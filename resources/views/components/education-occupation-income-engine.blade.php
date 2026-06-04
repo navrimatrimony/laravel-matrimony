@@ -3,7 +3,6 @@
     'values' => [],
     'currencies' => [],
     'categories' => null,
-    'employmentStatuses' => null,
     'workingWithTypes' => null,
     'professions' => null,
     'incomeRanges' => null,
@@ -18,14 +17,12 @@
     use App\Models\EducationDegree;
     use App\Services\EducationService;
     use Illuminate\Support\Facades\Schema;
-    use App\Models\MasterEmploymentStatus;
     use App\Models\MasterIncomeCurrency;
     use App\Models\WorkingWithType;
     use App\Models\Profession;
     use App\Models\IncomeRange;
 
     $currencies = (!empty($currencies)) ? $currencies : MasterIncomeCurrency::where('is_active', true)->get();
-    $employmentStatuses = $employmentStatuses ?? MasterEmploymentStatus::where('is_active', true)->orderBy('sort_order')->get();
     $workingWithTypes = $workingWithTypes ?? WorkingWithType::where('is_active', true)->orderBy('sort_order')->get();
     $professions = $professions ?? Profession::where('is_active', true)->with('workingWithType')->orderBy('sort_order')->get();
     $incomeRanges = $incomeRanges ?? IncomeRange::where('is_active', true)->orderBy('sort_order')->get(); // legacy

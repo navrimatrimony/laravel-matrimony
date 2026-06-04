@@ -86,6 +86,16 @@
                                 @endif
                                 @php
                                     $needsReview = ! empty($row['needs_review']);
+                                    $rowLabel = (string) ($row['label'] ?? '');
+                                    $rowValue = (string) ($row['value'] ?? '');
+                                    $isPropertySection = $sectionKey === 'property';
+                                    $isPropertyAssetHeading = $isPropertySection && preg_match('/^Property Asset \d+$/', $rowLabel) === 1;
+                                    $hidePropertyNotMentioned = $isPropertySection && ! $isPropertyAssetHeading && $rowValue === 'Not mentioned';
+                                @endphp
+                                @if ($hidePropertyNotMentioned)
+                                    @continue
+                                @endif
+                                @php
                                     $rowClasses = $isReview
                                         ? 'rounded bg-amber-100/80 dark:bg-amber-950/35 border border-amber-300 dark:border-amber-700 px-2 py-1.5'
                                         : ($needsReview
@@ -93,20 +103,51 @@
                                             : '');
                                 @endphp
                                 <div class="{{ $rowClasses }}">
-                                    <dt class="font-medium text-gray-700 dark:text-gray-300 break-words flex flex-wrap items-center gap-2">
-                                        <span>{{ $row['label'] ?? '' }}</span>
-                                        @if ($needsReview && ! $isReview)
-                                            <span class="inline-flex items-center rounded-full border border-amber-500 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-100">
-                                                {{ __('intake.normalized_draft_needs_review_badge') }}
-                                            </span>
+                                    @if ($isPropertyAssetHeading)
+                                        <dt class="font-semibold text-gray-900 dark:text-gray-100 break-words flex flex-wrap items-center gap-2 pt-1">
+                                            <span>{{ $rowLabel }}</span>
+                                            @if ($needsReview && ! $isReview)
+                                                <span class="inline-flex items-center rounded-full border border-amber-500 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-100">
+                                                    {{ __('intake.normalized_draft_needs_review_badge') }}
+                                                </span>
+                                            @endif
+                                        </dt>
+                                        @if (! empty($row['review_hint']))
+                                            <p class="mt-1 text-[11px] font-medium text-amber-800 dark:text-amber-200">
+                                                {{ $row['review_hint'] }}
+                                            </p>
                                         @endif
-                                    </dt>
-                                    @if (! empty($row['review_hint']))
-                                        <p class="mt-1 text-[11px] font-medium text-amber-800 dark:text-amber-200">
-                                            {{ $row['review_hint'] }}
-                                        </p>
+                                    @elseif ($isPropertySection)
+                                        <dd class="mt-0.5 pl-3 text-gray-800 dark:text-gray-100 break-words">
+                                            <span class="font-medium text-gray-700 dark:text-gray-300">{{ $rowLabel }}:</span>
+                                            <span>{{ $rowValue }}</span>
+                                            @if ($needsReview && ! $isReview)
+                                                <span class="ml-2 inline-flex items-center rounded-full border border-amber-500 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-100">
+                                                    {{ __('intake.normalized_draft_needs_review_badge') }}
+                                                </span>
+                                            @endif
+                                        </dd>
+                                        @if (! empty($row['review_hint']))
+                                            <p class="mt-1 pl-3 text-[11px] font-medium text-amber-800 dark:text-amber-200">
+                                                {{ $row['review_hint'] }}
+                                            </p>
+                                        @endif
+                                    @else
+                                        <dt class="font-medium text-gray-700 dark:text-gray-300 break-words flex flex-wrap items-center gap-2">
+                                            <span>{{ $rowLabel }}</span>
+                                            @if ($needsReview && ! $isReview)
+                                                <span class="inline-flex items-center rounded-full border border-amber-500 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-100">
+                                                    {{ __('intake.normalized_draft_needs_review_badge') }}
+                                                </span>
+                                            @endif
+                                        </dt>
+                                        @if (! empty($row['review_hint']))
+                                            <p class="mt-1 text-[11px] font-medium text-amber-800 dark:text-amber-200">
+                                                {{ $row['review_hint'] }}
+                                            </p>
+                                        @endif
+                                        <dd class="mt-0.5 text-gray-800 dark:text-gray-100 whitespace-pre-wrap break-words">{{ $rowValue }}</dd>
                                     @endif
-                                    <dd class="mt-0.5 text-gray-800 dark:text-gray-100 whitespace-pre-wrap break-words">{{ $row['value'] ?? '' }}</dd>
                                 </div>
                             @endforeach
                         </dl>

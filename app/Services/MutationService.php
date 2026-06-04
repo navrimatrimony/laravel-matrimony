@@ -38,7 +38,6 @@ class MutationService
         'relatives' => 'profile_relatives',
         'alliance_networks' => 'profile_alliance_networks',
         'addresses' => 'profile_addresses',
-        'property_summary' => 'profile_property_summary',
         'property_assets' => 'profile_property_assets',
         'horoscope' => 'profile_horoscope_data',
         'extended_narrative' => 'profile_extended_attributes',
@@ -52,14 +51,8 @@ class MutationService
         'relatives',
         'alliance_networks',
         'addresses',
-        'property_summary',
         'property_assets',
         'horoscope',
-    ];
-
-    /** Snapshot keys that are exactly ONE row per profile_id (upsert by profile_id, not by row id). */
-    private const SINGLE_ROW_SNAPSHOT_KEYS = [
-        'property_summary',
     ];
 
     /** States that must NOT be auto-activated (contract §6). */
@@ -397,12 +390,13 @@ class MutationService
                 }
 
                 // ——— Entity sync (only keys present in snapshot) ———
+                $snapshot = $this->collapsePropertySummaryIntoAssets($snapshot);
                 foreach (self::ENTITY_SYNC_ORDER as $snapshotKey) {
                     if (! array_key_exists($snapshotKey, $snapshot) || ! is_array($snapshot[$snapshotKey])) {
                         continue;
                     }
                     if ($snapshotKey === 'siblings' && Schema::hasTable('profile_siblings')) {
-                        $this->syncSiblingsWithSpouses($profile, $snapshot['siblings']);
+                        $this->syncSiblings($profile, $snapshot['siblings']);
 
                         continue;
                     }
@@ -415,11 +409,7 @@ class MutationService
                     if ($table === null || ! Schema::hasTable($table)) {
                         continue;
                     }
-                    if (in_array($snapshotKey, self::SINGLE_ROW_SNAPSHOT_KEYS, true)) {
-                        $this->syncSingleRowSection($profile, $table, $snapshot[$snapshotKey]);
-                    } else {
-                        $this->syncEntityDiff($profile, $table, $snapshot[$snapshotKey]);
-                    }
+                    $this->syncEntityDiff($profile, $table, $snapshot[$snapshotKey]);
                 }
 
                 if (isset($snapshot['preferences'])) {
@@ -909,6 +899,7 @@ class MutationService
 
                 // ——— Step 7: Normalized entity sync (snapshot keys → tables) ———
                 $this->setProfileAddressesFullReplaceFromSnapshot($snapshot);
+                $snapshot = $this->collapsePropertySummaryIntoAssets($snapshot);
                 foreach (self::ENTITY_SYNC_ORDER as $snapshotKey) {
                     $table = self::SNAPSHOT_KEY_TO_TABLE[$snapshotKey] ?? null;
                     if ($table === null || ! Schema::hasTable($table)) {
@@ -919,7 +910,7 @@ class MutationService
                         continue;
                     }
                     if ($snapshotKey === 'siblings' && Schema::hasTable('profile_siblings')) {
-                        $this->syncSiblingsWithSpouses($profile, $proposed);
+                        $this->syncSiblings($profile, $proposed);
 
                         continue;
                     }
@@ -931,11 +922,7 @@ class MutationService
 
                         continue;
                     }
-                    if (in_array($snapshotKey, self::SINGLE_ROW_SNAPSHOT_KEYS, true)) {
-                        $this->syncSingleRowSection($profile, $table, $proposed);
-                    } else {
-                        $this->syncEntityDiff($profile, $table, $proposed);
-                    }
+                    $this->syncEntityDiff($profile, $table, $proposed);
                 }
 
                 if (isset($snapshot['preferences']) && is_array($snapshot['preferences'])) {
@@ -1606,9 +1593,8 @@ class MutationService
         }
         if ($entityType === 'profile_siblings') {
             $mapped = $row;
-            $mapped['relation_type'] = in_array($mapped['relation_type'] ?? null, ['brother', 'sister'], true) ? $mapped['relation_type'] : null;
+            $mapped['relation_type'] = in_array($mapped['relation_type'] ?? null, ['brother', 'sister', 'brother_wife', 'sister_husband'], true) ? $mapped['relation_type'] : null;
             $mapped['name'] = isset($mapped['name']) && trim((string) $mapped['name']) !== '' ? trim((string) $mapped['name']) : null;
-            $mapped['gender'] = in_array($mapped['gender'] ?? null, ['male', 'female'], true) ? $mapped['gender'] : null;
             // Normalize marital_status: intake/form may send "Yes"/"No" or is_married; store as married/unmarried.
             $maritalRaw = $mapped['marital_status'] ?? ($mapped['is_married'] ?? null);
             if (in_array($maritalRaw, ['married', 'unmarried'], true)) {
@@ -1626,6 +1612,9 @@ class MutationService
             $spouse = isset($mapped['spouse']) && is_array($mapped['spouse']) ? $mapped['spouse'] : [];
             $spouseHasData = trim((string) ($spouse['name'] ?? '')) !== '' || trim((string) ($spouse['address_line'] ?? $spouse['address'] ?? $spouse['additional_info'] ?? '')) !== '';
             if ($spouseHasData && strtolower(trim((string) ($mapped['marital_status'] ?? ''))) !== 'married') {
+                $mapped['marital_status'] = 'married';
+            }
+            if (in_array($mapped['relation_type'], ['brother_wife', 'sister_husband'], true)) {
                 $mapped['marital_status'] = 'married';
             }
             $mapped['occupation'] = isset($mapped['occupation']) && trim((string) $mapped['occupation']) !== '' ? trim((string) $mapped['occupation']) : null;
@@ -1806,6 +1795,9 @@ class MutationService
         $mapped['taluka_id'] = ! empty($mapped['taluka_id']) ? (int) $mapped['taluka_id'] : null;
         $mapped['district_id'] = ! empty($mapped['district_id']) ? (int) $mapped['district_id'] : null;
         $mapped['state_id'] = ! empty($mapped['state_id']) ? (int) $mapped['state_id'] : null;
+        $mapped['location'] = isset($mapped['location']) && trim((string) $mapped['location']) !== '' ? trim((string) $mapped['location']) : null;
+        $mapped['notes'] = isset($mapped['notes']) && trim((string) $mapped['notes']) !== '' ? trim((string) $mapped['notes']) : null;
+        $mapped['additional_information'] = isset($mapped['additional_information']) && trim((string) $mapped['additional_information']) !== '' ? trim((string) $mapped['additional_information']) : null;
 
         return $mapped;
     }
@@ -1968,67 +1960,9 @@ class MutationService
     }
 
     /**
-     * Sync a single-row-per-profile section (e.g. profile_property_summary).
-     * If row exists → UPDATE; if not → INSERT with profile_id. Ensures exactly one row per profile_id.
+     * Day 31 Part 2: Sync sibling rows through the governed mutation path.
      */
-    private function syncSingleRowSection(MatrimonyProfile $profile, string $table, array $proposed): void
-    {
-        if (! Schema::hasTable($table)) {
-            return;
-        }
-        $row = isset($proposed[0]) && is_array($proposed[0]) ? $proposed[0] : $proposed;
-        if (! is_array($row)) {
-            return;
-        }
-        $row = $this->mapSnapshotRowToTable($table, $row);
-        $allowedColumns = array_flip(Schema::getColumnListing($table));
-        $data = [];
-        foreach ($row as $col => $value) {
-            if ($col === 'id' || $col === 'profile_id') {
-                continue;
-            }
-            if (! isset($allowedColumns[$col])) {
-                continue;
-            }
-            $data[$col] = $value;
-        }
-        $existing = DB::table($table)->where('profile_id', $profile->id)->first();
-        if ($existing) {
-            $changes = [];
-            foreach ($data as $col => $newVal) {
-                $oldVal = $existing->$col ?? null;
-                if ((string) ($oldVal ?? '') !== (string) ($newVal ?? '')) {
-                    $changes[$col] = ['old' => $oldVal, 'new' => $newVal];
-                }
-            }
-            if (! empty($changes)) {
-                $updateData = $data;
-                $updateData['updated_at'] = now();
-                DB::table($table)->where('profile_id', $profile->id)->update($updateData);
-                foreach ($changes as $fieldName => $vals) {
-                    $this->writeProfileChangeHistory(
-                        $profile->id,
-                        $table,
-                        (int) $existing->id,
-                        $fieldName,
-                        $vals['old'],
-                        $vals['new']
-                    );
-                }
-            }
-        } else {
-            $insertData = array_merge(['profile_id' => $profile->id], $data);
-            $insertData['created_at'] = now();
-            $insertData['updated_at'] = now();
-            DB::table($table)->insert($insertData);
-            $this->writeProfileChangeHistory($profile->id, $table, null, 'insert', null, json_encode($data));
-        }
-    }
-
-    /**
-     * Day 31 Part 2: Sync siblings + spouse rows. Uses soft deletes; collects sibling ids for spouse upsert.
-     */
-    private function syncSiblingsWithSpouses(MatrimonyProfile $profile, array $proposed): void
+    private function syncSiblings(MatrimonyProfile $profile, array $proposed): void
     {
         $table = 'profile_siblings';
         $hasDeletedAt = Schema::hasColumn($table, 'deleted_at');
@@ -2078,63 +2012,6 @@ class MutationService
                 DB::table($table)->where('id', $id)->update(['deleted_at' => now(), 'updated_at' => now()]);
             }
             $this->writeProfileChangeHistory($profile->id, $table, (int) $id, 'delete', json_encode($existingRow), null);
-        }
-
-        if (! Schema::hasTable('profile_sibling_spouses')) {
-            return;
-        }
-        $spouseTable = 'profile_sibling_spouses';
-        $spouseHasDeletedAt = Schema::hasColumn($spouseTable, 'deleted_at');
-        foreach ($proposed as $idx => $row) {
-            if (! is_array($row)) {
-                continue;
-            }
-            $siblingId = $siblingIds[$idx] ?? null;
-            if ($siblingId === null) {
-                continue;
-            }
-            $maritalVal = $row['marital_status'] ?? $row['is_married'] ?? null;
-            $isMarried = in_array($maritalVal, ['married'], true)
-                || $maritalVal === true || $maritalVal === 1
-                || (is_string($maritalVal) && in_array(strtolower(trim($maritalVal)), ['yes', 'married'], true));
-            $spouseData = $row['spouse'] ?? [];
-            $hasSpouseFields = ! empty($spouseData['name']) || ! empty($spouseData['occupation_title']) || ! empty($spouseData['occupation_master_id']) || ! empty($spouseData['occupation_custom_id']) || ! empty($spouseData['contact_number'])
-                || ! empty($spouseData['address_line']) || ! empty($spouseData['address']) || ! empty($spouseData['additional_info']) || ! empty($spouseData['city_id']);
-
-            if ($isMarried && $hasSpouseFields) {
-                $spouseAddress = trim((string) ($spouseData['address_line'] ?? $spouseData['address'] ?? $spouseData['additional_info'] ?? ''));
-                $spouseRow = [
-                    'name' => trim((string) ($spouseData['name'] ?? '')) ?: null,
-                    'occupation_title' => trim((string) ($spouseData['occupation_title'] ?? '')) ?: null,
-                    'occupation_master_id' => ! empty($spouseData['occupation_master_id']) ? (int) $spouseData['occupation_master_id'] : null,
-                    'occupation_custom_id' => ! empty($spouseData['occupation_custom_id']) ? (int) $spouseData['occupation_custom_id'] : null,
-                    'contact_number' => trim((string) ($spouseData['contact_number'] ?? '')) ?: null,
-                    'address_line' => $spouseAddress !== '' ? $spouseAddress : null,
-                    'city_id' => ! empty($spouseData['city_id']) ? (int) $spouseData['city_id'] : null,
-                    'taluka_id' => ! empty($spouseData['taluka_id']) ? (int) $spouseData['taluka_id'] : null,
-                    'district_id' => ! empty($spouseData['district_id']) ? (int) $spouseData['district_id'] : null,
-                    'state_id' => ! empty($spouseData['state_id']) ? (int) $spouseData['state_id'] : null,
-                ];
-                $existingSpouse = DB::table($spouseTable)->where('profile_sibling_id', $siblingId);
-                if ($spouseHasDeletedAt) {
-                    $existingSpouse->whereNull('deleted_at');
-                }
-                $existingSpouse = $existingSpouse->first();
-                $spouseRow['profile_sibling_id'] = $siblingId;
-                $spouseRow['updated_at'] = now();
-                if ($existingSpouse) {
-                    DB::table($spouseTable)->where('id', $existingSpouse->id)->update($spouseRow);
-                } else {
-                    $spouseRow['created_at'] = now();
-                    DB::table($spouseTable)->insert($spouseRow);
-                }
-            } else {
-                $toSoftDelete = DB::table($spouseTable)->where('profile_sibling_id', $siblingId);
-                if ($spouseHasDeletedAt) {
-                    $toSoftDelete->whereNull('deleted_at');
-                }
-                $toSoftDelete->update(['deleted_at' => now(), 'updated_at' => now()]);
-            }
         }
     }
 
@@ -2210,6 +2087,21 @@ class MutationService
                     $leaf = isset($row['location_id']) ? (int) $row['location_id'] : (isset($row['city_id']) ? (int) $row['city_id'] : 0);
                     $line = trim((string) ($row['address_line'] ?? ''));
                     if ($typeId <= 0 && $leaf <= 0 && $line === '') {
+                        continue;
+                    }
+                }
+                if ($entityType === 'profile_property_assets') {
+                    $typeId = isset($row['asset_type_id']) ? (int) $row['asset_type_id'] : 0;
+                    $location = trim((string) ($row['location'] ?? ''));
+                    $ownId = isset($row['ownership_type_id']) ? (int) $row['ownership_type_id'] : 0;
+                    $estimated = $row['estimated_value'] ?? null;
+                    $notes = trim((string) ($row['notes'] ?? ''));
+                    $additionalInformation = trim((string) ($row['additional_information'] ?? ''));
+                    $hasGeo = (int) ($row['city_id'] ?? 0) > 0
+                        || (int) ($row['taluka_id'] ?? 0) > 0
+                        || (int) ($row['district_id'] ?? 0) > 0
+                        || (int) ($row['state_id'] ?? 0) > 0;
+                    if ($typeId <= 0 && $location === '' && $ownId <= 0 && $estimated === null && $notes === '' && $additionalInformation === '' && ! $hasGeo) {
                         continue;
                     }
                 }
@@ -2903,6 +2795,7 @@ class MutationService
     private function partitionIntakeSnapshotForExistingProfile(MatrimonyProfile $profile, array &$snapshot, array &$proposedCore, ?int $sourceIntakeId = null): array
     {
         $profile->loadMissing('user');
+        $snapshot = $this->collapsePropertySummaryIntoAssets($snapshot);
 
         $suggestions = [
             'core' => [],
@@ -3102,6 +2995,88 @@ class MutationService
         }
 
         return $suggestions;
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    private function collapsePropertySummaryIntoAssets(array $snapshot): array
+    {
+        $assets = is_array($snapshot['property_assets'] ?? null) ? $snapshot['property_assets'] : [];
+        $summaryNotes = $this->propertySummaryNotesText($snapshot['property_summary'] ?? null);
+        if ($summaryNotes !== null) {
+            $assigned = false;
+            foreach ($assets as $idx => $asset) {
+                if (! is_array($asset)) {
+                    continue;
+                }
+                if ($this->propertyAssetRowHasMeaningfulData($asset)) {
+                    $existingNotes = trim((string) ($asset['notes'] ?? ''));
+                    $assets[$idx]['notes'] = $existingNotes === '' || str_contains($existingNotes, $summaryNotes)
+                        ? ($existingNotes !== '' ? $existingNotes : $summaryNotes)
+                        : $existingNotes."\n\n".$summaryNotes;
+                    $assigned = true;
+                    break;
+                }
+            }
+            if (! $assigned) {
+                $assets[] = ['notes' => $summaryNotes];
+            }
+        }
+
+        $snapshot['property_assets'] = $assets;
+        unset($snapshot['property_summary']);
+
+        return $snapshot;
+    }
+
+    private function propertyAssetRowHasMeaningfulData(array $row): bool
+    {
+        return ! empty($row['id'])
+            || ! empty($row['asset_type_id'])
+            || trim((string) ($row['location'] ?? '')) !== ''
+            || ! empty($row['ownership_type_id'])
+            || ($row['estimated_value'] ?? null) !== null
+            || ! empty($row['city_id'])
+            || ! empty($row['taluka_id'])
+            || ! empty($row['district_id'])
+            || ! empty($row['state_id']);
+    }
+
+    private function propertySummaryNotesText(mixed $propertySummary): ?string
+    {
+        $row = is_array($propertySummary) && isset($propertySummary[0]) && is_array($propertySummary[0])
+            ? $propertySummary[0]
+            : $propertySummary;
+        if (! is_array($row)) {
+            return null;
+        }
+
+        $lines = [];
+        if (! empty($row['owns_house'])) {
+            $lines[] = 'Owns house: Yes';
+        }
+        if (! empty($row['owns_flat'])) {
+            $lines[] = 'Owns flat: Yes';
+        }
+        if (! empty($row['owns_agriculture'])) {
+            $lines[] = 'Owns agriculture: Yes';
+        }
+        if (trim((string) ($row['agriculture_type'] ?? '')) !== '') {
+            $lines[] = 'Agriculture type: '.trim((string) $row['agriculture_type']);
+        }
+        if (($row['total_land_acres'] ?? null) !== null && (string) $row['total_land_acres'] !== '') {
+            $lines[] = 'Total land (acres): '.trim((string) $row['total_land_acres']);
+        }
+        if (($row['annual_agri_income'] ?? null) !== null && (string) $row['annual_agri_income'] !== '') {
+            $lines[] = 'Annual agriculture income: '.trim((string) $row['annual_agri_income']);
+        }
+        if (trim((string) ($row['summary_notes'] ?? '')) !== '') {
+            $lines[] = trim((string) $row['summary_notes']);
+        }
+
+        return $lines === [] ? null : implode("\n", $lines);
     }
 
     private function entityRowCountForProfile(string $table, int $profileId): int

@@ -92,26 +92,28 @@ TXT;
         $this->assertSame([], $queries);
 
         $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
-        $this->assertStringContainsString('7350953384', $basicBlob);
-        $this->assertStringContainsString('9673350078', $basicBlob);
+        $this->assertStringNotContainsString('7350953384', $basicBlob);
+        $this->assertStringNotContainsString('9673350078', $basicBlob);
+        $this->assertArrayNotHasKey('contacts', $out['sections']);
     }
 
-    public function test_swapnil_text_places_gender_contacts_family_counts_and_relatives_in_wizard_sections(): void
+    public function test_swapnil_text_places_gender_contacts_and_relatives_in_wizard_sections_without_family_counts(): void
     {
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($this->swapnilText(), true);
 
         $this->assertTrue($out['available']);
         $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
         $this->assertStringContainsString('male', $basicBlob);
-        $this->assertStringContainsString('9860956022', $basicBlob);
+        $this->assertStringNotContainsString('9860956022', $basicBlob);
+        $this->assertArrayNotHasKey('contacts', $out['sections']);
 
         $familyBlob = $this->sectionBlob($out['sections']['family-details']);
-        $this->assertStringContainsString('0', $familyBlob);
-        $this->assertStringContainsString('1', $familyBlob);
+        $this->assertStringNotContainsString('Brother count', $familyBlob);
+        $this->assertStringNotContainsString('Sister count', $familyBlob);
 
         $relativesBlob = $this->sectionBlob($out['sections']['relatives']);
         $this->assertStringContainsString('इस्लामपूर', $relativesBlob);
-        $this->assertSame('', $this->sectionBlob($out['sections']['siblings']));
+        $this->assertStringContainsString('Sister Married unmarried', $this->sectionBlob($out['sections']['siblings']));
     }
 
     public function test_mahesh_text_returns_available_basic_family_and_contact_rows(): void
@@ -121,7 +123,8 @@ TXT;
         $this->assertTrue($out['available']);
         $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
         $this->assertStringContainsString('महेशकुमार मोहन जगताप', $basicBlob);
-        $this->assertStringContainsString('9870879727', $basicBlob);
+        $this->assertStringNotContainsString('9870879727', $basicBlob);
+        $this->assertArrayNotHasKey('contacts', $out['sections']);
 
         $familyBlob = $this->sectionBlob($out['sections']['family-details']);
         $this->assertStringContainsString('मोहनराव गणपतराव जगताप', $familyBlob);
@@ -157,10 +160,86 @@ TXT, true);
 
         $this->assertStringNotContainsString('Â·', $blob);
         $this->assertStringNotContainsString('â€”', $blob);
-        $this->assertStringContainsString(' · ', $blob);
+        $this->assertStringContainsString('Brother Married unmarried', $blob);
+        $this->assertStringContainsString('Paternal Aunt (atya) Address इस्लामपूर', $blob);
     }
 
-    public function test_property_boolean_rows_display_marathi_yes(): void
+    public function test_extended_family_splits_parenthesized_places_as_addresses(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+मुलाचे नाव :- चि. रोहित पाटील
+चुलते :- श्री. अनिल भाऊराव पाटील ( वाघोली, पुणे)
+- श्री. सुनील भाऊराव पाटील ( माळीनगर)
+TXT, true);
+
+        $paternalBlob = $this->sectionBlob($out['sections']['relatives']);
+
+        $this->assertStringContainsString('Paternal Uncle (chulte) 1 श्री. अनिल भाऊराव पाटील', $paternalBlob);
+        $this->assertStringContainsString('Paternal Uncle (chulte) 1 Address वाघोली, पुणे', $paternalBlob);
+        $this->assertStringContainsString('Paternal Uncle (chulte) 2 श्री. सुनील भाऊराव पाटील', $paternalBlob);
+        $this->assertStringContainsString('Paternal Uncle (chulte) 2 Address माळीनगर', $paternalBlob);
+        $this->assertStringNotContainsString('Paternal Uncle (chulte) 2 पुणे)', $paternalBlob);
+    }
+
+    public function test_relative_address_drops_orphan_number_suffix(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+मुलाचे नाव :- चि. रोहित पाटील
+आत्या :- सौ. रेखा जाधव रा. सोलापूर नं.
+TXT, true);
+
+        $paternalBlob = $this->sectionBlob($out['sections']['relatives']);
+
+        $this->assertStringContainsString('Paternal Aunt (atya) Address सोलापूर', $paternalBlob);
+        $this->assertStringNotContainsString('सोलापूर नं', $paternalBlob);
+    }
+
+    public function test_html_table_numbered_chulte_rows_all_land_in_extended_family(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'HTML'
+<table>
+<tr><td>मुलीचे नाव</td><td>कु. प्राजक्ता सुभाष पानसरे</td></tr>
+<tr><td>चुलते</td><td>: १) रमेश किसन पानसरे रा.सोलापूर मो.नं. ९८६०१०८९७६<br/>२) सुरेश किसन पानसरे रा.पोमलवाडी ता.करमाळा मो.नं. ९७६३२३१७११</td></tr>
+</table>
+HTML, true);
+
+        $paternalBlob = $this->sectionBlob($out['sections']['relatives']);
+
+        $this->assertStringContainsString('Paternal Uncle (chulte) 1 रमेश किसन पानसरे', $paternalBlob);
+        $this->assertStringContainsString('Paternal Uncle (chulte) 1 Mobile 9860108976', $paternalBlob);
+        $this->assertStringContainsString('Paternal Uncle (chulte) 1 Address सोलापूर', $paternalBlob);
+        $this->assertStringContainsString('Paternal Uncle (chulte) 2 सुरेश किसन पानसरे', $paternalBlob);
+        $this->assertStringContainsString('Paternal Uncle (chulte) 2 Mobile 9763231711', $paternalBlob);
+        $this->assertStringContainsString('Paternal Uncle (chulte) 2 Address पोमलवाडी ता.करमाळा', $paternalBlob);
+    }
+
+    public function test_other_relatives_block_does_not_become_paternal_aunts_and_cousin_places_are_addresses(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+मुलाचे नाव :- चि. रोहित पाटील
+चुलत भाऊ :- प्रमोद शरदराव जगताप (Devloper and Construction) ठाणे
+:- कै. रतन दादासाहेब जाधव, पळशी (सांगली)
+आत्या :- जाधव, देशमुख, घोरपडे, मोरे पाटील, भोसले, गायकवाड, कदम, मोहिते, पवार देसाई
+उत्तर नातेवाईक :- वरकूटे-मलवडी
+ता. माण
+जि. सातारा
+TXT, true);
+
+        $paternalBlob = $this->sectionBlob($out['sections']['relatives']);
+        $allianceBlob = $this->sectionBlob($out['sections']['alliance']);
+
+        $this->assertStringContainsString('Cousin 1 प्रमोद शरदराव जगताप', $paternalBlob);
+        $this->assertStringContainsString('Cousin 1 Address ठाणे', $paternalBlob);
+        $this->assertStringContainsString('Cousin 1 Additional info Devloper and Construction', $paternalBlob);
+        $this->assertStringContainsString('Cousin 2 कै. रतन दादासाहेब जाधव', $paternalBlob);
+        $this->assertStringContainsString('Cousin 2 Address पळशी (सांगली)', $paternalBlob);
+        $this->assertStringContainsString('Paternal Aunt (atya) 9 पवार देसाई', $paternalBlob);
+        $this->assertStringNotContainsString('Paternal Aunt (atya) 10', $paternalBlob);
+        $this->assertStringNotContainsString('वरकूटे-मलवडी', $paternalBlob);
+        $this->assertStringContainsString('वरकूटे-मलवडी; ता. माण; जि. सातारा', $allianceBlob);
+    }
+
+    public function test_property_preview_uses_asset_rows_instead_of_boolean_yes_no_rows(): void
     {
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'HTML'
 <table>
@@ -169,10 +248,13 @@ TXT, true);
 HTML, true);
         $propertyBlob = $this->sectionBlob($out['sections']['property']);
 
-        $this->assertStringContainsString('होय', $propertyBlob);
+        $this->assertStringContainsString('Asset Type Flat', $propertyBlob);
+        $this->assertStringContainsString('Asset Type Land', $propertyBlob);
+        $this->assertStringContainsString('Ownership Type Sole', $propertyBlob);
+        $this->assertStringContainsString('01 एकर', $propertyBlob);
+        $this->assertStringContainsString('Notes Not mentioned', $propertyBlob);
+        $this->assertStringNotContainsString('होय', $propertyBlob);
         $this->assertStringNotContainsString('yes', $propertyBlob);
-        $this->assertStringNotContainsString('true', $propertyBlob);
-        $this->assertStringNotContainsString('false', $propertyBlob);
     }
 
     public function test_values_are_not_duplicated_across_wizard_sections(): void
@@ -197,10 +279,29 @@ HTML, true);
         $this->assertStringNotContainsString('cm', $basicBlob);
         $this->assertStringContainsString('B.Com', $educationBlob);
         $this->assertStringNotContainsString('B.Com', $basicBlob);
-        $this->assertStringContainsString('9876543210', $basicBlob);
+        $this->assertStringNotContainsString('9876543210', $basicBlob);
+        $this->assertArrayNotHasKey('contacts', $out['sections']);
         $this->assertStringContainsString('संकेत', $siblingsBlob);
         $this->assertStringNotContainsString('संकेत', $familyBlob);
-        $this->assertArrayNotHasKey('contacts', $out['sections']);
+    }
+
+    public function test_physical_section_displays_wizard_lifestyle_fields_when_present(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+मुलाचे नाव :- चि. रोहित शिंदे
+उंची :- 5 फूट 6 इंच
+आहार :- शाकाहारी
+धूम्रपान :- नाही
+मद्यपान :- नाही
+TXT, true);
+
+        $physicalBlob = $this->sectionBlob($out['sections']['physical']);
+
+        $this->assertStringContainsString('168 cm', $physicalBlob);
+        $this->assertStringContainsString('Diet', $physicalBlob);
+        $this->assertStringContainsString('शाकाहारी', $physicalBlob);
+        $this->assertStringContainsString('Smoking', $physicalBlob);
+        $this->assertStringContainsString('Drinking', $physicalBlob);
     }
 
     public function test_new_normalized_values_land_in_matching_wizard_sections_with_review_reasons(): void
@@ -221,7 +322,7 @@ TXT, true);
         $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
         $physicalBlob = $this->sectionBlob($out['sections']['physical']);
         $horoscopeBlob = $this->sectionBlob($out['sections']['horoscope']);
-        $relativesBlob = $this->sectionBlob($out['sections']['relatives']);
+        $relativesBlob = $this->sectionBlob($out['sections']['alliance']);
         $reviewBlob = $this->sectionBlob($out['sections']['review_needed']);
 
         $this->assertStringContainsString('3.45 A.M', $basicBlob);
@@ -232,6 +333,290 @@ TXT, true);
         $this->assertStringContainsString('मोहन कदम', $relativesBlob);
         $this->assertStringContainsString('unmapped_career', $reviewBlob);
         $this->assertStringContainsString('Suggested section: education-career', $reviewBlob);
+    }
+
+    public function test_horoscope_preview_uses_wizard_field_order_for_mapped_values(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+नावरस :- सीताराम
+देवक :- वासनलिवेल
+कुलस्वामी :- जोतिबा
+गोत्र :- कश्यप
+नक्षत्र :- अश्विनी
+चरण :- २ रे
+राशी :- कुंभ
+गण :- देव
+नाडी :- आद्य
+योनी :- व्याघ्र
+TXT, true);
+
+        $rows = $out['sections']['horoscope'];
+        $labels = array_values(array_map(
+            static fn (array $row): string => (string) ($row['label'] ?? ''),
+            array_filter($rows, static fn (array $row): bool => ! str_contains((string) ($row['label'] ?? ''), 'Horoscope line'))
+        ));
+
+        $this->assertSame([
+            __('components.horoscope.navras_name'),
+            __('components.horoscope.devak'),
+            __('components.horoscope.kul'),
+            __('components.horoscope.gotra'),
+            __('components.horoscope.nakshatra'),
+            __('components.horoscope.charan'),
+            __('components.horoscope.rashi'),
+            __('components.horoscope.gan'),
+            __('components.horoscope.nadi'),
+            __('components.horoscope.yoni'),
+        ], $labels);
+    }
+
+    public function test_horoscope_preview_keeps_unmatched_raw_lines_without_repeating_mapped_lines(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+राशी :- कुंभ
+नक्षत्र :- अश्विनी
+वश्य :- मानव
+TXT, true);
+
+        $horoscopeBlob = $this->sectionBlob($out['sections']['horoscope']);
+
+        $this->assertStringContainsString('कुंभ', $horoscopeBlob);
+        $this->assertStringContainsString('अश्विनी', $horoscopeBlob);
+        $this->assertStringContainsString('वश्य :- मानव', $horoscopeBlob);
+        $this->assertStringNotContainsString('Horoscope line 1 राशी :- कुंभ', $horoscopeBlob);
+        $this->assertStringNotContainsString('Horoscope line 2 नक्षत्र :- अश्विनी', $horoscopeBlob);
+    }
+
+    public function test_review_needed_does_not_repeat_confidently_mapped_values(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+||श्री गणेशायनम: ||
+कौटुंबिक माहिती
+मुलाचे नाव :- विशाल पांडुरंग डाकवे
+सध्याचा पत्ता :- Wonder Residency, Pune
+मामा :- जितेंद्र शामराव पवार
+राशी :- कुंभ
+देवक :- वासनलिवेल
+कुलस्वामी :- जोतिबा
+TXT, true);
+
+        $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
+        $familyBlob = $this->sectionBlob($out['sections']['family-details']);
+        $relativesBlob = $this->sectionBlob($out['sections']['alliance']);
+        $horoscopeBlob = $this->sectionBlob($out['sections']['horoscope']);
+        $reviewBlob = $this->sectionBlob($out['sections']['review_needed']);
+
+        $this->assertStringContainsString('Wonder Residency', $familyBlob);
+        $this->assertStringNotContainsString('Wonder Residency', $basicBlob);
+        $this->assertStringContainsString('जितेंद्र शामराव पवार', $relativesBlob);
+        $this->assertStringContainsString('कुंभ', $horoscopeBlob);
+        $this->assertStringContainsString('वासनलिवेल', $horoscopeBlob);
+        $this->assertStringContainsString('जोतिबा', $horoscopeBlob);
+        $this->assertStringNotContainsString('Wonder Residency', $reviewBlob);
+        $this->assertStringNotContainsString('जितेंद्र शामराव पवार', $reviewBlob);
+        $this->assertStringNotContainsString('कुंभ', $reviewBlob);
+        $this->assertStringNotContainsString('श्री गणेश', $reviewBlob);
+        $this->assertStringNotContainsString('कौटुंबिक माहिती', $reviewBlob);
+    }
+
+    public function test_vishal_sample_routes_fields_to_wizard_sections_without_parent_contacts_as_candidate_contacts(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+## बायोडेटा
+* मुलाचे नाव : विशाल पांडुरंग डाकवे
+* जन्म तारीख : ०२/११/१९९५
+* जन्मवार आणि वेळ : गुरुवारी सकाळी ११ वा. २७ मी.
+* नावरस : सीताराम
+* रास : कुंभ
+* देवक : वासनलिवेल
+* उंची : ५ फूट 4 इंच
+* कुलस्वामी : जोतिबा
+* शिक्षण : BE (MECH)
+* जात : हिंदू-मराठा
+* नोकरी : Production Engineer
+* वडिलांचे नाव : पांडुरंग लक्ष्मण डाकवे (नोकरी-9322202146)
+* आईचे नाव : सुवर्णा पांडुरंग डाकवे (नोकरी-9527610122)
+* पत्ता : मु. पो. डाकेवाडी काळगाव ता. पाटण जि.सातारा
+* निवासी पत्ता : A/303, Wonder Residency ,fatherwadi Vasai.
+* चुलते : कै. शामराव लक्ष्मण डाकवे, कृष्णा लक्ष्मण डाकवे,
+* हरि लक्ष्मण डाकवे.
+* आजोळ : मु. पो. कुठरे मोळावडेवाडी ता. पाटण जि.सातारा
+* मामा : जितेंद्र शामराव पवार
+TXT, true);
+
+        $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
+        $physicalBlob = $this->sectionBlob($out['sections']['physical']);
+        $educationBlob = $this->sectionBlob($out['sections']['education-career']);
+        $familyBlob = $this->sectionBlob($out['sections']['family-details']);
+        $paternalBlob = $this->sectionBlob($out['sections']['relatives']);
+        $maternalBlob = $this->sectionBlob($out['sections']['alliance']);
+        $horoscopeBlob = $this->sectionBlob($out['sections']['horoscope']);
+        $aboutBlob = $this->sectionBlob($out['sections']['about-me']);
+
+        $this->assertStringContainsString('विशाल पांडुरंग डाकवे', $basicBlob);
+        $this->assertStringContainsString('०२/११/१९९५', $basicBlob);
+        $this->assertStringNotContainsString('9322202146', $basicBlob);
+        $this->assertStringContainsString('163 cm', $physicalBlob);
+        $this->assertStringContainsString('BE (MECH)', $educationBlob);
+        $this->assertStringContainsString('Production Engineer', $educationBlob);
+        $this->assertStringContainsString('पांडुरंग लक्ष्मण डाकवे', $familyBlob);
+        $this->assertStringContainsString('नोकरी', $familyBlob);
+        $this->assertStringContainsString('9322202146', $familyBlob);
+        $this->assertStringContainsString('सुवर्णा पांडुरंग डाकवे', $familyBlob);
+        $this->assertStringContainsString('9527610122', $familyBlob);
+        $this->assertArrayNotHasKey('contacts', $out['sections']);
+        $this->assertSame(3, substr_count($paternalBlob, 'Paternal Uncle (chulte)'));
+        $this->assertStringContainsString('Paternal Uncle (chulte) 1 कै. शामराव लक्ष्मण डाकवे', $paternalBlob);
+        $this->assertStringContainsString('Paternal Uncle (chulte) 2 कृष्णा लक्ष्मण डाकवे', $paternalBlob);
+        $this->assertStringContainsString('Paternal Uncle (chulte) 3 हरि लक्ष्मण डाकवे', $paternalBlob);
+        $this->assertStringNotContainsString('Relative 1 Relation', $paternalBlob);
+        $this->assertStringContainsString('कै. शामराव लक्ष्मण डाकवे', $paternalBlob);
+        $this->assertStringContainsString('कृष्णा लक्ष्मण डाकवे', $paternalBlob);
+        $this->assertStringContainsString('हरि लक्ष्मण डाकवे', $paternalBlob);
+        $this->assertStringContainsString('Maternal address (Ajol) Address', $maternalBlob);
+        $this->assertStringContainsString('मु. पो. कुठरे मोळावडेवाडी ता. पाटण जि.सातारा', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama)', $maternalBlob);
+        $this->assertStringContainsString('जितेंद्र शामराव पवार', $maternalBlob);
+        $this->assertStringNotContainsString('Relative 1', $maternalBlob);
+        $this->assertStringNotContainsString('चुलते', $maternalBlob);
+        $this->assertStringNotContainsString('मामा', $paternalBlob);
+        $this->assertStringContainsString('सीताराम', $horoscopeBlob);
+        $this->assertStringContainsString('कुंभ', $horoscopeBlob);
+        $this->assertStringContainsString('वासनलिवेल', $horoscopeBlob);
+        $this->assertStringContainsString('जोतिबा', $horoscopeBlob);
+        $this->assertSame('', $aboutBlob);
+    }
+
+    public function test_maternal_relatives_use_relation_labels_and_preserve_all_fields(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+मुलीचे नाव :- कु. अंजली पाटील
+आजोळ :- मु. पो. कराड, जि. सातारा
+मामा :- श्री. मोहन कदम (मोठे मामा) (Teacher) रा. पुणे मो. 9123456789
+मामा :- श्री. सोमनाथ कदम (Business) रा. सातारा मो. 9876543210
+मामी :- सौ. रेखा मोहन कदम (गृहिणी) रा. पुणे
+मावशीचे यजमान :- श्री. संजय जाधव (Doctor) रा. कोल्हापूर मो. 9765432109
+मावस भाऊ :- चि. रोहित जाधव (B.Com) ठाणे
+TXT, true);
+
+        $maternalBlob = $this->sectionBlob($out['sections']['alliance']);
+
+        $this->assertStringContainsString('Maternal address (Ajol) Address मु. पो. कराड, जि. सातारा', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama) 1 श्री. मोहन कदम', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama) 1 Mobile 9123456789', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama) 1 Occupation Teacher', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama) 1 Address पुणे', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama) 1 Additional info मोठे मामा', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama) 2 श्री. सोमनाथ कदम', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama) 2 Mobile 9876543210', $maternalBlob);
+        $this->assertStringContainsString('Wife of Maternal Uncle सौ. रेखा मोहन कदम', $maternalBlob);
+        $this->assertStringContainsString('Wife of Maternal Uncle Occupation गृहिणी', $maternalBlob);
+        $this->assertStringContainsString('Husband of Maternal Aunt श्री. संजय जाधव', $maternalBlob);
+        $this->assertStringContainsString('Husband of Maternal Aunt Mobile 9765432109', $maternalBlob);
+        $this->assertStringContainsString('Maternal Cousin चि. रोहित जाधव', $maternalBlob);
+        $this->assertStringContainsString('Maternal Cousin Additional info B.Com', $maternalBlob);
+        $this->assertStringContainsString('Maternal Cousin Address ठाणे', $maternalBlob);
+        $this->assertStringNotContainsString('Relative 1', $maternalBlob);
+        $this->assertStringNotContainsString('Relative 4', $maternalBlob);
+    }
+
+    public function test_maternal_relatives_drop_photo_caption_noise_and_clean_other_relative_contacts(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+मुलीचे नाव :- कु. अंजली पाटील
+मामा :- श्री. मोहन कदम
+एका महिलाचे क्लोज-अप छायाचित्र
+जिने गुलाबी रंगाची रेशमी साडी नेसली आहे.
+पार्श्वभूमी अस्पष्ट आहे
+नातेवाईक :- पाटील, कदम मो. नं. 9876543210
+TXT, true);
+
+        $maternalBlob = $this->sectionBlob($out['sections']['alliance']);
+
+        $this->assertStringContainsString('Maternal Uncle (mama) श्री. मोहन कदम', $maternalBlob);
+        $this->assertStringContainsString('Other relatives text पाटील, कदम', $maternalBlob);
+        $this->assertStringNotContainsString('छायाचित्र', $maternalBlob);
+        $this->assertStringNotContainsString('साडी', $maternalBlob);
+        $this->assertStringNotContainsString('9876543210', $maternalBlob);
+    }
+
+    public function test_maternal_address_and_phone_continuations_merge_into_previous_uncle(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+मुलीचे नाव :- कु. प्राजक्ता पानसरे
+मामा :- श्री. तुकाराम भगवान इंगोले- नं.
+मामा :- श्री. बाबासाहेब भगवान इंगोले
+(प्राथमिक शिक्षक)
+रा.एखतपूर ता.सांगोला जि.सोलापूर मो. नं. ९६०४९६९५९३
+मु.पो.मोहीतेवाडी ता.कोरेगाव जि.सातारा
+TXT, true);
+
+        $maternalBlob = $this->sectionBlob($out['sections']['alliance']);
+
+        $this->assertStringContainsString('Maternal Uncle (mama) 1 श्री. तुकाराम भगवान इंगोले', $maternalBlob);
+        $this->assertStringNotContainsString('इंगोले- नं', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama) 2 श्री. बाबासाहेब भगवान इंगोले', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama) 2 Occupation प्राथमिक शिक्षक', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama) 2 Mobile 9604969593', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama) 2 Address एखतपूर ता.सांगोला जि.सोलापूर; मोहीतेवाडी ता.कोरेगाव जि.सातारा', $maternalBlob);
+        $this->assertStringNotContainsString('Maternal Uncle (mama) 3', $maternalBlob);
+        $this->assertStringNotContainsString('Additional info रा.एखतपूर', $maternalBlob);
+    }
+
+    public function test_embedded_chulte_and_other_relatives_do_not_become_maternal_uncles(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+मुलाचे नाव :- चि. रोहित सुंबे
+मामा :- कै.दशरथ बबन गगे (आंबी खालसा, ता. सुंगमनेर) चुलते:- श्री. भीमराव बन्सी सुंबे ( पाडळी तर्फ कान्हर ता. पारनेर)
+नातेवाईक :- सर्वश्री सिनारे, दावभट, जईड, निमसे, वाकळे, राखुंडे
+TXT, true);
+
+        $maternalBlob = $this->sectionBlob($out['sections']['alliance']);
+        $paternalBlob = $this->sectionBlob($out['sections']['relatives']);
+
+        $this->assertStringContainsString('Maternal Uncle (mama) कै.दशरथ बबन गगे', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama) Address आंबी खालसा, ता. सुंगमनेर', $maternalBlob);
+        $this->assertStringContainsString('Paternal Uncle (chulte) श्री. भीमराव बन्सी सुंबे', $paternalBlob);
+        $this->assertStringContainsString('Paternal Uncle (chulte) Address पाडळी तर्फ कान्हर ता. पारनेर', $paternalBlob);
+        $this->assertStringContainsString('Other relatives text सर्वश्री सिनारे, दावभट, जईड, निमसे, वाकळे, राखुंडे', $maternalBlob);
+        $this->assertStringNotContainsString('Maternal Uncle (mama) 2 कान्हर', $maternalBlob);
+        $this->assertStringNotContainsString('Maternal Uncle (mama) 3 नातेवाईक', $maternalBlob);
+    }
+
+    public function test_mama_list_and_pahune_other_relatives_are_preserved_without_javai_relatives(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+मुलाचे नाव :- चि. रोहित पाटील
+बहीण :- सौ. सुरेखा शिंदे
+बहीण :- सौ. रेखा शिंदे
+मामा :- १. डॉ. वसंतराव शिवाजीराव मोरे पाटील
+- (प्राध्यापक, शिवाजी विद्यापीठ, कोल्हापूर)
+- केशवराव शिवाजीराव मोरे पाटील, सोलापूर
+जावई :- १. दत्ताजी खंडेराव शिंदे (सरकार), बत्तीस शिराळा,
+- सांगली (व्यवसाय)
+- डॉ. अजय वसंतराव शिंदे (मुर्ती बारामती)
+- श्री क्लिनिक, डोंबिवली, ठाणे
+पाहुणे :- तातुगडे - देशमुख ( आमणापूर ), जाधव ( नरसेवाडी )
+इतर पाहूणे : पाटील, देवणे, मेंगाणे, शेळके
+TXT, true);
+
+        $maternalBlob = $this->sectionBlob($out['sections']['alliance']);
+        $siblingsBlob = $this->sectionBlob($out['sections']['siblings']);
+
+        $this->assertStringContainsString('Maternal Uncle (mama) 1 डॉ. वसंतराव शिवाजीराव मोरे पाटील', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama) 1 Occupation प्राध्यापक', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama) 1 Address शिवाजी विद्यापीठ, कोल्हापूर', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama) 2 केशवराव शिवाजीराव मोरे पाटील', $maternalBlob);
+        $this->assertStringContainsString('Maternal Uncle (mama) 2 Address सोलापूर', $maternalBlob);
+        $this->assertStringContainsString('Other relatives text तातुगडे - देशमुख ( आमणापूर ), जाधव ( नरसेवाडी ); पाटील, देवणे, मेंगाणे, शेळके', $maternalBlob);
+        $this->assertStringNotContainsString('जावई', $maternalBlob);
+        $this->assertStringNotContainsString('Maternal Uncle (mama) 3', $maternalBlob);
+        $this->assertStringContainsString("Sister's husband 1 Name दत्ताजी खंडेराव शिंदे", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband 1 Occupation व्यवसाय", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband 1 Address बत्तीस शिराळा, सांगली", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband 2 Name डॉ. अजय वसंतराव शिंदे", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband 2 Occupation श्री क्लिनिक, डोंबिवली, ठाणे", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband 2 Address मुर्ती बारामती", $siblingsBlob);
     }
 
     public function test_unavailable_when_not_biodata_text(): void
@@ -250,6 +635,121 @@ TXT, true);
 
         $this->assertFalse($out['available']);
         $this->assertSame('empty_text', $out['skipped_reason']);
+    }
+
+    public function test_property_preview_cleans_flat_location_quantity_and_land_notes(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+प्रोपर्टी :- 1BHK Flat (1)
+प्रोपर्टी :- 2 BHK Flat (2) मीरा रोड ठाणे मध्ये
+शेती :- १६ एकर
+TXT, true);
+
+        $property = $this->sectionBlob($out['sections']['property']);
+
+        $this->assertStringContainsString('Property Asset 1', $property);
+        $this->assertStringContainsString('Asset Type Flat', $property);
+        $this->assertStringContainsString('Location Not mentioned', $property);
+        $this->assertStringContainsString('Ownership Type Not mentioned', $property);
+        $this->assertStringContainsString('Additional Information 1 BHK Flat', $property);
+        $this->assertStringContainsString('Property Asset 2', $property);
+        $this->assertStringContainsString('Location मीरा रोड, ठाणे', $property);
+        $this->assertStringContainsString('Additional Information 2 Flats, 2 BHK', $property);
+        $this->assertStringContainsString('Property Asset 3', $property);
+        $this->assertStringContainsString('Additional Information १६ एकर', $property);
+        $this->assertStringContainsString('Notes Not mentioned', $property);
+        $this->assertStringNotContainsString('(1)', $property);
+        $this->assertStringNotContainsString('(2)', $property);
+    }
+
+    public function test_property_preview_expands_house_plot_and_bagayat_land_from_single_line(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+स्थावर :- स्वतः चे घर , ५ गुंठे प्लॉट व जमीन - १ एकर ( बागायत )
+TXT, true);
+
+        $property = $this->sectionBlob($out['sections']['property']);
+
+        $this->assertStringContainsString('Property Asset 1', $property);
+        $this->assertStringContainsString('Asset Type House', $property);
+        $this->assertStringContainsString('Ownership Type Sole', $property);
+        $this->assertStringContainsString('Property Asset 2', $property);
+        $this->assertStringContainsString('Asset Type Plot', $property);
+        $this->assertStringContainsString('Additional Information ५ गुंठे', $property);
+        $this->assertStringContainsString('Property Asset 3', $property);
+        $this->assertStringContainsString('Asset Type Land', $property);
+        $this->assertStringContainsString('Additional Information Farm land, Bagayat, १ एकर', $property);
+    }
+
+    public function test_property_preview_does_not_infer_property_from_house_number_in_address_only_text(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+नाव :- श्वेताली बाळासाहेब सुंबे
+पता :- घर नुं.३७, आशियाना कॉलोनी, सावेडी, अहमदनगर - ४१४ ००३.
+TXT, true);
+
+        $property = $this->sectionBlob($out['sections']['property']);
+
+        $this->assertStringNotContainsString('Asset Type House', $property);
+        $this->assertStringContainsString('Notes Not mentioned', $property);
+    }
+
+    public function test_property_preview_keeps_shared_kolhapur_house_plot_and_land_location(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+स्थावर व शेती : कोल्हापूर येथे स्वतःचे घर व २ प्लॉट, चार एक्कर शेती बांबवडे/ कळंबा
+स्थावर व शेती : सद्या- श्रीराम फोंड्री (झंवर ग्रुप ) सुपर वायझर (Quality Development)
+TXT, true);
+
+        $property = $this->sectionBlob($out['sections']['property']);
+
+        $this->assertStringContainsString('Property Asset 1', $property);
+        $this->assertStringContainsString('Asset Type House', $property);
+        $this->assertStringContainsString('Location कोल्हापूर', $property);
+        $this->assertStringContainsString('Ownership Type Sole', $property);
+        $this->assertStringContainsString('Property Asset 2', $property);
+        $this->assertStringContainsString('Asset Type Plot', $property);
+        $this->assertStringContainsString('Location कोल्हापूर', $property);
+        $this->assertStringContainsString('Additional Information 2 Plots', $property);
+        $this->assertStringContainsString('Property Asset 3', $property);
+        $this->assertStringContainsString('Asset Type Land', $property);
+        $this->assertStringContainsString('Location बांबवडे/ कळंबा', $property);
+        $this->assertStringContainsString('Additional Information Farm land, 4 एकर', $property);
+        $this->assertStringNotContainsString('श्रीराम फोंड्री', $property);
+    }
+
+    public function test_property_preview_reads_land_location_from_braced_belgaav(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+शेती : 01 एकर शेती {बेळगाव.}
+TXT, true);
+
+        $property = $this->sectionBlob($out['sections']['property']);
+
+        $this->assertStringContainsString('Asset Type Land', $property);
+        $this->assertStringContainsString('Location बेळगाव', $property);
+        $this->assertStringContainsString('Additional Information Farm land, 01 एकर', $property);
+    }
+
+    public function test_property_preview_keeps_common_location_quantity_in_notes(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+प्रोपर्टी :- पुणे मध्ये 6 2BHK flats
+प्रोपर्टी :- कोल्हापूर मध्ये commercial office
+TXT, true);
+
+        $property = $this->sectionBlob($out['sections']['property']);
+
+        $this->assertStringContainsString('Property Asset 1', $property);
+        $this->assertStringContainsString('Asset Type Flat', $property);
+        $this->assertStringContainsString('Location पुणे', $property);
+        $this->assertStringContainsString('Ownership Type Not mentioned', $property);
+        $this->assertStringContainsString('Additional Information 6 Flats, 2 BHK', $property);
+        $this->assertStringContainsString('Property Asset 2', $property);
+        $this->assertStringContainsString('Asset Type Commercial', $property);
+        $this->assertStringContainsString('Location कोल्हापूर', $property);
+        $this->assertStringContainsString('Additional Information Office', $property);
+        $this->assertStringContainsString('Notes Not mentioned', $property);
     }
 
     /**

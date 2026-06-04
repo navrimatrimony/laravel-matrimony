@@ -20,14 +20,14 @@
     $profile = $profile ?? new \stdClass();
     $prefix = $namePrefix ?: 'income';
     $periodOptions = $periodOptions ?? [
-        ['value' => 'annual', 'label' => 'Annual'],
-        ['value' => 'monthly', 'label' => 'Monthly'],
+        ['value' => 'annual', 'label' => __('wizard.income_period_annual')],
+        ['value' => 'monthly', 'label' => __('wizard.income_period_monthly')],
     ];
     $valueTypeOptions = $valueTypeOptions ?? [
-        ['value' => 'exact', 'label' => 'Exact'],
-        ['value' => 'approximate', 'label' => 'Approx.'],
-        ['value' => 'range', 'label' => 'Range'],
-        ['value' => 'undisclosed', 'label' => 'Prefer not to say'],
+        ['value' => 'exact', 'label' => __('wizard.income_value_exact')],
+        ['value' => 'approximate', 'label' => __('wizard.income_value_approximate')],
+        ['value' => 'range', 'label' => __('wizard.income_value_range')],
+        ['value' => 'undisclosed', 'label' => __('wizard.prefer_not_say')],
     ];
     $errorsArray = is_array($errors) ? $errors : [];
     if ($errors instanceof \Illuminate\Support\ViewErrorBag) {
@@ -102,7 +102,7 @@
     // Invisible overlay select: visible label is plain green text (no pill); avoids native <select> width quirks.
     $currencySelectOverlayCls = 'income-currency-select absolute inset-0 z-10 h-full min-h-[2.25rem] w-full cursor-pointer opacity-0 appearance-none border-0 bg-transparent p-0 outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50';
     $currencyReadonlyCls = 'inline-flex shrink-0 items-center justify-end whitespace-nowrap text-right text-sm font-semibold text-emerald-600 dark:text-emerald-400';
-    $privacyLabelText = $prefix === 'income' ? 'Keep my income private' : 'Keep family income private';
+    $privacyLabelText = $prefix === 'income' ? __('wizard.keep_my_income_private') : __('wizard.keep_family_income_private');
 @endphp
 <div class="income-engine w-full rounded-2xl border border-gray-200/80 dark:border-gray-600/80 bg-white dark:bg-gray-800/60 shadow-md shadow-gray-200/50 dark:shadow-none overflow-hidden">
     <div class="px-4 pt-4 pb-1">
@@ -114,7 +114,7 @@
             {{-- Period: same width as value type (income-control-col). Desktop widths unchanged from original (md+). --}}
             <div class="income-control-col w-full min-w-0 shrink-0 transition-[width,max-width] duration-200 md:w-36 lg:w-40 group-[.is-range]:md:w-[6.75rem] group-[.is-range]:md:max-w-[6.75rem] lg:group-[.is-range]:md:w-28 lg:group-[.is-range]:md:max-w-[7rem]">
                 @if(!$readOnly)
-                    <select name="{{ $n('period') }}" class="{{ $chipCls }} w-full min-w-0 max-w-full" {{ $disabled ? 'disabled' : '' }} aria-label="Period">
+                    <select name="{{ $n('period') }}" class="{{ $chipCls }} w-full min-w-0 max-w-full" {{ $disabled ? 'disabled' : '' }} aria-label="{{ __('wizard.income_period') }}">
                         @foreach($periodOptions as $opt)
                             <option value="{{ $opt['value'] }}" {{ (string)$periodRaw === (string)$opt['value'] ? 'selected' : '' }}>{{ $opt['label'] }}</option>
                         @endforeach
@@ -128,7 +128,7 @@
             {{-- Value type: same width as period --}}
             <div class="income-control-col w-full min-w-0 shrink-0 transition-[width,max-width] duration-200 md:w-36 lg:w-40 group-[.is-range]:md:w-[6.75rem] group-[.is-range]:md:max-w-[6.75rem] lg:group-[.is-range]:md:w-28 lg:group-[.is-range]:md:max-w-[7rem]">
                 @if(!$readOnly)
-                    <select name="{{ $n('value_type') }}" class="{{ $chipCls }} income-value-type-select w-full min-w-0 max-w-full" data-engine="{{ $prefix }}" {{ $disabled ? 'disabled' : '' }} aria-label="Value type">
+                    <select name="{{ $n('value_type') }}" class="{{ $chipCls }} income-value-type-select w-full min-w-0 max-w-full" data-engine="{{ $prefix }}" {{ $disabled ? 'disabled' : '' }} aria-label="{{ __('wizard.income_value_type') }}">
                         @foreach($valueTypeOptions as $opt)
                             <option value="{{ $opt['value'] }}" {{ (string)$valueTypeRaw === (string)$opt['value'] ? 'selected' : '' }}>{{ $opt['label'] }}</option>
                         @endforeach
@@ -143,22 +143,22 @@
             <div class="flex min-w-0 flex-[2] flex-wrap items-center gap-2 max-md:contents md:flex md:min-w-0">
                 <div class="income-amount-area flex min-w-0 flex-1 flex-wrap items-center gap-2 max-md:min-w-0" data-engine="{{ $prefix }}">
                     <div class="income-amount-single min-w-0 flex-1 basis-[8rem] transition-opacity duration-200" data-show="exact,approximate" style="{{ in_array($valueTypeRaw, ['exact','approximate'], true) ? '' : 'display:none!important' }}">
-                        <input type="text" inputmode="numeric" name="{{ $n('amount') }}" value="{{ $amountDisplayFormatted }}" placeholder="Amount" class="{{ $amountCls }} w-full min-w-0 income-amount-indian" data-raw="{{ $amountDisplay($amountVal) }}" {{ $disabled ? 'disabled' : '' }} aria-label="Amount" autocomplete="off">
+                        <input type="text" inputmode="numeric" name="{{ $n('amount') }}" value="{{ $amountDisplayFormatted }}" placeholder="{{ __('wizard.income_amount') }}" class="{{ $amountCls }} w-full min-w-0 income-amount-indian" data-raw="{{ $amountDisplay($amountVal) }}" {{ $disabled ? 'disabled' : '' }} aria-label="{{ __('wizard.income_amount') }}" autocomplete="off">
                     </div>
                     {{-- Compact row vs period/value; dash minimal gap; inputs capped but min-w for Indian-format digits --}}
                     <div class="income-amount-range flex min-w-0 max-w-[min(100%,17.5rem)] flex-1 basis-[8rem] items-center gap-1 transition-opacity duration-200 sm:max-w-[18.5rem]" data-show="range" style="{{ $valueTypeRaw === 'range' ? '' : 'display:none!important' }}">
-                        <input type="text" inputmode="numeric" name="{{ $n('min_amount') }}" value="{{ $minAmountDisplayFormatted }}" placeholder="50,000" class="{{ $amountCls }} income-amount-indian min-w-[5.25rem] max-w-[8.5rem] flex-1" data-raw="{{ $amountDisplay($minAmountVal) }}" {{ $disabled ? 'disabled' : '' }} aria-label="Minimum amount" autocomplete="off">
+                        <input type="text" inputmode="numeric" name="{{ $n('min_amount') }}" value="{{ $minAmountDisplayFormatted }}" placeholder="50,000" class="{{ $amountCls }} income-amount-indian min-w-[5.25rem] max-w-[8.5rem] flex-1" data-raw="{{ $amountDisplay($minAmountVal) }}" {{ $disabled ? 'disabled' : '' }} aria-label="{{ __('wizard.income_minimum_amount') }}" autocomplete="off">
                         <span class="shrink-0 select-none px-0 text-xs font-medium leading-none text-gray-400 dark:text-gray-500" aria-hidden="true">—</span>
-                        <input type="text" inputmode="numeric" name="{{ $n('max_amount') }}" value="{{ $maxAmountDisplayFormatted }}" placeholder="75,000" class="{{ $amountCls }} income-amount-indian min-w-[5.25rem] max-w-[8.5rem] flex-1" data-raw="{{ $amountDisplay($maxAmountVal) }}" {{ $disabled ? 'disabled' : '' }} aria-label="Maximum amount" autocomplete="off">
+                        <input type="text" inputmode="numeric" name="{{ $n('max_amount') }}" value="{{ $maxAmountDisplayFormatted }}" placeholder="75,000" class="{{ $amountCls }} income-amount-indian min-w-[5.25rem] max-w-[8.5rem] flex-1" data-raw="{{ $amountDisplay($maxAmountVal) }}" {{ $disabled ? 'disabled' : '' }} aria-label="{{ __('wizard.income_maximum_amount') }}" autocomplete="off">
                     </div>
                     <div class="income-amount-undisclosed flex-shrink-0 transition-opacity duration-200" data-show="undisclosed" style="{{ $valueTypeRaw === 'undisclosed' ? '' : 'display:none!important' }}">
-                        <span class="text-sm italic text-gray-400 dark:text-gray-500">No amount</span>
+                        <span class="text-sm italic text-gray-400 dark:text-gray-500">{{ __('wizard.no_amount') }}</span>
                     </div>
                 </div>
                 {{-- Currency: green text + icon only; invisible overlay <select> for native picker (no wide pill). --}}
                 <div class="group relative inline-flex max-w-full min-w-0 flex-shrink-0 items-center justify-end self-center rounded-sm py-0.5 focus-within:ring-2 focus-within:ring-emerald-500/45 focus-within:ring-offset-1 dark:focus-within:ring-offset-gray-800 max-md:w-full max-md:justify-self-end md:ml-auto">
                     @if(!$readOnly)
-                        <select name="{{ $n('currency_id') }}" class="{{ $currencySelectOverlayCls }}" {{ $disabled ? 'disabled' : '' }} aria-label="Currency" title="Change currency">
+                        <select name="{{ $n('currency_id') }}" class="{{ $currencySelectOverlayCls }}" {{ $disabled ? 'disabled' : '' }} aria-label="{{ __('wizard.currency') }}" title="{{ __('wizard.change_currency') }}">
                             @foreach($currencies as $c)
                                 @php $sym = $c->displaySymbol(); @endphp
                                 <option value="{{ $c->id }}" {{ (string)$defaultCurrencyId === (string)$c->id ? 'selected' : '' }}>{{ $sym }} {{ $c->code }}</option>
@@ -184,7 +184,7 @@
                 <input type="checkbox" name="{{ $n('private') }}" value="1" id="{{ $prefix }}_private_cb" {{ $privateRaw ? 'checked' : '' }} class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500" {{ $disabled ? 'disabled' : '' }}>
                 <label for="{{ $prefix }}_private_cb" class="text-sm text-gray-600 dark:text-gray-400 cursor-pointer select-none inline-flex items-center gap-1.5"><span aria-hidden="true">🔒</span>{{ $privacyLabelText }}</label>
             @else
-                <span class="text-sm text-gray-600 dark:text-gray-400 inline-flex items-center gap-1.5"><span aria-hidden="true">🔒</span>{{ $privateRaw ? $privacyLabelText : 'Visible' }}</span>
+                <span class="text-sm text-gray-600 dark:text-gray-400 inline-flex items-center gap-1.5"><span aria-hidden="true">🔒</span>{{ $privateRaw ? $privacyLabelText : __('wizard.visible') }}</span>
             @endif
         </div>
         @endif

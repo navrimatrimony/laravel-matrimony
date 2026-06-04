@@ -1629,7 +1629,6 @@ class GovernanceProfilePresenter
             'father_occupation_master_id' => fn (int $id): ?string => $this->resolveOccupationLabel($id),
             'mother_occupation' => fn (int $id): ?string => $this->resolveOccupationLabel($id),
             'mother_occupation_master_id' => fn (int $id): ?string => $this->resolveOccupationLabel($id),
-            'employment_status_id' => ['table' => 'master_employment_statuses', 'columns' => ['label']],
         ];
     }
 

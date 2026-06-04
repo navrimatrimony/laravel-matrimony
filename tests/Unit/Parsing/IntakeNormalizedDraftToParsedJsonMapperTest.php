@@ -146,6 +146,132 @@ class IntakeNormalizedDraftToParsedJsonMapperTest extends TestCase
         $this->assertSame($text, $parsed['core']['other_relatives_text'] ?? null);
     }
 
+    public function test_mapper_preserves_wizard_shaped_paternal_extended_family_fields(): void
+    {
+        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map([
+            'normalized' => [
+                'relatives' => [
+                    [
+                        'id' => '9',
+                        'relation_type' => 'paternal_uncle',
+                        'name' => 'श्री. मोहन पाटील',
+                        'occupation' => 'शेती',
+                        'occupation_master_id' => '7',
+                        'occupation_custom_id' => '8',
+                        'contact_number' => '9876543210',
+                        'address_line' => 'कळे, ता. पन्हाळा',
+                        'location_display' => 'Kale, Maharashtra',
+                        'city_id' => '101',
+                        'state_id' => '104',
+                        'notes' => 'मोठे चुलते',
+                        'is_primary_contact' => true,
+                    ],
+                ],
+            ],
+        ]);
+
+        $relative = $parsed['relatives'][0] ?? [];
+        $paternal = $parsed['relatives_parents_family'][0] ?? [];
+
+        $this->assertSame(9, $relative['id'] ?? null);
+        $this->assertSame('paternal_uncle', $relative['relation_type'] ?? null);
+        $this->assertSame('श्री. मोहन पाटील', $relative['name'] ?? null);
+        $this->assertSame('शेती', $relative['occupation'] ?? null);
+        $this->assertSame(7, $relative['occupation_master_id'] ?? null);
+        $this->assertSame(8, $relative['occupation_custom_id'] ?? null);
+        $this->assertSame('9876543210', $relative['contact_number'] ?? null);
+        $this->assertSame('कळे, ता. पन्हाळा', $relative['address_line'] ?? null);
+        $this->assertSame('Kale, Maharashtra', $relative['location_display'] ?? null);
+        $this->assertSame(101, $relative['city_id'] ?? null);
+        $this->assertSame(104, $relative['state_id'] ?? null);
+        $this->assertSame('मोठे चुलते', $relative['notes'] ?? null);
+        $this->assertTrue($relative['is_primary_contact'] ?? false);
+        $this->assertSame($relative, $paternal);
+    }
+
+    public function test_mapper_preserves_wizard_shaped_sibling_fields(): void
+    {
+        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map([
+            'normalized' => [
+                'siblings' => [
+                    [
+                        'id' => '12',
+                        'relation_type' => 'brother',
+                        'name' => 'ओंकार नितीन पोवार',
+                        'gender' => 'male',
+                        'marital_status' => 'married',
+                        'occupation' => 'व्यवसाय',
+                        'occupation_master_id' => '7',
+                        'occupation_custom_id' => '8',
+                        'contact_number' => '9876543210',
+                        'contact_number_2' => '9765432109',
+                        'contact_number_3' => '9765432110',
+                        'address_line' => 'कोल्हापूर',
+                        'location_display' => 'Kolhapur, Maharashtra',
+                        'city_id' => '101',
+                        'taluka_id' => '102',
+                        'district_id' => '103',
+                        'state_id' => '104',
+                        'notes' => 'elder brother',
+                        'sort_order' => '2',
+                        'spouse' => [
+                            'name' => 'सौ. नेहा ओंकार पोवार',
+                            'occupation_title' => 'शिक्षिका',
+                            'occupation_master_id' => '21',
+                            'occupation_custom_id' => '22',
+                            'contact_number' => '9123456789',
+                            'address_line' => 'पुणे',
+                            'location_display' => 'Pune, Maharashtra',
+                            'city_id' => '201',
+                            'taluka_id' => '202',
+                            'district_id' => '203',
+                            'state_id' => '204',
+                        ],
+                    ],
+                    [
+                        'relation_type' => 'sister',
+                        'name' => 'आर्या नितीन पोवार',
+                        'marital_status' => 'divorced',
+                    ],
+                ],
+            ],
+        ]);
+
+        $sibling = $parsed['siblings'][0] ?? [];
+
+        $this->assertSame(12, $sibling['id'] ?? null);
+        $this->assertSame('brother', $sibling['relation_type'] ?? null);
+        $this->assertSame('ओंकार नितीन पोवार', $sibling['name'] ?? null);
+        $this->assertSame('male', $sibling['gender'] ?? null);
+        $this->assertSame('married', $sibling['marital_status'] ?? null);
+        $this->assertSame('व्यवसाय', $sibling['occupation'] ?? null);
+        $this->assertSame(7, $sibling['occupation_master_id'] ?? null);
+        $this->assertSame(8, $sibling['occupation_custom_id'] ?? null);
+        $this->assertSame('9876543210', $sibling['contact_number'] ?? null);
+        $this->assertSame('9765432109', $sibling['contact_number_2'] ?? null);
+        $this->assertSame('9765432110', $sibling['contact_number_3'] ?? null);
+        $this->assertSame('कोल्हापूर', $sibling['address_line'] ?? null);
+        $this->assertSame('Kolhapur, Maharashtra', $sibling['location_display'] ?? null);
+        $this->assertSame(101, $sibling['city_id'] ?? null);
+        $this->assertSame(102, $sibling['taluka_id'] ?? null);
+        $this->assertSame(103, $sibling['district_id'] ?? null);
+        $this->assertSame(104, $sibling['state_id'] ?? null);
+        $this->assertSame('elder brother', $sibling['notes'] ?? null);
+        $this->assertSame(2, $sibling['sort_order'] ?? null);
+        $this->assertSame('सौ. नेहा ओंकार पोवार', $sibling['spouse']['name'] ?? null);
+        $this->assertSame('शिक्षिका', $sibling['spouse']['occupation_title'] ?? null);
+        $this->assertSame(21, $sibling['spouse']['occupation_master_id'] ?? null);
+        $this->assertSame(22, $sibling['spouse']['occupation_custom_id'] ?? null);
+        $this->assertSame('9123456789', $sibling['spouse']['contact_number'] ?? null);
+        $this->assertSame('पुणे', $sibling['spouse']['address_line'] ?? null);
+        $this->assertSame('Pune, Maharashtra', $sibling['spouse']['location_display'] ?? null);
+        $this->assertSame(201, $sibling['spouse']['city_id'] ?? null);
+        $this->assertSame(202, $sibling['spouse']['taluka_id'] ?? null);
+        $this->assertSame(203, $sibling['spouse']['district_id'] ?? null);
+        $this->assertSame(204, $sibling['spouse']['state_id'] ?? null);
+        $this->assertArrayNotHasKey('marital_status', $parsed['siblings'][1] ?? []);
+    }
+
     public function test_mapper_carries_parent_addresses_without_self_address_overwrite(): void
     {
         $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map([

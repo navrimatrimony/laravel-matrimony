@@ -62,7 +62,7 @@ final class IntakeHtmlTableHintApplier
 
         $core = &$draft['normalized']['core'];
         if ($hints !== []) {
-            $this->applyCoreHints($hints, $core);
+            $this->applyCoreHints($hints, $core, $draft['normalized']);
             $this->applyAddressHints($hints, $core, $draft['normalized'], $draft);
             $this->applyOtherRelativesTextHints($hints, $core);
             $this->applyPropertySummaryHints($hints, $draft['normalized']);
@@ -82,8 +82,9 @@ final class IntakeHtmlTableHintApplier
     /**
      * @param  array<string, string>  $hints
      * @param  array<string, mixed>  $core
+     * @param  array<string, mixed>  $normalized
      */
-    private function applyCoreHints(array $hints, array &$core): void
+    private function applyCoreHints(array $hints, array &$core, array &$normalized): void
     {
         if (isset($hints['full_name'])) {
             $this->setCoreField($core, 'full_name', $this->cleanPersonName(trim($hints['full_name'])), true);
@@ -140,6 +141,7 @@ final class IntakeHtmlTableHintApplier
             if ($occupation !== null && $occupation !== '') {
                 $this->setCoreField($core, 'father_occupation', $occupation, false);
             }
+            $this->applyParentContactAndAddressHint(trim($hints['father_name']), 'father', $core, $normalized);
         }
 
         if (isset($hints['mother_name'])) {
@@ -148,6 +150,7 @@ final class IntakeHtmlTableHintApplier
             if ($occupation !== null && $occupation !== '') {
                 $this->setCoreField($core, 'mother_occupation', $occupation, false);
             }
+            $this->applyParentContactAndAddressHint(trim($hints['mother_name']), 'mother', $core, $normalized);
         }
     }
 
@@ -306,11 +309,91 @@ final class IntakeHtmlTableHintApplier
         $value = trim($value);
         $occupation = null;
         if (preg_match('/[\(\{]\s*(.+?)\s*[\)\}]/u', $value, $m)) {
-            $occupation = trim($m[1]);
+            $occupation = $this->cleanOccupationText($m[1]);
             $value = trim(preg_replace('/[\(\{]\s*.+?\s*[\)\}]/u', '', $value) ?? $value);
         }
 
-        return [$this->cleanPersonName($value), $occupation !== '' ? $occupation : null];
+        return [$this->cleanPersonName($this->stripTrailingAddressAndPhones($value)), $occupation !== '' ? $occupation : null];
+    }
+
+    private function stripTrailingAddressAndPhones(string $value): string
+    {
+        $value = preg_split('/\s+(?:घरचा\s+पत्ता|घराचा\s+पत्ता|सध्याचा\s+पत्ता|निवासी\s+पत्ता|पत्ता|मोबाईल|मोबाइल|संपर्क|मो\.?\s*नं\.?)\s*[:\-]/u', $value, 2)[0] ?? $value;
+        $value = preg_split('/(?:\R|\s)+(?:मू\.?\s*पो\.?|मु\.?\s*पो\.?|रा\.|-\s*\(?\s*मो\.?\s*नं\.?|\(?\s*मो\.?\s*नं\.?)/u', $value, 2)[0] ?? $value;
+        $value = preg_replace('/(?<!\d)[6-9]\d{9}(?!\d)/u', '', OcrNormalize::normalizeDigits($value)) ?? $value;
+
+        return $this->trimSeparators($value);
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     * @param  array<string, mixed>  $normalized
+     */
+    private function applyParentContactAndAddressHint(string $value, string $parent, array &$core, array &$normalized): void
+    {
+        $phones = $this->extractValidPhones($value);
+        if ($phones !== []) {
+            foreach ($phones as $index => $phone) {
+                $key = $parent.'_contact_'.($index + 1);
+                if ($index > 2 || ! empty($core[$key] ?? null)) {
+                    continue;
+                }
+                $core[$key] = $phone;
+            }
+            if (empty($core[$parent.'_contact_number'] ?? null)) {
+                $core[$parent.'_contact_number'] = $phones[0];
+            }
+        }
+
+        $address = $this->extractParentAddressFromHint($value);
+        if ($address === '') {
+            return;
+        }
+        if (! is_array($normalized['parents_addresses'] ?? null)) {
+            $normalized['parents_addresses'] = [];
+        }
+        $key = $this->normalizeAddressKey($address);
+        foreach ($normalized['parents_addresses'] as $existing) {
+            if (! is_array($existing)) {
+                continue;
+            }
+            $existingLine = trim((string) ($existing['address_line'] ?? $existing['raw'] ?? ''));
+            if ($this->normalizeAddressKey($existingLine) === $key) {
+                return;
+            }
+        }
+        $normalized['parents_addresses'][] = [
+            'address_line' => $address,
+            'raw' => $address,
+            'type' => 'parents',
+            'address_type_key' => 'permanent',
+        ];
+    }
+
+    private function extractParentAddressFromHint(string $value): string
+    {
+        if (! preg_match('/(?:^|\R|\s)(मू\.?\s*पो\.?|मु\.?\s*पो\.?|रा\.)\s*(.+)$/us', $value, $m)) {
+            return '';
+        }
+        $address = trim(($m[1] ?? '').' '.($m[2] ?? ''));
+        $address = preg_split('/(?:\R|\s)*-?\s*\(?\s*(?:मो\.?\s*नं\.?|मोबाईल|मोबाइल|संपर्क)\s*[:\-]?/u', $address, 2)[0] ?? $address;
+
+        return $this->cleanAddressLine($address);
+    }
+
+    private function cleanOccupationText(string $value): string
+    {
+        $value = OcrNormalize::normalizeDigits($value);
+        $value = preg_replace('/(?:मो\.?\s*नं\.?|मोबाईल|मोबाइल|संपर्क)\s*[:\-]?\s*[6-9]\d{9}/u', '', $value) ?? $value;
+        $value = preg_replace('/(?<!\d)[6-9]\d{9}(?!\d)/u', '', $value) ?? $value;
+        $value = $this->trimSeparators($value);
+
+        return trim(preg_replace('/\s+/u', ' ', $value) ?? $value);
+    }
+
+    private function trimSeparators(string $value): string
+    {
+        return trim(preg_replace('/^[\s,\-–—]+|[\s,\-–—]+$/u', '', $value) ?? $value);
     }
 
     private function cleanPersonName(string $value): string
@@ -481,6 +564,8 @@ final class IntakeHtmlTableHintApplier
             'horoscope_nadi' => 'nadi',
             'horoscope_gan' => 'gan',
             'horoscope_charan' => 'charan',
+            'horoscope_yoni' => 'yoni',
+            'horoscope_varna' => 'varna',
             'devak' => 'devak',
             'kuldaivat' => 'kuldaivat',
             'gotra' => 'gotra',
@@ -536,9 +621,34 @@ final class IntakeHtmlTableHintApplier
                 if (! is_array($normalized['siblings'] ?? null)) {
                     $normalized['siblings'] = [];
                 }
-                $normalized['siblings'][] = ['relation_type' => $relation, 'name' => $line];
+                [$name, $occupation] = $this->splitNameOccupation($line);
+                $name = $this->cleanSiblingHintName($name);
+                $sibling = ['relation_type' => $relation, 'name' => $name !== '' ? $name : $line];
+                if ($occupation !== null && $occupation !== '') {
+                    if ($this->looksLikeSiblingAdditionalInfoText($occupation)) {
+                        $sibling['notes'] = $occupation;
+                    } else {
+                        $sibling['occupation'] = $occupation;
+                    }
+                }
+                $normalized['siblings'][] = $sibling;
             }
         }
+        if (is_array($normalized['siblings'] ?? null)) {
+            $normalized['siblings'] = $this->dedupeRows($normalized['siblings'], ['relation_type', 'name', 'occupation', 'notes']);
+        }
+    }
+
+    private function cleanSiblingHintName(string $value): string
+    {
+        $value = preg_replace('/^\s*(?:चि\.?|कु\.?|श्री\.?|सौ\.?)\s*/u', '', $value) ?? $value;
+
+        return $this->trimSeparators($value);
+    }
+
+    private function looksLikeSiblingAdditionalInfoText(string $value): bool
+    {
+        return (bool) preg_match('/\b(?:B\.?\s*A|B\.?\s*Com|B\.?\s*Sc|B\.?\s*E|M\.?\s*A|M\.?\s*Com|M\.?\s*Sc|MBA|BBA|BA|BCOM|BSC|BE|ME|ITI|Diploma|डिप्लोमा)\b/ui', $value);
     }
 
     /**
@@ -713,5 +823,33 @@ final class IntakeHtmlTableHintApplier
         $v = trim(OcrNormalize::normalizeDigits($value));
 
         return (bool) preg_match('/^[0-9]+$/', $v);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @param  list<string>  $fields
+     * @return list<array<string, mixed>>
+     */
+    private function dedupeRows(array $rows, array $fields): array
+    {
+        $seen = [];
+        $out = [];
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $keyParts = [];
+            foreach ($fields as $field) {
+                $keyParts[] = mb_strtolower(trim(preg_replace('/\s+/u', ' ', (string) ($row[$field] ?? '')) ?? ''));
+            }
+            $key = implode('|', $keyParts);
+            if ($key === str_repeat('|', max(0, count($fields) - 1)) || isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $out[] = $row;
+        }
+
+        return $out;
     }
 }

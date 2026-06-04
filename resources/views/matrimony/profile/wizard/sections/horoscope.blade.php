@@ -1,7 +1,7 @@
 {{-- Phase-5 SSOT: Horoscope. Shared horoscope-engine with dependency rules (nakshatra+charan->rashi; nakshatra->gan,nadi,yoni). --}}
 @php $namePrefix = $namePrefix ?? 'horoscope'; @endphp
 <div class="space-y-6">
-    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">Horoscope</h2>
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">Horoscope & Religious Details</h2>
     @php
         $h = old('horoscope', $profile_horoscope_data ?? new \stdClass());
         $hRow = is_object($h) ? (array) $h : $h;

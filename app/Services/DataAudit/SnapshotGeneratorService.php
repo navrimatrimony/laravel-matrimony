@@ -177,7 +177,6 @@ class SnapshotGeneratorService
             'id' => (int) $r->id,
             'relation_type' => (string) ($r->relation_type ?? ''),
             'name' => (string) ($r->name ?? ''),
-            'gender' => (string) ($r->gender ?? ''),
             'marital_status' => (string) ($r->marital_status ?? ''),
             'occupation' => (string) ($r->occupation ?? ''),
             'occupation_master_id' => $r->occupation_master_id,

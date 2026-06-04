@@ -231,6 +231,8 @@ return [
         'asset_type' => 'Asset Type',
         'ownership_type' => 'Ownership Type',
         'location' => 'Location',
+        'additional_information' => 'Additional Information',
+        'additional_information_placeholder' => 'Extra details for this property asset',
         'type_village_city_pincode' => 'Type village / city / pincode',
         'optional_notes_about_property' => 'Optional notes about property',
     ],

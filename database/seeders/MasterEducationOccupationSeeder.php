@@ -17,6 +17,10 @@ class MasterEducationOccupationSeeder extends Seeder
 {
     public function run(): void
     {
+        if (! Schema::hasTable('master_employment_statuses')) {
+            return;
+        }
+
         $this->seedMasterEmploymentStatuses();
     }
 

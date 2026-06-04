@@ -57,29 +57,30 @@ final class HtmlMarathiBiodataTableExtractor
             if ($cells === []) {
                 continue;
             }
-            [$label, $value] = self::splitLabelValueFromCells($cells);
-            if ($label === '' || $value === '') {
-                continue;
-            }
-            $hoSlot = self::mapHoroscopeGridLabelToSlot($label, $value);
-            if ($hoSlot !== null) {
-                $hints[$hoSlot] = $value;
+            foreach (self::splitLabelValuePairsFromCells($cells) as [$label, $value]) {
+                if ($label === '' || $value === '') {
+                    continue;
+                }
+                $hoSlot = self::mapHoroscopeGridLabelToSlot($label, $value);
+                if ($hoSlot !== null) {
+                    $hints[$hoSlot] = $value;
 
-                continue;
-            }
-            $slot = self::mapLabelToSlot($label, $value);
-            if ($slot === null) {
-                continue;
-            }
-            // Multiple भाऊ/बहिण rows: preserve each line (merge splits in BiodataParserService).
-            if ($slot === 'sibling_brother_line' || $slot === 'sibling_sister_line') {
-                $prev = $hints[$slot] ?? '';
-                $hints[$slot] = $prev === '' ? $value : trim($prev."\n".$value);
+                    continue;
+                }
+                $slot = self::mapLabelToSlot($label, $value);
+                if ($slot === null) {
+                    continue;
+                }
+                // Multiple भाऊ/बहिण rows: preserve each line (merge splits in BiodataParserService).
+                if ($slot === 'sibling_brother_line' || $slot === 'sibling_sister_line') {
+                    $prev = $hints[$slot] ?? '';
+                    $hints[$slot] = $prev === '' ? $value : trim($prev."\n".$value);
 
-                continue;
+                    continue;
+                }
+                // Single source of truth: later rows override (no OCR-style concatenation).
+                $hints[$slot] = $value;
             }
-            // Single source of truth: later rows override (no OCR-style concatenation).
-            $hints[$slot] = $value;
         }
 
         if ($hints === []) {
@@ -143,6 +144,23 @@ final class HtmlMarathiBiodataTableExtractor
 
     /**
      * @param  list<string>  $cells
+     * @return list<array{0: string, 1: string}>
+     */
+    private static function splitLabelValuePairsFromCells(array $cells): array
+    {
+        $n = count($cells);
+        if ($n >= 5 && self::isSeparatorCell($cells[1]) && self::labelCellHasTrailingSeparator($cells[3])) {
+            return [
+                [trim($cells[0]), self::cleanValueCell($cells[2])],
+                [trim($cells[3]), self::cleanValueCell($cells[4])],
+            ];
+        }
+
+        return [self::splitLabelValueFromCells($cells)];
+    }
+
+    /**
+     * @param  list<string>  $cells
      * @return array{0: string, 1: string}
      */
     private static function splitLabelValueFromCells(array $cells): array
@@ -184,6 +202,11 @@ final class HtmlMarathiBiodataTableExtractor
         return preg_match('/^:?\s*[\-–—]{1,3}\s*$/u', $t) === 1;
     }
 
+    private static function labelCellHasTrailingSeparator(string $c): bool
+    {
+        return preg_match('/\s*[:\-–—]+\s*$/u', trim($c)) === 1;
+    }
+
     private static function cleanValueCell(string $value): string
     {
         $value = trim($value);
@@ -216,6 +239,7 @@ final class HtmlMarathiBiodataTableExtractor
     private static function normalizeLabel(string $label): string
     {
         $t = trim($label);
+        $t = preg_replace('/^[*•●▪▫\-\s]+/u', '', $t) ?? $t;
         $t = preg_replace('/^\s*\d+[\.)]\s*/u', '', $t);
         $t = preg_replace('/\s*[:\-–—]+$/u', '', $t);
 
@@ -245,8 +269,8 @@ final class HtmlMarathiBiodataTableExtractor
             ['birth_place', '/^(?:जन्म\s*स्थळ|जन्मस्थळ|जन्म\s*ठिकाण)$/u'],
             ['birth_time', '/^(?:जन्मवेळ|जन्म\s*वेळ|जन्म\s*वार\s*व\s*वेळ|जन्मवार\s*व\s*वेळ)$/u'],
             ['height', '/^(?:उंची|ऊंची|Height)$/iu'],
-            ['complexion', '/^(?:वर्ण)$/u'],
-            ['blood_group', '/^(?:रक्तगट|रक्त\s*गट|रक्‍त\s*गट)$/u'],
+            ['complexion', '/^(?:वर्ण|रंग)$/u'],
+            ['blood_group', '/^(?:रक्तगट|रक्त\s*गट|रक्‍त\s*गट|ब्लड\s*ग्रुप|ब्लड\s*ग्रप)$/u'],
             ['highest_education', '/^(?:शिक्षण|Education)$/iu'],
             ['occupation_raw', '/^(?:नोकरी|व्यवसाय|व्यवसाय\s*विषय|Profession)$/iu'],
             ['kuldaivat', '/^(?:कुलदैवत|कुल\s*दैवत|कुलस्वामी)$/u'],

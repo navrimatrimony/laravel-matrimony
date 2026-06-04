@@ -17,6 +17,15 @@ final class AddressHierarchySearch
     /** @var list<string> */
     private const LEAF_TYPES = ['village', 'suburb', 'city'];
 
+    /** @var array<string, list<City>> */
+    private static array $findCitiesCache = [];
+
+    /** @var array<string, list<int>> */
+    private static array $talukaIdCache = [];
+
+    /** @var array<string, list<int>> */
+    private static array $districtIdCache = [];
+
     /**
      * @param  array{village: string, taluka: string, district: string}  $components
      * @return list<City>
@@ -26,6 +35,16 @@ final class AddressHierarchySearch
         $village = trim((string) ($components['village'] ?? ''));
         if ($village === '') {
             return [];
+        }
+
+        $cacheKey = json_encode([
+            'village' => $village,
+            'taluka' => trim((string) ($components['taluka'] ?? '')),
+            'district' => trim((string) ($components['district'] ?? '')),
+            'limit' => $limit,
+        ]);
+        if (is_string($cacheKey) && array_key_exists($cacheKey, self::$findCitiesCache)) {
+            return self::$findCitiesCache[$cacheKey];
         }
 
         $taluka = trim((string) ($components['taluka'] ?? ''));
@@ -50,12 +69,12 @@ final class AddressHierarchySearch
                 $seen[$id] = true;
                 $out[] = $city;
                 if (count($out) >= $limit) {
-                    return $out;
+                    return self::$findCitiesCache[$cacheKey] = $out;
                 }
             }
         }
 
-        return $out;
+        return self::$findCitiesCache[$cacheKey] = $out;
     }
 
     public function cityFromVillageLocation(Location $location): ?City
@@ -198,6 +217,11 @@ final class AddressHierarchySearch
      */
     private function resolveTalukaIds(string $taluka, string $district): array
     {
+        $cacheKey = mb_strtolower(trim($taluka).'|'.trim($district), 'UTF-8');
+        if (array_key_exists($cacheKey, self::$talukaIdCache)) {
+            return self::$talukaIdCache[$cacheKey];
+        }
+
         $query = Taluka::query();
         $query->where(function (Builder $w) use ($taluka): void {
             $this->applyGeoNameMatch($w, $taluka);
@@ -214,7 +238,7 @@ final class AddressHierarchySearch
             }
         }
 
-        return $query->limit(50)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        return self::$talukaIdCache[$cacheKey] = $query->limit(50)->pluck('id')->map(fn ($id) => (int) $id)->all();
     }
 
     /**
@@ -222,7 +246,12 @@ final class AddressHierarchySearch
      */
     private function resolveDistrictIds(string $district): array
     {
-        return District::query()
+        $cacheKey = mb_strtolower(trim($district), 'UTF-8');
+        if (array_key_exists($cacheKey, self::$districtIdCache)) {
+            return self::$districtIdCache[$cacheKey];
+        }
+
+        return self::$districtIdCache[$cacheKey] = District::query()
             ->where(function (Builder $w) use ($district): void {
                 $this->applyGeoNameMatch($w, $district);
             })

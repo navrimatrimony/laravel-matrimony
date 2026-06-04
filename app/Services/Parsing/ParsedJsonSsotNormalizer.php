@@ -224,16 +224,38 @@ final class ParsedJsonSsotNormalizer
             if (! is_array($row)) {
                 continue;
             }
-            foreach (['relation_type', 'name', 'occupation', 'address_line', 'contact_number', 'notes', 'marital_status'] as $f) {
+            foreach ([
+                'relation_type',
+                'name',
+                'gender',
+                'occupation',
+                'address_line',
+                'contact_number',
+                'contact_number_2',
+                'contact_number_3',
+                'notes',
+                'marital_status',
+                'location_display',
+            ] as $f) {
                 if (array_key_exists($f, $row)) {
                     $rows[$i][$f] = self::normalizeNullableString($row[$f], false);
                 }
             }
+            foreach (['id', 'sort_order', 'occupation_master_id', 'occupation_custom_id', 'city_id', 'taluka_id', 'district_id', 'state_id'] as $f) {
+                if (array_key_exists($f, $row)) {
+                    $rows[$i][$f] = self::normalizeNumericOrNull($row[$f]);
+                }
+            }
             if (isset($row['spouse']) && is_array($row['spouse'])) {
                 $sp = $row['spouse'];
-                foreach (['name', 'address_line', 'occupation_title', 'contact_number'] as $sf) {
+                foreach (['name', 'address_line', 'occupation_title', 'contact_number', 'location_display'] as $sf) {
                     if (array_key_exists($sf, $sp)) {
                         $sp[$sf] = self::normalizeNullableString($sp[$sf], false);
+                    }
+                }
+                foreach (['occupation_master_id', 'occupation_custom_id', 'city_id', 'taluka_id', 'district_id', 'state_id'] as $sf) {
+                    if (array_key_exists($sf, $sp)) {
+                        $sp[$sf] = self::normalizeNumericOrNull($sp[$sf]);
                     }
                 }
                 $rows[$i]['spouse'] = $sp;
@@ -252,6 +274,11 @@ final class ParsedJsonSsotNormalizer
             foreach (['relation_type', 'name', 'occupation', 'address_line', 'contact_number', 'notes', 'raw_note'] as $f) {
                 if (array_key_exists($f, $row)) {
                     $rows[$i][$f] = self::normalizeNullableString($row[$f], false);
+                }
+            }
+            foreach (['id', 'occupation_master_id', 'occupation_custom_id', 'city_id', 'state_id'] as $f) {
+                if (array_key_exists($f, $row)) {
+                    $rows[$i][$f] = self::normalizeNumericOrNull($row[$f]);
                 }
             }
         }

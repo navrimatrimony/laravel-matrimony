@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\DB;
  */
 class HoroscopeRuleService
 {
+    private static ?array $frontendRulesCache = null;
+
     /** Rashi key => zodiac position 1-12 for Bhakoot. */
     private const RASHI_POSITION = [
         'mesha' => 1, 'vrishabha' => 2, 'mithuna' => 3, 'karka' => 4, 'simha' => 5, 'kanya' => 6,
@@ -314,11 +316,13 @@ class HoroscopeRuleService
      */
     public function getRulesForFrontend(): array
     {
+        if (self::$frontendRulesCache !== null) {
+            return self::$frontendRulesCache;
+        }
+
         $rashiRules = MasterNakshatraPadaRashiRule::where('is_active', true)
             ->get(['nakshatra_id', 'charan', 'rashi_id'])
-            ->map(fn ($r) => ['nakshatra_id' => (int) $r->nakshatra_id, 'charan' => (int) $r->charan, 'rashi_id' => (int) $r->rashi_id])
-            ->values()
-            ->all();
+            ->map(fn ($r) => ['nakshatra_id' => (int) $r->nakshatra_id, 'charan' => (int) $r->charan, 'rashi_id' => (int) $r->rashi_id]);
         $nakshatraAttributes = MasterNakshatraAttribute::where('is_active', true)
             ->get(['nakshatra_id', 'gan_id', 'nadi_id', 'yoni_id'])
             ->map(fn ($a) => [
@@ -330,20 +334,25 @@ class HoroscopeRuleService
             ->values()
             ->all();
 
-        $nakshatraIds = array_unique(array_column($rashiRules, 'nakshatra_id'));
         $distinctRashiIdsByNakshatra = [];
-        foreach ($nakshatraIds as $nid) {
-            $distinctRashiIdsByNakshatra[(string) $nid] = $this->getDistinctRashiIdsForNakshatra((int) $nid);
-        }
-
-        $rashiIds = array_unique(array_column($rashiRules, 'rashi_id'));
         $nakshatraIdsByRashi = [];
-        foreach ($rashiIds as $rid) {
-            $nakshatraIdsByRashi[(string) $rid] = $this->getNakshatraIdsForRashi((int) $rid);
+        foreach ($rashiRules as $rule) {
+            $nakshatraId = (int) $rule['nakshatra_id'];
+            $rashiId = (int) $rule['rashi_id'];
+            $distinctRashiIdsByNakshatra[(string) $nakshatraId][$rashiId] = $rashiId;
+            $nakshatraIdsByRashi[(string) $rashiId][$nakshatraId] = $nakshatraId;
+        }
+        foreach ($distinctRashiIdsByNakshatra as $nakshatraId => $rashiIds) {
+            ksort($rashiIds);
+            $distinctRashiIdsByNakshatra[$nakshatraId] = array_values($rashiIds);
+        }
+        foreach ($nakshatraIdsByRashi as $rashiId => $nakshatraIds) {
+            ksort($nakshatraIds);
+            $nakshatraIdsByRashi[$rashiId] = array_values($nakshatraIds);
         }
 
-        return [
-            'rashi_rules' => $rashiRules,
+        return self::$frontendRulesCache = [
+            'rashi_rules' => $rashiRules->values()->all(),
             'nakshatra_attributes' => $nakshatraAttributes,
             'distinct_rashi_ids_by_nakshatra' => $distinctRashiIdsByNakshatra,
             'nakshatra_ids_by_rashi' => $nakshatraIdsByRashi,

@@ -7,11 +7,22 @@
     $propertyAssets = old($oldKeyAssets, $profile_property_assets ?? collect());
     if (is_object($propertySummary)) { $propertySummary = (array) $propertySummary; }
     if (is_object($propertyAssets)) { $propertyAssets = $propertyAssets->all(); }
+    $propertyNotes = '';
+    foreach (($propertyAssets ?? []) as $row) {
+        $notes = trim((string) ((is_object($row) ? ($row->notes ?? '') : ($row['notes'] ?? ''))));
+        if ($notes !== '') {
+            $propertyNotes = $notes;
+            break;
+        }
+    }
+    if ($propertyNotes === '') {
+        $propertyNotes = trim((string) (($propertySummary['summary_notes'] ?? '') ?: ''));
+    }
 @endphp
 
 <div class="space-y-6">
     <x-profile.property-engine
-        :summary="$propertySummary ?? []"
+        :notes="$propertyNotes"
         :assets="$propertyAssets ?? []"
         :assetTypes="$assetTypes ?? []"
         :ownershipTypes="$ownershipTypes ?? []"

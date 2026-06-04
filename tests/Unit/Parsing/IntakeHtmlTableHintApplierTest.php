@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Parsing;
 
+use App\Services\Ocr\OcrNormalize;
 use App\Services\Parsing\IntakeHtmlTableHintApplier;
 use App\Services\Parsing\IntakeNormalizedBiodataDraftBuilder;
 use App\Services\Parsing\IntakeNormalizedDraftToParsedJsonMapper;
@@ -300,5 +301,100 @@ HTML;
         $this->assertSame('देव', $horoscope['gan'] ?? null);
         $this->assertSame('वड', $horoscope['devak'] ?? null);
         $this->assertSame('जोतिबा', $horoscope['kuldaivat'] ?? null);
+    }
+
+    public function test_html_table_multiple_pairs_keep_physical_values_separate_from_horoscope(): void
+    {
+        $html = <<<'HTML'
+<table>
+<tr><td>● रक्तगट</td><td>-</td><td>B+ve</td><td>नक्षत्र -</td><td>मृग</td></tr>
+<tr><td>● योनी</td><td>-</td><td>सर्प</td><td>रंग -</td><td>गोरा</td></tr>
+</table>
+HTML;
+
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($html);
+        $core = $draft['normalized']['core'] ?? [];
+        $horoscope = $draft['normalized']['horoscope'] ?? [];
+
+        $this->assertSame('B+', $core['blood_group'] ?? null);
+        $this->assertSame('गोरा', $core['complexion'] ?? null);
+        $this->assertSame('मृग', $horoscope['nakshatra'] ?? null);
+        $this->assertSame('सर्प', $horoscope['yoni'] ?? null);
+        $this->assertStringNotContainsString('नक्षत्र', (string) ($core['blood_group'] ?? ''));
+    }
+
+    public function test_prajakta_table_keeps_family_relatives_and_horoscope_clean(): void
+    {
+        $html = <<<'HTML'
+<table>
+<tr><td>|| श्री गणेशायनम: ||</td><td></td></tr>
+<tr><td>मुलीचे नाव</td><td>कु. प्राजक्ता सुभाष पानसरे</td></tr>
+<tr><td>वडिलांचे नाव</td><td>सुभाष पानसरे (प्राथमिक शिक्षक.) घरचा पत्ता: बार्शी</td></tr>
+<tr><td>आईचे नाव</td><td>सौ. लता पानसरे (गृहिणी मो. नं. 9876543210)</td></tr>
+<tr><td>उंची</td><td>5 फूट 4 इंच</td></tr>
+<tr><td>रक्तगट</td><td>A+</td></tr>
+<tr><td>जात</td><td>हिंदू मराठा ९६ कुळी</td></tr>
+<tr><td>भाऊ</td><td>श्री. सागर पानसरे (B.Com)</td></tr>
+<tr><td>भाऊ</td><td>श्री. सागर पानसरे (B.Com)</td></tr>
+<tr><td>मामा</td><td>श्री. मोहन कदम 9123456789</td></tr>
+<tr><td>चुलते</td><td>श्री. राजू पानसरे, श्री. संजय पानसरे</td></tr>
+<tr><td>इतर नातेवाईक</td><td>कदम, जाधव</td></tr>
+<tr><td>रास</td><td>कन्या</td></tr>
+<tr><td>रास नाव</td><td>नवरस नाव चुकीचे</td></tr>
+<tr><td>नक्षत्र</td><td>चित्रा</td></tr>
+<tr><td>गण</td><td>राक्षस</td></tr>
+<tr><td>नाडी</td><td>मध्य</td></tr>
+</table>
+HTML;
+
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($html);
+        $core = $draft['normalized']['core'] ?? [];
+        $siblings = $draft['normalized']['siblings'] ?? [];
+        $horoscope = $draft['normalized']['horoscope'] ?? [];
+
+        $this->assertSame('सुभाष पानसरे', $core['father_name'] ?? null);
+        $this->assertSame('प्राथमिक शिक्षक.', $core['father_occupation'] ?? null);
+        $this->assertSame('सौ. लता पानसरे', $core['mother_name'] ?? null);
+        $this->assertSame('गृहिणी', $core['mother_occupation'] ?? null);
+        $this->assertSame('96 कुळी', OcrNormalize::normalizeDigits((string) ($core['sub_caste'] ?? '')));
+        $this->assertCount(1, $siblings);
+
+        $relativeBlob = implode(' ', array_map(
+            static fn ($row) => implode(' ', array_map('strval', is_array($row) ? $row : [])),
+            $draft['normalized']['relatives'] ?? []
+        ));
+        $this->assertStringContainsString('मोहन कदम', $relativeBlob);
+        $this->assertStringContainsString('9123456789', $relativeBlob);
+        $this->assertStringContainsString('राजू पानसरे', $relativeBlob);
+        $this->assertStringContainsString('संजय पानसरे', $relativeBlob);
+        $this->assertSame('कदम, जाधव', $core['other_relatives_text'] ?? null);
+        $this->assertSame('कन्या', $horoscope['rashi'] ?? null);
+        $this->assertNotSame('नवरस नाव चुकीचे', $horoscope['rashi'] ?? null);
+        $this->assertStringNotContainsString('श्री गणेश', implode(' ', array_map('json_encode', $draft['review_flags'] ?? [])));
+    }
+
+    public function test_html_table_parent_hint_splits_name_address_and_phone(): void
+    {
+        $html = <<<'HTML'
+<table>
+<tr><td>मुलीचे नाव</td><td>: कु. प्राजक्ता सुभाष पानसरे</td></tr>
+<tr><td>वडिलांचे नाव</td><td>: श्री सुभाष किसन पानसरे (प्राथमिक शिक्षक )<br/>मू.पो.केत्दूर नं २ ता.करमाळा,जिल्हा-सोलापूर<br/>-(मो.नं. ९६०४५६३२९२)</td></tr>
+<tr><td>आई</td><td>: सौ. वनिता सुभाष पानसरे (प्राथमिक शिक्षिका)(मो.नं.९४२०३५९७४०)</td></tr>
+</table>
+HTML;
+
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($html);
+        $core = $draft['normalized']['core'] ?? [];
+        $parents = $draft['normalized']['parents_addresses'] ?? [];
+
+        $this->assertSame('श्री सुभाष किसन पानसरे', $core['father_name'] ?? null);
+        $this->assertSame('प्राथमिक शिक्षक', $core['father_occupation'] ?? null);
+        $this->assertSame('9604563292', $core['father_contact_1'] ?? null);
+        $this->assertSame('सौ. वनिता सुभाष पानसरे', $core['mother_name'] ?? null);
+        $this->assertSame('प्राथमिक शिक्षिका', $core['mother_occupation'] ?? null);
+        $this->assertSame('9420359740', $core['mother_contact_1'] ?? null);
+        $this->assertStringContainsString('मू.पो.', (string) ($parents[0]['address_line'] ?? ''));
+        $this->assertStringContainsString('केत्दूर', (string) ($parents[0]['address_line'] ?? ''));
+        $this->assertStringContainsString('करमाळा', (string) ($parents[0]['address_line'] ?? ''));
     }
 }

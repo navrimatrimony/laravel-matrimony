@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\Schema;
  */
 class ControlledOptionEngine
 {
+    /** @var array<string, bool> */
+    private static array $columnPresenceCache = [];
+
     public function __construct(
         private readonly ControlledOptionRegistry $registry,
     ) {
@@ -51,7 +54,7 @@ class ControlledOptionEngine
         $activeColumn = $config['active_column'] ?? null;
 
         $masters = DB::table($table);
-        if ($activeColumn && Schema::hasColumn($table, $activeColumn)) {
+        if ($activeColumn && $this->hasColumnCached($table, $activeColumn)) {
             $masters->where($activeColumn, true);
         }
         $masters = $masters->get([$config['id_column'] ?? 'id', $keyColumn, $labelColumn]);
@@ -119,7 +122,7 @@ class ControlledOptionEngine
         $activeColumn = $config['active_column'] ?? null;
 
         $q = DB::table($table)->where($idColumn, $id);
-        if ($activeColumn && Schema::hasColumn($table, $activeColumn)) {
+        if ($activeColumn && $this->hasColumnCached($table, $activeColumn)) {
             $q->where($activeColumn, true);
         }
         $row = $q->first([$idColumn, $keyColumn]);
@@ -169,7 +172,7 @@ class ControlledOptionEngine
         $id = (int) $id;
 
         $q = DB::table($table)->where('id', $id);
-        if (Schema::hasTable($table) && Schema::hasColumn($table, 'is_active')) {
+        if (Schema::hasTable($table) && $this->hasColumnCached($table, 'is_active')) {
             $q->where('is_active', true);
         }
 
@@ -484,5 +487,14 @@ class ControlledOptionEngine
 
         return $v;
     }
-}
 
+    private function hasColumnCached(string $table, string $column): bool
+    {
+        $key = $table.'|'.$column;
+        if (! array_key_exists($key, self::$columnPresenceCache)) {
+            self::$columnPresenceCache[$key] = Schema::hasColumn($table, $column);
+        }
+
+        return self::$columnPresenceCache[$key];
+    }
+}

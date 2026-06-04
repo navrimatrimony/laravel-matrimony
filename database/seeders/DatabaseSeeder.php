@@ -23,7 +23,6 @@ class DatabaseSeeder extends Seeder
             NakshatraPadaRashiRuleSeeder::class,
             NakshatraAttributesSeeder::class,
             AshtakootaMasterSeeder::class,
-            MasterEducationOccupationSeeder::class,
             EducationSeeder::class,
             EducationCareerTemporarySeeder::class,
             OccupationBilingualSeeder::class,

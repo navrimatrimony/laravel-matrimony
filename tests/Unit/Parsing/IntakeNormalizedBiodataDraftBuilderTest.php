@@ -289,6 +289,76 @@ TXT);
         $this->assertStringContainsString('स्वतःचे घर', (string) ($draft['normalized']['property_summary']['summary_text'] ?? ''));
     }
 
+    public function test_inline_birth_time_is_split_from_date_of_birth(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+मुलीचे नाव :- कु. प्रीती राजेंद्र पाटील
+जन्म तारीख :- 24/10/1998 जन्म वेळ :- रात्री 09 वा.45 मि.
+जन्म स्थळ :- माळीनगर. ता.- माळशिरस, जि.सोलापूर.
+जात :- हिंदू मराठा 96 कुळी
+TXT);
+
+        $core = $draft['normalized']['core'];
+
+        $this->assertSame('24/10/1998', $core['date_of_birth']);
+        $this->assertSame('रात्री 09 वा.45 मि.', $core['birth_time']);
+        $this->assertFalse($this->hasReviewFlag($draft, 'review.missing', 'mixed_field_value'));
+    }
+
+    public function test_property_descriptor_is_inherited_for_numbered_locations(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+स्थावर मिळकत : स्वतःचे घर - १) बाबा जरगनगर, कोल्हापूर
+२) मंगळवार पेठ, कोल्हापूर
+TXT);
+
+        $assets = $draft['normalized']['property_assets'] ?? [];
+
+        $this->assertCount(2, $assets);
+        $this->assertSame('house', $assets[0]['asset_type_key'] ?? null);
+        $this->assertSame('sole', $assets[0]['ownership_type_key'] ?? null);
+        $this->assertSame('बाबा जरगनगर, कोल्हापूर', $assets[0]['location'] ?? null);
+        $this->assertSame('house', $assets[1]['asset_type_key'] ?? null);
+        $this->assertSame('sole', $assets[1]['ownership_type_key'] ?? null);
+        $this->assertSame('मंगळवार पेठ, कोल्हापूर', $assets[1]['location'] ?? null);
+    }
+
+    public function test_physical_ocr_typos_are_normalized_without_horoscope_pollution(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+मुलीचे नाव :- श्वेताली बाळासाहेब सुंबे
+कुंची :- ५' ३" . वर्ण :- निमगोरा,
+ब्लड ग्रप :- A+
+नक्षत्र :- चित्रा, वर्ण :- वैश्य,
+TXT);
+
+        $core = $draft['normalized']['core'];
+        $horoscope = $draft['normalized']['horoscope'] ?? [];
+
+        $this->assertEqualsWithDelta(160.02, (float) ($core['height_cm'] ?? 0), 0.01);
+        $this->assertSame('निमगोरा', $core['complexion']);
+        $this->assertSame('A+', $core['blood_group']);
+        $this->assertStringContainsString('वैश्य', (string) ($horoscope['varna'] ?? ''));
+    }
+
+    public function test_positional_physical_values_are_mapped_from_stacked_biodata_rows(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+## मुलाची माहिती
+चि. विवेक वसंत पवार
+०६/०३/१९९६ जन्म वेळ :- बुधवार रात्री १.४५ मी
+5. 7 इंच रास :- सिंह
+पूर्वा चरण :- ४ थे
+B+ देवक :-पाच पालवी
+हिंदू-मराठा { ९६ कुळी }
+TXT);
+
+        $core = $draft['normalized']['core'];
+
+        $this->assertEqualsWithDelta(170.18, (float) ($core['height_cm'] ?? 0), 0.01);
+        $this->assertSame('B+', $core['blood_group']);
+    }
+
     public function test_unmapped_useful_lines_are_flagged_without_full_raw_dump(): void
     {
         $text = <<<TXT
@@ -307,6 +377,129 @@ TXT;
         ));
         $this->assertStringContainsString('नोकरी माहिती', $reviewBlob);
         $this->assertStringNotContainsString($text, $reviewBlob);
+    }
+
+    public function test_shwetali_fixture_maps_confident_values_and_ignores_prayer_headers(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+||श्री गणेशानं प्रसन्न||
+परिचय पत्र
+मुलीचे नाव :- श्वेताली बाळासाहेब सुंबे
+जन्म तारीख :- सोमवार दि. १६/०८/१९९९
+जन्म वेळ :- पहाटे ०३.४५ वाजता
+जन्म स्थळ :- सुंगमनेर, जि. अहमदनगर
+धर्म :- हिंदू
+जात :- मराठा
+उंची :- ५' ३"
+वर्ण :- निमगोरा
+ब्लड ग्रुप :- A+
+शिक्षण :- MSC (computer science)
+नोकरी :- Software Engineer - Simplify healthcare, Magarpatta Package 3.55 LPA
+वडिलांचे नाव :- बाळासाहेब बन्सी सुंबे (पाटबुंधारे सोसायटी)
+आईचे नाव :- सौ. नंदा बाळासाहेब सुंबे (गृहिणी)
+भाऊ :- श्री.सुरज बाळासाहेब सुंबे (B.com)
+सध्याचा पत्ता :- घर नं 12 सावेडी, अहमदनगर
+मूळगाव :- मु.पो. पाडळी तर्फ कान्हर
+मामा :- श्री. मोहन पाटील
+चुलते :- श्री. रमेश सुंबे
+इतर नातेवाईक :- काळे, पवार
+देवक :- साळुंकी
+कुलदैवत :- पालीचा खुंडोबा
+राशी :- कन्या
+योनी :- व्याघ्र
+गण :- राक्षस
+नक्षत्र :- चित्रा
+वर्ण :- वैश्य
+TXT);
+
+        $core = $draft['normalized']['core'];
+        $horoscope = $draft['normalized']['horoscope'] ?? [];
+
+        $this->assertSame('श्वेताली बाळासाहेब सुंबे', $core['full_name']);
+        $this->assertSame('निमगोरा', $core['complexion']);
+        $this->assertSame('बाळासाहेब बन्सी सुंबे', $core['father_name']);
+        $this->assertSame('पाटबुंधारे सोसायटी', $core['father_occupation']);
+        $this->assertSame('सौ. नंदा बाळासाहेब सुंबे', $core['mother_name']);
+        $this->assertSame('गृहिणी', $core['mother_occupation']);
+        $this->assertNull($core['annual_income']);
+        $this->assertStringContainsString('Package 3.55 LPA', (string) ($core['salary_package_text'] ?? ''));
+
+        $this->assertSame('साळुंकी', $horoscope['devak'] ?? null);
+        $this->assertSame('पालीचा खुंडोबा', $horoscope['kuldaivat'] ?? null);
+        $this->assertSame('कन्या', $horoscope['rashi'] ?? null);
+        $this->assertSame('व्याघ्र', $horoscope['yoni'] ?? null);
+        $this->assertSame('राक्षस', $horoscope['gan'] ?? null);
+        $this->assertSame('चित्रा', $horoscope['nakshatra'] ?? null);
+        $this->assertSame('वैश्य', $horoscope['varna'] ?? null);
+
+        $relativeBlob = $this->normalizedBlob($draft['normalized']['relatives'] ?? []);
+        $addressBlob = $this->normalizedBlob($draft['normalized']['addresses'] ?? []);
+        $siblingBlob = $this->normalizedBlob($draft['normalized']['siblings'] ?? []);
+        $reviewBlob = $this->reviewBlob($draft);
+
+        $this->assertStringContainsString('मोहन पाटील', $relativeBlob);
+        $this->assertStringContainsString('रमेश सुंबे', $relativeBlob);
+        $this->assertStringContainsString('काळे, पवार', (string) ($core['other_relatives_text'] ?? ''));
+        $this->assertStringContainsString('सावेडी', $addressBlob);
+        $this->assertStringContainsString('पाडळी', $addressBlob);
+        $this->assertStringContainsString('सुरज', $siblingBlob);
+        $this->assertStringNotContainsString('श्री गणेश', $reviewBlob);
+        $this->assertStringNotContainsString('परिचय पत्र', $reviewBlob);
+        $this->assertStringNotContainsString('कन्या', $reviewBlob);
+        $this->assertStringNotContainsString('सावेडी', $reviewBlob);
+    }
+
+    public function test_vishal_fixture_maps_addresses_relatives_and_parent_contacts_without_occupation_pollution(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+बायोडेटा
+मुलाचे नाव :- विशाल पांडुरंग डाकवे.
+जन्म तारीख :- गुरुवार दि. १२/०२/१९९८
+जन्म वेळ :- सकाळी ०७.३०
+धर्म :- हिंदू
+जात :- मराठा
+उंची :- 5 ft 8 in
+शिक्षण :- B.E.
+व्यवसाय :- Engineer
+वडील :- पांडुरंग डाकवे (नोकरी-9322202146)
+आई :- सौ. सुनीता डाकवे (गृहिणी मो. नं. 9822202146)
+सध्याचा पत्ता :- Wonder Residency, Pune
+निवासी पत्ता :- Karve Nagar, Pune
+चुलते :- 1) कै. शामराव लक्ष्मण डाकवे, 2) कृष्णा लक्ष्मण डाकवे, 3) हरि लक्ष्मण डाकवे
+मामा :- जितेंद्र शामराव पवार
+आजोळ :- मु.पो. वाठार, जि. सातारा
+राशी :- कुंभ
+देवक :- वासनलिवेल
+कुलस्वामी :- जोतिबा
+TXT);
+
+        $core = $draft['normalized']['core'];
+        $this->assertSame('विशाल पांडुरंग डाकवे.', $core['full_name']);
+        $this->assertSame('पांडुरंग डाकवे', $core['father_name']);
+        $this->assertSame('नोकरी', $core['father_occupation']);
+        $this->assertSame('सौ. सुनीता डाकवे', $core['mother_name']);
+        $this->assertSame('गृहिणी', $core['mother_occupation']);
+        $this->assertSame('9322202146', $core['father_contact_number']);
+        $this->assertSame('9822202146', $core['mother_contact_number']);
+        $this->assertNotContains('9322202146', $this->phones($draft));
+        $this->assertNotContains('9822202146', $this->phones($draft));
+
+        $addressBlob = $this->normalizedBlob($draft['normalized']['addresses'] ?? []);
+        $relativeBlob = $this->normalizedBlob($draft['normalized']['relatives'] ?? []);
+        $reviewBlob = $this->reviewBlob($draft);
+
+        $this->assertStringContainsString('Wonder Residency', $addressBlob);
+        $this->assertStringContainsString('Karve Nagar', $addressBlob);
+        $this->assertStringContainsString('शामराव लक्ष्मण डाकवे', $relativeBlob);
+        $this->assertStringContainsString('कृष्णा लक्ष्मण डाकवे', $relativeBlob);
+        $this->assertStringContainsString('हरि लक्ष्मण डाकवे', $relativeBlob);
+        $this->assertStringContainsString('जितेंद्र शामराव पवार', $relativeBlob);
+        $this->assertSame('कुंभ', $draft['normalized']['horoscope']['rashi'] ?? null);
+        $this->assertSame('वासनलिवेल', $draft['normalized']['horoscope']['devak'] ?? null);
+        $this->assertSame('जोतिबा', $draft['normalized']['horoscope']['kuldaivat'] ?? null);
+        $this->assertStringNotContainsString('Wonder Residency', $reviewBlob);
+        $this->assertStringNotContainsString('जितेंद्र शामराव पवार', $reviewBlob);
+        $this->assertStringNotContainsString('कुंभ', $reviewBlob);
     }
 
     /**
@@ -333,5 +526,24 @@ TXT;
         }
 
         return false;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     */
+    private function normalizedBlob(array $rows): string
+    {
+        return implode(' ', array_map(
+            static fn ($row) => implode(' ', array_map('strval', is_array($row) ? $row : [])),
+            $rows
+        ));
+    }
+
+    private function reviewBlob(array $draft): string
+    {
+        return implode("\n", array_map(
+            static fn ($flag) => implode(' ', array_map('strval', is_array($flag) ? $flag : [])),
+            $draft['review_flags'] ?? []
+        ));
     }
 }

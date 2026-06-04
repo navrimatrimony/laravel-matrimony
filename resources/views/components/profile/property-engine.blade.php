@@ -1,13 +1,12 @@
 {{-- Reusable Property Engine: summary + repeatable assets. Used in wizard (namePrefix empty) and intake preview (namePrefix snapshot). --}}
 @props([
-    'summary' => [],
+    'notes' => '',
     'assets' => [],
     'assetTypes' => [],
     'ownershipTypes' => [],
     'namePrefix' => '',
 ])
 @php
-    $sum = is_object($summary) ? (array) $summary : (array) $summary;
     $assetList = $assets;
     if (is_object($assetList)) { $assetList = $assetList->all(); }
     if (!is_array($assetList)) { $assetList = []; }
@@ -17,6 +16,7 @@
     $assetName = function($idx, $key) use ($prefix) { return $prefix !== '' ? $prefix . '[property_assets][' . $idx . '][' . $key . ']' : 'property_assets[' . $idx . '][' . $key . ']'; };
     $assetsContainerId = $prefix !== '' ? str_replace('[', '-', str_replace(']', '', $prefix)) . '-property-assets' : 'property-assets-container';
     $assetsNamePrefix = $prefix !== '' ? $prefix . '[property_assets]' : 'property_assets';
+    $isMarathiLocale = app()->getLocale() === 'mr';
 @endphp
 <div class="space-y-6 property-engine" data-property-engine data-name-prefix="{{ $prefix }}">
     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">{{ __('components.property.property') }}</h2>
@@ -40,7 +40,11 @@
                             <select name="{{ $assetName($idx, 'asset_type_id') }}" class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
                                 <option value="">{{ __('common.select') }}</option>
                                 @foreach($assetTypes ?? [] as $item)
-                                    @php $label = $item->label ?? $item->key ?? $item->id; @endphp
+                                    @php
+                                        $label = ($isMarathiLocale && !empty($item->label_mr))
+                                            ? $item->label_mr
+                                            : ($item->label ?? $item->key ?? $item->id);
+                                    @endphp
                                     <option value="{{ $item->id }}" {{ (string)($r['asset_type_id'] ?? '') === (string)$item->id ? 'selected' : '' }}>{{ $label }}</option>
                                 @endforeach
                             </select>
@@ -58,11 +62,23 @@
                             <select name="{{ $assetName($idx, 'ownership_type_id') }}" class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
                                 <option value="">{{ __('common.select') }}</option>
                                 @foreach($ownershipTypes ?? [] as $item)
-                                    @php $label = $item->label ?? $item->key ?? $item->id; @endphp
+                                    @php
+                                        $label = ($isMarathiLocale && !empty($item->label_mr))
+                                            ? $item->label_mr
+                                            : ($item->label ?? $item->key ?? $item->id);
+                                    @endphp
                                     <option value="{{ $item->id }}" {{ (string)($r['ownership_type_id'] ?? '') === (string)$item->id ? 'selected' : '' }}>{{ $label }}</option>
                                 @endforeach
                             </select>
                         </div>
+                    </div>
+                    <div class="min-w-0">
+                        <label class="block text-sm text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.property.additional_information') }}</label>
+                        <input type="text"
+                               name="{{ $assetName($idx, 'additional_information') }}"
+                               value="{{ $r['additional_information'] ?? '' }}"
+                               class="form-input w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
+                               placeholder="{{ __('components.property.additional_information_placeholder') }}">
                     </div>
                     <div class="flex justify-between items-center">
                         <div class="property-asset-add-wrap">
@@ -79,9 +95,8 @@
 
     {{-- Notes only (summary section reduced to just notes) --}}
     <div>
-        <input type="hidden" name="{{ $sumName('id') }}" value="{{ $sum['id'] ?? '' }}">
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('common.notes') }}</label>
-        <textarea name="{{ $sumName('summary_notes') }}" rows="2" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2" placeholder="{{ __('components.property.optional_notes_about_property') }}">{{ $sum['summary_notes'] ?? '' }}</textarea>
+        <textarea name="{{ $sumName('summary_notes') }}" rows="2" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2" placeholder="{{ __('components.property.optional_notes_about_property') }}">{{ $notes ?? '' }}</textarea>
     </div>
 </div>
 

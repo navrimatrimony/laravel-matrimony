@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Location;
+use App\Models\MasterRelative;
 use App\Models\MatrimonyProfile;
 use App\Models\OccupationCategory;
 use App\Services\EducationService;
@@ -411,13 +412,12 @@ class ProfileWizardController extends Controller
                 break;
             case 'siblings':
                 $siblings = \App\Models\ProfileSibling::where('profile_id', $profile->id)
-                    ->with(['spouse', 'city', 'occupationMaster', 'occupationCustom', 'spouse.occupationMaster', 'spouse.occupationCustom'])
+                    ->with(['city', 'occupationMaster', 'occupationCustom'])
                     ->orderBy('sort_order')
                     ->orderBy('id')
                     ->get();
                 $data['profileSiblings'] = $siblings->map(function ($s) {
-                    $relationType = $s->relation_type ?? ($s->gender === 'male' ? 'brother' : ($s->gender === 'female' ? 'sister' : null));
-                    $spouse = $s->spouse ? (object) array_merge($s->spouse->toArray(), ['location_display' => $s->spouse->city?->name ?? $s->spouse->address_line ?? '']) : null;
+                    $relationType = $s->relation_type;
                     $locationDisplay = $s->city?->name ?? '';
                     if ($locationDisplay === '' && ! empty(trim((string) ($s->notes ?? '')))) {
                         $locationDisplay = $s->notes;
@@ -425,15 +425,10 @@ class ProfileWizardController extends Controller
                     $arr = array_merge($s->toArray(), [
                         'relation_type' => $relationType,
                         'location_display' => $locationDisplay,
-                        'spouse' => $spouse,
                     ]);
                     // profile_siblings has only notes (no address_line); show notes in Address field for display.
                     if (empty($arr['address_line']) && ! empty(trim((string) ($arr['notes'] ?? '')))) {
                         $arr['address_line'] = $arr['notes'];
-                    }
-                    // When spouse exists with data, show Married: Yes in wizard even if marital_status was not synced.
-                    if ($spouse && (trim((string) ($spouse->name ?? '')) !== '' || trim((string) ($spouse->address_line ?? '')) !== '' || trim((string) ($spouse->occupation_title ?? '')) !== '')) {
-                        $arr['marital_status'] = 'married';
                     }
 
                     return (object) $arr;
@@ -474,25 +469,8 @@ class ProfileWizardController extends Controller
                     })
                     ->values();
                 $data['profileRelativesMaternalFamily'] = $relRows->filter(fn ($r) => in_array($r->relation_type ?? '', $maternalFamilyTypes, true))->map($mapRow)->values();
-                $data['relationTypesParentsFamily'] = [
-                    ['value' => 'paternal_grandfather', 'label' => 'Paternal Grandfather'],
-                    ['value' => 'paternal_grandmother', 'label' => 'Paternal Grandmother'],
-                    ['value' => 'paternal_uncle', 'label' => 'Paternal Uncle (chulte)'],
-                    ['value' => 'wife_paternal_uncle', 'label' => 'Wife of Paternal Uncle (chulti)'],
-                    ['value' => 'paternal_aunt', 'label' => 'Paternal Aunt (atya)'],
-                    ['value' => 'husband_paternal_aunt', 'label' => 'Husband of Paternal Aunt'],
-                    ['value' => 'Cousin', 'label' => 'Cousin'],
-                ];
-                $data['relationTypesMaternalFamily'] = [
-                    ['value' => 'maternal_address_ajol', 'label' => 'Maternal address (Ajol)'],
-                    ['value' => 'maternal_grandfather', 'label' => 'Maternal Grandfather'],
-                    ['value' => 'maternal_grandmother', 'label' => 'Maternal Grandmother'],
-                    ['value' => 'maternal_uncle', 'label' => 'Maternal Uncle (mama)'],
-                    ['value' => 'wife_maternal_uncle', 'label' => 'Maternal Uncle\'s wife (mami)'],
-                    ['value' => 'maternal_aunt', 'label' => 'Maternal Aunt (mavshi)'],
-                    ['value' => 'husband_maternal_aunt', 'label' => 'Husband of Maternal Aunt'],
-                    ['value' => 'maternal_cousin', 'label' => 'Cousin'],
-                ];
+                $data['relationTypesParentsFamily'] = MasterRelative::optionsForGroup('paternal');
+                $data['relationTypesMaternalFamily'] = MasterRelative::optionsForGroup('maternal');
                 break;
             case 'alliance':
                 $data['otherRelativesText'] = $profile->getAttribute('other_relatives_text') ?? '';
@@ -510,27 +488,19 @@ class ProfileWizardController extends Controller
                 };
                 $maternalFamilyTypes = ['maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin'];
                 $data['profileRelativesMaternalFamily'] = $relRows->filter(fn ($r) => in_array($r->relation_type ?? '', $maternalFamilyTypes, true))->map($mapRow)->values();
-                $data['relationTypesMaternalFamily'] = [
-                    ['value' => 'maternal_address_ajol', 'label' => 'Maternal address (Ajol)'],
-                    ['value' => 'maternal_grandfather', 'label' => 'Maternal Grandfather'],
-                    ['value' => 'maternal_grandmother', 'label' => 'Maternal Grandmother'],
-                    ['value' => 'maternal_uncle', 'label' => 'Maternal Uncle (mama)'],
-                    ['value' => 'wife_maternal_uncle', 'label' => 'Maternal Uncle\'s wife (mami)'],
-                    ['value' => 'maternal_aunt', 'label' => 'Maternal Aunt (mavshi)'],
-                    ['value' => 'husband_maternal_aunt', 'label' => 'Husband of Maternal Aunt'],
-                    ['value' => 'maternal_cousin', 'label' => 'Cousin'],
-                ];
+                $data['relationTypesMaternalFamily'] = MasterRelative::optionsForGroup('maternal');
                 break;
             case 'property':
-                $data['profile_property_summary'] = DB::table('profile_property_summary')->where('profile_id', $profile->id)->first();
                 $allAssets = DB::table('profile_property_assets')->where('profile_id', $profile->id)->orderBy('id')->get();
                 // Exclude fully empty asset rows so we do not show duplicate empty blocks (engine still adds one empty row if none).
                 $data['profile_property_assets'] = $allAssets->filter(function ($r) {
                     $hasType = ! empty($r->asset_type_id ?? null);
                     $hasLoc = trim((string) ($r->location ?? '')) !== '';
                     $hasOwn = ! empty($r->ownership_type_id ?? null);
+                    $hasNotes = trim((string) ($r->notes ?? '')) !== '';
+                    $hasAdditionalInformation = trim((string) ($r->additional_information ?? '')) !== '';
 
-                    return $hasType || $hasLoc || $hasOwn;
+                    return $hasType || $hasLoc || $hasOwn || $hasNotes || $hasAdditionalInformation;
                 })->values();
                 $data['assetTypes'] = \App\Models\MasterAssetType::where('is_active', true)->get();
                 $data['ownershipTypes'] = \App\Models\MasterOwnershipType::where('is_active', true)->get();
@@ -1372,11 +1342,13 @@ class ProfileWizardController extends Controller
         } else {
             $occSvc = app(OccupationService::class);
             $uid = auth()->id();
+            $allowedSiblingRelations = ['brother', 'sister', 'brother_wife', 'sister_husband'];
             foreach ($request->input('siblings', []) as $row) {
-                $relationType = in_array($row['relation_type'] ?? null, ['brother', 'sister'], true) ? $row['relation_type'] : null;
+                $relationType = in_array($row['relation_type'] ?? null, $allowedSiblingRelations, true) ? $row['relation_type'] : null;
                 $maritalStatus = in_array($row['marital_status'] ?? null, ['unmarried', 'married'], true) ? $row['marital_status'] : null;
-                $isMarried = $maritalStatus === 'married' || ! empty($row['is_married']);
-                $spouseIn = $row['spouse'] ?? [];
+                if (in_array($relationType, ['brother_wife', 'sister_husband'], true)) {
+                    $maritalStatus = 'married';
+                }
                 $sibMid = ! empty($row['occupation_master_id']) ? (int) $row['occupation_master_id'] : null;
                 $sibCid = ! empty($row['occupation_custom_id']) ? (int) $row['occupation_custom_id'] : null;
                 $sibOccText = $occSvc->resolvedOccupationText($sibMid, $sibCid, $uid)
@@ -1385,7 +1357,6 @@ class ProfileWizardController extends Controller
                     'id' => ! empty($row['id']) ? (int) $row['id'] : null,
                     'relation_type' => $relationType,
                     'name' => trim((string) ($row['name'] ?? '')) ?: null,
-                    'gender' => in_array($row['gender'] ?? null, ['male', 'female'], true) ? $row['gender'] : null,
                     'marital_status' => $maritalStatus,
                     'occupation' => $sibOccText,
                     'occupation_master_id' => $sibMid && $sibMid > 0 ? $sibMid : null,
@@ -1397,24 +1368,6 @@ class ProfileWizardController extends Controller
                     'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
                     'sort_order' => isset($row['sort_order']) && $row['sort_order'] !== '' ? (int) $row['sort_order'] : 0,
                 ];
-                $spMid = ! empty($spouseIn['occupation_master_id']) ? (int) $spouseIn['occupation_master_id'] : null;
-                $spCid = ! empty($spouseIn['occupation_custom_id']) ? (int) $spouseIn['occupation_custom_id'] : null;
-                $spOccTitle = $occSvc->resolvedOccupationText($spMid, $spCid, $uid)
-                    ?: (trim((string) ($spouseIn['occupation_title'] ?? '')) !== '' ? trim((string) ($spouseIn['occupation_title'] ?? '')) : null);
-                if ($isMarried && (array_key_exists('name', $spouseIn) || array_key_exists('occupation_title', $spouseIn) || array_key_exists('occupation_master_id', $spouseIn) || array_key_exists('contact_number', $spouseIn) || array_key_exists('city_id', $spouseIn))) {
-                    $siblingRow['spouse'] = [
-                        'name' => trim((string) ($spouseIn['name'] ?? '')) ?: null,
-                        'occupation_title' => $spOccTitle,
-                        'occupation_master_id' => $spMid && $spMid > 0 ? $spMid : null,
-                        'occupation_custom_id' => $spCid && $spCid > 0 ? $spCid : null,
-                        'contact_number' => trim((string) ($spouseIn['contact_number'] ?? '')) ?: null,
-                        'address_line' => trim((string) ($spouseIn['address_line'] ?? '')) ?: null,
-                        'city_id' => ! empty($spouseIn['city_id']) ? (int) $spouseIn['city_id'] : null,
-                        'taluka_id' => ! empty($spouseIn['taluka_id']) ? (int) $spouseIn['taluka_id'] : null,
-                        'district_id' => ! empty($spouseIn['district_id']) ? (int) $spouseIn['district_id'] : null,
-                        'state_id' => ! empty($spouseIn['state_id']) ? (int) $spouseIn['state_id'] : null,
-                    ];
-                }
                 $siblings[] = $siblingRow;
             }
         }
@@ -1698,22 +1651,13 @@ class ProfileWizardController extends Controller
 
     private function buildPropertySnapshot(Request $request, MatrimonyProfile $profile): array
     {
-        $property_summary = [];
+        $propertyNotes = null;
         if ($request->has('property_summary')) {
             $request->validate([
                 'property_summary.agriculture_type' => ['nullable', 'string', 'max:50'],
             ]);
             $ps = $request->input('property_summary');
-            $property_summary = [[
-                'id' => ! empty($ps['id']) ? (int) $ps['id'] : null,
-                'owns_house' => ! empty($ps['owns_house']),
-                'owns_flat' => ! empty($ps['owns_flat']),
-                'owns_agriculture' => ! empty($ps['owns_agriculture']),
-                'agriculture_type' => isset($ps['agriculture_type']) && trim((string) ($ps['agriculture_type'] ?? '')) !== '' ? trim((string) $ps['agriculture_type']) : null,
-                'total_land_acres' => isset($ps['total_land_acres']) && $ps['total_land_acres'] !== '' ? (float) $ps['total_land_acres'] : null,
-                'annual_agri_income' => isset($ps['annual_agri_income']) && $ps['annual_agri_income'] !== '' ? (float) $ps['annual_agri_income'] : null,
-                'summary_notes' => trim((string) ($ps['summary_notes'] ?? '')),
-            ]];
+            $propertyNotes = $this->propertySummaryPayloadToNotes(is_array($ps) ? $ps : []);
         }
 
         $property_assets = [];
@@ -1723,8 +1667,10 @@ class ProfileWizardController extends Controller
                 'asset_type_id' => ! empty($row['asset_type_id']) ? (int) $row['asset_type_id'] : null,
                 'location' => trim((string) ($row['location'] ?? '')),
                 'ownership_type_id' => ! empty($row['ownership_type_id']) ? (int) $row['ownership_type_id'] : null,
+                'additional_information' => trim((string) ($row['additional_information'] ?? '')) ?: null,
             ];
         }
+        $property_assets = $this->attachPropertyNotesToAssets($property_assets, $propertyNotes);
 
         $core = [];
         if ($request->has('location_id') || $request->has('address_line')) {
@@ -1737,9 +1683,76 @@ class ProfileWizardController extends Controller
 
         return [
             'core' => $core,
-            'property_summary' => $property_summary,
             'property_assets' => $property_assets,
         ];
+    }
+
+    private function propertySummaryPayloadToNotes(array $payload): ?string
+    {
+        $lines = [];
+        if (! empty($payload['owns_house'])) {
+            $lines[] = 'Owns house: Yes';
+        }
+        if (! empty($payload['owns_flat'])) {
+            $lines[] = 'Owns flat: Yes';
+        }
+        if (! empty($payload['owns_agriculture'])) {
+            $lines[] = 'Owns agriculture: Yes';
+        }
+        if (trim((string) ($payload['agriculture_type'] ?? '')) !== '') {
+            $lines[] = 'Agriculture type: '.trim((string) $payload['agriculture_type']);
+        }
+        if (($payload['total_land_acres'] ?? null) !== null && (string) $payload['total_land_acres'] !== '') {
+            $lines[] = 'Total land (acres): '.trim((string) $payload['total_land_acres']);
+        }
+        if (($payload['annual_agri_income'] ?? null) !== null && (string) $payload['annual_agri_income'] !== '') {
+            $lines[] = 'Annual agriculture income: '.trim((string) $payload['annual_agri_income']);
+        }
+        if (trim((string) ($payload['summary_notes'] ?? '')) !== '') {
+            $lines[] = trim((string) $payload['summary_notes']);
+        }
+
+        return $lines === [] ? null : implode("\n", $lines);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $assets
+     * @return list<array<string, mixed>>
+     */
+    private function attachPropertyNotesToAssets(array $assets, ?string $notes): array
+    {
+        $notes = trim((string) $notes);
+        if ($notes === '') {
+            return $assets;
+        }
+
+        foreach ($assets as $idx => $asset) {
+            if (! is_array($asset)) {
+                continue;
+            }
+            $hasData = ! empty($asset['id'])
+                || ! empty($asset['asset_type_id'])
+                || trim((string) ($asset['location'] ?? '')) !== ''
+                || ! empty($asset['ownership_type_id'])
+                || trim((string) ($asset['additional_information'] ?? '')) !== '';
+            if (! $hasData) {
+                continue;
+            }
+            $assets[$idx]['notes'] = $notes;
+
+            return $assets;
+        }
+
+        $assets[] = [
+            'id' => null,
+            'asset_type_id' => null,
+            'location' => '',
+            'ownership_type_id' => null,
+            'additional_information' => null,
+            'notes' => $notes,
+        ];
+
+        return $assets;
     }
 
     private function buildHoroscopeSnapshot(Request $request, MatrimonyProfile $profile): array

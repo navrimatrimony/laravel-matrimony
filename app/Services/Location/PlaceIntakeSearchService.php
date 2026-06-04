@@ -14,6 +14,18 @@ use Illuminate\Database\Eloquent\Builder;
  */
 final class PlaceIntakeSearchService
 {
+    /** @var array<string, array<int, array<string, mixed>>> */
+    private static array $searchCache = [];
+
+    /** @var array<string, array<string, mixed>|null> */
+    private static array $confidentMatchCache = [];
+
+    /** @var array<string, list<int>> */
+    private static array $districtIdCache = [];
+
+    /** @var array<string, list<int>> */
+    private static array $cityParentIdCache = [];
+
     public function __construct(
         private readonly LocationCompoundAddressParser $compoundParser,
         private readonly AddressHierarchySearch $hierarchySearch,
@@ -29,6 +41,11 @@ final class PlaceIntakeSearchService
         $searchText = trim($searchText);
         if ($searchText === '') {
             return [];
+        }
+
+        $cacheKey = mb_strtolower($searchText, 'UTF-8').'|'.$limit;
+        if (array_key_exists($cacheKey, self::$searchCache)) {
+            return self::$searchCache[$cacheKey];
         }
 
         $limit = max(1, $limit);
@@ -75,7 +92,7 @@ final class PlaceIntakeSearchService
 
         $ranked = $this->rankLocations($locations, $hints, $searchText, $simpleParts);
 
-        return $this->formatRows(array_slice($ranked, 0, $limit));
+        return self::$searchCache[$cacheKey] = $this->formatRows(array_slice($ranked, 0, $limit));
     }
 
     /**
@@ -91,6 +108,11 @@ final class PlaceIntakeSearchService
             return null;
         }
 
+        $cacheKey = mb_strtolower($searchText, 'UTF-8');
+        if (array_key_exists($cacheKey, self::$confidentMatchCache)) {
+            return self::$confidentMatchCache[$cacheKey];
+        }
+
         $hints = $this->compoundParser->parseComponents($searchText);
         $simpleParts = $this->parseSimpleParts($searchText);
         $pattern = $this->detectIntakePattern($hints, $simpleParts);
@@ -98,21 +120,21 @@ final class PlaceIntakeSearchService
         if ($pattern === 'rural' && $this->hasFullRuralHints($hints)) {
             $resolved = $this->resolveUniqueRuralVillage($hints);
             if ($resolved !== null) {
-                return $this->formatRows([$resolved])[0] ?? null;
+                return self::$confidentMatchCache[$cacheKey] = ($this->formatRows([$resolved])[0] ?? null);
             }
         }
 
         if ($pattern === 'town_taluka') {
             $resolved = $this->resolveUniqueTownTaluka($hints);
             if ($resolved !== null) {
-                return $this->formatRows([$resolved])[0] ?? null;
+                return self::$confidentMatchCache[$cacheKey] = ($this->formatRows([$resolved])[0] ?? null);
             }
         }
 
         $rows = $this->search($searchText, 10);
         $candidates = $this->filterRowsForIntakePattern($rows, $pattern, $hints, $simpleParts);
 
-        return $this->pickSingleConfidentRow($candidates, $hints, $rows);
+        return self::$confidentMatchCache[$cacheKey] = $this->pickSingleConfidentRow($candidates, $hints, $rows);
     }
 
     /**
@@ -781,7 +803,12 @@ final class PlaceIntakeSearchService
      */
     private function resolveDistrictIds(string $district): array
     {
-        return District::query()
+        $cacheKey = mb_strtolower(trim($district), 'UTF-8');
+        if (array_key_exists($cacheKey, self::$districtIdCache)) {
+            return self::$districtIdCache[$cacheKey];
+        }
+
+        return self::$districtIdCache[$cacheKey] = District::query()
             ->where(function (Builder $w) use ($district): void {
                 $this->applyGeoNameMatch($w, $district);
             })
@@ -798,6 +825,11 @@ final class PlaceIntakeSearchService
      */
     private function resolveCityParentIds(string $cityName): array
     {
+        $cacheKey = mb_strtolower(trim($cityName), 'UTF-8');
+        if (array_key_exists($cacheKey, self::$cityParentIdCache)) {
+            return self::$cityParentIdCache[$cacheKey];
+        }
+
         $ids = Location::query()
             ->whereIn('type', ['city', 'district'])
             ->where(function (Builder $w) use ($cityName): void {
@@ -809,7 +841,7 @@ final class PlaceIntakeSearchService
             ->all();
 
         if ($ids !== []) {
-            return $ids;
+            return self::$cityParentIdCache[$cacheKey] = $ids;
         }
 
         $stateIds = State::query()
@@ -821,10 +853,10 @@ final class PlaceIntakeSearchService
             ->all();
 
         if ($stateIds === []) {
-            return [];
+            return self::$cityParentIdCache[$cacheKey] = [];
         }
 
-        return Location::query()
+        return self::$cityParentIdCache[$cacheKey] = Location::query()
             ->where('type', 'district')
             ->whereIn('parent_id', $stateIds)
             ->limit(20)

@@ -76,127 +76,212 @@
         <input type="hidden" name="{{ $n('id') }}" value="{{ $row['id'] }}">
     @endif
 
-    {{-- Row 1: Nakshatra, Charan, Rashi — single line --}}
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-            <label for="horoscope-nakshatra_id" class="{{ $labelCls }}">{{ __('components.horoscope.nakshatra') }}</label>
-            <select name="{{ $n('nakshatra_id') }}" id="horoscope-nakshatra_id" class="{{ $cls }}">
-                <option value="">{{ __('common.select_placeholder') }}</option>
-                @foreach($nakshatras as $item)
-                    @if(($item->key ?? '') === 'other') @continue @endif
-                    <option value="{{ $item->id }}" {{ (string)($val('nakshatra_id') ?? '') === (string)$item->id ? 'selected' : '' }}>{{ $item->label ?? $item->name ?? '' }}</option>
-                @endforeach
-            </select>
-        </div>
-        <div>
-            <label for="horoscope-charan" class="{{ $labelCls }}">{{ __('components.horoscope.charan') }}</label>
-            <select name="{{ $n('charan') }}" id="horoscope-charan" class="{{ $cls }}">
-                <option value="">{{ __('common.select_placeholder') }}</option>
-                @foreach([1, 2, 3, 4] as $c)
-                    <option value="{{ $c }}" {{ (string)($val('charan') ?? '') === (string)$c ? 'selected' : '' }}>{{ $c }}</option>
-                @endforeach
-            </select>
-        </div>
-        <div>
-            <label for="horoscope-rashi_id" class="{{ $labelCls }}">{{ __('components.horoscope.rashi') }}</label>
-            <select name="{{ $n('rashi_id') }}" id="horoscope-rashi_id" class="{{ $cls }}" data-horoscope-field="rashi_id">
-                <option value="">{{ __('common.select_placeholder') }}</option>
-                @foreach($rashis as $item)
-                    @if(($item->key ?? '') === 'other') @continue @endif
-                    <option value="{{ $item->id }}" {{ (string)($val('rashi_id') ?? '') === (string)$item->id ? 'selected' : '' }}>{{ $item->label ?? $item->name ?? '' }}</option>
-                @endforeach
-            </select>
-            @if($warn('rashi_id'))
-                <div class="horoscope-field-warning mt-1">
-                    <p class="text-sm text-amber-800 dark:text-amber-200">{{ $warn('rashi_id')['message'] ?? '' }}</p>
-                    @if(!empty($warn('rashi_id')['expected']))
-                        <div class="mt-1 flex flex-wrap gap-1">
-                            @foreach($warn('rashi_id')['expected'] as $opt)
-                                <button type="button" class="horoscope-hint-chip inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800" data-field="rashi_id" data-value="{{ $opt['id'] }}">{{ __('components.horoscope.correct_option') }} {{ $opt['label'] ?? $opt['id'] }}</button>
-                            @endforeach
-                        </div>
-                    @endif
-                </div>
-            @endif
-        </div>
-    </div>
-
-    {{-- Row 2: Gan, Nadi, Yoni — single line --}}
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-            <label for="horoscope-gan_id" class="{{ $labelCls }}">{{ __('components.horoscope.gan') }}</label>
-            <x-forms.controlled-select
-                field="horoscope.gan"
-                name="{{ $n('gan_id') }}"
-                :selected="$val('gan_id')"
-                :id="'horoscope-gan_id'"
-                :placeholder="__('common.select_placeholder')"
-            />
-            @if($warn('gan_id'))
-                <div class="horoscope-field-warning mt-1">
-                    <p class="text-sm text-amber-800 dark:text-amber-200">{{ $warn('gan_id')['message'] ?? '' }}</p>
-                    @if(!empty($warn('gan_id')['expected']))
-                        <div class="mt-1 flex flex-wrap gap-1">
-                            @foreach($warn('gan_id')['expected'] as $opt)
-                                <button type="button" class="horoscope-hint-chip inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800" data-field="gan_id" data-value="{{ $opt['id'] }}">{{ __('components.horoscope.correct_option') }} {{ $opt['label'] ?? $opt['id'] }}</button>
-                            @endforeach
-                        </div>
-                    @endif
-                </div>
-            @endif
-        </div>
-        <div>
-            <label for="horoscope-nadi_id" class="{{ $labelCls }}">{{ __('components.horoscope.nadi') }}</label>
-            <x-forms.controlled-select
-                field="horoscope.nadi"
-                name="{{ $n('nadi_id') }}"
-                :selected="$val('nadi_id')"
-                :id="'horoscope-nadi_id'"
-                :placeholder="__('common.select_placeholder')"
-            />
-            @if($warn('nadi_id'))
-                <div class="horoscope-field-warning mt-1">
-                    <p class="text-sm text-amber-800 dark:text-amber-200">{{ $warn('nadi_id')['message'] ?? '' }}</p>
-                    @if(!empty($warn('nadi_id')['expected']))
-                        <div class="mt-1 flex flex-wrap gap-1">
-                            @foreach($warn('nadi_id')['expected'] as $opt)
-                                <button type="button" class="horoscope-hint-chip inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800" data-field="nadi_id" data-value="{{ $opt['id'] }}">{{ __('components.horoscope.correct_option') }} {{ $opt['label'] ?? $opt['id'] }}</button>
-                            @endforeach
-                        </div>
-                    @endif
-                </div>
-            @endif
-        </div>
-        <div>
-            <label for="horoscope-yoni_id" class="{{ $labelCls }}">{{ __('components.horoscope.yoni') }}</label>
-            <select name="{{ $n('yoni_id') }}" id="horoscope-yoni_id" class="{{ $cls }}" data-horoscope-field="yoni_id">
-                <option value="">{{ __('common.select_placeholder') }}</option>
-                @foreach($yonis as $item)
-                    @if(($item->key ?? '') === 'other') @continue @endif
-                    <option value="{{ $item->id }}" {{ (string)($val('yoni_id') ?? '') === (string)$item->id ? 'selected' : '' }}>{{ $yoniDisplayLabel($item) }}</option>
-                @endforeach
-            </select>
-            @if($warn('yoni_id'))
-                <div class="horoscope-field-warning mt-1">
-                    <p class="text-sm text-amber-800 dark:text-amber-200">{{ $warn('yoni_id')['message'] ?? '' }}</p>
-                    @if(!empty($warn('yoni_id')['expected']))
-                        <div class="mt-1 flex flex-wrap gap-1">
-                            @foreach($warn('yoni_id')['expected'] as $opt)
-                                <button type="button" class="horoscope-hint-chip inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800" data-field="yoni_id" data-value="{{ $opt['id'] }}">{{ __('components.horoscope.correct_option') }} {{ $opt['label'] ?? $opt['id'] }}</button>
-                            @endforeach
-                        </div>
-                    @endif
-                </div>
-            @endif
-        </div>
-    </div>
-
-    {{-- Row 3: Varna, Vashya, Rashi Lord (editable dropdowns) + Mangal Dosh --}}
-    <div class="flex flex-wrap items-center gap-4 py-2">
-        <div class="flex flex-wrap items-center gap-3">
+    {{-- Top box: Mangal Dosh, Navras name, Devak, Kuldaivat, Gotra, Birth weekday --}}
+    <div class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/60 dark:bg-gray-800/40 p-4">
+        <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Basic Religious Details</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-                <label for="horoscope-varna_id" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('components.horoscope.varna') }}</label>
-                <select name="{{ $n('varna_id') }}" id="horoscope-varna_id" class="{{ $cls }} ml-0">
+                <label for="horoscope-mangal_dosh_type_id" class="{{ $labelCls }}">{{ __('components.horoscope.mangal_dosh') }}</label>
+                <select name="{{ $n('mangal_dosh_type_id') }}" id="horoscope-mangal_dosh_type_id" class="{{ $cls }}">
+                    <option value="">{{ __('common.select_placeholder') }}</option>
+                    @foreach($mangalDoshTypes ?? [] as $md)
+                        @if(($md->key ?? '') === 'other') @continue @endif
+                        <option value="{{ $md->id }}" {{ (string)($val('mangal_dosh_type_id') ?? '') === (string)$md->id ? 'selected' : '' }}>{{ $optionLabel('mangal_dosh_type', $md) }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label for="horoscope-navras_name" class="{{ $labelCls }}">{{ __('components.horoscope.navras_name') }}</label>
+                <input
+                    type="text"
+                    name="{{ $n('navras_name') }}"
+                    id="horoscope-navras_name"
+                    class="{{ $cls }}"
+                    value="{{ $val('navras_name') }}"
+                    autocomplete="off"
+                >
+            </div>
+            <div>
+                <label for="horoscope-devak" class="{{ $labelCls }}">{{ __('components.horoscope.devak') }}</label>
+                <input
+                    type="text"
+                    name="{{ $n('devak') }}"
+                    id="horoscope-devak"
+                    class="{{ $cls }}"
+                    value="{{ $val('devak') }}"
+                    autocomplete="off"
+                >
+            </div>
+            <div>
+                <label for="horoscope-kul" class="{{ $labelCls }}">{{ __('components.horoscope.kul') }}</label>
+                <input
+                    type="text"
+                    name="{{ $n('kul') }}"
+                    id="horoscope-kul"
+                    class="{{ $cls }}"
+                    value="{{ $val('kul') }}"
+                    autocomplete="off"
+                >
+            </div>
+            <div>
+                <label for="horoscope-gotra" class="{{ $labelCls }}">{{ __('components.horoscope.gotra') }}</label>
+                <input
+                    type="text"
+                    name="{{ $n('gotra') }}"
+                    id="horoscope-gotra"
+                    class="{{ $cls }}"
+                    value="{{ $val('gotra') }}"
+                    autocomplete="off"
+                >
+            </div>
+            <div>
+                <label for="horoscope-birth_weekday" class="{{ $labelCls }}">{{ __('components.horoscope.birth_weekday') }}</label>
+                <select
+                    name="{{ $n('birth_weekday') }}"
+                    id="horoscope-birth_weekday"
+                    class="{{ $cls }}"
+                >
+                    <option value="">{{ __('common.select_placeholder') }}</option>
+                    @php
+                        $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                    @endphp
+                    @foreach($days as $day)
+                        <option value="{{ $day }}" {{ (string)($birthWeekdayValue ?? '') === $day ? 'selected' : '' }}>
+                            {{ __('components.horoscope.weekdays.' . strtolower($day)) }}
+                        </option>
+                    @endforeach
+                </select>
+                @if($birthWeekdayMismatch)
+                    <p class="mt-1 text-sm text-amber-800 dark:text-amber-200">
+                        {{ __('components.horoscope.birth_weekday_mismatch', ['selected' => __('components.horoscope.weekdays.' . strtolower($birthWeekdayValue)), 'expected' => __('components.horoscope.weekdays.' . strtolower($birthWeekdayExpected))]) }}
+                    </p>
+                @endif
+            </div>
+        </div>
+    </div>
+
+    <div class="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/20 p-4">
+        <h3 class="text-sm font-semibold text-blue-950 dark:text-blue-100 mb-3">Horoscope Details</h3>
+        {{-- Row 1: Nakshatra, Charan, Rashi — single line --}}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label for="horoscope-nakshatra_id" class="{{ $labelCls }} text-base font-bold">{{ __('components.horoscope.nakshatra') }}</label>
+                <select name="{{ $n('nakshatra_id') }}" id="horoscope-nakshatra_id" class="{{ $cls }}">
+                    <option value="">{{ __('common.select_placeholder') }}</option>
+                    @foreach($nakshatras as $item)
+                        @if(($item->key ?? '') === 'other') @continue @endif
+                        <option value="{{ $item->id }}" {{ (string)($val('nakshatra_id') ?? '') === (string)$item->id ? 'selected' : '' }}>{{ $item->label ?? $item->name ?? '' }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label for="horoscope-charan" class="{{ $labelCls }} text-base font-bold">{{ __('components.horoscope.charan') }}</label>
+                <select name="{{ $n('charan') }}" id="horoscope-charan" class="{{ $cls }}">
+                    <option value="">{{ __('common.select_placeholder') }}</option>
+                    @foreach([1, 2, 3, 4] as $c)
+                        <option value="{{ $c }}" {{ (string)($val('charan') ?? '') === (string)$c ? 'selected' : '' }}>{{ $c }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label for="horoscope-rashi_id" class="{{ $labelCls }} text-base font-bold">{{ __('components.horoscope.rashi') }}</label>
+                <select name="{{ $n('rashi_id') }}" id="horoscope-rashi_id" class="{{ $cls }}" data-horoscope-field="rashi_id">
+                    <option value="">{{ __('common.select_placeholder') }}</option>
+                    @foreach($rashis as $item)
+                        @if(($item->key ?? '') === 'other') @continue @endif
+                        <option value="{{ $item->id }}" {{ (string)($val('rashi_id') ?? '') === (string)$item->id ? 'selected' : '' }}>{{ $item->label ?? $item->name ?? '' }}</option>
+                    @endforeach
+                </select>
+                @if($warn('rashi_id'))
+                    <div class="horoscope-field-warning mt-1">
+                        <p class="text-sm text-amber-800 dark:text-amber-200">{{ $warn('rashi_id')['message'] ?? '' }}</p>
+                        @if(!empty($warn('rashi_id')['expected']))
+                            <div class="mt-1 flex flex-wrap gap-1">
+                                @foreach($warn('rashi_id')['expected'] as $opt)
+                                    <button type="button" class="horoscope-hint-chip inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800" data-field="rashi_id" data-value="{{ $opt['id'] }}">{{ __('components.horoscope.correct_option') }} {{ $opt['label'] ?? $opt['id'] }}</button>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                @endif
+            </div>
+        </div>
+
+        {{-- Row 2: Gan, Nadi, Yoni — single line --}}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+            <div>
+                <label for="horoscope-gan_id" class="{{ $labelCls }}">{{ __('components.horoscope.gan') }}</label>
+                <x-forms.controlled-select
+                    field="horoscope.gan"
+                    name="{{ $n('gan_id') }}"
+                    :selected="$val('gan_id')"
+                    :id="'horoscope-gan_id'"
+                    :placeholder="__('common.select_placeholder')"
+                />
+                @if($warn('gan_id'))
+                    <div class="horoscope-field-warning mt-1">
+                        <p class="text-sm text-amber-800 dark:text-amber-200">{{ $warn('gan_id')['message'] ?? '' }}</p>
+                        @if(!empty($warn('gan_id')['expected']))
+                            <div class="mt-1 flex flex-wrap gap-1">
+                                @foreach($warn('gan_id')['expected'] as $opt)
+                                    <button type="button" class="horoscope-hint-chip inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800" data-field="gan_id" data-value="{{ $opt['id'] }}">{{ __('components.horoscope.correct_option') }} {{ $opt['label'] ?? $opt['id'] }}</button>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                @endif
+            </div>
+            <div>
+                <label for="horoscope-nadi_id" class="{{ $labelCls }}">{{ __('components.horoscope.nadi') }}</label>
+                <x-forms.controlled-select
+                    field="horoscope.nadi"
+                    name="{{ $n('nadi_id') }}"
+                    :selected="$val('nadi_id')"
+                    :id="'horoscope-nadi_id'"
+                    :placeholder="__('common.select_placeholder')"
+                />
+                @if($warn('nadi_id'))
+                    <div class="horoscope-field-warning mt-1">
+                        <p class="text-sm text-amber-800 dark:text-amber-200">{{ $warn('nadi_id')['message'] ?? '' }}</p>
+                        @if(!empty($warn('nadi_id')['expected']))
+                            <div class="mt-1 flex flex-wrap gap-1">
+                                @foreach($warn('nadi_id')['expected'] as $opt)
+                                    <button type="button" class="horoscope-hint-chip inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800" data-field="nadi_id" data-value="{{ $opt['id'] }}">{{ __('components.horoscope.correct_option') }} {{ $opt['label'] ?? $opt['id'] }}</button>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                @endif
+            </div>
+            <div>
+                <label for="horoscope-yoni_id" class="{{ $labelCls }}">{{ __('components.horoscope.yoni') }}</label>
+                <select name="{{ $n('yoni_id') }}" id="horoscope-yoni_id" class="{{ $cls }}" data-horoscope-field="yoni_id">
+                    <option value="">{{ __('common.select_placeholder') }}</option>
+                    @foreach($yonis as $item)
+                        @if(($item->key ?? '') === 'other') @continue @endif
+                        <option value="{{ $item->id }}" {{ (string)($val('yoni_id') ?? '') === (string)$item->id ? 'selected' : '' }}>{{ $yoniDisplayLabel($item) }}</option>
+                    @endforeach
+                </select>
+                @if($warn('yoni_id'))
+                    <div class="horoscope-field-warning mt-1">
+                        <p class="text-sm text-amber-800 dark:text-amber-200">{{ $warn('yoni_id')['message'] ?? '' }}</p>
+                        @if(!empty($warn('yoni_id')['expected']))
+                            <div class="mt-1 flex flex-wrap gap-1">
+                                @foreach($warn('yoni_id')['expected'] as $opt)
+                                    <button type="button" class="horoscope-hint-chip inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800" data-field="yoni_id" data-value="{{ $opt['id'] }}">{{ __('components.horoscope.correct_option') }} {{ $opt['label'] ?? $opt['id'] }}</button>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                @endif
+            </div>
+        </div>
+
+        {{-- Row 3: Varna, Vashya, Rashi Lord --}}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+            <div>
+                <label for="horoscope-varna_id" class="{{ $labelCls }}">{{ __('components.horoscope.varna') }}</label>
+                <select name="{{ $n('varna_id') }}" id="horoscope-varna_id" class="{{ $cls }}">
                     <option value="">{{ __('common.select_placeholder') }}</option>
                     @foreach($varnas ?? [] as $v)
                         <option value="{{ $v->id }}" {{ (string)($val('varna_id') ?? '') === (string)$v->id ? 'selected' : '' }}>{{ $optionLabel('varna', $v) }}</option>
@@ -204,8 +289,8 @@
                 </select>
             </div>
             <div>
-                <label for="horoscope-vashya_id" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('components.horoscope.vashya') }}</label>
-                <select name="{{ $n('vashya_id') }}" id="horoscope-vashya_id" class="{{ $cls }} ml-0">
+                <label for="horoscope-vashya_id" class="{{ $labelCls }}">{{ __('components.horoscope.vashya') }}</label>
+                <select name="{{ $n('vashya_id') }}" id="horoscope-vashya_id" class="{{ $cls }}">
                     <option value="">{{ __('common.select_placeholder') }}</option>
                     @foreach($vashyas ?? [] as $v)
                         <option value="{{ $v->id }}" {{ (string)($val('vashya_id') ?? '') === (string)$v->id ? 'selected' : '' }}>{{ $optionLabel('vashya', $v) }}</option>
@@ -213,8 +298,8 @@
                 </select>
             </div>
             <div>
-                <label for="horoscope-rashi_lord_id" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('components.horoscope.rashi_lord') }}</label>
-                <select name="{{ $n('rashi_lord_id') }}" id="horoscope-rashi_lord_id" class="{{ $cls }} ml-0">
+                <label for="horoscope-rashi_lord_id" class="{{ $labelCls }}">{{ __('components.horoscope.rashi_lord') }}</label>
+                <select name="{{ $n('rashi_lord_id') }}" id="horoscope-rashi_lord_id" class="{{ $cls }}">
                     <option value="">{{ __('common.select_placeholder') }}</option>
                     @foreach($rashiLords ?? [] as $rl)
                         <option value="{{ $rl->id }}" {{ (string)($val('rashi_lord_id') ?? '') === (string)$rl->id ? 'selected' : '' }}>{{ $optionLabel('rashi_lord', $rl) }}</option>
@@ -222,93 +307,6 @@
                 </select>
             </div>
         </div>
-        <div>
-            <label for="horoscope-mangal_dosh_type_id" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('components.horoscope.mangal_dosh') }}</label>
-            <select name="{{ $n('mangal_dosh_type_id') }}" id="horoscope-mangal_dosh_type_id" class="{{ $cls }}">
-                <option value="">{{ __('common.select_placeholder') }}</option>
-                @foreach($mangalDoshTypes ?? [] as $md)
-                    @if(($md->key ?? '') === 'other') @continue @endif
-                    <option value="{{ $md->id }}" {{ (string)($val('mangal_dosh_type_id') ?? '') === (string)$md->id ? 'selected' : '' }}>{{ $optionLabel('mangal_dosh_type', $md) }}</option>
-                @endforeach
-            </select>
-        </div>
-    </div>
-
-    {{-- Row 4: Navras name + Devak --}}
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-            <label for="horoscope-navras_name" class="{{ $labelCls }}">{{ __('components.horoscope.navras_name') }}</label>
-            <input
-                type="text"
-                name="{{ $n('navras_name') }}"
-                id="horoscope-navras_name"
-                class="{{ $cls }}"
-                value="{{ $val('navras_name') }}"
-                autocomplete="off"
-            >
-        </div>
-        <div>
-            <label for="horoscope-devak" class="{{ $labelCls }}">{{ __('components.horoscope.devak') }}</label>
-            <input
-                type="text"
-                name="{{ $n('devak') }}"
-                id="horoscope-devak"
-                class="{{ $cls }}"
-                value="{{ $val('devak') }}"
-                autocomplete="off"
-            >
-        </div>
-    </div>
-
-    {{-- Row 5: Kul + Gotra --}}
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-            <label for="horoscope-kul" class="{{ $labelCls }}">{{ __('components.horoscope.kul') }}</label>
-            <input
-                type="text"
-                name="{{ $n('kul') }}"
-                id="horoscope-kul"
-                class="{{ $cls }}"
-                value="{{ $val('kul') }}"
-                autocomplete="off"
-            >
-        </div>
-        <div>
-            <label for="horoscope-gotra" class="{{ $labelCls }}">{{ __('components.horoscope.gotra') }}</label>
-            <input
-                type="text"
-                name="{{ $n('gotra') }}"
-                id="horoscope-gotra"
-                class="{{ $cls }}"
-                value="{{ $val('gotra') }}"
-                autocomplete="off"
-            >
-        </div>
-    </div>
-
-    {{-- Row 6: Janma-waar (day of week from DOB, editable with mismatch warning) --}}
-    <div class="mt-2">
-        <label for="horoscope-birth_weekday" class="{{ $labelCls }}">{{ __('components.horoscope.birth_weekday') }}</label>
-        <select
-            name="{{ $n('birth_weekday') }}"
-            id="horoscope-birth_weekday"
-            class="{{ $cls }}"
-        >
-            <option value="">{{ __('common.select_placeholder') }}</option>
-            @php
-                $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-            @endphp
-            @foreach($days as $day)
-                <option value="{{ $day }}" {{ (string)($birthWeekdayValue ?? '') === $day ? 'selected' : '' }}>
-                    {{ __('components.horoscope.weekdays.' . strtolower($day)) }}
-                </option>
-            @endforeach
-        </select>
-        @if($birthWeekdayMismatch)
-            <p class="mt-1 text-sm text-amber-800 dark:text-amber-200">
-                {{ __('components.horoscope.birth_weekday_mismatch', ['selected' => __('components.horoscope.weekdays.' . strtolower($birthWeekdayValue)), 'expected' => __('components.horoscope.weekdays.' . strtolower($birthWeekdayExpected))]) }}
-            </p>
-        @endif
     </div>
 
     <script>

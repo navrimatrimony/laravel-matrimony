@@ -22,7 +22,6 @@
 @include('matrimony.profile.wizard.sections.alliance', ['namePrefix' => $relativesMaternalPrefix])
 @include('matrimony.profile.wizard.sections.property', ['namePrefix' => $propertyPrefix])
 @include('matrimony.profile.wizard.sections.horoscope', ['namePrefix' => $horoscopePrefix])
-@include('matrimony.profile.wizard.sections.contacts')
 @include('matrimony.profile.wizard.sections.about_me', ['namePrefix' => $narrativePrefix])
 @include('matrimony.profile.wizard.sections.about_preferences')
 {{-- Photo is managed via the dedicated photo upload engine (upload-photo page). --}}

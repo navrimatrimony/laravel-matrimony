@@ -40,8 +40,13 @@ class IntakeNormalizedDraftToParsedJsonMapper
         $parsed['addresses'] = $this->mapAddresses($draft);
         $parsed['parents_addresses'] = $this->mapParentsAddresses($draft);
         $parsed['relatives'] = $this->mapRelatives($draft);
+        $parsed['relatives_parents_family'] = array_values(array_filter(
+            $parsed['relatives'],
+            fn (array $relative): bool => $this->isPaternalRelativeType((string) ($relative['relation_type'] ?? ''))
+        ));
         $parsed['siblings'] = $this->mapSiblings($draft);
         $parsed['property_summary'] = $this->mapPropertySummary($draft);
+        $parsed['property_assets'] = $this->mapPropertyAssets($draft);
         $parsed['horoscope'] = $this->mapHoroscope($draft);
         $parsed['confidence_map'] = $this->mapConfidenceMap($draft, $parsed);
 
@@ -203,6 +208,7 @@ class IntakeNormalizedDraftToParsedJsonMapper
 
             $mapped[] = [
                 'type' => 'parents',
+                'address_type_key' => trim((string) ($row['address_type_key'] ?? 'permanent')) ?: 'permanent',
                 'address_line' => $addressLine !== '' ? $addressLine : null,
                 'raw' => $raw !== '' ? $raw : null,
             ];
@@ -225,21 +231,31 @@ class IntakeNormalizedDraftToParsedJsonMapper
                 continue;
             }
             $name = trim((string) ($relative['name'] ?? ''));
+            $addressLine = trim((string) ($relative['address_line'] ?? ''));
             $raw = trim((string) ($relative['raw'] ?? $name));
-            $blob = implode(' ', array_filter([$name, $raw]));
+            $blob = implode(' ', array_filter([$name, $addressLine, $raw]));
             if ($blob === '' || $this->isRelativeContaminated($blob)) {
                 continue;
             }
 
-            $relationType = $this->inferRelativeRelationType($raw);
+            $relationType = $this->canonicalRelativeRelationType((string) ($relative['relation_type'] ?? '')) ?? $this->inferRelativeRelationType($raw);
             $mapped[] = [
                 'relation_type' => $relationType,
                 'name' => $name !== '' ? $name : null,
                 'raw_note' => $raw !== '' ? $raw : null,
-                'notes' => $name !== '' ? $name : $raw,
-                'address_line' => null,
-                'location' => null,
+                'occupation' => trim((string) ($relative['occupation'] ?? '')) ?: null,
+                'contact_number' => OcrNormalize::normalizePhone((string) ($relative['contact_number'] ?? '')) ?: null,
+                'notes' => trim((string) ($relative['notes'] ?? '')) ?: null,
+                'address_line' => $addressLine !== '' ? $addressLine : null,
+                'location' => $addressLine !== '' ? $addressLine : null,
+                'location_display' => trim((string) ($relative['location_display'] ?? '')) ?: null,
+                'is_primary_contact' => ! empty($relative['is_primary_contact']),
             ];
+            foreach (['id', 'occupation_master_id', 'occupation_custom_id', 'city_id', 'state_id'] as $field) {
+                if (! empty($relative[$field])) {
+                    $mapped[array_key_last($mapped)][$field] = (int) $relative[$field];
+                }
+            }
         }
 
         return $mapped;
@@ -291,6 +307,43 @@ class IntakeNormalizedDraftToParsedJsonMapper
      * @param  array<string, mixed>  $draft
      * @return list<array<string, mixed>>
      */
+    public function mapPropertyAssets(array $draft): array
+    {
+        $assets = is_array($draft['normalized']['property_assets'] ?? null) ? $draft['normalized']['property_assets'] : [];
+        $mapped = [];
+        foreach ($assets as $asset) {
+            if (! is_array($asset)) {
+                continue;
+            }
+            $row = [];
+            $assetType = trim((string) ($asset['asset_type_key'] ?? $asset['asset_type'] ?? ''));
+            if ($assetType !== '') {
+                $row['asset_type'] = $assetType;
+            }
+            $location = trim((string) ($asset['location'] ?? ''));
+            if ($location !== '') {
+                $row['location'] = $location;
+            }
+            $ownershipType = trim((string) ($asset['ownership_type_key'] ?? $asset['ownership_type'] ?? ''));
+            if ($ownershipType !== '') {
+                $row['ownership_type'] = $ownershipType;
+            }
+            $notes = trim((string) ($asset['notes'] ?? ''));
+            if ($notes !== '') {
+                $row['notes'] = $notes;
+            }
+            if ($row !== []) {
+                $mapped[] = $row;
+            }
+        }
+
+        return $mapped;
+    }
+
+    /**
+     * @param  array<string, mixed>  $draft
+     * @return list<array<string, mixed>>
+     */
     public function mapHoroscope(array $draft): array
     {
         $horoscope = $draft['normalized']['horoscope'] ?? null;
@@ -316,6 +369,10 @@ class IntakeNormalizedDraftToParsedJsonMapper
             'gotra' => $this->extractHoroscopeField($blob, ['गोत्र']),
             'nadi' => $this->extractHoroscopeField($blob, ['नाडी']),
             'gan' => $this->extractHoroscopeField($blob, ['गण']),
+            'yoni' => $this->scalarHoroscopeValue($horoscope, 'yoni') ?? $this->extractHoroscopeField($blob, ['योनी']),
+            'varna' => $this->scalarHoroscopeValue($horoscope, 'varna') ?? $this->extractHoroscopeField($blob, ['वर्ण']),
+            'navras_name' => $this->scalarHoroscopeValue($horoscope, 'navras_name') ?? $this->extractHoroscopeField($blob, ['नावरस']),
+            'birth_weekday' => $this->scalarHoroscopeValue($horoscope, 'birth_weekday'),
         ];
 
         $nonEmpty = array_filter($row, static fn ($value, $key) => ! str_ends_with((string) $key, '_id') && $value !== null && $value !== '', ARRAY_FILTER_USE_BOTH);
@@ -397,8 +454,12 @@ class IntakeNormalizedDraftToParsedJsonMapper
             'full_name', 'gender', 'date_of_birth', 'birth_time', 'birth_place_text',
             'religion', 'caste', 'sub_caste', 'height_cm', 'complexion', 'blood_group',
             'marital_status', 'father_name', 'father_occupation', 'mother_name', 'mother_occupation',
+            'father_extra_info', 'father_contact_1', 'father_contact_2', 'father_contact_3',
+            'mother_extra_info', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3',
             'brother_count', 'sister_count', 'highest_education', 'occupation_title',
-            'company_name', 'annual_income', 'work_location_text', 'other_relatives_text',
+            'company_name', 'annual_income', 'work_location_text', 'family_income',
+            'family_type', 'family_type_id', 'family_status', 'family_values',
+            'other_relatives_text',
         ];
         $picked = [];
         foreach ($fields as $field) {
@@ -444,10 +505,50 @@ class IntakeNormalizedDraftToParsedJsonMapper
             if ($name === '' || in_array($name, ['नाही', 'एक', 'No', 'None', '0', '०'], true)) {
                 continue;
             }
-            $mapped[] = [
-                'relation_type' => (string) ($sibling['relation_type'] ?? ''),
+            $relationType = in_array(($sibling['relation_type'] ?? null), ['brother', 'sister', 'brother_wife', 'sister_husband'], true)
+                ? (string) $sibling['relation_type']
+                : '';
+            if ($relationType === '') {
+                continue;
+            }
+            $row = [
+                'relation_type' => $relationType,
                 'name' => $name,
             ];
+            foreach (['occupation', 'address_line', 'contact_number', 'contact_number_2', 'contact_number_3', 'notes', 'location_display'] as $field) {
+                $value = trim((string) ($sibling[$field] ?? ''));
+                if ($value !== '') {
+                    $row[$field] = $value;
+                }
+            }
+            $maritalStatus = trim((string) ($sibling['marital_status'] ?? ''));
+            if (in_array($maritalStatus, ['married', 'unmarried'], true)) {
+                $row['marital_status'] = $maritalStatus;
+            }
+            foreach (['id', 'sort_order', 'occupation_master_id', 'occupation_custom_id', 'city_id', 'taluka_id', 'district_id', 'state_id'] as $field) {
+                if (! empty($sibling[$field])) {
+                    $row[$field] = (int) $sibling[$field];
+                }
+            }
+            if (isset($sibling['spouse']) && is_array($sibling['spouse'])) {
+                $spouse = [];
+                foreach (['name', 'occupation_title', 'address_line', 'contact_number', 'location_display'] as $field) {
+                    $value = trim((string) ($sibling['spouse'][$field] ?? ''));
+                    if ($value !== '') {
+                        $spouse[$field] = $value;
+                    }
+                }
+                foreach (['occupation_master_id', 'occupation_custom_id', 'city_id', 'taluka_id', 'district_id', 'state_id'] as $field) {
+                    if (! empty($sibling['spouse'][$field])) {
+                        $spouse[$field] = (int) $sibling['spouse'][$field];
+                    }
+                }
+                if ($spouse !== []) {
+                    $row['spouse'] = $spouse;
+                    $row['marital_status'] = 'married';
+                }
+            }
+            $mapped[] = $row;
         }
 
         return $mapped;
@@ -501,6 +602,9 @@ class IntakeNormalizedDraftToParsedJsonMapper
 
     private function inferRelativeRelationType(string $raw): ?string
     {
+        if (preg_match('/^चुलते/u', $raw)) {
+            return 'paternal_uncle';
+        }
         if (preg_match('/^मामा/u', $raw)) {
             return 'maternal_uncle';
         }
@@ -512,6 +616,59 @@ class IntakeNormalizedDraftToParsedJsonMapper
         }
 
         return null;
+    }
+
+    private function canonicalRelativeRelationType(string $value): ?string
+    {
+        $value = trim($value);
+        if (in_array($value, [
+            'paternal_grandfather',
+            'paternal_grandmother',
+            'paternal_uncle',
+            'wife_paternal_uncle',
+            'paternal_aunt',
+            'husband_paternal_aunt',
+            'Cousin',
+            'maternal_address_ajol',
+            'maternal_grandfather',
+            'maternal_grandmother',
+            'maternal_uncle',
+            'wife_maternal_uncle',
+            'maternal_aunt',
+            'husband_maternal_aunt',
+            'maternal_cousin',
+        ], true)) {
+            return $value;
+        }
+
+        return null;
+    }
+
+    private function isPaternalRelativeType(string $value): bool
+    {
+        return in_array($value, [
+            'paternal_grandfather',
+            'paternal_grandmother',
+            'paternal_uncle',
+            'wife_paternal_uncle',
+            'paternal_aunt',
+            'husband_paternal_aunt',
+            'Cousin',
+        ], true);
+    }
+
+    /**
+     * @param  array<string, mixed>  $horoscope
+     */
+    private function scalarHoroscopeValue(array $horoscope, string $field): ?string
+    {
+        $value = $horoscope[$field] ?? null;
+        if (! is_scalar($value)) {
+            return null;
+        }
+        $text = trim((string) $value);
+
+        return $text !== '' ? $text : null;
     }
 
     /**

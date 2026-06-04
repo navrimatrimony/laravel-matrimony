@@ -116,7 +116,6 @@ class AdminEducationOccupationController extends Controller
             ['table' => 'matrimony_profiles', 'column' => 'mother_occupation_master_id'],
             ['table' => 'profile_siblings', 'column' => 'occupation_master_id'],
             ['table' => 'profile_relatives', 'column' => 'occupation_master_id'],
-            ['table' => 'profile_sibling_spouses', 'column' => 'occupation_master_id'],
         ] as $ref) {
             if (! Schema::hasTable($ref['table']) || ! Schema::hasColumn($ref['table'], $ref['column'])) {
                 continue;
@@ -544,7 +543,6 @@ class AdminEducationOccupationController extends Controller
             $this->reassignOccupationColumn('matrimony_profiles', 'mother_occupation_master_id', $occupation->id, $replacementId);
             $this->reassignOccupationColumn('profile_siblings', 'occupation_master_id', $occupation->id, $replacementId);
             $this->reassignOccupationColumn('profile_relatives', 'occupation_master_id', $occupation->id, $replacementId);
-            $this->reassignOccupationColumn('profile_sibling_spouses', 'occupation_master_id', $occupation->id, $replacementId);
 
             $occupation->delete();
         });

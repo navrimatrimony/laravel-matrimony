@@ -59,15 +59,15 @@
     {{-- Line 1: Father — name + occupation --}}
     <div class="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
         <div class="flex-1">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Name</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.father_name') }}</label>
             <input type="text" name="{{ $n('father_name') }}" value="{{ $u8(old($oldK('father_name'), $profile->father_name ?? null)) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
         <div class="flex-1">
             @if (Schema::hasColumn('matrimony_profiles', 'father_occupation_master_id'))
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('Father Occupation') }}</label>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.father_occupation') }}</label>
                 <x-occupation-search-engine :profile="$profile" :name-prefix="$namePrefix" occupation-key-stem="father_occupation" :show-label="false" :form-field-style="true" />
             @else
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Occupation</label>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.father_occupation') }}</label>
                 @php $fatherOccupationLegacy = $u8(old($oldK('father_occupation'), $profile->father_occupation ?? null)); @endphp
                 <input type="text" name="{{ $n('father_occupation') }}" value="{{ $fatherOccupationLegacy }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
             @endif
@@ -77,11 +77,11 @@
     {{-- Line 2: Father — extra info + up to 3 contact numbers (+ adds in-context) --}}
     <div class="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
         <div class="flex-1">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Extra Information</label>
-            <input type="text" name="{{ $n('father_extra_info') }}" value="{{ $u8(old($oldK('father_extra_info'), $profile->father_extra_info ?? '')) }}" maxlength="255" placeholder="e.g. Retired from MSEB, Kolhapur" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.father_extra_info') }}</label>
+            <input type="text" name="{{ $n('father_extra_info') }}" value="{{ $u8(old($oldK('father_extra_info'), $profile->father_extra_info ?? '')) }}" maxlength="255" placeholder="{{ __('wizard.father_extra_info_placeholder') }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
         <div class="flex-1 min-w-0" data-contact-context="father" data-max-slots="{{ $maxParentContactSlots }}">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Contact number</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.father_contact_number') }}</label>
             <div class="flex flex-wrap items-end gap-2" id="father-contact-slots-inner">
                 @for($i = 0; $i < $fatherCount; $i++)
                     @php
@@ -95,7 +95,7 @@
                             :value="$fatherContacts[$i] ?? ''"
                             variant="inline"
                             label=""
-                            placeholder="10-digit"
+                            :placeholder="__('wizard.placeholder_10_digit_short')"
                             :showCountryCode="true"
                             :showWhatsapp="true"
                             :nameWhatsapp="$nameWa"
@@ -112,15 +112,15 @@
     {{-- Line 3: Mother — name + occupation --}}
     <div class="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
         <div class="flex-1">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Name</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.mother_name') }}</label>
             <input type="text" name="{{ $n('mother_name') }}" value="{{ $u8(old($oldK('mother_name'), $profile->mother_name ?? null)) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
         <div class="flex-1">
             @if (Schema::hasColumn('matrimony_profiles', 'father_occupation_master_id'))
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('Mother Occupation') }}</label>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.mother_occupation') }}</label>
                 <x-occupation-search-engine :profile="$profile" :name-prefix="$namePrefix" occupation-key-stem="mother_occupation" :show-label="false" :form-field-style="true" />
             @else
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Occupation</label>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.mother_occupation') }}</label>
                 <input type="text" name="{{ $n('mother_occupation') }}" value="{{ $u8(old($oldK('mother_occupation'), $profile->mother_occupation ?? null)) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
             @endif
         </div>
@@ -129,11 +129,11 @@
     {{-- Line 4: Mother — extra info + up to 3 contact numbers (+ adds in-context) --}}
     <div class="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
         <div class="flex-1">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Extra Information</label>
-            <input type="text" name="{{ $n('mother_extra_info') }}" value="{{ $u8(old($oldK('mother_extra_info'), $profile->mother_extra_info ?? '')) }}" maxlength="255" placeholder="e.g. Housewife, stays with son in Pune" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.mother_extra_info') }}</label>
+            <input type="text" name="{{ $n('mother_extra_info') }}" value="{{ $u8(old($oldK('mother_extra_info'), $profile->mother_extra_info ?? '')) }}" maxlength="255" placeholder="{{ __('wizard.mother_extra_info_placeholder') }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
         <div class="flex-1 min-w-0" data-contact-context="mother" data-max-slots="{{ $maxParentContactSlots }}">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Contact number</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.mother_contact_number') }}</label>
             <div class="flex flex-wrap items-end gap-2" id="mother-contact-slots-inner">
                 @for($i = 0; $i < $motherCount; $i++)
                     @php
@@ -147,7 +147,7 @@
                             :value="$motherContacts[$i] ?? ''"
                             variant="inline"
                             label=""
-                            placeholder="10-digit"
+                            :placeholder="__('wizard.placeholder_10_digit_short')"
                             :showCountryCode="true"
                             :showWhatsapp="true"
                             :nameWhatsapp="$nameWa"
@@ -188,7 +188,8 @@
                             <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{{ __('wizard.address_type') }}</label>
                             <select name="{{ $ppfx }}[address_type_key]" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-2 text-sm h-[42px]">
                                 @foreach($addrTypes as $at)
-                                    <option value="{{ $at->key }}" {{ (string) $ptype === (string) $at->key ? 'selected' : '' }}>{{ $at->label }}</option>
+                                    @php $addrTypeLabel = app()->getLocale() === 'mr' && filled($at->label_mr ?? null) ? $at->label_mr : $at->label; @endphp
+                                    <option value="{{ $at->key }}" {{ (string) $ptype === (string) $at->key ? 'selected' : '' }}>{{ $addrTypeLabel }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -228,9 +229,10 @@
                 <div class="min-w-[10rem] flex-1">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{{ __('wizard.address_type') }}</label>
                     <select name="{{ $ppfx }}[address_type_key]" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-2 text-sm h-[42px]">
-                        @foreach($addrTypes as $at)
-                            <option value="{{ $at->key }}" {{ $at->key === 'permanent' ? 'selected' : '' }}>{{ $at->label }}</option>
-                        @endforeach
+                            @foreach($addrTypes as $at)
+                                @php $addrTypeLabel = app()->getLocale() === 'mr' && filled($at->label_mr ?? null) ? $at->label_mr : $at->label; @endphp
+                                <option value="{{ $at->key }}" {{ $at->key === 'permanent' ? 'selected' : '' }}>{{ $addrTypeLabel }}</option>
+                            @endforeach
                     </select>
                 </div>
                 <div class="flex-1 min-w-[8rem]">

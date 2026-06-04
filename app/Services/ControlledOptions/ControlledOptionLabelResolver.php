@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\Schema;
  */
 class ControlledOptionLabelResolver
 {
+    /** @var array<string, bool> */
+    private static array $columnPresenceCache = [];
+
     public function __construct(
         private readonly ControlledOptionRegistry $registry,
     ) {
@@ -39,7 +42,7 @@ class ControlledOptionLabelResolver
         $strict = $config['strict_keys'] ?? null;
 
         $q = DB::table($table);
-        if ($activeColumn && Schema::hasColumn($table, $activeColumn)) {
+        if ($activeColumn && $this->hasColumnCached($table, $activeColumn)) {
             $q->where($activeColumn, true);
         }
         $rows = $q->get([$idColumn, $keyColumn, $labelColumn]);
@@ -104,5 +107,14 @@ class ControlledOptionLabelResolver
 
         return $out;
     }
-}
 
+    private function hasColumnCached(string $table, string $column): bool
+    {
+        $key = $table.'|'.$column;
+        if (! array_key_exists($key, self::$columnPresenceCache)) {
+            self::$columnPresenceCache[$key] = Schema::hasColumn($table, $column);
+        }
+
+        return self::$columnPresenceCache[$key];
+    }
+}

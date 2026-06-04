@@ -73,11 +73,9 @@
     @foreach($rows as $idx => $row)
         @php
             $r = is_object($row) ? (array) $row : (array) $row;
-            $spouse = $r['spouse'] ?? null;
-            if (is_object($spouse)) { $spouse = (array) $spouse; }
-            $spouse = $spouse ?? [];
-            $isMarried = ($r['marital_status'] ?? '') === 'married' || !empty($r['is_married']) || !empty($spouse['name']) || !empty($spouse['occupation_title'])
-                || !empty($spouse['occupation_master_id']) || !empty($spouse['occupation_custom_id']);
+            $relationType = (string) ($r['relation_type'] ?? '');
+            $forceMarried = in_array($relationType, ['brother_wife', 'sister_husband'], true);
+            $isMarried = $forceMarried || ($r['marital_status'] ?? '') === 'married' || !empty($r['is_married']);
         @endphp
         <div class="{{ $namePrefix }}-row relation-engine-row mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 space-y-3">
             <input type="hidden" name="{{ $namePrefix }}[{{ $idx }}][id]" value="{{ $r['id'] ?? '' }}">
@@ -87,7 +85,7 @@
             <div class="grid grid-cols-12 gap-3 items-center">
                 <div class="col-span-12 sm:col-span-3 min-w-0">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.relation') }}</label>
-                    <select name="{{ $namePrefix }}[{{ $idx }}][relation_type]" class="relation-input-h form-select w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                    <select name="{{ $namePrefix }}[{{ $idx }}][relation_type]" class="relation-type-select relation-input-h form-select w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                         <option value="">—</option>
                         @foreach($opts as $opt)
                             <option value="{{ $opt['value'] }}" {{ ($r['relation_type'] ?? '') == $opt['value'] ? 'selected' : '' }}>{{ $opt['label'] }}</option>
@@ -99,11 +97,11 @@
                     <input type="text" name="{{ $namePrefix }}[{{ $idx }}][name]" value="{{ $r['name'] ?? '' }}" placeholder="{{ __('components.relation.name_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm box-border">
                 </div>
                 <div class="col-span-12 sm:col-span-2 min-w-0">
-                    <div class="relation-marital-wrap" data-spouse-block="{{ $namePrefix }}-spouse-{{ $idx }}">
+                    <div class="relation-marital-wrap">
                         <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.married') }}</label>
-                        <select name="{{ $namePrefix }}[{{ $idx }}][marital_status]" class="relation-marital-select relation-input-h form-select w-full h-10 rounded border px-1 py-1.5 text-sm box-border {{ ($r['marital_status'] ?? '') === 'married' || $isMarried ? 'marital-yes' : 'marital-no' }}">
-                            <option value="unmarried" {{ ($r['marital_status'] ?? '') !== 'married' && !$isMarried ? 'selected' : '' }}>{{ __('common.no') }}</option>
-                            <option value="married" {{ ($r['marital_status'] ?? '') === 'married' || $isMarried ? 'selected' : '' }}>{{ __('common.yes') }}</option>
+                        <select name="{{ $namePrefix }}[{{ $idx }}][marital_status]" class="relation-marital-select relation-input-h form-select w-full h-10 rounded border px-1 py-1.5 text-sm box-border {{ $isMarried ? 'marital-yes' : 'marital-no' }}" data-force-married="{{ $forceMarried ? '1' : '0' }}">
+                            <option value="unmarried" {{ ! $isMarried ? 'selected' : '' }}>{{ __('common.no') }}</option>
+                            <option value="married" {{ $isMarried ? 'selected' : '' }}>{{ __('common.yes') }}</option>
                         </select>
                     </div>
                 </div>
@@ -263,38 +261,6 @@
             </div>
             @endif
 
-            @if($showMarried)
-            <div id="{{ $namePrefix }}-spouse-{{ $idx }}" class="relation-spouse-block mt-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-100 dark:bg-gray-700/60 p-3" style="{{ !$isMarried ? 'display:none;' : '' }}">
-                <p class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('components.relation.spouse_details') }}</p>
-                <div class="grid gap-2 items-start mb-2" style="grid-template-columns: 1fr 1fr;">
-                    <div class="min-w-0">
-                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.name') }}</label>
-                        <input type="text" name="{{ $namePrefix }}[{{ $idx }}][spouse][name]" value="{{ $spouse['name'] ?? '' }}" placeholder="{{ __('components.relation.name_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
-                    </div>
-                    <div class="min-w-0">
-                        <x-profile.contact-field variant="inline" name="{{ $namePrefix }}[{{ $idx }}][spouse][contact_number]" :value="$spouse['contact_number'] ?? ''" :label="__('components.relation.mobile')" :placeholder="__('components.relation.ten_digit')" :showCountryCode="true" :showWhatsapp="true" :nameWhatsapp="$namePrefix . '[' . $idx . '][spouse][contact_preference]'" :valueWhatsapp="'call'" inputClass="relation-input-h w-full min-w-0" />
-                    </div>
-                </div>
-                <div class="grid gap-2 items-start" style="grid-template-columns: 30fr 30fr 40fr;">
-                    <div class="min-w-0">
-                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.occupation') }}</label>
-                        @if ($hasOccEngine && \Illuminate\Support\Facades\Schema::hasColumn('profile_sibling_spouses', 'occupation_master_id'))
-                            <x-occupation-search-engine :profile="(object) $spouse" :name-prefix="$namePrefix . '[' . $idx . '][spouse]'" :show-label="false" :compact="true" :form-field-style="true" />
-                        @else
-                            <input type="text" name="{{ $namePrefix }}[{{ $idx }}][spouse][occupation_title]" value="{{ $spouse['occupation_title'] ?? '' }}" placeholder="{{ __('components.relation.occupation_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
-                        @endif
-                    </div>
-                    <div class="min-w-0 relation-address-cell">
-                        <x-profile.location-typeahead context="alliance" namePrefix="{{ $namePrefix }}[{{ $idx }}][spouse]" :value="$spouse['location_display'] ?? ''" placeholder="{{ __('components.relation.address_city') }}" label="{{ __('components.relation.address') }}" :data-city-id="$spouse['city_id'] ?? ''" :data-taluka-id="$spouse['taluka_id'] ?? ''" :data-district-id="$spouse['district_id'] ?? ''" :data-state-id="$spouse['state_id'] ?? ''" :flush="true" />
-                    </div>
-                    <div class="min-w-0">
-                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.additional_info') }}</label>
-                        <input type="text" name="{{ $namePrefix }}[{{ $idx }}][spouse][address_line]" value="{{ $spouse['address_line'] ?? '' }}" placeholder="{{ __('components.relation.notes_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
-                    </div>
-                </div>
-            </div>
-            @endif
-
             @if($showPrimaryContact)
             @php $hidePrimaryForAddressOnly = isset($addressOnlyRelationValue) && (($r['relation_type'] ?? '') === $addressOnlyRelationValue); @endphp
             <div class="relation-primary-contact-wrap" @if($hidePrimaryForAddressOnly) style="display:none" @endif>
@@ -350,26 +316,37 @@
 (function() {
     function initRelationEngine(container) {
         if (!container || container.getAttribute('data-relation-inited') === '1') return;
-        var prefix = container.getAttribute('data-name-prefix');
         var showMarried = container.getAttribute('data-show-married') === '1';
+        var forcedMarriedRelations = ['brother_wife', 'sister_husband'];
+
+        function relationForRow(row) {
+            var sel = row ? row.querySelector('select[name*="[relation_type]"]') : null;
+            return sel ? sel.value : '';
+        }
+
+        function enforceForcedMarriedRows() {
+            if (!showMarried) return;
+            container.querySelectorAll('.relation-engine-row').forEach(function(row) {
+                var marital = row.querySelector('.relation-marital-select');
+                if (!marital) return;
+                var force = forcedMarriedRelations.indexOf(relationForRow(row)) !== -1;
+                marital.setAttribute('data-force-married', force ? '1' : '0');
+                if (force) {
+                    marital.value = 'married';
+                }
+            });
+        }
 
         function updateMaritalStyles() {
+            enforceForcedMarriedRows();
             container.querySelectorAll('.relation-marital-select').forEach(function(sel) {
                 sel.classList.remove('marital-yes', 'marital-no');
                 sel.classList.add(sel.value === 'married' ? 'marital-yes' : 'marital-no');
             });
         }
-        function toggleSpouseBlocks() {
-            container.querySelectorAll('.relation-marital-select').forEach(function(sel) {
-                var wrap = sel.closest('.relation-marital-wrap');
-                var blockId = wrap ? wrap.getAttribute('data-spouse-block') : null;
-                var block = blockId ? document.getElementById(blockId) : null;
-                if (block) block.style.display = (sel.value === 'married') ? 'block' : 'none';
-            });
-            updateMaritalStyles();
-        }
         container.addEventListener('change', function(e) {
-            if (e.target && e.target.classList.contains('relation-marital-select')) toggleSpouseBlocks();
+            if (showMarried && e.target && e.target.matches('select[name*="[relation_type]"]')) updateMaritalStyles();
+            if (e.target && e.target.classList.contains('relation-marital-select')) updateMaritalStyles();
             if (!showMarried && e.target.matches('select[name*="[relation_type]"]') && e.target.value === '') {
                 var row = e.target.closest('.relation-engine-row');
                 if (row) {
@@ -382,7 +359,7 @@
                 }
             }
         });
-        if (showMarried) { updateMaritalStyles(); toggleSpouseBlocks(); }
+        if (showMarried) { updateMaritalStyles(); }
 
         var addressOnlyRelation = container.getAttribute('data-address-only-relation') || '';
         function setDisabledInEl(el, disabled) {
@@ -449,17 +426,10 @@
             }
             var ms = row.querySelector('.relation-marital-select');
             if (ms) { ms.value = 'unmarried'; ms.classList.remove('marital-yes'); ms.classList.add('marital-no'); }
-            var spouseBlock = row.querySelector('.relation-spouse-block');
-            if (spouseBlock) {
-                spouseBlock.id = prefix + '-spouse-' + newIdx;
-                var wrap = row.querySelector('.relation-marital-wrap');
-                if (wrap) wrap.setAttribute('data-spouse-block', prefix + '-spouse-' + newIdx);
-                spouseBlock.style.display = 'none';
-            }
             row.querySelectorAll('.location-typeahead-wrapper').forEach(function(w) { w.removeAttribute('data-bound'); });
             row.querySelectorAll('.location-typeahead-input').forEach(function(i) { i.value = ''; });
             row.querySelectorAll('.location-hidden-city, .location-hidden-taluka, .location-hidden-district, .location-hidden-state').forEach(function(h) { h.value = ''; });
-            toggleSpouseBlocks();
+            updateMaritalStyles();
             if (addressOnlyRelation) initAddressOnlyToggles();
             if (window.LocationTypeahead && window.LocationTypeahead.init) window.LocationTypeahead.init();
         });

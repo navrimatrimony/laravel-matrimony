@@ -100,7 +100,6 @@ class ProfileShowSnapshotService
             'caste_visible' => true,
             'height_visible' => true,
             'enable_relatives_section' => true,
-            'profile_property_summary' => null,
             'preference_criteria' => null,
             'preferred_religion_ids' => [],
             'preferred_caste_ids' => [],
@@ -429,8 +428,8 @@ class ProfileShowSnapshotService
         }
 
         $groups = [];
-        $byGender = $profile->siblings->groupBy(fn ($s) => ($s->gender ?? 'other') ?: 'other');
-        foreach ($byGender as $gender => $items) {
+        $byRelation = $profile->siblings->groupBy(fn ($s) => ($s->relation_type ?? 'other') ?: 'other');
+        foreach ($byRelation as $relationType => $items) {
             $lines = [];
             foreach ($items as $sib) {
                 $parts = array_filter([
@@ -443,7 +442,7 @@ class ProfileShowSnapshotService
                 $lines[] = implode(' · ', $parts) ?: '—';
             }
             $groups[] = [
-                'heading' => Str::title((string) $gender),
+                'heading' => Str::headline((string) $relationType),
                 'lines' => $lines,
             ];
         }
@@ -548,43 +547,35 @@ class ProfileShowSnapshotService
     private function sectionProperty(MatrimonyProfile $profile, array $ctx): ?array
     {
         $rows = [];
-        $summary = $ctx['profile_property_summary'] ?? null;
-
-        if ($summary) {
-            if (! empty($summary->owns_house)) {
-                $rows[] = $this->row(__('Owns house'), __('Yes'));
+        $assets = DB::table('profile_property_assets as ppa')
+            ->leftJoin('master_asset_types as mat', 'mat.id', '=', 'ppa.asset_type_id')
+            ->leftJoin('master_ownership_types as mot', 'mot.id', '=', 'ppa.ownership_type_id')
+            ->where('ppa.profile_id', $profile->id)
+            ->orderBy('ppa.id')
+            ->get([
+                'ppa.*',
+                'mat.label as asset_type_label',
+                'mot.label as ownership_type_label',
+            ]);
+        $sectionNotes = null;
+        $assetIndex = 0;
+        foreach ($assets as $asset) {
+            if ($sectionNotes === null && $this->present($asset->notes ?? null)) {
+                $sectionNotes = (string) $asset->notes;
             }
-            if (! empty($summary->owns_flat)) {
-                $rows[] = $this->row(__('Owns flat'), __('Yes'));
-            }
-            if (! empty($summary->owns_agriculture)) {
-                $rows[] = $this->row(__('Owns agriculture'), __('Yes'));
-            }
-            if (($summary->total_land_acres ?? null) !== null && (string) $summary->total_land_acres !== '') {
-                $rows[] = $this->row(__('Total land (acres)'), (string) $summary->total_land_acres);
-            }
-            if (($summary->annual_agri_income ?? null) !== null && (string) $summary->annual_agri_income !== '') {
-                $rows[] = $this->row(__('Annual agriculture income'), (string) $summary->annual_agri_income);
-            }
-            if ($this->present($summary->agriculture_type ?? null)) {
-                $rows[] = $this->row(__('Agriculture type'), (string) $summary->agriculture_type);
-            }
-            if ($this->present($summary->summary_notes ?? null)) {
-                $rows[] = $this->row(__('Notes'), (string) $summary->summary_notes, false, true);
-            }
-        }
-
-        $assets = DB::table('profile_property_assets')->where('profile_id', $profile->id)->orderBy('id')->get();
-        foreach ($assets as $idx => $asset) {
             $bits = array_filter([
-                $asset->asset_type ?? null,
+                $asset->asset_type_label ?? $asset->asset_type ?? null,
                 $asset->location ?? null,
-                $asset->ownership_type ?? null,
+                $asset->ownership_type_label ?? $asset->ownership_type ?? null,
                 isset($asset->estimated_value) && $asset->estimated_value !== null ? __('Est. value').': '.$asset->estimated_value : null,
             ]);
             if ($bits !== []) {
-                $rows[] = $this->row(__('Property').' '.($idx + 1), implode(' · ', $bits), false, true);
+                $assetIndex++;
+                $rows[] = $this->row(__('Property').' '.$assetIndex, implode(' · ', $bits), false, true);
             }
+        }
+        if ($sectionNotes !== null) {
+            $rows[] = $this->row(__('Notes'), $sectionNotes, false, true);
         }
 
         if ($rows === []) {

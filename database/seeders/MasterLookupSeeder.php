@@ -29,6 +29,7 @@ class MasterLookupSeeder extends Seeder
         $this->seedYonis();
         $this->seedChildLivingWith();
         $this->seedContactRelations();
+        $this->seedRelatives();
         $this->seedAddressTypes();
         $this->seedAssetTypes();
         $this->seedOwnershipTypes();
@@ -311,6 +312,49 @@ class MasterLookupSeeder extends Seeder
             ['key' => 'sibling', 'label' => 'Sibling', 'label_mr' => 'भाऊबहीण'],
             ['key' => 'other', 'label' => 'Other', 'label_mr' => 'इतर'],
         ]);
+    }
+
+    private function seedRelatives(): void
+    {
+        if (! Schema::hasTable('master_relatives')) {
+            return;
+        }
+
+        foreach ([
+            ['key' => 'father', 'relation_group' => 'family_core', 'label' => 'Father', 'label_mr' => 'वडील', 'sort_order' => 10],
+            ['key' => 'mother', 'relation_group' => 'family_core', 'label' => 'Mother', 'label_mr' => 'आई', 'sort_order' => 20],
+
+            ['key' => 'brother', 'relation_group' => 'sibling', 'label' => 'Brother', 'label_mr' => 'भाऊ', 'sort_order' => 10],
+            ['key' => 'sister', 'relation_group' => 'sibling', 'label' => 'Sister', 'label_mr' => 'बहीण', 'sort_order' => 20],
+            ['key' => 'brother_wife', 'relation_group' => 'sibling', 'label' => 'Brother\'s wife', 'label_mr' => 'भावजय / वहिनी', 'sort_order' => 30],
+            ['key' => 'sister_husband', 'relation_group' => 'sibling', 'label' => 'Sister\'s husband', 'label_mr' => 'दाजी', 'sort_order' => 40],
+
+            ['key' => 'paternal_grandfather', 'relation_group' => 'paternal', 'label' => 'Paternal Grandfather', 'label_mr' => 'आजोबा', 'sort_order' => 10],
+            ['key' => 'paternal_grandmother', 'relation_group' => 'paternal', 'label' => 'Paternal Grandmother', 'label_mr' => 'आजी', 'sort_order' => 20],
+            ['key' => 'paternal_uncle', 'relation_group' => 'paternal', 'label' => 'Paternal Uncle (chulte)', 'label_mr' => 'चुलते', 'sort_order' => 30],
+            ['key' => 'wife_paternal_uncle', 'relation_group' => 'paternal', 'label' => 'Wife of Paternal Uncle (chulti)', 'label_mr' => 'चुलती', 'sort_order' => 40],
+            ['key' => 'paternal_aunt', 'relation_group' => 'paternal', 'label' => 'Paternal Aunt (atya)', 'label_mr' => 'आत्या', 'sort_order' => 50],
+            ['key' => 'husband_paternal_aunt', 'relation_group' => 'paternal', 'label' => 'Husband of Paternal Aunt', 'label_mr' => 'आत्यांचे यजमान', 'sort_order' => 60],
+            ['key' => 'Cousin', 'relation_group' => 'paternal', 'label' => 'Cousin', 'label_mr' => 'चुलत भाऊ / बहीण', 'sort_order' => 70],
+
+            ['key' => 'maternal_address_ajol', 'relation_group' => 'maternal', 'label' => 'Maternal address (Ajol)', 'label_mr' => 'आजोळचा पत्ता', 'sort_order' => 10],
+            ['key' => 'maternal_grandfather', 'relation_group' => 'maternal', 'label' => 'Maternal Grandfather', 'label_mr' => 'मातृ आजोबा', 'sort_order' => 20],
+            ['key' => 'maternal_grandmother', 'relation_group' => 'maternal', 'label' => 'Maternal Grandmother', 'label_mr' => 'मातृ आजी', 'sort_order' => 30],
+            ['key' => 'maternal_uncle', 'relation_group' => 'maternal', 'label' => 'Maternal Uncle (mama)', 'label_mr' => 'मामा', 'sort_order' => 40],
+            ['key' => 'wife_maternal_uncle', 'relation_group' => 'maternal', 'label' => 'Wife of Maternal Uncle', 'label_mr' => 'मामी', 'sort_order' => 50],
+            ['key' => 'maternal_aunt', 'relation_group' => 'maternal', 'label' => 'Maternal Aunt (mavshi)', 'label_mr' => 'मावशी', 'sort_order' => 60],
+            ['key' => 'husband_maternal_aunt', 'relation_group' => 'maternal', 'label' => 'Husband of Maternal Aunt', 'label_mr' => 'मावशीचे यजमान', 'sort_order' => 70],
+            ['key' => 'maternal_cousin', 'relation_group' => 'maternal', 'label' => 'Maternal Cousin', 'label_mr' => 'मावस भाऊ / बहीण', 'sort_order' => 80],
+        ] as $row) {
+            DB::table('master_relatives')->updateOrInsert(
+                ['key' => $row['key']],
+                array_merge($row, [
+                    'is_active' => true,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+            );
+        }
     }
 
     private function seedAddressTypes(): void

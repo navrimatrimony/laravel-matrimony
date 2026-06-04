@@ -525,13 +525,13 @@
         @endif
         @if ($profile->siblings?->isNotEmpty())
             @php
-                $siblingsByGender = $profile->siblings->groupBy(function ($s) { return ($s->gender ?? 'other') ?: 'other'; });
+                $siblingsByRelation = $profile->siblings->groupBy(function ($s) { return ($s->relation_type ?? 'other') ?: 'other'; });
             @endphp
             <div class="mt-6 border-t border-stone-200/80 pt-5 dark:border-gray-700">
                 <p class="mb-3 text-[11px] font-semibold text-stone-500 dark:text-stone-400">{{ __('profile.show_sibling_details') }}</p>
-                @foreach ($siblingsByGender as $gender => $items)
+                @foreach ($siblingsByRelation as $relationType => $items)
                     <div class="mb-3 last:mb-0">
-                        <p class="mb-1 text-xs font-medium text-stone-500 dark:text-stone-400">{{ ucfirst($gender) }}</p>
+                        <p class="mb-1 text-xs font-medium text-stone-500 dark:text-stone-400">{{ \Illuminate\Support\Str::headline((string) $relationType) }}</p>
                         @foreach ($items as $sib)
                             <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">
                                 {{ $sib->occupation ?: '—' }}{{ $sib->marital_status ? ' · ' . ucfirst($sib->marital_status) : '' }}{{ $sib->city?->name ? ' · ' . $sib->city->name : '' }}{{ $sib->notes ? ' · ' . \Illuminate\Support\Str::limit($sib->notes, 50) : '' }}
@@ -633,15 +633,6 @@
                 <span class="text-stone-500 dark:text-stone-500">{{ __('profile.show_managed_by') }}</span> {{ $regLabel }}
             </p>
         @endif
-    </x-profile.show.profile-section-card>
-@endif
-
-@if (($profilePropertySummary ?? null) && ($profilePropertySummary->owns_agriculture ?? false) && (($profilePropertySummary->agriculture_type ?? '') !== ''))
-    <x-profile.show.profile-section-card class="{{ $sectionMb }} {{ $sectionCardHeading }}" :title="__('Property')">
-        <div class="space-y-1">
-            <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Agriculture type') }}</p>
-            <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profilePropertySummary->agriculture_type }}</p>
-        </div>
     </x-profile.show.profile-section-card>
 @endif
 

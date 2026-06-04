@@ -1239,10 +1239,6 @@ class MatrimonyProfileController extends Controller
 
         $enableRelativesSection = true;
 
-        $profilePropertySummary = \Illuminate\Support\Facades\DB::table('profile_property_summary')
-            ->where('profile_id', $profile->id)
-            ->first();
-
         // Preferences: aggregate for view (view also uses $preferenceCriteria, $preferredReligionIds, $preferredCasteIds, $preferredDistrictIds)
         $preferences = [];
 
@@ -1393,7 +1389,6 @@ class MatrimonyProfileController extends Controller
             'caste_visible' => $casteVisible,
             'height_visible' => $heightVisible,
             'enable_relatives_section' => $enableRelativesSection,
-            'profile_property_summary' => $profilePropertySummary,
             'preference_criteria' => $preferenceCriteria,
             'preferred_religion_ids' => $preferredReligionIds,
             'preferred_caste_ids' => $preferredCasteIds,

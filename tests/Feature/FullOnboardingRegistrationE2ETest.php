@@ -222,6 +222,11 @@ class FullOnboardingRegistrationE2ETest extends TestCase
         $edu->assertOk();
         $this->assertStringContainsString('E2E Company', $edu->getContent() ?: '');
 
+        $fullWizard = $this->withSession($wizardSession)->get(route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1]));
+        $fullWizard->assertOk();
+        $fullWizard->assertDontSee(__('wizard.contacts'));
+        $fullWizard->assertDontSee('wizard-additional-contacts-container', false);
+
         Queue::fake();
         $photoResponse = $this->post(route('matrimony.profile.upload-photo'), [
             'profile_photo' => UploadedFile::fake()->image('e2e_upload.jpg', 900, 900),

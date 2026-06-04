@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Structured siblings (Day 31 Part 2). Does not replace brothers_count / sisters_count.
- * relation_type: brother | sister. Optional spouse in profile_sibling_spouses.
+ * relation_type includes sibling and sibling-spouse relationship options.
  */
 class ProfileSibling extends Model
 {
@@ -19,7 +19,6 @@ class ProfileSibling extends Model
         'profile_id',
         'relation_type',
         'name',
-        'gender',
         'marital_status',
         'occupation',
         'occupation_master_id',
@@ -50,8 +49,4 @@ class ProfileSibling extends Model
         return $this->belongsTo(OccupationCustom::class, 'occupation_custom_id');
     }
 
-    public function spouse()
-    {
-        return $this->hasOne(ProfileSiblingSpouse::class, 'profile_sibling_id');
-    }
 }

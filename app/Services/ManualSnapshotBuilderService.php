@@ -154,18 +154,10 @@ class ManualSnapshotBuilderService
         }
 
         $property_summary = [];
+        $propertyNotes = null;
         if ($request->has('property_summary')) {
             $ps = $request->input('property_summary');
-            $property_summary = [[
-                'id' => ! empty($ps['id']) ? (int) $ps['id'] : null,
-                'owns_house' => ! empty($ps['owns_house']),
-                'owns_flat' => ! empty($ps['owns_flat']),
-                'owns_agriculture' => ! empty($ps['owns_agriculture']),
-                'agriculture_type' => isset($ps['agriculture_type']) && trim((string) ($ps['agriculture_type'] ?? '')) !== '' ? trim((string) $ps['agriculture_type']) : null,
-                'total_land_acres' => isset($ps['total_land_acres']) && $ps['total_land_acres'] !== '' ? (float) $ps['total_land_acres'] : null,
-                'annual_agri_income' => isset($ps['annual_agri_income']) && $ps['annual_agri_income'] !== '' ? (float) $ps['annual_agri_income'] : null,
-                'summary_notes' => trim((string) ($ps['summary_notes'] ?? '')),
-            ]];
+            $propertyNotes = $this->propertySummaryPayloadToNotes(is_array($ps) ? $ps : []);
         }
 
         $property_assets = [];
@@ -182,6 +174,7 @@ class ManualSnapshotBuilderService
                 'state_id' => ! empty($row['state_id']) ? (int) $row['state_id'] : null,
             ];
         }
+        $property_assets = $this->attachPropertyNotesToAssets($property_assets, $propertyNotes);
 
         $horoscope = [];
         if ($request->has('horoscope')) {
@@ -231,14 +224,15 @@ class ManualSnapshotBuilderService
 
         $siblings = [];
         foreach ($request->input('siblings', []) as $row) {
+            $relationType = in_array($row['relation_type'] ?? null, ['brother', 'sister', 'brother_wife', 'sister_husband'], true) ? $row['relation_type'] : null;
             $maritalStatus = in_array($row['marital_status'] ?? null, ['unmarried', 'married'], true) ? $row['marital_status'] : null;
-            $isMarried = $maritalStatus === 'married' || ! empty($row['is_married']);
-            $spouseIn = $row['spouse'] ?? [];
+            if (in_array($relationType, ['brother_wife', 'sister_husband'], true)) {
+                $maritalStatus = 'married';
+            }
             $siblingRow = [
                 'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'relation_type' => in_array($row['relation_type'] ?? null, ['brother', 'sister'], true) ? $row['relation_type'] : null,
+                'relation_type' => $relationType,
                 'name' => trim((string) ($row['name'] ?? '')) ?: null,
-                'gender' => in_array($row['gender'] ?? null, ['male', 'female'], true) ? $row['gender'] : null,
                 'marital_status' => $maritalStatus,
                 'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
                 'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
@@ -246,18 +240,6 @@ class ManualSnapshotBuilderService
                 'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
                 'sort_order' => isset($row['sort_order']) && $row['sort_order'] !== '' ? (int) $row['sort_order'] : 0,
             ];
-            if ($isMarried && (array_key_exists('name', $spouseIn) || array_key_exists('occupation_title', $spouseIn) || array_key_exists('contact_number', $spouseIn) || array_key_exists('city_id', $spouseIn))) {
-                $siblingRow['spouse'] = [
-                    'name' => trim((string) ($spouseIn['name'] ?? '')) ?: null,
-                    'occupation_title' => trim((string) ($spouseIn['occupation_title'] ?? '')) ?: null,
-                    'contact_number' => trim((string) ($spouseIn['contact_number'] ?? '')) ?: null,
-                    'address_line' => trim((string) ($spouseIn['address_line'] ?? '')) ?: null,
-                    'city_id' => ! empty($spouseIn['city_id']) ? (int) $spouseIn['city_id'] : null,
-                    'taluka_id' => ! empty($spouseIn['taluka_id']) ? (int) $spouseIn['taluka_id'] : null,
-                    'district_id' => ! empty($spouseIn['district_id']) ? (int) $spouseIn['district_id'] : null,
-                    'state_id' => ! empty($spouseIn['state_id']) ? (int) $spouseIn['state_id'] : null,
-                ];
-            }
             $siblings[] = $siblingRow;
         }
 
@@ -454,5 +436,77 @@ class ManualSnapshotBuilderService
         }
 
         return $out;
+    }
+
+    private function propertySummaryPayloadToNotes(array $payload): ?string
+    {
+        $lines = [];
+        if (! empty($payload['owns_house'])) {
+            $lines[] = 'Owns house: Yes';
+        }
+        if (! empty($payload['owns_flat'])) {
+            $lines[] = 'Owns flat: Yes';
+        }
+        if (! empty($payload['owns_agriculture'])) {
+            $lines[] = 'Owns agriculture: Yes';
+        }
+        if (trim((string) ($payload['agriculture_type'] ?? '')) !== '') {
+            $lines[] = 'Agriculture type: '.trim((string) $payload['agriculture_type']);
+        }
+        if (($payload['total_land_acres'] ?? null) !== null && (string) $payload['total_land_acres'] !== '') {
+            $lines[] = 'Total land (acres): '.trim((string) $payload['total_land_acres']);
+        }
+        if (($payload['annual_agri_income'] ?? null) !== null && (string) $payload['annual_agri_income'] !== '') {
+            $lines[] = 'Annual agriculture income: '.trim((string) $payload['annual_agri_income']);
+        }
+        if (trim((string) ($payload['summary_notes'] ?? '')) !== '') {
+            $lines[] = trim((string) $payload['summary_notes']);
+        }
+
+        return $lines === [] ? null : implode("\n", $lines);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $assets
+     * @return list<array<string, mixed>>
+     */
+    private function attachPropertyNotesToAssets(array $assets, ?string $notes): array
+    {
+        $notes = trim((string) $notes);
+        if ($notes === '') {
+            return $assets;
+        }
+
+        foreach ($assets as $idx => $asset) {
+            if (! is_array($asset)) {
+                continue;
+            }
+            $hasData = ! empty($asset['id'])
+                || ! empty($asset['asset_type_id'])
+                || trim((string) ($asset['location'] ?? '')) !== ''
+                || ! empty($asset['ownership_type_id'])
+                || ($asset['estimated_value'] ?? null) !== null;
+            if (! $hasData) {
+                continue;
+            }
+            $assets[$idx]['notes'] = $notes;
+
+            return $assets;
+        }
+
+        $assets[] = [
+            'id' => null,
+            'asset_type_id' => null,
+            'location' => '',
+            'estimated_value' => null,
+            'ownership_type_id' => null,
+            'city_id' => null,
+            'taluka_id' => null,
+            'district_id' => null,
+            'state_id' => null,
+            'notes' => $notes,
+        ];
+
+        return $assets;
     }
 }

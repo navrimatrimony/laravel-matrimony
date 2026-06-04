@@ -219,6 +219,8 @@ return [
         'asset_type' => 'साधन प्रकार',
         'ownership_type' => 'मालकी प्रकार',
         'location' => 'ठिकाण',
+        'additional_information' => 'अतिरिक्त माहिती',
+        'additional_information_placeholder' => 'या मालमत्ता नोंदीबद्दल अतिरिक्त माहिती',
         'type_village_city_pincode' => 'गाव / शहर / पिनकोड टाइप करा',
         'optional_notes_about_property' => 'मालमत्तेबद्दल पर्यायी नोंदी',
     ],

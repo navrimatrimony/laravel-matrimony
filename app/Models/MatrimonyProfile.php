@@ -39,6 +39,9 @@ use Illuminate\Validation\ValidationException;
  */
 class MatrimonyProfile extends Model
 {
+    /** @var array<string, bool> */
+    private static array $columnPresenceCache = [];
+
     use HasFactory, SoftDeletes;
 
     /*
@@ -263,7 +266,7 @@ class MatrimonyProfile extends Model
     {
         return Attribute::make(
             get: function (mixed $value): ?int {
-                if (Schema::hasColumn($this->getTable(), 'location_id')) {
+                if (self::hasColumnCached($this->getTable(), 'location_id')) {
                     if ($value === null || $value === '') {
                         return null;
                     }
@@ -278,7 +281,7 @@ class MatrimonyProfile extends Model
             },
             set: function ($value): void {
                 $intVal = $value === null || $value === '' ? null : (int) $value;
-                if (Schema::hasColumn($this->getTable(), 'location_id')) {
+                if (self::hasColumnCached($this->getTable(), 'location_id')) {
                     $this->attributes['location_id'] = $intVal;
 
                     return;
@@ -298,7 +301,7 @@ class MatrimonyProfile extends Model
         return Attribute::make(
             get: function (?string $value): ?string {
                 $raw = null;
-                if (Schema::hasColumn($this->getTable(), 'address_line')) {
+                if (self::hasColumnCached($this->getTable(), 'address_line')) {
                     $raw = $this->attributes['address_line'] ?? null;
                 } elseif ($this->exists) {
                     $raw = ProfileCanonicalResidenceService::addressLineRaw((int) $this->id);
@@ -317,7 +320,7 @@ class MatrimonyProfile extends Model
                     $repaired = Utf8MojibakeRepair::repair($s);
                     $normalized = is_string($repaired) ? $repaired : $s;
                 }
-                if (Schema::hasColumn($this->getTable(), 'address_line')) {
+                if (self::hasColumnCached($this->getTable(), 'address_line')) {
                     $this->attributes['address_line'] = $normalized;
 
                     return;
@@ -423,7 +426,7 @@ class MatrimonyProfile extends Model
         $geo = Location::geoTable();
         $tbl = $this->getTable();
 
-        if (Schema::hasColumn($tbl, 'location_id')) {
+        if (self::hasColumnCached($tbl, 'location_id')) {
             return $query->whereNotNull($tbl.'.location_id')
                 ->whereRaw(
                     "EXISTS (
@@ -443,7 +446,7 @@ class MatrimonyProfile extends Model
             return $query->whereRaw('1 = 0');
         }
 
-        $leafCol = Schema::hasColumn('profile_addresses', 'location_id') ? 'pa.location_id' : 'pa.city_id';
+        $leafCol = self::hasColumnCached('profile_addresses', 'location_id') ? 'pa.location_id' : 'pa.city_id';
 
         return $query->whereExists(function ($q) use ($tbl, $geo, $ancestorAddressId, $typeId, $leafCol): void {
             $q->selectRaw('1')
@@ -565,7 +568,7 @@ class MatrimonyProfile extends Model
      */
     public function nativePlaceLeafStorageId(): ?int
     {
-        if (Schema::hasColumn($this->getTable(), 'native_city_id')) {
+        if (self::hasColumnCached($this->getTable(), 'native_city_id')) {
             $v = $this->attributes['native_city_id'] ?? null;
 
             return $v !== null && $v !== '' && (int) $v > 0 ? (int) $v : null;
@@ -582,7 +585,7 @@ class MatrimonyProfile extends Model
      */
     public function workCityLeafStorageId(): ?int
     {
-        if (Schema::hasColumn($this->getTable(), 'work_city_id')) {
+        if (self::hasColumnCached($this->getTable(), 'work_city_id')) {
             $v = $this->attributes['work_city_id'] ?? null;
 
             return $v !== null && $v !== '' && (int) $v > 0 ? (int) $v : null;
@@ -604,7 +607,7 @@ class MatrimonyProfile extends Model
 
     public function getWorkStateIdAttribute(mixed $value): ?int
     {
-        if (Schema::hasColumn($this->getTable(), 'work_state_id')) {
+        if (self::hasColumnCached($this->getTable(), 'work_state_id')) {
             return ($value !== null && $value !== '') ? (int) $value : null;
         }
         $leaf = $this->workCityLeafStorageId();
@@ -946,7 +949,7 @@ class MatrimonyProfile extends Model
 
     public function getWorkLocationTextAttribute(mixed $value): ?string
     {
-        if (Schema::hasColumn($this->getTable(), 'work_location_text')) {
+        if (self::hasColumnCached($this->getTable(), 'work_location_text')) {
             $stored = array_key_exists('work_location_text', $this->attributes)
                 ? $this->attributes['work_location_text']
                 : null;
@@ -968,7 +971,7 @@ class MatrimonyProfile extends Model
         $prepared = ($value !== null && is_string($value) && trim($value) !== '')
             ? mb_substr(trim($value), 0, 255)
             : null;
-        if (Schema::hasColumn($this->getTable(), 'work_location_text')) {
+        if (self::hasColumnCached($this->getTable(), 'work_location_text')) {
             $arr = (new MojibakeSafeUtf8String)->set($this, 'work_location_text', $prepared, $this->attributes);
             $this->attributes['work_location_text'] = $arr['work_location_text'];
 
@@ -1114,7 +1117,7 @@ class MatrimonyProfile extends Model
     /** Best-effort legacy {@see Profession} row — name match on canonical {@see OccupationMaster} only. */
     public function resolvedProfession(): ?Profession
     {
-        if (Schema::hasColumn($this->getTable(), 'profession_id') && isset($this->attributes['profession_id']) && $this->attributes['profession_id']) {
+        if (self::hasColumnCached($this->getTable(), 'profession_id') && isset($this->attributes['profession_id']) && $this->attributes['profession_id']) {
             return Profession::query()->find((int) $this->attributes['profession_id']);
         }
         $this->loadMissing(['occupationMaster']);
@@ -1132,7 +1135,7 @@ class MatrimonyProfile extends Model
     /** Workplace category via occupation master → {@code master_occupation_categories.legacy_working_with_type_id}. */
     public function resolvedWorkingWithType(): ?WorkingWithType
     {
-        if (Schema::hasColumn($this->getTable(), 'working_with_type_id')
+        if (self::hasColumnCached($this->getTable(), 'working_with_type_id')
             && isset($this->attributes['working_with_type_id'])
             && $this->attributes['working_with_type_id']) {
             return WorkingWithType::query()->find((int) $this->attributes['working_with_type_id']);
@@ -1146,7 +1149,7 @@ class MatrimonyProfile extends Model
     /** Human-readable career title (canonical engine or legacy column when present). */
     public function getOccupationTitleAttribute(mixed $value): ?string
     {
-        if (Schema::hasColumn($this->getTable(), 'occupation_title')) {
+        if (self::hasColumnCached($this->getTable(), 'occupation_title')) {
             $stored = array_key_exists('occupation_title', $this->attributes)
                 ? $this->attributes['occupation_title']
                 : null;
@@ -1163,7 +1166,7 @@ class MatrimonyProfile extends Model
 
     public function setOccupationTitleAttribute(mixed $value): void
     {
-        if (! Schema::hasColumn($this->getTable(), 'occupation_title')) {
+        if (! self::hasColumnCached($this->getTable(), 'occupation_title')) {
             return;
         }
         $arr = (new MojibakeSafeUtf8String)->set($this, 'occupation_title', $value, $this->attributes);
@@ -1250,10 +1253,10 @@ class MatrimonyProfile extends Model
     public function getDirty(): array
     {
         $dirty = parent::getDirty();
-        if (! Schema::hasColumn($this->getTable(), 'location_id')) {
+        if (! self::hasColumnCached($this->getTable(), 'location_id')) {
             unset($dirty['location_id']);
         }
-        if (! Schema::hasColumn($this->getTable(), 'address_line')) {
+        if (! self::hasColumnCached($this->getTable(), 'address_line')) {
             unset($dirty['address_line']);
         }
 
@@ -1268,14 +1271,24 @@ class MatrimonyProfile extends Model
     public function getAttributes(): array
     {
         $attrs = parent::getAttributes();
-        if (! Schema::hasColumn($this->getTable(), 'location_id')) {
+        if (! self::hasColumnCached($this->getTable(), 'location_id')) {
             unset($attrs['location_id']);
         }
-        if (! Schema::hasColumn($this->getTable(), 'address_line')) {
+        if (! self::hasColumnCached($this->getTable(), 'address_line')) {
             unset($attrs['address_line']);
         }
 
         return $attrs;
+    }
+
+    private static function hasColumnCached(string $table, string $column): bool
+    {
+        $key = $table.'|'.$column;
+        if (! array_key_exists($key, self::$columnPresenceCache)) {
+            self::$columnPresenceCache[$key] = Schema::hasColumn($table, $column);
+        }
+
+        return self::$columnPresenceCache[$key];
     }
 
     /**
@@ -1294,7 +1307,7 @@ class MatrimonyProfile extends Model
         });
 
         static::saved(function (MatrimonyProfile $profile): void {
-            if (Schema::hasColumn($profile->getTable(), 'location_id')) {
+            if (self::hasColumnCached($profile->getTable(), 'location_id')) {
                 return;
             }
             if ($profile->pendingCanonicalSelfResidence === []) {
