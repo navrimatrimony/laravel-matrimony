@@ -86,10 +86,23 @@ TXT;
 
         $response->assertOk();
         $response->assertSee(__('intake.normalized_draft_heading'), false);
-        $response->assertSee('Preview only', false);
+        $response->assertDontSee('Preview only', false);
         $response->assertSee(__('intake.normalized_draft_disclaimer'), false);
         $response->assertSee(__('intake.normalized_draft_needs_review_badge'), false);
         $response->assertSee(__('intake.normalized_draft_full_name_fallback_hint'), false);
+        $response->assertSee('Raw normalized draft JSON', false);
+        $response->assertSee('normalized_biodata_draft_v1', false);
+        $response->assertSee(__('wizard.basic_info').' JSON', false);
+        $response->assertSee(__('wizard.family_details').' JSON', false);
+        $response->assertSee('Confidence map JSON', false);
+        $response->assertSee('Full raw Parsed JSON', false);
+        $response->assertSee('birth_district_id', false);
+        $response->assertSeeInOrder([
+            __('wizard.basic_info').' JSON',
+            __('wizard.family_details').' JSON',
+            __('intake.normalized_draft_section_horoscope_religious').' JSON',
+            'Confidence map JSON',
+        ], false);
         $response->assertSee('महेशकुमार', false);
 
         $intake->refresh();
@@ -180,6 +193,7 @@ TXT;
         $response->assertOk();
         $response->assertSee('Parsed JSON', false);
         $response->assertSee(__('intake.normalized_draft_heading'), false);
+        $response->assertDontSee('Preview only', false);
         $response->assertSee('तपासा आणि सुधारा — फॉर्म', false);
         $this->assertNotContains('parsed_json', array_column($response->viewData('editableFormSections'), 'key'));
         $this->assertNotContains('review_needed', array_column($response->viewData('editableFormSections'), 'key'));

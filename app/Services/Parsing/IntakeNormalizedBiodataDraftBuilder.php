@@ -170,6 +170,7 @@ class IntakeNormalizedBiodataDraftBuilder
 
         $lastRelativeLabel = null;
         $lastRelativeIndex = null;
+        $lastRelativeGroupStartIndex = null;
         foreach ($this->expandEmbeddedRelativeLabels($sections['relatives']['lines'] ?? []) as $line) {
             if ($this->isHardSectionBoundary($line) || $this->startsPahune($line)) {
                 if ($this->startsPahune($line)) {
@@ -177,12 +178,21 @@ class IntakeNormalizedBiodataDraftBuilder
                         $core['other_relatives_text'] ?? null,
                         $this->cleanOtherRelativesText($this->stripOtherRelativesLabel($line))
                     );
+                    $lastRelativeLabel = 'इतर पाहुणे';
+                    $lastRelativeIndex = null;
+                    $lastRelativeGroupStartIndex = null;
+
+                    continue;
                 }
                 $lastRelativeLabel = null;
                 $lastRelativeIndex = null;
+                $lastRelativeGroupStartIndex = null;
                 continue;
             }
             if ($this->isRelativeNoiseLine($line)) {
+                continue;
+            }
+            if ($this->isIncompleteRelativeLabelFragment($line)) {
                 continue;
             }
             if (preg_match('/^\s*(?:इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|नातेवाईक|नातेसंबंध|इतर\s+पाहूणे|इतर\s+पाहुणे|पाहुणे)\s*(?::\s*-\s*|[:\-–—]\s*)?(.*)$/u', $line, $otherMatch)) {
@@ -192,12 +202,14 @@ class IntakeNormalizedBiodataDraftBuilder
                 );
                 $lastRelativeLabel = trim((string) preg_replace('/\s*(?::\s*-\s*|[:\-–—]).*$/u', '', $line));
                 $lastRelativeIndex = null;
+                $lastRelativeGroupStartIndex = null;
 
                 continue;
             }
             if (preg_match('/^\s*(?:जावई|दाजी)'.self::LABEL_SUFFIX.'/u', $line)) {
                 $lastRelativeLabel = null;
                 $lastRelativeIndex = null;
+                $lastRelativeGroupStartIndex = null;
 
                 continue;
             }
@@ -212,13 +224,20 @@ class IntakeNormalizedBiodataDraftBuilder
                             $this->cleanOtherRelativesText($value)
                         );
                         $lastRelativeIndex = null;
+                        $lastRelativeGroupStartIndex = null;
                     } else {
+                        $lastRelativeGroupStartIndex = count($relatives);
                         foreach ($this->splitRelativeValues($value) as $relativeValue) {
                             $relatives[] = $this->relativeRow($name, $relativeValue, $line);
                             $lastRelativeIndex = array_key_last($relatives);
                         }
                     }
                 }
+
+                continue;
+            }
+            if ($lastRelativeGroupStartIndex !== null && $lastRelativeLabel !== null && $this->isSharedRelativeAddressLine($line)) {
+                $this->applySharedRelativeAddressLine($relatives, $lastRelativeGroupStartIndex, $line);
 
                 continue;
             }
@@ -621,7 +640,7 @@ class IntakeNormalizedBiodataDraftBuilder
                     $core['birth_time'] = $birthTime;
                 }
             }
-            if (preg_match('/जन्म\s+वेळ\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
+            if (preg_match('/(?:जन्म\s*वेळ(?:\s*व\s*वार|\s*आणि\s*वार)?|जन्मवेळ\s*व\s*वार)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
                 $core['birth_time'] = trim($m[1]);
             }
             if ($core['birth_time'] === null
@@ -688,6 +707,9 @@ class IntakeNormalizedBiodataDraftBuilder
                 && ! preg_match('/कुटुंब/u', $normalizedLine)
                 && preg_match('/([0-9]+(?:\.[0-9]+)?)\s*(?:LAC|लाख)/ui', $normalizedLine, $m)) {
                 $core['annual_income'] = (int) round(((float) $m[1]) * 100000);
+            } elseif ($core['annual_income'] === null
+                && preg_match('/(?:पगार|वेतन|उत्पन्न|salary)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/ui', $normalizedLine, $m)) {
+                $this->extractAmountFromIncomeText($m[1], $core);
             }
         }
     }
@@ -2608,7 +2630,7 @@ class IntakeNormalizedBiodataDraftBuilder
     {
         $value = trim(str_replace(['{', '}'], ['(', ')'], $value));
         $kuliPattern = '(?:कुळी|क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कळी)';
-        if (preg_match('/हिंद[ुू]\s*मराठा\s*\(?\s*([0-9०-९]+\s*'.$kuliPattern.')\s*\)?/u', $value, $m)
+        if (preg_match('/हिंद[ुू]\s*[-–—]?\s*मराठा\s*\(?\s*([0-9०-९]+\s*'.$kuliPattern.')\s*\)?/u', $value, $m)
             || preg_match('/हिंद[ुू]\s*[-–]?\s*([0-9०-९]+\s*'.$kuliPattern.')\s*मराठा/u', $value, $m)) {
             $core['religion'] = 'हिंदू';
             $core['caste'] = 'मराठा';
@@ -2875,6 +2897,28 @@ class IntakeNormalizedBiodataDraftBuilder
         return (bool) preg_match('/\b(?:pvt|private|limited|ltd|llp|inc|corp|company|technologies|technology|healthcare|systems|solutions|industries)\b/ui', $value);
     }
 
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function extractAmountFromIncomeText(string $value, array &$core): void
+    {
+        $normalized = OcrNormalize::normalizeDigits($value);
+        $normalized = str_replace(',', '', $normalized);
+        if (! preg_match('/([0-9]+(?:\.[0-9]+)?)/u', $normalized, $m)) {
+            return;
+        }
+
+        $amount = (float) $m[1];
+        if (preg_match('/(?:प्रति\s*महिना|दर\s*महा|monthly|per\s*month)/ui', $normalized)) {
+            $core['annual_income'] = (int) round($amount * 12);
+
+            return;
+        }
+        if (preg_match('/(?:प्रति\s*वर्ष|वार्षिक|yearly|per\s*year|annual)/ui', $normalized)) {
+            $core['annual_income'] = (int) round($amount);
+        }
+    }
+
     private function setTextOnce(mixed $current, string $value): string
     {
         $current = trim((string) $current);
@@ -3111,6 +3155,11 @@ class IntakeNormalizedBiodataDraftBuilder
         return (bool) preg_match('/(?:छायाचित्र|फोटो|क्लोज-अप|साडी|कॅमेऱ्याकडे|पार्श्वभूमी|ब्लर|दिवे|उत्सवाचे|समारंभाचे|वातावरण\s+दर्शवते)/u', $line);
     }
 
+    private function isIncompleteRelativeLabelFragment(string $line): bool
+    {
+        return (bool) preg_match('/^\s*(?:इतर|पाहुणे|नातेवाईक|नातेसंबंध)\s*$/u', trim($line));
+    }
+
     /**
      * @param  array<string, mixed>  $relative
      */
@@ -3215,6 +3264,28 @@ class IntakeNormalizedBiodataDraftBuilder
         $line = trim($line);
 
         return (bool) preg_match('/^\(?\s*(?:प्राध्यापक|शिक्षक|प्राथमिक\s+शिक्षक|doctor|teacher|business|engineer|नोकरी|व्यवसाय)[^()]*\)?$/ui', $line);
+    }
+
+    private function isSharedRelativeAddressLine(string $line): bool
+    {
+        return (bool) preg_match('/^\s*सर्व\s+(?:रा\.?|राहणार|मु\.?\s*पो\.?|पत्ता|ता\.|जि\.)/u', trim($line));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $relatives
+     */
+    private function applySharedRelativeAddressLine(array &$relatives, int $startIndex, string $line): void
+    {
+        $address = trim((string) preg_replace('/^\s*सर्व\s+/u', '', trim($line)));
+        $address = $this->cleanRelativeAddress($address);
+        $address = trim((string) preg_replace('/^रा\.?\s*/u', '', $address));
+        if ($address === '') {
+            return;
+        }
+
+        for ($index = $startIndex; $index < count($relatives); $index++) {
+            $relatives[$index]['address_line'] = $this->setTextOnce($relatives[$index]['address_line'] ?? null, $address);
+        }
     }
 
     /**

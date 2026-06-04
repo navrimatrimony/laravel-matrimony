@@ -163,7 +163,7 @@ return [
     'parse_input_text_help' => 'This is the exact text the system parsed to build the form and JSON beside it — the same input as the last successful parse (not necessarily the original upload OCR).',
     'preview_review_intro' => 'Review your information and fix anything needed. Scroll through everything before you approve.',
     'preview_two_column_intro' => 'Left: text used for parsing. Right: structured JSON. Complete the form below, then approve.',
-    'normalized_draft_heading' => 'Normalized Biodata Draft (Preview only)',
+    'normalized_draft_heading' => 'Normalized Biodata Draft',
     'normalized_draft_disclaimer' => 'This is a read-only diagnostic draft. It does not change the form, parsed JSON, approval, or profile data.',
     'normalized_draft_needs_review_badge' => 'Needs review',
     'normalized_draft_full_name_fallback_hint' => 'Name detected by fallback; verify before using.',

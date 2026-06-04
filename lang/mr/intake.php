@@ -163,7 +163,7 @@ return [
     'parse_input_text_help' => 'हा तोच मजकूर आहे ज्यावरून सिस्टमने फॉर्म आणि बाजूचा JSON तयार केला — शेवटच्या यशस्वी parse वेळी parser ला दिलेला (मूळ अपलोड OCR पेक्षा वेगळा असू शकतो).',
     'preview_review_intro' => 'तुमची माहिती तपासा आणि आवश्यक ते सुधारा. खाली स्क्रोल करून सर्व तपासल्यानंतरच अप्रूव्ह करा.',
     'preview_two_column_intro' => 'डावीकडे: पार्सिंगसाठी वापरलेला मजकूर. उजवीकडे: स्ट्रक्चर्ड JSON. खाली फॉर्म भरून अप्रूव्ह करा.',
-    'normalized_draft_heading' => 'सुधारित बायोडाटा मसुदा (फक्त preview)',
+    'normalized_draft_heading' => 'सुधारित बायोडाटा मसुदा',
     'normalized_draft_disclaimer' => 'हा फक्त तपासणीसाठी तयार केलेला स्वच्छ मसुदा आहे. यामुळे form, parsed JSON, approval किंवा profile data बदलत नाही.',
     'normalized_draft_needs_review_badge' => 'तपासणी आवश्यक',
     'normalized_draft_full_name_fallback_hint' => 'नाव अंदाजाने सापडले आहे; वापरण्यापूर्वी नीट तपासा.',

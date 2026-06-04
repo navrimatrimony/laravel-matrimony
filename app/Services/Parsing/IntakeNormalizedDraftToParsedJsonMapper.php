@@ -358,12 +358,15 @@ class IntakeNormalizedDraftToParsedJsonMapper
 
         $blob = implode("\n", array_map('strval', $rawLines));
         $row = [
+            'mangal_dosh_type_id' => null,
             'rashi_id' => null,
             'nakshatra_id' => null,
             'gan_id' => null,
             'nadi_id' => null,
+            'yoni_id' => null,
             'rashi' => $this->scalarHoroscopeValue($horoscope, 'rashi') ?? $this->extractHoroscopeField($blob, ['रास', 'राशी']),
             'nakshatra' => $this->scalarHoroscopeValue($horoscope, 'nakshatra') ?? $this->extractHoroscopeField($blob, ['नक्षत्र']),
+            'charan' => $this->scalarHoroscopeValue($horoscope, 'charan') ?? $this->extractHoroscopeField($blob, ['चरण']),
             'devak' => $this->scalarHoroscopeValue($horoscope, 'devak') ?? $this->extractHoroscopeField($blob, ['देवक']),
             'kuldaivat' => $this->scalarHoroscopeValue($horoscope, 'kuldaivat') ?? $this->extractHoroscopeField($blob, ['कुलदैवत', 'कुलदेवत', 'कलदैवत']),
             'gotra' => $this->scalarHoroscopeValue($horoscope, 'gotra') ?? $this->extractHoroscopeField($blob, ['गोत्र']),

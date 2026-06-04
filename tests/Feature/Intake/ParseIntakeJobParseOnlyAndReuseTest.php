@@ -62,6 +62,10 @@ class ParseIntakeJobParseOnlyAndReuseTest extends TestCase
         $this->assertSame('canonical_transcript_reparse', $dbg['parse_input_source'] ?? null);
         $this->assertSame('parse_input_text_cache', $dbg['canonical_transcript_source'] ?? null);
         $this->assertStringContainsString('टेस्ट परसे', (string) $intake->last_parse_input_text);
+        $this->assertSame('कु. टेस्ट परसे', $intake->parsed_json['core']['full_name'] ?? null);
+        $core = is_array($intake->parsed_json['core'] ?? null) ? $intake->parsed_json['core'] : [];
+        $this->assertArrayHasKey('birth_district_id', $core);
+        $this->assertSame(null, $core['birth_district_id']);
     }
 
     public function test_fingerprint_reuse_skips_paid_extraction_for_second_intake(): void

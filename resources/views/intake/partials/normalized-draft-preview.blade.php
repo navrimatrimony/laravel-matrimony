@@ -297,10 +297,10 @@
         </div>
     @endif
 
-    @if (config('app.debug') && ! empty($draftPreview['raw_draft_json']))
+    @if (! empty($draftPreview['raw_draft_json']))
         <details class="rounded border border-dashed border-violet-400 dark:border-violet-700 bg-violet-50/80 dark:bg-violet-950/30 p-3 text-xs">
             <summary class="cursor-pointer font-medium text-violet-900 dark:text-violet-100 select-none">
-                {{ __('intake.normalized_draft_debug_heading') }}
+                Raw normalized draft JSON
             </summary>
             <pre class="mt-2 whitespace-pre-wrap break-words font-mono text-gray-800 dark:text-gray-200 max-h-64 overflow-auto">{{ $draftPreview['raw_draft_json'] }}</pre>
         </details>

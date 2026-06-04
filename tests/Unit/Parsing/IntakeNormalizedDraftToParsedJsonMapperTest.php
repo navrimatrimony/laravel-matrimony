@@ -188,6 +188,86 @@ TXT);
         $this->assertSame('वैश्य', $row['varna'] ?? null);
     }
 
+    public function test_mapper_splits_nakshatra_charan_and_navras_name_from_normalized_horoscope(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+जन्मरास :- वृषभ
+जन्मनक्षत्र :- रोहिणी ४ नावरस नाव : वू
+TXT);
+        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map($draft);
+        $row = $parsed['horoscope'][0] ?? [];
+
+        $this->assertSame('वृषभ', $row['rashi'] ?? null);
+        $this->assertSame('रोहिणी', $row['nakshatra'] ?? null);
+        $this->assertSame('४', $row['charan'] ?? null);
+        $this->assertSame('वू', $row['navras_name'] ?? null);
+        $this->assertArrayHasKey('mangal_dosh_type_id', $row);
+        $this->assertArrayHasKey('yoni_id', $row);
+        $this->assertSame(null, $row['mangal_dosh_type_id']);
+        $this->assertSame(null, $row['yoni_id']);
+    }
+
+    public function test_mapper_keeps_mahesh_more_normalized_draft_fields_in_parsed_json(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+।। श्री खंडोबा प्रसन्न ।। ।। गजानन प्रसन्न ।। ।। श्री जोतिर्लिंग प्रसन्न ।।
+
+## मुलाची माहिती
+
+- मुलाचे नांव :- कु. महेश बळवंत मोरे
+- जन्म तारीख :- १३/०५/१९९४
+- जन्मवेळ व वार :- शुक्रवार रात्री १२ वा. १५ मि.
+- उंची :- ५ फुट ६ इंच
+- जन्मरास :- वृषभ
+- जन्मनक्षत्र :- रोहिणी ४ नावरस नाव : वू
+- जात :- हिंदू-मराठा (९६ कुळी)
+- शिक्षण :- B.E. Civil
+- नोकरी :- चौगुले होसमानी बिझनेस असोसिएट्स, कोल्हापूर
+- पगार :- 42,000/- (प्रति महिना)
+- व्यवसाय :- गव्हर्नमेंट कॉन्ट्रॅक्टर, प्रायव्हेट बिल्डींग प्लॅनिंग अॅण्ड इस्टीमेटींग
+- शेती :- ३ एकर
+
+## कौटुंबिक माहिती
+
+- वडीलांचे नांव :- श्री. बळवंत पांडुरंग मोरे
+- (सेवानिवृत्त केन यार्ड सुपरवायझर कुंभी-कासारी सह. साखर कारखाना,
+- कुडित्रे)
+- आईचे नांव :- सौ. मुक्ता बळवंत मोरे (गृहिणी)
+- भाऊ :- एक - अविवाहित कु. पवन बळवंत मोरे (B.A)
+- (व्यवसाय - श्री पांडुरंग ट्रेडर्स,प्लंबींग ॲण्ड हार्डवेअर्स, खुपीरे)
+- बहिण :- दोन - विवाहित १.सौ. शितल उत्तम पाटील (वाळोली, ता. पन्हाळा)
+- सौ. गिता सतिश निर्मळ (कंदलगाव, ता. करवीर)
+- आत्या :- सौ. सुमन अशोक कापडे (रा. सांगरुळ, ता. करवीर)
+- मामा :- १.श्री. कृष्णात बापू हुजरे- पाटील
+- श्री. सर्जेराव बापू हुजरे-पाटील (गव्हर्नमेंट कॉन्ट्रॅक्टर)
+- श्री. यशवंत बापू हुजरे - पाटील (प्राध्यापक)
+- सर्व रा. खुपिरे, ता. करवीर, जि. कोल्हापूर.
+- इतर पाहुणे :- पाटील, निर्मळ, शिंदे, हुजरे, नाळे, खाडे, खोत, जांभळे, केंबळेकर,
+- भोसले, रामाने , पोवार .
+- घरचा पत्ता :- मु. वाकरे, ता. करवीर, जि. कोल्हापूर.
+- संपर्क :- ८६००२३३७४७/ ९४०३५५४२९३
+TXT);
+        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map($draft);
+
+        $core = $parsed['core'] ?? [];
+        $this->assertSame('शुक्रवार रात्री १२ वा. १५ मि.', $core['birth_time'] ?? null);
+        $this->assertSame('96 कुळी', OcrNormalize::normalizeDigits((string) ($core['sub_caste'] ?? '')));
+        $this->assertSame(504000, $core['annual_income'] ?? null);
+        $this->assertStringContainsString('पोवार', (string) ($core['other_relatives_text'] ?? ''));
+
+        $maternalUncles = array_values(array_filter(
+            $parsed['relatives'] ?? [],
+            static fn ($row) => ($row['relation_type'] ?? null) === 'maternal_uncle'
+        ));
+
+        $this->assertCount(3, $maternalUncles);
+        $this->assertSame('खुपिरे, ता. करवीर, जि. कोल्हापूर.', $maternalUncles[0]['address_line'] ?? null);
+        $this->assertSame('खुपिरे, ता. करवीर, जि. कोल्हापूर.', $maternalUncles[1]['address_line'] ?? null);
+        $this->assertSame('खुपिरे, ता. करवीर, जि. कोल्हापूर.', $maternalUncles[2]['address_line'] ?? null);
+        $this->assertStringNotContainsString('\"name\":\"सर्व\"', json_encode($parsed['relatives'] ?? [], JSON_UNESCAPED_UNICODE));
+        $this->assertStringNotContainsString('\"name\":\"इतर\"', json_encode($parsed['relatives'] ?? [], JSON_UNESCAPED_UNICODE));
+    }
+
     public function test_mapper_preserves_wizard_shaped_paternal_extended_family_fields(): void
     {
         $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map([

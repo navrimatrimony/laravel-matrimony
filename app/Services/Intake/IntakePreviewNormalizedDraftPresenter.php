@@ -130,9 +130,7 @@ final class IntakePreviewNormalizedDraftPresenter
                 'build_error' => null,
                 'review_flags_by_field' => $reviewMap,
                 'sections' => $sections,
-                'raw_draft_json' => config('app.debug')
-                    ? json_encode($draft, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-                    : null,
+                'raw_draft_json' => json_encode($draft, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ];
         } catch (Throwable $e) {
             report($e);

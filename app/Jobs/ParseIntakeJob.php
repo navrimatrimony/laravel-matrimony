@@ -11,6 +11,8 @@ use App\Services\Intake\IntakePipelineService;
 use App\Services\IntakeManualOcrPreparedService;
 use App\Services\Ocr\OcrQualityEvaluator;
 use App\Services\OcrService;
+use App\Services\Parsing\IntakeNormalizedBiodataDraftBuilder;
+use App\Services\Parsing\IntakeNormalizedDraftToParsedJsonMapper;
 use App\Services\Parsing\ParserStrategyResolver;
 use App\Services\Parsing\ProviderResolver;
 use App\Support\IntakeDobTrace;
@@ -29,7 +31,8 @@ use Illuminate\Support\Facades\Log;
 |
 | 1) Fetch intake. 2) If parse_status != pending return. 3) Build parse text ($raw), same resolution as review UI:
 |    AI vision mode: extraction / reuse; else manual-crop OCR or upload OCR via OcrService (raw_ocr_text unchanged).
-| 4) Parse via strategy parser. 5) Store parsed_json and last_parse_input_text (= exact $raw).
+| 4) Build the normalized biodata draft from resolved text. 5) Map that draft to parsed_json and
+|    store it with last_parse_input_text (= exact $raw).
 | Do NOT touch raw_ocr_text.
 |
 | Canonical transcript: last_parse_input_text (DB) + optional parse_input_text cache; re-parse uses these first
@@ -37,9 +40,9 @@ use Illuminate\Support\Facades\Log;
 | Re-extract: force_fresh_paid_extraction → AiVisionExtractionService only (no raw_ocr shortcut).
 | Manual crop: forceRecompute without parse_input_only → normal OCR/vision resolution.
 |
-| LOCKED: Cross-intake parsed_json reuse is forbidden. parsed_json is always the
-| output of $parser->parse($raw, ...) for this intake id, where $raw is this
-| intake's resolved parse input (OCR / vision extract / per-intake cache only).
+| LOCKED: Cross-intake parsed_json reuse is forbidden. parsed_json is always rebuilt
+| for this intake id from this intake's resolved parse input (OCR / vision extract /
+| per-intake cache only) via the normalized biodata draft -> parsed_json mapper path.
 | Transcript text may be reused for cost (see IntakeExtractionReuseResolver);
 | structured JSON is never copied from another BiodataIntake row.
 |
@@ -504,7 +507,12 @@ class ParseIntakeJob implements ShouldQueue
             return;
         }
 
-        // At this point parsers are already required to return SSOT-compatible shape.
+        $normalizedDraft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($raw, [
+            'intake_id' => $intake->id,
+            'parser_mode' => $mode,
+        ]);
+        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map($normalizedDraft);
+
         $utf8Stats = [];
         $ssot = app(IntakePipelineService::class)->finalizeParsedSnapshotForStorage($parsed, $utf8Stats);
         if (($utf8Stats['strings_fixed'] ?? 0) > 0) {

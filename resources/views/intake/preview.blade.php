@@ -462,6 +462,7 @@
             $sectionSourceKeys = $sectionSourceKeys ?? [];
             $coreData = $sections['core']['data'] ?? $data['core'] ?? [];
             $parsedJsonForDisplay = isset($data) && is_array($data) ? json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '';
+            $parsedJsonDisplaySections = is_array($parsedJsonDisplaySections ?? null) ? $parsedJsonDisplaySections : [];
         @endphp
 
         {{-- One row: Left = Raw biodata text, Right = Parsed JSON — both with scroll (slider) for small windows --}}
@@ -528,10 +529,34 @@
             {{-- Right: Parsed JSON --}}
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 lg:p-5 flex flex-col min-w-0">
                 <h2 class="text-base font-semibold mb-2 border-b border-gray-200 dark:border-gray-600 pb-2 shrink-0">Parsed JSON</h2>
-                <p class="text-xs text-gray-600 dark:text-gray-400 mb-2 shrink-0">बायोडाटा मधून काढलेला स्ट्रक्चर्ड डेटा. खालील फॉर्म याच्या आधारे भरलेला आहे.</p>
+                <p class="text-xs text-gray-600 dark:text-gray-400 mb-2 shrink-0">बायोडाटा मधून काढलेला स्ट्रक्चर्ड डेटा. खालील blocks section-wise ठेवले आहेत, म्हणजे प्रत्येक भाग वेगळा तपासता येईल.</p>
                 <div class="intake-preview-scroll-panel rounded border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 p-3 text-xs text-gray-800 dark:text-gray-100 leading-relaxed font-mono">
-                    @if($parsedJsonForDisplay !== '')
-                        <pre class="m-0 whitespace-pre-wrap break-words">{!! $parsedJsonForDisplay !!}</pre>
+                    @if(!empty($parsedJsonDisplaySections))
+                        <div class="space-y-3">
+                            @foreach($parsedJsonDisplaySections as $jsonSection)
+                                <details class="rounded border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-950/40" @if(empty($jsonSection['is_empty'])) open @endif>
+                                    <summary class="cursor-pointer select-none px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">
+                                        {{ $jsonSection['label'] ?? 'Parsed JSON section' }}
+                                        @if(!empty($jsonSection['is_empty']))
+                                            <span class="ml-2 text-[11px] font-normal text-gray-500 dark:text-gray-400">(No extracted values)</span>
+                                        @endif
+                                    </summary>
+                                    <div class="border-t border-gray-200 dark:border-gray-700 px-3 py-2">
+                                        <pre class="m-0 whitespace-pre-wrap break-words">{{ $jsonSection['json'] ?? '{}' }}</pre>
+                                    </div>
+                                </details>
+                            @endforeach
+                            <details class="rounded border border-dashed border-gray-300 dark:border-gray-600 bg-gray-100/80 dark:bg-gray-950/50">
+                                <summary class="cursor-pointer select-none px-3 py-2 font-semibold text-gray-900 dark:text-gray-100">Full raw Parsed JSON</summary>
+                                <div class="border-t border-gray-200 dark:border-gray-700 px-3 py-2">
+                                    @if($parsedJsonForDisplay !== '')
+                                        <pre class="m-0 whitespace-pre-wrap break-words">{{ $parsedJsonForDisplay }}</pre>
+                                    @else
+                                        <span class="text-amber-600 dark:text-amber-400">Parsed JSON उपलब्ध नाही.</span>
+                                    @endif
+                                </div>
+                            </details>
+                        </div>
                     @else
                         <span class="text-amber-600 dark:text-amber-400">Parsed JSON उपलब्ध नाही.</span>
                     @endif

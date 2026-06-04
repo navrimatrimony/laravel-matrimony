@@ -246,6 +246,7 @@ class IntakeController extends Controller
 
         $mapper = new PreviewSectionMapper;
         $sections = $mapper->map($data);
+        $parsedJsonDisplaySections = $this->parsedJsonDisplaySections($data);
 
         // Review text panel: exact string passed to the parser for this intake's parsed_json (DB snapshot, or cache/OCR pipeline matching ParseIntakeJob).
         $previewRaw = app(IntakeReviewParseInputTextResolver::class)->resolve($intake);
@@ -1504,6 +1505,7 @@ class IntakeController extends Controller
             'showOcrLowQualityWarning',
             'showIntakeReextractAction',
             'sections',
+            'parsedJsonDisplaySections',
             'confidenceMap',
             'criticalFields',
             'missingCriticalFields',
@@ -3602,5 +3604,449 @@ class IntakeController extends Controller
         return redirect()
             ->route('intake.status', $intake)
             ->with('success', __('intake.suggestion_rejected_success'));
+    }
+
+    /**
+     * Build user-facing Parsed JSON review blocks without changing the stored snapshot schema.
+     *
+     * @param  array<string,mixed>  $parsed
+     * @return list<array{key:string,label:string,json:string,is_empty:bool}>
+     */
+    private function parsedJsonDisplaySections(array $parsed): array
+    {
+        $core = is_array($parsed['core'] ?? null) ? $parsed['core'] : [];
+        $narrative = is_array($parsed['extended_narrative'] ?? null) ? $parsed['extended_narrative'] : [];
+        $relativesSectioned = is_array($parsed['relatives_sectioned'] ?? null) ? $parsed['relatives_sectioned'] : [];
+        $sectionLabels = is_array(config('field_catalog.section_labels', [])) ? config('field_catalog.section_labels', []) : [];
+
+        $blocks = [
+            'basic-info' => [
+                'label' => __($sectionLabels['basic-info'] ?? 'wizard.basic_info').' JSON',
+                'data' => [
+                    'core' => $this->sliceParsedCore($core, [
+                        'full_name',
+                        'gender',
+                        'gender_id',
+                        'date_of_birth',
+                        'birth_time',
+                        'birth_place_text',
+                        'birth_place',
+                        'birth_city_id',
+                        'birth_taluka_id',
+                        'birth_district_id',
+                        'birth_state_id',
+                        'religion',
+                        'religion_id',
+                        'caste',
+                        'caste_id',
+                        'sub_caste',
+                        'sub_caste_id',
+                        'marital_status',
+                        'marital_status_id',
+                        'primary_contact_number',
+                        'mother_tongue',
+                        'mother_tongue_id',
+                        'diet',
+                        'diet_id',
+                        'smoking',
+                        'smoking_status',
+                        'smoking_status_id',
+                        'drinking',
+                        'drinking_status',
+                        'drinking_status_id',
+                        'address_line',
+                    ]),
+                    'birth_place' => $parsed['birth_place'] ?? null,
+                    'native_place' => $parsed['native_place'] ?? null,
+                ],
+            ],
+            'physical' => [
+                'label' => __($sectionLabels['physical'] ?? 'wizard.physical').' JSON',
+                'data' => [
+                    'core' => $this->sliceParsedCore($core, [
+                        'height',
+                        'height_cm',
+                        'weight_kg',
+                        'complexion',
+                        'complexion_id',
+                        'blood_group',
+                        'blood_group_id',
+                        'physical_build',
+                        'physical_build_id',
+                        'spectacles_lens',
+                        'physical_condition',
+                    ]),
+                ],
+            ],
+            'education-career' => [
+                'label' => __($sectionLabels['education-career'] ?? 'wizard.education_career').' JSON',
+                'data' => [
+                    'core' => $this->sliceParsedCore($core, [
+                        'highest_education',
+                        'highest_education_other',
+                        'working_with_type_id',
+                        'profession_id',
+                        'occupation_type',
+                        'occupation_title',
+                        'company_name',
+                        'income_currency',
+                        'income_currency_id',
+                        'annual_income',
+                        'income_period',
+                        'income_value_type',
+                        'income_amount',
+                        'income_min_amount',
+                        'income_max_amount',
+                        'income_normalized_annual_amount',
+                        'income_range_id',
+                        'income_private',
+                        'country_id',
+                        'state_id',
+                        'district_id',
+                        'taluka_id',
+                        'city_id',
+                        'address_line',
+                        'work_city_id',
+                        'work_state_id',
+                        'work_location_text',
+                    ]),
+                    'education_history' => is_array($parsed['education_history'] ?? null) ? $parsed['education_history'] : [],
+                    'career_history' => is_array($parsed['career_history'] ?? null) ? $parsed['career_history'] : [],
+                ],
+            ],
+            'family-details' => [
+                'label' => __($sectionLabels['family-details'] ?? 'wizard.family_details').' JSON',
+                'data' => [
+                    'core' => $this->sliceParsedCore($core, [
+                        'family_type',
+                        'family_type_id',
+                        'has_children',
+                        'has_siblings',
+                        'father_name',
+                        'father_occupation',
+                        'father_extra_info',
+                        'father_contact_1',
+                        'father_contact_2',
+                        'mother_name',
+                        'mother_occupation',
+                        'mother_contact_1',
+                        'mother_contact_2',
+                        'family_income',
+                        'family_income_period',
+                        'family_income_value_type',
+                        'family_income_amount',
+                        'family_income_min_amount',
+                        'family_income_max_amount',
+                        'family_income_normalized_annual_amount',
+                        'family_income_currency_id',
+                        'family_income_private',
+                        'brother_count',
+                        'sister_count',
+                        'other_relatives_text',
+                    ]),
+                    'contacts' => is_array($parsed['contacts'] ?? null) ? $parsed['contacts'] : [],
+                    'parents_addresses' => is_array($parsed['parents_addresses'] ?? null) ? $parsed['parents_addresses'] : [],
+                ],
+            ],
+            'siblings' => [
+                'label' => __($sectionLabels['siblings'] ?? 'wizard.siblings').' JSON',
+                'data' => [
+                    'siblings' => $this->orderRowList(
+                        is_array($parsed['siblings'] ?? null) ? $parsed['siblings'] : [],
+                        [
+                            'relation_type',
+                            'name',
+                            'marital_status',
+                            'occupation',
+                            'occupation_master_id',
+                            'occupation_custom_id',
+                            'contact_number',
+                            'contact_number_2',
+                            'contact_number_3',
+                            'address_line',
+                            'location_display',
+                            'city_id',
+                            'taluka_id',
+                            'district_id',
+                            'state_id',
+                            'notes',
+                            'sort_order',
+                            'spouse',
+                        ]
+                    ),
+                ],
+            ],
+            'relatives' => [
+                'label' => __($sectionLabels['relatives'] ?? 'wizard.extended_family').' JSON',
+                'data' => [
+                    'relatives' => $this->orderRowList(
+                        is_array($parsed['relatives'] ?? null) ? $parsed['relatives'] : [],
+                        [
+                            'relation_type',
+                            'name',
+                            'occupation',
+                            'occupation_master_id',
+                            'occupation_custom_id',
+                            'contact_number',
+                            'address_line',
+                            'location_display',
+                            'city_id',
+                            'taluka_id',
+                            'district_id',
+                            'state_id',
+                            'notes',
+                            'is_primary_contact',
+                        ]
+                    ),
+                    'relatives_parents_family' => $this->orderRowList(
+                        is_array($parsed['relatives_parents_family'] ?? null) ? $parsed['relatives_parents_family'] : [],
+                        [
+                            'relation_type',
+                            'name',
+                            'occupation',
+                            'occupation_master_id',
+                            'occupation_custom_id',
+                            'contact_number',
+                            'address_line',
+                            'location_display',
+                            'city_id',
+                            'taluka_id',
+                            'district_id',
+                            'state_id',
+                            'notes',
+                            'is_primary_contact',
+                        ]
+                    ),
+                    'relatives_sectioned' => [
+                        'paternal' => is_array($relativesSectioned['paternal'] ?? null) ? $relativesSectioned['paternal'] : [],
+                        'other' => is_array($relativesSectioned['other'] ?? null) ? $relativesSectioned['other'] : [],
+                    ],
+                ],
+            ],
+            'alliance' => [
+                'label' => __($sectionLabels['alliance'] ?? 'wizard.alliance').' JSON',
+                'data' => [
+                    'relatives_maternal_family' => $this->orderRowList(
+                        is_array($parsed['relatives_maternal_family'] ?? null) ? $parsed['relatives_maternal_family'] : [],
+                        [
+                            'relation_type',
+                            'name',
+                            'occupation',
+                            'occupation_master_id',
+                            'occupation_custom_id',
+                            'contact_number',
+                            'address_line',
+                            'location_display',
+                            'city_id',
+                            'taluka_id',
+                            'district_id',
+                            'state_id',
+                            'notes',
+                            'is_primary_contact',
+                        ]
+                    ),
+                    'alliance_networks' => $this->orderRowList(
+                        is_array($parsed['alliance_networks'] ?? null) ? $parsed['alliance_networks'] : [],
+                        [
+                            'relation_type',
+                            'name',
+                            'occupation',
+                            'contact_number',
+                            'address_line',
+                            'location_display',
+                            'notes',
+                        ]
+                    ),
+                    'relatives_sectioned' => [
+                        'maternal' => is_array($relativesSectioned['maternal'] ?? null) ? $relativesSectioned['maternal'] : [],
+                    ],
+                ],
+            ],
+            'property' => [
+                'label' => __($sectionLabels['property'] ?? 'wizard.property').' JSON',
+                'data' => [
+                    'property_summary' => $parsed['property_summary'] ?? [],
+                    'property_assets' => $this->orderRowList(
+                        is_array($parsed['property_assets'] ?? null) ? $parsed['property_assets'] : [],
+                        [
+                            'asset_type',
+                            'asset_type_label',
+                            'asset_type_key',
+                            'ownership_type',
+                            'ownership_type_label',
+                            'ownership_type_key',
+                            'location',
+                            'location_display',
+                            'country_id',
+                            'state_id',
+                            'district_id',
+                            'taluka_id',
+                            'city_id',
+                            'additional_information',
+                            'notes',
+                        ]
+                    ),
+                ],
+            ],
+            'horoscope' => [
+                'label' => __('intake.normalized_draft_section_horoscope_religious').' JSON',
+                'data' => [
+                    'horoscope' => $this->orderRowList(
+                        is_array($parsed['horoscope'] ?? null) ? $parsed['horoscope'] : [],
+                        [
+                            'mangal_dosh_type',
+                            'mangal_dosh_type_id',
+                            'navras_name',
+                            'devak',
+                            'kuldaivat',
+                            'gotra',
+                            'birth_weekday',
+                            'nakshatra',
+                            'nakshatra_id',
+                            'charan',
+                            'rashi',
+                            'rashi_id',
+                            'gan',
+                            'gan_id',
+                            'nadi',
+                            'nadi_id',
+                            'yoni',
+                            'yoni_id',
+                            'varna',
+                            'vashya',
+                            'rashi_lord',
+                        ]
+                    ),
+                ],
+            ],
+            'about-me' => [
+                'label' => __($sectionLabels['about-me'] ?? 'wizard.about_me').' JSON',
+                'data' => [
+                    'extended_narrative' => [
+                        'narrative_about_me' => $narrative['narrative_about_me'] ?? null,
+                        'additional_notes' => $narrative['additional_notes'] ?? null,
+                    ],
+                ],
+            ],
+            'partner-preferences' => [
+                'label' => __($sectionLabels['about-preferences'] ?? 'wizard.partner_preferences').' JSON',
+                'data' => [
+                    'preferences' => is_array($parsed['preferences'] ?? null) ? $parsed['preferences'] : [],
+                    'extended_narrative' => [
+                        'narrative_expectations' => $narrative['narrative_expectations'] ?? null,
+                    ],
+                ],
+            ],
+            'children-marriages' => [
+                'label' => 'Children & Marriages JSON',
+                'data' => [
+                    'children' => is_array($parsed['children'] ?? null) ? $parsed['children'] : [],
+                    'marriages' => is_array($parsed['marriages'] ?? null) ? $parsed['marriages'] : [],
+                ],
+            ],
+            'confidence-map' => [
+                'label' => 'Confidence map JSON',
+                'data' => [
+                    'confidence_map' => is_array($parsed['confidence_map'] ?? null) ? $parsed['confidence_map'] : [],
+                ],
+            ],
+        ];
+
+        $out = [];
+        foreach ($blocks as $key => $block) {
+            $blockData = $block['data'];
+            $json = json_encode($blockData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $out[] = [
+                'key' => $key,
+                'label' => $block['label'],
+                'json' => is_string($json) ? $json : '{}',
+                'is_empty' => ! $this->parsedJsonDisplaySectionHasContent($blockData),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array<string,mixed>  $core
+     * @param  list<string>  $keys
+     * @return array<string,mixed>
+     */
+    private function sliceParsedCore(array $core, array $keys): array
+    {
+        $slice = [];
+        foreach ($keys as $key) {
+            $slice[$key] = $core[$key] ?? null;
+        }
+
+        return $slice;
+    }
+
+    /**
+     * @param  list<array<string,mixed>|mixed>  $rows
+     * @param  list<string>  $keys
+     * @return list<mixed>
+     */
+    private function orderRowList(array $rows, array $keys): array
+    {
+        $ordered = [];
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                $ordered[] = $row;
+
+                continue;
+            }
+            $ordered[] = $this->orderAssocByKeys($row, $keys);
+        }
+
+        return $ordered;
+    }
+
+    /**
+     * @param  array<string,mixed>  $row
+     * @param  list<string>  $keys
+     * @return array<string,mixed>
+     */
+    private function orderAssocByKeys(array $row, array $keys): array
+    {
+        $ordered = [];
+        foreach ($keys as $key) {
+            if (array_key_exists($key, $row)) {
+                $ordered[$key] = $row[$key];
+            }
+        }
+        foreach ($row as $key => $value) {
+            if (! array_key_exists($key, $ordered)) {
+                $ordered[$key] = $value;
+            }
+        }
+
+        return $ordered;
+    }
+
+    /**
+     * @param  mixed  $value
+     */
+    private function parsedJsonDisplaySectionHasContent($value): bool
+    {
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                if ($this->parsedJsonDisplaySectionHasContent($item)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if ($value === null) {
+            return false;
+        }
+
+        if (is_string($value)) {
+            return trim($value) !== '';
+        }
+
+        return true;
     }
 }
