@@ -257,6 +257,7 @@ final class IntakePreviewNormalizedDraftPresenter
     {
         $rows = [];
         $coreAddressLine = $this->stringify($core['address_line'] ?? null);
+        $parentAddressLines = $this->parentAddressLines($normalized);
         foreach (self::BASIC_INFO_FIELDS as $field) {
             $value = $this->stringify($core[$field] ?? null);
             if ($value === '') {
@@ -297,6 +298,9 @@ final class IntakePreviewNormalizedDraftPresenter
             if ($coreAddressLine !== '' && $addrLine === $coreAddressLine) {
                 continue;
             }
+            if ($this->isParentAddressDuplicate($addrLine, $parentAddressLines)) {
+                continue;
+            }
             $type = $this->stringify($address['type'] ?? null);
             $label = $type !== ''
                 ? $this->addressLabel($type)
@@ -333,7 +337,29 @@ final class IntakePreviewNormalizedDraftPresenter
      */
     private function educationCareerRows(array $core, array $reviewMap): array
     {
-        return $this->coreRows($core, self::EDUCATION_CAREER_FIELDS, $reviewMap);
+        $rows = $this->coreRows($core, self::EDUCATION_CAREER_FIELDS, $reviewMap);
+
+        $hasAnnualIncome = false;
+        foreach ($rows as $row) {
+            if (($row['label'] ?? '') === $this->fieldLabel('annual_income')) {
+                $hasAnnualIncome = true;
+                break;
+            }
+        }
+
+        if (! $hasAnnualIncome) {
+            $derivedIncome = $this->annualIncomeFromSalaryPackage($this->stringify($core['salary_package_text'] ?? null));
+            if ($derivedIncome !== null) {
+                $rows[] = $this->displayRow(
+                    $this->fieldLabel('annual_income'),
+                    (string) $derivedIncome,
+                    'core.annual_income',
+                    $reviewMap
+                );
+            }
+        }
+
+        return $rows;
     }
 
     /**
@@ -1993,5 +2019,53 @@ final class IntakePreviewNormalizedDraftPresenter
         }
 
         return $addrLine !== '' ? ($addrLine.' · '.$location) : $location;
+    }
+
+    /**
+     * @param  array<string, mixed>  $normalized
+     * @return array<string, true>
+     */
+    private function parentAddressLines(array $normalized): array
+    {
+        $lines = [];
+        foreach ($normalized['parents_addresses'] ?? [] as $address) {
+            if (! is_array($address)) {
+                continue;
+            }
+            $line = mb_strtolower($this->stringify($address['address_line'] ?? $address['raw'] ?? null));
+            if ($line !== '') {
+                $lines[$line] = true;
+            }
+        }
+
+        return $lines;
+    }
+
+    private function annualIncomeFromSalaryPackage(string $salaryPackageText): ?int
+    {
+        $normalized = OcrNormalize::normalizeDigits($salaryPackageText);
+        if (! preg_match('/([0-9]+(?:\.[0-9]+)?)\s*(?:LPA|LAC|लाख)/ui', $normalized, $m)) {
+            return null;
+        }
+
+        return (int) round(((float) $m[1]) * 100000);
+    }
+
+    /**
+     * @param  array<string, true>  $parentAddressLines
+     */
+    private function isParentAddressDuplicate(string $addressLine, array $parentAddressLines): bool
+    {
+        $needle = mb_strtolower(trim($addressLine));
+        if ($needle === '') {
+            return false;
+        }
+        foreach (array_keys($parentAddressLines) as $parentLine) {
+            if ($parentLine === $needle || str_contains($parentLine, $needle) || str_contains($needle, $parentLine)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -663,12 +663,11 @@ class IntakeNormalizedBiodataDraftBuilder
             if (preg_match('/(?:कुटुंब\s+उत्पन्न|family\s+income)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/ui', $line, $m)) {
                 $core['family_income'] = trim($m[1]);
             }
-            if (preg_match('/(?:package|पॅकेज)\s*[:=\-]?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:LPA|LAC|लाख)/ui', $normalizedLine, $m)) {
+            if (! preg_match('/कुटुंब/u', $normalizedLine) && preg_match('/(?:package|पॅकेज)\s*[:=\-]?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:LPA|LAC|लाख)/ui', $normalizedLine, $m)) {
                 $core['salary_package_text'] = trim($m[0]);
-                if ($core['annual_income'] === null) {
-                    $core['annual_income'] = (int) round(((float) $m[1]) * 100000);
-                }
-            } elseif ($core['annual_income'] === null && preg_match('/([0-9]+(?:\.[0-9]+)?)\s*(?:LAC|लाख)/ui', $normalizedLine, $m)) {
+            } elseif ($core['annual_income'] === null
+                && ! preg_match('/कुटुंब/u', $normalizedLine)
+                && preg_match('/([0-9]+(?:\.[0-9]+)?)\s*(?:LAC|लाख)/ui', $normalizedLine, $m)) {
                 $core['annual_income'] = (int) round(((float) $m[1]) * 100000);
             }
         }
@@ -748,12 +747,15 @@ class IntakeNormalizedBiodataDraftBuilder
      */
     private function extractEducationCareer(array $lines, array &$core): void
     {
-        $candidateCareerClosed = false;
+        $capturedCareer = false;
+        $careerClosed = false;
         foreach ($lines as $line) {
-            if ($this->startsCandidateCareerBoundary($line)) {
-                $candidateCareerClosed = true;
+            if ($careerClosed) {
+                continue;
             }
-            if ($candidateCareerClosed) {
+            if ($capturedCareer && $this->startsCandidateCareerBoundary($line)
+                && ! preg_match('/^(?:शिक्षण|नोकरी|व्यवसाय|वेतन|उत्पन्न|नोकरी\/व्यवसाय|कंपनी|company|कामाचे\s+ठिकाण|नोकरीचे\s+ठिकाण|work\s+location)'.self::LABEL_SUFFIX.'/ui', $line)) {
+                $careerClosed = true;
                 continue;
             }
             if (preg_match('/^शिक्षण\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
@@ -762,12 +764,17 @@ class IntakeNormalizedBiodataDraftBuilder
             if (preg_match('/^(?:नोकरी\/व्यवसाय|नोकरी|व्यवसाय)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
                 $work = trim($m[1]);
                 $this->parseWorkLine($work, $core);
+                if (($core['occupation_title'] ?? null) !== null || ($core['company_name'] ?? null) !== null || ($core['work_location_text'] ?? null) !== null) {
+                    $capturedCareer = true;
+                }
             }
             if (preg_match('/^(?:कंपनी|company)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/ui', $line, $m)) {
                 $core['company_name'] = trim($m[1]);
+                $capturedCareer = true;
             }
             if (preg_match('/^(?:कामाचे\s+ठिकाण|नोकरीचे\s+ठिकाण|work\s+location)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/ui', $line, $m)) {
                 $core['work_location_text'] = trim($m[1]);
+                $capturedCareer = true;
             }
         }
     }
@@ -1631,6 +1638,13 @@ class IntakeNormalizedBiodataDraftBuilder
                 continue;
             }
 
+            if (preg_match('/^#{1,6}\s+\S/u', $trimmed)) {
+                $currentParent = null;
+                $capturingParentAddress = false;
+                $lastParentAddressIndex = null;
+                continue;
+            }
+
             if ($this->startsSiblingLine($trimmed)
                 || (bool) preg_match('/^(?:दाजी|मामा|मावशी|माऊशी|आत्या|चुलते|आजोळ|इतर\s+नातेवाईक|नातेसंबंध|मुलाचे\s+नां?व|मुलीचे\s+नां?व|जन्म|शिक्षण|जात|धर्म|उंची|देवक|रास|राशी)'.self::LABEL_SUFFIX.'/u', $trimmed)) {
                 $currentParent = null;
@@ -1653,10 +1667,10 @@ class IntakeNormalizedBiodataDraftBuilder
                 continue;
             }
 
-            if ($this->startsParentHomeAddressLine($trimmed)
-                || (($currentParent !== null || $isFamilyLine) && $this->startsCandidateResidenceAddressLine($trimmed))) {
+            if (($this->startsParentHomeAddressLine($trimmed) && ($currentParent !== null || $isFamilyLine))
+                || ($isFamilyLine && $this->startsCandidateResidenceAddressLine($trimmed))) {
                 $address = $this->labeledAddressValue($trimmed);
-                if ($address !== '' && ($isFamilyLine || $currentParent !== null || $this->shouldRouteAddressToParents($trimmed, $address))) {
+                if ($address !== '' && ($isFamilyLine || $currentParent !== null)) {
                     $typeKey = $this->parentAddressTypeFromLabelLine($trimmed, $address);
                     $parentsAddresses[] = [
                         'type' => 'parents',
@@ -1682,7 +1696,7 @@ class IntakeNormalizedBiodataDraftBuilder
                 if ($capturingParentAddress && empty($core['father_contact_1'] ?? null) && ! empty($core['father_name'] ?? null)) {
                     $phoneParent = 'father';
                 }
-                if ($phoneParent !== null) {
+                if ($phoneParent !== null && ($capturingParentAddress || $isFamilyLine || $this->looksLikeDirectParentPhoneLine($trimmed))) {
                     $this->assignParentPhones($core, $phoneParent, $this->extractPhones($trimmed));
                 }
                 $capturingParentAddress = false;
@@ -1757,6 +1771,12 @@ class IntakeNormalizedBiodataDraftBuilder
     private function isParentMobileLine(string $line): bool
     {
         return (bool) preg_match('/^(?:मोबा\.?|मो\.?\s*नं\.?|मोबाईल|मोबाइल|मोबाईल\s+नंबर|मोबाइल\s+नंबर|फोन\s*नं\.?|फोन\s+नंबर|फोन|संपर्क)'.self::LABEL_SUFFIX.'/u', $line);
+    }
+
+    private function looksLikeDirectParentPhoneLine(string $line): bool
+    {
+        return (bool) preg_match('/^(?:मोबा\.?|फोन\s*नं\.?|फोन\s+नंबर|फोन|मोबाईल|मोबाइल)\s*(?::\s*-\s*|[:\-]\s*)/u', $line)
+            && ! (bool) preg_match('/^(?:मोबाईल|मोबाइल)\s+(?:नं\.?|नंबर)\s*(?::\s*-\s*|[:\-]\s*)/u', $line);
     }
 
     private function startsCandidateResidenceAddressLine(string $line): bool
@@ -1914,30 +1934,7 @@ class IntakeNormalizedBiodataDraftBuilder
      */
     private function removeParentAddressDuplicates(array $addresses, array $parentsAddresses): array
     {
-        $parentLines = [];
-        foreach ($parentsAddresses as $address) {
-            $line = mb_strtolower(trim((string) ($address['address_line'] ?? '')));
-            if ($line !== '') {
-                $parentLines[$line] = true;
-            }
-        }
-        if ($parentLines === []) {
-            return $addresses;
-        }
-
-        return array_values(array_filter($addresses, function (array $address) use ($parentLines): bool {
-            $line = mb_strtolower(trim((string) ($address['address_line'] ?? $address['raw'] ?? '')));
-            if ($line === '') {
-                return true;
-            }
-            foreach (array_keys($parentLines) as $parentLine) {
-                if ($line === $parentLine || str_contains($parentLine, $line) || str_contains($line, $parentLine)) {
-                    return false;
-                }
-            }
-
-            return true;
-        }));
+        return $addresses;
     }
 
     /**
@@ -1946,9 +1943,6 @@ class IntakeNormalizedBiodataDraftBuilder
     private function extractAddressLine(string $line, array &$addresses, ?string $previousLine = null): void
     {
         if (! preg_match('/^(घरचा\s+पत्ता|घराचा\s+पत्ता|घर\s+पत्ता|सध्याचा\s+पत्ता|निवासी\s+पत्ता|गावचा\s+पत्ता|मुळगाव|मूळगाव|पत्ता|पता)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
-            return;
-        }
-        if ($previousLine !== null && $this->startsSiblingLine($previousLine)) {
             return;
         }
         $label = trim($m[1]);
@@ -2651,9 +2645,6 @@ class IntakeNormalizedBiodataDraftBuilder
         $normalized = OcrNormalize::normalizeDigits($work);
         if (preg_match('/(?:package|पॅकेज)\s*[:=\-]?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:LPA|LAC|लाख)/ui', $normalized, $m)) {
             $core['salary_package_text'] = trim($m[0]);
-            if ($core['annual_income'] === null) {
-                $core['annual_income'] = (int) round(((float) $m[1]) * 100000);
-            }
         }
 
         $withoutPackage = preg_replace('/\s*\(?\s*(?:package|पॅकेज)\s*[:=\-]?\s*[0-9]+(?:\.[0-9]+)?\s*(?:LPA|LAC|लाख)\s*\)?/ui', '', $work) ?? $work;
@@ -2888,6 +2879,7 @@ class IntakeNormalizedBiodataDraftBuilder
     private function cleanOtherRelativesText(string $value): string
     {
         $value = OcrNormalize::normalizeDigits($value);
+        $value = preg_split('/(?:अपेक्षा|शिक्षण|नोकरी|मोबाईल|मोबाइल|संपर्क|जन्म\s+तारीख|जन्म\s+स्थळ|प्रॉपर्टी|प्रॉपर्टि)\s*[:\-]/u', $value, 2)[0] ?? $value;
         $value = preg_replace('/(?:मो\.?|मो\s+नं\.?|मोबाईल|मोबाइल|संपर्क|contact|mobile)\s*[:\-]?\s*[6-9][0-9\s\/-]{9,}/ui', '', $value) ?? $value;
         $value = preg_replace('/(?<!\d)[6-9]\d{9}(?!\d)/u', '', $value) ?? $value;
         $value = preg_replace('/\s+/u', ' ', $value) ?? $value;

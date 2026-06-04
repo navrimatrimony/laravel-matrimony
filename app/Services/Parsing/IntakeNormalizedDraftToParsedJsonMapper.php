@@ -515,6 +515,10 @@ class IntakeNormalizedDraftToParsedJsonMapper
                 'relation_type' => $relationType,
                 'name' => $name,
             ];
+            $gender = trim((string) ($sibling['gender'] ?? ''));
+            if (in_array($gender, ['male', 'female'], true)) {
+                $row['gender'] = $gender;
+            }
             foreach (['occupation', 'address_line', 'contact_number', 'contact_number_2', 'contact_number_3', 'notes', 'location_display'] as $field) {
                 $value = trim((string) ($sibling[$field] ?? ''));
                 if ($value !== '') {
