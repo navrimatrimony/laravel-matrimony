@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
+use App\Models\MasterRelative;
 use App\Services\EducationService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
 use App\Services\Intake\IntakeLocationSuggestionLayerService;
@@ -21,6 +22,7 @@ use App\Services\IntakeManualOcrPreparedService;
 use App\Services\MutationService;
 use App\Services\OcrService;
 use App\Services\Parsing\ProviderResolver;
+use App\Services\ProfileForm\ProfileFormSectionSchema;
 use App\Services\Preview\PreviewSectionMapper;
 use App\Support\IntakeDobTrace;
 use App\Support\IntakePreviewDiagnosticsPresenter;
@@ -997,6 +999,7 @@ class IntakeController extends Controller
         $relativesMaternalPrefix = 'snapshot[relatives_maternal_family]';
         $propertyPrefix = 'snapshot';
         $narrativePrefix = 'snapshot[extended_narrative]';
+        $editableFormSections = ProfileFormSectionSchema::fullFormSections();
         $profile = $intakeProfile;
         $currentSection = 'full';
         $profileSiblings = collect($snapshot['siblings'] ?? [])->map(fn ($r) => (object) (is_array($r) ? $r : []));
@@ -1353,25 +1356,8 @@ class IntakeController extends Controller
         $preferredCasteIds = $prefRow['preferred_caste_ids'] ?? [];
         $assetTypes = \App\Models\MasterAssetType::where('is_active', true)->get();
         $ownershipTypes = \App\Models\MasterOwnershipType::where('is_active', true)->get();
-        $relationTypesParentsFamily = [
-            ['value' => 'paternal_grandfather', 'label' => 'Paternal Grandfather'],
-            ['value' => 'paternal_grandmother', 'label' => 'Paternal Grandmother'],
-            ['value' => 'paternal_uncle', 'label' => 'Paternal Uncle (chulte)'],
-            ['value' => 'wife_paternal_uncle', 'label' => 'Wife of Paternal Uncle'],
-            ['value' => 'paternal_aunt', 'label' => 'Paternal Aunt (atya)'],
-            ['value' => 'husband_paternal_aunt', 'label' => 'Husband of Paternal Aunt'],
-            ['value' => 'Cousin', 'label' => 'Cousin'],
-        ];
-        $relationTypesMaternalFamily = [
-            ['value' => 'maternal_address_ajol', 'label' => 'Maternal address (Ajol)'],
-            ['value' => 'maternal_grandfather', 'label' => 'Maternal Grandfather'],
-            ['value' => 'maternal_grandmother', 'label' => 'Maternal Grandmother'],
-            ['value' => 'maternal_uncle', 'label' => 'Maternal Uncle (mama)'],
-            ['value' => 'wife_maternal_uncle', 'label' => 'Wife of Maternal Uncle'],
-            ['value' => 'maternal_aunt', 'label' => 'Maternal Aunt (mavshi)'],
-            ['value' => 'husband_maternal_aunt', 'label' => 'Husband of Maternal Aunt'],
-            ['value' => 'maternal_cousin', 'label' => 'Maternal Cousin'],
-        ];
+        $relationTypesParentsFamily = MasterRelative::optionsForGroup('paternal');
+        $relationTypesMaternalFamily = MasterRelative::optionsForGroup('maternal');
         $familyTypes = \App\Models\MasterFamilyType::where('is_active', true)->get();
         $currencies = \App\Models\MasterIncomeCurrency::where('is_active', true)->get();
         $complexions = \App\Models\MasterComplexion::where('is_active', true)->orderBy('id')->get();
@@ -1383,7 +1369,7 @@ class IntakeController extends Controller
         $motherTongues = \App\Models\MasterMotherTongue::where('is_active', true)->orderBy('sort_order')->orderBy('label')->get(['id', 'key', 'label']);
         $addressTypes = \App\Models\MasterAddressType::where('is_active', true)->orderBy('id')->get(['id', 'key', 'label']);
         $religions = \App\Models\Religion::where('is_active', true)->orderBy('label')->get(['id', 'label']);
-        $rashiAshtakootaJson = [];
+        $rashiAshtakootaJson = $horoscopeRuleService->getRashiAshtakootaForFrontend();
         $talukasByDistrict = \App\Models\Taluka::all()->groupBy('district_id')->map(fn ($col) => $col->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->values()->toArray())->toArray();
         $districtsByState = \App\Models\District::all()->groupBy('state_id')->map(fn ($col) => $col->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->values()->toArray())->toArray();
         $stateIdToCountryId = \App\Models\State::all()->pluck('country_id', 'id')->toArray();
@@ -1531,6 +1517,7 @@ class IntakeController extends Controller
             'previewFieldSuggestions',
             'previewProtectedCoreKeys',
             'linkedMatrimonyProfile',
+            'editableFormSections',
             'placeholderNotFound',
             'placeholderSelectRequired',
             'intakeProfile',

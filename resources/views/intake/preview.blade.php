@@ -571,7 +571,34 @@
         {{-- Form: edit parsed data and submit --}}
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 space-y-8">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600 pb-2">तपासा आणि सुधारा — फॉर्म</h2>
-            @include('matrimony.profile.wizard.sections.full_form')
+            @php
+                $editableFormSections = $editableFormSections ?? [];
+                $sectionPrefixes = [
+                    'basic-info' => $corePrefix,
+                    'physical' => $corePrefix,
+                    'education-career' => $corePrefix,
+                    'family-details' => $corePrefix,
+                    'siblings' => $siblingsPrefix,
+                    'relatives' => $relativesPaternalPrefix,
+                    'alliance' => $relativesMaternalPrefix,
+                    'property' => $propertyPrefix,
+                    'horoscope' => $horoscopePrefix,
+                    'about-me' => $narrativePrefix,
+                ];
+            @endphp
+            @foreach ($editableFormSections as $section)
+                @php
+                    $partial = $section['partial'] ?? null;
+                    $sectionKey = $section['key'] ?? null;
+                    $includeData = [];
+                    if (is_string($sectionKey) && array_key_exists($sectionKey, $sectionPrefixes)) {
+                        $includeData['namePrefix'] = $sectionPrefixes[$sectionKey];
+                    }
+                @endphp
+                @if (is_string($partial) && $partial !== '')
+                    @include($partial, $includeData)
+                @endif
+            @endforeach
         </section>
 
         {{-- Scroll anchor at bottom --}}
