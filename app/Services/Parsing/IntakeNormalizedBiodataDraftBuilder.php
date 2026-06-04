@@ -2364,36 +2364,132 @@ class IntakeNormalizedBiodataDraftBuilder
 
     private function extractHoroscopeLine(string $line, mixed &$horoscope): void
     {
-        if (! preg_match('/^(?:रास|राशी|नक्षत्र|देवक|कुलदैवत|कुलस्वामी|कुळस्वामी|नाडी|गण|चरण|गोत्र|योनी|वर्ण|वश्य|राशी\s*स्वामी|रास\s*स्वामी|मंगळ(?:िक|दोष)?|नावरस|जन्मवार\s*आणि\s*वेळ|जन्मवार\s*व\s*वेळ)'.self::LABEL_SUFFIX.'/u', $line)) {
+        if (! preg_match('/^(?:रास|राशी|रास\s*नाव|राशी\s*नाव|नक्षत्र|देवक|कुलदैवत|कलदैवत|कुलस्वामी|कुळस्वामी|नाडी|गण|चरण|गोत्र|योनी|वर्ण|वश्य|वैरवर्ग|राशी\s*स्वामी|रास\s*स्वामी|स्वामी|मंगळ(?:िक|दोष)?|नावरस|जन्मवार\s*आणि\s*वेळ|जन्मवार\s*व\s*वेळ)'.self::LABEL_SUFFIX.'/u', $line)) {
             return;
         }
         $horoscope = is_array($horoscope) ? $horoscope : ['raw' => []];
         $horoscope['raw'][] = $line;
-        if (preg_match('/जन्मवार\s*(?:आणि|व)\s*वेळ\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)
-            && preg_match('/(सोमवार|मंगळवार|बुधवार|गुरुवार|शुक्रवार|शनिवार|रविवार)/u', $m[1], $weekday)) {
-            $horoscope['birth_weekday'] = $weekday[1];
-        }
-        foreach ([
-            'rashi' => ['रास', 'राशी'],
-            'nakshatra' => ['नक्षत्र'],
-            'nadi' => ['नाडी'],
-            'gan' => ['गण'],
-            'devak' => ['देवक'],
-            'kuldaivat' => ['कुलदैवत', 'कुलस्वामी', 'कुळस्वामी'],
-            'charan' => ['चरण'],
-            'gotra' => ['गोत्र'],
-            'yoni' => ['योनी'],
-            'varna' => ['वर्ण'],
-            'vashya' => ['वश्य'],
-            'rashi_lord' => ['राशी स्वामी', 'रास स्वामी'],
-            'mangal_dosh_type' => ['मंगळिक', 'मंगळ दोष'],
-            'navras_name' => ['नावरस'],
-        ] as $field => $labels) {
-            $value = $this->extractLabeledValue($line, $labels);
-            if ($value !== null && ! $this->horoscopeValueLooksPolluted($value)) {
-                $horoscope[$field] = $value;
+        foreach ($this->extractHoroscopeSegments($line) as $field => $value) {
+            $normalizedValue = $this->normalizeHoroscopeFieldValue($field, $value);
+            if ($normalizedValue !== null && ! $this->horoscopeValueLooksPolluted($normalizedValue)) {
+                $horoscope[$field] = $normalizedValue;
             }
         }
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function extractHoroscopeSegments(string $line): array
+    {
+        $labelToField = [
+            'जन्मवार आणि वेळ' => 'birth_weekday',
+            'जन्मवार व वेळ' => 'birth_weekday',
+            'राशी स्वामी' => 'rashi_lord',
+            'रास स्वामी' => 'rashi_lord',
+            'राशी नाव' => 'navras_name',
+            'रास नाव' => 'navras_name',
+            'नावरस' => 'navras_name',
+            'कुलदैवत' => 'kuldaivat',
+            'कलदैवत' => 'kuldaivat',
+            'कुलस्वामी' => 'kuldaivat',
+            'कुळस्वामी' => 'kuldaivat',
+            'मंगळिक' => 'mangal_dosh_type',
+            'मंगळ दोष' => 'mangal_dosh_type',
+            'नक्षत्र' => 'nakshatra',
+            'देवक' => 'devak',
+            'नाडी' => 'nadi',
+            'गण' => 'gan',
+            'चरण' => 'charan',
+            'गोत्र' => 'gotra',
+            'योनी' => 'yoni',
+            'वर्ण' => 'varna',
+            'वश्य' => 'vashya',
+            'वैरवर्ग' => 'vashya',
+            'राशी' => 'rashi',
+            'रास' => 'rashi',
+            'स्वामी' => 'rashi_lord',
+        ];
+
+        $labels = array_keys($labelToField);
+        usort($labels, static fn (string $a, string $b): int => mb_strlen($b) <=> mb_strlen($a));
+        $escaped = array_map(static fn (string $label): string => preg_quote($label, '/'), $labels);
+        $pattern = '/(?P<prefix>^|[\s,;|])(?P<label>'.implode('|', $escaped).')\s*(?::\s*-\s*|[:\-–—]\s*)/u';
+
+        preg_match_all($pattern, $line, $matches, PREG_OFFSET_CAPTURE);
+
+        $segments = [];
+        $fullMatches = $matches[0] ?? [];
+        $labelMatches = $matches['label'] ?? [];
+        foreach ($fullMatches as $index => $fullMatch) {
+            $fullText = $fullMatch[0] ?? '';
+            $fullStart = $fullMatch[1] ?? null;
+            $label = $labelMatches[$index][0] ?? null;
+            if (! is_int($fullStart) || ! is_string($label) || $label === '') {
+                continue;
+            }
+
+            $valueStart = $fullStart + strlen($fullText);
+            $nextStart = isset($fullMatches[$index + 1][1]) && is_int($fullMatches[$index + 1][1])
+                ? $fullMatches[$index + 1][1]
+                : strlen($line);
+            $value = substr($line, $valueStart, $nextStart - $valueStart);
+            $value = trim($value);
+            if ($value === '') {
+                continue;
+            }
+
+            $field = $labelToField[$label] ?? null;
+            if ($field === null) {
+                continue;
+            }
+
+            $segments[$field] = $value;
+        }
+
+        return $segments;
+    }
+
+    private function normalizeHoroscopeFieldValue(string $field, string $value): ?string
+    {
+        $value = trim($value);
+        $value = trim(preg_replace('/^[,;:.\-–—\s]+|[,;:.\-–—\s]+$/u', '', $value) ?? $value);
+        if ($value === '') {
+            return null;
+        }
+
+        if ($field === 'birth_weekday') {
+            if (preg_match('/(सोमवार|मंगळवार|बुधवार|गुरुवार|शुक्रवार|शनिवार|रविवार)/u', $value, $weekday)) {
+                return $weekday[1];
+            }
+
+            return null;
+        }
+
+        if ($field === 'navras_name') {
+            return \App\Services\BiodataParserService::sanitizeNavrasDisplayText($value) ?? $this->trimSeparators($value);
+        }
+
+        if ($field === 'rashi') {
+            return \App\Services\BiodataParserService::sanitizeRashiDisplayText($value) ?? $this->trimSeparators($value);
+        }
+
+        $value = $this->trimSeparators($value);
+        $value = trim(preg_replace('/[.।]+$/u', '', $value) ?? $value);
+
+        $fieldAliases = [
+            'nakshatra' => [
+                'चचत्रा' => 'चित्रा',
+            ],
+            'yoni' => [
+                'व्याघ्र' => 'वाघ',
+            ],
+        ];
+        if (isset($fieldAliases[$field][$value])) {
+            $value = $fieldAliases[$field][$value];
+        }
+
+        return $value !== '' ? $value : null;
     }
 
     /**
@@ -3111,7 +3207,7 @@ class IntakeNormalizedBiodataDraftBuilder
             }
             $value = trim($m[1]);
             $value = preg_split(
-                '/\s+(?:रास|राशी|नक्षत्र|देवक|कुलदैवत|कुलस्वामी|कुळस्वामी|नाडी|गण|चरण|गोत्र|नावरस|ब्लड\s*ग्रुप|रक्त\s*गट|मोबाईल|मोबाइल|संपर्क|प्रोपर्टी|प्रॉपर्टी|स्थावर)'.self::LABEL_SUFFIX.'/u',
+                '/\s+(?:रास|राशी|नक्षत्र|देवक|कुलदैवत|कुलस्वामी|कुळस्वामी|नाडी|गण|चरण|गोत्र|वैरवर्ग|नावरस|ब्लड\s*ग्रुप|रक्त\s*गट|मोबाईल|मोबाइल|संपर्क|प्रोपर्टी|प्रॉपर्टी|स्थावर)'.self::LABEL_SUFFIX.'/u',
                 $value,
                 2
             )[0] ?? $value;

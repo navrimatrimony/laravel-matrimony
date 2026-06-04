@@ -382,9 +382,60 @@ TXT, true);
 
         $this->assertStringContainsString('कुंभ', $horoscopeBlob);
         $this->assertStringContainsString('अश्विनी', $horoscopeBlob);
-        $this->assertStringContainsString('वश्य :- मानव', $horoscopeBlob);
+        $this->assertStringContainsString(__('components.horoscope.vashya'), $horoscopeBlob);
+        $this->assertStringContainsString('मानव', $horoscopeBlob);
         $this->assertStringNotContainsString('Horoscope line 1 राशी :- कुंभ', $horoscopeBlob);
         $this->assertStringNotContainsString('Horoscope line 2 नक्षत्र :- अश्विनी', $horoscopeBlob);
+        $this->assertStringNotContainsString('Horoscope line 3 वश्य :- मानव', $horoscopeBlob);
+    }
+
+    public function test_horoscope_preview_maps_swami_and_vairavarga_into_wizard_labels(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+स्वामी :- शनि
+वैरवर्ग :- मानव
+TXT, true);
+
+        $horoscopeBlob = $this->sectionBlob($out['sections']['horoscope']);
+
+        $this->assertStringContainsString(__('components.horoscope.rashi_lord'), $horoscopeBlob);
+        $this->assertStringContainsString('शनि', $horoscopeBlob);
+        $this->assertStringContainsString(__('components.horoscope.vashya'), $horoscopeBlob);
+        $this->assertStringContainsString('मानव', $horoscopeBlob);
+        $this->assertStringNotContainsString('Horoscope line 1 स्वामी :- शनि', $horoscopeBlob);
+        $this->assertStringNotContainsString('Horoscope line 2 वैरवर्ग :- मानव', $horoscopeBlob);
+    }
+
+    public function test_horoscope_preview_for_intake_457_keeps_single_mapped_values_without_duplicate_raw_lines(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+देवक :- साळुंकी, कलदैवत :-पालीचा खुंडोबा,
+कुंची :- ५' ३" . वर्ण :- निमगोरा,
+रास :- कन्या, योनी :- व्याघ्र,
+रास नाव :- पेमदेवी, गण :- राक्षस
+नक्षत्र :- चचत्रा, वर्ण :- वैश्य,
+TXT, true);
+
+        $horoscopeBlob = $this->sectionBlob($out['sections']['horoscope']);
+
+        $this->assertStringContainsString(__('components.horoscope.devak'), $horoscopeBlob);
+        $this->assertStringContainsString('साळुंकी', $horoscopeBlob);
+        $this->assertStringContainsString(__('components.horoscope.kul'), $horoscopeBlob);
+        $this->assertStringContainsString('पालीचा खुंडोबा', $horoscopeBlob);
+        $this->assertStringContainsString(__('components.horoscope.rashi'), $horoscopeBlob);
+        $this->assertStringContainsString('कन्या', $horoscopeBlob);
+        $this->assertStringContainsString(__('components.horoscope.yoni'), $horoscopeBlob);
+        $this->assertStringContainsString('वाघ', $horoscopeBlob);
+        $this->assertStringContainsString(__('components.horoscope.navras_name'), $horoscopeBlob);
+        $this->assertStringContainsString('पेमदेवी', $horoscopeBlob);
+        $this->assertStringContainsString(__('components.horoscope.nakshatra'), $horoscopeBlob);
+        $this->assertStringContainsString('चित्रा', $horoscopeBlob);
+        $this->assertStringContainsString(__('components.horoscope.varna'), $horoscopeBlob);
+        $this->assertStringContainsString('वैश्य', $horoscopeBlob);
+        $this->assertStringNotContainsString('Horoscope line 1', $horoscopeBlob);
+        $this->assertStringNotContainsString('Horoscope line 2', $horoscopeBlob);
+        $this->assertStringNotContainsString('Horoscope line 3', $horoscopeBlob);
+        $this->assertStringNotContainsString('Horoscope line 4', $horoscopeBlob);
     }
 
     public function test_review_needed_does_not_repeat_confidently_mapped_values(): void

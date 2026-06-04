@@ -146,6 +146,48 @@ class IntakeNormalizedDraftToParsedJsonMapperTest extends TestCase
         $this->assertSame($text, $parsed['core']['other_relatives_text'] ?? null);
     }
 
+    public function test_mapper_carries_horoscope_alias_fields_for_preview_and_form_parity(): void
+    {
+        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map([
+            'normalized' => [
+                'horoscope' => [
+                    'raw' => [
+                        'स्वामी :- शनि',
+                        'वैरवर्ग :- मानव',
+                    ],
+                    'rashi_lord' => 'शनि',
+                    'vashya' => 'मानव',
+                ],
+            ],
+        ]);
+
+        $row = $parsed['horoscope'][0] ?? [];
+
+        $this->assertSame('शनि', $row['rashi_lord'] ?? null);
+        $this->assertSame('मानव', $row['vashya'] ?? null);
+    }
+
+    public function test_mapper_keeps_intake_457_horoscope_scalar_values_without_raw_reparse_overwrite(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+देवक :- साळुंकी, कलदैवत :-पालीचा खुंडोबा,
+रास :- कन्या, योनी :- व्याघ्र,
+रास नाव :- पेमदेवी, गण :- राक्षस
+नक्षत्र :- चचत्रा, वर्ण :- वैश्य,
+TXT);
+        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map($draft);
+        $row = $parsed['horoscope'][0] ?? [];
+
+        $this->assertSame('साळुंकी', $row['devak'] ?? null);
+        $this->assertSame('पालीचा खुंडोबा', $row['kuldaivat'] ?? null);
+        $this->assertSame('कन्या', $row['rashi'] ?? null);
+        $this->assertSame('वाघ', $row['yoni'] ?? null);
+        $this->assertSame('पेमदेवी', $row['navras_name'] ?? null);
+        $this->assertSame('राक्षस', $row['gan'] ?? null);
+        $this->assertSame('चित्रा', $row['nakshatra'] ?? null);
+        $this->assertSame('वैश्य', $row['varna'] ?? null);
+    }
+
     public function test_mapper_preserves_wizard_shaped_paternal_extended_family_fields(): void
     {
         $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map([

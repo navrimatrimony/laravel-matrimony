@@ -264,6 +264,103 @@ TXT;
         ], $payload[(string) $rashiId]);
     }
 
+    public function test_normalized_draft_horoscope_section_uses_form_matched_headings(): void
+    {
+        $user = User::factory()->create();
+        $parsed = app(IntakeParsedSnapshotSkeleton::class)->ensure([
+            'core' => [
+                'full_name' => 'Horoscope Heading Candidate',
+                'gender' => 'male',
+            ],
+            'horoscope' => [[
+                'navras_name' => 'सीताराम',
+                'devak' => 'वड',
+                'kuldaivat' => 'जोतिबा',
+                'nakshatra' => 'पुनर्वसू',
+                'charan' => '3',
+                'rashi' => 'मिथुन',
+                'gan' => 'देव',
+                'nadi' => 'आदि',
+                'yoni' => 'मार्जार',
+                'varna' => 'शुद्र',
+                'vashya' => 'मानव / नर',
+                'rashi_lord' => 'बुध',
+            ]],
+        ]);
+
+        $intake = BiodataIntake::create([
+            'raw_ocr_text' => 'horoscope heading raw',
+            'last_parse_input_text' => <<<'TXT'
+नावरस :- सीताराम
+देवक :- वड
+कुलस्वामी :- जोतिबा
+नक्षत्र :- पुनर्वसू
+चरण :- ३
+राशी :- मिथुन
+गण :- देव
+नाडी :- आदि
+योनी :- मार्जार
+वर्ण :- शुद्र
+वश्य :- मानव / नर
+स्वामी :- बुध
+TXT,
+            'uploaded_by' => $user->id,
+            'parse_status' => 'parsed',
+            'intake_status' => 'DRAFT',
+            'intake_locked' => false,
+            'approved_by_user' => false,
+            'parsed_json' => $parsed,
+            'approval_snapshot_json' => [],
+        ]);
+
+        $response = $this->actingAs($user)->get(route('intake.preview', $intake));
+
+        $response->assertOk();
+        $response->assertSee(__('intake.normalized_draft_section_horoscope_religious'), false);
+        $response->assertSee(__('intake.normalized_draft_horoscope_basic_heading'), false);
+        $response->assertSee(__('intake.normalized_draft_horoscope_details_heading'), false);
+        $response->assertSee('सीताराम', false);
+        $response->assertSee('मिथुन', false);
+        $response->assertSee('मानव / नर', false);
+    }
+
+    public function test_normalized_draft_preview_renders_normal_horoscope_rows_inline_for_intake_457_case(): void
+    {
+        $user = User::factory()->create();
+        $parsed = app(IntakeParsedSnapshotSkeleton::class)->ensure([
+            'core' => [
+                'full_name' => 'Intake 457 Candidate',
+                'gender' => 'female',
+            ],
+        ]);
+
+        $intake = BiodataIntake::create([
+            'raw_ocr_text' => 'intake 457 horoscope raw',
+            'last_parse_input_text' => <<<'TXT'
+देवक :- साळुंकी, कलदैवत :-पालीचा खुंडोबा,
+कुंची :- ५' ३" . वर्ण :- निमगोरा,
+रास :- कन्या, योनी :- व्याघ्र,
+रास नाव :- पेमदेवी, गण :- राक्षस
+नक्षत्र :- चचत्रा, वर्ण :- वैश्य,
+TXT,
+            'uploaded_by' => $user->id,
+            'parse_status' => 'parsed',
+            'intake_status' => 'DRAFT',
+            'intake_locked' => false,
+            'approved_by_user' => false,
+            'parsed_json' => $parsed,
+            'approval_snapshot_json' => [],
+        ]);
+
+        $response = $this->actingAs($user)->get(route('intake.preview', $intake));
+        $response->assertOk();
+
+        $html = $response->getContent();
+        $this->assertMatchesRegularExpression('/Nakshatra:<\/span>\s*<span[^>]*>चित्रा<\/span>/u', $html);
+        $this->assertMatchesRegularExpression('/Rashi:<\/span>\s*<span[^>]*>कन्या<\/span>/u', $html);
+        $this->assertMatchesRegularExpression('/Yoni:<\/span>\s*<span[^>]*>वाघ<\/span>/u', $html);
+    }
+
     public function test_property_preview_uses_wizard_asset_fields_and_notes(): void
     {
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'

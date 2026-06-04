@@ -39,8 +39,28 @@
                 @php
                     $rows = is_array($draftSections[$sectionKey] ?? null) ? $draftSections[$sectionKey] : [];
                     $isReview = $sectionKey === 'review_needed';
+                    $isHoroscopeSection = $sectionKey === 'horoscope';
                     $photoPreview = is_array($intakePhotoPreview ?? null) ? $intakePhotoPreview : [];
                     $showPhotoPreview = $sectionKey === 'photo' && ! empty($photoPreview['show_in_normalized_preview']);
+                    $horoscopeBasicLabels = [
+                        __('components.horoscope.mangal_dosh'),
+                        __('components.horoscope.navras_name'),
+                        __('components.horoscope.devak'),
+                        __('components.horoscope.kul'),
+                        __('components.horoscope.gotra'),
+                        __('components.horoscope.birth_weekday'),
+                    ];
+                    $horoscopeDetailLabels = [
+                        __('components.horoscope.nakshatra'),
+                        __('components.horoscope.charan'),
+                        __('components.horoscope.rashi'),
+                        __('components.horoscope.gan'),
+                        __('components.horoscope.nadi'),
+                        __('components.horoscope.yoni'),
+                        __('components.horoscope.varna'),
+                        __('components.horoscope.vashya'),
+                        __('components.horoscope.rashi_lord'),
+                    ];
                 @endphp
                 <div @class([
                     'rounded p-3 min-w-0',
@@ -54,6 +74,8 @@
                     ])>
                         @if ($isReview)
                             {{ __('intake.normalized_draft_review_needed') }}
+                        @elseif ($isHoroscopeSection)
+                            {{ __('intake.normalized_draft_section_horoscope_religious') }}
                         @else
                             {{ __($sectionLabels[$sectionKey] ?? $sectionKey) }}
                         @endif
@@ -78,6 +100,82 @@
                                 {{ __('intake.normalized_draft_no_data') }}
                             @endif
                         </p>
+                    @elseif ($isHoroscopeSection)
+                        @php
+                            $basicRows = [];
+                            $detailRows = [];
+                            $otherRows = [];
+                            foreach ($rows as $row) {
+                                if (! is_array($row)) {
+                                    continue;
+                                }
+                                $label = (string) ($row['label'] ?? '');
+                                if (in_array($label, $horoscopeBasicLabels, true)) {
+                                    $basicRows[] = $row;
+                                    continue;
+                                }
+                                if (in_array($label, $horoscopeDetailLabels, true)) {
+                                    $detailRows[] = $row;
+                                    continue;
+                                }
+                                $otherRows[] = $row;
+                            }
+                            $horoscopeGroups = [
+                                [
+                                    'heading' => __('intake.normalized_draft_horoscope_basic_heading'),
+                                    'rows' => $basicRows,
+                                    'card' => 'rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/60 dark:bg-gray-800/40 p-3',
+                                ],
+                                [
+                                    'heading' => __('intake.normalized_draft_horoscope_details_heading'),
+                                    'rows' => array_merge($detailRows, $otherRows),
+                                    'card' => 'rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/20 p-3',
+                                ],
+                            ];
+                        @endphp
+                        <div class="space-y-4">
+                            @foreach ($horoscopeGroups as $group)
+                                <div class="{{ $group['card'] }}">
+                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                                        {{ $group['heading'] }}
+                                    </h4>
+                                    @if (($group['rows'] ?? []) === [])
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 italic">
+                                            {{ __('intake.normalized_draft_no_data') }}
+                                        </p>
+                                    @else
+                                        <dl class="space-y-2 text-xs">
+                                            @foreach (($group['rows'] ?? []) as $row)
+                                                @php
+                                                    $needsReview = ! empty($row['needs_review']);
+                                                    $rowLabel = (string) ($row['label'] ?? '');
+                                                    $rowValue = (string) ($row['value'] ?? '');
+                                                    $rowClasses = $needsReview
+                                                        ? 'rounded bg-amber-50 dark:bg-amber-950/25 border border-amber-200 dark:border-amber-800 px-2 py-1.5'
+                                                        : '';
+                                                @endphp
+                                                <div class="{{ $rowClasses }}">
+                                                    <div class="flex flex-wrap items-start gap-2">
+                                                        <span class="font-medium text-gray-700 dark:text-gray-300 break-words">{{ $rowLabel }}:</span>
+                                                        <span class="text-gray-800 dark:text-gray-100 whitespace-pre-wrap break-words">{{ $rowValue }}</span>
+                                                        @if ($needsReview)
+                                                            <span class="inline-flex items-center rounded-full border border-amber-500 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-100">
+                                                                {{ __('intake.normalized_draft_needs_review_badge') }}
+                                                            </span>
+                                                        @endif
+                                                    </div>
+                                                    @if (! empty($row['review_hint']))
+                                                        <p class="mt-1 text-[11px] font-medium text-amber-800 dark:text-amber-200">
+                                                            {{ $row['review_hint'] }}
+                                                        </p>
+                                                    @endif
+                                                </div>
+                                            @endforeach
+                                        </dl>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
                     @else
                         <dl class="space-y-2 text-xs">
                             @foreach ($rows as $row)
@@ -133,20 +231,20 @@
                                             </p>
                                         @endif
                                     @else
-                                        <dt class="font-medium text-gray-700 dark:text-gray-300 break-words flex flex-wrap items-center gap-2">
-                                            <span>{{ $rowLabel }}</span>
+                                        <div class="flex flex-wrap items-start gap-2">
+                                            <span class="font-medium text-gray-700 dark:text-gray-300 break-words">{{ $rowLabel }}:</span>
+                                            <span class="text-gray-800 dark:text-gray-100 whitespace-pre-wrap break-words">{{ $rowValue }}</span>
                                             @if ($needsReview && ! $isReview)
                                                 <span class="inline-flex items-center rounded-full border border-amber-500 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-100">
                                                     {{ __('intake.normalized_draft_needs_review_badge') }}
                                                 </span>
                                             @endif
-                                        </dt>
+                                        </div>
                                         @if (! empty($row['review_hint']))
                                             <p class="mt-1 text-[11px] font-medium text-amber-800 dark:text-amber-200">
                                                 {{ $row['review_hint'] }}
                                             </p>
                                         @endif
-                                        <dd class="mt-0.5 text-gray-800 dark:text-gray-100 whitespace-pre-wrap break-words">{{ $rowValue }}</dd>
                                     @endif
                                 </div>
                             @endforeach

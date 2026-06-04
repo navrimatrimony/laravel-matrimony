@@ -1797,9 +1797,9 @@ final class IntakePreviewNormalizedDraftPresenter
         $present = [];
         $patterns = [
             'mangal_dosh_type' => '/मंगळ(?:िक|दोष)|mangal/ui',
-            'navras_name' => '/नावरस/u',
+            'navras_name' => '/नावरस|रास\s*नाव|राशी\s*नाव/u',
             'devak' => '/देवक/u',
-            'kuldaivat' => '/कुलदैवत|कुलस्वामी|कुळस्वामी/u',
+            'kuldaivat' => '/कुलदैवत|कलदैवत|कुलस्वामी|कुळस्वामी/u',
             'gotra' => '/गोत्र/u',
             'birth_weekday' => '/जन्मवार|वार/u',
             'nakshatra' => '/नक्षत्र/u',
@@ -1809,8 +1809,8 @@ final class IntakePreviewNormalizedDraftPresenter
             'nadi' => '/नाडी|नाड\b/u',
             'yoni' => '/योनी/u',
             'varna' => '/वर्ण/u',
-            'vashya' => '/वश्य|vashya/ui',
-            'rashi_lord' => '/राशी\s*स्वामी|रास\s*स्वामी|rashi\s*lord/ui',
+            'vashya' => '/वश्य|वैरवर्ग|vashya/ui',
+            'rashi_lord' => '/^स्वामी\b|राशी\s*स्वामी|रास\s*स्वामी|rashi\s*lord/ui',
         ];
 
         foreach ($rawLines as $line) {
@@ -1857,15 +1857,17 @@ final class IntakePreviewNormalizedDraftPresenter
     private function shouldKeepHoroscopeRawLine(string $line, array $displayValues): bool
     {
         $residual = OcrNormalize::normalizeDigits($line);
+        $residual = str_replace(['व्याघ्र', 'चचत्रा'], ['वाघ', 'चित्रा'], $residual);
         foreach ($displayValues as $value) {
             $needle = OcrNormalize::normalizeDigits($value);
+            $needle = str_replace(['व्याघ्र', 'चचत्रा'], ['वाघ', 'चित्रा'], $needle);
             if ($needle === '') {
                 continue;
             }
             $residual = str_replace($needle, ' ', $residual);
         }
 
-        $residual = preg_replace('/(?:रास|राशी|नक्षत्र|देवक|कुलदैवत|कुलस्वामी|कुळस्वामी|नाडी|नाड\b|गण|चरण|गोत्र|योनी|वर्ण|नावरस|मंगळ(?:िक|दोष)?|जन्मवार(?:\s*आणि\s*वेळ|\s*व\s*वेळ)?|राशी\s*स्वामी|रास\s*स्वामी|vashya|rashi\s*lord)/ui', ' ', $residual) ?? $residual;
+        $residual = preg_replace('/(?:रास\s*नाव|राशी\s*नाव|रास|राशी|नक्षत्र|देवक|कुलदैवत|कलदैवत|कुलस्वामी|कुळस्वामी|नाडी|नाड\b|गण|चरण|गोत्र|योनी|वर्ण|वश्य|वैरवर्ग|नावरस|मंगळ(?:िक|दोष)?|जन्मवार(?:\s*आणि\s*वेळ|\s*व\s*वेळ)?|राशी\s*स्वामी|रास\s*स्वामी|स्वामी|vashya|rashi\s*lord)/ui', ' ', $residual) ?? $residual;
         $residual = preg_replace('/[:\-–—,.;(){}\[\]\/\\\\]+/u', ' ', $residual) ?? $residual;
         $residual = preg_replace('/\b(?:and|or|time)\b/ui', ' ', $residual) ?? $residual;
         $residual = preg_replace('/\s+/u', ' ', trim($residual)) ?? trim($residual);

@@ -341,6 +341,47 @@ TXT);
         $this->assertStringContainsString('वैश्य', (string) ($horoscope['varna'] ?? ''));
     }
 
+    public function test_horoscope_alias_lines_fill_wizard_parity_fields(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+स्वामी :- शनि
+वैरवर्ग :- मानव
+TXT);
+
+        $horoscope = $draft['normalized']['horoscope'] ?? [];
+
+        $this->assertSame('शनि', $horoscope['rashi_lord'] ?? null);
+        $this->assertSame('मानव', $horoscope['vashya'] ?? null);
+    }
+
+    public function test_intake_457_same_line_horoscope_labels_split_cleanly(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+देवक :- साळुंकी, कलदैवत :-पालीचा खुंडोबा,
+कुंची :- ५' ३" . वर्ण :- निमगोरा,
+रास :- कन्या, योनी :- व्याघ्र,
+रास नाव :- पेमदेवी, गण :- राक्षस
+नक्षत्र :- चचत्रा, वर्ण :- वैश्य,
+TXT);
+
+        $core = $draft['normalized']['core'];
+        $horoscope = $draft['normalized']['horoscope'] ?? [];
+
+        $this->assertEqualsWithDelta(160.02, (float) ($core['height_cm'] ?? 0), 0.01);
+        $this->assertSame('निमगोरा', $core['complexion']);
+        $this->assertSame('साळुंकी', $horoscope['devak'] ?? null);
+        $this->assertSame('पालीचा खुंडोबा', $horoscope['kuldaivat'] ?? null);
+        $this->assertSame('कन्या', $horoscope['rashi'] ?? null);
+        $this->assertSame('वाघ', $horoscope['yoni'] ?? null);
+        $this->assertSame('पेमदेवी', $horoscope['navras_name'] ?? null);
+        $this->assertSame('राक्षस', $horoscope['gan'] ?? null);
+        $this->assertSame('चित्रा', $horoscope['nakshatra'] ?? null);
+        $this->assertSame('वैश्य', $horoscope['varna'] ?? null);
+        $this->assertStringNotContainsString('कलदैवत', (string) ($horoscope['devak'] ?? ''));
+        $this->assertStringNotContainsString('नाव :-', (string) ($horoscope['rashi'] ?? ''));
+        $this->assertStringNotContainsString('वर्ण :-', (string) ($horoscope['nakshatra'] ?? ''));
+    }
+
     public function test_positional_physical_values_are_mapped_from_stacked_biodata_rows(): void
     {
         $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
@@ -427,7 +468,7 @@ TXT);
         $this->assertSame('साळुंकी', $horoscope['devak'] ?? null);
         $this->assertSame('पालीचा खुंडोबा', $horoscope['kuldaivat'] ?? null);
         $this->assertSame('कन्या', $horoscope['rashi'] ?? null);
-        $this->assertSame('व्याघ्र', $horoscope['yoni'] ?? null);
+        $this->assertSame('वाघ', $horoscope['yoni'] ?? null);
         $this->assertSame('राक्षस', $horoscope['gan'] ?? null);
         $this->assertSame('चित्रा', $horoscope['nakshatra'] ?? null);
         $this->assertSame('वैश्य', $horoscope['varna'] ?? null);
