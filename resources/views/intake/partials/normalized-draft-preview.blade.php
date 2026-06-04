@@ -186,9 +186,15 @@
                                     $needsReview = ! empty($row['needs_review']);
                                     $rowLabel = (string) ($row['label'] ?? '');
                                     $rowValue = (string) ($row['value'] ?? '');
+                                    $displayLabel = (string) ($row['display_label'] ?? $rowLabel);
+                                    $displayHeadingText = (string) ($row['display_heading_text'] ?? $rowValue);
+                                    $rowVariant = (string) ($row['row_variant'] ?? '');
+                                    $isGroupHeading = $rowVariant === 'group_heading';
+                                    $isGroupedDetail = in_array($rowVariant, ['group_detail', 'group_detail_value_only'], true);
+                                    $spacingBefore = ! empty($row['spacing_before']);
                                     $isPropertySection = $sectionKey === 'property';
-                                    $isPropertyAssetHeading = $isPropertySection && preg_match('/^Property Asset \d+$/', $rowLabel) === 1;
-                                    $hidePropertyNotMentioned = $isPropertySection && ! $isPropertyAssetHeading && $rowValue === 'Not mentioned';
+                                    $isPropertyAssetHeading = $isPropertySection && preg_match('/^(?:Property Asset|मालमत्ता साधन) \d+$/u', $rowLabel) === 1;
+                                    $hidePropertyNotMentioned = $isPropertySection && ! $isPropertyAssetHeading && $rowValue === __('intake.normalized_draft_not_mentioned');
                                 @endphp
                                 @if ($hidePropertyNotMentioned)
                                     @continue
@@ -215,6 +221,23 @@
                                                 {{ $row['review_hint'] }}
                                             </p>
                                         @endif
+                                    @elseif ($isGroupHeading)
+                                        <div @class([
+                                            'font-semibold text-gray-900 dark:text-gray-100 break-words',
+                                            'mt-4' => $spacingBefore,
+                                        ])>
+                                            {{ $displayHeadingText }}
+                                            @if ($needsReview && ! $isReview)
+                                                <span class="ml-2 inline-flex items-center rounded-full border border-amber-500 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-100">
+                                                    {{ __('intake.normalized_draft_needs_review_badge') }}
+                                                </span>
+                                            @endif
+                                        </div>
+                                        @if (! empty($row['review_hint']))
+                                            <p class="mt-1 text-[11px] font-medium text-amber-800 dark:text-amber-200">
+                                                {{ $row['review_hint'] }}
+                                            </p>
+                                        @endif
                                     @elseif ($isPropertySection)
                                         <dd class="mt-0.5 pl-3 text-gray-800 dark:text-gray-100 break-words">
                                             <span class="font-medium text-gray-700 dark:text-gray-300">{{ $rowLabel }}:</span>
@@ -225,6 +248,25 @@
                                                 </span>
                                             @endif
                                         </dd>
+                                        @if (! empty($row['review_hint']))
+                                            <p class="mt-1 pl-3 text-[11px] font-medium text-amber-800 dark:text-amber-200">
+                                                {{ $row['review_hint'] }}
+                                            </p>
+                                        @endif
+                                    @elseif ($isGroupedDetail)
+                                        <div class="flex flex-wrap items-start gap-2 pl-3">
+                                            @if ($rowVariant === 'group_detail_value_only')
+                                                <span class="text-gray-800 dark:text-gray-100 whitespace-pre-wrap break-words">{{ $rowValue }}</span>
+                                            @else
+                                                <span class="font-medium text-gray-700 dark:text-gray-300 break-words">{{ $displayLabel }}:</span>
+                                                <span class="text-gray-800 dark:text-gray-100 whitespace-pre-wrap break-words">{{ $rowValue }}</span>
+                                            @endif
+                                            @if ($needsReview && ! $isReview)
+                                                <span class="inline-flex items-center rounded-full border border-amber-500 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-100">
+                                                    {{ __('intake.normalized_draft_needs_review_badge') }}
+                                                </span>
+                                            @endif
+                                        </div>
                                         @if (! empty($row['review_hint']))
                                             <p class="mt-1 pl-3 text-[11px] font-medium text-amber-800 dark:text-amber-200">
                                                 {{ $row['review_hint'] }}

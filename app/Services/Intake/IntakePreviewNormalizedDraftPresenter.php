@@ -36,7 +36,9 @@ final class IntakePreviewNormalizedDraftPresenter
     /** @var list<string> */
     private const BASIC_INFO_FIELDS = [
         'full_name', 'gender', 'date_of_birth', 'birth_time', 'birth_place_text',
-        'religion', 'caste', 'sub_caste', 'marital_status', 'address_line',
+        'religion', 'caste', 'sub_caste', 'marital_status',
+        'primary_contact_number_2', 'primary_contact_number_3',
+        'address_line',
     ];
 
     /** @var list<string> */
@@ -224,7 +226,7 @@ final class IntakePreviewNormalizedDraftPresenter
      * @param  array<string, list<array{reason: string, raw: string}>>  $reviewMap
      * @return array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}
      */
-    private function displayRow(string $label, string $value, ?string $reviewFieldKey, array $reviewMap): array
+    private function displayRow(string $label, string $value, ?string $reviewFieldKey, array $reviewMap, array $meta = []): array
     {
         $needsReview = false;
         $reviewReason = null;
@@ -238,14 +240,14 @@ final class IntakePreviewNormalizedDraftPresenter
             }
         }
 
-        return [
+        return array_merge([
             'label' => $label,
             'value' => $value,
             'field' => $reviewFieldKey,
             'needs_review' => $needsReview,
             'review_reason' => $reviewReason !== '' ? $reviewReason : null,
             'review_hint' => $reviewHint,
-        ];
+        ], $meta);
     }
 
     /**
@@ -265,7 +267,7 @@ final class IntakePreviewNormalizedDraftPresenter
             }
             $rows[] = $this->displayRow(
                 $this->fieldLabel($field),
-                $value,
+                $this->formatFieldValue($field, $value),
                 'core.'.$field,
                 $reviewMap
             );
@@ -370,8 +372,71 @@ final class IntakePreviewNormalizedDraftPresenter
      */
     private function familyDetailsRows(array $core, array $normalized, array $reviewMap): array
     {
-        $rows = $this->coreRows($core, self::FAMILY_DETAIL_FIELDS, $reviewMap);
+        $rows = [];
 
+        $fatherName = $this->stringify($core['father_name'] ?? null);
+        if ($fatherName !== '') {
+            $rows[] = $this->groupHeadingRow(
+                app()->getLocale() === 'mr' ? 'वडील' : 'Father',
+                $fatherName,
+                false,
+                null,
+                $reviewMap
+            );
+            foreach ([
+                'father_occupation' => $this->familyDetailLabel('occupation'),
+                'father_extra_info' => $this->familyDetailLabel('extra'),
+                'father_contact_1' => $this->familyDetailLabel('contact_1'),
+                'father_contact_2' => $this->familyDetailLabel('contact_2'),
+                'father_contact_3' => $this->familyDetailLabel('contact_3'),
+            ] as $field => $displayLabel) {
+                $value = $this->stringify($core[$field] ?? null);
+                if ($value === '') {
+                    continue;
+                }
+                $rows[] = $this->groupDetailRow(
+                    $this->fieldLabel($field),
+                    $this->formatFieldValue($field, $value),
+                    'core.'.$field,
+                    $reviewMap,
+                    false,
+                    ['display_label' => $displayLabel]
+                );
+            }
+        }
+
+        $motherName = $this->stringify($core['mother_name'] ?? null);
+        if ($motherName !== '') {
+            $rows[] = $this->groupHeadingRow(
+                app()->getLocale() === 'mr' ? 'आई' : 'Mother',
+                $motherName,
+                $rows !== [],
+                null,
+                $reviewMap
+            );
+            foreach ([
+                'mother_occupation' => $this->familyDetailLabel('occupation'),
+                'mother_extra_info' => $this->familyDetailLabel('extra'),
+                'mother_contact_1' => $this->familyDetailLabel('contact_1'),
+                'mother_contact_2' => $this->familyDetailLabel('contact_2'),
+                'mother_contact_3' => $this->familyDetailLabel('contact_3'),
+            ] as $field => $displayLabel) {
+                $value = $this->stringify($core[$field] ?? null);
+                if ($value === '') {
+                    continue;
+                }
+                $rows[] = $this->groupDetailRow(
+                    $this->fieldLabel($field),
+                    $this->formatFieldValue($field, $value),
+                    'core.'.$field,
+                    $reviewMap,
+                    false,
+                    ['display_label' => $displayLabel]
+                );
+            }
+        }
+
+        $addressRows = [];
         foreach ($normalized['parents_addresses'] ?? [] as $index => $address) {
             if (! is_array($address)) {
                 continue;
@@ -380,10 +445,41 @@ final class IntakePreviewNormalizedDraftPresenter
             if ($addrLine === '') {
                 continue;
             }
-            $rows[] = $this->displayRow(
+            $addressRows[] = $this->groupDetailRow(
                 $this->parentsAddressLabel($address, $index),
                 $this->parentsAddressValue($address, $addrLine),
                 null,
+                $reviewMap,
+                false,
+                ['display_label' => $this->parentsAddressDetailLabel($address, $index)]
+            );
+        }
+        if ($addressRows !== []) {
+            $rows[] = $this->groupHeadingRow(
+                $this->familyAddressHeading(),
+                '',
+                $rows !== [],
+                null,
+                $reviewMap
+            );
+            array_push($rows, ...$addressRows);
+        }
+
+        foreach ([
+            'family_income',
+            'family_type',
+            'family_type_id',
+            'family_status',
+            'family_values',
+        ] as $field) {
+            $value = $this->stringify($core[$field] ?? null);
+            if ($value === '') {
+                continue;
+            }
+            $rows[] = $this->displayRow(
+                $this->fieldLabel($field),
+                $this->formatFieldValue($field, $value),
+                'core.'.$field,
                 $reviewMap
             );
         }
@@ -399,24 +495,19 @@ final class IntakePreviewNormalizedDraftPresenter
     private function siblingRows(array $normalized, array $reviewMap): array
     {
         $rows = [];
-        $expanded = $this->expandedSiblingPreviewRows($normalized['siblings'] ?? []);
-        $relationTotals = $this->siblingRelationTotals($expanded);
+        $siblings = is_array($normalized['siblings'] ?? null) ? $normalized['siblings'] : [];
+        $relationTotals = $this->siblingRelationTotals($siblings);
         $relationOccurrences = [];
-        foreach ($expanded as $sibling) {
+        foreach ($siblings as $sibling) {
             if (! is_array($sibling)) {
                 continue;
             }
             $relationType = $this->stringify($sibling['relation_type'] ?? null);
             $relationOccurrences[$relationType] = ($relationOccurrences[$relationType] ?? 0) + 1;
             $prefix = $this->siblingRelationDisplayLabel($relationType, $relationTotals, $relationOccurrences[$relationType]);
-            foreach ($this->siblingDisplayParts($sibling) as $part) {
-                $rows[] = $this->displayRow(
-                    $prefix.' '.$part['label'],
-                    $part['value'],
-                    null,
-                    $reviewMap
-                );
-            }
+            $name = $this->stringify($sibling['name'] ?? null);
+            $rows[] = $this->groupHeadingRow($prefix, $name, $rows !== [], null, $reviewMap);
+            array_push($rows, ...$this->groupedSiblingDetailRows($sibling, $prefix, $relationType, $reviewMap));
         }
 
         return $rows;
@@ -573,8 +664,11 @@ final class IntakePreviewNormalizedDraftPresenter
     private function siblingRelationDisplayLabel(string $relationType, array $relationTotals, int $occurrence): string
     {
         $canonical = $this->canonicalSiblingRelation($relationType);
-        $label = $this->relativeMasterLabel('sibling', $canonical)
-            ?? ucfirst(str_replace('_', ' ', $relationType !== '' ? $relationType : 'Sibling'));
+        $label = $this->localizedRelationDisplayLabel(
+            'sibling',
+            $canonical,
+            ucfirst(str_replace('_', ' ', $relationType !== '' ? $relationType : 'Sibling'))
+        );
 
         $numbered = match ($canonical) {
             'brother' => ($relationTotals['brother'] ?? 0) > 1,
@@ -600,25 +694,32 @@ final class IntakePreviewNormalizedDraftPresenter
 
     /**
      * @param  array<string, mixed>  $sibling
-     * @return list<array{label: string, value: string}>
+     * @return list<array{label: string, value: string, absolute_label?: bool}>
      */
-    private function siblingDisplayParts(array $sibling): array
+    private function siblingDisplayParts(array $sibling, string $prefix, string $relationType): array
     {
         $parts = [];
         foreach ([
-            'name' => 'Name',
-            'marital_status' => 'Married',
-            'contact_number' => 'Mobile 1',
-            'contact_number_2' => 'Mobile 2',
-            'contact_number_3' => 'Mobile 3',
-            'occupation' => 'Occupation',
-            'address_line' => 'Address',
-            'location_display' => 'Location',
-            'notes' => 'Additional info',
-        ] as $field => $label) {
+            'name',
+            'marital_status',
+            'contact_number',
+            'contact_number_2',
+            'contact_number_3',
+            'occupation',
+            'address_line',
+            'location_display',
+            'notes',
+        ] as $field) {
             $value = $this->stringify($sibling[$field] ?? null);
             if ($value !== '') {
-                $parts[] = ['label' => $label, 'value' => $value];
+                $part = [
+                    'label' => $this->siblingPartLabel($field, $prefix, $relationType),
+                    'value' => $this->siblingPartValue($field, $value),
+                ];
+                if ($field === 'marital_status') {
+                    $part['absolute_label'] = true;
+                }
+                $parts[] = $part;
             }
         }
 
@@ -647,7 +748,7 @@ final class IntakePreviewNormalizedDraftPresenter
             $seenValues[$dedupeKey] = true;
             $rows[] = $this->displayRow(
                 $this->fieldLabel($field),
-                $field === 'height_cm' ? $this->formatHeight($value) : $value,
+                $this->formatFieldValue($field, $value),
                 'core.'.$field,
                 $reviewMap
             );
@@ -682,15 +783,9 @@ final class IntakePreviewNormalizedDraftPresenter
                 $relationTotals[$relationType] ?? 0,
                 $relationOccurrences[$relationType]
             );
-
-            foreach ($this->relativeDisplayParts($relative) as $part) {
-                $rows[] = $this->displayRow(
-                    $part['label'] === '' ? $prefix : $prefix.' '.$part['label'],
-                    $part['value'],
-                    $relativesFlagged ? 'relatives' : null,
-                    $reviewMap
-                );
-            }
+            $name = $this->stringify($relative['name'] ?? null);
+            $rows[] = $this->groupHeadingRow($prefix, $name, $rows !== [], $relativesFlagged ? 'relatives' : null, $reviewMap);
+            array_push($rows, ...$this->groupedRelativeDetailRows($relative, $prefix, $relativesFlagged ? 'relatives' : null, $reviewMap));
         }
 
         return $rows;
@@ -743,24 +838,20 @@ final class IntakePreviewNormalizedDraftPresenter
                 $relationTotals[$relationType] ?? 0,
                 $relationOccurrences[$relationType]
             );
-
-            foreach ($this->relativeDisplayParts($relative) as $part) {
-                $rows[] = $this->displayRow(
-                    $part['label'] === '' ? $prefix : $prefix.' '.$part['label'],
-                    $part['value'],
-                    $relativesFlagged ? 'relatives' : null,
-                    $reviewMap
-                );
-            }
+            $name = $this->stringify($relative['name'] ?? null);
+            $rows[] = $this->groupHeadingRow($prefix, $name, $rows !== [], $relativesFlagged ? 'relatives' : null, $reviewMap);
+            array_push($rows, ...$this->groupedRelativeDetailRows($relative, $prefix, $relativesFlagged ? 'relatives' : null, $reviewMap));
         }
 
         $other = $this->stringify($core['other_relatives_text'] ?? null);
         if ($other !== '') {
-            $rows[] = $this->displayRow(
+            $rows[] = $this->groupHeadingRow($this->fieldLabel('other_relatives_text'), '', $rows !== [], 'core.other_relatives_text', $reviewMap);
+            $rows[] = $this->groupDetailRow(
                 $this->fieldLabel('other_relatives_text'),
                 $other,
                 'core.other_relatives_text',
-                $reviewMap
+                $reviewMap,
+                true
             );
         }
 
@@ -816,11 +907,11 @@ final class IntakePreviewNormalizedDraftPresenter
         $parts = [];
         foreach ([
             'name' => '',
-            'contact_number' => 'Mobile',
-            'occupation' => 'Occupation',
-            'address_line' => 'Address',
-            'location_display' => 'Location',
-            'notes' => 'Additional info',
+            'contact_number' => $this->relationFieldLabel('contact_number'),
+            'occupation' => $this->relationFieldLabel('occupation'),
+            'address_line' => $this->relationFieldLabel('address_line'),
+            'location_display' => $this->relationFieldLabel('location_display'),
+            'notes' => $this->relationFieldLabel('notes'),
         ] as $field => $label) {
             $value = $this->stringify($relative[$field] ?? null);
             if ($value !== '') {
@@ -849,10 +940,7 @@ final class IntakePreviewNormalizedDraftPresenter
     {
         $group = $this->relativeGroupForType($relationType);
         if ($group !== null) {
-            $label = $this->relativeMasterLabel($group, $relationType);
-            if ($label !== null) {
-                return $label;
-            }
+            return $this->localizedRelationDisplayLabel($group, $relationType, str_replace('_', ' ', $relationType));
         }
 
         return str_replace('_', ' ', $relationType);
@@ -982,13 +1070,13 @@ final class IntakePreviewNormalizedDraftPresenter
         $assetRows = $this->previewPropertyAssets($normalized, $rawText);
 
         foreach ($assetRows as $index => $asset) {
-            $rows[] = $this->displayRow('Property Asset '.($index + 1), '', null, $reviewMap);
+            $rows[] = $this->displayRow(__('intake.normalized_draft_property_asset_row', ['n' => $index + 1]), '', null, $reviewMap);
             foreach ($this->propertyAssetDisplayParts($asset, true) as $part) {
                 $rows[] = $this->displayRow($part['label'], $part['value'], null, $reviewMap);
             }
         }
 
-        $rows[] = $this->displayRow('Notes', $this->previewPropertySectionNotes($normalized, $assetRows), null, $reviewMap);
+        $rows[] = $this->displayRow(__('intake.normalized_draft_property_notes_label'), $this->previewPropertySectionNotes($normalized, $assetRows), null, $reviewMap);
 
         return $rows;
     }
@@ -1283,31 +1371,33 @@ final class IntakePreviewNormalizedDraftPresenter
         $bhk = $this->previewBhkFromRaw($raw);
 
         if ($bhk !== null && $quantity === '1') {
-            return $bhk.' Flat';
+            return $bhk.' '.$this->propertyGeneratedTerm('flat_singular');
         }
 
         if ($quantity !== null) {
-            $parts[] = $quantity === '1' ? 'Flat' : $quantity.' Flats';
+            $parts[] = $quantity === '1'
+                ? $this->propertyGeneratedTerm('flat_singular')
+                : $quantity.' '.$this->propertyGeneratedTerm('flat_plural');
         }
         if ($bhk !== null) {
-            $parts[] = $quantity === null ? $bhk.' Flat' : $bhk;
+            $parts[] = $quantity === null ? $bhk.' '.$this->propertyGeneratedTerm('flat_singular') : $bhk;
         }
         if ($parts !== []) {
             return implode(', ', $parts);
         }
 
-        return preg_match('/(?:flat|flats|फ्लॅट|फ्लाट)/ui', $raw) ? 'Flat' : '';
+        return preg_match('/(?:flat|flats|फ्लॅट|फ्लाट)/ui', $raw) ? $this->propertyGeneratedTerm('flat_singular') : '';
     }
 
     private function previewCommercialNotes(string $raw): string
     {
         $parts = [];
         if (preg_match('/(?:\boffice\b|ऑफिस)/ui', $raw)) {
-            $parts[] = 'Office';
+            $parts[] = $this->propertyGeneratedTerm('office');
         }
         $quantity = $this->previewCountFromRaw($raw, '(?:commercial|office|व्यावसायिक|ऑफिस)');
         if ($quantity !== null && $parts === []) {
-            $parts[] = $quantity.' Commercial';
+            $parts[] = $quantity.' '.$this->propertyGeneratedTerm('commercial');
         }
 
         return implode(', ', $parts);
@@ -1317,10 +1407,10 @@ final class IntakePreviewNormalizedDraftPresenter
     {
         $parts = [];
         if (preg_match('/(?:farm\s*land|शेती|बागायत|agri|agriculture)/ui', $raw)) {
-            $parts[] = 'Farm land';
+            $parts[] = $this->propertyGeneratedTerm('farm_land');
         }
         if (preg_match('/बागायत/u', $raw)) {
-            $parts[] = 'Bagayat';
+            $parts[] = $this->propertyGeneratedTerm('bagayat');
         }
         if (preg_match('/([0-9०-९]+(?:\.[0-9०-९]+)?|एक|दोन|तीन|चार|पाच|सहा|सात|आठ|नऊ|दहा)\s*(एकर|एक्कर|acre|acres|guntha|गुंठे?|गुंठा)/ui', $raw, $m)) {
             $parts[] = trim($this->previewNumberTokenToDisplay($m[1]).' '.$this->normalizeLandUnitLabel($m[2]));
@@ -1341,9 +1431,9 @@ final class IntakePreviewNormalizedDraftPresenter
     private function previewCountNotes(string $raw, string $type): string
     {
         $map = [
-            'house' => ['pattern' => '(?:घर|घरे|house|houses)', 'label' => 'Houses'],
-            'shop' => ['pattern' => '(?:shop|shops|दुकान|दुकाने|गाळा|गाळे)', 'label' => 'Shops'],
-            'plot' => ['pattern' => '(?:plot|plots|प्लॉट)', 'label' => 'Plots'],
+            'house' => ['pattern' => '(?:घर|घरे|house|houses)', 'label' => $this->propertyGeneratedTerm('house_plural')],
+            'shop' => ['pattern' => '(?:shop|shops|दुकान|दुकाने|गाळा|गाळे)', 'label' => $this->propertyGeneratedTerm('shop_plural')],
+            'plot' => ['pattern' => '(?:plot|plots|प्लॉट)', 'label' => $this->propertyGeneratedTerm('plot_plural')],
         ];
         $config = $map[$type] ?? null;
         if ($config === null) {
@@ -1631,27 +1721,27 @@ final class IntakePreviewNormalizedDraftPresenter
     {
         $parts = [];
         foreach ([
-            'asset_type_label' => 'Asset Type',
-            'asset_type' => 'Asset Type',
-            'asset_type_key' => 'Asset Type',
-            'location' => 'Location',
-            'ownership_type_label' => 'Ownership Type',
-            'ownership_type' => 'Ownership Type',
-            'ownership_type_key' => 'Ownership Type',
-            'additional_information' => 'Additional Information',
-            'notes' => 'Additional Information',
+            'asset_type_label' => __('components.property.asset_type'),
+            'asset_type' => __('components.property.asset_type'),
+            'asset_type_key' => __('components.property.asset_type'),
+            'location' => __('components.property.location'),
+            'ownership_type_label' => __('components.property.ownership_type'),
+            'ownership_type' => __('components.property.ownership_type'),
+            'ownership_type_key' => __('components.property.ownership_type'),
+            'additional_information' => __('components.property.additional_information'),
+            'notes' => __('components.property.additional_information'),
         ] as $field => $label) {
             $value = $this->stringify($asset[$field] ?? null);
             if ($value === '' && ! $includeMissing) {
                 continue;
             }
-            if ($label === 'Asset Type' && $this->hasPropertyPart($parts, 'Asset Type')) {
+            if ($label === __('components.property.asset_type') && $this->hasPropertyPart($parts, __('components.property.asset_type'))) {
                 continue;
             }
-            if ($label === 'Ownership Type' && $this->hasPropertyPart($parts, 'Ownership Type')) {
+            if ($label === __('components.property.ownership_type') && $this->hasPropertyPart($parts, __('components.property.ownership_type'))) {
                 continue;
             }
-            if ($label === 'Additional Information' && $this->hasPropertyPart($parts, 'Additional Information')) {
+            if ($label === __('components.property.additional_information') && $this->hasPropertyPart($parts, __('components.property.additional_information'))) {
                 continue;
             }
             $parts[] = ['label' => $label, 'value' => $this->propertyOptionDisplayValue($field, $value !== '' ? $value : $this->propertyNotMentionedValue())];
@@ -1677,22 +1767,26 @@ final class IntakePreviewNormalizedDraftPresenter
     private function propertyOptionDisplayValue(string $field, string $value): string
     {
         $key = mb_strtolower(trim($value));
-        if (in_array($field, ['asset_type', 'asset_type_key'], true)) {
+        if (in_array($field, ['asset_type_label', 'asset_type', 'asset_type_key'], true)) {
             return [
-                'land' => 'Land',
-                'house' => 'House',
-                'vehicle' => 'Vehicle',
-                'gold' => 'Gold',
-                'financial' => 'Financial',
-                'other' => 'Other',
+                'flat' => __('intake.normalized_draft_property_option.flat'),
+                'plot' => __('intake.normalized_draft_property_option.plot'),
+                'shop' => __('intake.normalized_draft_property_option.shop'),
+                'commercial' => __('intake.normalized_draft_property_option.commercial'),
+                'land' => __('intake.normalized_draft_property_option.land'),
+                'house' => __('intake.normalized_draft_property_option.house'),
+                'vehicle' => __('intake.normalized_draft_property_option.vehicle'),
+                'gold' => __('intake.normalized_draft_property_option.gold'),
+                'financial' => __('intake.normalized_draft_property_option.financial'),
+                'other' => __('intake.normalized_draft_property_option.other'),
             ][$key] ?? $value;
         }
-        if (in_array($field, ['ownership_type', 'ownership_type_key'], true)) {
+        if (in_array($field, ['ownership_type_label', 'ownership_type', 'ownership_type_key'], true)) {
             return [
-                'sole' => 'Sole',
-                'joint' => 'Joint',
-                'family' => 'Family',
-                'other' => 'Other',
+                'sole' => __('intake.normalized_draft_property_option.sole'),
+                'joint' => __('intake.normalized_draft_property_option.joint'),
+                'family' => __('intake.normalized_draft_property_option.family'),
+                'other' => __('intake.normalized_draft_property_option.other'),
             ][$key] ?? $value;
         }
 
@@ -1723,7 +1817,7 @@ final class IntakePreviewNormalizedDraftPresenter
 
     private function propertyNotMentionedValue(): string
     {
-        return 'Not mentioned';
+        return __('intake.normalized_draft_not_mentioned');
     }
 
     /**
@@ -1797,14 +1891,14 @@ final class IntakePreviewNormalizedDraftPresenter
         $present = [];
         $patterns = [
             'mangal_dosh_type' => '/मंगळ(?:िक|दोष)|mangal/ui',
-            'navras_name' => '/नावरस|रास\s*नाव|राशी\s*नाव/u',
+            'navras_name' => '/नावरस|नावरस\s*नाव|रास\s*नाव|राशी\s*नाव|नावास\s*नाव/u',
             'devak' => '/देवक/u',
-            'kuldaivat' => '/कुलदैवत|कलदैवत|कुलस्वामी|कुळस्वामी/u',
+            'kuldaivat' => '/कुलदैवत|कुलदेवत|कलदैवत|कुलस्वामी|कुळस्वामी/u',
             'gotra' => '/गोत्र/u',
             'birth_weekday' => '/जन्मवार|वार/u',
-            'nakshatra' => '/नक्षत्र/u',
+            'nakshatra' => '/नक्षत्र|जन्मनक्षत्र/u',
             'charan' => '/चरण/u',
-            'rashi' => '/रास|राशी/u',
+            'rashi' => '/जन्मरास|रास|राशी/u',
             'gan' => '/गण/u',
             'nadi' => '/नाडी|नाड\b/u',
             'yoni' => '/योनी/u',
@@ -1858,18 +1952,28 @@ final class IntakePreviewNormalizedDraftPresenter
     {
         $residual = OcrNormalize::normalizeDigits($line);
         $residual = str_replace(['व्याघ्र', 'चचत्रा'], ['वाघ', 'चित्रा'], $residual);
+        $normalizedDisplayValues = [];
         foreach ($displayValues as $value) {
             $needle = OcrNormalize::normalizeDigits($value);
             $needle = str_replace(['व्याघ्र', 'चचत्रा'], ['वाघ', 'चित्रा'], $needle);
             if ($needle === '') {
                 continue;
             }
+            $normalizedDisplayValues[] = $needle;
+        }
+
+        usort($normalizedDisplayValues, static fn (string $left, string $right): int => mb_strlen($right) <=> mb_strlen($left));
+
+        foreach ($normalizedDisplayValues as $needle) {
             $residual = str_replace($needle, ' ', $residual);
         }
 
-        $residual = preg_replace('/(?:रास\s*नाव|राशी\s*नाव|रास|राशी|नक्षत्र|देवक|कुलदैवत|कलदैवत|कुलस्वामी|कुळस्वामी|नाडी|नाड\b|गण|चरण|गोत्र|योनी|वर्ण|वश्य|वैरवर्ग|नावरस|मंगळ(?:िक|दोष)?|जन्मवार(?:\s*आणि\s*वेळ|\s*व\s*वेळ)?|राशी\s*स्वामी|रास\s*स्वामी|स्वामी|vashya|rashi\s*lord)/ui', ' ', $residual) ?? $residual;
+        $residual = preg_replace('/(?:नावरस\s*नाव|रास\s*नाव|राशी\s*नाव|नावास\s*नाव|जन्मरास|रास|राशी|जन्मनक्षत्र|नक्षत्र|देवक|कुलदैवत|कुलदेवत|कलदैवत|कुलस्वामी|कुळस्वामी|नाडी|नाड\b|गण|चरण|गोत्र|योनी|वर्ण|वश्य|वैरवर्ग|नावरस|मंगळ(?:िक|दोष)?|जन्मवार(?:\s*आणि\s*वेळ|\s*व\s*वेळ)?|राशी\s*स्वामी|रास\s*स्वामी|स्वामी|vashya|rashi\s*lord)/ui', ' ', $residual) ?? $residual;
         $residual = preg_replace('/[:\-–—,.;(){}\[\]\/\\\\]+/u', ' ', $residual) ?? $residual;
         $residual = preg_replace('/\b(?:and|or|time)\b/ui', ' ', $residual) ?? $residual;
+        $residual = preg_replace('/(?:रक्त\s*गट|रक्तगट|रक[\x{094D}\x{200C}\s]*त\s*गट|blood\s*group|ब्लड\s*ग्रुप|ब्लड\s*ग्रप|कुंची|उंची|height|रंग|complexion)/ui', ' ', $residual) ?? $residual;
+        $residual = preg_replace('/\b(?:A|B|AB|O)\s*[+-](?:VE)?\b/ui', ' ', $residual) ?? $residual;
+        $residual = preg_replace('/^(?:गोरा|गोरी|निमगोरा|निमगोरी|सावळा|सावळी|गव्हाळ|fair|wheatish|dusky)$/ui', ' ', trim($residual)) ?? $residual;
         $residual = preg_replace('/\s+/u', ' ', trim($residual)) ?? trim($residual);
 
         return $residual !== '';
@@ -1925,12 +2029,12 @@ final class IntakePreviewNormalizedDraftPresenter
                 continue;
             }
             $valueParts = array_filter([
-                $reason,
-                $raw !== '' ? 'Raw: '.$raw : '',
-                $suggested !== '' ? 'Suggested section: '.$suggested : '',
+                $this->reviewReasonLabel($reason),
+                $raw !== '' ? __('intake.normalized_draft_review_raw_prefix').' '.$raw : '',
+                $suggested !== '' ? __('intake.normalized_draft_review_suggested_section_prefix').' '.$this->reviewSectionLabel($suggested) : '',
             ]);
             $row = $this->displayRow(
-                $field !== '' ? $field : __('intake.normalized_draft_review_row', ['n' => $index + 1]),
+                $field !== '' ? $this->reviewFieldLabel($field) : __('intake.normalized_draft_review_row', ['n' => $index + 1]),
                 $valueParts !== [] ? implode(' — ', $valueParts) : '—',
                 $field !== '' ? $field : null,
                 [$field => [['reason' => $reason, 'raw' => $raw]]]
@@ -1944,8 +2048,9 @@ final class IntakePreviewNormalizedDraftPresenter
 
     private function fieldLabel(string $field): string
     {
-        if ($field === 'height_cm') {
-            return 'Height';
+        $translated = __('intake.core_suggestion_field.'.$field);
+        if ($translated !== 'intake.core_suggestion_field.'.$field) {
+            return $translated;
         }
 
         $translated = __('profile.'.$field);
@@ -1954,6 +2059,23 @@ final class IntakePreviewNormalizedDraftPresenter
         }
 
         return ucfirst(str_replace('_', ' ', $field));
+    }
+
+    private function formatFieldValue(string $field, string $value): string
+    {
+        if ($field === 'height_cm') {
+            return $this->formatHeight($value);
+        }
+
+        if (in_array($field, ['gender_id', 'gender'], true)) {
+            $normalized = mb_strtolower(trim($value));
+            $translated = __('wizard.'.$normalized);
+            if ($translated !== 'wizard.'.$normalized) {
+                return $translated;
+            }
+        }
+
+        return $value;
     }
 
     private function stringify(mixed $value): string
@@ -1991,8 +2113,8 @@ final class IntakePreviewNormalizedDraftPresenter
     private function addressLabel(string $type): string
     {
         return match ($type) {
-            'native' => 'Native / Parents address',
-            'current' => 'Residential / Current address',
+            'native' => __('intake.normalized_draft_address_native'),
+            'current' => __('intake.normalized_draft_address_current'),
             default => __('intake.normalized_draft_address_typed', ['type' => $type]),
         };
     }
@@ -2007,7 +2129,7 @@ final class IntakePreviewNormalizedDraftPresenter
             return __('intake.normalized_draft_parents_address_row', ['n' => $index + 1]);
         }
 
-        return __('intake.normalized_draft_parents_address_row', ['n' => $index + 1]).' ('.$type.')';
+        return __('intake.normalized_draft_parents_address_row', ['n' => $index + 1]).' ('.$this->localizedAddressType($type).')';
     }
 
     /**
@@ -2069,5 +2191,401 @@ final class IntakePreviewNormalizedDraftPresenter
         }
 
         return false;
+    }
+
+    private function siblingPartLabel(string $field, string $prefix, string $relationType): string
+    {
+        return match ($field) {
+            'name' => $this->relationFieldLabel('name'),
+            'marital_status' => $this->siblingMaritalStatusLabel($prefix, $relationType),
+            'contact_number' => $this->indexedRelationFieldLabel('contact_number', 1),
+            'contact_number_2' => $this->indexedRelationFieldLabel('contact_number', 2),
+            'contact_number_3' => $this->indexedRelationFieldLabel('contact_number', 3),
+            'occupation' => $this->relationFieldLabel('occupation'),
+            'address_line' => $this->relationFieldLabel('address_line'),
+            'location_display' => $this->relationFieldLabel('location_display'),
+            'notes' => $this->relationFieldLabel('notes'),
+            default => ucfirst(str_replace('_', ' ', $field)),
+        };
+    }
+
+    private function siblingPartValue(string $field, string $value): string
+    {
+        if ($field !== 'marital_status') {
+            return $value;
+        }
+
+        $normalized = mb_strtolower(trim($value));
+
+        return match (app()->getLocale()) {
+            'mr' => match ($normalized) {
+                'married' => 'विवाहित',
+                'unmarried', 'single', 'never_married' => 'अविवाहित',
+                'divorced' => 'घटस्फोट',
+                'widowed' => 'विधुर/विधवा',
+                default => $value,
+            },
+            default => $value,
+        };
+    }
+
+    private function relationFieldLabel(string $field): string
+    {
+        return match ($field) {
+            'name' => __('components.relation.name'),
+            'contact_number' => __('components.relation.mobile'),
+            'occupation' => __('components.relation.occupation'),
+            'address_line' => __('components.relation.address'),
+            'location_display' => __('components.relation.address'),
+            'notes' => __('components.relation.additional_info'),
+            default => $this->fieldLabel($field),
+        };
+    }
+
+    private function indexedRelationFieldLabel(string $field, int $index): string
+    {
+        return $this->relationFieldLabel($field).' '.$index;
+    }
+
+    private function siblingMaritalStatusLabel(string $prefix, string $relationType): string
+    {
+        $canonical = $this->canonicalSiblingRelation($relationType);
+        $normalizedPrefix = trim($prefix);
+
+        if (app()->getLocale() === 'mr') {
+            return match ($canonical) {
+                'brother' => preg_match('/\s+\d+$/u', $normalizedPrefix) === 1
+                    ? $normalizedPrefix.' ची विवाह माहिती'
+                    : 'भावाची विवाह माहिती',
+                'sister' => preg_match('/\s+\d+$/u', $normalizedPrefix) === 1
+                    ? $normalizedPrefix.' ची विवाह माहिती'
+                    : 'बहिणीची विवाह माहिती',
+                default => $normalizedPrefix.' '.__('components.relation.spouse_details'),
+            };
+        }
+
+        return $normalizedPrefix.' '.__('components.relation.married');
+    }
+
+    private function reviewFieldLabel(string $field): string
+    {
+        $translated = __('intake.normalized_draft_review_field.'.$field);
+        if ($translated !== 'intake.normalized_draft_review_field.'.$field) {
+            return $translated;
+        }
+
+        if (str_starts_with($field, 'core.')) {
+            $coreField = substr($field, 5);
+            $coreField = match ($coreField) {
+                'gender' => 'gender_id',
+                'religion' => 'religion_id',
+                default => $coreField,
+            };
+
+            return $this->fieldLabel($coreField);
+        }
+
+        return $field;
+    }
+
+    private function reviewReasonLabel(string $reason): string
+    {
+        if ($reason === '') {
+            return '';
+        }
+
+        $translated = __('intake.normalized_draft_review_reason.'.$reason);
+
+        return $translated !== 'intake.normalized_draft_review_reason.'.$reason
+            ? $translated
+            : ucfirst(str_replace('_', ' ', $reason));
+    }
+
+    private function reviewSectionLabel(string $section): string
+    {
+        $translated = __('intake.normalized_draft_review_section.'.$section);
+
+        return $translated !== 'intake.normalized_draft_review_section.'.$section
+            ? $translated
+            : $section;
+    }
+
+    private function localizedRelationDisplayLabel(string $group, string $relationType, string $default): string
+    {
+        $label = $this->relativeMasterLabel($group, $relationType);
+        if ($label !== null && (! $this->shouldPreferTranslatedRelationLabel($label))) {
+            return $label;
+        }
+
+        $translated = __('intake.normalized_draft_relation_label.'.$relationType);
+        if ($translated !== 'intake.normalized_draft_relation_label.'.$relationType) {
+            return $translated;
+        }
+
+        return $label ?? $default;
+    }
+
+    private function shouldPreferTranslatedRelationLabel(string $label): bool
+    {
+        return app()->getLocale() === 'mr' && preg_match('/^[\p{Latin}\p{Common}\p{Zs}()\'".,&\-0-9]+$/u', $label) === 1;
+    }
+
+    private function localizedAddressType(string $type): string
+    {
+        $normalized = mb_strtolower(trim($type));
+        $translated = __('intake.normalized_draft_address_type.'.$normalized);
+        if ($translated !== 'intake.normalized_draft_address_type.'.$normalized) {
+            return $translated;
+        }
+
+        return $type;
+    }
+
+    private function propertyGeneratedTerm(string $key): string
+    {
+        $translated = __('intake.normalized_draft_property_generated.'.$key);
+
+        return $translated !== 'intake.normalized_draft_property_generated.'.$key
+            ? $translated
+            : $key;
+    }
+
+    private function groupHeadingRow(string $label, string $value, bool $spacingBefore, ?string $reviewFieldKey = null, array $reviewMap = []): array
+    {
+        return $this->displayRow($label, $value, $reviewFieldKey, $reviewMap, [
+            'row_variant' => 'group_heading',
+            'spacing_before' => $spacingBefore,
+            'display_heading_text' => $this->groupHeadingText($label, $value),
+        ]);
+    }
+
+    private function groupDetailRow(string $label, string $value, ?string $reviewFieldKey, array $reviewMap, bool $valueOnly = false, array $meta = []): array
+    {
+        return $this->displayRow($label, $value, $reviewFieldKey, $reviewMap, array_merge([
+            'row_variant' => $valueOnly ? 'group_detail_value_only' : 'group_detail',
+        ], $meta));
+    }
+
+    private function groupHeadingText(string $prefix, string $name): string
+    {
+        return $name !== '' ? $prefix.' - '.$name : $prefix;
+    }
+
+    /**
+     * @param  array<string, mixed>  $sibling
+     * @param  array<string, list<array{reason: string, raw: string}>>  $reviewMap
+     * @return list<array<string, mixed>>
+     */
+    private function groupedSiblingDetailRows(array $sibling, string $prefix, string $relationType, array $reviewMap): array
+    {
+        $rows = [];
+        $marital = $this->stringify($sibling['marital_status'] ?? null);
+        if ($marital !== '') {
+            $rows[] = $this->groupDetailRow(
+                $this->siblingMaritalStatusLabel($prefix, $relationType),
+                $this->siblingPartValue('marital_status', $marital),
+                null,
+                $reviewMap,
+                false,
+                ['display_label' => $this->compactMaritalLabel($relationType)]
+            );
+        }
+
+        $spouse = is_array($sibling['spouse'] ?? null) ? $sibling['spouse'] : [];
+        if ($spouse !== []) {
+            $spouseLabel = $this->compactSpouseHeading($relationType);
+            $spouseName = $this->stringify($spouse['name'] ?? null);
+            $spouseOccurrence = preg_match('/\s+(\d+)$/u', trim($prefix), $m) === 1 ? (int) $m[1] : 1;
+            $rawSpousePrefix = $this->localizedRelationDisplayLabel(
+                'sibling',
+                $this->siblingSpouseRelationFor($relationType),
+                $spouseLabel
+            ).' '.$spouseOccurrence;
+            if ($spouseName !== '') {
+                $rows[] = $this->groupDetailRow(
+                    $rawSpousePrefix.' '.$this->relationFieldLabel('name'),
+                    $spouseName,
+                    null,
+                    $reviewMap,
+                    false,
+                    ['display_label' => $spouseLabel]
+                );
+            }
+            foreach ([
+                'occupation' => $spouseLabel.' '.$this->relationFieldLabel('occupation'),
+                'occupation_title' => $spouseLabel.' '.$this->relationFieldLabel('occupation'),
+                'address_line' => $spouseLabel.' '.$this->relationFieldLabel('address_line'),
+                'location_display' => $spouseLabel.' '.$this->relationFieldLabel('location_display'),
+                'contact_number' => $spouseLabel.' '.$this->relationFieldLabel('contact_number'),
+                'contact_number_2' => $spouseLabel.' '.$this->indexedRelationFieldLabel('contact_number', 2),
+                'contact_number_3' => $spouseLabel.' '.$this->indexedRelationFieldLabel('contact_number', 3),
+                'notes' => $spouseLabel.' '.$this->relationFieldLabel('notes'),
+                'additional_info' => $spouseLabel.' '.$this->relationFieldLabel('notes'),
+            ] as $field => $label) {
+                $value = $this->stringify($spouse[$field] ?? null);
+                if ($value === '') {
+                    continue;
+                }
+                $rows[] = $this->groupDetailRow(
+                    $rawSpousePrefix.' '.$this->spouseRawFieldLabel($field),
+                    $value,
+                    null,
+                    $reviewMap,
+                    false,
+                    ['display_label' => $label]
+                );
+            }
+        }
+
+        foreach ([
+            'occupation' => $this->relationFieldLabel('occupation'),
+            'contact_number' => $this->relationFieldLabel('contact_number'),
+            'contact_number_2' => $this->indexedRelationFieldLabel('contact_number', 2),
+            'contact_number_3' => $this->indexedRelationFieldLabel('contact_number', 3),
+            'address_line' => $this->relationFieldLabel('address_line'),
+            'location_display' => $this->relationFieldLabel('location_display'),
+            'notes' => $this->relationFieldLabel('notes'),
+        ] as $field => $label) {
+            $value = $this->stringify($sibling[$field] ?? null);
+            if ($value === '') {
+                continue;
+            }
+            $rows[] = $this->groupDetailRow(
+                $prefix.' '.$this->siblingPartLabel($field, $prefix, $relationType),
+                $value,
+                null,
+                $reviewMap,
+                false,
+                ['display_label' => $label]
+            );
+        }
+
+        if ($rows === []) {
+            $rows[] = $this->groupDetailRow('', $prefix, null, $reviewMap, true);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<string, mixed>  $relative
+     * @param  array<string, list<array{reason: string, raw: string}>>  $reviewMap
+     * @return list<array<string, mixed>>
+     */
+    private function groupedRelativeDetailRows(array $relative, string $prefix, ?string $reviewFieldKey, array $reviewMap): array
+    {
+        $rows = [];
+        foreach ([
+            'occupation' => $this->relationFieldLabel('occupation'),
+            'contact_number' => $this->relationFieldLabel('contact_number'),
+            'address_line' => $this->relationFieldLabel('address_line'),
+            'location_display' => $this->relationFieldLabel('location_display'),
+            'notes' => $this->relationFieldLabel('notes'),
+        ] as $field => $label) {
+            $value = $this->stringify($relative[$field] ?? null);
+            if ($value === '') {
+                continue;
+            }
+            $rows[] = $this->groupDetailRow(
+                $prefix.' '.$label,
+                $value,
+                $reviewFieldKey,
+                $reviewMap,
+                false,
+                ['display_label' => $label]
+            );
+        }
+
+        return $rows;
+    }
+
+    private function compactMaritalLabel(string $relationType): string
+    {
+        return app()->getLocale() === 'mr'
+            ? 'वैवाहिक'
+            : 'Married';
+    }
+
+    private function compactSpouseHeading(string $relationType): string
+    {
+        $spouseRelation = $this->siblingSpouseRelationFor($relationType);
+
+        return $this->relativeRelationBaseLabel($spouseRelation);
+    }
+
+    private function familyHeading(string $type, string $name): string
+    {
+        $label = match (app()->getLocale()) {
+            'mr' => $type === 'father' ? 'वडील' : 'आई',
+            default => $type === 'father' ? 'Father' : 'Mother',
+        };
+
+        return $label.' - '.$name;
+    }
+
+    private function familyAddressHeading(): string
+    {
+        return app()->getLocale() === 'mr'
+            ? 'पालकांचा पत्ता'
+            : 'Parents address';
+    }
+
+    private function familyDetailLabel(string $key): string
+    {
+        return match (app()->getLocale()) {
+            'mr' => match ($key) {
+                'occupation' => 'व्यवसाय',
+                'extra' => 'अतिरिक्त',
+                'contact_1' => 'संपर्क 1',
+                'contact_2' => 'संपर्क 2',
+                'contact_3' => 'संपर्क 3',
+                default => $key,
+            },
+            default => match ($key) {
+                'occupation' => 'Occupation',
+                'extra' => 'Additional',
+                'contact_1' => 'Contact 1',
+                'contact_2' => 'Contact 2',
+                'contact_3' => 'Contact 3',
+                default => $key,
+            },
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $address
+     */
+    private function parentsAddressDetailLabel(array $address, int $index): string
+    {
+        $type = mb_strtolower(trim($this->stringify($address['type'] ?? null)));
+
+        return match (app()->getLocale()) {
+            'mr' => match ($type) {
+                'permanent' => 'कायम',
+                'current' => 'सध्याचा',
+                'parents' => __('intake.normalized_draft_parents_address_row', ['n' => $index + 1]),
+                default => $type !== '' ? $this->localizedAddressType($type) : __('intake.normalized_draft_parents_address_row', ['n' => $index + 1]),
+            },
+            default => match ($type) {
+                'permanent' => 'Permanent',
+                'current' => 'Current',
+                'parents' => __('intake.normalized_draft_parents_address_row', ['n' => $index + 1]),
+                default => $type !== '' ? $this->localizedAddressType($type) : __('intake.normalized_draft_parents_address_row', ['n' => $index + 1]),
+            },
+        };
+    }
+
+    private function spouseRawFieldLabel(string $field): string
+    {
+        return match ($field) {
+            'occupation', 'occupation_title' => $this->relationFieldLabel('occupation'),
+            'address_line' => $this->relationFieldLabel('address_line'),
+            'location_display' => $this->relationFieldLabel('location_display'),
+            'contact_number' => $this->indexedRelationFieldLabel('contact_number', 1),
+            'contact_number_2' => $this->indexedRelationFieldLabel('contact_number', 2),
+            'contact_number_3' => $this->indexedRelationFieldLabel('contact_number', 3),
+            'notes', 'additional_info' => $this->relationFieldLabel('notes'),
+            default => ucfirst(str_replace('_', ' ', $field)),
+        };
     }
 }

@@ -566,6 +566,8 @@ final class IntakeHtmlTableHintApplier
             'horoscope_charan' => 'charan',
             'horoscope_yoni' => 'yoni',
             'horoscope_varna' => 'varna',
+            'horoscope_vairavarga' => 'vashya',
+            'horoscope_swami' => 'rashi_lord',
             'devak' => 'devak',
             'kuldaivat' => 'kuldaivat',
             'gotra' => 'gotra',

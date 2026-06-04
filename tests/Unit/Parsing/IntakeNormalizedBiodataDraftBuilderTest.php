@@ -132,6 +132,37 @@ TXT);
         $this->assertStringNotContainsString('वसंतराव', (string) $core['full_name']);
     }
 
+    public function test_candidate_heading_skips_personal_details_section_and_uses_actual_name_heading(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+*प्रतिमा लाल रंगातील एक सजावटीचे कोपरा चिन्ह दर्शवते. यात एक शैलीकृत, वक्र डिझाइन आहे जे एका कोपऱ्यात ठेवले जाते, जे बहुतेक वेळा कागदपत्रे किंवा पुस्तकांमध्ये वापरले जाते.*
+
+- जन्म तारीख :- २२ ऑक्टोबर १९९३
+- कास्ट :- ९६ कुळी मराठा
+
+## वैयक्तिक तपशील
+
+- पित्याचे नाव :-मोहनराव गणपतराव जगताप
+- आईचे नाव :-अनिता मोहनराव जगताप
+
+## कौटुंबिक तपशील
+
+## ॥ श्री गजानन प्रसन्न ॥ ॥ श्री खंडोबा प्रसन्न ॥
+बयोडाटा
+
+*प्रतिमामध्ये एका माणसाचे वर्तुळाकार चित्र आहे. तो गडद दाढी आणि मिशा असलेला एक तरुण आहे. त्याने पांढऱ्या शर्टवर काळा नेहरू जॅकेट घातला आहे. पार्श्वभूमी गडद लाल रंगाची आहे.*
+
+## महेशकुमार मोहन जगताप
+TXT);
+
+        $core = $draft['normalized']['core'];
+        $this->assertSame('महेशकुमार मोहन जगताप', $core['full_name']);
+        $this->assertNotSame('वैयक्तिक तपशील', $core['full_name']);
+        $this->assertNotSame('कौटुंबिक तपशील', $core['full_name']);
+        $this->assertTrue($this->hasReviewFlag($draft, 'core.full_name', 'candidate_name_from_heading_fallback'));
+        $this->assertFalse($this->hasReviewFlag($draft, 'core.full_name', 'suspicious_heading_as_name'));
+    }
+
     public function test_gharcha_patta_is_address_not_property(): void
     {
         $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
@@ -190,6 +221,55 @@ TXT);
         $phones = $this->phones($draft);
         $this->assertContains('9860956022', $phones);
         $this->assertContains('8668270153', $phones);
+    }
+
+    public function test_multiline_embedded_relative_address_stays_in_single_chulte_row(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+मुलाचे नाव :- चि. रोहित सुंबे
+मामा :- कै.दशरथ बबन गगे (आंबी खालसा, ता. सुंगमनेर) चुलते:- श्री. भीमराव बन्सी सुंबे ( पाडळी तर्फ
+कान्हर ता. पारनेर)
+नातेवाईक :- सर्वश्री सिनारे, दावभट, जईड, निमसे
+TXT);
+
+        $relatives = $draft['normalized']['relatives'];
+        $this->assertCount(2, $relatives);
+
+        $mamaRows = array_values(array_filter($relatives, static fn ($row) => ($row['relation_type'] ?? null) === 'maternal_uncle'));
+        $chulteRows = array_values(array_filter($relatives, static fn ($row) => ($row['relation_type'] ?? null) === 'paternal_uncle'));
+
+        $this->assertCount(1, $mamaRows);
+        $this->assertCount(1, $chulteRows);
+        $this->assertSame('कै.दशरथ बबन गगे', $mamaRows[0]['name'] ?? null);
+        $this->assertSame('आंबी खालसा, ता. सुंगमनेर', $mamaRows[0]['address_line'] ?? null);
+        $this->assertSame('श्री. भीमराव बन्सी सुंबे', $chulteRows[0]['name'] ?? null);
+        $this->assertSame('पाडळी तर्फ कान्हर ता. पारनेर', $chulteRows[0]['address_line'] ?? null);
+        $this->assertSame('सर्वश्री सिनारे, दावभट, जईड, निमसे', $draft['normalized']['core']['other_relatives_text'] ?? null);
+    }
+
+    public function test_orphan_biodata_numbers_fill_father_then_user_then_mother_preview_slots(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+नाव :- श्वेताली बाळासाहेब सुंबे
+वडील :- बाळासाहेब बन्सी सुंबे
+आई :- सौ. नंदा बाळासाहेब सुंबे
+मोबाईल नंबर:
+9860771090
+7972565670
+9423651090
+9123456789
+9234567890
+9345678901
+TXT);
+
+        $core = $draft['normalized']['core'];
+
+        $this->assertSame('9860771090', $core['father_contact_1'] ?? null);
+        $this->assertSame('7972565670', $core['father_contact_2'] ?? null);
+        $this->assertSame('9423651090', $core['father_contact_3'] ?? null);
+        $this->assertSame('9123456789', $core['primary_contact_number_2'] ?? null);
+        $this->assertSame('9234567890', $core['primary_contact_number_3'] ?? null);
+        $this->assertSame('9345678901', $core['mother_contact_1'] ?? null);
     }
 
     public function test_caste_without_religion_remains_review_safe(): void
@@ -354,6 +434,45 @@ TXT);
         $this->assertSame('मानव', $horoscope['vashya'] ?? null);
     }
 
+    public function test_horoscope_builder_keeps_devak_from_blood_group_combo_and_rejects_complexion_as_varna(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+देवक :- वासनिचा वेल रक्त गट :- B+ve
+वर्ण :- गोरा
+TXT);
+
+        $core = $draft['normalized']['core'];
+        $horoscope = $draft['normalized']['horoscope'] ?? [];
+
+        $this->assertSame('B+', $core['blood_group'] ?? null);
+        $this->assertSame('गोरा', $core['complexion'] ?? null);
+        $this->assertSame('वासनिचा वेल', $horoscope['devak'] ?? null);
+        $this->assertNull($horoscope['varna'] ?? null);
+    }
+
+    public function test_horoscope_builder_maps_kuldevat_alias_and_no_brother_line_without_review_flag(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+रास :- मीन देवक :- मरेडीचा वेल
+कुलदेवत :- जोतिबा नक्षत्र :- उत्तर भाद्रपदा
+भाऊ :- नाही
+बहीण :- एक ( अविवाहित )
+TXT);
+
+        $core = $draft['normalized']['core'];
+        $horoscope = $draft['normalized']['horoscope'] ?? [];
+        $reviewBlob = $this->reviewBlob($draft);
+
+        $this->assertSame('मीन', $horoscope['rashi'] ?? null);
+        $this->assertSame('मरेडीचा वेल', $horoscope['devak'] ?? null);
+        $this->assertSame('जोतिबा', $horoscope['kuldaivat'] ?? null);
+        $this->assertSame('उत्तर भाद्रपदा', $horoscope['nakshatra'] ?? null);
+        $this->assertSame(0, $core['brother_count']);
+        $this->assertSame(1, $core['sister_count']);
+        $this->assertStringNotContainsString('कुलदेवत :- जोतिबा नक्षत्र :- उत्तर भाद्रपदा', $reviewBlob);
+        $this->assertStringNotContainsString('भाऊ :- नाही', $reviewBlob);
+    }
+
     public function test_intake_457_same_line_horoscope_labels_split_cleanly(): void
     {
         $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
@@ -380,6 +499,30 @@ TXT);
         $this->assertStringNotContainsString('कलदैवत', (string) ($horoscope['devak'] ?? ''));
         $this->assertStringNotContainsString('नाव :-', (string) ($horoscope['rashi'] ?? ''));
         $this->assertStringNotContainsString('वर्ण :-', (string) ($horoscope['nakshatra'] ?? ''));
+    }
+
+    public function test_horoscope_builder_maps_janma_aliases_navadras_alias_and_nad_combo_without_review_noise(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+जन्मरास :- वृषभ
+जन्मनक्षत्र :- रोहिणी ४ नावरस नाव : वू
+नाड :- आध्य गण :- राक्षस. चरण :- ४
+## कौटुंबिक माहिती
+TXT);
+
+        $horoscope = $draft['normalized']['horoscope'] ?? [];
+        $reviewBlob = $this->reviewBlob($draft);
+
+        $this->assertSame('वृषभ', $horoscope['rashi'] ?? null);
+        $this->assertSame('रोहिणी', $horoscope['nakshatra'] ?? null);
+        $this->assertTrue(in_array($horoscope['charan'] ?? null, ['४', '4'], true));
+        $this->assertSame('वू', $horoscope['navras_name'] ?? null);
+        $this->assertSame('आध्य', $horoscope['nadi'] ?? null);
+        $this->assertSame('राक्षस', $horoscope['gan'] ?? null);
+        $this->assertStringNotContainsString('जन्मरास :- वृषभ', $reviewBlob);
+        $this->assertStringNotContainsString('जन्मनक्षत्र :- रोहिणी ४ नावरस नाव : वू', $reviewBlob);
+        $this->assertStringNotContainsString('नाड :- आध्य गण :- राक्षस. चरण :- ४', $reviewBlob);
+        $this->assertStringNotContainsString('## कौटुंबिक माहिती', $reviewBlob);
     }
 
     public function test_positional_physical_values_are_mapped_from_stacked_biodata_rows(): void
@@ -541,6 +684,89 @@ TXT);
         $this->assertStringNotContainsString('Wonder Residency', $reviewBlob);
         $this->assertStringNotContainsString('जितेंद्र शामराव पवार', $reviewBlob);
         $this->assertStringNotContainsString('कुंभ', $reviewBlob);
+    }
+
+    public function test_intake_447_markdown_heading_name_and_family_relatives_are_mapped_without_false_review_noise(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+## * बायोडटा *
+
+## *मुलाचे नाव : चि. विजय विलास काळुगडे
+
+- जन्म तारीख :-24/09/1995
+- जन्म वेळ :-सकाळी ७.वा
+- जन्म स्थळ :-आष्टा - मिरजवाडी
+- वर्ण :-सावळा
+- कुलदैवत :-श्री. जोतिबा
+- मूळगाव :-ऐतवडे बुः
+- ता. वाळवा जि. सांगली
+- उंची :-५ फूट ६इंच
+- शिक्षण :-B.A (Government Iti Fitter)
+- नोकरी :-Quality power Electric Equipment Limited.
+- kupwad (sangli)
+- शेती -:१ एकर बागायत
+
+## *कौटुंबिक माहिती*
+
+- वडिलांचे नाव :-श्री. विलास आकाराम काळुगडे (शेती )
+- आईचे नाव :-सौ. सुजाता विलास काळुगडे
+- भाऊ :-नाही
+- बहीण :-नाही
+- मामाचे नाव :-श्री. शिवाजी आनंदा साळुंखे (रा. मिरजवाडी ता.
+- वाळवा जि. सांगली)
+- मुलाची आत्या :-सौ. छाया शामराव जाधव (रा.रेठरे बुः)
+- इतर नातेवाईक :-साळुंखे,पाटील,चव्हाण,जाधव
+- संपर्क :-9579254525/9637700398/9527905986
+TXT);
+
+        $core = $draft['normalized']['core'];
+        $relatives = $draft['normalized']['relatives'] ?? [];
+        $reviewBlob = $this->reviewBlob($draft);
+
+        $this->assertSame('चि. विजय विलास काळुगडे', $core['full_name'] ?? null);
+        $this->assertSame('male', $core['gender'] ?? null);
+        $this->assertSame('श्री. विलास आकाराम काळुगडे', $core['father_name'] ?? null);
+        $this->assertSame('शेती', $core['father_occupation'] ?? null);
+        $this->assertSame('सौ. सुजाता विलास काळुगडे', $core['mother_name'] ?? null);
+        $this->assertSame(0, $core['brother_count'] ?? null);
+        $this->assertSame(0, $core['sister_count'] ?? null);
+
+        $maternalUncles = array_values(array_filter($relatives, static fn ($row) => ($row['relation_type'] ?? null) === 'maternal_uncle'));
+        $paternalAunts = array_values(array_filter($relatives, static fn ($row) => ($row['relation_type'] ?? null) === 'paternal_aunt'));
+
+        $this->assertCount(1, $maternalUncles);
+        $this->assertCount(1, $paternalAunts);
+        $this->assertSame('श्री. शिवाजी आनंदा साळुंखे', $maternalUncles[0]['name'] ?? null);
+        $this->assertSame('मिरजवाडी ता. वाळवा जि. सांगली', $maternalUncles[0]['address_line'] ?? null);
+        $this->assertSame('सौ. छाया शामराव जाधव', $paternalAunts[0]['name'] ?? null);
+        $this->assertSame('रेठरे बुः', $paternalAunts[0]['address_line'] ?? null);
+        $this->assertSame('साळुंखे,पाटील,चव्हाण,जाधव', $core['other_relatives_text'] ?? null);
+
+        $this->assertStringNotContainsString('candidate_name_from_heading_fallback', $reviewBlob);
+        $this->assertStringNotContainsString('## *कौटुंबिक माहिती*', $reviewBlob);
+        $this->assertStringNotContainsString('मामाचे नाव', $reviewBlob);
+        $this->assertStringNotContainsString('मुलाची आत्या', $reviewBlob);
+    }
+
+    public function test_other_relatives_text_preserves_tail_entries_while_removing_contact_no_noise(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+इतर नातेवाईक :- यादव (करमाळा), यादव (सोलापुर), कन्हेरे (माढा), भोसले (मोहोळ), पवार (पिंपळनेर),
+बोरुडे (माळीनगर), चौधरी (करमाळा), चव्हाण (सोलापूर, इंदापूर, माढा, वेळापूर), सुरवसे (बार्शी), फाटे
+(पाटोदा), Contact.No. कदम (इंदापूर, पुणे, पंढरपूर), भोसले (इंदापूर), शिंदे (इंदापूर, कुर्डुवाडी), भुजबळ (शेळगाव),
+मिसाळ (वाघोली), माने (कोंडबावी, अकलुज, कुर्डुवाडी), चव्हाण (लवंग), गायकवाड (बावडा), मिटकल
+(बाभुळ गाव), पराडे (संगम)
+TXT);
+
+        $text = (string) (($draft['normalized']['core'] ?? [])['other_relatives_text'] ?? '');
+
+        $this->assertStringContainsString('यादव (करमाळा)', $text);
+        $this->assertStringContainsString('कदम (इंदापूर, पुणे, पंढरपूर)', $text);
+        $this->assertStringContainsString('मिसाळ (वाघोली)', $text);
+        $this->assertStringContainsString('पराडे (संगम)', $text);
+        $this->assertStringNotContainsString('Contact.No.', $text);
+        $this->assertStringNotContainsString('Contact No.', $text);
+        $this->assertStringNotContainsString('No.', $text);
     }
 
     /**

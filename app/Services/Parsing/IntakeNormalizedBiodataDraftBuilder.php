@@ -147,6 +147,8 @@ class IntakeNormalizedBiodataDraftBuilder
                 $contacts[$phone] = ['phone_number' => $phone];
             }
         }
+        $this->routeOrphanPhonesToPreviewContactSlots($core, array_keys($contacts));
+        $this->syncParentContactAliases($core);
 
         $previousLine = null;
         $propertyContinuationContext = null;
@@ -199,7 +201,7 @@ class IntakeNormalizedBiodataDraftBuilder
 
                 continue;
             }
-            if (preg_match('/^\s*[-–—]?\s*(वडिलांचे\s+वडील|वडिलांची\s+आई|वडिलांची\s+बहीण|वडिलांची\s+बहिण|आजोबा|आजी|चुलते|काका|चुलती|काकू|आत्या|आत्याचे\s+यजमान|आत्यांचे\s+यजमान|आत्या\s+यजमान|चुलत\s+भाऊ|चुलत\s+बहिण|चुलत\s+बहीण|आईचे\s+वडील|आईची\s+आई|मुलाचे\s+मामा|मुलीचे\s+मामा|मामा|मामी|मावशी|माऊशी|मावशीचे\s+यजमान|मावशीचा\s+नवरा|मावस\s+भाऊ|मावस\s+बहिण|मावस\s+बहीण|इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|नातेवाईक|इतर\s+पाहूणे|इतर\s+पाहुणे|पाहुणे|आजोळ|नातेसंबंध)\s*(?::\s*-\s*|[:\-–—]\s*)(.+)$/u', $line, $m)) {
+            if (preg_match('/^\s*[-–—]?\s*(वडिलांचे\s+वडील|वडिलांची\s+आई|वडिलांची\s+बहीण|वडिलांची\s+बहिण|आजोबा|आजी|चुलते|काका|चुलती|काकू|आत्या|मुलाची\s+आत्या|आत्याचे\s+यजमान|आत्यांचे\s+यजमान|आत्या\s+यजमान|चुलत\s+भाऊ|चुलत\s+बहिण|चुलत\s+बहीण|आईचे\s+वडील|आईची\s+आई|मुलाचे\s+मामा|मुलीचे\s+मामा|मामाचे\s+नाव|मामा|मामी|मावशी|मुलाची\s+मावशी|माऊशी|मावशीचे\s+यजमान|मावशीचा\s+नवरा|मावस\s+भाऊ|मावस\s+बहिण|मावस\s+बहीण|इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|नातेवाईक|इतर\s+पाहूणे|इतर\s+पाहुणे|पाहुणे|आजोळ|नातेसंबंध)\s*(?::\s*-\s*|[:\-–—]\s*)(.+)$/u', $line, $m)) {
                 $name = trim($m[1]);
                 $value = trim($m[2]);
                 $lastRelativeLabel = $name;
@@ -224,6 +226,17 @@ class IntakeNormalizedBiodataDraftBuilder
                 if ($this->mergeRelativeContinuationLine($relatives[$lastRelativeIndex], $line)) {
                     continue;
                 }
+            }
+            if ($lastRelativeLabel !== null && $this->isOtherRelativesLabel($lastRelativeLabel)) {
+                $cleanOther = $this->cleanOtherRelativesText(trim($line));
+                if ($cleanOther !== '') {
+                    $core['other_relatives_text'] = $this->setTextOnce(
+                        $core['other_relatives_text'] ?? null,
+                        $cleanOther
+                    );
+                }
+
+                continue;
             }
             if ($lastRelativeLabel !== null && preg_match('/^\s*(?:[-–—]\s*)?(?::\s*-\s*)?(?:(?:\d+|[०-९]+)[\).]\s*)?(?:श्री\.?|सौ\.?|कै\.?|डॉ\.?|कु\.?)?\s*[\p{L}\p{M}.]+/u', $line)) {
                 $line = trim(preg_replace('/^\s*(?:[-–—]\s*)?(?::\s*-\s*)?/u', '', $line) ?? $line);
@@ -358,6 +371,8 @@ class IntakeNormalizedBiodataDraftBuilder
             'father_contact_1' => null,
             'father_contact_2' => null,
             'father_contact_3' => null,
+            'primary_contact_number_2' => null,
+            'primary_contact_number_3' => null,
             'mother_name' => null,
             'mother_occupation' => null,
             'mother_contact_number' => null,
@@ -382,6 +397,7 @@ class IntakeNormalizedBiodataDraftBuilder
 
     private function detectSection(string $line, string $current, bool $relativesClosed = false): ?string
     {
+        $normalizedLine = $this->stripMarkdownHeadingDecorators($line);
         if ($this->startsAddressLine($line)) {
             return 'addresses';
         }
@@ -394,19 +410,19 @@ class IntakeNormalizedBiodataDraftBuilder
         if ($this->startsPahune($line)) {
             return 'relatives';
         }
-        if (preg_match('/^(?:वैयक्तिक\s+माहिती|वैयक्तिक\s+तपशील)/u', $line)) {
+        if (preg_match('/^(?:वैयक्तिक\s+माहिती|वैयक्तिक\s+तपशील)/u', $normalizedLine)) {
             return 'personal';
         }
-        if (preg_match('/^(?:कौटुंबिक\s+माहिती|कौटुंबिक\s+तपशील)/u', $line)) {
+        if (preg_match('/^(?:कौटुंबिक\s+माहिती|कौटुंबिक\s+तपशील)/u', $normalizedLine)) {
             return 'family';
         }
-        if (preg_match('/^(?:रास|राशी|नक्षत्र|देवक|कुलदैवत|कुलस्वामी|कुळस्वामी|नाडी|गण|चरण|गोत्र|योनी|वर्ण|नावरस|जन्मवार\s*आणि\s*वेळ|जन्मवार\s*व\s*वेळ)'.self::LABEL_SUFFIX.'/u', $line)) {
+        if (preg_match('/^(?:रास|राशी|जन्मरास|नक्षत्र|जन्मनक्षत्र|देवक|कुलदैवत|कुलदेवत|कुलस्वामी|कुळस्वामी|नाड|नाडी|गण|चरण|गोत्र|योनी|वर्ण|नावरस|नावरस\s*नाव|जन्मवार\s*आणि\s*वेळ|जन्मवार\s*व\s*वेळ)'.self::LABEL_SUFFIX.'/u', $normalizedLine)) {
             return 'horoscope';
         }
-        if (preg_match('/^(?:शिक्षण|नोकरी|व्यवसाय|वेतन|उत्पन्न|नोकरी\/व्यवसाय)'.self::LABEL_SUFFIX.'/u', $line)) {
+        if (preg_match('/^(?:शिक्षण|नोकरी|व्यवसाय|वेतन|उत्पन्न|नोकरी\/व्यवसाय)'.self::LABEL_SUFFIX.'/u', $normalizedLine)) {
             return 'education_career';
         }
-        if (preg_match('/^\s*[-–—]?\s*(?:वडिलांचे\s+वडील|वडिलांची\s+आई|वडिलांची\s+बहीण|वडिलांची\s+बहिण|आजोबा|आजी|चुलते|काका|चुलती|काकू|आत्या|आत्याचे\s+यजमान|आत्यांचे\s+यजमान|आत्या\s+यजमान|चुलत\s+भाऊ|चुलत\s+बहिण|चुलत\s+बहीण|आईचे\s+वडील|आईची\s+आई|मुलाचे\s+मामा|मुलीचे\s+मामा|मामा|मामी|मावशी|माऊशी|मावशीचे\s+यजमान|मावशीचा\s+नवरा|मावस\s+भाऊ|मावस\s+बहिण|मावस\s+बहीण|इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|नातेवाईक|इतर\s+पाहूणे|इतर\s+पाहुणे|पाहुणे|आजोळ|नातेसंबंध)'.self::LABEL_SUFFIX.'/u', $line)) {
+        if (preg_match('/^\s*[-–—]?\s*(?:वडिलांचे\s+वडील|वडिलांची\s+आई|वडिलांची\s+बहीण|वडिलांची\s+बहिण|आजोबा|आजी|चुलते|काका|चुलती|काकू|आत्या|मुलाची\s+आत्या|आत्याचे\s+यजमान|आत्यांचे\s+यजमान|आत्या\s+यजमान|चुलत\s+भाऊ|चुलत\s+बहिण|चुलत\s+बहीण|आईचे\s+वडील|आईची\s+आई|मुलाचे\s+मामा|मुलीचे\s+मामा|मामाचे\s+नाव|मामा|मामी|मावशी|माऊशी|मुलाची\s+मावशी|मावशीचे\s+यजमान|मावशीचा\s+नवरा|मावस\s+भाऊ|मावस\s+बहिण|मावस\s+बहीण|इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|नातेवाईक|इतर\s+पाहूणे|इतर\s+पाहुणे|पाहुणे|आजोळ|नातेसंबंध)'.self::LABEL_SUFFIX.'/u', $normalizedLine)) {
             return 'relatives';
         }
 
@@ -462,7 +478,8 @@ class IntakeNormalizedBiodataDraftBuilder
     private function extractCandidateName(array $candidateLines, array $allLines): ?string
     {
         foreach ($candidateLines as $line) {
-            if (preg_match('/^(?:मुलाचे\s+नां?व|मुलीचे\s+नां?व|वधूचे\s+नां?व|नां?व)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
+            $normalizedLine = $this->stripMarkdownHeadingDecorators($line);
+            if (preg_match('/^(?:मुलाचे\s+नां?व|मुलीचे\s+नां?व|वधूचे\s+नां?व|नां?व)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $normalizedLine, $m)) {
                 return $this->cleanPersonName($m[1]);
             }
         }
@@ -475,15 +492,17 @@ class IntakeNormalizedBiodataDraftBuilder
         }
 
         foreach ($allLines as $index => $line) {
-            if (preg_match('/^#{1,6}\s*मुलाची\s+माहिती$/u', trim($line))) {
+            if (preg_match('/^मुलाची\s+माहिती$/u', $this->stripMarkdownHeadingDecorators($line))) {
                 $headingName = $this->extractNameAfterCandidateInfoHeading($allLines, $index);
                 if ($headingName !== null) {
                     return $headingName;
                 }
             }
-            if (preg_match('/^#{1,6}\s*(.+)$/u', trim($line), $m)) {
+            if (preg_match('/^#{1,6}\s*(.+)$/u', trim($line))
+                && preg_match('/^(.+)$/u', $this->stripMarkdownHeadingDecorators($line), $m)) {
                 $headingName = $this->cleanPersonName($m[1]);
                 if ($this->isPlausibleCandidateName($headingName)
+                    && ! $this->isSuspiciousHeadingAsName($headingName)
                     && ! $this->isParentRelativeName($headingName, $parentRelativeNames)
                     && ! $this->lineHasRelativeContextMarker($line, $allLines, $index)
                     && $hasBiodataContext) {
@@ -498,7 +517,7 @@ class IntakeNormalizedBiodataDraftBuilder
             if ($this->isParentRelativeLabelLine($line) || $this->lineHasRelativeContextMarker($line, $allLines, $index)) {
                 continue;
             }
-            $t = trim(preg_replace('/^#{1,6}\s*/u', '', trim($line)) ?? trim($line));
+            $t = $this->stripMarkdownHeadingDecorators($line);
             if (! $this->isPlausibleCandidateName($t) || preg_match('/बायोडाटा|वैयक्तिक|कौटुंबिक|श्री\s+साई|गणेश|प्रसन्न/u', $t)) {
                 continue;
             }
@@ -763,6 +782,15 @@ class IntakeNormalizedBiodataDraftBuilder
             }
             if (preg_match('/^(?:नोकरी\/व्यवसाय|नोकरी|व्यवसाय)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
                 $work = trim($m[1]);
+                $isBusinessLine = preg_match('/^व्यवसाय\s*(?::\s*-\s*|[:\-]\s*)/u', $line) === 1;
+                if ($isBusinessLine && (($core['company_name'] ?? null) !== null || ($core['work_location_text'] ?? null) !== null)) {
+                    $occupation = $this->cleanOccupationText($work);
+                    if ($occupation !== '') {
+                        $core['occupation_title'] = $occupation;
+                        $capturedCareer = true;
+                    }
+                    continue;
+                }
                 $this->parseWorkLine($work, $core);
                 if (($core['occupation_title'] ?? null) !== null || ($core['company_name'] ?? null) !== null || ($core['work_location_text'] ?? null) !== null) {
                     $capturedCareer = true;
@@ -1909,6 +1937,63 @@ class IntakeNormalizedBiodataDraftBuilder
     }
 
     /**
+     * Orphan biodata phone numbers should still be visible in preview.
+     * Fallback order per user rule:
+     * 1) father contact slots
+     * 2) self/user extra slots (never primary_contact_number itself)
+     * 3) mother contact slots
+     *
+     * @param  array<string, mixed>  $core
+     * @param  list<string>  $phones
+     */
+    private function routeOrphanPhonesToPreviewContactSlots(array &$core, array $phones): void
+    {
+        $seen = [];
+        foreach ([
+            'father_contact_number', 'father_contact_1', 'father_contact_2', 'father_contact_3',
+            'primary_contact_number', 'primary_contact_number_2', 'primary_contact_number_3',
+            'mother_contact_number', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3',
+        ] as $field) {
+            $value = trim((string) ($core[$field] ?? ''));
+            if ($value !== '') {
+                $seen[$value] = true;
+            }
+        }
+
+        foreach ($phones as $phone) {
+            if ($phone === '' || isset($seen[$phone])) {
+                continue;
+            }
+            if ($this->assignPreviewPhoneToSlots($core, ['father_contact_1', 'father_contact_2', 'father_contact_3'], $phone)
+                || $this->assignPreviewPhoneToSlots($core, ['primary_contact_number_2', 'primary_contact_number_3'], $phone)
+                || $this->assignPreviewPhoneToSlots($core, ['mother_contact_1', 'mother_contact_2', 'mother_contact_3'], $phone)) {
+                $seen[$phone] = true;
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     * @param  list<string>  $slots
+     */
+    private function assignPreviewPhoneToSlots(array &$core, array $slots, string $phone): bool
+    {
+        foreach ($slots as $slot) {
+            $current = trim((string) ($core[$slot] ?? ''));
+            if ($current === '') {
+                $core[$slot] = $phone;
+
+                return true;
+            }
+            if ($current === $phone) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @param  array<string, mixed>  $core
      * @return array<string, true>
      */
@@ -2364,7 +2449,7 @@ class IntakeNormalizedBiodataDraftBuilder
 
     private function extractHoroscopeLine(string $line, mixed &$horoscope): void
     {
-        if (! preg_match('/^(?:रास|राशी|रास\s*नाव|राशी\s*नाव|नक्षत्र|देवक|कुलदैवत|कलदैवत|कुलस्वामी|कुळस्वामी|नाडी|गण|चरण|गोत्र|योनी|वर्ण|वश्य|वैरवर्ग|राशी\s*स्वामी|रास\s*स्वामी|स्वामी|मंगळ(?:िक|दोष)?|नावरस|जन्मवार\s*आणि\s*वेळ|जन्मवार\s*व\s*वेळ)'.self::LABEL_SUFFIX.'/u', $line)) {
+        if (! preg_match('/^(?:रास|राशी|जन्मरास|रास\s*नाव|राशी\s*नाव|नावास\s*नाव|नावरस\s*नाव|नक्षत्र|जन्मनक्षत्र|देवक|कुलदैवत|कुलदेवत|कलदैवत|कुलस्वामी|कुळस्वामी|नाड|नाडी|गण|चरण|गोत्र|योनी|वर्ण|वश्य|वैरवर्ग|राशी\s*स्वामी|रास\s*स्वामी|स्वामी|मंगळ(?:िक|दोष)?|नावरस|जन्मवार\s*आणि\s*वेळ|जन्मवार\s*व\s*वेळ)'.self::LABEL_SUFFIX.'/u', $line)) {
             return;
         }
         $horoscope = is_array($horoscope) ? $horoscope : ['raw' => []];
@@ -2387,10 +2472,15 @@ class IntakeNormalizedBiodataDraftBuilder
             'जन्मवार व वेळ' => 'birth_weekday',
             'राशी स्वामी' => 'rashi_lord',
             'रास स्वामी' => 'rashi_lord',
+            'जन्मरास' => 'rashi',
             'राशी नाव' => 'navras_name',
             'रास नाव' => 'navras_name',
+            'नावास नाव' => 'navras_name',
+            'नावरस नाव' => 'navras_name',
             'नावरस' => 'navras_name',
+            'जन्मनक्षत्र' => 'nakshatra',
             'कुलदैवत' => 'kuldaivat',
+            'कुलदेवत' => 'kuldaivat',
             'कलदैवत' => 'kuldaivat',
             'कुलस्वामी' => 'kuldaivat',
             'कुळस्वामी' => 'kuldaivat',
@@ -2398,6 +2488,7 @@ class IntakeNormalizedBiodataDraftBuilder
             'मंगळ दोष' => 'mangal_dosh_type',
             'नक्षत्र' => 'nakshatra',
             'देवक' => 'devak',
+            'नाड' => 'nadi',
             'नाडी' => 'nadi',
             'गण' => 'gan',
             'चरण' => 'charan',
@@ -2447,6 +2538,14 @@ class IntakeNormalizedBiodataDraftBuilder
             $segments[$field] = $value;
         }
 
+        if (isset($segments['nakshatra']) && ! isset($segments['charan'])) {
+            $nakshatraValue = trim((string) $segments['nakshatra']);
+            if (preg_match('/^(.+?)\s+([०-९0-9]+)$/u', $nakshatraValue, $m)) {
+                $segments['nakshatra'] = trim($m[1]);
+                $segments['charan'] = trim($m[2]);
+            }
+        }
+
         return $segments;
     }
 
@@ -2475,7 +2574,17 @@ class IntakeNormalizedBiodataDraftBuilder
         }
 
         $value = $this->trimSeparators($value);
+        $value = preg_split(
+            '/\s+(?:ब्लड\s*ग्रुप|ब्लड\s*ग्रप|रक्तगट|रक्त\s*गट|रक[\x{094D}\x{200C}\s]*त\s*गट|कुंची|उंची|height|मोबाईल|मोबाइल|संपर्क|प्रोपर्टी|प्रॉपर्टी|स्थावर|घरचा\s+पत्ता|सध्याचा\s+पत्ता)'.self::LABEL_SUFFIX.'/ui',
+            $value,
+            2
+        )[0] ?? $value;
+        $value = trim($value);
         $value = trim(preg_replace('/[.।]+$/u', '', $value) ?? $value);
+
+        if ($field === 'varna' && $this->looksLikeComplexion($value)) {
+            return null;
+        }
 
         $fieldAliases = [
             'nakshatra' => [
@@ -2830,12 +2939,12 @@ class IntakeNormalizedBiodataDraftBuilder
             'वडिलांची आई', 'आजी' => 'paternal_grandmother',
             'चुलते', 'काका' => 'paternal_uncle',
             'चुलती', 'काकू' => 'wife_paternal_uncle',
-            'आत्या' => 'paternal_aunt',
+            'आत्या', 'मुलाची आत्या' => 'paternal_aunt',
             'वडिलांची बहीण', 'वडिलांची बहिण' => 'paternal_aunt',
             'आत्याचे यजमान', 'आत्यांचे यजमान', 'आत्या यजमान' => 'husband_paternal_aunt',
             'आईचे वडील' => 'maternal_grandfather',
             'आईची आई' => 'maternal_grandmother',
-            'मुलाचे मामा', 'मुलीचे मामा', 'मामा' => 'maternal_uncle',
+            'मुलाचे मामा', 'मुलीचे मामा', 'मामाचे नाव', 'मामा' => 'maternal_uncle',
             'मामी' => 'wife_maternal_uncle',
             'मावशी', 'माऊशी' => 'maternal_aunt',
             'मावशीचे यजमान', 'मावशीचा नवरा' => 'husband_maternal_aunt',
@@ -2950,13 +3059,20 @@ class IntakeNormalizedBiodataDraftBuilder
     {
         $out = [];
         $labelPattern = '(?:चुलते|चुलती|काका|काकू|आत्या|मामा|मामी|मावशी|माऊशी|आजोळ|इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|इतर\s+पाहूणे|इतर\s+पाहुणे|पाहुणे)';
+        $protectedAliases = [
+            'मुलाची आत्या' => 'मुलाची__REL_ALIAS__आत्या',
+            'मामाचे नाव' => 'मामाचे__REL_ALIAS__नाव',
+            'मुलाची मावशी' => 'मुलाची__REL_ALIAS__मावशी',
+        ];
         foreach ($lines as $line) {
             $line = trim((string) $line);
             if ($line === '') {
                 continue;
             }
-            $parts = preg_split('/\s+(?='.$labelPattern.'\s*(?::\s*-\s*|[:\-–—]))/u', $line) ?: [$line];
+            $protectedLine = strtr($line, $protectedAliases);
+            $parts = preg_split('/\s+(?='.$labelPattern.'\s*(?::\s*-\s*|[:\-–—]))/u', $protectedLine) ?: [$protectedLine];
             foreach ($parts as $part) {
+                $part = strtr($part, array_flip($protectedAliases));
                 $part = trim($part);
                 if ($part !== '') {
                     $out[] = $part;
@@ -2975,9 +3091,11 @@ class IntakeNormalizedBiodataDraftBuilder
     private function cleanOtherRelativesText(string $value): string
     {
         $value = OcrNormalize::normalizeDigits($value);
-        $value = preg_split('/(?:अपेक्षा|शिक्षण|नोकरी|मोबाईल|मोबाइल|संपर्क|जन्म\s+तारीख|जन्म\s+स्थळ|प्रॉपर्टी|प्रॉपर्टि)\s*[:\-]/u', $value, 2)[0] ?? $value;
-        $value = preg_replace('/(?:मो\.?|मो\s+नं\.?|मोबाईल|मोबाइल|संपर्क|contact|mobile)\s*[:\-]?\s*[6-9][0-9\s\/-]{9,}/ui', '', $value) ?? $value;
+        $value = preg_split('/\R+\s*(?:अपेक्षा|शिक्षण|नोकरी|मोबाईल|मोबाइल|संपर्क|जन्म\s+तारीख|जन्म\s+स्थळ|प्रॉपर्टी|प्रॉपर्टि)\s*[:\-]/u', $value, 2)[0] ?? $value;
+        $value = preg_replace('/(?:मो\.?|मो\s*नं\.?|मोबाईल|मोबाइल|संपर्क|contact(?:\s*\.?\s*no\.?)?|mobile)\s*[:\-]?\s*(?:\+?91[\s-]*)?[6-9][0-9\s\/-]{9,}/ui', '', $value) ?? $value;
         $value = preg_replace('/(?<!\d)[6-9]\d{9}(?!\d)/u', '', $value) ?? $value;
+        $value = preg_replace('/(?:मो\.?|मो\s*नं\.?|मोबाईल|मोबाइल|संपर्क|contact(?:\s*\.?\s*no\.?)?|mobile|no\.)\s*[:\-\.]*/ui', '', $value) ?? $value;
+        $value = preg_replace('/\s*;\s*/u', '; ', $value) ?? $value;
         $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
 
         return $this->trimSeparators($value);
@@ -3000,6 +3118,10 @@ class IntakeNormalizedBiodataDraftBuilder
     {
         $line = trim($line);
         if ($line === '') {
+            return true;
+        }
+
+        if ($this->mergeOpenRelativeFragment($relative, $line)) {
             return true;
         }
 
@@ -3052,6 +3174,34 @@ class IntakeNormalizedBiodataDraftBuilder
         return false;
     }
 
+    /**
+     * OCR often breaks a single relative row inside an opening parenthesis:
+     * "चुलते:- श्री. X ( गाव" + "\n" + "ता. Y)".
+     * Rebuild the original raw value before we decide this is a new relative row.
+     *
+     * @param  array<string, mixed>  $relative
+     */
+    private function mergeOpenRelativeFragment(array &$relative, string $line): bool
+    {
+        $raw = trim((string) ($relative['raw'] ?? ''));
+        if ($raw === '' || ! $this->hasUnbalancedParentheses($raw)) {
+            return false;
+        }
+        if ($this->looksLikeAnyKnownLabel($line) || $this->startsPahune($line) || $this->isHardSectionBoundary($line)) {
+            return false;
+        }
+
+        $combinedRaw = trim($raw.' '.$line);
+        $value = $this->relativeValueFromRaw($combinedRaw);
+        if ($value === '') {
+            return false;
+        }
+
+        $this->applyParsedRelativeFields($relative, $this->parseRelativeValue($value), $combinedRaw);
+
+        return true;
+    }
+
     private function lineIsRelativeAddressOnly(string $line): bool
     {
         $line = trim($line);
@@ -3087,8 +3237,43 @@ class IntakeNormalizedBiodataDraftBuilder
         $address = preg_replace('/(?:मो\.?|मो\s+नं\.?|मोबाईल|मोबाइल|संपर्क)\s*[:\-]?\s*[6-9][0-9\s\/-]{9,}/u', '', $address) ?? $address;
         $address = preg_replace('/(?<!\d)[6-9]\d{9}(?!\d)/u', '', $address) ?? $address;
         $address = preg_replace('/\s+(?:मो\.?|मोबाईल|मोबाइल|संपर्क)?\s*नं\.?\s*$/u', '', $address) ?? $address;
+        $address = trim($address);
+        if ($address !== '' && substr_count($address, '(') < substr_count($address, ')')) {
+            $address = preg_replace('/\)+\s*$/u', '', $address) ?? $address;
+        }
 
         return $this->trimSeparators($address);
+    }
+
+    private function hasUnbalancedParentheses(string $value): bool
+    {
+        return substr_count($value, '(') > substr_count($value, ')');
+    }
+
+    private function relativeValueFromRaw(string $raw): string
+    {
+        if (preg_match('/^\s*[-–—]?\s*.+?\s*(?::\s*-\s*|[:\-–—]\s*)(.+)$/u', $raw, $m)) {
+            return trim((string) ($m[1] ?? ''));
+        }
+
+        return trim($raw);
+    }
+
+    /**
+     * @param  array<string, mixed>  $relative
+     * @param  array<string, mixed>  $parsed
+     */
+    private function applyParsedRelativeFields(array &$relative, array $parsed, string $raw): void
+    {
+        $relative['raw'] = $raw;
+        foreach (['name', 'occupation', 'contact_number', 'address_line', 'notes'] as $field) {
+            $value = $parsed[$field] ?? null;
+            if ($value === null || trim((string) $value) === '') {
+                unset($relative[$field]);
+                continue;
+            }
+            $relative[$field] = $value;
+        }
     }
 
     /**
@@ -3227,7 +3412,7 @@ class IntakeNormalizedBiodataDraftBuilder
 
     private function isSuspiciousHeadingAsName(string $value): bool
     {
-        return (bool) preg_match('/^(?:वैयक्तिक\s+माहिती|कौटुंबिक\s+माहिती|कौटुंबिक\s+तपशील|शिक्षण|नोकरी|व्यवसाय|बायोडाटा)$/u', trim($value));
+        return (bool) preg_match('/^(?:वैयक्तिक\s+माहिती|वैयक्तिक\s+तपशील|कौटुंबिक\s+माहिती|कौटुंबिक\s+तपशील|शिक्षण|नोकरी|व्यवसाय|बायोडाटा)$/u', trim($value));
     }
 
     /**
@@ -3304,6 +3489,10 @@ class IntakeNormalizedBiodataDraftBuilder
      */
     private function lineHasMappedValue(string $line, array $normalized, array $core): bool
     {
+        if ($this->lineHasMappedNoSiblingSignal($line, $core)) {
+            return true;
+        }
+
         foreach ($core as $value) {
             if (is_scalar($value) && $this->lineContainsMappedScalar($line, $value)) {
                 return true;
@@ -3338,6 +3527,32 @@ class IntakeNormalizedBiodataDraftBuilder
         return false;
     }
 
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function lineHasMappedNoSiblingSignal(string $line, array $core): bool
+    {
+        $trimmed = trim($line);
+        if (! $this->startsSiblingLine($trimmed)) {
+            return false;
+        }
+
+        if (! preg_match('/^(?:भाऊ|बहीण|बहिण|बहिणी)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $trimmed, $m)) {
+            return false;
+        }
+
+        $value = trim((string) ($m[1] ?? ''));
+        if (! $this->isNoSiblingValue($value)) {
+            return false;
+        }
+
+        if (preg_match('/^भाऊ/u', $trimmed)) {
+            return ($core['brother_count'] ?? null) === 0;
+        }
+
+        return ($core['sister_count'] ?? null) === 0;
+    }
+
     private function lineContainsMappedScalar(string $line, mixed $value): bool
     {
         $needle = trim((string) $value);
@@ -3367,8 +3582,8 @@ class IntakeNormalizedBiodataDraftBuilder
         }
 
         $rows = [
-            ['mixed_field_value', 'review_needed', '/(?:जन्म|उंची|जात|शिक्षण|नोकरी|राशी|नाडी|गण|मोबाईल).*(?:जन्म|उंची|जात|शिक्षण|नोकरी|राशी|नाडी|गण|मोबाईल)/u'],
-            ['unmapped_horoscope', 'horoscope', '/(?:रास|राशी|नक्षत्र|देवक|कुलदैवत|कुलस्वामी|कुळस्वामी|नाडी|गण|चरण|गोत्र|योनी)/u'],
+            ['mixed_field_value', 'review_needed', '/(?:जन्म|उंची|जात|शिक्षण|नोकरी|राशी|रास|नाडी|नाड|गण|मोबाईल).*(?:जन्म|उंची|जात|शिक्षण|नोकरी|राशी|रास|नाडी|नाड|गण|मोबाईल)/u'],
+            ['unmapped_horoscope', 'horoscope', '/(?:जन्मरास|जन्मनक्षत्र|नावरस\s*नाव|नावास\s*नाव|रास|राशी|नक्षत्र|देवक|कुलदैवत|कुलदेवत|कुलस्वामी|कुळस्वामी|नाडी|नाड|गण|चरण|गोत्र|योनी)/u'],
             ['unmapped_relatives', 'relatives', '/^\s*[-–—]\s*(?:मामा|मावशी|माऊशी|आत्या|चुलते|इतर\s+नातेवाईक)/u'],
             ['unmapped_family', 'family-details', '/(?:वडील|आई|भाऊ|बहिण|कुटुंब|कौटुंबिक)/u'],
             ['unmapped_address', 'basic-info', '/(?:पत्ता|मु\.?\s*पो\.?|रा\.)/u'],
@@ -3402,7 +3617,7 @@ class IntakeNormalizedBiodataDraftBuilder
     {
         $line = trim($line);
 
-        return (bool) preg_match('/^(?:परिचय\s*पत्र|परिचयपत्र|कौटुंबिक\s+माहिती|बायोडेटा|बायोडाटा)$/u', $line)
+        return (bool) preg_match('/^(?:#+\s*\*?\s*)?(?:परिचय\s*पत्र|परिचयपत्र|कौटुंबिक\s+माहिती|कौटुंबिक\s+तपशील|मुलाची\s+माहिती|मुलीची\s+माहिती|बायोडेटा|बायोडाटा)\*?$/u', $line)
             || (bool) preg_match('/^(?:संपर्क\s+नंबर|मोबाईल\s+नंबर|मोबाइल\s+नंबर|कायमचा\s+पत्ता)\s*:?\s*$/u', $line)
             || (bool) preg_match('/श्री\s*(?:गणेश|गणेशाय|गजानन)|तुळजाभवानी\s+प्रसन्न|खंडोबा\s+प्रसन्न/u', $line);
     }
@@ -3445,7 +3660,7 @@ class IntakeNormalizedBiodataDraftBuilder
             if (preg_match('/^(?:आईचे|मातेचे|आई)\s+नां?व\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
                 $names[] = $this->cleanPersonName($this->splitNameOccupation($m[1])[0]);
             }
-            if (preg_match('/^(?:मामा|मावशी|आत्या|चुलत|जावई|पाहुणे|नातेसंबंध)\s*[:\-]\s*(.+)$/u', $line, $m)) {
+            if (preg_match('/^(?:मामा|मामाचे\s+नाव|मावशी|मुलाची\s+आत्या|आत्या|चुलत|जावई|पाहुणे|नातेसंबंध)\s*[:\-]\s*(.+)$/u', $line, $m)) {
                 $names[] = $this->cleanPersonName(trim($m[1]));
             }
         }
@@ -3465,7 +3680,7 @@ class IntakeNormalizedBiodataDraftBuilder
 
     private function isParentRelativeLabelLine(string $line): bool
     {
-        return (bool) preg_match('/^(?:पित्याचे|वडिलांचे|वडीलांचे|वडील|आईचे|मातेचे|आई|मामा|मावशी|आत्या|चुलत|जावई|पाहुणे|नातेसंबंध)'.self::LABEL_SUFFIX.'/u', $line);
+        return (bool) preg_match('/^(?:पित्याचे|वडिलांचे|वडीलांचे|वडील|आईचे|मातेचे|आई|मामा|मामाचे\s+नाव|मावशी|मुलाची\s+आत्या|आत्या|चुलत|जावई|पाहुणे|नातेसंबंध)'.self::LABEL_SUFFIX.'/u', $line);
     }
 
     /**
@@ -3479,8 +3694,18 @@ class IntakeNormalizedBiodataDraftBuilder
         }
         $blob = implode("\n", $window);
 
-        return (bool) preg_match('/(?:वडील|पित्याचे|आई|मामा|मावशी|आत्या|चुलत|पाहुणे|नातेसंबंध|जावई)(?:[\s:：\-\.]|$)/u', $blob)
+        return (bool) preg_match('/(?:वडील|पित्याचे|आई|मामा|मामाचे\s+नाव|मावशी|मुलाची\s+आत्या|आत्या|चुलत|पाहुणे|नातेसंबंध|जावई)(?:[\s:：\-\.]|$)/u', $blob)
             && ! preg_match('/^#{1,6}\s/u', trim($line));
+    }
+
+    private function stripMarkdownHeadingDecorators(string $line): string
+    {
+        $line = trim($line);
+        $line = preg_replace('/^\s*#{1,6}\s*/u', '', $line) ?? $line;
+        $line = preg_replace('/^\*+\s*/u', '', $line) ?? $line;
+        $line = preg_replace('/\s*\*+\s*$/u', '', $line) ?? $line;
+
+        return trim($line);
     }
 
     private function isPlausibleCandidateName(string $value): bool

@@ -9,6 +9,8 @@ return [
     'full_name' => 'पूर्ण नाव',
     'date_of_birth' => 'जन्मतारीख',
     'birth_time' => 'जन्मवेळ',
+    'primary_contact_number_2' => 'स्वतःचा संपर्क १',
+    'primary_contact_number_3' => 'स्वतःचा संपर्क २',
     'marital_status' => 'वैवाहिक स्थिती',
     'religion' => 'धर्म',
     'caste' => 'जात',

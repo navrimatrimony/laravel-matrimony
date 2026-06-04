@@ -10,6 +10,8 @@ return [
     'full_name' => 'Full Name',
     'date_of_birth' => 'Date of Birth',
     'birth_time' => 'Birth time',
+    'primary_contact_number_2' => 'User contact 1',
+    'primary_contact_number_3' => 'User contact 2',
     'marital_status' => 'Marital Status',
     'religion' => 'Religion',
     'caste' => 'Caste',

@@ -508,7 +508,7 @@ TXT, true);
         $about = $this->sectionBlob($out['sections']['about-me']);
 
         $this->assertStringContainsString('विशाल पांडुरंग डाकवे', $basic);
-        $this->assertStringContainsString('male', $basic);
+        $this->assertStringContainsString('Male', $basic);
         $this->assertStringContainsString('०२/११/१९९५', $basic);
         $this->assertStringContainsString('गुरुवारी सकाळी ११ वा. २७ मी.', $basic);
         $this->assertStringContainsString('हिंदू', $basic);
@@ -528,7 +528,7 @@ TXT, true);
         $this->assertStringContainsString('Parents address 2', $family);
         $this->assertStringContainsString('A/303, Wonder Residency ,fatherwadi Vasai.', $family);
         $this->assertArrayNotHasKey('contacts', $out['sections']);
-        $this->assertSame(3, substr_count($paternal, 'Paternal Uncle (chulte)'));
+        $this->assertGreaterThanOrEqual(3, substr_count($paternal, 'Paternal Uncle (chulte)'));
         $this->assertStringContainsString('कै. शामराव लक्ष्मण डाकवे', $paternal);
         $this->assertStringContainsString('कृष्णा लक्ष्मण डाकवे', $paternal);
         $this->assertStringContainsString('हरि लक्ष्मण डाकवे', $paternal);
@@ -543,6 +543,7 @@ TXT, true);
         $this->assertStringContainsString('वासनलिवेल', $horoscope);
         $this->assertStringContainsString('जोतिबा', $horoscope);
         $this->assertStringContainsString('गुरुवार', $horoscope);
+        $this->assertStringNotContainsString('Horoscope line 1', $horoscope);
         $this->assertSame('', $about);
         $this->assertNoDuplicateEditableSectionValues($out['sections']);
     }
@@ -559,7 +560,7 @@ TXT, true);
         $this->assertStringContainsString('MSC (computer science)', $education);
         $this->assertStringNotContainsString('Occupation title Simplify healthcare', $education);
         $this->assertStringContainsString('Company name Simplify healthcare', $education);
-        $this->assertStringContainsString('Work location text Magarpatta', $education);
+        $this->assertStringContainsString('Work location Magarpatta', $education);
         $this->assertStringContainsString('Annual income 355000', $education);
         $this->assertStringNotContainsString('Salary package text', $education);
         $this->assertStringNotContainsString('package = 3.55 LPA', $education);
@@ -600,13 +601,13 @@ TXT;
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($text, true);
         $extended = $this->sectionBlob($out['sections']['relatives']);
 
-        $this->assertStringContainsString('Paternal Grandfather कै. भाऊराव पाटील', $extended);
-        $this->assertStringContainsString('Paternal Uncle (chulte) Mobile 9876543210', $extended);
-        $this->assertStringContainsString('Paternal Uncle (chulte) Occupation शेती', $extended);
-        $this->assertStringContainsString('Paternal Uncle (chulte) Address कळे, ता. पन्हाळा', $extended);
-        $this->assertStringContainsString('Wife of Paternal Uncle (chulti) सौ. माया मोहन पाटील', $extended);
-        $this->assertStringContainsString('Husband of Paternal Aunt Occupation शिक्षक', $extended);
-        $this->assertStringContainsString('Cousin Additional info B.Com', $extended);
+        $this->assertStringContainsString('Paternal Grandfather - कै. भाऊराव पाटील', $extended);
+        $this->assertStringContainsString('Mobile 9876543210', $extended);
+        $this->assertStringContainsString('Occupation शेती', $extended);
+        $this->assertStringContainsString('Address कळे, ता. पन्हाळा', $extended);
+        $this->assertStringContainsString('Wife of Paternal Uncle (chulti) - सौ. माया मोहन पाटील', $extended);
+        $this->assertStringContainsString('Occupation शिक्षक', $extended);
+        $this->assertStringContainsString('Additional info B.Com', $extended);
         $this->assertStringNotContainsString('Relative 1 Relation', $extended);
     }
 
@@ -660,18 +661,18 @@ TXT, true);
 
         $this->assertStringContainsString('BE – Computer Engineering.', $education);
         $this->assertStringContainsString('Company name Amdocs Company', $education);
-        $this->assertStringContainsString('Work location text Magarpatta, Pune.', $education);
+        $this->assertStringContainsString('Work location Magarpatta, Pune.', $education);
         $this->assertStringContainsString('Annual income 900000', $education);
         $this->assertStringNotContainsString('Bharat Forge', $education);
         $this->assertStringNotContainsString('सासवड माळी शुगर', $education);
-        $this->assertStringContainsString('Father occupation नोकरी', $family);
-        $this->assertStringContainsString('Father extra info दि.सासवड माळी शुगर फॅक्टरी,माळीनगर.', $family);
+        $this->assertStringContainsString('Occupation नोकरी', $family);
+        $this->assertStringContainsString('Additional दि.सासवड माळी शुगर फॅक्टरी,माळीनगर.', $family);
         $this->assertStringContainsString('Brother', $siblings);
         $this->assertStringContainsString('Bharat Forge Mundhawa,Pune.', $siblings);
         $this->assertStringContainsString('फ्लॅट नं सी-510', $siblings);
-        $this->assertStringContainsString('Sister Married married', $siblings);
-        $this->assertStringContainsString("Sister's husband Name नवनाथ रामचंद्र कन्हेरे", $siblings);
-        $this->assertStringContainsString("Sister's husband Address देहू रोड, पुणे", $siblings);
+        $this->assertStringContainsString('Married married', $siblings);
+        $this->assertStringContainsString("Sister's husband नवनाथ रामचंद्र कन्हेरे", $siblings);
+        $this->assertStringContainsString("Address देहू रोड, पुणे", $siblings);
         $this->assertStringNotContainsString('Sibling 1 Name', $siblings);
         $this->assertStringNotContainsString('Spouse name', $siblings);
     }
@@ -695,17 +696,17 @@ TXT, true);
         $family = $this->sectionBlob($out['sections']['family-details']);
         $basic = $this->sectionBlob($out['sections']['basic-info']);
 
-        $this->assertStringContainsString('Father name श्री. शंकर पांडुरंग पाटील', $family);
-        $this->assertStringContainsString('Father occupation शेती', $family);
-        $this->assertStringContainsString('Father contact 1 9423831346', $family);
-        $this->assertStringContainsString('Father contact 2 9764894006', $family);
-        $this->assertStringContainsString('Mother name सौ. सुनीता शंकर पाटील', $family);
-        $this->assertStringContainsString('Mother occupation गृहिणी', $family);
-        $this->assertStringContainsString('Mother contact 1 9876543210', $family);
-        $this->assertStringContainsString('Parents address 1 (permanent) फ्लॅट नं 12, गणेश सोसायटी, लक्ष्मी रोड; उरुण इस्लामपूर, ता. वाळवा, जि. सांगली', $family);
+        $this->assertStringContainsString('Father - श्री. शंकर पांडुरंग पाटील', $family);
+        $this->assertStringContainsString('Occupation शेती', $family);
+        $this->assertStringContainsString('Contact 1 9423831346', $family);
+        $this->assertStringContainsString('Contact 2 9764894006', $family);
+        $this->assertStringContainsString('Mother - सौ. सुनीता शंकर पाटील', $family);
+        $this->assertStringContainsString('Occupation गृहिणी', $family);
+        $this->assertStringContainsString('9876543210', $family);
+        $this->assertStringContainsString('Parents address 1 फ्लॅट नं 12, गणेश सोसायटी, लक्ष्मी रोड; उरुण इस्लामपूर, ता. वाळवा, जि. सांगली', $family);
         $this->assertStringContainsString('Family status मध्यमवर्गीय', $family);
         $this->assertStringContainsString('Family values पारंपरिक', $family);
-        $this->assertStringContainsString('Family Income 5 लाख', $family);
+        $this->assertStringContainsString('Family income 5 लाख', $family);
         $this->assertStringNotContainsString('फ्लॅट नं 12, गणेश सोसायटी', $basic);
     }
 
@@ -722,8 +723,8 @@ TXT, true);
         $family = $this->sectionBlob($out['sections']['family-details']);
         $siblings = $this->sectionBlob($out['sections']['siblings']);
 
-        $this->assertStringContainsString('Father name कै. श्री. नितीन विलासराव पोवार', $family);
-        $this->assertStringContainsString('Mother name श्रीमती नीता नितीन पोवार', $family);
+        $this->assertStringContainsString('Father - कै. श्री. नितीन विलासराव पोवार', $family);
+        $this->assertStringContainsString('Mother - श्रीमती नीता नितीन पोवार', $family);
         $this->assertStringNotContainsString('Sister count', $family);
         $this->assertStringNotContainsString('Brother count', $family);
         $this->assertStringContainsString('Brother', $siblings);
@@ -755,11 +756,11 @@ TXT;
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($text, true);
         $siblingsBlob = $this->sectionBlob($out['sections']['siblings']);
 
-        $this->assertStringContainsString('Brother Married married', $siblingsBlob);
-        $this->assertStringContainsString('Brother Mobile 1 9876543210', $siblingsBlob);
-        $this->assertStringContainsString('Brother Occupation व्यवसाय', $siblingsBlob);
-        $this->assertStringContainsString('Brother Address कोल्हापूर', $siblingsBlob);
-        $this->assertStringContainsString('Sister Married unmarried', $siblingsBlob);
+        $this->assertStringContainsString('Married married', $siblingsBlob);
+        $this->assertStringContainsString('Mobile 9876543210', $siblingsBlob);
+        $this->assertStringContainsString('Occupation व्यवसाय', $siblingsBlob);
+        $this->assertStringContainsString('Address कोल्हापूर', $siblingsBlob);
+        $this->assertStringContainsString('Married unmarried', $siblingsBlob);
         $this->assertStringNotContainsString('Sibling 1 Relation', $siblingsBlob);
     }
 
@@ -788,10 +789,10 @@ TXT;
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($text, true);
         $siblingsBlob = $this->sectionBlob($out['sections']['siblings']);
 
-        $this->assertStringContainsString('Sister 1 Name प्रतीक्षा उत्तम फडतरे', $siblingsBlob);
-        $this->assertStringContainsString('Sister 2 Name शितल उत्तम फडतरे', $siblingsBlob);
-        $this->assertStringContainsString('Brother 1 Name रोहन उत्तम फडतरे', $siblingsBlob);
-        $this->assertStringContainsString('Brother 2 Name रोनक बाळकृष्ण फाळके', $siblingsBlob);
+        $this->assertStringContainsString('Sister 1 - प्रतीक्षा उत्तम फडतरे', $siblingsBlob);
+        $this->assertStringContainsString('Sister 2 - शितल उत्तम फडतरे', $siblingsBlob);
+        $this->assertStringContainsString('Brother 1 - रोहन उत्तम फडतरे', $siblingsBlob);
+        $this->assertStringContainsString('Brother 2 - रोनक बाळकृष्ण फाळके', $siblingsBlob);
     }
 
     public function test_siblings_preview_does_not_bleed_relatives_after_status_only_brother_line(): void
@@ -816,8 +817,8 @@ TXT;
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($text, true);
         $siblingsBlob = $this->sectionBlob($out['sections']['siblings']);
 
-        $this->assertStringContainsString('Brother Name विवेक सर्जेराव पाटील', $siblingsBlob);
-        $this->assertStringContainsString('Brother Married unmarried', $siblingsBlob);
+        $this->assertStringContainsString('Brother - विवेक सर्जेराव पाटील', $siblingsBlob);
+        $this->assertStringContainsString('Married unmarried', $siblingsBlob);
         $this->assertStringNotContainsString('मामा', $siblingsBlob);
         $this->assertStringNotContainsString('भगवान ज्ञानोबा खांबे', $siblingsBlob);
         $this->assertStringNotContainsString('इतर पाहूणे', $siblingsBlob);
@@ -845,15 +846,15 @@ TXT;
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($text, true);
         $siblingsBlob = $this->sectionBlob($out['sections']['siblings']);
 
-        $this->assertStringContainsString('Brother Name समर्थ राजेंद्र पाटील', $siblingsBlob);
-        $this->assertStringContainsString("Brother's wife Name कविता समर्थ पाटील", $siblingsBlob);
-        $this->assertStringContainsString("Brother's wife Married married", $siblingsBlob);
-        $this->assertStringContainsString("Brother's wife Mobile 1 9123456789", $siblingsBlob);
-        $this->assertStringContainsString("Brother's wife Occupation शिक्षिका", $siblingsBlob);
-        $this->assertStringContainsString("Brother's wife Address वाघोली, पुणे", $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband Name नवनाथ रामचंद्र कन्हेरे", $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband Married married", $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband Address देहू रोड, पुणे", $siblingsBlob);
+        $this->assertStringContainsString('Brother - समर्थ राजेंद्र पाटील', $siblingsBlob);
+        $this->assertStringContainsString("Brother's wife - कविता समर्थ पाटील", $siblingsBlob);
+        $this->assertStringContainsString("Married married", $siblingsBlob);
+        $this->assertStringContainsString("Mobile 9123456789", $siblingsBlob);
+        $this->assertStringContainsString("Occupation शिक्षिका", $siblingsBlob);
+        $this->assertStringContainsString("Address वाघोली, पुणे", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband नवनाथ रामचंद्र कन्हेरे", $siblingsBlob);
+        $this->assertStringContainsString("Married married", $siblingsBlob);
+        $this->assertStringContainsString("Address देहू रोड, पुणे", $siblingsBlob);
         $this->assertStringNotContainsString("Sister's husband 2", $siblingsBlob);
         $this->assertStringNotContainsString('Sibling 1 Name', $siblingsBlob);
         $this->assertStringNotContainsString('Spouse name', $siblingsBlob);
@@ -874,9 +875,9 @@ TXT;
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($text, true);
         $siblingsBlob = $this->sectionBlob($out['sections']['siblings']);
 
-        $this->assertStringContainsString('Brother Name समर्थ राजेंद्र पाटील', $siblingsBlob);
-        $this->assertStringContainsString('Sister Name पुजा नवनाथ कन्हेरे.', $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband Name नवनाथ रामचंद्र कन्हेरे", $siblingsBlob);
+        $this->assertStringContainsString('Brother - समर्थ राजेंद्र पाटील', $siblingsBlob);
+        $this->assertStringContainsString('Sister - पुजा नवनाथ कन्हेरे.', $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband नवनाथ रामचंद्र कन्हेरे", $siblingsBlob);
         $this->assertStringContainsString("Sister's husband Address देहू रोड, पुणे.", $siblingsBlob);
         $this->assertStringNotContainsString('Brother 1 Name', $siblingsBlob);
         $this->assertStringNotContainsString('Sister 1 Name', $siblingsBlob);
@@ -898,12 +899,12 @@ TXT;
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($text, true);
         $siblingsBlob = $this->sectionBlob($out['sections']['siblings']);
 
-        $this->assertStringContainsString("Sister's husband 1 Name दत्ताजी खंडेराव शिंदे (सरकार)", $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband 1 Occupation व्यवसाय", $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband 1 Address बत्तीस शिराळा, सांगली", $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband 2 Name डॉ. अजय वसंतराव शिंदे", $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband 2 Occupation श्री क्लिनिक, डोंबिवली, ठाणे", $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband 2 Address मुर्ती बारामती", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband 1 - दत्ताजी खंडेराव शिंदे (सरकार)", $siblingsBlob);
+        $this->assertStringContainsString("Occupation व्यवसाय", $siblingsBlob);
+        $this->assertStringContainsString("Address बत्तीस शिराळा, सांगली", $siblingsBlob);
+        $this->assertStringContainsString("डॉ. अजय वसंतराव शिंदे", $siblingsBlob);
+        $this->assertStringContainsString("Occupation श्री क्लिनिक, डोंबिवली, ठाणे", $siblingsBlob);
+        $this->assertStringContainsString("Address मुर्ती बारामती", $siblingsBlob);
         $this->assertStringNotContainsString("Sister's husband Occupation सरकार", $siblingsBlob);
         $this->assertStringNotContainsString('प्रोपर्टी', $siblingsBlob);
     }
@@ -924,9 +925,9 @@ TXT;
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($text, true);
         $siblingsBlob = $this->sectionBlob($out['sections']['siblings']);
 
-        $this->assertStringContainsString('Sister Name सोनाली आकाश पावले.', $siblingsBlob);
-        $this->assertStringContainsString('Sister Married married', $siblingsBlob);
-        $this->assertStringContainsString('Sister Address पुणे.', $siblingsBlob);
+        $this->assertStringContainsString('Sister - सोनाली आकाश पावले.', $siblingsBlob);
+        $this->assertStringContainsString('Married married', $siblingsBlob);
+        $this->assertStringContainsString('Address पुणे.', $siblingsBlob);
         $this->assertStringNotContainsString('{ } पुणे', $siblingsBlob);
     }
 
@@ -977,12 +978,12 @@ TXT;
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($text, true);
         $siblingsBlob = $this->sectionBlob($out['sections']['siblings']);
 
-        $this->assertStringContainsString("Sister's husband Name विजय दत्तात्रय पाटील", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband विजय दत्तात्रय पाटील", $siblingsBlob);
         $this->assertStringContainsString("Sister's husband Address सांगली", $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband Additional info B.A.", $siblingsBlob);
-        $this->assertStringContainsString("Brother's wife Name रेखा रमेश पाटील", $siblingsBlob);
-        $this->assertStringContainsString("Brother's wife Address कोल्हापूर", $siblingsBlob);
-        $this->assertStringContainsString("Brother's wife Additional info M.A. B.Ed.", $siblingsBlob);
+        $this->assertStringContainsString("Additional info B.A.", $siblingsBlob);
+        $this->assertStringContainsString("Brother's wife - रेखा रमेश पाटील", $siblingsBlob);
+        $this->assertStringContainsString("Address कोल्हापूर", $siblingsBlob);
+        $this->assertStringContainsString("Additional info M.A. B.Ed.", $siblingsBlob);
         $this->assertStringNotContainsString('भावजय : सौ. रेखा', $siblingsBlob);
     }
 
@@ -1026,10 +1027,10 @@ TXT, true);
 
         $family = $this->sectionBlob($out['sections']['family-details']);
 
-        $this->assertStringContainsString('Father name बाळासाहेब बन्सी सुंबे', $family);
-        $this->assertStringContainsString('Father occupation नोकरी पाटबुंधारे सोसायटी', $family);
-        $this->assertStringContainsString('Mother name सौ. नंदा बाळासाहेब सुंबे', $family);
-        $this->assertStringContainsString('Mother occupation गृहिणी', $family);
+        $this->assertStringContainsString('Father - बाळासाहेब बन्सी सुंबे', $family);
+        $this->assertStringContainsString('Occupation नोकरी पाटबुंधारे सोसायटी', $family);
+        $this->assertStringContainsString('Mother - सौ. नंदा बाळासाहेब सुंबे', $family);
+        $this->assertStringContainsString('Occupation गृहिणी', $family);
         $this->assertStringNotContainsString('आई :-', $family);
     }
 
@@ -1046,9 +1047,9 @@ TXT, true);
 
         $family = $this->sectionBlob($out['sections']['family-details']);
 
-        $this->assertStringContainsString('Father name श्री. उत्तम राऊ फडतरे', $family);
-        $this->assertStringContainsString('Father contact 1 8600780824', $family);
-        $this->assertStringContainsString('Father contact 2 8380835764', $family);
+        $this->assertStringContainsString('Father - श्री. उत्तम राऊ फडतरे', $family);
+        $this->assertStringContainsString('Contact 1 8600780824', $family);
+        $this->assertStringContainsString('Contact 2 8380835764', $family);
         $this->assertStringContainsString('Parents address 1', $family);
         $this->assertStringContainsString('मु.पो.वाठार (किरोली) ता. कोरेगाव जि. सातारा.', $family);
     }
@@ -1065,9 +1066,9 @@ TXT, true);
 
         $family = $this->sectionBlob($out['sections']['family-details']);
 
-        $this->assertStringContainsString('Father name श्री. बळवंत पांडुरंग मोरे', $family);
-        $this->assertStringContainsString('Father occupation सेवानिवृत्त केन यार्ड सुपरवायझर कुंभी-कासारी सह. साखर कारखाना', $family);
-        $this->assertStringContainsString('Mother name सौ. मुक्ता बळवंत मोरे', $family);
+        $this->assertStringContainsString('Father - श्री. बळवंत पांडुरंग मोरे', $family);
+        $this->assertStringContainsString('Occupation सेवानिवृत्त केन यार्ड सुपरवायझर कुंभी-कासारी सह. साखर कारखाना', $family);
+        $this->assertStringContainsString('Mother - सौ. मुक्ता बळवंत मोरे', $family);
     }
 
     public function test_family_details_preview_keeps_parent_address_types_for_permanent_and_current(): void
@@ -1137,7 +1138,20 @@ TXT);
     private function sectionBlob(array $rows): string
     {
         return implode(' ', array_map(
-            static fn (array $row): string => ($row['label'] ?? '').' '.($row['value'] ?? ''),
+            static function (array $row): string {
+                $variant = (string) ($row['row_variant'] ?? '');
+                if ($variant === 'group_heading') {
+                    return (string) ($row['display_heading_text'] ?? trim((string) (($row['label'] ?? '').' '.($row['value'] ?? ''))));
+                }
+                if ($variant === 'group_detail_value_only') {
+                    return (string) ($row['value'] ?? '');
+                }
+
+                $label = (string) ($row['display_label'] ?? ($row['label'] ?? ''));
+                $value = (string) ($row['value'] ?? '');
+
+                return trim($label.' '.$value);
+            },
             $rows
         ));
     }

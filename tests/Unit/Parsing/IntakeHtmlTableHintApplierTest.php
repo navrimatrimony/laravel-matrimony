@@ -253,6 +253,22 @@ HTML;
         $this->assertTrue($mappedProperty['owns_house'] ?? false);
     }
 
+    public function test_html_table_horoscope_grid_aliases_map_to_wizard_fields(): void
+    {
+        $html = <<<'HTML'
+<table>
+<tr><td>स्वामी</td><td>शनि</td></tr>
+<tr><td>वैरवर्ग</td><td>मानव</td></tr>
+</table>
+HTML;
+
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($html);
+
+        $horoscope = $draft['normalized']['horoscope'] ?? [];
+        $this->assertSame('मानव', $horoscope['vashya'] ?? null);
+        $this->assertSame('शनि', $horoscope['rashi_lord'] ?? null);
+    }
+
     public function test_html_table_gharcha_patta_does_not_create_property_summary(): void
     {
         $html = <<<'HTML'
