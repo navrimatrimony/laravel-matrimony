@@ -87,6 +87,7 @@ final class IntakePreviewNormalizedDraftPresenter
      *     skipped_reason: ?string,
      *     build_error: ?string,
      *     review_flags_by_field: array<string, list<array{reason: string, raw: string}>>,
+     *     detected_but_not_included: list<array{label: string, value: string, reason: ?string, suggested_section: ?string}>,
      *     sections: array<string, list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}>>,
      *     raw_draft_json: ?string
      * }
@@ -107,6 +108,7 @@ final class IntakePreviewNormalizedDraftPresenter
             $core = is_array($normalized['core'] ?? null) ? $normalized['core'] : [];
             $flags = is_array($draft['review_flags'] ?? null) ? $draft['review_flags'] : [];
             $reviewMap = $this->buildReviewMap($flags);
+            $detectedButNotIncluded = $this->detectedButNotIncludedRows($flags, $normalized);
 
             $sections = array_replace($this->emptySections(), [
                 'review_needed' => $this->reviewRows($flags),
@@ -129,6 +131,7 @@ final class IntakePreviewNormalizedDraftPresenter
                 'skipped_reason' => null,
                 'build_error' => null,
                 'review_flags_by_field' => $reviewMap,
+                'detected_but_not_included' => $detectedButNotIncluded,
                 'sections' => $sections,
                 'raw_draft_json' => json_encode($draft, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ];
@@ -140,6 +143,7 @@ final class IntakePreviewNormalizedDraftPresenter
                 'skipped_reason' => null,
                 'build_error' => $e->getMessage(),
                 'review_flags_by_field' => [],
+                'detected_but_not_included' => [],
                 'sections' => $this->emptySections(),
                 'raw_draft_json' => null,
             ];
@@ -152,6 +156,7 @@ final class IntakePreviewNormalizedDraftPresenter
      *     skipped_reason: ?string,
      *     build_error: ?string,
      *     review_flags_by_field: array<string, list<array{reason: string, raw: string}>>,
+     *     detected_but_not_included: list<array{label: string, value: string, reason: ?string, suggested_section: ?string}>,
      *     sections: array<string, list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}>>,
      *     raw_draft_json: ?string
      * }
@@ -163,6 +168,7 @@ final class IntakePreviewNormalizedDraftPresenter
             'skipped_reason' => $reason,
             'build_error' => null,
             'review_flags_by_field' => [],
+            'detected_but_not_included' => [],
             'sections' => $this->emptySections(),
             'raw_draft_json' => null,
         ];
@@ -1847,34 +1853,9 @@ final class IntakePreviewNormalizedDraftPresenter
             $displayValues[] = $text;
         }
 
-        foreach ($horoscope as $key => $value) {
-            if ($key === 'raw' || in_array((string) $key, self::HOROSCOPE_FIELDS, true) || ! is_scalar($value)) {
-                continue;
-            }
-            $text = $this->stringify($value);
-            if ($text === '') {
-                continue;
-            }
-            $rows[] = $this->displayRow($this->fieldLabel((string) $key), $text, null, $reviewMap);
-            $displayValues[] = $text;
-        }
-
         $coreBirthTime = $this->stringify($normalized['core']['birth_time'] ?? null);
         if ($coreBirthTime !== '') {
             $displayValues[] = $coreBirthTime;
-        }
-
-        foreach ($rawLines as $index => $line) {
-            $text = $this->stringify($line);
-            if ($text === '' || ! $this->shouldKeepHoroscopeRawLine($text, $displayValues)) {
-                continue;
-            }
-            $rows[] = $this->displayRow(
-                __('intake.normalized_draft_horoscope_line', ['n' => $index + 1]),
-                $text,
-                null,
-                $reviewMap
-            );
         }
 
         return $rows;
@@ -2044,6 +2025,123 @@ final class IntakePreviewNormalizedDraftPresenter
         return $rows;
     }
 
+    /**
+     * @param  list<array<string, mixed>>  $flags
+     * @param  array<string, mixed>  $normalized
+     * @return list<array{label: string, value: string, reason: ?string, suggested_section: ?string}>
+     */
+    private function detectedButNotIncludedRows(array $flags, array $normalized): array
+    {
+        $rows = [];
+        $seen = [];
+
+        foreach ($flags as $flag) {
+            if (! is_array($flag)) {
+                continue;
+            }
+
+            $raw = $this->stringify($flag['raw'] ?? null);
+            if ($raw === '') {
+                continue;
+            }
+
+            $field = $this->stringify($flag['field'] ?? null);
+            $reason = $this->stringify($flag['reason'] ?? null);
+            $suggested = $this->stringify($flag['suggested_section'] ?? null);
+
+            $this->appendDetectedButNotIncludedRow(
+                $rows,
+                $seen,
+                $field !== '' ? $this->reviewFieldLabel($field) : __('intake.normalized_draft_detected_item_label'),
+                $raw,
+                $reason !== '' ? $this->reviewReasonLabel($reason) : null,
+                $suggested !== '' ? $this->reviewSectionLabel($suggested) : null
+            );
+        }
+
+        $horoscope = $normalized['horoscope'] ?? null;
+        if (! is_array($horoscope)) {
+            return $rows;
+        }
+
+        $rawLines = is_array($horoscope['raw'] ?? null) ? $horoscope['raw'] : [];
+        $explicitFieldPresence = $this->horoscopeExplicitFieldPresence($rawLines);
+        $displayValues = [];
+
+        foreach (self::HOROSCOPE_FIELDS as $field) {
+            $text = $this->stringify($horoscope[$field] ?? null);
+            if ($text === '') {
+                continue;
+            }
+            if ($this->shouldSkipDuplicateHoroscopeField($field, $text, $horoscope, $explicitFieldPresence)) {
+                continue;
+            }
+            $displayValues[] = $text;
+        }
+
+        $coreBirthTime = $this->stringify($normalized['core']['birth_time'] ?? null);
+        if ($coreBirthTime !== '') {
+            $displayValues[] = $coreBirthTime;
+        }
+
+        foreach ($horoscope as $key => $value) {
+            if ($key === 'raw' || in_array((string) $key, self::HOROSCOPE_FIELDS, true) || ! is_scalar($value)) {
+                continue;
+            }
+            $text = $this->stringify($value);
+            if ($text === '') {
+                continue;
+            }
+
+            $this->appendDetectedButNotIncludedRow(
+                $rows,
+                $seen,
+                $this->fieldLabel((string) $key),
+                $text,
+                __('intake.normalized_draft_detected_not_included_reason'),
+                __('intake.normalized_draft_section_horoscope_religious')
+            );
+        }
+
+        foreach ($rawLines as $line) {
+            $text = $this->stringify($line);
+            if ($text === '' || ! $this->shouldKeepHoroscopeRawLine($text, $displayValues)) {
+                continue;
+            }
+
+            $this->appendDetectedButNotIncludedRow(
+                $rows,
+                $seen,
+                __('intake.normalized_draft_detected_item_label'),
+                $text,
+                __('intake.normalized_draft_detected_not_included_reason'),
+                __('intake.normalized_draft_section_horoscope_religious')
+            );
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  list<array{label: string, value: string, reason: ?string, suggested_section: ?string}>  $rows
+     * @param  array<string, bool>  $seen
+     */
+    private function appendDetectedButNotIncludedRow(array &$rows, array &$seen, string $label, string $value, ?string $reason, ?string $suggestedSection): void
+    {
+        $key = mb_strtolower(trim($label.'|'.$value));
+        if ($key === '' || isset($seen[$key])) {
+            return;
+        }
+
+        $seen[$key] = true;
+        $rows[] = [
+            'label' => $label,
+            'value' => $value,
+            'reason' => $reason,
+            'suggested_section' => $suggestedSection,
+        ];
+    }
+
     private function fieldLabel(string $field): string
     {
         $translated = __('intake.core_suggestion_field.'.$field);
@@ -2073,7 +2171,7 @@ final class IntakePreviewNormalizedDraftPresenter
             }
         }
 
-        return $value;
+        return OcrNormalize::normalizeDigits($value);
     }
 
     private function stringify(mixed $value): string
@@ -2085,7 +2183,7 @@ final class IntakePreviewNormalizedDraftPresenter
             return $value ? 'होय' : 'नाही';
         }
         if (is_scalar($value)) {
-            return trim((string) $value);
+            return OcrNormalize::normalizeDigits(trim((string) $value));
         }
 
         return '';
@@ -2389,52 +2487,6 @@ final class IntakePreviewNormalizedDraftPresenter
             );
         }
 
-        $spouse = is_array($sibling['spouse'] ?? null) ? $sibling['spouse'] : [];
-        if ($spouse !== []) {
-            $spouseLabel = $this->compactSpouseHeading($relationType);
-            $spouseName = $this->stringify($spouse['name'] ?? null);
-            $spouseOccurrence = preg_match('/\s+(\d+)$/u', trim($prefix), $m) === 1 ? (int) $m[1] : 1;
-            $rawSpousePrefix = $this->localizedRelationDisplayLabel(
-                'sibling',
-                $this->siblingSpouseRelationFor($relationType),
-                $spouseLabel
-            ).' '.$spouseOccurrence;
-            if ($spouseName !== '') {
-                $rows[] = $this->groupDetailRow(
-                    $rawSpousePrefix.' '.$this->relationFieldLabel('name'),
-                    $spouseName,
-                    null,
-                    $reviewMap,
-                    false,
-                    ['display_label' => $spouseLabel]
-                );
-            }
-            foreach ([
-                'occupation' => $spouseLabel.' '.$this->relationFieldLabel('occupation'),
-                'occupation_title' => $spouseLabel.' '.$this->relationFieldLabel('occupation'),
-                'address_line' => $spouseLabel.' '.$this->relationFieldLabel('address_line'),
-                'location_display' => $spouseLabel.' '.$this->relationFieldLabel('location_display'),
-                'contact_number' => $spouseLabel.' '.$this->relationFieldLabel('contact_number'),
-                'contact_number_2' => $spouseLabel.' '.$this->indexedRelationFieldLabel('contact_number', 2),
-                'contact_number_3' => $spouseLabel.' '.$this->indexedRelationFieldLabel('contact_number', 3),
-                'notes' => $spouseLabel.' '.$this->relationFieldLabel('notes'),
-                'additional_info' => $spouseLabel.' '.$this->relationFieldLabel('notes'),
-            ] as $field => $label) {
-                $value = $this->stringify($spouse[$field] ?? null);
-                if ($value === '') {
-                    continue;
-                }
-                $rows[] = $this->groupDetailRow(
-                    $rawSpousePrefix.' '.$this->spouseRawFieldLabel($field),
-                    $value,
-                    null,
-                    $reviewMap,
-                    false,
-                    ['display_label' => $label]
-                );
-            }
-        }
-
         foreach ([
             'occupation' => $this->relationFieldLabel('occupation'),
             'contact_number' => $this->relationFieldLabel('contact_number'),
@@ -2456,6 +2508,46 @@ final class IntakePreviewNormalizedDraftPresenter
                 false,
                 ['display_label' => $label]
             );
+        }
+
+        $spouse = is_array($sibling['spouse'] ?? null) ? $sibling['spouse'] : [];
+        if ($spouse !== []) {
+            $spouseLabel = $this->compactSpouseHeading($relationType);
+            $spouseName = $this->stringify($spouse['name'] ?? null);
+            $spouseOccurrence = preg_match('/\s+(\d+)$/u', trim($prefix), $m) === 1 ? (int) $m[1] : 1;
+            $rawSpousePrefix = $this->localizedRelationDisplayLabel(
+                'sibling',
+                $this->siblingSpouseRelationFor($relationType),
+                $spouseLabel
+            );
+            $spouseHeading = $spouseOccurrence > 1 ? $rawSpousePrefix.' '.$spouseOccurrence : $rawSpousePrefix;
+            if ($spouseName !== '') {
+                $rows[] = $this->groupHeadingRow($spouseHeading, $spouseName, true, null, $reviewMap);
+            }
+            foreach ([
+                'occupation' => $this->relationFieldLabel('occupation'),
+                'occupation_title' => $this->relationFieldLabel('occupation'),
+                'address_line' => $this->relationFieldLabel('address_line'),
+                'location_display' => $this->relationFieldLabel('location_display'),
+                'contact_number' => $this->relationFieldLabel('contact_number'),
+                'contact_number_2' => $this->indexedRelationFieldLabel('contact_number', 2),
+                'contact_number_3' => $this->indexedRelationFieldLabel('contact_number', 3),
+                'notes' => $this->relationFieldLabel('notes'),
+                'additional_info' => $this->relationFieldLabel('notes'),
+            ] as $field => $label) {
+                $value = $this->stringify($spouse[$field] ?? null);
+                if ($value === '') {
+                    continue;
+                }
+                $rows[] = $this->groupDetailRow(
+                    $spouseHeading.' '.$this->spouseRawFieldLabel($field),
+                    $value,
+                    null,
+                    $reviewMap,
+                    false,
+                    ['display_label' => $label]
+                );
+            }
         }
 
         if ($rows === []) {

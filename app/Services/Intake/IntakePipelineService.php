@@ -7,6 +7,7 @@ use App\Services\Parsing\IntakeControlledFieldNormalizer;
 use App\Services\Parsing\IntakeDictionaryMapper;
 use App\Services\Parsing\IntakeParsedJsonUtf8Sanitizer;
 use App\Services\Parsing\IntakeParsedSnapshotSkeleton;
+use App\Services\Ocr\OcrNormalize;
 
 /**
  * Central orchestration for intake snapshot shaping and pending suggestion storage.
@@ -68,16 +69,22 @@ class IntakePipelineService
      * @param  array<string, int>|null  $utf8Stats
      * @return array<string, mixed>
      */
-    public function finalizeParsedSnapshotForStorage(array $parsed, ?array &$utf8Stats = null): array
+    public function finalizeParsedSnapshotForStorage(array $parsed, ?array &$utf8Stats = null, ?int $suggestedByUserId = null): array
     {
-        $ssot = $this->snapshotSkeleton->ensure($parsed);
+        $ssot = OcrNormalize::normalizeDigitsDeep($this->snapshotSkeleton->ensure($parsed));
+        $ssot = $this->controlledFieldNormalizer->normalizeSnapshot($ssot, $suggestedByUserId);
         $stats = [];
         $out = IntakeParsedJsonUtf8Sanitizer::sanitize($ssot, $stats);
+        $out = $this->controlledFieldNormalizer->finalizePostSsotSnapshot(
+            $this->snapshotSkeleton->ensure($out),
+            $suggestedByUserId
+        );
+        $out = OcrNormalize::normalizeDigitsDeep($this->snapshotSkeleton->ensure($out));
         if ($utf8Stats !== null) {
             $utf8Stats = $stats;
         }
 
-        return $out;
+        return $this->snapshotSkeleton->ensure($out);
     }
 
     /**

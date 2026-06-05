@@ -1,6 +1,7 @@
 @php
     $draftPreview = is_array($normalizedDraftPreview ?? null) ? $normalizedDraftPreview : [];
     $draftAvailable = ! empty($draftPreview['available']);
+    $detectedButNotIncluded = is_array($draftPreview['detected_but_not_included'] ?? null) ? $draftPreview['detected_but_not_included'] : [];
     $draftSections = is_array($draftPreview['sections'] ?? null) ? $draftPreview['sections'] : [];
     $sectionKeys = array_keys($draftSections);
     if ($sectionKeys === []) {
@@ -34,6 +35,45 @@
             {{ __('intake.normalized_draft_unavailable') }}
         </p>
     @else
+        @if ($detectedButNotIncluded !== [])
+            <div class="rounded border border-rose-300 dark:border-rose-700 bg-rose-50 dark:bg-rose-950/20 px-3 py-3 space-y-2">
+                <div>
+                    <h3 class="text-sm font-semibold text-rose-900 dark:text-rose-100">
+                        {{ __('intake.normalized_draft_detected_not_included_heading') }}
+                    </h3>
+                    <p class="mt-1 text-xs text-rose-900/90 dark:text-rose-100/90">
+                        {{ __('intake.normalized_draft_detected_not_included_help') }}
+                    </p>
+                </div>
+                <dl class="space-y-2 text-xs">
+                    @foreach ($detectedButNotIncluded as $row)
+                        @if (! is_array($row))
+                            @continue
+                        @endif
+                        <div class="rounded border border-rose-200 dark:border-rose-800 bg-white/70 dark:bg-gray-900/30 px-2 py-1.5">
+                            <div class="flex flex-wrap items-start gap-2">
+                                <span class="font-medium text-gray-700 dark:text-gray-300 break-words">{{ (string) ($row['label'] ?? __('intake.normalized_draft_detected_item_label')) }}:</span>
+                                <span class="text-gray-800 dark:text-gray-100 whitespace-pre-wrap break-words">{{ (string) ($row['value'] ?? '') }}</span>
+                            </div>
+                            @if (! empty($row['reason']) || ! empty($row['suggested_section']))
+                                <p class="mt-1 text-[11px] text-rose-800 dark:text-rose-200">
+                                    @if (! empty($row['reason']))
+                                        {{ (string) $row['reason'] }}
+                                    @endif
+                                    @if (! empty($row['reason']) && ! empty($row['suggested_section']))
+                                        <span> • </span>
+                                    @endif
+                                    @if (! empty($row['suggested_section']))
+                                        {{ __('intake.normalized_draft_review_suggested_section_prefix') }} {{ (string) $row['suggested_section'] }}
+                                    @endif
+                                </p>
+                            @endif
+                        </div>
+                    @endforeach
+                </dl>
+            </div>
+        @endif
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             @foreach ($sectionKeys as $sectionKey)
                 @php

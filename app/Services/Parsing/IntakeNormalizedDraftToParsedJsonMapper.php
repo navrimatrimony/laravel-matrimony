@@ -44,10 +44,17 @@ class IntakeNormalizedDraftToParsedJsonMapper
             $parsed['relatives'],
             fn (array $relative): bool => $this->isPaternalRelativeType((string) ($relative['relation_type'] ?? ''))
         ));
+        $parsed['relatives_maternal_family'] = array_values(array_filter(
+            $parsed['relatives'],
+            fn (array $relative): bool => $this->isMaternalRelativeType((string) ($relative['relation_type'] ?? ''))
+        ));
+        $parsed['relatives_sectioned'] = $this->buildRelativesSectioned($parsed['relatives']);
         $parsed['siblings'] = $this->mapSiblings($draft);
         $parsed['property_summary'] = $this->mapPropertySummary($draft);
         $parsed['property_assets'] = $this->mapPropertyAssets($draft);
         $parsed['horoscope'] = $this->mapHoroscope($draft);
+        $parsed['preferences'] = $this->mapPreferences($draft);
+        $parsed['extended_narrative'] = $this->mapExtendedNarrative($draft, $parsed['preferences']);
         $parsed['confidence_map'] = $this->mapConfidenceMap($draft, $parsed);
 
         $education = trim((string) ($core['highest_education'] ?? ''));
@@ -368,7 +375,7 @@ class IntakeNormalizedDraftToParsedJsonMapper
             'nakshatra' => $this->scalarHoroscopeValue($horoscope, 'nakshatra') ?? $this->extractHoroscopeField($blob, ['नक्षत्र']),
             'charan' => $this->scalarHoroscopeValue($horoscope, 'charan') ?? $this->extractHoroscopeField($blob, ['चरण']),
             'devak' => $this->scalarHoroscopeValue($horoscope, 'devak') ?? $this->extractHoroscopeField($blob, ['देवक']),
-            'kuldaivat' => $this->scalarHoroscopeValue($horoscope, 'kuldaivat') ?? $this->extractHoroscopeField($blob, ['कुलदैवत', 'कुलदेवत', 'कलदैवत']),
+            'kuldaivat' => $this->scalarHoroscopeValue($horoscope, 'kuldaivat') ?? $this->extractHoroscopeField($blob, ['कुल दैवत', 'कुलदैवत', 'कुलदेवत', 'कलदैवत']),
             'gotra' => $this->scalarHoroscopeValue($horoscope, 'gotra') ?? $this->extractHoroscopeField($blob, ['गोत्र']),
             'nadi' => $this->scalarHoroscopeValue($horoscope, 'nadi') ?? $this->extractHoroscopeField($blob, ['नाडी']),
             'gan' => $this->scalarHoroscopeValue($horoscope, 'gan') ?? $this->extractHoroscopeField($blob, ['गण']),
@@ -377,6 +384,7 @@ class IntakeNormalizedDraftToParsedJsonMapper
             'vashya' => $this->scalarHoroscopeValue($horoscope, 'vashya') ?? $this->extractHoroscopeField($blob, ['वश्य', 'वैरवर्ग']),
             'rashi_lord' => $this->scalarHoroscopeValue($horoscope, 'rashi_lord') ?? $this->extractHoroscopeField($blob, ['राशी स्वामी', 'रास स्वामी']),
             'navras_name' => $this->scalarHoroscopeValue($horoscope, 'navras_name') ?? $this->extractHoroscopeField($blob, ['नावरस', 'रास नाव', 'राशी नाव']),
+            'yog' => $this->scalarHoroscopeValue($horoscope, 'yog') ?? $this->extractHoroscopeField($blob, ['योग']),
             'birth_weekday' => $this->scalarHoroscopeValue($horoscope, 'birth_weekday'),
         ];
 
@@ -654,6 +662,108 @@ class IntakeNormalizedDraftToParsedJsonMapper
             'husband_paternal_aunt',
             'Cousin',
         ], true);
+    }
+
+    private function isMaternalRelativeType(string $value): bool
+    {
+        return in_array($value, [
+            'maternal_address_ajol',
+            'maternal_grandfather',
+            'maternal_grandmother',
+            'maternal_uncle',
+            'wife_maternal_uncle',
+            'maternal_aunt',
+            'husband_maternal_aunt',
+            'maternal_cousin',
+        ], true);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $relatives
+     * @return array<string, mixed>
+     */
+    private function buildRelativesSectioned(array $relatives): array
+    {
+        $sectioned = app(IntakeParsedSnapshotSkeleton::class)->defaults()['relatives_sectioned'];
+
+        foreach ($relatives as $relative) {
+            if (! is_array($relative)) {
+                continue;
+            }
+
+            $type = (string) ($relative['relation_type'] ?? '');
+            if ($type === '') {
+                continue;
+            }
+
+            if ($this->isMaternalRelativeType($type)) {
+                $bucket = match ($type) {
+                    'maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother' => 'ajol',
+                    'maternal_uncle', 'wife_maternal_uncle' => 'mama',
+                    'maternal_aunt', 'husband_maternal_aunt' => 'mavshi',
+                    default => 'other',
+                };
+                $sectioned['maternal'][$bucket][] = $relative;
+
+                continue;
+            }
+
+            if ($this->isPaternalRelativeType($type)) {
+                $bucket = match ($type) {
+                    'paternal_aunt', 'husband_paternal_aunt' => 'atya',
+                    'paternal_uncle', 'wife_paternal_uncle' => 'chulte',
+                    default => 'other',
+                };
+                $sectioned['paternal'][$bucket][] = $relative;
+
+                continue;
+            }
+
+            $sectioned['other'][] = $relative;
+        }
+
+        return $sectioned;
+    }
+
+    /**
+     * @param  array<string, mixed>  $draft
+     * @return array<string, mixed>
+     */
+    private function mapPreferences(array $draft): array
+    {
+        $raw = is_array($draft['normalized']['preferences'] ?? null) ? $draft['normalized']['preferences'] : [];
+        $mapped = [];
+
+        foreach ($raw as $key => $value) {
+            if (! is_scalar($value)) {
+                continue;
+            }
+            $text = trim((string) $value);
+            if ($text === '') {
+                continue;
+            }
+            $mapped[(string) $key] = $text;
+        }
+
+        return $mapped;
+    }
+
+    /**
+     * @param  array<string, mixed>  $draft
+     * @param  array<string, mixed>  $preferences
+     * @return array<string, mixed>
+     */
+    private function mapExtendedNarrative(array $draft, array $preferences): array
+    {
+        $defaults = app(IntakeParsedSnapshotSkeleton::class)->defaults()['extended_narrative'];
+        $narrative = $defaults;
+
+        $expectations = trim((string) ($preferences['expectations'] ?? ''));
+        if ($expectations !== '') {
+            $narrative['narrative_expectations'] = $expectations;
+        }
+
+        return $narrative;
     }
 
     /**

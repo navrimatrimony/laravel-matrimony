@@ -2,10 +2,15 @@
 
 namespace App\Services\Parsing;
 
+use App\Models\Caste;
 use App\Models\City;
+use App\Models\Location;
+use App\Models\SubCaste;
 use App\Services\BiodataParserService;
 use App\Services\ControlledOptions\ControlledOptionNormalizer;
 use App\Services\EducationService;
+use App\Services\Location\LocationCompoundAddressParser;
+use App\Services\Location\LocationService;
 use App\Services\Location\LocationNormalizationService;
 use App\Services\Location\LocationOpenPlaceSuggestionService;
 use App\Services\OccupationService;
@@ -46,6 +51,8 @@ class IntakeControlledFieldNormalizer
         private EducationService $education,
         private OccupationService $occupation,
         private LocationNormalizationService $locationNormalization,
+        private LocationCompoundAddressParser $locationCompoundParser,
+        private LocationService $locationService,
         private LocationOpenPlaceSuggestionService $openPlaceSuggestions,
     ) {}
 
@@ -119,6 +126,7 @@ class IntakeControlledFieldNormalizer
             if (! is_array($snapshot['core'] ?? null)) {
                 $snapshot['core'] = [];
             }
+            $snapshot['core'] = $this->normalizeCore($snapshot['core']);
             $this->normalizeBirthPlace($snapshot);
             $this->normalizeNativePlace($snapshot);
             $this->normalizeAddressRows($snapshot);
@@ -225,6 +233,7 @@ class IntakeControlledFieldNormalizer
                 }
             }
         }
+        $out = $this->backfillCanonicalCommunityHierarchyIds($out);
         foreach ($this->parentContactSlotCoreKeys() as $ck) {
             if (! isset($out[$ck]) || $out[$ck] === null || $out[$ck] === '') {
                 continue;
@@ -245,6 +254,43 @@ class IntakeControlledFieldNormalizer
     }
 
     /**
+     * When lower-level canonical IDs are resolved, derive missing parent canonical IDs from master hierarchy.
+     *
+     * @param  array<string, mixed>  $core
+     * @return array<string, mixed>
+     */
+    private function backfillCanonicalCommunityHierarchyIds(array $core): array
+    {
+        $subCasteId = is_numeric($core['sub_caste_id'] ?? null) ? (int) $core['sub_caste_id'] : null;
+        if ($subCasteId !== null && $subCasteId > 0) {
+            $subCaste = SubCaste::query()->find($subCasteId);
+            if ($subCaste !== null) {
+                if (empty($core['caste_id']) && ! empty($subCaste->caste_id)) {
+                    $core['caste_id'] = (int) $subCaste->caste_id;
+                }
+                if ($core['caste'] === null || $core['caste'] === '') {
+                    $core['caste'] = $subCaste->caste?->display_label ?? $core['caste'] ?? null;
+                }
+            }
+        }
+
+        $casteId = is_numeric($core['caste_id'] ?? null) ? (int) $core['caste_id'] : null;
+        if ($casteId !== null && $casteId > 0) {
+            $caste = Caste::query()->find($casteId);
+            if ($caste !== null) {
+                if (empty($core['religion_id']) && ! empty($caste->religion_id)) {
+                    $core['religion_id'] = (int) $caste->religion_id;
+                }
+                if (($core['religion'] ?? null) === null || ($core['religion'] ?? '') === '') {
+                    $core['religion'] = $caste->religion?->display_label ?? $core['religion'] ?? null;
+                }
+            }
+        }
+
+        return $core;
+    }
+
+    /**
      * Birth place text → {@see LocationNormalizationService} (alias + city→district/state). Sets hierarchy ids or {@code birth_place_text}.
      *
      * @param  array<string, mixed>  $snapshot
@@ -256,6 +302,8 @@ class IntakeControlledFieldNormalizer
         }
         $core = &$snapshot['core'];
         if (! empty($core['birth_city_id']) && is_numeric($core['birth_city_id'])) {
+            $this->backfillBirthHierarchyFromCityId($core, $snapshot);
+
             return;
         }
 
@@ -268,6 +316,10 @@ class IntakeControlledFieldNormalizer
         if (($res['confidence'] ?? 0.0) >= 0.80 && $res['matched'] && $res['city_id'] !== null) {
             $cityId = (int) $res['city_id'];
             $core['birth_city_id'] = $cityId;
+            $core['birth_country_id'] = isset($res['country_id']) && $res['country_id'] !== null ? (int) $res['country_id'] : null;
+            $core['birth_taluka_id'] = isset($res['taluka_id']) && $res['taluka_id'] !== null ? (int) $res['taluka_id'] : null;
+            $core['birth_district_id'] = isset($res['district_id']) && $res['district_id'] !== null ? (int) $res['district_id'] : null;
+            $core['birth_state_id'] = isset($res['state_id']) && $res['state_id'] !== null ? (int) $res['state_id'] : null;
             $talukaForSnapshot = null;
             if (isset($res['taluka_id']) && $res['taluka_id'] !== null) {
                 $talukaForSnapshot = (int) $res['taluka_id'];
@@ -284,6 +336,8 @@ class IntakeControlledFieldNormalizer
             $snapshot['birth_place']['taluka_id'] = $talukaForSnapshot;
             $snapshot['birth_place']['district_id'] = $res['district_id'] ?? null;
             $snapshot['birth_place']['state_id'] = $res['state_id'] ?? null;
+            $snapshot['birth_place']['country_id'] = $res['country_id'] ?? null;
+            $this->backfillBirthHierarchyFromCityId($core, $snapshot);
 
             return;
         }
@@ -302,6 +356,59 @@ class IntakeControlledFieldNormalizer
     }
 
     /**
+     * @param  array<string, mixed>  $core
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function backfillBirthHierarchyFromCityId(array &$core, array &$snapshot): void
+    {
+        $cityId = is_numeric($core['birth_city_id'] ?? null) ? (int) $core['birth_city_id'] : 0;
+        if ($cityId < 1) {
+            return;
+        }
+
+        $leaf = Location::query()->find($cityId);
+        if ($leaf === null) {
+            return;
+        }
+
+        $hierarchy = $this->locationService->fillHierarchyGaps($leaf, $this->locationService->getFullHierarchy($leaf));
+        $talukaId = ($hierarchy['taluka'] ?? null)?->id !== null ? (int) $hierarchy['taluka']->id : null;
+        $districtId = ($hierarchy['district'] ?? null)?->id !== null ? (int) $hierarchy['district']->id : null;
+        $stateId = ($hierarchy['state'] ?? null)?->id !== null ? (int) $hierarchy['state']->id : null;
+        $countryId = null;
+        if (($hierarchy['state'] ?? null) !== null && $hierarchy['state']->parent_id !== null) {
+            $countryId = (int) $hierarchy['state']->parent_id;
+        } else {
+            $country = $this->locationService->getAncestorByType($leaf, 'country');
+            if ($country !== null) {
+                $countryId = (int) $country->id;
+            }
+        }
+
+        if (empty($core['birth_taluka_id']) && $talukaId !== null) {
+            $core['birth_taluka_id'] = $talukaId;
+        }
+        if (empty($core['birth_district_id']) && $districtId !== null) {
+            $core['birth_district_id'] = $districtId;
+        }
+        if (empty($core['birth_state_id']) && $stateId !== null) {
+            $core['birth_state_id'] = $stateId;
+        }
+        if (empty($core['birth_country_id']) && $countryId !== null) {
+            $core['birth_country_id'] = $countryId;
+        }
+
+        if (! is_array($snapshot['birth_place'] ?? null)) {
+            $snapshot['birth_place'] = [];
+        }
+        $snapshot['birth_place']['city_id'] = $snapshot['birth_place']['city_id'] ?? $cityId;
+        $snapshot['birth_place']['taluka_id'] = $snapshot['birth_place']['taluka_id'] ?? $talukaId;
+        $snapshot['birth_place']['district_id'] = $snapshot['birth_place']['district_id'] ?? $districtId;
+        $snapshot['birth_place']['state_id'] = $snapshot['birth_place']['state_id'] ?? $stateId;
+        $snapshot['birth_place']['country_id'] = $snapshot['birth_place']['country_id'] ?? $countryId;
+    }
+
+    /**
      * Native place text → {@see LocationNormalizationService}. Sets native hierarchy ids or preserves text on {@code native_place}.
      *
      * @param  array<string, mixed>  $snapshot
@@ -313,6 +420,8 @@ class IntakeControlledFieldNormalizer
         }
         $core = &$snapshot['core'];
         if (! empty($core['native_city_id']) && is_numeric($core['native_city_id'])) {
+            $this->backfillNativeHierarchyFromCityId($core, $snapshot);
+
             return;
         }
 
@@ -331,6 +440,7 @@ class IntakeControlledFieldNormalizer
         if (($res['confidence'] ?? 0.0) >= 0.80 && $res['matched'] && $res['city_id'] !== null) {
             $cityId = (int) $res['city_id'];
             $core['native_city_id'] = $cityId;
+            $core['native_country_id'] = $res['country_id'] ?? null;
             $core['native_district_id'] = $res['district_id'] ?? null;
             $core['native_state_id'] = $res['state_id'] ?? null;
             if (isset($res['taluka_id']) && $res['taluka_id'] !== null) {
@@ -348,6 +458,8 @@ class IntakeControlledFieldNormalizer
             $snapshot['native_place']['taluka_id'] = $core['native_taluka_id'] ?? null;
             $snapshot['native_place']['district_id'] = $res['district_id'] ?? null;
             $snapshot['native_place']['state_id'] = $res['state_id'] ?? null;
+            $snapshot['native_place']['country_id'] = $res['country_id'] ?? null;
+            $this->backfillNativeHierarchyFromCityId($core, $snapshot);
 
             return;
         }
@@ -367,6 +479,59 @@ class IntakeControlledFieldNormalizer
             'raw_input' => $raw,
         ]);
         $this->recordUnresolvedLocationSuggestion($raw, 'native_place', []);
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function backfillNativeHierarchyFromCityId(array &$core, array &$snapshot): void
+    {
+        $cityId = is_numeric($core['native_city_id'] ?? null) ? (int) $core['native_city_id'] : 0;
+        if ($cityId < 1) {
+            return;
+        }
+
+        $leaf = Location::query()->find($cityId);
+        if ($leaf === null) {
+            return;
+        }
+
+        $hierarchy = $this->locationService->fillHierarchyGaps($leaf, $this->locationService->getFullHierarchy($leaf));
+        $talukaId = ($hierarchy['taluka'] ?? null)?->id !== null ? (int) $hierarchy['taluka']->id : null;
+        $districtId = ($hierarchy['district'] ?? null)?->id !== null ? (int) $hierarchy['district']->id : null;
+        $stateId = ($hierarchy['state'] ?? null)?->id !== null ? (int) $hierarchy['state']->id : null;
+        $countryId = null;
+        if (($hierarchy['state'] ?? null) !== null && $hierarchy['state']->parent_id !== null) {
+            $countryId = (int) $hierarchy['state']->parent_id;
+        } else {
+            $country = $this->locationService->getAncestorByType($leaf, 'country');
+            if ($country !== null) {
+                $countryId = (int) $country->id;
+            }
+        }
+
+        if (empty($core['native_taluka_id']) && $talukaId !== null) {
+            $core['native_taluka_id'] = $talukaId;
+        }
+        if (empty($core['native_district_id']) && $districtId !== null) {
+            $core['native_district_id'] = $districtId;
+        }
+        if (empty($core['native_state_id']) && $stateId !== null) {
+            $core['native_state_id'] = $stateId;
+        }
+        if (empty($core['native_country_id']) && $countryId !== null) {
+            $core['native_country_id'] = $countryId;
+        }
+
+        if (! is_array($snapshot['native_place'] ?? null)) {
+            $snapshot['native_place'] = [];
+        }
+        $snapshot['native_place']['city_id'] = $snapshot['native_place']['city_id'] ?? $cityId;
+        $snapshot['native_place']['taluka_id'] = $snapshot['native_place']['taluka_id'] ?? $talukaId;
+        $snapshot['native_place']['district_id'] = $snapshot['native_place']['district_id'] ?? $districtId;
+        $snapshot['native_place']['state_id'] = $snapshot['native_place']['state_id'] ?? $stateId;
+        $snapshot['native_place']['country_id'] = $snapshot['native_place']['country_id'] ?? $countryId;
     }
 
     /**
@@ -505,7 +670,10 @@ class IntakeControlledFieldNormalizer
             }
         }
         $line = isset($addr['address_line']) && is_string($addr['address_line']) ? trim($addr['address_line']) : '';
-        if ($line !== '' && mb_strlen($line, 'UTF-8') <= 48 && mb_strpos($line, ',') === false) {
+        if ($line !== '' && (
+            (mb_strlen($line, 'UTF-8') <= 48 && mb_strpos($line, ',') === false)
+            || $this->locationCompoundParser->looksCompound($line)
+        )) {
             return $line;
         }
 

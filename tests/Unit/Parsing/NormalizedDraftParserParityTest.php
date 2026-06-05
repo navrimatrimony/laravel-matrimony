@@ -85,6 +85,28 @@ HTML;
         $this->assertSame($expected, $out);
     }
 
+    public function test_akshada_normalized_improves_salary_family_property_and_horoscope_fields(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($this->akshadaText());
+        $normalized = app(IntakeParsedSnapshotSkeleton::class)->ensure(
+            app(IntakeNormalizedDraftToParsedJsonMapper::class)->map($draft)
+        );
+
+        $this->assertSame('Bajaj Electricals', $normalized['core']['company_name'] ?? null);
+        $this->assertSame('नवी मुंबई', $normalized['core']['work_location_text'] ?? null);
+        $this->assertSame(1675000, $normalized['core']['annual_income'] ?? null);
+        $this->assertSame('शेती/व्यावसायिक', $normalized['core']['father_occupation'] ?? null);
+        $this->assertSame('B.Com', $normalized['core']['father_extra_info'] ?? null);
+        $this->assertSame('A+', $normalized['core']['blood_group'] ?? null);
+
+        $this->assertCount(2, $normalized['parents_addresses'] ?? []);
+        $this->assertSame('San Francisco (USA)', $normalized['siblings'][0]['address_line'] ?? null);
+        $this->assertSame('शिक्षण IIT चेन्नई M.tech', $normalized['siblings'][0]['notes'] ?? null);
+        $this->assertSame('जेजुरीचा खंडोबा', $normalized['horoscope'][0]['kuldaivat'] ?? null);
+        $this->assertSame('मिन', $normalized['horoscope'][0]['rashi'] ?? null);
+        $this->assertSame('बज्ठ', $normalized['horoscope'][0]['yog'] ?? null);
+    }
+
     /**
      * @return array{0: array<string, mixed>, 1: array<string, mixed>}
      */
@@ -158,6 +180,37 @@ TXT;
 
 मोबाईल नंबर :- महेश मोहन जगताप (९८७०८७९७२७)
 :- मोहन जगताप (९१३७७९३३७१)
+TXT;
+    }
+
+    private function akshadaText(): string
+    {
+        return <<<'TXT'
+मुलीचे नाव : कु.अक्षदा अनिल कामठे
+पत्ता : १.ईशा बेला विस्टा, डी-वींग,फ्लॅट नं.१०३
+२.यमुना निवास,अल्कोन आकाशिया जवळ,
+कोंढवा बु.।। ता.हवेली जि.पुणे-४११०४८
+जन्म तारीख : १४ नोव्हेंबर १९९४
+जन्म वेळ : सकाळी ७ वाजून ० मि.
+जन्म ठिकाण : पुणे
+उंची : ५ फुट ४ इंच
+वर्ण : गोरा
+शिक्षण : B.E.MECHANICAL / M.Tech (Design)
+नोकरी/व्यवसाय : Bajaj Electricals नवी मुंबई
+16,75,000 P/A
+जात : ९६ कुळी मराठा
+कुल दैवत : जेजुरीचा खंडोबा
+वडिलांचे नाव : श्री.अनिल बबन कामठे
+( शेती/व्यावसायिक ) (B.Com)
+मो.नं. : 9881459325 / 9307777812
+स्वता:ची मालमत्ता : शेती/फ्लॅट/शॉप(भाडे)/रुम भाडे/स्वतःचे घर
+आईचे नाव : सौ.राधिका अनिल कामठे (गृहिणी)
+भाऊ : कु.अनिकेत अनिल कामठे (शिक्षण IIT चेन्नई M.tech)
+नोकरी : San Francisco (USA)
+मामा : श्री.सुरेश तुकाराम वटारे (घोरपडी, पुणे)
+नाते संबंध : लिपाने, हरपळे, तापकिर, तारु
+देवक : वडाचे पान | जन्मनक्षत्र : उत्तरा भाद्र पदा | नाडी : मध्य | चरण : तिसरे
+गण : मनुष्य | रास : मिन | योग : बज्ठ | रक्तगट : A+
 TXT;
     }
 }

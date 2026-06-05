@@ -2,6 +2,7 @@
 
 namespace App\Services\Parsing\Parsers;
 
+use App\Models\AdminSetting;
 use App\Services\BiodataParserService;
 use App\Services\Parsing\IntakeNormalizedBiodataDraftBuilder;
 use App\Services\Parsing\IntakeNormalizedDraftToParsedJsonMapper;
@@ -54,8 +55,19 @@ class RulesOnlyBiodataParser implements BiodataParserInterface
      */
     private function shouldUseNormalizedDraftParser(array $context): bool
     {
-        return (bool) config('intake.use_normalized_draft_parser', false)
+        return $this->normalizedDraftParserEnabled()
             && empty($context['legacy_rules_only']);
+    }
+
+    private function normalizedDraftParserEnabled(): bool
+    {
+        $fallback = (bool) config('intake.use_normalized_draft_parser', false);
+
+        try {
+            return AdminSetting::getBool('intake_use_normalized_draft_parser', $fallback);
+        } catch (\Throwable) {
+            return $fallback;
+        }
     }
 
     /**

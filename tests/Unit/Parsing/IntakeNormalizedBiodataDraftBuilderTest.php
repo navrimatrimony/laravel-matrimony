@@ -247,7 +247,7 @@ TXT);
         $this->assertSame('सर्वश्री सिनारे, दावभट, जईड, निमसे', $draft['normalized']['core']['other_relatives_text'] ?? null);
     }
 
-    public function test_orphan_biodata_numbers_fill_father_then_user_then_mother_preview_slots(): void
+    public function test_orphan_biodata_numbers_do_not_backfill_parent_preview_slots(): void
     {
         $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
 नाव :- श्वेताली बाळासाहेब सुंबे
@@ -264,12 +264,37 @@ TXT);
 
         $core = $draft['normalized']['core'];
 
-        $this->assertSame('9860771090', $core['father_contact_1'] ?? null);
-        $this->assertSame('7972565670', $core['father_contact_2'] ?? null);
-        $this->assertSame('9423651090', $core['father_contact_3'] ?? null);
-        $this->assertSame('9123456789', $core['primary_contact_number_2'] ?? null);
-        $this->assertSame('9234567890', $core['primary_contact_number_3'] ?? null);
-        $this->assertSame('9345678901', $core['mother_contact_1'] ?? null);
+        $this->assertNull($core['father_contact_1'] ?? null);
+        $this->assertNull($core['father_contact_2'] ?? null);
+        $this->assertNull($core['father_contact_3'] ?? null);
+        $this->assertSame('9860771090', $core['primary_contact_number_2'] ?? null);
+        $this->assertSame('7972565670', $core['primary_contact_number_3'] ?? null);
+        $this->assertNull($core['mother_contact_1'] ?? null);
+        $this->assertNull($core['mother_contact_2'] ?? null);
+        $this->assertNull($core['mother_contact_3'] ?? null);
+    }
+
+    public function test_parent_slots_do_not_absorb_relative_phone_numbers_from_table_rows(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+<table>
+<tr><td>वडिलांचे नाव</td><td>: श्री सुभाष किसन पानसरे (प्राथमिक शिक्षक )<br/>मू.पो.केत्दूर नं २ ता.करमाळा,जिल्हा-सोलापूर<br/>-(मो.नं. ९६०४५६३२९२)</td></tr>
+<tr><td>आई</td><td>: सौ. वनिता सुभाष पानसरे (प्राथमिक शिक्षिका)(मो.नं.९४२०३५९७४०)</td></tr>
+<tr><td>मामा</td><td>: १) श्री. तुकाराम भगवान इंगोले- मो. नं. ९९३००५७३१२<br/>२) श्री. बाबासाहेब भगवान इंगोले (प्राथमिक शिक्षक )<br/>रा.एखतपूर ता.सांगोला जि.सोलापूर मो. नं. ९६०४९६९५९३</td></tr>
+</table>
+TXT);
+
+        $core = $draft['normalized']['core'];
+
+        $this->assertSame('9604563292', $core['father_contact_1'] ?? null);
+        $this->assertNull($core['father_contact_2'] ?? null);
+        $this->assertNull($core['father_contact_3'] ?? null);
+        $this->assertSame('9420359740', $core['mother_contact_1'] ?? null);
+        $this->assertNull($core['mother_contact_2'] ?? null);
+        $this->assertNull($core['mother_contact_3'] ?? null);
+        $this->assertSame('9930057312', $core['primary_contact_number'] ?? null);
+        $this->assertNull($core['primary_contact_number_2'] ?? null);
+        $this->assertNull($core['primary_contact_number_3'] ?? null);
     }
 
     public function test_caste_without_religion_remains_review_safe(): void
@@ -838,6 +863,52 @@ TXT);
         $this->assertStringNotContainsString('maternal_uncle सर्व', $relativeBlob);
     }
 
+    public function test_akshada_sample_extracts_salary_kuldaivat_parent_extra_property_sibling_addresses_and_horoscope_cleanly(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($this->akshadaText());
+
+        $core = $draft['normalized']['core'];
+        $this->assertSame('Bajaj Electricals', $core['company_name'] ?? null);
+        $this->assertSame('नवी मुंबई', $core['work_location_text'] ?? null);
+        $this->assertSame(1675000, $core['annual_income'] ?? null);
+        $this->assertSame('16,75,000 P/A', $core['salary_package_text'] ?? null);
+        $this->assertSame('शेती/व्यावसायिक', $core['father_occupation'] ?? null);
+        $this->assertSame('B.Com', $core['father_extra_info'] ?? null);
+
+        $horoscope = $draft['normalized']['horoscope'] ?? [];
+        $this->assertSame('जेजुरीचा खंडोबा', $horoscope['kuldaivat'] ?? null);
+        $this->assertSame('वडाचे पान', $horoscope['devak'] ?? null);
+        $this->assertSame('उत्तरा भाद्र पदा', $horoscope['nakshatra'] ?? null);
+        $this->assertSame('मध्य', $horoscope['nadi'] ?? null);
+        $this->assertSame('तिसरे', $horoscope['charan'] ?? null);
+        $this->assertSame('मनुष्य', $horoscope['gan'] ?? null);
+        $this->assertSame('मिन', $horoscope['rashi'] ?? null);
+        $this->assertSame('बज्ठ', $horoscope['yog'] ?? null);
+        $this->assertSame('A+', $core['blood_group'] ?? null);
+
+        $parentsAddresses = $draft['normalized']['parents_addresses'] ?? [];
+        $this->assertCount(2, $parentsAddresses);
+        $this->assertSame('ईशा बेला विस्टा, डी-वींग,फ्लॅट नं.१०३', $parentsAddresses[0]['address_line'] ?? null);
+        $this->assertSame('यमुना निवास,अल्कोन आकाशिया जवळ; कोंढवा बु.।। ता.हवेली जि.पुणे-४११०४८', $parentsAddresses[1]['address_line'] ?? null);
+
+        $propertySummary = (string) ($draft['normalized']['property_summary']['summary_text'] ?? '');
+        $this->assertStringContainsString('स्वता:ची मालमत्ता', $propertySummary);
+        $this->assertStringNotContainsString('( शेती/व्यावसायिक )', $propertySummary);
+
+        $propertyBlob = $this->normalizedBlob($draft['normalized']['property_assets'] ?? []);
+        $this->assertStringContainsString('land', $propertyBlob);
+        $this->assertStringContainsString('house', $propertyBlob);
+        $this->assertStringContainsString('शॉप(भाडे)', $propertyBlob);
+        $this->assertStringContainsString('रुम भाडे', $propertyBlob);
+
+        $siblings = $draft['normalized']['siblings'] ?? [];
+        $this->assertCount(1, $siblings);
+        $this->assertSame('अनिकेत अनिल कामठे', $siblings[0]['name'] ?? null);
+        $this->assertSame('unmarried', $siblings[0]['marital_status'] ?? null);
+        $this->assertSame('San Francisco (USA)', $siblings[0]['address_line'] ?? null);
+        $this->assertSame('शिक्षण IIT चेन्नई M.tech', $siblings[0]['notes'] ?? null);
+    }
+
     /**
      * @param  array<string, mixed>  $draft
      * @return list<string>
@@ -881,5 +952,36 @@ TXT);
             static fn ($flag) => implode(' ', array_map('strval', is_array($flag) ? $flag : [])),
             $draft['review_flags'] ?? []
         ));
+    }
+
+    private function akshadaText(): string
+    {
+        return <<<'TXT'
+मुलीचे नाव : कु.अक्षदा अनिल कामठे
+पत्ता : १.ईशा बेला विस्टा, डी-वींग,फ्लॅट नं.१०३
+२.यमुना निवास,अल्कोन आकाशिया जवळ,
+कोंढवा बु.।। ता.हवेली जि.पुणे-४११०४८
+जन्म तारीख : १४ नोव्हेंबर १९९४
+जन्म वेळ : सकाळी ७ वाजून ० मि.
+जन्म ठिकाण : पुणे
+उंची : ५ फुट ४ इंच
+वर्ण : गोरा
+शिक्षण : B.E.MECHANICAL / M.Tech (Design)
+नोकरी/व्यवसाय : Bajaj Electricals नवी मुंबई
+16,75,000 P/A
+जात : ९६ कुळी मराठा
+कुल दैवत : जेजुरीचा खंडोबा
+वडिलांचे नाव : श्री.अनिल बबन कामठे
+( शेती/व्यावसायिक ) (B.Com)
+मो.नं. : 9881459325 / 9307777812
+स्वता:ची मालमत्ता : शेती/फ्लॅट/शॉप(भाडे)/रुम भाडे/स्वतःचे घर
+आईचे नाव : सौ.राधिका अनिल कामठे (गृहिणी)
+भाऊ : कु.अनिकेत अनिल कामठे (शिक्षण IIT चेन्नई M.tech)
+नोकरी : San Francisco (USA)
+मामा : श्री.सुरेश तुकाराम वटारे (घोरपडी, पुणे)
+नाते संबंध : लिपाने, हरपळे, तापकिर, तारु
+देवक : वडाचे पान | जन्मनक्षत्र : उत्तरा भाद्र पदा | नाडी : मध्य | चरण : तिसरे
+गण : मनुष्य | रास : मिन | योग : बज्ठ | रक्तगट : A+
+TXT;
     }
 }

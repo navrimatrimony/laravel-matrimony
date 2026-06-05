@@ -281,8 +281,13 @@ final class PlaceIntakeSearchService
             'rural' => $type === 'village' && ($tag === '' || in_array($tag, ['rural', 'village'], true)),
             'town_taluka' => $type === 'taluka' && in_array($tag, ['town', 'taluka'], true),
             'suburban' => $type === 'suburb' && ($tag === '' || $tag === 'suburban'),
-            'metro' => in_array($type, ['city', 'district'], true)
-                && ($tag === '' || in_array($tag, ['metro', 'city', 'capital'], true)),
+            'metro' => (
+                in_array($type, ['city', 'district'], true)
+                && ($tag === '' || in_array($tag, ['metro', 'city', 'capital'], true))
+            ) || (
+                $type === 'taluka'
+                && ($tag === '' || in_array($tag, ['town', 'taluka'], true))
+            ),
             default => true,
         };
     }
@@ -638,11 +643,11 @@ final class PlaceIntakeSearchService
 
         return Location::query()
             ->with(['parent'])
-            ->whereIn('type', ['city', 'district'])
+            ->whereIn('type', ['city', 'district', 'taluka'])
             ->where(function (Builder $w) use ($name): void {
                 $this->applyGeoNameMatch($w, $name);
             })
-            ->orderByRaw("CASE WHEN type = 'district' THEN 0 ELSE 1 END")
+            ->orderByRaw("CASE WHEN type = 'taluka' THEN 0 WHEN type = 'city' THEN 1 WHEN type = 'district' THEN 2 ELSE 3 END")
             ->orderBy('name')
             ->limit(12)
             ->get()
@@ -729,7 +734,12 @@ final class PlaceIntakeSearchService
                 $score += 150;
             }
             if (count($simpleParts) === 1 && $simpleFirst !== '' && $locName === $simpleFirst) {
-                $score += ($loc->type === 'district' || $loc->type === 'city') ? 200 : 0;
+                $score += match ($loc->type) {
+                    'taluka' => 240,
+                    'city' => 220,
+                    'district' => 180,
+                    default => 0,
+                };
             }
             if ($districtKey !== '' && ($districtName === $districtKey || str_contains($districtName, $districtKey))) {
                 $score += 40;

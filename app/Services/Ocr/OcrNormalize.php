@@ -20,6 +20,27 @@ class OcrNormalize
     }
 
     /**
+     * Recursively normalize numeric digit characters in string leaves while preserving structure.
+     */
+    public static function normalizeDigitsDeep(mixed $value): mixed
+    {
+        if (is_string($value)) {
+            return self::normalizeDigits($value);
+        }
+
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        $out = [];
+        foreach ($value as $key => $item) {
+            $out[$key] = self::normalizeDigitsDeep($item);
+        }
+
+        return $out;
+    }
+
+    /**
      * Replace Marathi month names with English (for DD Month YYYY parsing after digit normalize).
      * Longest keys first so multi-character month names win over short tokens (e.g. मे).
      */
@@ -547,4 +568,3 @@ class OcrNormalize
         return $out !== null ? $out : $rawText;
     }
 }
-

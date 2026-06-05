@@ -166,6 +166,13 @@ final class IntakeHtmlTableHintApplier
 
         if ($phones === []) {
             $phones = $this->phonesFromNormalizedContacts($normalized);
+            $parentPhones = $this->parentPhonesFromCore($core);
+            if ($parentPhones !== []) {
+                $phones = array_values(array_filter(
+                    $phones,
+                    static fn (string $phone): bool => ! isset($parentPhones[$phone])
+                ));
+            }
             $footerPhones = $postTableBody !== null && trim($postTableBody) !== ''
                 ? $this->extractValidPhones($postTableBody)
                 : [];
@@ -192,6 +199,25 @@ final class IntakeHtmlTableHintApplier
 
         $normalized['contacts'] = $contacts;
         $core['primary_contact_number'] = $phones[0];
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     * @return array<string, true>
+     */
+    private function parentPhonesFromCore(array $core): array
+    {
+        $phones = [];
+        foreach (['father', 'mother'] as $parent) {
+            foreach (['contact_number', 'contact_1', 'contact_2', 'contact_3'] as $suffix) {
+                $phone = OcrNormalize::normalizePhone((string) ($core[$parent.'_'.$suffix] ?? ''));
+                if (is_string($phone) && preg_match('/^[6-9]\d{9}$/', $phone)) {
+                    $phones[$phone] = true;
+                }
+            }
+        }
+
+        return $phones;
     }
 
     /**

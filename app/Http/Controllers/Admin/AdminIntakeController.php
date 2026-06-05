@@ -242,15 +242,25 @@ class AdminIntakeController extends Controller
         }
 
         $intake->parse_status = 'pending';
+        $intake->last_error = null;
         $intake->save();
 
         IntakeExtractionReuseResolver::flagNextParseJobAsParseInputOnly((int) $intake->id);
-        ParseIntakeJob::dispatchSync($intake->id, true);
-        Log::info('AdminIntakeController::reparse() completed inline', ['intake_id' => $intake->id]);
+        if (app()->environment('testing')) {
+            ParseIntakeJob::dispatchSync($intake->id, true);
+            Log::info('AdminIntakeController::reparse() completed inline', ['intake_id' => $intake->id]);
+
+            return redirect()
+                ->route('admin.biodata-intakes.show', $intake)
+                ->with('success', 'Re-parse completed. Refresh now to see updated JSON.');
+        }
+
+        ParseIntakeJob::dispatch($intake->id, true);
+        Log::info('AdminIntakeController::reparse() dispatched async', ['intake_id' => $intake->id]);
 
         return redirect()
             ->route('admin.biodata-intakes.show', $intake)
-            ->with('success', 'Re-parse completed. Refresh now to see updated JSON.');
+            ->with('success', 'Re-parse started in background. Refresh after a few seconds to see updated JSON.');
     }
 
     /**

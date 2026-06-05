@@ -373,6 +373,56 @@ TXT);
         $this->assertSame($relative, $paternal);
     }
 
+    public function test_mapper_populates_sectionwise_maternal_relatives_and_expectations_from_apurva_sample(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+|| श्री ||
+नाव - अपूर्वा सुधीर डोंगरे
+जन्मतारीख - ४-०३-२०००
+जन्मवेळ - सकाळी ७ वाजता
+शिक्षण- B.com, MBA(Finance)
+नोकरी - Capgemini- SAP consultant (Sr. Analyst)
+ऊंची-५.६
+वर्ण-गोरा
+रक्तगट - B+
+देवक - आरखड
+नाडी - मध्य
+कौटुंबिक माहिती
+वडील – सुधीर रामचंद्र डोंगरे (सेवानिवृत)
+आई – उज्वला सुधीर डोंगरे (प्राध्यापिका)
+भाऊ – प्रज्वल सुधीर डोंगरे (विवाहित) (IT engineer)
+वाहिनी – मानसी प्रज्वल डोंगरे (Civil engineer )
+बहीण – स्नेहल मयूर शेंडकर (विवाहित) (IT engineer)
+जावई -मयूर बाळू शेंडकर (व्यवसाईक)
+मूळ गाव – मु.पोस्ट आर्वी नारायणगाव,पुणे
+निवास – पंतनगर,घाटकोपर(e),मुंबई
+मामा – राजेश गणपत पोखरकर
+नातेसंबंध – पोखरकर,वर्पे,मुळे,ढोबळे,इंदोरे,तट्टू,ढमाले,घंघाले,डुंबरे,शेंडकर,तापकिर,दांगट,औटी
+अपेक्षा – निर्व्यसनी,उच्च शिक्षित,नोकरी,सुसंस्कृत
+भ्रमणध्वनी – ९५९४२३७११७, ९६९९७३८८२२, ८६५५२११७२८
+TXT);
+        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map($draft);
+
+        $this->assertSame(
+            'निर्व्यसनी,उच्च शिक्षित,नोकरी,सुसंस्कृत',
+            $parsed['preferences']['expectations'] ?? null
+        );
+        $this->assertSame(
+            'निर्व्यसनी,उच्च शिक्षित,नोकरी,सुसंस्कृत',
+            $parsed['extended_narrative']['narrative_expectations'] ?? null
+        );
+
+        $maternal = $parsed['relatives_maternal_family'] ?? [];
+        $this->assertNotEmpty($maternal);
+        $this->assertSame('maternal_uncle', $maternal[0]['relation_type'] ?? null);
+        $this->assertSame('राजेश गणपत पोखरकर', $maternal[0]['name'] ?? null);
+
+        $sectionedMama = $parsed['relatives_sectioned']['maternal']['mama'] ?? [];
+        $this->assertNotEmpty($sectionedMama);
+        $this->assertSame('maternal_uncle', $sectionedMama[0]['relation_type'] ?? null);
+        $this->assertSame('राजेश गणपत पोखरकर', $sectionedMama[0]['name'] ?? null);
+    }
+
     public function test_mapper_preserves_wizard_shaped_sibling_fields(): void
     {
         $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map([
@@ -505,6 +555,51 @@ TXT);
         $this->assertSame([], $queries);
     }
 
+    public function test_akshada_draft_maps_sectionwise_salary_horoscope_family_property_and_sibling_fields(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($this->akshadaText());
+        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map($draft);
+
+        $core = $parsed['core'];
+        $this->assertSame('Bajaj Electricals', $core['company_name'] ?? null);
+        $this->assertSame('नवी मुंबई', $core['work_location_text'] ?? null);
+        $this->assertSame(1675000, $core['annual_income'] ?? null);
+        $this->assertSame('शेती/व्यावसायिक', $core['father_occupation'] ?? null);
+        $this->assertSame('B.Com', $core['father_extra_info'] ?? null);
+        $this->assertSame('A+', $core['blood_group'] ?? null);
+
+        $parentsAddresses = $parsed['parents_addresses'] ?? [];
+        $this->assertCount(2, $parentsAddresses);
+        $this->assertSame('ईशा बेला विस्टा, डी-वींग,फ्लॅट नं.१०३', $parentsAddresses[0]['address_line'] ?? null);
+        $this->assertSame('यमुना निवास,अल्कोन आकाशिया जवळ; कोंढवा बु.।। ता.हवेली जि.पुणे-४११०४८', $parentsAddresses[1]['address_line'] ?? null);
+
+        $propertySummary = $parsed['property_summary'] ?? [];
+        $this->assertTrue((bool) ($propertySummary['owns_house'] ?? false));
+        $this->assertTrue((bool) ($propertySummary['owns_flat'] ?? false));
+        $this->assertTrue((bool) ($propertySummary['owns_agriculture'] ?? false));
+        $this->assertStringContainsString('शॉप(भाडे)', (string) ($propertySummary['summary_notes'] ?? ''));
+        $this->assertStringNotContainsString('( शेती/व्यावसायिक )', (string) ($propertySummary['summary_notes'] ?? ''));
+
+        $propertyBlob = json_encode($parsed['property_assets'] ?? [], JSON_UNESCAPED_UNICODE);
+        $this->assertStringContainsString('शॉप(भाडे)', (string) $propertyBlob);
+        $this->assertStringContainsString('रुम भाडे', (string) $propertyBlob);
+
+        $siblings = $parsed['siblings'] ?? [];
+        $this->assertCount(1, $siblings);
+        $this->assertSame('San Francisco (USA)', $siblings[0]['address_line'] ?? null);
+        $this->assertSame('शिक्षण IIT चेन्नई M.tech', $siblings[0]['notes'] ?? null);
+
+        $horoscope = $parsed['horoscope'][0] ?? [];
+        $this->assertSame('जेजुरीचा खंडोबा', $horoscope['kuldaivat'] ?? null);
+        $this->assertSame('वडाचे पान', $horoscope['devak'] ?? null);
+        $this->assertSame('उत्तरा भाद्र पदा', $horoscope['nakshatra'] ?? null);
+        $this->assertSame('मध्य', $horoscope['nadi'] ?? null);
+        $this->assertSame('तिसरे', $horoscope['charan'] ?? null);
+        $this->assertSame('मनुष्य', $horoscope['gan'] ?? null);
+        $this->assertSame('मिन', $horoscope['rashi'] ?? null);
+        $this->assertSame('बज्ठ', $horoscope['yog'] ?? null);
+    }
+
     /**
      * @param  array<string, mixed>  $parsed
      * @return list<string>
@@ -581,6 +676,37 @@ TXT;
 
 मोबाईल नंबर :- महेश मोहन जगताप (९८७०८७९७२७)
 :- मोहन जगताप (९१३७७९३३७१)
+TXT;
+    }
+
+    private function akshadaText(): string
+    {
+        return <<<'TXT'
+मुलीचे नाव : कु.अक्षदा अनिल कामठे
+पत्ता : १.ईशा बेला विस्टा, डी-वींग,फ्लॅट नं.१०३
+२.यमुना निवास,अल्कोन आकाशिया जवळ,
+कोंढवा बु.।। ता.हवेली जि.पुणे-४११०४८
+जन्म तारीख : १४ नोव्हेंबर १९९४
+जन्म वेळ : सकाळी ७ वाजून ० मि.
+जन्म ठिकाण : पुणे
+उंची : ५ फुट ४ इंच
+वर्ण : गोरा
+शिक्षण : B.E.MECHANICAL / M.Tech (Design)
+नोकरी/व्यवसाय : Bajaj Electricals नवी मुंबई
+16,75,000 P/A
+जात : ९६ कुळी मराठा
+कुल दैवत : जेजुरीचा खंडोबा
+वडिलांचे नाव : श्री.अनिल बबन कामठे
+( शेती/व्यावसायिक ) (B.Com)
+मो.नं. : 9881459325 / 9307777812
+स्वता:ची मालमत्ता : शेती/फ्लॅट/शॉप(भाडे)/रुम भाडे/स्वतःचे घर
+आईचे नाव : सौ.राधिका अनिल कामठे (गृहिणी)
+भाऊ : कु.अनिकेत अनिल कामठे (शिक्षण IIT चेन्नई M.tech)
+नोकरी : San Francisco (USA)
+मामा : श्री.सुरेश तुकाराम वटारे (घोरपडी, पुणे)
+नाते संबंध : लिपाने, हरपळे, तापकिर, तारु
+देवक : वडाचे पान | जन्मनक्षत्र : उत्तरा भाद्र पदा | नाडी : मध्य | चरण : तिसरे
+गण : मनुष्य | रास : मिन | योग : बज्ठ | रक्तगट : A+
 TXT;
     }
 }

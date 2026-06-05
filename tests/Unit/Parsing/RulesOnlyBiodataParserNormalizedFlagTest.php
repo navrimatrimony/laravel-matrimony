@@ -2,14 +2,18 @@
 
 namespace Tests\Unit\Parsing;
 
+use App\Models\AdminSetting;
 use App\Services\BiodataParserService;
 use App\Services\Ocr\OcrNormalize;
 use App\Services\Parsing\IntakeParsedSnapshotSkeleton;
 use App\Services\Parsing\Parsers\RulesOnlyBiodataParser;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class RulesOnlyBiodataParserNormalizedFlagTest extends TestCase
 {
+    use RefreshDatabase;
+
     protected function tearDown(): void
     {
         config(['intake.use_normalized_draft_parser' => false]);
@@ -34,6 +38,7 @@ class RulesOnlyBiodataParserNormalizedFlagTest extends TestCase
     public function test_flag_true_uses_builder_mapper_path_for_golden_samples(): void
     {
         config(['intake.use_normalized_draft_parser' => true]);
+        AdminSetting::setValue('intake_use_normalized_draft_parser', '1');
 
         foreach ([
             'yuvraj' => [$this->yuvrajText(), '7350953384', '9673350078'],
@@ -63,6 +68,7 @@ class RulesOnlyBiodataParserNormalizedFlagTest extends TestCase
     public function test_legacy_rules_only_context_forces_legacy_even_when_flag_true(): void
     {
         config(['intake.use_normalized_draft_parser' => true]);
+        AdminSetting::setValue('intake_use_normalized_draft_parser', '1');
 
         $text = $this->maheshText();
         $expected = app(IntakeParsedSnapshotSkeleton::class)->ensure(
@@ -72,6 +78,22 @@ class RulesOnlyBiodataParserNormalizedFlagTest extends TestCase
         $out = app(RulesOnlyBiodataParser::class)->parse($text, ['legacy_rules_only' => true]);
 
         $this->assertSame($expected, $out);
+    }
+
+    public function test_admin_setting_false_overrides_true_config_flag(): void
+    {
+        config(['intake.use_normalized_draft_parser' => true]);
+        AdminSetting::setValue('intake_use_normalized_draft_parser', '0');
+
+        $text = $this->swapnilText();
+        $expected = app(IntakeParsedSnapshotSkeleton::class)->ensure(
+            app(BiodataParserService::class)->parse($text)
+        );
+
+        $out = app(RulesOnlyBiodataParser::class)->parse($text);
+
+        $this->assertSame($expected, $out);
+        $this->assertNoDraftMetadataKeys($out);
     }
 
     /**

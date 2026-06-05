@@ -199,6 +199,95 @@ TXT;
         $this->assertNotContains('review_needed', array_column($response->viewData('editableFormSections'), 'key'));
     }
 
+    public function test_basic_info_json_dedupes_birth_place_text_and_shows_typed_addresses(): void
+    {
+        $user = User::factory()->create();
+        $parsed = app(IntakeParsedSnapshotSkeleton::class)->ensure([
+            'core' => [
+                'full_name' => 'Akshada Candidate',
+                'gender' => 'female',
+                'birth_place' => null,
+                'birth_place_text' => 'पुणे',
+                'birth_city_id' => 81,
+                'birth_taluka_id' => 81,
+                'birth_district_id' => 11,
+                'birth_state_id' => 4,
+                'address_line' => '१.ईशा बेला विस्टा, डी-वींग,फ्लॅट नं.१०३',
+            ],
+            'birth_place' => [
+                'address_line' => 'पुणे',
+                'raw' => 'पुणे',
+                'city_id' => 81,
+                'taluka_id' => 81,
+                'district_id' => 11,
+                'state_id' => 4,
+            ],
+            'addresses' => [[
+                'type' => 'current',
+                'address_line' => '१.ईशा बेला विस्टा, डी-वींग,फ्लॅट नं.१०३',
+                'raw' => '१.ईशा बेला विस्टा, डी-वींग,फ्लॅट नं.१०३',
+            ]],
+        ]);
+
+        $intake = BiodataIntake::create([
+            'raw_ocr_text' => 'parsed json display test',
+            'last_parse_input_text' => 'parsed json display test',
+            'uploaded_by' => $user->id,
+            'parse_status' => 'parsed',
+            'intake_status' => 'DRAFT',
+            'intake_locked' => false,
+            'approved_by_user' => false,
+            'parsed_json' => $parsed,
+            'approval_snapshot_json' => [],
+        ]);
+
+        $response = $this->actingAs($user)->get(route('intake.preview', $intake));
+        $response->assertOk();
+
+        $sections = $response->viewData('parsedJsonDisplaySections');
+        $this->assertIsArray($sections);
+        $basicInfo = collect($sections)->firstWhere('key', 'basic-info');
+        $this->assertIsArray($basicInfo);
+
+        $basicJson = json_decode((string) ($basicInfo['json'] ?? '{}'), true, 512, JSON_THROW_ON_ERROR);
+        $basicCore = is_array($basicJson['core'] ?? null) ? $basicJson['core'] : [];
+
+        $this->assertSame('पुणे', $basicCore['birth_place_text'] ?? null);
+        $this->assertArrayNotHasKey('address_line', $basicCore);
+        $this->assertSame([
+            'city_id' => 81,
+            'taluka_id' => 81,
+            'district_id' => 11,
+            'state_id' => 4,
+        ], $basicCore['birth_place'] ?? null);
+        $this->assertSame([[
+            'type' => 'current',
+            'address_line' => '१.ईशा बेला विस्टा, डी-वींग,फ्लॅट नं.१०३',
+            'raw' => '१.ईशा बेला विस्टा, डी-वींग,फ्लॅट नं.१०३',
+        ]], $basicCore['addresses'] ?? null);
+        $this->assertSame([
+            'full_name',
+            'gender',
+            'birth_place_text',
+            'birth_place',
+            'birth_state_id',
+            'birth_district_id',
+            'birth_taluka_id',
+            'birth_city_id',
+            'addresses',
+        ], array_values(array_intersect(array_keys($basicCore), [
+            'full_name',
+            'gender',
+            'birth_place_text',
+            'birth_place',
+            'birth_state_id',
+            'birth_district_id',
+            'birth_taluka_id',
+            'birth_city_id',
+            'addresses',
+        ])));
+    }
+
     public function test_intake_approval_route_still_exists(): void
     {
         $this->assertNotNull(Route::getRoutes()->getByName('intake.approve'));
@@ -375,6 +464,41 @@ TXT,
         $this->assertMatchesRegularExpression('/Yoni:<\/span>\s*<span[^>]*>वाघ<\/span>/u', $html);
     }
 
+    public function test_preview_page_shows_detected_but_not_included_block_for_unmapped_lines(): void
+    {
+        $user = User::factory()->create();
+        $parsed = app(IntakeParsedSnapshotSkeleton::class)->ensure([
+            'core' => [
+                'full_name' => 'Detected Block Candidate',
+                'gender' => 'female',
+            ],
+        ]);
+
+        $intake = BiodataIntake::create([
+            'raw_ocr_text' => 'detected block raw',
+            'last_parse_input_text' => <<<'TXT'
+नाव :- कु. रोहिणी पाटील
+जात :- हिंदू मराठा
+योग :- बष्ट
+TXT,
+            'uploaded_by' => $user->id,
+            'parse_status' => 'parsed',
+            'intake_status' => 'DRAFT',
+            'intake_locked' => false,
+            'approved_by_user' => false,
+            'parsed_json' => $parsed,
+            'approval_snapshot_json' => [],
+        ]);
+
+        $response = $this->actingAs($user)->get(route('intake.preview', $intake));
+
+        $response->assertOk();
+        $response->assertSee(__('intake.normalized_draft_detected_not_included_heading'), false);
+        $response->assertSee('Yog', false);
+        $response->assertSee('बष्ट', false);
+        $response->assertDontSee('Horoscope line 1', false);
+    }
+
     public function test_property_preview_uses_wizard_asset_fields_and_notes(): void
     {
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
@@ -393,7 +517,7 @@ TXT, true);
         $this->assertStringContainsString('Additional Information 2 Flats, 2 BHK', $property);
         $this->assertStringContainsString('Property Asset 3', $property);
         $this->assertStringContainsString('Location मु.पो. कळे, ता. पन्हाळा, जि. कोल्हापूर', $property);
-        $this->assertStringContainsString('Additional Information Farm land, Bagayat, १६ एकर', $property);
+        $this->assertStringContainsString('Additional Information Farm land, Bagayat, 16 एकर', $property);
         $this->assertStringContainsString('Property Asset 4', $property);
         $this->assertStringContainsString('Asset Type House', $property);
         $this->assertStringContainsString('Location पुणे', $property);
@@ -418,9 +542,9 @@ TXT, true);
         $this->assertStringContainsString('Asset Type House', $property);
         $this->assertStringContainsString('Ownership Type Sole', $property);
         $this->assertStringContainsString('Asset Type Plot', $property);
-        $this->assertStringContainsString('Additional Information ५ गुंठे', $property);
+        $this->assertStringContainsString('Additional Information 5 गुंठे', $property);
         $this->assertStringContainsString('Asset Type Land', $property);
-        $this->assertStringContainsString('Additional Information Farm land, Bagayat, १ एकर', $property);
+        $this->assertStringContainsString('Additional Information Farm land, Bagayat, 1 एकर', $property);
     }
 
     public function test_property_preview_does_not_create_false_house_from_address_only_text(): void
@@ -433,7 +557,7 @@ TXT, true);
         $property = $this->sectionBlob($out['sections']['property']);
 
         $this->assertStringNotContainsString('Asset Type House', $property);
-        $this->assertStringContainsString('Notes Not mentioned', $property);
+        $this->assertSame('', $property);
     }
 
     public function test_property_preview_keeps_kolhapur_house_plot_and_bambavade_land_details(): void
@@ -449,8 +573,9 @@ TXT, true);
         $this->assertStringContainsString('Location कोल्हापूर', $property);
         $this->assertStringContainsString('Asset Type Plot', $property);
         $this->assertStringContainsString('Additional Information 2 Plots', $property);
-        $this->assertStringContainsString('Location बांबवडे/ कळंबा', $property);
+        $this->assertStringContainsString('Location Not mentioned', $property);
         $this->assertStringContainsString('Additional Information Farm land, 4 एकर', $property);
+        $this->assertStringContainsString('Additional Information कळंबा', $property);
         $this->assertStringNotContainsString('श्रीराम फोंड्री', $property);
     }
 
@@ -523,8 +648,8 @@ TXT, true);
 
         $this->assertStringContainsString('विशाल पांडुरंग डाकवे', $basic);
         $this->assertStringContainsString('Male', $basic);
-        $this->assertStringContainsString('०२/११/१९९५', $basic);
-        $this->assertStringContainsString('गुरुवारी सकाळी ११ वा. २७ मी.', $basic);
+        $this->assertStringContainsString('02/11/1995', $basic);
+        $this->assertStringContainsString('गुरुवारी सकाळी 11 वा. 27 मी.', $basic);
         $this->assertStringContainsString('हिंदू', $basic);
         $this->assertStringContainsString('मराठा', $basic);
         $this->assertStringNotContainsString('Sub caste', $basic);
@@ -685,7 +810,7 @@ TXT, true);
         $this->assertStringContainsString('Bharat Forge Mundhawa,Pune.', $siblings);
         $this->assertStringContainsString('फ्लॅट नं सी-510', $siblings);
         $this->assertStringContainsString('Married married', $siblings);
-        $this->assertStringContainsString("Sister's husband नवनाथ रामचंद्र कन्हेरे", $siblings);
+        $this->assertStringContainsString("Sister's husband - नवनाथ रामचंद्र कन्हेरे", $siblings);
         $this->assertStringContainsString("Address देहू रोड, पुणे", $siblings);
         $this->assertStringNotContainsString('Sibling 1 Name', $siblings);
         $this->assertStringNotContainsString('Spouse name', $siblings);
@@ -866,7 +991,7 @@ TXT;
         $this->assertStringContainsString("Mobile 9123456789", $siblingsBlob);
         $this->assertStringContainsString("Occupation शिक्षिका", $siblingsBlob);
         $this->assertStringContainsString("Address वाघोली, पुणे", $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband नवनाथ रामचंद्र कन्हेरे", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband - नवनाथ रामचंद्र कन्हेरे", $siblingsBlob);
         $this->assertStringContainsString("Married married", $siblingsBlob);
         $this->assertStringContainsString("Address देहू रोड, पुणे", $siblingsBlob);
         $this->assertStringNotContainsString("Sister's husband 2", $siblingsBlob);
@@ -891,8 +1016,8 @@ TXT;
 
         $this->assertStringContainsString('Brother - समर्थ राजेंद्र पाटील', $siblingsBlob);
         $this->assertStringContainsString('Sister - पुजा नवनाथ कन्हेरे.', $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband नवनाथ रामचंद्र कन्हेरे", $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband Address देहू रोड, पुणे.", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband - नवनाथ रामचंद्र कन्हेरे", $siblingsBlob);
+        $this->assertStringContainsString("Address देहू रोड, पुणे.", $siblingsBlob);
         $this->assertStringNotContainsString('Brother 1 Name', $siblingsBlob);
         $this->assertStringNotContainsString('Sister 1 Name', $siblingsBlob);
         $this->assertStringNotContainsString('चुलते', $siblingsBlob);
@@ -913,7 +1038,7 @@ TXT;
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($text, true);
         $siblingsBlob = $this->sectionBlob($out['sections']['siblings']);
 
-        $this->assertStringContainsString("Sister's husband 1 - दत्ताजी खंडेराव शिंदे (सरकार)", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband - दत्ताजी खंडेराव शिंदे (सरकार)", $siblingsBlob);
         $this->assertStringContainsString("Occupation व्यवसाय", $siblingsBlob);
         $this->assertStringContainsString("Address बत्तीस शिराळा, सांगली", $siblingsBlob);
         $this->assertStringContainsString("डॉ. अजय वसंतराव शिंदे", $siblingsBlob);
@@ -992,7 +1117,7 @@ TXT;
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($text, true);
         $siblingsBlob = $this->sectionBlob($out['sections']['siblings']);
 
-        $this->assertStringContainsString("Sister's husband विजय दत्तात्रय पाटील", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband - विजय दत्तात्रय पाटील", $siblingsBlob);
         $this->assertStringContainsString("Sister's husband Address सांगली", $siblingsBlob);
         $this->assertStringContainsString("Additional info B.A.", $siblingsBlob);
         $this->assertStringContainsString("Brother's wife - रेखा रमेश पाटील", $siblingsBlob);

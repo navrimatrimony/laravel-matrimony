@@ -50,6 +50,37 @@ TXT;
 TXT;
     }
 
+    private function apurvaText(): string
+    {
+        return <<<'TXT'
+|| श्री ||
+नाव - अपूर्वा सुधीर डोंगरे
+जन्मतारीख - ४-०३-२०००
+जन्मवेळ - सकाळी ७ वाजता
+शिक्षण- B.com, MBA(Finance)
+नोकरी - Capgemini- SAP consultant (Sr. Analyst)
+ऊंची-५.६
+वर्ण-गोरा
+रक्तगट - B+
+देवक - आरखड
+एका महिलेचे बाहेरील छायाचित्र. तिने पिवळ्या रंगाची साडी नेसली असून त्यावर गडद हिरव्या रंगाचा ब्लाउज आहे.
+नाडी - मध्य
+कौटुंबिक माहिती
+वडील – सुधीर रामचंद्र डोंगरे (सेवानिवृत)
+आई – उज्वला सुधीर डोंगरे (प्राध्यापिका)
+भाऊ – प्रज्वल सुधीर डोंगरे (विवाहित) (IT engineer)
+वाहिनी – मानसी प्रज्वल डोंगरे (Civil engineer )
+बहीण – स्नेहल मयूर शेंडकर (विवाहित) (IT engineer)
+जावई -मयूर बाळू शेंडकर (व्यवसाईक)
+मूळ गाव – मु.पोस्ट आर्वी नारायणगाव,पुणे
+निवास – पंतनगर,घाटकोपर(e),मुंबई
+मामा – राजेश गणपत पोखरकर
+नातेसंबंध – पोखरकर,वर्पे,मुळे,ढोबळे,इंदोरे,तट्टू,ढमाले,घंघाले,डुंबरे,शेंडकर,तापकिर,दांगट,औटी
+अपेक्षा – निर्व्यसनी,उच्च शिक्षित,नोकरी,सुसंस्कृत
+भ्रमणध्वनी – ९५९४२३७११७, ९६९९७३८८२२, ८६५५२११७२८
+TXT;
+    }
+
     public function test_sections_follow_wizard_order_and_old_sections_are_absent(): void
     {
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($this->yuvrajText(), true);
@@ -143,6 +174,56 @@ TXT;
             $fullNameRow['review_hint']
         );
         $this->assertArrayHasKey('core.full_name', $out['review_flags_by_field']);
+    }
+
+    public function test_apurva_text_maps_dash_variant_family_address_preference_and_work_lines(): void
+    {
+        $draft = app(\App\Services\Parsing\IntakeNormalizedBiodataDraftBuilder::class)->build($this->apurvaText());
+        $core = $draft['normalized']['core'] ?? [];
+        $siblings = $draft['normalized']['siblings'] ?? [];
+        $preferences = $draft['normalized']['preferences'] ?? [];
+
+        $this->assertSame('female', $core['gender'] ?? null);
+        $this->assertSame('सकाळी ७ वाजता', $core['birth_time'] ?? null);
+        $this->assertSame('SAP consultant (Sr. Analyst)', $core['occupation_title'] ?? null);
+        $this->assertSame('Capgemini', $core['company_name'] ?? null);
+        $this->assertSame('निर्व्यसनी,उच्च शिक्षित,नोकरी,सुसंस्कृत', $preferences['expectations'] ?? null);
+        $this->assertSame('native', $draft['normalized']['addresses'][0]['type'] ?? null);
+        $this->assertSame('current', $draft['normalized']['addresses'][1]['type'] ?? null);
+        $this->assertSame('brother', $siblings[0]['relation_type'] ?? null);
+        $this->assertSame('brother_wife', $siblings[1]['relation_type'] ?? null);
+        $this->assertSame('sister', $siblings[2]['relation_type'] ?? null);
+        $this->assertSame('मयूर बाळू शेंडकर', $siblings[2]['spouse']['name'] ?? null);
+        $this->assertSame('व्यवसाईक', $siblings[2]['spouse']['occupation_title'] ?? null);
+        $this->assertSame(
+            'पोखरकर,वर्पे,मुळे,ढोबळे,इंदोरे,तट्टू,ढमाले,घंघाले,डुंबरे,शेंडकर,तापकिर,दांगट,औटी',
+            $core['other_relatives_text'] ?? null
+        );
+        $this->assertSame([], $draft['review_flags'] ?? []);
+
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($this->apurvaText(), true);
+        $basic = $this->sectionBlob($out['sections']['basic-info']);
+        $physical = $this->sectionBlob($out['sections']['physical']);
+        $education = $this->sectionBlob($out['sections']['education-career']);
+        $siblingsBlob = $this->sectionBlob($out['sections']['siblings']);
+        $allianceBlob = $this->sectionBlob($out['sections']['alliance']);
+        $preferencesBlob = $this->sectionBlob($out['sections']['about-preferences']);
+
+        $this->assertStringContainsString('Gender Female', $basic);
+        $this->assertStringContainsString('Birth time सकाळी 7 वाजता', $basic);
+        $this->assertStringContainsString('Native / Parents address मु.पोस्ट आर्वी नारायणगाव,पुणे', $basic);
+        $this->assertStringContainsString('Residential / Current address पंतनगर,घाटकोपर(e),मुंबई', $basic);
+        $this->assertStringContainsString('5\' 6" (168 cm)', $physical);
+        $this->assertStringContainsString('Occupation title SAP consultant (Sr. Analyst)', $education);
+        $this->assertStringContainsString('Company name Capgemini', $education);
+        $this->assertStringContainsString('Brother प्रज्वल सुधीर डोंगरे', $siblingsBlob);
+        $this->assertStringContainsString("Brother's wife मानसी प्रज्वल डोंगरे", $siblingsBlob);
+        $this->assertStringContainsString('Sister स्नेहल मयूर शेंडकर', $siblingsBlob);
+        $this->assertStringContainsString('Sister Occupation IT engineer', $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband मयूर बाळू शेंडकर", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband Occupation व्यवसाईक", $siblingsBlob);
+        $this->assertStringContainsString('पोखरकर,वर्पे,मुळे,ढोबळे,इंदोरे,तट्टू,ढमाले,घंघाले,डुंबरे,शेंडकर,तापकिर,दांगट,औटी', $allianceBlob);
+        $this->assertStringContainsString('Expectations निर्व्यसनी,उच्च शिक्षित,नोकरी,सुसंस्कृत', $preferencesBlob);
     }
 
     public function test_display_rows_use_clean_unicode_separators(): void
@@ -355,7 +436,7 @@ TXT, true);
         $rows = $out['sections']['horoscope'];
         $labels = array_values(array_map(
             static fn (array $row): string => (string) ($row['label'] ?? ''),
-            array_filter($rows, static fn (array $row): bool => ! str_contains((string) ($row['label'] ?? ''), 'Horoscope line'))
+            $rows
         ));
 
         $this->assertSame([
@@ -389,6 +470,39 @@ TXT, true);
         $this->assertStringNotContainsString('Horoscope line 1 राशी :- कुंभ', $horoscopeBlob);
         $this->assertStringNotContainsString('Horoscope line 2 नक्षत्र :- अश्विनी', $horoscopeBlob);
         $this->assertStringNotContainsString('Horoscope line 3 वश्य :- मानव', $horoscopeBlob);
+    }
+
+    public function test_horoscope_unknown_values_move_to_detected_but_not_included_block(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+देवक :- वडाचे पान
+कुल दैवत :- जेजुरीचा खंडोबा
+नक्षत्र :- उत्तरा भाद्र पदा
+नाडी :- मध्य
+योग :- बष्ट
+रक्तगट : A+
+TXT, true);
+
+        $horoscopeBlob = $this->sectionBlob($out['sections']['horoscope']);
+        $detectedBlob = $this->detectedBlob($out['detected_but_not_included'] ?? []);
+
+        $this->assertStringContainsString(__('components.horoscope.devak'), $horoscopeBlob);
+        $this->assertStringContainsString('वडाचे पान', $horoscopeBlob);
+        $this->assertStringNotContainsString('Yog', $horoscopeBlob);
+        $this->assertStringNotContainsString('योग', $horoscopeBlob);
+        $this->assertStringContainsString('Yog बष्ट', $detectedBlob);
+        $this->assertStringContainsString('Detected in biodata text but not mapped to a wizard field.', $detectedBlob);
+    }
+
+    public function test_supported_lines_do_not_leak_into_detected_but_not_included_block(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+नाव :- कु. रोहिणी पाटील
+जात :- हिंदू मराठा
+अपेक्षा :- उच्चशिक्षित
+TXT, true);
+
+        $this->assertSame([], $out['detected_but_not_included'] ?? []);
     }
 
     public function test_horoscope_preview_maps_swami_and_vairavarga_into_wizard_labels(): void
@@ -509,7 +623,7 @@ TXT, true);
             $this->assertStringContainsString('साधन प्रकार फ्लॅट', $propertyBlob);
             $this->assertStringContainsString('अतिरिक्त माहिती फ्लॅट', $propertyBlob);
             $this->assertStringContainsString('साधन प्रकार जमीन', $propertyBlob);
-            $this->assertStringContainsString('अतिरिक्त माहिती शेती जमीन, १ एकर', $propertyBlob);
+            $this->assertStringContainsString('अतिरिक्त माहिती शेती जमीन, 1 एकर', $propertyBlob);
             $this->assertStringContainsString('नोंदी उल्लेख नाही', $propertyBlob);
             $this->assertStringNotContainsString('Property Asset', $propertyBlob);
             $this->assertStringNotContainsString('Asset Type', $propertyBlob);
@@ -604,7 +718,7 @@ TXT, true);
         $this->assertStringContainsString(__('components.horoscope.nakshatra'), $horoscopeBlob);
         $this->assertStringContainsString('रोहिणी', $horoscopeBlob);
         $this->assertStringContainsString(__('components.horoscope.charan'), $horoscopeBlob);
-        $this->assertTrue(str_contains($horoscopeBlob, '४') || str_contains($horoscopeBlob, '4'));
+        $this->assertStringContainsString('4', $horoscopeBlob);
         $this->assertStringContainsString(__('components.horoscope.navras_name'), $horoscopeBlob);
         $this->assertStringContainsString('वू', $horoscopeBlob);
         $this->assertStringContainsString(__('components.horoscope.nadi'), $horoscopeBlob);
@@ -687,7 +801,7 @@ TXT, true);
         $aboutBlob = $this->sectionBlob($out['sections']['about-me']);
 
         $this->assertStringContainsString('विशाल पांडुरंग डाकवे', $basicBlob);
-        $this->assertStringContainsString('०२/११/१९९५', $basicBlob);
+        $this->assertStringContainsString('02/11/1995', $basicBlob);
         $this->assertStringNotContainsString('9322202146', $basicBlob);
         $this->assertStringContainsString('163 cm', $physicalBlob);
         $this->assertStringContainsString('BE (MECH)', $educationBlob);
@@ -738,7 +852,7 @@ TXT, true);
         $horoscopeBlob = $this->sectionBlob($out['sections']['horoscope']);
 
         $this->assertStringContainsString('Birth time', $basicBlob);
-        $this->assertStringContainsString('गुरुवारी सकाळी ११ वा. २७ मी.', $basicBlob);
+        $this->assertStringContainsString('गुरुवारी सकाळी 11 वा. 27 मी.', $basicBlob);
         $this->assertStringContainsString(__('components.horoscope.birth_weekday'), $horoscopeBlob);
         $this->assertStringContainsString('गुरुवार', $horoscopeBlob);
         $this->assertStringNotContainsString('Horoscope line 1', $horoscopeBlob);
@@ -936,10 +1050,10 @@ TXT, true);
         $this->assertStringContainsString('Other relatives तातुगडे - देशमुख ( आमणापूर ), जाधव ( नरसेवाडी ); पाटील, देवणे, मेंगाणे, शेळके', $maternalBlob);
         $this->assertStringNotContainsString('जावई', $maternalBlob);
         $this->assertStringNotContainsString('Maternal Uncle (mama) 3', $maternalBlob);
-        $this->assertStringContainsString("Sister's husband 1 Name दत्ताजी खंडेराव शिंदे", $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband 1 Occupation व्यवसाय", $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband 1 Address बत्तीस शिराळा, सांगली", $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband 2 Name डॉ. अजय वसंतराव शिंदे", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband दत्ताजी खंडेराव शिंदे", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband Occupation व्यवसाय", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband Address बत्तीस शिराळा, सांगली", $siblingsBlob);
+        $this->assertStringContainsString("Sister's husband 2 डॉ. अजय वसंतराव शिंदे", $siblingsBlob);
         $this->assertStringContainsString("Sister's husband 2 Occupation श्री क्लिनिक, डोंबिवली, ठाणे", $siblingsBlob);
         $this->assertStringContainsString("Sister's husband 2 Address मुर्ती बारामती", $siblingsBlob);
     }
@@ -981,7 +1095,7 @@ TXT, true);
         $this->assertStringContainsString('Location मीरा रोड, ठाणे', $property);
         $this->assertStringContainsString('Additional Information 2 Flats, 2 BHK', $property);
         $this->assertStringContainsString('Property Asset 3', $property);
-        $this->assertStringContainsString('Additional Information १६ एकर', $property);
+        $this->assertStringContainsString('Additional Information 16 एकर', $property);
         $this->assertStringContainsString('Notes Not mentioned', $property);
         $this->assertStringNotContainsString('(1)', $property);
         $this->assertStringNotContainsString('(2)', $property);
@@ -1000,10 +1114,10 @@ TXT, true);
         $this->assertStringContainsString('Ownership Type Sole', $property);
         $this->assertStringContainsString('Property Asset 2', $property);
         $this->assertStringContainsString('Asset Type Plot', $property);
-        $this->assertStringContainsString('Additional Information ५ गुंठे', $property);
+        $this->assertStringContainsString('Additional Information 5 गुंठे', $property);
         $this->assertStringContainsString('Property Asset 3', $property);
         $this->assertStringContainsString('Asset Type Land', $property);
-        $this->assertStringContainsString('Additional Information Farm land, Bagayat, १ एकर', $property);
+        $this->assertStringContainsString('Additional Information Farm land, Bagayat, 1 एकर', $property);
     }
 
     public function test_property_preview_does_not_infer_property_from_house_number_in_address_only_text(): void
@@ -1016,7 +1130,7 @@ TXT, true);
         $property = $this->sectionBlob($out['sections']['property']);
 
         $this->assertStringNotContainsString('Asset Type House', $property);
-        $this->assertStringContainsString('Notes Not mentioned', $property);
+        $this->assertSame('', $property);
     }
 
     public function test_property_preview_keeps_shared_kolhapur_house_plot_and_land_location(): void
@@ -1038,8 +1152,9 @@ TXT, true);
         $this->assertStringContainsString('Additional Information 2 Plots', $property);
         $this->assertStringContainsString('Property Asset 3', $property);
         $this->assertStringContainsString('Asset Type Land', $property);
-        $this->assertStringContainsString('Location बांबवडे/ कळंबा', $property);
+        $this->assertStringContainsString('Location Not mentioned', $property);
         $this->assertStringContainsString('Additional Information Farm land, 4 एकर', $property);
+        $this->assertStringContainsString('Additional Information कळंबा', $property);
         $this->assertStringNotContainsString('श्रीराम फोंड्री', $property);
     }
 
@@ -1150,6 +1265,22 @@ TXT, true);
     {
         return implode(' ', array_map(
             static fn (array $row): string => ($row['label'] ?? '').' '.($row['value'] ?? ''),
+            $rows
+        ));
+    }
+
+    /**
+     * @param  list<array{label: string, value: string, reason?: ?string, suggested_section?: ?string}>  $rows
+     */
+    private function detectedBlob(array $rows): string
+    {
+        return implode(' ', array_map(
+            static fn (array $row): string => trim(
+                ($row['label'] ?? '').' '
+                .($row['value'] ?? '').' '
+                .($row['reason'] ?? '').' '
+                .($row['suggested_section'] ?? '')
+            ),
             $rows
         ));
     }

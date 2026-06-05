@@ -43,6 +43,8 @@ class IntakeSettingsUiTest extends TestCase
             ->assertSee('Crop candidate profile photo from uploaded biodata image', false)
             ->assertSee('Show cropped photo thumbnail in Normalized Biodata Draft', false)
             ->assertSee('Apply cropped biodata photo as profile photo after approval/apply', false)
+            ->assertSee('Use Normalized Draft Parser for rules-only parsing', false)
+            ->assertSee('Experimental. Changes rules-only parser path only. AI-first merge may ignore this setting.', false)
             ->assertSee('User-uploaded photo becomes primary later', false)
             ->assertSee('Keep biodata-cropped photo primary until manually changed', false);
     }
@@ -127,5 +129,25 @@ class IntakeSettingsUiTest extends TestCase
         $this->assertSame('0', AdminSetting::getValue('intake_photo_show_in_normalized_preview'));
         $this->assertSame('0', AdminSetting::getValue('intake_photo_apply_as_profile_photo'));
         $this->assertSame('new_upload_primary', AdminSetting::getValue('intake_photo_later_upload_primary_policy'));
+    }
+
+    public function test_saving_rules_only_normalized_draft_parser_toggle_persists_setting(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $this->actingAs($admin)->post(route('admin.intake-settings.update'), $this->baseIntakePayload([
+            'intake_processing_mode' => 'end_to_end',
+            'intake_primary_ai_provider' => 'openai',
+            'intake_use_normalized_draft_parser' => 1,
+        ]))->assertRedirect(route('admin.intake-settings.index'));
+
+        $this->assertSame('1', AdminSetting::getValue('intake_use_normalized_draft_parser'));
+
+        $this->actingAs($admin)->post(route('admin.intake-settings.update'), $this->baseIntakePayload([
+            'intake_processing_mode' => 'end_to_end',
+            'intake_primary_ai_provider' => 'openai',
+        ]))->assertRedirect(route('admin.intake-settings.index'));
+
+        $this->assertSame('0', AdminSetting::getValue('intake_use_normalized_draft_parser'));
     }
 }

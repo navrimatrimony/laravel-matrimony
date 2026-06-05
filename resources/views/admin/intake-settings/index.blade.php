@@ -224,6 +224,15 @@
                         </p>
                     </div>
                 </div>
+                <div class="rounded border border-amber-200 bg-amber-50 p-3 dark:border-amber-700/60 dark:bg-amber-900/20">
+                    <label class="inline-flex items-center gap-2 text-sm">
+                        <input type="checkbox" name="intake_use_normalized_draft_parser" value="1" {{ $intakeUseNormalizedDraftParser ? 'checked' : '' }} class="rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700">
+                        <span class="font-medium text-gray-800 dark:text-gray-100">Use Normalized Draft Parser for rules-only parsing</span>
+                    </label>
+                    <p class="mt-2 text-xs text-amber-800 dark:text-amber-200">
+                        Experimental. Changes rules-only parser path only. AI-first merge may ignore this setting.
+                    </p>
+                </div>
             </div>
             <script>
                 (function () {

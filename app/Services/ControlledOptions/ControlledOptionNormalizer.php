@@ -2,6 +2,7 @@
 
 namespace App\Services\ControlledOptions;
 
+use App\Services\Ocr\OcrNormalize;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -521,29 +522,83 @@ class ControlledOptionNormalizer
         $v = trim($rawValue);
         $vNorm = $this->deterministicToken($v);
 
-        $rows = DB::table($table)
-            ->where('is_active', true)
-            ->get(['id', 'key', 'label']);
-
-        foreach ($rows as $row) {
-            $k = trim((string) ($row->key ?? ''));
-            $l = trim((string) ($row->label ?? ''));
-            if ($k === $v || $l === $v) {
-                return ['id' => (int) $row->id, 'key' => $k, 'label' => $l];
+        $columns = ['id', 'key', 'label'];
+        foreach (['label_en', 'label_mr', 'name'] as $column) {
+            if (Schema::hasColumn($table, $column)) {
+                $columns[] = $column;
             }
         }
+
+        $rows = DB::table($table)
+            ->where('is_active', true)
+            ->get($columns);
+
+        $best = null;
+        $bestScore = PHP_INT_MIN;
         foreach ($rows as $row) {
-            $kNorm = $this->deterministicToken((string) ($row->key ?? ''));
-            $lNorm = $this->deterministicToken((string) ($row->label ?? ''));
-            if ($kNorm !== '' && $kNorm === $vNorm) {
-                return ['id' => (int) $row->id, 'key' => (string) $row->key, 'label' => (string) $row->label];
+            $score = $this->activeMasterMatchScore($row, $v, $vNorm);
+            if ($score > $bestScore) {
+                $best = $row;
+                $bestScore = $score;
             }
-            if ($lNorm !== '' && $lNorm === $vNorm) {
-                return ['id' => (int) $row->id, 'key' => (string) $row->key, 'label' => (string) $row->label];
-            }
+        }
+
+        if ($best !== null && $bestScore > PHP_INT_MIN) {
+            return [
+                'id' => (int) $best->id,
+                'key' => trim((string) ($best->key ?? '')),
+                'label' => trim((string) ($best->label ?? $best->label_en ?? $best->label_mr ?? $best->name ?? '')),
+            ];
         }
 
         return null;
+    }
+
+    private function activeMasterMatchScore(object $row, string $rawValue, string $rawNorm): int
+    {
+        $fieldScores = [
+            'key' => 800,
+            'label' => 700,
+            'label_en' => 680,
+            'label_mr' => 680,
+            'name' => 660,
+        ];
+
+        $best = PHP_INT_MIN;
+        foreach ($fieldScores as $field => $score) {
+            $candidate = trim((string) ($row->{$field} ?? ''));
+            if ($candidate === '') {
+                continue;
+            }
+            if ($candidate === $rawValue) {
+                $best = max($best, $score - $this->generatedSuggestionKeyPenalty((string) ($row->key ?? '')));
+
+                continue;
+            }
+
+            $candidateNorm = $this->deterministicToken($candidate);
+            if ($candidateNorm !== '' && $candidateNorm === $rawNorm) {
+                $best = max($best, ($score - 100) - $this->generatedSuggestionKeyPenalty((string) ($row->key ?? '')));
+            }
+        }
+
+        return $best;
+    }
+
+    private function generatedSuggestionKeyPenalty(string $key): int
+    {
+        $key = trim(Str::lower($key));
+        if ($key === '') {
+            return 0;
+        }
+
+        foreach (['rel-sc-', 'cas-sc-', 'kuli-sc-'] as $prefix) {
+            if (str_starts_with($key, $prefix)) {
+                return 50;
+            }
+        }
+
+        return 0;
     }
 
     private function masterTableForLogicalField(string $logicalField): ?string
@@ -578,7 +633,7 @@ class ControlledOptionNormalizer
                 'female' => 'female', 'f' => 'female', 'स्त्री' => 'female', 'महिला' => 'female', 'वधू' => 'female',
             ],
             'marital_status' => [
-                'unmarried' => 'unmarried', 'single' => 'unmarried', 'अविवाहित' => 'unmarried',
+                'unmarried' => 'never_married', 'single' => 'never_married', 'अविवाहित' => 'never_married',
                 'married' => 'married', 'विवाहित' => 'married',
                 'divorced' => 'divorced', 'घटस्फोटित' => 'divorced',
                 'widowed' => 'widowed', 'विधवा' => 'widowed', 'विधुर' => 'widowed',
@@ -612,7 +667,9 @@ class ControlledOptionNormalizer
 
     private function deterministicToken(string $value): string
     {
-        $v = trim(Str::lower($value));
+        $v = OcrNormalize::normalizeDigits($value);
+        $v = str_replace(['कुली', 'कुळी मराठा', 'कुली मराठा'], ['कुळी', 'कुळी मराठा', 'कुळी मराठा'], $v);
+        $v = trim(Str::lower($v));
         if ($v === '') {
             return '';
         }

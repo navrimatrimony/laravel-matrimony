@@ -51,6 +51,10 @@ class ParseIntakeJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public int $tries = 1;
+
+    public int $timeout = 300;
+
     public function __construct(
         public int $intakeId,
         public bool $forceRecompute = false
@@ -514,7 +518,11 @@ class ParseIntakeJob implements ShouldQueue
         $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map($normalizedDraft);
 
         $utf8Stats = [];
-        $ssot = app(IntakePipelineService::class)->finalizeParsedSnapshotForStorage($parsed, $utf8Stats);
+        $ssot = app(IntakePipelineService::class)->finalizeParsedSnapshotForStorage(
+            $parsed,
+            $utf8Stats,
+            $suggestedByUserId
+        );
         if (($utf8Stats['strings_fixed'] ?? 0) > 0) {
             Log::warning('ParseIntakeJob: repaired malformed UTF-8 in parsed_json before save', [
                 'intake_id' => $intake->id,
@@ -563,5 +571,26 @@ class ParseIntakeJob implements ShouldQueue
                 'parsed_json_core_date_of_birth' => $savedCore['date_of_birth'] ?? null,
             ]);
         }
+    }
+
+    public function failed(\Throwable $e): void
+    {
+        $intake = BiodataIntake::find($this->intakeId);
+        if ($intake === null) {
+            return;
+        }
+
+        if ($intake->parse_status === 'pending') {
+            $intake->update([
+                'parse_status' => 'error',
+                'last_error' => mb_substr(trim($e->getMessage()) ?: 'parse_job_failed', 0, 255),
+            ]);
+        }
+
+        Log::error('ParseIntakeJob failed', [
+            'intake_id' => $this->intakeId,
+            'forceRecompute' => $this->forceRecompute,
+            'error' => $e->getMessage(),
+        ]);
     }
 }

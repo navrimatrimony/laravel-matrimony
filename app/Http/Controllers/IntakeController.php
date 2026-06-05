@@ -1614,11 +1614,21 @@ class IntakeController extends Controller
 
         $this->forgetIntakeParseOcrDebugCache($intake, true);
         IntakeExtractionReuseResolver::flagNextParseJobAsParseInputOnly((int) $intake->id);
-        $intake->update(['parse_status' => 'pending']);
-        ParseIntakeJob::dispatchSync($intake->id, true);
+        $intake->update([
+            'parse_status' => 'pending',
+            'last_error' => null,
+        ]);
+        if (app()->environment('testing')) {
+            ParseIntakeJob::dispatchSync($intake->id, true);
 
-        return redirect()->route('intake.index')
-            ->with('success', 'पुन्हा पार्स पूर्ण झाले. या intake चे प्रिव्ह्यू उघडा — अद्ययावत माहिती दिसेल.');
+            return redirect()->route('intake.index')
+                ->with('success', 'पुन्हा पार्स पूर्ण झाले. या intake चे प्रिव्ह्यू उघडा — अद्ययावत माहिती दिसेल.');
+        }
+
+        ParseIntakeJob::dispatch($intake->id, true);
+
+        return redirect()->route('intake.status', $intake->id)
+            ->with('success', 'पुन्हा पार्स सुरू झाले. पूर्ण झाल्यावर प्रिव्ह्यू आपोआप उघडेल.');
     }
 
     /**
@@ -3623,7 +3633,59 @@ class IntakeController extends Controller
             'basic-info' => [
                 'label' => __($sectionLabels['basic-info'] ?? 'wizard.basic_info').' JSON',
                 'data' => [
-                    'core' => $this->sliceParsedCore($core, [
+                    'core' => $this->orderAssocByKeys($this->compactDisplayPayload(array_merge(
+                        $this->sliceParsedCore($core, [
+                            'full_name',
+                            'gender',
+                            'gender_id',
+                            'date_of_birth',
+                            'birth_time',
+                            'birth_place_text',
+                            'birth_country_id',
+                            'birth_city_id',
+                            'birth_taluka_id',
+                            'birth_district_id',
+                            'birth_state_id',
+                            'native_country_id',
+                            'native_state_id',
+                            'native_district_id',
+                            'native_taluka_id',
+                            'native_city_id',
+                            'religion',
+                            'religion_id',
+                            'caste',
+                            'caste_id',
+                            'sub_caste',
+                            'sub_caste_id',
+                            'marital_status',
+                            'marital_status_id',
+                            'primary_contact_number',
+                            'mother_tongue',
+                            'mother_tongue_id',
+                            'diet',
+                            'diet_id',
+                            'smoking',
+                            'smoking_status',
+                            'smoking_status_id',
+                            'drinking',
+                            'drinking_status',
+                            'drinking_status_id',
+                        ]),
+                        [
+                            'birth_place' => $this->displayPlacePayload(
+                                $parsed['birth_place'] ?? null,
+                                $core['birth_place_text'] ?? $core['birth_place'] ?? null
+                            ),
+                            'native_place' => $this->displayPlacePayload(
+                                $parsed['native_place'] ?? null,
+                                $core['native_place'] ?? $core['native_place_text'] ?? null
+                            ),
+                            'addresses' => $this->displayAddressRows(
+                                is_array($parsed['addresses'] ?? null) ? $parsed['addresses'] : [],
+                                $core
+                            ),
+                        ]
+                    )), [
                         'full_name',
                         'gender',
                         'gender_id',
@@ -3631,10 +3693,17 @@ class IntakeController extends Controller
                         'birth_time',
                         'birth_place_text',
                         'birth_place',
-                        'birth_city_id',
-                        'birth_taluka_id',
-                        'birth_district_id',
+                        'birth_country_id',
                         'birth_state_id',
+                        'birth_district_id',
+                        'birth_taluka_id',
+                        'birth_city_id',
+                        'native_place',
+                        'native_country_id',
+                        'native_state_id',
+                        'native_district_id',
+                        'native_taluka_id',
+                        'native_city_id',
                         'religion',
                         'religion_id',
                         'caste',
@@ -3654,10 +3723,8 @@ class IntakeController extends Controller
                         'drinking',
                         'drinking_status',
                         'drinking_status_id',
-                        'address_line',
+                        'addresses',
                     ]),
-                    'birth_place' => $parsed['birth_place'] ?? null,
-                    'native_place' => $parsed['native_place'] ?? null,
                 ],
             ],
             'physical' => [
@@ -3705,7 +3772,6 @@ class IntakeController extends Controller
                         'district_id',
                         'taluka_id',
                         'city_id',
-                        'address_line',
                         'work_city_id',
                         'work_state_id',
                         'work_location_text',
@@ -3980,6 +4046,100 @@ class IntakeController extends Controller
         }
 
         return $slice;
+    }
+
+    /**
+     * @param  mixed  $place
+     * @param  mixed  $displayText
+     * @return array<string,mixed>|null
+     */
+    private function displayPlacePayload($place, $displayText): ?array
+    {
+        if (! is_array($place)) {
+            return null;
+        }
+
+        $out = $place;
+        $display = trim((string) ($displayText ?? ''));
+        $raw = trim((string) ($out['raw'] ?? ''));
+        $line = trim((string) ($out['address_line'] ?? ''));
+        if ($display !== '') {
+            if ($raw !== '' && $this->normalizeDisplayJsonText($raw) === $this->normalizeDisplayJsonText($display)) {
+                unset($out['raw']);
+            }
+            if ($line !== '' && $this->normalizeDisplayJsonText($line) === $this->normalizeDisplayJsonText($display)) {
+                unset($out['address_line']);
+            }
+        }
+
+        return $this->compactDisplayPayload($out);
+    }
+
+    /**
+     * @param  list<array<string,mixed>>  $addresses
+     * @param  array<string,mixed>  $core
+     * @return list<array<string,mixed>>
+     */
+    private function displayAddressRows(array $addresses, array $core): array
+    {
+        $rows = [];
+        foreach ($addresses as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $rows[] = $this->compactDisplayPayload($this->orderAssocByKeys($row, [
+                'type',
+                'address_line',
+                'raw',
+                'location_id',
+                'city_id',
+                'taluka_id',
+                'district_id',
+                'state_id',
+                'country_id',
+            ]));
+        }
+
+        if ($rows !== []) {
+            return $rows;
+        }
+
+        $line = trim((string) ($core['address_line'] ?? ''));
+        if ($line === '') {
+            return [];
+        }
+
+        return [[
+            'type' => 'current',
+            'address_line' => $line,
+        ]];
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @return array<string,mixed>
+     */
+    private function compactDisplayPayload(array $payload): array
+    {
+        foreach ($payload as $key => $value) {
+            if ($value === null) {
+                unset($payload[$key]);
+
+                continue;
+            }
+            if (is_string($value) && trim($value) === '') {
+                unset($payload[$key]);
+            }
+        }
+
+        return $payload;
+    }
+
+    private function normalizeDisplayJsonText(string $value): string
+    {
+        $collapsed = preg_replace('/\s+/u', ' ', trim($value));
+
+        return mb_strtolower($collapsed ?? '');
     }
 
     /**

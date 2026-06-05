@@ -24,6 +24,7 @@ final class LocationNormalizationService
         private readonly LocationService $locationService,
         private readonly LocationCompoundAddressParser $compoundAddressParser,
         private readonly LocationSearchService $locationSearch,
+        private readonly PlaceIntakeSearchService $placeIntakeSearch,
     ) {}
 
     /**
@@ -55,6 +56,11 @@ final class LocationNormalizationService
             if ($match !== null) {
                 return $match;
             }
+        }
+
+        $exactStandalone = $this->resolveExactStandalonePreferredLeaf($rawInput);
+        if ($exactStandalone !== null) {
+            return $exactStandalone;
         }
 
         return $this->resolveFromSearchFallback($rawInput);
@@ -116,6 +122,10 @@ final class LocationNormalizationService
     private function resolveFromSearchFallback(string $rawInput): array
     {
         $hints = $this->compoundAddressParser->parseComponents($rawInput);
+        $intakeMatch = $this->resolveFromIntakeConfidentMatch($rawInput);
+        if ($intakeMatch !== null) {
+            return $intakeMatch;
+        }
 
         foreach ($this->compoundAddressParser->searchQueries($rawInput) as $query) {
             $res = $this->locationSearch->search($query, [], [], true);
@@ -138,6 +148,82 @@ final class LocationNormalizationService
         }
 
         return $this->result(false, null, null, null, null, null, self::CONFIDENCE_NO_MATCH, $rawInput, false, [], null);
+    }
+
+    /**
+     * @return array{matched: bool, city_id: int|null, district_id: int|null, state_id: int|null, taluka_id: int|null, country_id: int|null, confidence: float, raw_input: string, ambiguity: bool, possible_matches: array<int, array<string, mixed>>, location_id: int|null}|null
+     */
+    private function resolveFromIntakeConfidentMatch(string $rawInput): ?array
+    {
+        $row = $this->placeIntakeSearch->confidentMatch($rawInput);
+        if (! is_array($row)) {
+            return null;
+        }
+
+        $locationId = (int) ($row['city_id'] ?? $row['id'] ?? 0);
+        if ($locationId < 1) {
+            return null;
+        }
+
+        $location = Location::query()->find($locationId);
+        $countryId = null;
+        if ($location !== null) {
+            $hierarchy = $this->locationService->fillHierarchyGaps($location, $this->locationService->getFullHierarchy($location));
+            $state = $hierarchy['state'] ?? null;
+            if ($state !== null && isset($state->attributes['parent_id'])) {
+                $countryId = (int) $state->parent_id;
+            }
+        }
+
+        return $this->result(
+            true,
+            $locationId,
+            isset($row['district_id']) && (int) $row['district_id'] > 0 ? (int) $row['district_id'] : null,
+            isset($row['state_id']) && (int) $row['state_id'] > 0 ? (int) $row['state_id'] : null,
+            isset($row['taluka_id']) && (int) $row['taluka_id'] > 0 ? (int) $row['taluka_id'] : null,
+            $countryId,
+            self::CONFIDENCE_SEARCH_MATCH,
+            $rawInput,
+            false,
+            [],
+            $locationId,
+        );
+    }
+
+    /**
+     * Prefer an exact standalone canonical row for single-token places such as "Pune":
+     * taluka > city > district. This avoids district-only matches when a more specific
+     * same-name leaf exists in the hierarchy.
+     *
+     * @return array{matched: bool, city_id: int|null, district_id: int|null, state_id: int|null, taluka_id: int|null, country_id: int|null, confidence: float, raw_input: string, ambiguity: bool, possible_matches: array<int, array<string, mixed>>, location_id: int|null}|null
+     */
+    private function resolveExactStandalonePreferredLeaf(string $rawInput): ?array
+    {
+        if ($this->compoundAddressParser->looksCompound($rawInput)) {
+            return null;
+        }
+
+        $trimmed = trim($rawInput);
+        if ($trimmed === '' || preg_match('/\s/u', $trimmed) === 1) {
+            return null;
+        }
+
+        $normalized = mb_strtolower($trimmed, 'UTF-8');
+        $query = Location::query()
+            ->whereIn('type', ['taluka', 'city', 'district'])
+            ->where(function ($q) use ($trimmed, $normalized): void {
+                $q->whereRaw('LOWER(TRIM(COALESCE(name, ""))) = ?', [$normalized])
+                    ->orWhereRaw('LOWER(TRIM(COALESCE(name_en, ""))) = ?', [$normalized]);
+                if (Schema::hasColumn(Location::geoTable(), 'name_mr')) {
+                    $q->orWhereRaw('TRIM(COALESCE(name_mr, "")) = ?', [$trimmed]);
+                }
+            })
+            ->orderByRaw("CASE WHEN type = 'taluka' THEN 0 WHEN type = 'city' THEN 1 WHEN type = 'district' THEN 2 ELSE 3 END")
+            ->orderBy('id');
+
+        $loc = $query->first();
+
+        return $loc !== null ? $this->buildMatchFromLocation($loc, $rawInput) : null;
     }
 
     /**
@@ -230,6 +316,9 @@ final class LocationNormalizationService
         $districtId = $district?->id !== null ? (int) $district->id : null;
         $stateId = $state?->id !== null ? (int) $state->id : null;
         $talukaId = $taluka?->id !== null ? (int) $taluka->id : null;
+        if ($talukaId === null && $loc->type === 'taluka') {
+            $talukaId = $locationId;
+        }
         $countryId = null;
         if ($state !== null && isset($state->attributes['parent_id'])) {
             $countryId = (int) $state->parent_id;
@@ -237,7 +326,7 @@ final class LocationNormalizationService
 
         return $this->result(
             true,
-            null,
+            $loc->type !== 'district' && $loc->type !== 'state' && $loc->type !== 'country' ? $locationId : null,
             $districtId,
             $stateId,
             $talukaId,
