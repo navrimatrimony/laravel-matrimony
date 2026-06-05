@@ -9,6 +9,7 @@ use App\Models\ProfilePhoto;
 use App\Services\Admin\AdminSettingService;
 use App\Services\EducationService;
 use App\Services\MutationService;
+use App\Services\Profile\ProfileCanonicalResidenceService;
 use App\Services\ProfileLifecycleService;
 use App\Services\ReferralService;
 use Illuminate\Http\RedirectResponse;
@@ -43,6 +44,10 @@ class OnboardingController extends Controller
         }
         if (! ProfileLifecycleService::isEditableForManual($profile)) {
             return redirect()->route('matrimony.profile.show', $profile->id)->with('error', __('wizard.profile_not_editable_current_state'));
+        }
+
+        if ($step === 2) {
+            $this->clearStaleResidenceFlashForStepTwo();
         }
 
         $this->syncCardOnboardingResumeStep($profile, $step);
@@ -173,6 +178,12 @@ class OnboardingController extends Controller
         }
 
         if ($step === 4) {
+            $profile->refresh();
+            $residenceError = $this->canonicalResidenceErrorMessageForPhotoHandoff($profile);
+            if ($residenceError !== null) {
+                return redirect()->route('matrimony.onboarding.show', ['step' => 3])
+                    ->withErrors(['location_id' => $residenceError]);
+            }
             $profile->forceFill(['card_onboarding_resume_step' => MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP])->saveQuietly();
 
             return redirect()->route('matrimony.profile.upload-photo', ['from' => 'onboarding'])
@@ -214,6 +225,44 @@ class OnboardingController extends Controller
         return false;
     }
 
+    private function clearStaleResidenceFlashForStepTwo(): void
+    {
+        $error = session('error');
+        if (is_string($error) && in_array($error, ['Residence location is required.', 'Select a valid residence location.'], true)) {
+            session()->forget('error');
+        }
+
+        $viewErrors = session('errors');
+        if (! $viewErrors instanceof \Illuminate\Support\ViewErrorBag) {
+            return;
+        }
+
+        $filteredViewErrors = new \Illuminate\Support\ViewErrorBag;
+        foreach ($viewErrors->getBags() as $bagName => $bag) {
+            $kept = [];
+            foreach ($bag->messages() as $key => $messages) {
+                $isResidenceKey = $key === 'location_id'
+                    || $key === 'location_input'
+                    || str_starts_with($key, 'self_addresses.');
+                $hasResidenceMessage = collect($messages)->contains(fn ($message) => in_array((string) $message, [
+                    'Residence location is required.',
+                    'Select a valid residence location.',
+                ], true));
+
+                if ($isResidenceKey || $hasResidenceMessage) {
+                    continue;
+                }
+
+                $kept[$key] = $messages;
+            }
+
+            $filteredViewErrors->put($bagName, new \Illuminate\Support\MessageBag($kept));
+        }
+
+        session()->flash('errors', $filteredViewErrors);
+        view()->share('errors', $filteredViewErrors);
+    }
+
     /**
      * True when the profile already has a stored primary path or at least one gallery row
      * (includes pending/… placeholders while processing).
@@ -247,6 +296,7 @@ class OnboardingController extends Controller
         if ($basic === null || $physical === null) {
             throw new \RuntimeException('Invalid onboarding snapshot merge');
         }
+        $this->assertStep3HasCanonicalResidence($basic);
         $basic['core'] = array_merge($basic['core'], $physical['core']);
 
         return $basic;
@@ -490,6 +540,39 @@ class OnboardingController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * Card step 3 must end with a canonical residence selection, not only unresolved free-text.
+     *
+     * @param  array<string, mixed>  $basicSnapshot
+     */
+    private function assertStep3HasCanonicalResidence(array $basicSnapshot): void
+    {
+        $core = is_array($basicSnapshot['core'] ?? null) ? $basicSnapshot['core'] : [];
+        $locationId = $core['location_id'] ?? null;
+        $locationInput = trim((string) ($core['location_input'] ?? ''));
+
+        if ($locationId !== null && $locationId !== '' && (int) $locationId > 0) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'location_id' => [$locationInput !== '' ? 'Select a valid residence location.' : 'Residence location is required.'],
+        ]);
+    }
+
+    private function canonicalResidenceErrorMessageForPhotoHandoff(MatrimonyProfile $profile): ?string
+    {
+        $locationId = Schema::hasColumn('matrimony_profiles', 'location_id')
+            ? $profile->location_id
+            : ProfileCanonicalResidenceService::locationLeafId((int) $profile->id);
+
+        if ($locationId !== null && $locationId !== '' && (int) $locationId > 0) {
+            return null;
+        }
+
+        return 'Residence location is required.';
     }
 
     private function onboardingScalarOrProfile(Request $request, string $key, mixed $fallback): mixed

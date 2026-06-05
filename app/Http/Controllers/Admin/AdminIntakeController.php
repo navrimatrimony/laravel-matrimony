@@ -245,12 +245,12 @@ class AdminIntakeController extends Controller
         $intake->save();
 
         IntakeExtractionReuseResolver::flagNextParseJobAsParseInputOnly((int) $intake->id);
-        ParseIntakeJob::dispatch($intake->id, true);
-        Log::info('AdminIntakeController::reparse() dispatch called', ['intake_id' => $intake->id]);
+        ParseIntakeJob::dispatchSync($intake->id, true);
+        Log::info('AdminIntakeController::reparse() completed inline', ['intake_id' => $intake->id]);
 
         return redirect()
             ->route('admin.biodata-intakes.show', $intake)
-            ->with('success', 'Re-parse job dispatched. Refresh after a few seconds.');
+            ->with('success', 'Re-parse completed. Refresh now to see updated JSON.');
     }
 
     /**

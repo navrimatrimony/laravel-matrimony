@@ -1615,10 +1615,10 @@ class IntakeController extends Controller
         $this->forgetIntakeParseOcrDebugCache($intake, true);
         IntakeExtractionReuseResolver::flagNextParseJobAsParseInputOnly((int) $intake->id);
         $intake->update(['parse_status' => 'pending']);
-        ParseIntakeJob::dispatch($intake->id, true);
+        ParseIntakeJob::dispatchSync($intake->id, true);
 
         return redirect()->route('intake.index')
-            ->with('success', 'पुन्हा पार्स चालू केले. काही सेकंदांनी या intake चे प्रिव्ह्यू पुन्हा उघडा — अद्ययावत माहिती दिसेल.');
+            ->with('success', 'पुन्हा पार्स पूर्ण झाले. या intake चे प्रिव्ह्यू उघडा — अद्ययावत माहिती दिसेल.');
     }
 
     /**

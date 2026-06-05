@@ -132,6 +132,68 @@ class IntakeNormalizedDraftToParsedJsonMapperTest extends TestCase
         }
     }
 
+    public function test_mapper_preserves_core_ids_from_normalized_draft(): void
+    {
+        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map([
+            'normalized' => [
+                'core' => [
+                    'gender' => 'female',
+                    'gender_id' => 2,
+                    'religion' => 'हिंदू',
+                    'religion_id' => 5,
+                    'caste' => 'मराठा',
+                    'caste_id' => 8,
+                    'sub_caste' => '96 कुळी',
+                    'sub_caste_id' => 13,
+                    'marital_status' => 'unmarried',
+                    'marital_status_id' => 1,
+                    'mother_tongue_id' => 4,
+                    'birth_city_id' => 101,
+                    'birth_taluka_id' => 102,
+                    'birth_district_id' => 103,
+                    'birth_state_id' => 104,
+                    'country_id' => 91,
+                    'state_id' => 27,
+                    'district_id' => 28,
+                    'taluka_id' => 29,
+                    'city_id' => 30,
+                    'complexion_id' => 6,
+                    'blood_group_id' => 7,
+                    'physical_build_id' => 9,
+                    'working_with_type_id' => 10,
+                    'profession_id' => 11,
+                    'family_type_id' => 12,
+                    'serious_intent_id' => 14,
+                ],
+            ],
+        ]);
+
+        $core = $parsed['core'];
+
+        $this->assertSame(2, $core['gender_id'] ?? null);
+        $this->assertSame(5, $core['religion_id'] ?? null);
+        $this->assertSame(8, $core['caste_id'] ?? null);
+        $this->assertSame(13, $core['sub_caste_id'] ?? null);
+        $this->assertSame(1, $core['marital_status_id'] ?? null);
+        $this->assertSame(4, $core['mother_tongue_id'] ?? null);
+        $this->assertSame(101, $core['birth_city_id'] ?? null);
+        $this->assertSame(102, $core['birth_taluka_id'] ?? null);
+        $this->assertSame(103, $core['birth_district_id'] ?? null);
+        $this->assertSame(104, $core['birth_state_id'] ?? null);
+        $this->assertSame(91, $core['country_id'] ?? null);
+        $this->assertSame(27, $core['state_id'] ?? null);
+        $this->assertSame(28, $core['district_id'] ?? null);
+        $this->assertSame(29, $core['taluka_id'] ?? null);
+        $this->assertSame(30, $core['city_id'] ?? null);
+        $this->assertSame(6, $core['complexion_id'] ?? null);
+        $this->assertSame(7, $core['blood_group_id'] ?? null);
+        $this->assertSame(9, $core['physical_build_id'] ?? null);
+        $this->assertSame(10, $core['working_with_type_id'] ?? null);
+        $this->assertSame(11, $core['profession_id'] ?? null);
+        $this->assertSame(12, $core['family_type_id'] ?? null);
+        $this->assertSame(14, $core['serious_intent_id'] ?? null);
+    }
+
     public function test_mapper_carries_other_relatives_text_from_normalized_core(): void
     {
         $text = 'इतर पाहुणे: मामा पुणे, काका सातारा';

@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\City;
 use App\Models\MasterChildLivingWith;
 use App\Models\MasterGender;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
 use App\Models\Religion;
 use App\Models\User;
+use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -30,6 +32,25 @@ class OnboardingFlowTest extends TestCase
             ->get(route('matrimony.onboarding.show', ['step' => 2]))
             ->assertOk()
             ->assertSeeText(__('onboarding.step2_title'), false);
+    }
+
+    public function test_onboarding_step_two_clears_stale_residence_flash(): void
+    {
+        $user = User::factory()->create();
+        $errors = new \Illuminate\Support\ViewErrorBag;
+        $errors->put('default', new \Illuminate\Support\MessageBag([
+            'location_id' => ['Residence location is required.'],
+        ]));
+
+        $response = $this->actingAs($user)
+            ->withSession([
+                'error' => 'Residence location is required.',
+                'errors' => $errors,
+            ])
+            ->get(route('matrimony.onboarding.show', ['step' => 2]));
+
+        $response->assertOk();
+        $response->assertDontSee('Residence location is required.', false);
     }
 
     public function test_registration_accepts_onboarding_meta_fields(): void
@@ -97,6 +118,7 @@ class OnboardingFlowTest extends TestCase
     {
         $this->seed(\Database\Seeders\MasterLookupSeeder::class);
         $this->seed(\Database\Seeders\ReligionCasteSubCasteSeeder::class);
+        $this->seed(MinimalLocationSeeder::class);
 
         $user = User::factory()->create();
         $genderId = MasterGender::where('key', 'male')->where('is_active', true)->value('id');
@@ -104,8 +126,9 @@ class OnboardingFlowTest extends TestCase
         $livingWithId = MasterChildLivingWith::where('key', 'with_parent')->value('id')
             ?? MasterChildLivingWith::query()->value('id');
         $religion = Religion::where('is_active', true)->first();
+        $puneCityId = (int) City::query()->where('name', 'Pune City')->value('id');
 
-        if (! $genderId || ! $divorcedId || ! $livingWithId || ! $religion) {
+        if (! $genderId || ! $divorcedId || ! $livingWithId || ! $religion || ! $puneCityId) {
             $this->markTestSkipped('Seed data incomplete.');
         }
 
@@ -132,7 +155,7 @@ class OnboardingFlowTest extends TestCase
             'caste_id' => '',
             'sub_caste_id' => '',
             'height_cm' => '170',
-            'location_input' => 'Pune',
+            'location_id' => (string) $puneCityId,
         ]);
 
         $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 4]));
@@ -155,6 +178,7 @@ class OnboardingFlowTest extends TestCase
             'user_id' => $user->id,
             'full_name' => '',
             'marital_status_id' => $neverId,
+            'profile_photo' => 'existing-photo.webp',
         ]);
 
         $response = $this->actingAs($user)->post(route('matrimony.onboarding.store', ['step' => 2]), [
@@ -181,13 +205,15 @@ class OnboardingFlowTest extends TestCase
     {
         $this->seed(\Database\Seeders\MasterLookupSeeder::class);
         $this->seed(\Database\Seeders\ReligionCasteSubCasteSeeder::class);
+        $this->seed(MinimalLocationSeeder::class);
 
         $user = User::factory()->create();
         $genderId = MasterGender::where('key', 'male')->where('is_active', true)->value('id');
         $divorcedId = MasterMaritalStatus::where('key', 'divorced')->value('id');
         $religion = Religion::where('is_active', true)->first();
+        $puneCityId = (int) City::query()->where('name', 'Pune City')->value('id');
 
-        if (! $genderId || ! $divorcedId || ! $religion) {
+        if (! $genderId || ! $divorcedId || ! $religion || ! $puneCityId) {
             $this->markTestSkipped('Seed data incomplete.');
         }
 
@@ -202,7 +228,7 @@ class OnboardingFlowTest extends TestCase
         $response = $this->actingAs($user)->post(route('matrimony.onboarding.store', ['step' => 3]), [
             'religion_id' => (string) $religion->id,
             'height_cm' => '170',
-            'location_input' => 'Pune',
+            'location_id' => (string) $puneCityId,
         ]);
 
         $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 4]));
@@ -211,6 +237,35 @@ class OnboardingFlowTest extends TestCase
             'user_id' => $user->id,
             'marital_status_id' => $divorcedId,
         ]);
+    }
+
+    public function test_onboarding_step_three_requires_canonical_residence_before_step_four(): void
+    {
+        $this->seed(\Database\Seeders\MasterLookupSeeder::class);
+        $this->seed(\Database\Seeders\ReligionCasteSubCasteSeeder::class);
+
+        $user = User::factory()->create();
+        $genderId = MasterGender::where('key', 'male')->where('is_active', true)->value('id');
+        $religion = Religion::where('is_active', true)->first();
+
+        if (! $genderId || ! $religion) {
+            $this->markTestSkipped('Seed data incomplete.');
+        }
+
+        MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'full_name' => 'Test User',
+            'gender_id' => $genderId,
+        ]);
+
+        $response = $this->actingAs($user)->post(route('matrimony.onboarding.store', ['step' => 3]), [
+            'religion_id' => (string) $religion->id,
+            'height_cm' => '170',
+            'location_input' => 'Pune',
+        ]);
+
+        $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 3]));
+        $response->assertSessionHasErrors('location_id');
     }
 
     public function test_onboarding_step_six_is_removed(): void
@@ -230,9 +285,14 @@ class OnboardingFlowTest extends TestCase
         $this->seed(\Database\Seeders\MasterLookupSeeder::class);
         $this->seed(\Database\Seeders\EducationSeeder::class);
         $this->seed(\Database\Seeders\EducationCareerTemporarySeeder::class);
+        $this->seed(MinimalLocationSeeder::class);
 
         $user = User::factory()->create();
-        MatrimonyProfile::factory()->create(['user_id' => $user->id]);
+        $puneCityId = (int) City::query()->where('name', 'Pune City')->value('id');
+        if (! $puneCityId) {
+            $this->markTestSkipped('Location seed incomplete.');
+        }
+        MatrimonyProfile::factory()->create(['user_id' => $user->id, 'location_id' => $puneCityId]);
 
         $degreeCode = \App\Models\EducationDegree::query()->value('code');
         $wwId = \Illuminate\Support\Facades\DB::table('working_with_types')->where('is_active', true)->value('id');
@@ -259,9 +319,14 @@ class OnboardingFlowTest extends TestCase
         $this->seed(\Database\Seeders\MasterLookupSeeder::class);
         $this->seed(\Database\Seeders\EducationSeeder::class);
         $this->seed(\Database\Seeders\EducationCareerTemporarySeeder::class);
+        $this->seed(MinimalLocationSeeder::class);
 
         $user = User::factory()->create();
-        MatrimonyProfile::factory()->create(['user_id' => $user->id]);
+        $puneCityId = (int) City::query()->where('name', 'Pune City')->value('id');
+        if (! $puneCityId) {
+            $this->markTestSkipped('Location seed incomplete.');
+        }
+        MatrimonyProfile::factory()->create(['user_id' => $user->id, 'location_id' => $puneCityId]);
 
         $degreeCode = \App\Models\EducationDegree::query()->value('code');
         $wwId = \Illuminate\Support\Facades\DB::table('working_with_types')->where('is_active', true)->value('id');

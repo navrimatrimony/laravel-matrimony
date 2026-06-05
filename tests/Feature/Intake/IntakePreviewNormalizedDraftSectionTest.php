@@ -1146,6 +1146,83 @@ TXT);
         $this->assertStringNotContainsString('8369453302', (string) ($parents[1]['address_line'] ?? ''));
     }
 
+    public function test_intake_preview_463_marathi_sample_keeps_fields_in_correct_sections(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+मुलाचे नाव :- चि.अनिकेत जयवंत पाटील
+जन्म दि :- १६/११/१९९६
+जन्म स्थळ :- मु.पो.येडेमच्छिंद्र, ता.वाळवा,जि.सांगली.
+उंची :- ५ फुट ५ इंच
+वर्ण :- निम गोरा
+रक्त गट :- B+ve
+कुलदैवत :- श्री.जोतिर्लिंग कोल्हापूर
+जात :- हिंदू मराठा
+शिक्षण :- B.S.C CHEMISTRY
+नोकरी :- SHILPA PHARMA LIFE SCINCE LTD UNIT 1 KARNATK RAICHUR
+शेती :- 1 एकर
+
+## कौटुंबिक माहिती
+
+वडील :- श्री.जयवंत तुकाराम पाटील (पोस्टमास्टर) मोबाईल-८८०५५२६१९७
+घराचा पत्ता :- मु.पो.रेठरे हरणाक्ष, ता.वाळवा, जि.सांगली.
+चुलते :- १)श्री.दिलीप तुकाराम पाटील (शेती)
+कै.धनाजी तुकाराम पाटील
+बहीण :- श्री.प्रदीप गोरख पाटील(ग्रामपंचायत सदस्य)
+एक(विवाहित) पत्ता-बिउर,ता.शिराळा,जिसांगली मोबाईल-९२०९९०५००५
+मुलाचे मामा :- 1) श्री.हनुमंत दिनकर जगताप 2) चि.भोपाल दिनकर जगताप,
+पत्ता - मु.पो.येडेमच्छिंद्र, ता. वाळवा जि. सांगली.
+मुलाची आत्या :- श्री.बाबासो पांडुरंग पवार.
+पत्ता - मु.पो.रेठरे हरणाक्ष, ता.वाळवा, जि.सांगली.
+नाते संबंध :- येडेमच्छिंद्र,तुपारी,बहे,तासगाव,तांबवे (कासेगाव) कवलापूर
+| रास | मकर | गण | देव |
+| देवक | गण | नक्षत्र | श्रवण |
+| चरण | १ले | | |
+TXT);
+
+        $normalized = $draft['normalized'] ?? [];
+        $core = $normalized['core'] ?? [];
+        $parents = $normalized['parents_addresses'] ?? [];
+        $siblings = $normalized['siblings'] ?? [];
+        $relatives = $normalized['relatives'] ?? [];
+        $propertyAssets = $normalized['property_assets'] ?? [];
+        $horoscope = $normalized['horoscope'] ?? [];
+
+        $this->assertSame('१६/११/१९९६', $core['date_of_birth'] ?? null);
+        $this->assertSame('निम गोरा', $core['complexion'] ?? null);
+        $this->assertSame('B+', $core['blood_group'] ?? null);
+        $this->assertSame('नोकरी', $core['occupation_title'] ?? null);
+        $this->assertSame('SHILPA PHARMA LIFE SCINCE LTD UNIT 1 KARNATK RAICHUR', $core['company_name'] ?? null);
+        $this->assertSame('श्री.जयवंत तुकाराम पाटील', $core['father_name'] ?? null);
+        $this->assertSame('पोस्टमास्टर', $core['father_occupation'] ?? null);
+        $this->assertSame('8805526197', $core['father_contact_1'] ?? null);
+        $this->assertNull($core['father_contact_2'] ?? null);
+        $this->assertStringContainsString('येडेमच्छिंद्र', (string) ($core['other_relatives_text'] ?? ''));
+        $this->assertStringNotContainsString('| रास |', (string) ($core['other_relatives_text'] ?? ''));
+
+        $this->assertCount(3, $parents);
+        $this->assertStringNotContainsString('नाते संबंध', (string) ($parents[2]['address_line'] ?? ''));
+        $this->assertStringNotContainsString('| रास |', (string) ($parents[2]['address_line'] ?? ''));
+        $this->assertSame('प्रदीप गोरख पाटील', $siblings[0]['name'] ?? null);
+        $this->assertArrayNotHasKey('address_line', $siblings[0] ?? []);
+
+        $relativeNames = array_map(static fn (array $row): string => (string) ($row['name'] ?? ''), $relatives);
+        $this->assertContains('श्री.दिलीप तुकाराम पाटील', $relativeNames);
+        $this->assertContains('कै.धनाजी तुकाराम पाटील', $relativeNames);
+        $this->assertContains('श्री.हनुमंत दिनकर जगताप', $relativeNames);
+        $this->assertContains('चि.भोपाल दिनकर जगताप', $relativeNames);
+        $this->assertContains('श्री.बाबासो पांडुरंग पवार', $relativeNames);
+        $this->assertNotContains('बहीण :- श्री.प्रदीप गोरख पाटील', $relativeNames);
+
+        $this->assertCount(1, $propertyAssets);
+        $this->assertSame('land', $propertyAssets[0]['asset_type_key'] ?? null);
+        $this->assertSame('1 एकर', $propertyAssets[0]['notes'] ?? null);
+        $this->assertSame('मकर', $horoscope['rashi'] ?? null);
+        $this->assertSame('देव', $horoscope['gan'] ?? null);
+        $this->assertSame('श्रवण', $horoscope['nakshatra'] ?? null);
+        $this->assertSame('१ले', $horoscope['charan'] ?? null);
+        $this->assertSame([], $draft['review_flags'] ?? []);
+    }
+
     /**
      * @param  list<array{label: string, value: string}>  $rows
      */

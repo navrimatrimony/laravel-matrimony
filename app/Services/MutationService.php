@@ -444,7 +444,12 @@ class MutationService
                     $current = $profile->lifecycle_state ?? 'draft';
                     // Showcase profiles stay draft until admin publishes from bulk-create; do not
                     // treat photo upload / wizard edits as "go live" for member search.
-                    if ($current === 'draft' && ! empty($profile->profile_photo) && ! in_array($current, self::NO_AUTO_ACTIVATE_STATES, true)) {
+                    if (
+                        $current === 'draft'
+                        && ! empty($profile->profile_photo)
+                        && $this->profileHasCanonicalResidence($profile)
+                        && ! in_array($current, self::NO_AUTO_ACTIVATE_STATES, true)
+                    ) {
                         if (! $profile->isShowcaseProfile()) {
                             $this->setLifecycleState($profile, 'active');
                         }
@@ -1075,6 +1080,15 @@ class MutationService
         );
         $profile->lifecycle_state = $targetState;
         $profile->save();
+    }
+
+    private function profileHasCanonicalResidence(MatrimonyProfile $profile): bool
+    {
+        $locationId = Schema::hasColumn($profile->getTable(), 'location_id')
+            ? $profile->location_id
+            : ProfileCanonicalResidenceService::locationLeafId((int) $profile->id);
+
+        return $locationId !== null && $locationId !== '' && (int) $locationId > 0;
     }
 
     /**

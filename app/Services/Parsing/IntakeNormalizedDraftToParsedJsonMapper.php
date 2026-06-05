@@ -455,17 +455,7 @@ class IntakeNormalizedDraftToParsedJsonMapper
      */
     private function pickCoreFields(array $normalized): array
     {
-        $fields = [
-            'full_name', 'gender', 'date_of_birth', 'birth_time', 'birth_place_text',
-            'religion', 'caste', 'sub_caste', 'height_cm', 'complexion', 'blood_group',
-            'marital_status', 'father_name', 'father_occupation', 'mother_name', 'mother_occupation',
-            'father_extra_info', 'father_contact_1', 'father_contact_2', 'father_contact_3',
-            'mother_extra_info', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3',
-            'brother_count', 'sister_count', 'highest_education', 'occupation_title',
-            'company_name', 'annual_income', 'work_location_text', 'family_income',
-            'family_type', 'family_type_id', 'family_status', 'family_values',
-            'other_relatives_text',
-        ];
+        $fields = array_keys(app(IntakeParsedSnapshotSkeleton::class)->defaults()['core']);
         $picked = [];
         foreach ($fields as $field) {
             if (array_key_exists($field, $normalized)) {
