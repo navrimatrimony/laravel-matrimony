@@ -393,6 +393,7 @@
                         'favicon' => 'Favicon',
                         'admin_panel_logo' => 'Admin Panel Logo',
                         'default_seo_image' => 'Default SEO Image (Open Graph image)',
+                        'auth_background_image' => 'Guest/Auth Background Image',
                     ] as $field => $label)
                         <div class="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-600 dark:bg-gray-800">
                             <label class="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-2">{{ $label }}</label>
@@ -400,6 +401,9 @@
                                 <img src="{{ $siteIdentityImageUrls[$field] }}" alt="" class="mb-3 h-14 max-w-full rounded border border-gray-200 bg-white object-contain p-1 dark:border-gray-600">
                             @endif
                             <input type="file" name="{{ $field }}" accept="{{ $field === 'favicon' ? '.ico,image/*' : 'image/*' }}" class="block w-full text-xs text-gray-700 dark:text-gray-200">
+                            @if ($field === 'auth_background_image')
+                                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Used on guest/auth pages like login, register, forgot password, reset password, and email verification.</p>
+                            @endif
                         </div>
                     @endforeach
                     <div class="rounded-lg border border-dashed border-indigo-200 bg-indigo-50/50 p-3 dark:border-indigo-800 dark:bg-indigo-950/20 md:col-span-2">

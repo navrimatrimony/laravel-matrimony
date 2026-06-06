@@ -123,8 +123,8 @@ TXT;
         $this->assertSame([], $queries);
 
         $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
-        $this->assertStringNotContainsString('7350953384', $basicBlob);
-        $this->assertStringNotContainsString('9673350078', $basicBlob);
+        $this->assertStringContainsString('User contact 1 7350953384', $basicBlob);
+        $this->assertStringContainsString('User contact 2 9673350078', $basicBlob);
         $this->assertArrayNotHasKey('contacts', $out['sections']);
     }
 
@@ -135,7 +135,8 @@ TXT;
         $this->assertTrue($out['available']);
         $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
         $this->assertStringContainsString('Male', $basicBlob);
-        $this->assertStringNotContainsString('9860956022', $basicBlob);
+        $this->assertStringContainsString('User contact 1 9860956022', $basicBlob);
+        $this->assertStringContainsString('User contact 2 8668270153', $basicBlob);
         $this->assertArrayNotHasKey('contacts', $out['sections']);
 
         $familyBlob = $this->sectionBlob($out['sections']['family-details']);
@@ -154,7 +155,8 @@ TXT;
         $this->assertTrue($out['available']);
         $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
         $this->assertStringContainsString('महेशकुमार मोहन जगताप', $basicBlob);
-        $this->assertStringNotContainsString('9870879727', $basicBlob);
+        $this->assertStringContainsString('User contact 1 9870879727', $basicBlob);
+        $this->assertStringContainsString('User contact 2 9137793371', $basicBlob);
         $this->assertArrayNotHasKey('contacts', $out['sections']);
 
         $familyBlob = $this->sectionBlob($out['sections']['family-details']);
@@ -362,7 +364,7 @@ HTML, true);
         $this->assertStringNotContainsString('cm', $basicBlob);
         $this->assertStringContainsString('B.Com', $educationBlob);
         $this->assertStringNotContainsString('B.Com', $basicBlob);
-        $this->assertStringNotContainsString('9876543210', $basicBlob);
+        $this->assertStringContainsString('User contact 1 9876543210', $basicBlob);
         $this->assertArrayNotHasKey('contacts', $out['sections']);
         $this->assertStringContainsString('संकेत', $siblingsBlob);
         $this->assertStringNotContainsString('संकेत', $familyBlob);
@@ -491,6 +493,7 @@ TXT, true);
         $this->assertStringNotContainsString('Yog', $horoscopeBlob);
         $this->assertStringNotContainsString('योग', $horoscopeBlob);
         $this->assertStringContainsString('Yog बष्ट', $detectedBlob);
+        $this->assertStringContainsString('Line 5', $detectedBlob);
         $this->assertStringContainsString('Detected in biodata text but not mapped to a wizard field.', $detectedBlob);
     }
 
@@ -989,12 +992,14 @@ TXT, true);
         $familyBlob = $this->sectionBlob($out['sections']['family-details']);
         $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
 
-        $this->assertStringContainsString('Father contact 1 9860771090', $familyBlob);
-        $this->assertStringContainsString('Father contact 2 7972565670', $familyBlob);
-        $this->assertStringContainsString('Father contact 3 9423651090', $familyBlob);
-        $this->assertStringContainsString('User contact 1 9123456789', $basicBlob);
-        $this->assertStringContainsString('User contact 2 9234567890', $basicBlob);
-        $this->assertStringContainsString('Mother contact 1 9345678901', $familyBlob);
+        $this->assertStringNotContainsString('Father contact 1', $familyBlob);
+        $this->assertStringNotContainsString('Mother contact 1', $familyBlob);
+        $this->assertStringContainsString('User contact 1 9860771090', $basicBlob);
+        $this->assertStringContainsString('User contact 2 7972565670', $basicBlob);
+        $this->assertStringContainsString('User contact 3 9423651090', $basicBlob);
+        $this->assertStringContainsString('User contact 4 9123456789', $basicBlob);
+        $this->assertStringContainsString('User contact 5 9234567890', $basicBlob);
+        $this->assertStringContainsString('User contact 6 9345678901', $basicBlob);
     }
 
     public function test_preview_family_and_relative_sections_expose_grouped_heading_metadata(): void

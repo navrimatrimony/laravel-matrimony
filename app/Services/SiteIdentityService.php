@@ -38,6 +38,7 @@ class SiteIdentityService
         'favicon',
         'admin_panel_logo',
         'default_seo_image',
+        'auth_background_image',
     ];
 
     public const DEFAULTS = [
@@ -50,6 +51,7 @@ class SiteIdentityService
         'favicon' => 'favicon.ico',
         'admin_panel_logo' => null,
         'default_seo_image' => null,
+        'auth_background_image' => null,
         'footer_copyright_text' => '© {year} Navri Mile Navryala. All rights reserved.',
         'company_name' => 'Navri Mile Navryala',
         'support_email' => '',

@@ -32,6 +32,9 @@ class IntakeNormalizedBiodataDraftBuilder
             'cleaned_text' => $cleanedText,
             'sections' => $sections,
             'normalized' => $normalized,
+            'source_lines' => $this->buildSourceLines($cleanedText),
+            'extracted_facts' => [],
+            'coverage_audit' => [],
             'review_flags' => [],
         ];
         $draft = app(IntakeHtmlTableHintApplier::class)->apply($draft);
@@ -39,7 +42,13 @@ class IntakeNormalizedBiodataDraftBuilder
             $this->syncParentContactAliases($draft['normalized']['core']);
             $this->dedupePreviewContactSlotsAgainstParents($draft['normalized']['core']);
         }
-        $draft['review_flags'] = $this->buildReviewFlags($draft);
+        $draft['source_lines'] = $this->finalizeSourceLines($draft);
+        $draft['extracted_facts'] = $this->buildExtractedFacts($draft);
+        $draft['coverage_audit'] = app(IntakeNormalizedDraftCoverageAuditor::class)->audit($draft);
+        $draft['review_flags'] = $this->mergeReviewFlags(
+            $this->buildReviewFlags($draft),
+            is_array($draft['coverage_audit']['review_flags'] ?? null) ? $draft['coverage_audit']['review_flags'] : []
+        );
 
         return $draft;
     }
@@ -68,6 +77,58 @@ class IntakeNormalizedBiodataDraftBuilder
         }
 
         return trim(implode("\n", $lines));
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function buildSourceLines(string $cleanedText): array
+    {
+        $sourceLines = [];
+        $lineNo = 1;
+        foreach (explode("\n", $cleanedText) as $line) {
+            $raw = trim($line);
+            if ($raw === '') {
+                continue;
+            }
+            $sourceLines[] = [
+                'line_no' => $lineNo,
+                'raw' => $raw,
+                'normalized' => OcrNormalize::normalizeDigits($raw),
+                'ignored' => false,
+                'ignore_reason' => null,
+            ];
+            $lineNo++;
+        }
+
+        return $sourceLines;
+    }
+
+    /**
+     * @param  array<string, mixed>  $draft
+     * @return list<array<string, mixed>>
+     */
+    private function finalizeSourceLines(array $draft): array
+    {
+        $sourceLines = is_array($draft['source_lines'] ?? null) ? $draft['source_lines'] : [];
+        foreach ($sourceLines as $index => $sourceLine) {
+            if (! is_array($sourceLine)) {
+                continue;
+            }
+            $raw = trim((string) ($sourceLine['raw'] ?? ''));
+            $ignoreReason = null;
+            if ($raw === '') {
+                $ignoreReason = 'blank_line';
+            } elseif ($this->isIgnorableReviewLine($raw)) {
+                $ignoreReason = 'ignorable_heading_or_noise';
+            } elseif ($this->isHardSectionBoundary($raw) && $this->extractPhones($raw) === []) {
+                $ignoreReason = 'section_boundary';
+            }
+            $sourceLines[$index]['ignored'] = $ignoreReason !== null;
+            $sourceLines[$index]['ignore_reason'] = $ignoreReason;
+        }
+
+        return $sourceLines;
     }
 
     /**
@@ -178,6 +239,7 @@ class IntakeNormalizedBiodataDraftBuilder
         $siblings = $this->normalizeSiblingRowsForWizard($siblings);
         $this->extractEnglishAddresses($allLines, $addresses);
         $addresses = $this->removeParentAddressDuplicates($addresses, $parentsAddresses);
+        $this->normalizeEmptyCoreStringsToNull($core);
 
         $lastRelativeLabel = null;
         $lastRelativeIndex = null;
@@ -356,6 +418,9 @@ class IntakeNormalizedBiodataDraftBuilder
         if (($core['full_name'] ?? null) !== null && $this->isSuspiciousHeadingAsName((string) $core['full_name'])) {
             $flags[] = ['field' => 'core.full_name', 'reason' => 'suspicious_heading_as_name', 'raw' => (string) $core['full_name'], 'suggested_section' => 'basic-info'];
         }
+        if (($core['full_name'] ?? null) !== null && $this->looksLikeAddressText((string) $core['full_name'])) {
+            $flags[] = ['field' => 'core.full_name', 'reason' => 'full_name_looks_like_address', 'raw' => (string) $core['full_name'], 'suggested_section' => 'basic-info'];
+        }
         if ($this->candidateNameFromFallback && ($core['full_name'] ?? null) !== null && ! $this->fullNameCameFromTableHint($draft, (string) $core['full_name'])) {
             $flags[] = ['field' => 'core.full_name', 'reason' => 'candidate_name_from_heading_fallback', 'raw' => (string) $core['full_name']];
         }
@@ -366,6 +431,352 @@ class IntakeNormalizedBiodataDraftBuilder
             }
         }
         foreach ($this->unmappedUsefulLineFlags($draft) as $flag) {
+            $flags[] = $flag;
+        }
+
+        return $flags;
+    }
+
+    /**
+     * @param  array<string, mixed>  $draft
+     * @return list<array<string, mixed>>
+     */
+    private function buildExtractedFacts(array $draft): array
+    {
+        $normalized = is_array($draft['normalized'] ?? null) ? $draft['normalized'] : [];
+        $core = is_array($normalized['core'] ?? null) ? $normalized['core'] : [];
+        $facts = [];
+
+        foreach ([
+            ['field_value', 'basic-info', 'core.full_name', $core['full_name'] ?? null],
+            ['field_value', 'basic-info', 'core.gender', $core['gender'] ?? null],
+            ['field_value', 'basic-info', 'core.date_of_birth', $core['date_of_birth'] ?? null],
+            ['field_value', 'basic-info', 'core.birth_time', $core['birth_time'] ?? null],
+            ['field_value', 'basic-info', 'core.birth_place_text', $core['birth_place_text'] ?? null],
+            ['field_value', 'basic-info', 'core.religion', $core['religion'] ?? null],
+            ['field_value', 'basic-info', 'core.caste', $core['caste'] ?? null],
+            ['field_value', 'basic-info', 'core.sub_caste', $core['sub_caste'] ?? null],
+            ['field_value', 'basic-info', 'core.marital_status', $core['marital_status'] ?? null],
+            ['phone_number', 'basic-info', 'core.primary_contact_number', $core['primary_contact_number'] ?? null],
+            ['phone_number', 'basic-info', 'core.primary_contact_number_2', $core['primary_contact_number_2'] ?? null],
+            ['phone_number', 'basic-info', 'core.primary_contact_number_3', $core['primary_contact_number_3'] ?? null],
+            ['field_value', 'physical', 'core.height_cm', $core['height_cm'] ?? null],
+            ['field_value', 'physical', 'core.complexion', $core['complexion'] ?? null],
+            ['field_value', 'physical', 'core.blood_group', $core['blood_group'] ?? null],
+            ['field_value', 'education-career', 'core.highest_education', $core['highest_education'] ?? null],
+            ['field_value', 'education-career', 'core.occupation_title', $core['occupation_title'] ?? null],
+            ['field_value', 'education-career', 'core.company_name', $core['company_name'] ?? null],
+            ['field_value', 'education-career', 'core.annual_income', $core['annual_income'] ?? null],
+            ['field_value', 'education-career', 'core.work_location_text', $core['work_location_text'] ?? null],
+            ['field_value', 'family-details', 'core.father_name', $core['father_name'] ?? null],
+            ['field_value', 'family-details', 'core.father_occupation', $core['father_occupation'] ?? null],
+            ['phone_number', 'family-details', 'core.father_contact_1', $core['father_contact_1'] ?? null],
+            ['phone_number', 'family-details', 'core.father_contact_2', $core['father_contact_2'] ?? null],
+            ['phone_number', 'family-details', 'core.father_contact_3', $core['father_contact_3'] ?? null],
+            ['field_value', 'family-details', 'core.mother_name', $core['mother_name'] ?? null],
+            ['field_value', 'family-details', 'core.mother_occupation', $core['mother_occupation'] ?? null],
+            ['phone_number', 'family-details', 'core.mother_contact_1', $core['mother_contact_1'] ?? null],
+            ['phone_number', 'family-details', 'core.mother_contact_2', $core['mother_contact_2'] ?? null],
+            ['phone_number', 'family-details', 'core.mother_contact_3', $core['mother_contact_3'] ?? null],
+            ['field_value', 'alliance', 'core.other_relatives_text', $core['other_relatives_text'] ?? null],
+        ] as [$factType, $section, $field, $value]) {
+            $fact = $this->makeFact($draft, (string) $factType, $value, (string) $section, (string) $field);
+            if ($fact !== null) {
+                $facts[] = $fact;
+            }
+        }
+
+        foreach (($normalized['contacts'] ?? []) as $index => $contact) {
+            if (! is_array($contact)) {
+                continue;
+            }
+            $fact = $this->makeFact(
+                $draft,
+                'phone_number',
+                $contact['phone_number'] ?? null,
+                'basic-info',
+                'contacts.'.($index + 1).'.phone_number'
+            );
+            if ($fact !== null) {
+                $facts[] = $fact;
+            }
+        }
+
+        foreach (($normalized['addresses'] ?? []) as $index => $address) {
+            if (! is_array($address)) {
+                continue;
+            }
+            $fact = $this->makeFact(
+                $draft,
+                'address_line',
+                $address['address_line'] ?? $address['raw'] ?? null,
+                'basic-info',
+                'addresses.'.($index + 1).'.address_line'
+            );
+            if ($fact !== null) {
+                $facts[] = $fact;
+            }
+        }
+
+        foreach (($normalized['parents_addresses'] ?? []) as $index => $address) {
+            if (! is_array($address)) {
+                continue;
+            }
+            $fact = $this->makeFact(
+                $draft,
+                'address_line',
+                $address['address_line'] ?? $address['raw'] ?? null,
+                'family-details',
+                'parents_addresses.'.($index + 1).'.address_line'
+            );
+            if ($fact !== null) {
+                $facts[] = $fact;
+            }
+        }
+
+        foreach (($normalized['siblings'] ?? []) as $index => $sibling) {
+            if (! is_array($sibling)) {
+                continue;
+            }
+            foreach ([
+                'name' => 'sibling_name',
+                'occupation' => 'sibling_occupation',
+                'contact_number' => 'phone_number',
+                'contact_number_2' => 'phone_number',
+                'contact_number_3' => 'phone_number',
+                'address_line' => 'address_line',
+                'notes' => 'text_detail',
+            ] as $field => $factType) {
+                $fact = $this->makeFact($draft, $factType, $sibling[$field] ?? null, 'siblings', 'siblings.'.($index + 1).'.'.$field);
+                if ($fact !== null) {
+                    $facts[] = $fact;
+                }
+            }
+            $spouse = is_array($sibling['spouse'] ?? null) ? $sibling['spouse'] : [];
+            foreach ([
+                'name' => 'sibling_spouse_name',
+                'occupation' => 'sibling_spouse_occupation',
+                'occupation_title' => 'sibling_spouse_occupation',
+                'contact_number' => 'phone_number',
+                'contact_number_2' => 'phone_number',
+                'contact_number_3' => 'phone_number',
+                'address_line' => 'address_line',
+                'additional_info' => 'text_detail',
+                'notes' => 'text_detail',
+            ] as $field => $factType) {
+                $fact = $this->makeFact($draft, $factType, $spouse[$field] ?? null, 'siblings', 'siblings.'.($index + 1).'.spouse.'.$field);
+                if ($fact !== null) {
+                    $facts[] = $fact;
+                }
+            }
+        }
+
+        foreach (($normalized['relatives'] ?? []) as $index => $relative) {
+            if (! is_array($relative)) {
+                continue;
+            }
+            $section = $this->relativeTargetSection($relative);
+            foreach ([
+                'name' => 'relative_name',
+                'occupation' => 'relative_occupation',
+                'contact_number' => 'phone_number',
+                'address_line' => 'address_line',
+                'notes' => 'text_detail',
+            ] as $field => $factType) {
+                $fact = $this->makeFact($draft, $factType, $relative[$field] ?? null, $section, 'relatives.'.($index + 1).'.'.$field);
+                if ($fact !== null) {
+                    $facts[] = $fact;
+                }
+            }
+        }
+
+        $horoscope = is_array($normalized['horoscope'] ?? null) ? $normalized['horoscope'] : [];
+        foreach ($horoscope as $field => $value) {
+            if ($field === 'raw') {
+                continue;
+            }
+            $fact = $this->makeFact($draft, 'horoscope_value', $value, 'horoscope', 'horoscope.'.$field);
+            if ($fact !== null) {
+                $facts[] = $fact;
+            }
+        }
+
+        foreach ((array) ($normalized['preferences'] ?? []) as $field => $value) {
+            $fact = $this->makeFact($draft, 'preference_text', $value, 'about-preferences', 'preferences.'.$field);
+            if ($fact !== null) {
+                $facts[] = $fact;
+            }
+        }
+
+        return $this->mergeExtractedFacts($facts, $this->sourceOnlyPhoneFacts($draft, $facts));
+    }
+
+    private function factTypeForTargetField(string $factType, string $targetField): string
+    {
+        if ($factType !== 'field_value') {
+            return $factType;
+        }
+
+        return match (true) {
+            preg_match('/(?:^|\.)(?:full_name|father_name|mother_name|name)$/', $targetField) === 1 => 'person_name',
+            str_contains($targetField, 'expectations') => 'preference_text',
+            default => 'field_value',
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $draft
+     * @param  list<array<string, mixed>>  $existingFacts
+     * @return list<array<string, mixed>>
+     */
+    private function sourceOnlyPhoneFacts(array $draft, array $existingFacts): array
+    {
+        $facts = [];
+        $knownPhones = [];
+        foreach ($existingFacts as $fact) {
+            if (! is_array($fact) || ($fact['fact_type'] ?? null) !== 'phone_number') {
+                continue;
+            }
+            $phone = $this->canonicalPhone((string) ($fact['value'] ?? ''));
+            if ($phone !== '') {
+                $knownPhones[$phone] = true;
+            }
+        }
+
+        foreach (($draft['source_lines'] ?? []) as $sourceLine) {
+            if (! is_array($sourceLine) || ! empty($sourceLine['ignored'])) {
+                continue;
+            }
+            $raw = trim((string) ($sourceLine['raw'] ?? ''));
+            foreach ($this->extractPhones($raw) as $phone) {
+                $canonical = $this->canonicalPhone($phone);
+                if ($canonical === '' || isset($knownPhones[$canonical])) {
+                    continue;
+                }
+                $facts[] = [
+                    'fact_type' => 'phone_number',
+                    'value' => $phone,
+                    'source_line_no' => $sourceLine['line_no'] ?? null,
+                    'source_text' => $raw,
+                    'target_section' => $this->guessPhoneTargetSection($raw),
+                    'target_field' => $this->guessPhoneTargetField($raw),
+                ];
+            }
+        }
+
+        return $facts;
+    }
+
+    /**
+     * @param  array<string, mixed>  $draft
+     * @return array<string, mixed>|null
+     */
+    private function makeFact(array $draft, string $factType, mixed $value, string $targetSection, string $targetField): ?array
+    {
+        $text = $this->stringifyExtractedFactValue($value);
+        if ($text === '') {
+            return null;
+        }
+        $factType = $this->factTypeForTargetField($factType, $targetField);
+        $source = $this->findSourceLineForFact($draft, $text, $targetField);
+
+        return [
+            'fact_type' => $factType,
+            'value' => $text,
+            'source_line_no' => $source['line_no'] ?? null,
+            'source_text' => $source['raw'] ?? '',
+            'target_section' => $targetSection,
+            'target_field' => $targetField,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $draft
+     * @return array<string, mixed>|null
+     */
+    private function findSourceLineForFact(array $draft, string $value, string $targetField): ?array
+    {
+        $needles = array_filter([$value, $this->canonicalPhone($value)]);
+        foreach (($draft['source_lines'] ?? []) as $sourceLine) {
+            if (! is_array($sourceLine)) {
+                continue;
+            }
+            $raw = (string) ($sourceLine['raw'] ?? '');
+            $normalized = (string) ($sourceLine['normalized'] ?? '');
+            foreach ($needles as $needle) {
+                if ($needle === '') {
+                    continue;
+                }
+                if (str_contains($raw, $needle) || str_contains($normalized, $needle)) {
+                    return $sourceLine;
+                }
+            }
+        }
+
+        $fieldHint = preg_replace('/^[^.]+\./', '', $targetField) ?? $targetField;
+        foreach (($draft['source_lines'] ?? []) as $sourceLine) {
+            if (! is_array($sourceLine)) {
+                continue;
+            }
+            $raw = (string) ($sourceLine['raw'] ?? '');
+            if ($fieldHint !== '' && preg_match('/'.preg_quote(str_replace('_', ' ', $fieldHint), '/').'/iu', $raw)) {
+                return $sourceLine;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $facts
+     * @return list<array<string, mixed>>
+     */
+    private function mergeExtractedFacts(array $facts, array $extraFacts): array
+    {
+        $merged = [];
+        $seen = [];
+        foreach (array_merge($facts, $extraFacts) as $fact) {
+            if (! is_array($fact)) {
+                continue;
+            }
+            $identity = implode('|', [
+                trim((string) ($fact['fact_type'] ?? '')),
+                mb_strtolower(trim((string) ($fact['value'] ?? ''))),
+                trim((string) ($fact['target_field'] ?? '')),
+            ]);
+            if ($identity === '||' || isset($seen[$identity])) {
+                continue;
+            }
+            $seen[$identity] = true;
+            $merged[] = $fact;
+        }
+
+        return $merged;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $baseFlags
+     * @param  list<array<string, mixed>>  $extraFlags
+     * @return list<array<string, mixed>>
+     */
+    private function mergeReviewFlags(array $baseFlags, array $extraFlags): array
+    {
+        $flags = [];
+        $seen = [];
+        foreach (array_merge($baseFlags, $extraFlags) as $flag) {
+            if (! is_array($flag)) {
+                continue;
+            }
+            $identity = implode('|', [
+                trim((string) ($flag['field'] ?? '')),
+                trim((string) ($flag['reason'] ?? '')),
+                trim((string) ($flag['raw'] ?? '')),
+                trim((string) ($flag['source_line_no'] ?? '')),
+            ]);
+            if ($identity === '|||' || isset($seen[$identity])) {
+                continue;
+            }
+            $seen[$identity] = true;
             $flags[] = $flag;
         }
 
@@ -529,7 +940,10 @@ class IntakeNormalizedBiodataDraftBuilder
         foreach ($candidateLines as $line) {
             $normalizedLine = $this->stripMarkdownHeadingDecorators($line);
             if (preg_match('/^(?:मुलाचे\s+नां?व|मुलीचे\s+नां?व|वधूचे\s+नां?व|नां?व)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $normalizedLine, $m)) {
-                return $this->cleanPersonName($m[1]);
+                $candidate = $this->cleanPersonName($m[1]);
+                if ($candidate !== '' && ! $this->looksLikeAddressText($candidate)) {
+                    return $candidate;
+                }
             }
         }
 
@@ -552,6 +966,7 @@ class IntakeNormalizedBiodataDraftBuilder
                 $headingName = $this->cleanPersonName($m[1]);
                 if ($this->isPlausibleCandidateName($headingName)
                     && ! $this->isSuspiciousHeadingAsName($headingName)
+                    && ! $this->looksLikeAddressText($headingName)
                     && ! $this->isParentRelativeName($headingName, $parentRelativeNames)
                     && ! $this->lineHasRelativeContextMarker($line, $allLines, $index)
                     && $hasBiodataContext) {
@@ -567,7 +982,7 @@ class IntakeNormalizedBiodataDraftBuilder
                 continue;
             }
             $t = $this->stripMarkdownHeadingDecorators($line);
-            if (! $this->isPlausibleCandidateName($t) || preg_match('/बायोडाटा|वैयक्तिक|कौटुंबिक|श्री\s+साई|गणेश|प्रसन्न/u', $t)) {
+            if (! $this->isPlausibleCandidateName($t) || $this->looksLikeAddressText($t) || preg_match('/बायोडाटा|वैयक्तिक|कौटुंबिक|श्री\s+साई|गणेश|प्रसन्न/u', $t)) {
                 continue;
             }
             if ($this->isParentRelativeName($t, $parentRelativeNames)) {
@@ -1716,6 +2131,8 @@ class IntakeNormalizedBiodataDraftBuilder
             'occupation_title',
             'address_line',
             'location_display',
+            'notes',
+            'additional_info',
             'occupation_master_id',
             'occupation_custom_id',
             'city_id',
@@ -3010,8 +3427,21 @@ class IntakeNormalizedBiodataDraftBuilder
     {
         $value = trim($value);
         $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        if ($this->isSuspiciousHeadingAsName($value) || $this->isOtherRelativesLabel($value) || $this->isInvalidPersonLabelValue($value)) {
+            return '';
+        }
 
         return trim($value);
+    }
+
+    private function looksLikeAddressText(string $value): bool
+    {
+        return (bool) preg_match('/(?:मु\.?\s*पो\.?|रा\.|ता\.|जि\.|पत्ता|पोस्ट|कॉलनी|रोड|नगर|वाडी|गाव|फ्लॅट|वॉर्ड)/u', $value);
+    }
+
+    private function isInvalidPersonLabelValue(string $value): bool
+    {
+        return (bool) preg_match('/^(?:मामा|मामाचे\s+नाव|वडील|वडिलांचे\s+नाव|आई|आईचे\s+नाव|नातेसंबंध|नाते\s+संबंध|इतर\s+नातेवाईक|पाहुणे|इतर\s+पाहुणे|नाव)$/u', trim($value));
     }
 
     private function normalizeKuli(string $value): string
@@ -3896,7 +4326,7 @@ class IntakeNormalizedBiodataDraftBuilder
 
         $previousLine = null;
         $recentSiblingLine = false;
-        foreach ($lines as $line) {
+        foreach ($lines as $index => $line) {
             $raw = trim($line);
             if ($raw === '' || mb_strlen($raw) > 220) {
                 $previousLine = $line;
@@ -3926,6 +4356,8 @@ class IntakeNormalizedBiodataDraftBuilder
             }
             $flag = $this->reviewFlagForUsefulLine($raw);
             if ($flag !== null) {
+                $flag['source_line_no'] = $index + 1;
+                $flag['source_text'] = $raw;
                 $key = $flag['field'].'|'.$flag['reason'].'|'.$flag['raw'];
                 $flags[$key] = $flag;
             }
@@ -4086,6 +4518,76 @@ class IntakeNormalizedBiodataDraftBuilder
         }
 
         return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $relative
+     */
+    private function relativeTargetSection(array $relative): string
+    {
+        $type = mb_strtolower(trim((string) ($relative['relation_type'] ?? '')));
+
+        return in_array($type, [
+            'maternal_uncle',
+            'wife_maternal_uncle',
+            'maternal_aunt',
+            'husband_maternal_aunt',
+            'maternal_cousin',
+            'maternal_address_ajol',
+        ], true) ? 'alliance' : 'relatives';
+    }
+
+    private function stringifyExtractedFactValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+        if (is_scalar($value)) {
+            return OcrNormalize::normalizeDigits(trim((string) $value));
+        }
+
+        return '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function normalizeEmptyCoreStringsToNull(array &$core): void
+    {
+        foreach ($core as $key => $value) {
+            if (is_string($value) && trim($value) === '') {
+                $core[$key] = null;
+            }
+        }
+    }
+
+    private function canonicalPhone(string $value): string
+    {
+        return $this->extractPhones($value)[0] ?? '';
+    }
+
+    private function guessPhoneTargetSection(string $line): string
+    {
+        if ($this->isParentContactLine($line) || $this->isParentMobileLine($line)) {
+            return 'family-details';
+        }
+        if ($this->startsSiblingLine($line)) {
+            return 'siblings';
+        }
+
+        return 'basic-info';
+    }
+
+    private function guessPhoneTargetField(string $line): string
+    {
+        if ($this->isParentContactLine($line) || $this->isParentMobileLine($line)) {
+            return 'family-details.phone_number';
+        }
+        if ($this->startsSiblingLine($line)) {
+            return 'siblings.phone_number';
+        }
+
+        return 'core.primary_contact_number';
     }
 
     private function lineLooksMixedFieldValue(string $line): bool

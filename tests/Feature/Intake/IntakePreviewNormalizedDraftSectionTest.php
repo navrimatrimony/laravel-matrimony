@@ -1103,22 +1103,24 @@ TXT;
         $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($text);
         $siblings = $draft['normalized']['siblings'] ?? [];
 
-        $this->assertSame('sister_husband', $siblings[1]['relation_type'] ?? null);
-        $this->assertSame('विजय दत्तात्रय पाटील', $siblings[1]['name'] ?? null);
-        $this->assertSame('शिक्षक', $siblings[1]['occupation'] ?? null);
-        $this->assertSame('सांगली', $siblings[1]['address_line'] ?? null);
-        $this->assertSame('B.A.', $siblings[1]['notes'] ?? null);
-        $this->assertSame('brother_wife', $siblings[2]['relation_type'] ?? null);
-        $this->assertSame('रेखा रमेश पाटील', $siblings[2]['name'] ?? null);
-        $this->assertSame('शिक्षिका', $siblings[2]['occupation'] ?? null);
-        $this->assertSame('कोल्हापूर', $siblings[2]['address_line'] ?? null);
-        $this->assertSame('M.A. B.Ed.', $siblings[2]['notes'] ?? null);
+        $this->assertSame('sister', $siblings[0]['relation_type'] ?? null);
+        $this->assertSame('राधा विजय पाटील', $siblings[0]['name'] ?? null);
+        $this->assertSame('विजय दत्तात्रय पाटील', $siblings[0]['spouse']['name'] ?? null);
+        $this->assertSame('शिक्षक', $siblings[0]['spouse']['occupation_title'] ?? null);
+        $this->assertSame('सांगली', $siblings[0]['spouse']['address_line'] ?? null);
+        $this->assertSame('9000000001', $siblings[0]['spouse']['contact_number'] ?? null);
+        $this->assertSame('B.A.', $siblings[0]['spouse']['notes'] ?? null);
+        $this->assertSame('brother_wife', $siblings[1]['relation_type'] ?? null);
+        $this->assertSame('रेखा रमेश पाटील', $siblings[1]['name'] ?? null);
+        $this->assertSame('शिक्षिका', $siblings[1]['occupation'] ?? null);
+        $this->assertSame('कोल्हापूर', $siblings[1]['address_line'] ?? null);
+        $this->assertSame('M.A. B.Ed.', $siblings[1]['notes'] ?? null);
 
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($text, true);
         $siblingsBlob = $this->sectionBlob($out['sections']['siblings']);
 
         $this->assertStringContainsString("Sister's husband - विजय दत्तात्रय पाटील", $siblingsBlob);
-        $this->assertStringContainsString("Sister's husband Address सांगली", $siblingsBlob);
+        $this->assertStringContainsString("Address सांगली", $siblingsBlob);
         $this->assertStringContainsString("Additional info B.A.", $siblingsBlob);
         $this->assertStringContainsString("Brother's wife - रेखा रमेश पाटील", $siblingsBlob);
         $this->assertStringContainsString("Address कोल्हापूर", $siblingsBlob);

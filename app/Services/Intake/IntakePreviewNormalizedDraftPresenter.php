@@ -37,7 +37,6 @@ final class IntakePreviewNormalizedDraftPresenter
     private const BASIC_INFO_FIELDS = [
         'full_name', 'gender', 'date_of_birth', 'birth_time', 'birth_place_text',
         'religion', 'caste', 'sub_caste', 'marital_status',
-        'primary_contact_number_2', 'primary_contact_number_3',
         'address_line',
     ];
 
@@ -108,7 +107,7 @@ final class IntakePreviewNormalizedDraftPresenter
             $core = is_array($normalized['core'] ?? null) ? $normalized['core'] : [];
             $flags = is_array($draft['review_flags'] ?? null) ? $draft['review_flags'] : [];
             $reviewMap = $this->buildReviewMap($flags);
-            $detectedButNotIncluded = $this->detectedButNotIncludedRows($flags, $normalized);
+            $detectedButNotIncluded = $this->detectedButNotIncludedRows($flags, $normalized, is_array($draft['source_lines'] ?? null) ? $draft['source_lines'] : []);
 
             $sections = array_replace($this->emptySections(), [
                 'review_needed' => $this->reviewRows($flags),
@@ -277,6 +276,10 @@ final class IntakePreviewNormalizedDraftPresenter
             );
         }
 
+        foreach ($this->userContactRows($core, $normalized, $reviewMap) as $contactRow) {
+            $rows[] = $contactRow;
+        }
+
         $addressLabelTotals = [];
         foreach ($normalized['addresses'] ?? [] as $address) {
             if (! is_array($address)) {
@@ -321,6 +324,67 @@ final class IntakePreviewNormalizedDraftPresenter
                 null,
                 $reviewMap
             );
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     * @param  array<string, mixed>  $normalized
+     * @param  array<string, list<array{reason: string, raw: string}>>  $reviewMap
+     * @return list<array<string, mixed>>
+     */
+    private function userContactRows(array $core, array $normalized, array $reviewMap): array
+    {
+        $rows = [];
+        $phones = [];
+        $parentPhones = [];
+        foreach ([
+            'father_contact_number', 'father_contact_1', 'father_contact_2', 'father_contact_3',
+            'mother_contact_number', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3',
+        ] as $field) {
+            $phone = $this->stringify($core[$field] ?? null);
+            if ($phone !== '') {
+                $parentPhones[$phone] = true;
+            }
+        }
+
+        foreach ([
+            ['core.primary_contact_number', $core['primary_contact_number'] ?? null],
+            ['core.primary_contact_number_2', $core['primary_contact_number_2'] ?? null],
+            ['core.primary_contact_number_3', $core['primary_contact_number_3'] ?? null],
+        ] as [$field, $value]) {
+            $phone = $this->stringify($value);
+            if ($phone === '' || isset($parentPhones[$phone]) || in_array($phone, $phones, true)) {
+                continue;
+            }
+            $phones[] = $phone;
+        }
+
+        foreach (($normalized['contacts'] ?? []) as $contact) {
+            if (! is_array($contact)) {
+                continue;
+            }
+            $phone = $this->stringify($contact['phone_number'] ?? null);
+            if ($phone === '' || isset($parentPhones[$phone]) || in_array($phone, $phones, true)) {
+                continue;
+            }
+            $phones[] = $phone;
+        }
+
+        foreach ($phones as $index => $phone) {
+            $field = match ($index) {
+                0 => 'core.primary_contact_number',
+                1 => 'core.primary_contact_number_2',
+                2 => 'core.primary_contact_number_3',
+                default => 'contacts.'.($index + 1).'.phone_number',
+            };
+            $label = match (app()->getLocale()) {
+                'mr' => 'स्वतःचा संपर्क '.($index + 1),
+                default => 'User contact '.($index + 1),
+            };
+            $rows[] = $this->displayRow($label, $phone, $field, $reviewMap);
         }
 
         return $rows;
@@ -2004,11 +2068,15 @@ final class IntakePreviewNormalizedDraftPresenter
             $reason = $this->stringify($flag['reason'] ?? null);
             $raw = $this->stringify($flag['raw'] ?? null);
             $suggested = $this->stringify($flag['suggested_section'] ?? null);
+            $sourceLineNo = $this->stringify($flag['source_line_no'] ?? null);
+            $sourceText = $this->stringify($flag['source_text'] ?? null);
             if ($field === '' && $reason === '' && $raw === '') {
                 continue;
             }
             $valueParts = array_filter([
                 $this->reviewReasonLabel($reason),
+                $sourceLineNo !== '' ? 'Line '.$sourceLineNo : '',
+                $sourceText !== '' ? __('intake.normalized_draft_review_raw_prefix').' '.$sourceText : '',
                 $raw !== '' ? __('intake.normalized_draft_review_raw_prefix').' '.$raw : '',
                 $suggested !== '' ? __('intake.normalized_draft_review_suggested_section_prefix').' '.$this->reviewSectionLabel($suggested) : '',
             ]);
@@ -2028,9 +2096,10 @@ final class IntakePreviewNormalizedDraftPresenter
     /**
      * @param  list<array<string, mixed>>  $flags
      * @param  array<string, mixed>  $normalized
+     * @param  list<array<string, mixed>>  $sourceLines
      * @return list<array{label: string, value: string, reason: ?string, suggested_section: ?string}>
      */
-    private function detectedButNotIncludedRows(array $flags, array $normalized): array
+    private function detectedButNotIncludedRows(array $flags, array $normalized, array $sourceLines): array
     {
         $rows = [];
         $seen = [];
@@ -2048,13 +2117,15 @@ final class IntakePreviewNormalizedDraftPresenter
             $field = $this->stringify($flag['field'] ?? null);
             $reason = $this->stringify($flag['reason'] ?? null);
             $suggested = $this->stringify($flag['suggested_section'] ?? null);
+            $sourceLineNo = $this->stringify($flag['source_line_no'] ?? null);
+            $sourceText = $this->stringify($flag['source_text'] ?? null);
 
             $this->appendDetectedButNotIncludedRow(
                 $rows,
                 $seen,
                 $field !== '' ? $this->reviewFieldLabel($field) : __('intake.normalized_draft_detected_item_label'),
-                $raw,
-                $reason !== '' ? $this->reviewReasonLabel($reason) : null,
+                $sourceText !== '' ? $sourceText : $raw,
+                $reason !== '' ? trim($this->reviewReasonLabel($reason).' '.($sourceLineNo !== '' ? '(Line '.$sourceLineNo.')' : '')) : ($sourceLineNo !== '' ? 'Line '.$sourceLineNo : null),
                 $suggested !== '' ? $this->reviewSectionLabel($suggested) : null
             );
         }
@@ -2098,7 +2169,10 @@ final class IntakePreviewNormalizedDraftPresenter
                 $seen,
                 $this->fieldLabel((string) $key),
                 $text,
-                __('intake.normalized_draft_detected_not_included_reason'),
+                $this->detectedReasonWithLineNumber(
+                    __('intake.normalized_draft_detected_not_included_reason'),
+                    $this->findSourceLineNumber($sourceLines, $text)
+                ),
                 __('intake.normalized_draft_section_horoscope_religious')
             );
         }
@@ -2114,12 +2188,55 @@ final class IntakePreviewNormalizedDraftPresenter
                 $seen,
                 __('intake.normalized_draft_detected_item_label'),
                 $text,
-                __('intake.normalized_draft_detected_not_included_reason'),
+                $this->detectedReasonWithLineNumber(
+                    __('intake.normalized_draft_detected_not_included_reason'),
+                    $this->findSourceLineNumber($sourceLines, $text)
+                ),
                 __('intake.normalized_draft_section_horoscope_religious')
             );
         }
 
         return $rows;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $sourceLines
+     */
+    private function findSourceLineNumber(array $sourceLines, string $text): ?int
+    {
+        $needle = trim(OcrNormalize::normalizeDigits($text));
+        if ($needle === '') {
+            return null;
+        }
+
+        foreach ($sourceLines as $sourceLine) {
+            if (! is_array($sourceLine)) {
+                continue;
+            }
+
+            $raw = trim(OcrNormalize::normalizeDigits((string) ($sourceLine['raw'] ?? '')));
+            $normalized = trim(OcrNormalize::normalizeDigits((string) ($sourceLine['normalized'] ?? '')));
+            if ($raw === '' && $normalized === '') {
+                continue;
+            }
+            if ($raw === $needle || $normalized === $needle || str_contains($raw, $needle) || str_contains($normalized, $needle)) {
+                $lineNo = (int) ($sourceLine['line_no'] ?? 0);
+
+                return $lineNo > 0 ? $lineNo : null;
+            }
+        }
+
+        return null;
+    }
+
+    private function detectedReasonWithLineNumber(string $reason, ?int $lineNo): string
+    {
+        $reason = trim($reason);
+        if ($lineNo === null || $lineNo <= 0) {
+            return $reason;
+        }
+
+        return trim($reason.' (Line '.$lineNo.')');
     }
 
     /**

@@ -780,6 +780,7 @@ class AdminSettingsController extends Controller
             'favicon' => ['nullable', 'file', 'mimes:ico,png,jpg,jpeg,svg,webp', 'max:1024'],
             'admin_panel_logo' => ['nullable', 'image', 'max:5120'],
             'default_seo_image' => ['nullable', 'image', 'max:5120'],
+            'auth_background_image' => ['nullable', 'image', 'max:5120'],
         ]);
 
         $on = $request->boolean('admin_bypass_mode');

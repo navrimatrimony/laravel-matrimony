@@ -909,6 +909,75 @@ TXT);
         $this->assertSame('शिक्षण IIT चेन्नई M.tech', $siblings[0]['notes'] ?? null);
     }
 
+    public function test_apurva_sample_emits_source_lines_extracted_facts_and_clean_coverage_audit(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+नाव - अपूर्वा सुधीर डोंगरे
+जन्मतारीख - ४-०३-२०००
+जन्मवेळ - सकाळी ७ वाजता
+देवक - आरखड
+नाडी - मध्य
+वडील – सुधीर रामचंद्र डोंगरे (सेवानिवृत)
+आई – उज्वला सुधीर डोंगरे (प्राध्यापिका)
+भाऊ – प्रज्वल सुधीर डोंगरे (विवाहित) (IT engineer)
+वाहिनी – मानसी प्रज्वल डोंगरे (Civil engineer )
+बहीण – स्नेहल मयूर शेंडकर (विवाहित) (IT engineer)
+जावई -मयूर बाळू शेंडकर (व्यवसाईक)
+मूळ गाव – मु.पोस्ट आर्वी नारायणगाव,पुणे
+निवास – पंतनगर,घाटकोपर(e),मुंबई
+मामा – राजेश गणपत पोखरकर
+नातेसंबंध – पोखरकर,वर्पे,मुळे
+अपेक्षा – निर्व्यसनी,उच्च शिक्षित
+भ्रमणध्वनी – ९५९४२३७११७, ९६९९७३८८२२, ८६५५२११७२८
+TXT);
+
+        $sourceLines = $draft['source_lines'] ?? [];
+        $facts = $draft['extracted_facts'] ?? [];
+        $coverage = $draft['coverage_audit'] ?? [];
+
+        $this->assertNotEmpty($sourceLines);
+        $this->assertSame(1, $sourceLines[0]['line_no'] ?? null);
+        $this->assertSame('नाव - अपूर्वा सुधीर डोंगरे', $sourceLines[0]['raw'] ?? null);
+        $this->assertArrayHasKey('normalized', $sourceLines[0] ?? []);
+        $this->assertArrayHasKey('ignored', $sourceLines[0] ?? []);
+
+        $factsJson = json_encode($facts, JSON_UNESCAPED_UNICODE);
+        $this->assertStringContainsString('9594237117', $factsJson);
+        $this->assertStringContainsString('9699738822', $factsJson);
+        $this->assertStringContainsString('8655211728', $factsJson);
+        $this->assertStringContainsString('राजेश गणपत पोखरकर', $factsJson);
+        $this->assertStringContainsString('आरखड', $factsJson);
+        $this->assertStringContainsString('मध्य', $factsJson);
+        $this->assertStringContainsString('निर्व्यसनी,उच्च शिक्षित', $factsJson);
+
+        $this->assertSame([], $coverage['missing_facts'] ?? []);
+        $this->assertSame([], $coverage['duplicate_facts'] ?? []);
+        $this->assertSame([], $coverage['suspicious_mapped_facts'] ?? []);
+        $this->assertGreaterThanOrEqual(10, (int) ($coverage['source_fact_count'] ?? 0));
+        $this->assertGreaterThanOrEqual(10, (int) ($coverage['visible_fact_count'] ?? 0));
+    }
+
+    public function test_address_looking_candidate_name_is_rejected_from_basic_info(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+नाव :- मु. पो. समडोळी, ता. मिरज, जि. सांगली
+TXT);
+
+        $this->assertNull($draft['normalized']['core']['full_name'] ?? null);
+        $this->assertTrue($this->hasReviewFlag($draft, 'core.primary_contact_number', 'missing_critical'));
+    }
+
+    public function test_parent_name_heading_like_value_is_not_accepted(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+वडिलांचे नाव :- कौटुंबिक माहिती
+आईचे नाव :- वैयक्तिक माहिती
+TXT);
+
+        $this->assertNull($draft['normalized']['core']['father_name'] ?? null);
+        $this->assertNull($draft['normalized']['core']['mother_name'] ?? null);
+    }
+
     /**
      * @param  array<string, mixed>  $draft
      * @return list<string>
