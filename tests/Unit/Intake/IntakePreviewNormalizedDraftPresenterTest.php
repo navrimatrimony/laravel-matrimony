@@ -1248,6 +1248,30 @@ TXT, true);
         $this->assertStringNotContainsString('मुलाची आत्या', $reviewBlob);
     }
 
+    public function test_decorative_eight_divider_preview_does_not_render_split_parent_address_rows(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+मुलाचे नाव ८ चि. आविनाश आवासी पाटील
+जन्म तारीख ८ २१.०६.१९९२. जन्म ठिकाण ८ कराड.
+शिक्षण ८ B. Com धर्म ८ हिंदू ९६ कुळी मराठा
+वडिलांचे नाव ८ श्री.आवासो भगवान पाटील . व्यवसाय ८ शेती
+पत्ता ८ मु.पो.येडेमच्छिंद्र ता. वाळवा. जि. सांगली.मो.न.९६६५९१९२१५.
+TXT, true);
+
+        $basic = $this->sectionBlob($out['sections']['basic-info']);
+        $family = $this->sectionBlob($out['sections']['family-details']);
+        $review = $this->detectedBlob($out['sections']['review_needed']);
+
+        $this->assertStringContainsString('चि. आविनाश आवासी पाटील', $basic);
+        $this->assertStringContainsString('User contact 1 9665919215', $basic);
+        $this->assertStringContainsString('श्री.आवासो भगवान पाटील', $family);
+        $this->assertStringContainsString('शेती', $family);
+        $this->assertStringContainsString('मु.पो.येडेमच्छिंद्र ता. वाळवा. जि. सांगली', $family);
+        $this->assertStringNotContainsString('Parents address 2', $family);
+        $this->assertStringNotContainsString('Parents address 3', $family);
+        $this->assertStringNotContainsString('full_name_looks_like_address', $review);
+    }
+
     /**
      * @param  list<array<string, mixed>>  $rows
      * @return array<string, mixed>|null

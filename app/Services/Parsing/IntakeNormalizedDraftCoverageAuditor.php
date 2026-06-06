@@ -6,65 +6,91 @@ use App\Services\Ocr\OcrNormalize;
 
 class IntakeNormalizedDraftCoverageAuditor
 {
+    public function __construct(
+        private readonly WizardRelationSchema $relationSchema
+    ) {}
+
     /**
      * @param  array<string, mixed>  $draft
      * @return array<string, mixed>
      */
     public function audit(array $draft): array
     {
-        $extractedFacts = is_array($draft['extracted_facts'] ?? null) ? $draft['extracted_facts'] : [];
+        $extractedFacts = array_values(array_filter(is_array($draft['extracted_facts'] ?? null) ? $draft['extracted_facts'] : [], 'is_array'));
         $visibleFacts = $this->visibleFacts($draft);
-        $visibleIndex = [];
-        $visibleCounts = [];
 
+        $visibleByExact = [];
+        $visibleByValueField = [];
+        $visibleCounts = [];
         foreach ($visibleFacts as $fact) {
-            if (! is_array($fact)) {
-                continue;
+            $exact = $this->factIdentity($fact, true);
+            $valueField = $this->factIdentity($fact, false);
+            if ($exact !== '') {
+                $visibleByExact[$exact][] = $fact;
             }
-            $identity = $this->factIdentity($fact);
-            if ($identity === '') {
-                continue;
+            if ($valueField !== '') {
+                $visibleByValueField[$valueField][] = $fact;
             }
-            $visibleIndex[$identity] = true;
-            $duplicateIdentity = $this->duplicateIdentity($fact);
-            $visibleCounts[$duplicateIdentity] = ($visibleCounts[$duplicateIdentity] ?? 0) + 1;
+            $visibleCounts[$exact] = ($visibleCounts[$exact] ?? 0) + 1;
         }
 
         $missingFacts = [];
+        $wrongSectionFacts = [];
+        $mixedFacts = [];
         foreach ($extractedFacts as $fact) {
-            if (! is_array($fact)) {
+            $exact = $this->factIdentity($fact, true);
+            if ($exact !== '' && isset($visibleByExact[$exact])) {
                 continue;
             }
-            $identity = $this->factIdentity($fact);
-            if ($identity === '' || isset($visibleIndex[$identity])) {
+
+            $valueField = $this->factIdentity($fact, false);
+            $visibleVariants = $valueField !== '' ? ($visibleByValueField[$valueField] ?? []) : [];
+            if ($visibleVariants !== []) {
+                $sourceRelation = trim((string) ($fact['relation_type'] ?? ''));
+                $matchedRelation = false;
+                foreach ($visibleVariants as $variant) {
+                    if ($sourceRelation !== '' && $sourceRelation === trim((string) ($variant['relation_type'] ?? ''))) {
+                        $matchedRelation = true;
+                        break;
+                    }
+                }
+                if ($sourceRelation !== '' && ! $matchedRelation) {
+                    $mixedFacts[] = $this->coverageFactSummary($fact);
+                    continue;
+                }
+                $wrongSectionFacts[] = $this->coverageFactSummary($fact);
                 continue;
             }
+
             $missingFacts[] = $this->coverageFactSummary($fact);
         }
 
         $duplicateFacts = [];
-        $recordedDuplicates = [];
         foreach ($visibleFacts as $fact) {
-            if (! is_array($fact)) {
+            $exact = $this->factIdentity($fact, true);
+            if ($exact === '' || ($visibleCounts[$exact] ?? 0) < 2 || (($fact['fact_type'] ?? '') === 'address_line')) {
                 continue;
             }
-            $duplicateIdentity = $this->duplicateIdentity($fact);
-            if ($duplicateIdentity === '' || ($visibleCounts[$duplicateIdentity] ?? 0) < 2 || isset($recordedDuplicates[$duplicateIdentity])) {
-                continue;
-            }
-            $duplicateFacts[] = $this->coverageFactSummary($fact);
-            $recordedDuplicates[$duplicateIdentity] = true;
+            $duplicateFacts[$exact] = $this->coverageFactSummary($fact);
         }
 
-        $suspiciousMappedFacts = $this->suspiciousMappedFacts($draft, $visibleFacts);
+        $suspiciousMappedFacts = $this->suspiciousMappedFacts($draft);
 
         return [
-            'missing_facts' => $missingFacts,
-            'duplicate_facts' => $duplicateFacts,
+            'missing_facts' => array_values($missingFacts),
+            'wrong_section_facts' => array_values($wrongSectionFacts),
+            'duplicate_facts' => array_values($duplicateFacts),
+            'mixed_facts' => array_values($mixedFacts),
             'suspicious_mapped_facts' => $suspiciousMappedFacts,
-            'source_fact_count' => count(array_filter($extractedFacts, 'is_array')),
-            'visible_fact_count' => count(array_filter($visibleFacts, 'is_array')),
-            'review_flags' => $this->reviewFlagsFromCoverageIssues($missingFacts, $duplicateFacts, $suspiciousMappedFacts),
+            'source_fact_count' => count($extractedFacts),
+            'visible_fact_count' => count($visibleFacts),
+            'review_flags' => $this->reviewFlagsFromCoverageIssues(
+                $missingFacts,
+                $wrongSectionFacts,
+                array_values($duplicateFacts),
+                $mixedFacts,
+                $suspiciousMappedFacts
+            ),
         ];
     }
 
@@ -79,60 +105,44 @@ class IntakeNormalizedDraftCoverageAuditor
         $facts = [];
 
         foreach ([
-            ['basic-info', 'core.full_name', 'full_name'],
-            ['basic-info', 'core.gender', 'gender'],
-            ['basic-info', 'core.date_of_birth', 'date_of_birth'],
-            ['basic-info', 'core.birth_time', 'birth_time'],
-            ['basic-info', 'core.birth_place_text', 'birth_place_text'],
-            ['basic-info', 'core.religion', 'religion'],
-            ['basic-info', 'core.caste', 'caste'],
-            ['basic-info', 'core.sub_caste', 'sub_caste'],
-            ['basic-info', 'core.marital_status', 'marital_status'],
-            ['physical', 'core.height_cm', 'height_cm'],
-            ['physical', 'core.complexion', 'complexion'],
-            ['physical', 'core.blood_group', 'blood_group'],
-            ['physical', 'core.weight_kg', 'weight_kg'],
-            ['physical', 'core.physical_build', 'physical_build'],
-            ['physical', 'core.spectacles_lens', 'spectacles_lens'],
-            ['physical', 'core.physical_condition', 'physical_condition'],
-            ['physical', 'core.diet', 'diet'],
-            ['education-career', 'core.highest_education', 'highest_education'],
-            ['education-career', 'core.occupation_title', 'occupation_title'],
-            ['education-career', 'core.company_name', 'company_name'],
-            ['education-career', 'core.annual_income', 'annual_income'],
-            ['education-career', 'core.work_location_text', 'work_location_text'],
-            ['education-career', 'core.specialization', 'specialization'],
-            ['family-details', 'core.father_name', 'father_name'],
-            ['family-details', 'core.father_occupation', 'father_occupation'],
-            ['family-details', 'core.father_extra_info', 'father_extra_info'],
-            ['family-details', 'core.father_contact_1', 'father_contact_1'],
-            ['family-details', 'core.father_contact_2', 'father_contact_2'],
-            ['family-details', 'core.father_contact_3', 'father_contact_3'],
-            ['family-details', 'core.mother_name', 'mother_name'],
-            ['family-details', 'core.mother_occupation', 'mother_occupation'],
-            ['family-details', 'core.mother_extra_info', 'mother_extra_info'],
-            ['family-details', 'core.mother_contact_1', 'mother_contact_1'],
-            ['family-details', 'core.mother_contact_2', 'mother_contact_2'],
-            ['family-details', 'core.mother_contact_3', 'mother_contact_3'],
-            ['family-details', 'core.family_income', 'family_income'],
-            ['family-details', 'core.family_type', 'family_type'],
-            ['family-details', 'core.family_status', 'family_status'],
-            ['family-details', 'core.family_values', 'family_values'],
+            ['basic-info', 'core.full_name', 'person_name'],
+            ['basic-info', 'core.gender', 'field_value'],
+            ['basic-info', 'core.date_of_birth', 'field_value'],
+            ['basic-info', 'core.birth_time', 'field_value'],
+            ['basic-info', 'core.birth_place_text', 'field_value'],
+            ['basic-info', 'core.religion', 'field_value'],
+            ['basic-info', 'core.caste', 'field_value'],
+            ['basic-info', 'core.sub_caste', 'field_value'],
+            ['basic-info', 'core.marital_status', 'field_value'],
+            ['physical', 'core.height_cm', 'field_value'],
+            ['physical', 'core.complexion', 'field_value'],
+            ['physical', 'core.blood_group', 'field_value'],
+            ['education-career', 'core.highest_education', 'field_value'],
+            ['education-career', 'core.occupation_title', 'field_value'],
+            ['education-career', 'core.company_name', 'field_value'],
+            ['education-career', 'core.annual_income', 'field_value'],
+            ['education-career', 'core.work_location_text', 'field_value'],
+            ['family-details', 'core.father_name', 'person_name'],
+            ['family-details', 'core.father_occupation', 'field_value'],
+            ['family-details', 'core.mother_name', 'person_name'],
+            ['family-details', 'core.mother_occupation', 'field_value'],
             ['alliance', 'core.other_relatives_text', 'other_relatives_text'],
-        ] as [$section, $field, $coreKey]) {
-            $value = $this->stringify($core[$coreKey] ?? null);
-            if ($value === '') {
-                continue;
+        ] as [$section, $field, $factType]) {
+            $value = data_get($normalized, str_replace('core.', 'core.', $field));
+            $text = $this->stringify($value);
+            if ($text !== '') {
+                $facts[] = ['fact_type' => $factType, 'value' => $text, 'target_section' => $section, 'target_field' => $field];
             }
-            $facts[] = [
-                'fact_type' => $this->factTypeFromField($field),
-                'value' => $value,
-                'target_section' => $section,
-                'target_field' => $field,
-            ];
         }
 
-        foreach (($normalized['addresses'] ?? []) as $index => $address) {
+        foreach (['father_contact_1', 'father_contact_2', 'father_contact_3', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3'] as $field) {
+            $value = $this->stringify($core[$field] ?? null);
+            if ($value !== '') {
+                $facts[] = ['fact_type' => 'phone_number', 'value' => $value, 'target_section' => 'family-details', 'target_field' => 'core.'.$field];
+            }
+        }
+
+        foreach (($normalized['addresses'] ?? []) as $address) {
             if (! is_array($address)) {
                 continue;
             }
@@ -140,37 +150,32 @@ class IntakeNormalizedDraftCoverageAuditor
             if ($value === '') {
                 continue;
             }
-            $facts[] = [
-                'fact_type' => 'address_line',
-                'value' => $value,
-                'target_section' => 'basic-info',
-                'target_field' => 'addresses.'.($index + 1).'.address_line',
-            ];
+            $type = trim((string) ($address['address_type'] ?? $address['type'] ?? 'other'));
+            $facts[] = ['fact_type' => 'address_line', 'value' => $value, 'target_section' => 'basic-info', 'target_field' => 'addresses.'.$type.'.address_line'];
         }
 
-        foreach (($normalized['parents_addresses'] ?? []) as $index => $address) {
+        foreach (($normalized['parents_addresses'] ?? []) as $address) {
             if (! is_array($address)) {
                 continue;
             }
             $value = $this->stringify($address['address_line'] ?? $address['raw'] ?? null);
-            if ($value === '') {
-                continue;
+            if ($value !== '') {
+                $facts[] = ['fact_type' => 'address_line', 'value' => $value, 'target_section' => 'family-details', 'target_field' => 'parents_addresses.address_line'];
             }
-            $facts[] = [
-                'fact_type' => 'address_line',
-                'value' => $value,
-                'target_section' => 'family-details',
-                'target_field' => 'parents_addresses.'.($index + 1).'.address_line',
-            ];
         }
 
-        foreach (($normalized['siblings'] ?? []) as $index => $sibling) {
+        foreach ($this->visibleUserContactFacts($core, $normalized) as $fact) {
+            $facts[] = $fact;
+        }
+
+        foreach (($normalized['siblings'] ?? []) as $sibling) {
             if (! is_array($sibling)) {
                 continue;
             }
+            $relationType = trim((string) ($sibling['relation_type'] ?? ''));
             foreach ([
-                'name' => 'sibling_name',
-                'occupation' => 'sibling_occupation',
+                'name' => 'person_name',
+                'occupation' => 'field_value',
                 'contact_number' => 'phone_number',
                 'contact_number_2' => 'phone_number',
                 'contact_number_3' => 'phone_number',
@@ -178,21 +183,16 @@ class IntakeNormalizedDraftCoverageAuditor
                 'notes' => 'text_detail',
             ] as $field => $factType) {
                 $value = $this->stringify($sibling[$field] ?? null);
-                if ($value === '') {
-                    continue;
+                if ($value !== '') {
+                    $facts[] = ['fact_type' => $factType, 'value' => $value, 'target_section' => 'siblings', 'target_field' => 'siblings.'.$relationType.'.'.$field, 'relation_type' => $relationType];
                 }
-                $facts[] = [
-                    'fact_type' => $factType,
-                    'value' => $value,
-                    'target_section' => 'siblings',
-                    'target_field' => 'siblings.'.($index + 1).'.'.$field,
-                ];
             }
             $spouse = is_array($sibling['spouse'] ?? null) ? $sibling['spouse'] : [];
+            $spouseRelation = $relationType === 'brother' ? 'brother_wife' : ($relationType === 'sister' ? 'sister_husband' : '');
             foreach ([
-                'name' => 'sibling_spouse_name',
-                'occupation' => 'sibling_spouse_occupation',
-                'occupation_title' => 'sibling_spouse_occupation',
+                'name' => 'person_name',
+                'occupation' => 'field_value',
+                'occupation_title' => 'field_value',
                 'contact_number' => 'phone_number',
                 'contact_number_2' => 'phone_number',
                 'contact_number_3' => 'phone_number',
@@ -201,76 +201,47 @@ class IntakeNormalizedDraftCoverageAuditor
                 'notes' => 'text_detail',
             ] as $field => $factType) {
                 $value = $this->stringify($spouse[$field] ?? null);
-                if ($value === '') {
-                    continue;
+                if ($value !== '') {
+                    $facts[] = ['fact_type' => $factType, 'value' => $value, 'target_section' => 'siblings', 'target_field' => 'siblings.spouse.'.$field, 'relation_type' => $spouseRelation];
                 }
-                $facts[] = [
-                    'fact_type' => $factType,
-                    'value' => $value,
-                    'target_section' => 'siblings',
-                    'target_field' => 'siblings.'.($index + 1).'.spouse.'.$field,
-                ];
             }
         }
 
-        foreach (($normalized['relatives'] ?? []) as $index => $relative) {
+        foreach (($normalized['relatives'] ?? []) as $relative) {
             if (! is_array($relative)) {
                 continue;
             }
-            $section = $this->relativeTargetSection($relative);
+            $relationType = trim((string) ($relative['relation_type'] ?? ''));
+            $section = $this->relationSchema->sectionForRelationType($relationType) ?? 'review_needed';
             foreach ([
-                'name' => 'relative_name',
-                'occupation' => 'relative_occupation',
+                'name' => 'person_name',
+                'occupation' => 'field_value',
                 'contact_number' => 'phone_number',
                 'address_line' => 'address_line',
                 'notes' => 'text_detail',
             ] as $field => $factType) {
                 $value = $this->stringify($relative[$field] ?? null);
-                if ($value === '') {
-                    continue;
+                if ($value !== '') {
+                    $facts[] = ['fact_type' => $factType, 'value' => $value, 'target_section' => $section, 'target_field' => 'relatives.'.$relationType.'.'.$field, 'relation_type' => $relationType];
                 }
-                $facts[] = [
-                    'fact_type' => $factType,
-                    'value' => $value,
-                    'target_section' => $section,
-                    'target_field' => 'relatives.'.($index + 1).'.'.$field,
-                ];
             }
         }
 
-        $horoscope = is_array($normalized['horoscope'] ?? null) ? $normalized['horoscope'] : [];
-        foreach ($horoscope as $field => $value) {
+        foreach ((array) ($normalized['horoscope'] ?? []) as $field => $value) {
             if ($field === 'raw') {
                 continue;
             }
             $text = $this->stringify($value);
-            if ($text === '') {
-                continue;
+            if ($text !== '') {
+                $facts[] = ['fact_type' => 'horoscope_value', 'value' => $text, 'target_section' => 'horoscope', 'target_field' => 'horoscope.'.$field];
             }
-            $facts[] = [
-                'fact_type' => 'horoscope_value',
-                'value' => $text,
-                'target_section' => 'horoscope',
-                'target_field' => 'horoscope.'.$field,
-            ];
         }
 
-        $preferences = is_array($normalized['preferences'] ?? null) ? $normalized['preferences'] : [];
-        foreach ($preferences as $field => $value) {
+        foreach ((array) ($normalized['preferences'] ?? []) as $field => $value) {
             $text = $this->stringify($value);
-            if ($text === '') {
-                continue;
+            if ($text !== '') {
+                $facts[] = ['fact_type' => 'preference_text', 'value' => $text, 'target_section' => 'about-preferences', 'target_field' => 'preferences.'.$field];
             }
-            $facts[] = [
-                'fact_type' => 'preference_text',
-                'value' => $text,
-                'target_section' => 'about-preferences',
-                'target_field' => 'preferences.'.$field,
-            ];
-        }
-
-        foreach ($this->visibleUserContactFacts($core, $normalized) as $fact) {
-            $facts[] = $fact;
         }
 
         return $facts;
@@ -278,10 +249,9 @@ class IntakeNormalizedDraftCoverageAuditor
 
     /**
      * @param  array<string, mixed>  $draft
-     * @param  list<array<string, mixed>>  $visibleFacts
      * @return list<array<string, mixed>>
      */
-    private function suspiciousMappedFacts(array $draft, array $visibleFacts): array
+    private function suspiciousMappedFacts(array $draft): array
     {
         $normalized = is_array($draft['normalized'] ?? null) ? $draft['normalized'] : [];
         $core = is_array($normalized['core'] ?? null) ? $normalized['core'] : [];
@@ -289,44 +259,24 @@ class IntakeNormalizedDraftCoverageAuditor
 
         $fullName = $this->stringify($core['full_name'] ?? null);
         if ($fullName !== '' && $this->looksLikeAddressText($fullName)) {
-            $issues[] = [
-                'fact_type' => 'full_name',
-                'value' => $fullName,
-                'target_section' => 'basic-info',
-                'target_field' => 'core.full_name',
-                'reason' => 'full_name_looks_like_address',
-            ];
+            $issues[] = ['fact_type' => 'person_name', 'value' => $fullName, 'target_section' => 'basic-info', 'target_field' => 'core.full_name', 'reason' => 'full_name_looks_like_address'];
         }
 
-        foreach ([
-            'core.father_name' => $this->stringify($core['father_name'] ?? null),
-            'core.mother_name' => $this->stringify($core['mother_name'] ?? null),
-        ] as $field => $value) {
-            if ($value === '' || ! $this->looksLikeSectionHeading($value)) {
-                continue;
+        foreach (['core.father_name' => $core['father_name'] ?? null, 'core.mother_name' => $core['mother_name'] ?? null] as $field => $value) {
+            $text = $this->stringify($value);
+            if ($text !== '' && $this->looksLikeSectionHeading($text)) {
+                $issues[] = ['fact_type' => 'person_name', 'value' => $text, 'target_section' => 'family-details', 'target_field' => $field, 'reason' => 'person_name_looks_like_section_heading'];
             }
-            $issues[] = [
-                'fact_type' => 'person_name',
-                'value' => $value,
-                'target_section' => 'family-details',
-                'target_field' => $field,
-                'reason' => 'parent_name_looks_like_section_heading',
-            ];
         }
 
-        foreach (($normalized['relatives'] ?? []) as $index => $relative) {
+        foreach (($normalized['relatives'] ?? []) as $relative) {
             if (! is_array($relative)) {
                 continue;
             }
             $name = $this->stringify($relative['name'] ?? null);
+            $relationType = trim((string) ($relative['relation_type'] ?? ''));
             if ($name !== '' && $this->looksLikeSectionHeading($name)) {
-                $issues[] = [
-                    'fact_type' => 'relative_name',
-                    'value' => $name,
-                    'target_section' => $this->relativeTargetSection($relative),
-                    'target_field' => 'relatives.'.($index + 1).'.name',
-                    'reason' => 'relative_name_looks_like_section_heading',
-                ];
+                $issues[] = ['fact_type' => 'person_name', 'value' => $name, 'target_section' => $this->relationSchema->sectionForRelationType($relationType) ?? 'review_needed', 'target_field' => 'relatives.'.$relationType.'.name', 'reason' => 'person_name_looks_like_section_heading'];
             }
         }
 
@@ -335,34 +285,31 @@ class IntakeNormalizedDraftCoverageAuditor
 
     /**
      * @param  list<array<string, mixed>>  $missingFacts
+     * @param  list<array<string, mixed>>  $wrongSectionFacts
      * @param  list<array<string, mixed>>  $duplicateFacts
+     * @param  list<array<string, mixed>>  $mixedFacts
      * @param  list<array<string, mixed>>  $suspiciousFacts
      * @return list<array<string, mixed>>
      */
-    private function reviewFlagsFromCoverageIssues(array $missingFacts, array $duplicateFacts, array $suspiciousFacts): array
+    private function reviewFlagsFromCoverageIssues(array $missingFacts, array $wrongSectionFacts, array $duplicateFacts, array $mixedFacts, array $suspiciousFacts): array
     {
         $flags = [];
-
-        foreach ($missingFacts as $fact) {
-            $flags[] = [
-                'field' => (string) ($fact['target_field'] ?? 'review.missing'),
-                'reason' => 'coverage_missing_fact',
-                'raw' => (string) ($fact['source_text'] ?? $fact['value'] ?? ''),
-                'suggested_section' => (string) ($fact['target_section'] ?? 'review_needed'),
-                'source_line_no' => $fact['source_line_no'] ?? null,
-                'source_text' => (string) ($fact['source_text'] ?? ''),
-            ];
-        }
-
-        foreach ($duplicateFacts as $fact) {
-            $flags[] = [
-                'field' => (string) ($fact['target_field'] ?? 'review.duplicate'),
-                'reason' => 'coverage_duplicate_fact',
-                'raw' => (string) ($fact['value'] ?? ''),
-                'suggested_section' => (string) ($fact['target_section'] ?? 'review_needed'),
-                'source_line_no' => $fact['source_line_no'] ?? null,
-                'source_text' => (string) ($fact['source_text'] ?? ''),
-            ];
+        foreach ([
+            'coverage_missing_fact' => $missingFacts,
+            'coverage_wrong_section_fact' => $wrongSectionFacts,
+            'coverage_duplicate_fact' => $duplicateFacts,
+            'coverage_mixed_fact' => $mixedFacts,
+        ] as $reason => $facts) {
+            foreach ($facts as $fact) {
+                $flags[] = [
+                    'field' => (string) ($fact['target_field'] ?? 'review.coverage'),
+                    'reason' => $reason,
+                    'raw' => (string) ($fact['source_text'] ?? $fact['value'] ?? ''),
+                    'suggested_section' => (string) ($fact['target_section'] ?? 'review_needed'),
+                    'source_line_no' => $fact['source_line_no'] ?? null,
+                    'source_text' => (string) ($fact['source_text'] ?? ''),
+                ];
+            }
         }
 
         foreach ($suspiciousFacts as $fact) {
@@ -371,8 +318,6 @@ class IntakeNormalizedDraftCoverageAuditor
                 'reason' => (string) ($fact['reason'] ?? 'coverage_suspicious_fact'),
                 'raw' => (string) ($fact['value'] ?? ''),
                 'suggested_section' => (string) ($fact['target_section'] ?? 'review_needed'),
-                'source_line_no' => $fact['source_line_no'] ?? null,
-                'source_text' => (string) ($fact['source_text'] ?? ''),
             ];
         }
 
@@ -387,7 +332,7 @@ class IntakeNormalizedDraftCoverageAuditor
     {
         return [
             'fact_type' => (string) ($fact['fact_type'] ?? ''),
-            'value' => (string) ($fact['value'] ?? $fact['name'] ?? $fact['details'] ?? ''),
+            'value' => (string) ($fact['value'] ?? ''),
             'target_section' => (string) ($fact['target_section'] ?? ''),
             'target_field' => (string) ($fact['target_field'] ?? ''),
             'source_line_no' => $fact['source_line_no'] ?? null,
@@ -398,17 +343,37 @@ class IntakeNormalizedDraftCoverageAuditor
     /**
      * @param  array<string, mixed>  $fact
      */
-    private function factIdentity(array $fact): string
+    private function factIdentity(array $fact, bool $includeSection): string
     {
         $factType = trim((string) ($fact['fact_type'] ?? ''));
-        $value = (string) ($fact['value'] ?? $fact['name'] ?? $fact['details'] ?? '');
-        $canonicalValue = $this->canonicalScalar($value, $factType);
-
-        if ($factType === '' || $canonicalValue === '') {
+        $canonicalValue = $this->canonicalScalar((string) ($fact['value'] ?? ''), $factType);
+        $targetField = $this->canonicalTargetField((string) ($fact['target_field'] ?? ''));
+        if ($factType === '' || $canonicalValue === '' || $targetField === '') {
             return '';
         }
 
-        return $factType.'|'.$canonicalValue;
+        $parts = [$factType, $canonicalValue];
+        if ($includeSection) {
+            $parts[] = trim((string) ($fact['target_section'] ?? ''));
+        }
+        $parts[] = $targetField;
+
+        return implode('|', $parts);
+    }
+
+    private function canonicalTargetField(string $field): string
+    {
+        $field = preg_replace('/\.\d+\./', '.', $field) ?? $field;
+        $field = str_replace(['.native.', '.current.', '.other.'], '.address_line.', $field);
+        $field = str_replace(['siblings.brother_wife', 'siblings.sister_husband'], 'siblings.spouse', $field);
+        $field = str_replace(['contact_number_2', 'contact_number_3'], 'contact_number', $field);
+        $field = str_replace(['father_contact_2', 'father_contact_3'], 'father_contact_1', $field);
+        $field = str_replace(['mother_contact_2', 'mother_contact_3'], 'mother_contact_1', $field);
+        $field = str_replace(['core.primary_contact_number_2', 'core.primary_contact_number_3'], 'core.primary_contact_number', $field);
+        $field = str_replace('occupation_title', 'occupation', $field);
+        $field = str_replace('additional_info', 'notes', $field);
+
+        return trim($field, '.');
     }
 
     private function canonicalScalar(string $value, string $factType): string
@@ -420,37 +385,29 @@ class IntakeNormalizedDraftCoverageAuditor
             return implode(',', array_unique($matches[0] ?? []));
         }
 
+        if ($factType === 'person_name') {
+            $value = preg_replace('/^\s*(?:श्री\.?|सौ\.?|कु\.?|चि\.?|कै\.?|डॉ\.?)\s*/u', '', $value) ?? $value;
+        }
+        if ($factType === 'other_relatives_text') {
+            $value = preg_replace('/^(?:नाते\s+)?संबंध\s*(?::\s*-\s*|[:\-]\s*)/u', '', $value) ?? $value;
+        }
+        if (str_contains($value, 'B+ve')) {
+            $value = str_replace('B+ve', 'B+', $value);
+        }
+        if (str_contains($value, 'A+ve')) {
+            $value = str_replace('A+ve', 'A+', $value);
+        }
+        if (str_contains($value, 'AB+ve')) {
+            $value = str_replace('AB+ve', 'AB+', $value);
+        }
+        if (str_contains($value, 'O+ve')) {
+            $value = str_replace('O+ve', 'O+', $value);
+        }
+
+        $value = trim((string) preg_replace('/[.,;]+$/u', '', $value));
         $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
 
         return mb_strtolower(trim($value));
-    }
-
-    /**
-     * @param  array<string, mixed>  $relative
-     */
-    private function relativeTargetSection(array $relative): string
-    {
-        $type = mb_strtolower(trim((string) ($relative['relation_type'] ?? '')));
-
-        return in_array($type, [
-            'maternal_uncle',
-            'wife_maternal_uncle',
-            'maternal_aunt',
-            'husband_maternal_aunt',
-            'maternal_cousin',
-            'maternal_address_ajol',
-        ], true) ? 'alliance' : 'relatives';
-    }
-
-    private function factTypeFromField(string $field): string
-    {
-        return match (true) {
-            str_contains($field, 'contact') || str_contains($field, 'phone') => 'phone_number',
-            str_contains($field, 'address') => 'address_line',
-            preg_match('/(?:^|\.)(?:full_name|father_name|mother_name|name)$/', $field) === 1 => 'person_name',
-            str_contains($field, 'expectations') => 'preference_text',
-            default => 'field_value',
-        };
     }
 
     /**
@@ -463,26 +420,18 @@ class IntakeNormalizedDraftCoverageAuditor
         $facts = [];
         $phones = [];
         $parentPhones = [];
-        foreach ([
-            'father_contact_number', 'father_contact_1', 'father_contact_2', 'father_contact_3',
-            'mother_contact_number', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3',
-        ] as $field) {
+        foreach (['father_contact_1', 'father_contact_2', 'father_contact_3', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3'] as $field) {
             $phone = $this->stringify($core[$field] ?? null);
             if ($phone !== '') {
                 $parentPhones[$phone] = true;
             }
         }
 
-        foreach ([
-            $core['primary_contact_number'] ?? null,
-            $core['primary_contact_number_2'] ?? null,
-            $core['primary_contact_number_3'] ?? null,
-        ] as $value) {
+        foreach ([$core['primary_contact_number'] ?? null, $core['primary_contact_number_2'] ?? null, $core['primary_contact_number_3'] ?? null] as $value) {
             $phone = $this->stringify($value);
-            if ($phone === '' || isset($parentPhones[$phone]) || in_array($phone, $phones, true)) {
-                continue;
+            if ($phone !== '' && ! isset($parentPhones[$phone]) && ! in_array($phone, $phones, true)) {
+                $phones[] = $phone;
             }
-            $phones[] = $phone;
         }
 
         foreach (($normalized['contacts'] ?? []) as $contact) {
@@ -490,50 +439,26 @@ class IntakeNormalizedDraftCoverageAuditor
                 continue;
             }
             $phone = $this->stringify($contact['phone_number'] ?? null);
-            if ($phone === '' || isset($parentPhones[$phone]) || in_array($phone, $phones, true)) {
-                continue;
+            if ($phone !== '' && ! isset($parentPhones[$phone]) && ! in_array($phone, $phones, true)) {
+                $phones[] = $phone;
             }
-            $phones[] = $phone;
         }
 
-        foreach ($phones as $index => $phone) {
-            $facts[] = [
-                'fact_type' => 'phone_number',
-                'value' => $phone,
-                'target_section' => 'basic-info',
-                'target_field' => match ($index) {
-                    0 => 'core.primary_contact_number',
-                    1 => 'core.primary_contact_number_2',
-                    2 => 'core.primary_contact_number_3',
-                    default => 'contacts.'.($index + 1).'.phone_number',
-                },
-            ];
+        foreach ($phones as $phone) {
+            $facts[] = ['fact_type' => 'phone_number', 'value' => $phone, 'target_section' => 'basic-info', 'target_field' => 'core.primary_contact_number'];
         }
 
         return $facts;
     }
 
-    /**
-     * @param  array<string, mixed>  $fact
-     */
-    private function duplicateIdentity(array $fact): string
-    {
-        $identity = $this->factIdentity($fact);
-        if ($identity === '') {
-            return '';
-        }
-
-        return $identity.'|'.trim((string) ($fact['target_field'] ?? ''));
-    }
-
     private function looksLikeSectionHeading(string $value): bool
     {
-        return preg_match('/^(?:वैयक्तिक\s+माहिती|वैयक्तिक\s+तपशील|कौटुंबिक\s+माहिती|कौटुंबिक\s+तपशील|शिक्षण|नोकरी|व्यवसाय|बायोडाटा|बयोडाटा|मुलाची\s+माहिती|मुलाचे\s+नाव|मुलीचे\s+नाव|नाव)$/u', trim($value)) === 1;
+        return preg_match('/^(?:वैयक्तिक\s+माहिती|वैयक्तिक\s+तपशील|कौटुंबिक\s+माहिती|कौटुंबिक\s+तपशील|इतर\s+पाहुणे|इतर\s+प्रॉपर्टी|मुलाची\s+आई|मुलाचे\s+भाऊ|बायोडाटा|कौटुंबिक\s+माहिती)$/u', trim($value)) === 1;
     }
 
     private function looksLikeAddressText(string $value): bool
     {
-        return preg_match('/(?:मु\.?\s*पो\.?|रा\.|ता\.|जि\.|पत्ता|पोस्ट|नगर|रोड|कॉलनी|वाडी|गाव|फ्लॅट|वॉर्ड)/u', $value) === 1;
+        return preg_match('/(?:मु\.?\s*पो\.?|रा\.|ता\.|जि\.|पत्ता|निवास|पोस्ट|नगर|रोड|कॉलनी|वाडी|गाव|फ्लॅट|वॉर्ड)/u', $value) === 1;
     }
 
     private function stringify(mixed $value): string

@@ -8,6 +8,25 @@ class IntakeNormalizedBiodataDraftBuilder
 {
     private const LABEL_SUFFIX = '(?:[\s:：\-\.]|$)';
 
+    private const OCR_DECORATIVE_LABELS = [
+        'मुलाचे नांव', 'मुलाचे नाव', 'मुलीचे नांव', 'मुलीचे नाव', 'वधूचे नांव', 'वधूचे नाव',
+        'नाव', 'जन्म तारीख', 'जन्मतारीख', 'जन्म वेळ व वार', 'जन्म वेळ आणि वार', 'जन्मवेळ व वार',
+        'जन्मवेळ आणि वार', 'जन्म वेळ', 'जन्मवेळ', 'जन्म ठिकाण', 'जन्म स्थळ', 'जन्मठिकाण',
+        'धर्म', 'जात', 'कास्ट', 'उपजात', 'उप जात', 'उंची', 'ऊंची', 'कुंची', 'वर्ण', 'रंग',
+        'ब्लड ग्रुप', 'ब्लड ग्रप', 'रक्तगट', 'रक्त गट', 'शिक्षण', 'शिक्षण / नोकरी', 'नोकरी',
+        'नोकरी/व्यवसाय', 'व्यवसाय', 'कंपनी', 'वार्षिक उत्पन्न', 'उत्पन्न', 'वडील', 'वडिलांचे नाव',
+        'पित्याचे नाव', 'आई', 'आईचे नाव', 'मातेचे नाव', 'मूळ गाव', 'मुळगाव', 'मूळगाव',
+        'निवास', 'सध्याचा पत्ता', 'निवासी पत्ता', 'पत्ता', 'पता', 'घरचा पत्ता', 'घराचा पत्ता',
+        'गावचा पत्ता', 'मुळ गाव', 'मूळ गाव', 'आजोळचा पत्ता', 'अपेक्षा', 'देवक', 'नाडी', 'नाड',
+        'राशी', 'रास', 'नक्षत्र', 'गण', 'गोत्र', 'कुलदैवत', 'कुल दैवत', 'प्रॉपर्टी',
+        'प्रॉपर्टी तपशील', 'प्रोपर्टी', 'स्थावर मालमत्ता', 'भ्रमणध्वनी', 'मोबाईल', 'मोबाइल',
+        'मोबाईल नंबर', 'मोबाइल नंबर', 'मो. नं', 'मो. नं.', 'मो नं', 'मो नं.', 'संपर्क', 'फोन',
+        'भाऊ', 'मुलाचा भाऊ', 'मुलाचे भाऊ', 'बहीण', 'बहिण', 'बहिणी', 'मुलाची बहीण', 'मुलाची बहिण',
+        'दाजी', 'जावई', 'मामा', 'मुलाचे मामा', 'मावशी', 'माऊशी', 'आत्या',
+        'मुलाची आत्या', 'मुलाची आत्त्या', 'चुलते', 'मुलाचे चुलते', 'नातेसंबंध', 'नाते संबंध', 'इतर नातेवाईक', 'पाहुणे',
+        'इतर पाहूणे', 'इतर पाहुणे', 'नावरस', 'नावरस नाव',
+    ];
+
     private bool $candidateNameFromFallback = false;
 
     /**
@@ -19,7 +38,8 @@ class IntakeNormalizedBiodataDraftBuilder
         $this->candidateNameFromFallback = false;
         $prepared = app(IntakeNormalizedBiodataHtmlPreprocessor::class)->prepare($rawText);
         $cleanedText = $this->cleanText($prepared['text']);
-        $sections = $this->splitSections($cleanedText);
+        $parsingText = $this->normalizeDecorativeLabelSeparatorsInText($cleanedText);
+        $sections = $this->splitSections($parsingText);
         $normalized = $this->normalizeSectionValues($sections);
         $draft = [
             'meta' => [
@@ -43,7 +63,7 @@ class IntakeNormalizedBiodataDraftBuilder
             $this->dedupePreviewContactSlotsAgainstParents($draft['normalized']['core']);
         }
         $draft['source_lines'] = $this->finalizeSourceLines($draft);
-        $draft['extracted_facts'] = $this->buildExtractedFacts($draft);
+        $draft['extracted_facts'] = app(IntakeWizardSourceFactExtractor::class)->extract($draft);
         $draft['coverage_audit'] = app(IntakeNormalizedDraftCoverageAuditor::class)->audit($draft);
         $draft['review_flags'] = $this->mergeReviewFlags(
             $this->buildReviewFlags($draft),
@@ -94,7 +114,7 @@ class IntakeNormalizedBiodataDraftBuilder
             $sourceLines[] = [
                 'line_no' => $lineNo,
                 'raw' => $raw,
-                'normalized' => OcrNormalize::normalizeDigits($raw),
+                'normalized' => OcrNormalize::normalizeDigits($this->normalizeDecorativeLabelSeparators($raw)),
                 'ignored' => false,
                 'ignore_reason' => null,
             ];
@@ -202,6 +222,10 @@ class IntakeNormalizedBiodataDraftBuilder
             $core,
             $parentsAddresses
         );
+        $familyAddressLineSet = [];
+        foreach (array_merge($sections['family']['lines'] ?? [], $sections['addresses']['lines'] ?? []) as $familyAddressLine) {
+            $familyAddressLineSet[trim((string) $familyAddressLine)] = true;
+        }
         $this->syncParentContactAliases($core);
         $parentPhones = $this->parentContactPhones($core);
 
@@ -224,9 +248,13 @@ class IntakeNormalizedBiodataDraftBuilder
         $propertyContinuationContext = null;
         foreach ($allLines as $line) {
             $this->extractSiblingCounts($line, $core, $siblings);
-            $this->extractAddressLine($line, $addresses, $previousLine);
-            $this->extractStandaloneAddressLine($line, $addresses, $previousLine);
-            $this->extractUnlabeledNativeAddressLine($line, $addresses);
+            $trimmedLine = trim($line);
+            $familyParentAddressLine = isset($familyAddressLineSet[$trimmedLine]) && (bool) preg_match('/^प(?:त्)?ता'.self::LABEL_SUFFIX.'/u', $trimmedLine);
+            if (! $familyParentAddressLine) {
+                $this->extractAddressLine($line, $addresses, $previousLine);
+                $this->extractStandaloneAddressLine($line, $addresses, $previousLine);
+                $this->extractUnlabeledNativeAddressLine($line, $addresses);
+            }
             $propertyContinuationContext = $this->extractPropertyLine($line, $propertySummary, $propertyAssets, $propertyContinuationContext);
             $this->extractHoroscopeLine($line, $horoscope);
             $this->extractPreferenceLine($line, $preferences);
@@ -295,7 +323,7 @@ class IntakeNormalizedBiodataDraftBuilder
 
                 continue;
             }
-            if (preg_match('/^\s*[-–—]?\s*(वडिलांचे\s+वडील|वडिलांची\s+आई|वडिलांची\s+बहीण|वडिलांची\s+बहिण|आजोबा|आजी|चुलते|काका|चुलती|काकू|आत्या|मुलाची\s+आत्या|आत्याचे\s+यजमान|आत्यांचे\s+यजमान|आत्या\s+यजमान|चुलत\s+भाऊ|चुलत\s+बहिण|चुलत\s+बहीण|आईचे\s+वडील|आईची\s+आई|मुलाचे\s+मामा|मुलीचे\s+मामा|मामाचे\s+नाव|मामा|मामी|मावशी|मुलाची\s+मावशी|माऊशी|मावशीचे\s+यजमान|मावशीचा\s+नवरा|मावस\s+भाऊ|मावस\s+बहिण|मावस\s+बहीण|इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|नातेवाईक|इतर\s+पाहूणे|इतर\s+पाहुणे|पाहुणे|आजोळ|नातेसंबंध|नाते\s+संबंध)\s*(?::\s*-\s*|[:\-–—]\s*)(.+)$/u', $line, $m)) {
+            if (preg_match('/^\s*[-–—]?\s*(वडिलांचे\s+वडील|वडिलांची\s+आई|वडिलांची\s+बहीण|वडिलांची\s+बहिण|आजोबा|आजी|चुलते|काका|चुलती|काकू|आत्या|मुलाची\s+आत्या|मुलाची\s+आत्त्या|आत्याचे\s+यजमान|आत्यांचे\s+यजमान|आत्या\s+यजमान|चुलत\s+भाऊ|चुलत\s+बहिण|चुलत\s+बहीण|आईचे\s+वडील|आईची\s+आई|मुलाचे\s+मामा|मुलीचे\s+मामा|मामाचे\s+नाव|मामा|मामी|मावशी|मुलाची\s+मावशी|माऊशी|मावशीचे\s+यजमान|मावशीचा\s+नवरा|मावस\s+भाऊ|मावस\s+बहिण|मावस\s+बहीण|इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|नातेवाईक|इतर\s+पाहूणे|इतर\s+पाहुणे|पाहुणे|आजोळ|नातेसंबंध|नाते\s+संबंध)\s*(?::\s*-\s*|[:\-–—]\s*)(.+)$/u', $line, $m)) {
                 $name = trim($m[1]);
                 $value = trim($m[2]);
                 $lastRelativeLabel = $name;
@@ -377,6 +405,7 @@ class IntakeNormalizedBiodataDraftBuilder
                 $relatives[] = ['name' => trim($line), 'raw' => $line];
             }
         }
+        $this->attachRelativeAddressContinuationsFromOrderedLines($allLines, $relatives);
 
         return [
             'core' => $core,
@@ -390,6 +419,79 @@ class IntakeNormalizedBiodataDraftBuilder
             'horoscope' => $horoscope,
             'preferences' => $preferences,
         ];
+    }
+
+    /**
+     * @param  list<string>  $lines
+     * @param  list<array<string, mixed>>  $relatives
+     */
+    private function attachRelativeAddressContinuationsFromOrderedLines(array $lines, array &$relatives): void
+    {
+        $cursor = -1;
+        $currentRelativeIndex = null;
+        $withinRelativeGroup = false;
+
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+            if ($trimmed === '') {
+                continue;
+            }
+
+            if (preg_match('/^\s*[-–—]?\s*मुलाची\s+आत्त?्या\s*(?::\s*-\s*|[:\-–—]\s*)(.+)$/u', $trimmed, $m)) {
+                $cursor++;
+                $currentRelativeIndex = $cursor;
+                $withinRelativeGroup = true;
+
+                continue;
+            }
+
+            if (preg_match('/^\s*[-–—]?\s*(वडिलांचे\s+वडील|वडिलांची\s+आई|वडिलांची\s+बहीण|वडिलांची\s+बहिण|आजोबा|आजी|चुलते|काका|चुलती|काकू|आत्या|मुलाची\s+आत्या|मुलाची\s+आत्त्या|आत्याचे\s+यजमान|आत्यांचे\s+यजमान|आत्या\s+यजमान|चुलत\s+भाऊ|चुलत\s+बहिण|चुलत\s+बहीण|आईचे\s+वडील|आईची\s+आई|मुलाचे\s+मामा|मुलीचे\s+मामा|मामाचे\s+नाव|मामा|मामी|मावशी|मुलाची\s+मावशी|माऊशी|मावशीचे\s+यजमान|मावशीचा\s+नवरा|मावस\s+भाऊ|मावस\s+बहिण|मावस\s+बहीण)\s*(?::\s*-\s*|[:\-–—]\s*)(.+)$/u', $trimmed, $m)) {
+                foreach ($this->splitRelativeValues(trim((string) $m[2])) as $_) {
+                    $cursor++;
+                    $currentRelativeIndex = $cursor;
+                }
+                $withinRelativeGroup = true;
+
+                continue;
+            }
+
+            if ($withinRelativeGroup
+                && $currentRelativeIndex !== null
+                && ! $this->startsAddressLine($trimmed)
+                && ! $this->looksLikeAnyKnownLabel($trimmed)
+                && ! $this->startsSiblingLine($trimmed)
+                && ! $this->startsSisterSpouseLine($trimmed)
+                && ! $this->startsPahune($trimmed)
+                && ! $this->startsOtherRelativesLine($trimmed)
+                && preg_match('/^\s*(?:[-–—]\s*)?(?:(?:\d+|[०-९]+)[\).]\s*)?(?:श्री\.?|सौ\.?|कै\.?|डॉ\.?|कु\.?)?\s*[\p{L}\p{M}]/u', $trimmed)) {
+                $cursor++;
+                $currentRelativeIndex = $cursor;
+
+                continue;
+            }
+
+            if ($currentRelativeIndex === null || ! isset($relatives[$currentRelativeIndex])) {
+                continue;
+            }
+
+            if ($this->startsAddressLine($trimmed)) {
+                $address = $this->labeledAddressValue($trimmed);
+                if ($address !== '') {
+                    $relatives[$currentRelativeIndex]['address_line'] = $this->setTextOnce($relatives[$currentRelativeIndex]['address_line'] ?? null, $address);
+                }
+
+                continue;
+            }
+
+            if ($this->looksLikeAnyKnownLabel($trimmed)
+                || $this->startsSiblingLine($trimmed)
+                || $this->startsSisterSpouseLine($trimmed)
+                || $this->startsPahune($trimmed)
+                || $this->startsOtherRelativesLine($trimmed)) {
+                $currentRelativeIndex = null;
+                $withinRelativeGroup = false;
+            }
+        }
     }
 
     /**
@@ -859,6 +961,10 @@ class IntakeNormalizedBiodataDraftBuilder
     {
         $normalizedLine = $this->stripMarkdownHeadingDecorators($line);
         if ($this->startsAddressLine($line)) {
+            if ($current === 'relatives' && ! $relativesClosed) {
+                return 'relatives';
+            }
+
             return 'addresses';
         }
         if ($this->startsContactLine($line)) {
@@ -882,7 +988,7 @@ class IntakeNormalizedBiodataDraftBuilder
         if (preg_match('/^(?:शिक्षण|नोकरी|व्यवसाय|वेतन|उत्पन्न|नोकरी\/व्यवसाय)'.self::LABEL_SUFFIX.'/u', $normalizedLine)) {
             return 'education_career';
         }
-        if (preg_match('/^\s*[-–—]?\s*(?:वडिलांचे\s+वडील|वडिलांची\s+आई|वडिलांची\s+बहीण|वडिलांची\s+बहिण|आजोबा|आजी|चुलते|काका|चुलती|काकू|आत्या|मुलाची\s+आत्या|आत्याचे\s+यजमान|आत्यांचे\s+यजमान|आत्या\s+यजमान|चुलत\s+भाऊ|चुलत\s+बहिण|चुलत\s+बहीण|आईचे\s+वडील|आईची\s+आई|मुलाचे\s+मामा|मुलीचे\s+मामा|मामाचे\s+नाव|मामा|मामी|मावशी|माऊशी|मुलाची\s+मावशी|मावशीचे\s+यजमान|मावशीचा\s+नवरा|मावस\s+भाऊ|मावस\s+बहिण|मावस\s+बहीण|इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|नातेवाईक|इतर\s+पाहूणे|इतर\s+पाहुणे|पाहुणे|आजोळ|नातेसंबंध|नाते\s+संबंध)'.self::LABEL_SUFFIX.'/u', $normalizedLine)) {
+        if (preg_match('/^\s*[-–—]?\s*(?:वडिलांचे\s+वडील|वडिलांची\s+आई|वडिलांची\s+बहीण|वडिलांची\s+बहिण|आजोबा|आजी|चुलते|काका|चुलती|काकू|आत्या|मुलाची\s+आत्या|मुलाची\s+आत्त्या|आत्याचे\s+यजमान|आत्यांचे\s+यजमान|आत्या\s+यजमान|चुलत\s+भाऊ|चुलत\s+बहिण|चुलत\s+बहीण|आईचे\s+वडील|आईची\s+आई|मुलाचे\s+मामा|मुलीचे\s+मामा|मामाचे\s+नाव|मामा|मामी|मावशी|माऊशी|मुलाची\s+मावशी|मावशीचे\s+यजमान|मावशीचा\s+नवरा|मावस\s+भाऊ|मावस\s+बहिण|मावस\s+बहीण|इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|नातेवाईक|इतर\s+पाहूणे|इतर\s+पाहुणे|पाहुणे|आजोळ|नातेसंबंध|नाते\s+संबंध)'.self::LABEL_SUFFIX.'/u', $normalizedLine)) {
             return 'relatives';
         }
 
@@ -1117,6 +1223,9 @@ class IntakeNormalizedBiodataDraftBuilder
             }
             if (($religion = $this->extractLabeledValue($line, ['धर्म', 'religion'])) !== null) {
                 $core['religion'] = $religion;
+                if (($core['caste'] ?? null) === null || ($core['sub_caste'] ?? null) === null) {
+                    $this->normalizeCasteLine($religion, $core);
+                }
             }
             if (($casteLine = $this->extractLabeledValue($line, ['जात', 'कास्ट'])) !== null) {
                 $this->normalizeCasteLine($casteLine, $core);
@@ -1216,8 +1325,9 @@ class IntakeNormalizedBiodataDraftBuilder
      */
     private function splitDateOfBirthAndTime(string $value): array
     {
-        $normalized = OcrNormalize::normalizeDigits($value);
-        if (preg_match('/^(.+?)\s+जन्म\s*वेळ\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $normalized, $m)) {
+        $raw = trim((string) preg_replace('/^\s*[8८]\s*/u', '', $value));
+        $normalized = OcrNormalize::normalizeDigits($raw);
+        if (preg_match('/^(.+?)\s+जन्म\s*वेळ\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $raw, $m)) {
             return [trim($m[1]), trim($m[2]) !== '' ? trim($m[2]) : null];
         }
 
@@ -1226,7 +1336,7 @@ class IntakeNormalizedBiodataDraftBuilder
             return [trim($m[1]), trim($m[2])];
         }
 
-        return [trim($value), null];
+        return [trim((string) preg_replace('/[\s,.।]+$/u', '', $raw)), null];
     }
 
     /**
@@ -1486,7 +1596,7 @@ class IntakeNormalizedBiodataDraftBuilder
                 continue;
             }
 
-            if ((bool) preg_match('/^(?:दाजी|मामा|मावशी|माऊशी|आत्या|मुलाची\s+आत्या|चुलते|मुलाचे\s+मामा|आजोळ|इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|नातेसंबंध|नाते\s+संबंध)'.self::LABEL_SUFFIX.'/u', $trimmed)) {
+            if ((bool) preg_match('/^(?:दाजी|सासरे|मामा|मावशी|माऊशी|आत्या|आत्त्या|मुलाची\s+आत्या|मुलाची\s+आत्त्या|चुलते|मुलाचे\s+चुलते|मुलाचे\s+मामा|आजोळ|इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|नातेसंबंध|नाते\s+संबंध)'.self::LABEL_SUFFIX.'/u', $trimmed)) {
                 $currentKey = null;
                 $capturingAddress = false;
                 $currentRelation = null;
@@ -1495,7 +1605,11 @@ class IntakeNormalizedBiodataDraftBuilder
 
             if (preg_match('/^(?:नोकरी\/व्यवसाय|नोकरी|व्यवसाय)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $trimmed, $m)) {
                 $value = trim($m[1]);
-                if ($this->looksLikeSiblingAddressText($value) && ! $this->looksLikeSiblingAdditionalInfoText($value)) {
+                if ($this->looksLikeSiblingAddressText($value)
+                    && ! $this->looksLikeSiblingAdditionalInfoText($value)
+                    && ! $this->looksLikeEmployerLeadSegment($value)
+                    && ! $this->looksLikeCompanyName($value)
+                    && ! preg_match('/(?:कंपनी|company|ltd|limited|bank|electric|pharma|construction|consultant|analyst)/ui', $value)) {
                     $siblings[$currentKey]['address_line'] = $this->setTextOnce($siblings[$currentKey]['address_line'] ?? null, $value);
                 } else {
                     $siblings[$currentKey]['occupation'] = $value;
@@ -1782,7 +1896,7 @@ class IntakeNormalizedBiodataDraftBuilder
 
     private function siblingLineValue(string $line): ?string
     {
-        if (preg_match('/^(?:भाऊ|बहीण|बहिण|बहिणी)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
+        if (preg_match('/^(?:भाऊ|बहीण|बहिण|बहिणी|मुलाचा\s+भाऊ|मुलाचे\s+भाऊ|मुलाची\s+बहीण|मुलाची\s+बहिण)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
             return trim($m[1]);
         }
 
@@ -1799,6 +1913,7 @@ class IntakeNormalizedBiodataDraftBuilder
         $sourceIndex = 0;
         $ordered = [];
         $currentRelation = null;
+        $allowContinuation = false;
         foreach ($lines as $line) {
             $trimmed = trim($line);
             if ($trimmed === '') {
@@ -1815,6 +1930,10 @@ class IntakeNormalizedBiodataDraftBuilder
                 $row = $sourceRows[$sourceIndex] ?? ['relation_type' => $currentRelation, 'name' => $value];
                 $sourceIndex++;
                 $ordered[] = $row;
+                $allowContinuation = ! (bool) preg_match('/^(?:मुलाचा\s+भाऊ|मुलाचे\s+भाऊ|मुलाची\s+बहीण|मुलाची\s+बहिण)\s*(?::\s*-\s*|[:\-–—]\s*)/u', $trimmed);
+                if (! $allowContinuation) {
+                    $currentRelation = null;
+                }
                 continue;
             }
 
@@ -1827,11 +1946,12 @@ class IntakeNormalizedBiodataDraftBuilder
                 || $this->looksLikeRelativeContinuationBoundary($trimmed)) {
                 if (! $this->startsAddressLine($trimmed) && ! preg_match('/^(?:नोकरी\/व्यवसाय|नोकरी|व्यवसाय)'.self::LABEL_SUFFIX.'/u', $trimmed)) {
                     $currentRelation = null;
+                    $allowContinuation = false;
                 }
                 continue;
             }
 
-            if ($this->looksLikeSiblingContinuationName($trimmed)) {
+            if ($allowContinuation && $this->looksLikeSiblingContinuationName($trimmed)) {
                 $ordered[] = ['relation_type' => $currentRelation, 'name' => $trimmed];
             }
         }
@@ -1858,7 +1978,7 @@ class IntakeNormalizedBiodataDraftBuilder
 
     private function looksLikeRelativeContinuationBoundary(string $line): bool
     {
-        return (bool) preg_match('/^(?:दाजी|मामा|मावशी|माऊशी|आत्या|मुलाची\s+आत्या|चुलते|आजोळ|इतर\s+नातेवाईक|इतर\s+पाहूणे|इतर\s+पाहुणे|पाहुणे|नातेसंबंध|नाते\s+संबंध|मुलाचे\s+मामा)'.self::LABEL_SUFFIX.'/u', $line);
+        return (bool) preg_match('/^(?:दाजी|सासरे|मामा|मावशी|माऊशी|आत्या|आत्त्या|मुलाची\s+आत्या|मुलाची\s+आत्त्या|चुलते|मुलाचे\s+चुलते|आजोळ|इतर\s+नातेवाईक|इतर\s+पाहूणे|इतर\s+पाहुणे|पाहुणे|नातेसंबंध|नाते\s+संबंध|मुलाचे\s+मामा)'.self::LABEL_SUFFIX.'/u', $line);
     }
 
     /**
@@ -1965,6 +2085,14 @@ class IntakeNormalizedBiodataDraftBuilder
             }
             foreach (array_values(array_unique(array_filter($addressParts))) as $address) {
                 $normalized['address_line'] = $this->setTextOnce($normalized['address_line'] ?? null, $address);
+            }
+            if (empty($normalized['address_line'] ?? null)
+                && ! empty($normalized['occupation'] ?? null)
+                && $this->looksLikeSiblingAddressText((string) $normalized['occupation'])
+                && ! $this->looksLikeCompanyName((string) $normalized['occupation'])
+                && ! preg_match('/(?:कंपनी|company|ltd|limited|bank|electric|pharma|construction|consultant|analyst)/ui', (string) $normalized['occupation'])) {
+                $normalized['address_line'] = $normalized['occupation'];
+                unset($normalized['occupation']);
             }
             foreach (array_values(array_unique(array_filter($noteParts))) as $note) {
                 $normalized['notes'] = $this->setTextOnce($normalized['notes'] ?? null, $note);
@@ -2115,6 +2243,8 @@ class IntakeNormalizedBiodataDraftBuilder
         $v = preg_replace('/\b(?:अविवाहित|अविवाहीत|विवाहित|विवाहीत)\b\s*[-–—:]?\s*/u', '', $v) ?? $v;
         $v = preg_replace('/^\s*(?:[0-9]+|[०-९]+)\s*[\.)]\s*/u', '', $v) ?? $v;
         $v = preg_replace('/^\s*(?:चि\.?|कु\.?|श्री\.?|सौ\.?)\s*/u', '', $v) ?? $v;
+        $v = preg_replace('/\b(?:Whats\s*App|Whatsapp)\b/ui', '', $v) ?? $v;
+        $v = preg_replace('/(?:मो\.?\s*नं?\.?|मोबाईल|मोबाइल|संपर्क)\s*[:\-\.]*$/u', '', $v) ?? $v;
 
         return $this->trimSeparators($v);
     }
@@ -2159,7 +2289,7 @@ class IntakeNormalizedBiodataDraftBuilder
     private function labeledAddressValue(string $line): string
     {
         if (preg_match('/^(?:घरचा\s+पत्ता|घराचा\s+पत्ता|घर\s+पत्ता|सध्याचा\s+पत्ता|निवासी\s+पत्ता|गावचा\s+पत्ता|मुळगाव|मूळगाव|पत्ता|पता)\s*(?::\s*-\s*|[:\-]\s*)?(.*)$/u', $line, $m)) {
-            return trim($m[1] ?? '');
+            return $this->cleanRelativeAddress(trim((string) ($m[1] ?? '')));
         }
 
         return '';
@@ -2169,7 +2299,7 @@ class IntakeNormalizedBiodataDraftBuilder
     {
         $line = trim((string) preg_replace('/^\s*[-–—]\s*/u', '', $line));
 
-        return (bool) preg_match('/^(?:मुलाचे\s+नां?व|मुलीचे\s+नां?व|वधूचे\s+नां?व|जन्म|शिक्षण|नोकरी|व्यवसाय|जात|धर्म|उंची|वर्ण|देवक|रास|राशी|नक्षत्र|नाड|नाडी|गण|चरण|वडिलांचे|पित्याचे|आईचे|मातेचे|आई|भाऊ|बहीण|बहिण|दाजी|जावई|मामा|मावशी|माऊशी|आत्या|मुलाची\s+आत्या|चुलते|मुलाचे\s+मामा|चुलत\s+भाऊ|चुलत\s+बहिण|चुलत\s+बहीण|पत्ता|गावचा\s+पत्ता|सध्याचा\s+पत्ता|मोबाईल|मोबाइल|मोबाईल\s+नंबर|फोन|संपर्क|प्रॉपर्टी|प्रोपर्टी|शेती|कौटुंबिक|नातेसंबंध|नाते\s+संबंध)'.self::LABEL_SUFFIX.'/u', $line);
+        return (bool) preg_match('/^(?:मुलाचे\s+नां?व|मुलीचे\s+नां?व|वधूचे\s+नां?व|जन्म|शिक्षण|नोकरी|व्यवसाय|जात|धर्म|उंची|वर्ण|देवक|रास|राशी|नक्षत्र|नाड|नाडी|गण|चरण|वडिलांचे|पित्याचे|आईचे|मातेचे|आई|भाऊ|बहीण|बहिण|मुलाचा\s+भाऊ|मुलाचे\s+भाऊ|मुलाची\s+बहीण|मुलाची\s+बहिण|दाजी|जावई|मामा|मावशी|माऊशी|आत्या|मुलाची\s+आत्या|चुलते|मुलाचे\s+मामा|चुलत\s+भाऊ|चुलत\s+बहिण|चुलत\s+बहीण|पत्ता|गावचा\s+पत्ता|सध्याचा\s+पत्ता|मोबाईल|मोबाइल|मोबाईल\s+नंबर|फोन|संपर्क|प्रॉपर्टी|प्रोपर्टी|शेती|कौटुंबिक|नातेसंबंध|नाते\s+संबंध)'.self::LABEL_SUFFIX.'/u', $line);
     }
 
     /**
@@ -2665,7 +2795,7 @@ class IntakeNormalizedBiodataDraftBuilder
             return [];
         }
 
-        $parts = preg_split('/\s*(?=(?:\d+|[०-९]+)[\).]\s*)/u', $value) ?: [];
+        $parts = preg_split('/(?:(?<=^)|(?<=\s)|(?<=,))(?=(?:\d{1,2}|[०-९]{1,2})[\).]\s*\D)/u', $value) ?: [];
         if (count($parts) <= 1) {
             return [$value];
         }
@@ -2736,7 +2866,7 @@ class IntakeNormalizedBiodataDraftBuilder
 
     private function startsSiblingLine(string $line): bool
     {
-        return (bool) preg_match('/^(?:भाऊ|बहीण|बहिण|बहिणी)\s*(?::\s*-\s*|[:\-–—]\s*)/u', trim($line));
+        return (bool) preg_match('/^(?:भाऊ|बहीण|बहिण|बहिणी|मुलाचा\s+भाऊ|मुलाचे\s+भाऊ|मुलाची\s+बहीण|मुलाची\s+बहिण)\s*(?::\s*-\s*|[:\-–—]\s*)/u', trim($line));
     }
 
     private function startsSiblingSpouseLine(string $line): bool
@@ -3373,6 +3503,10 @@ class IntakeNormalizedBiodataDraftBuilder
             $occupation = $this->cleanOccupationText($m[1]);
             $value = trim(preg_replace('/[\(\{]\s*.+?\s*[\)\}]/u', '', $value) ?? $value);
         }
+        if (preg_match('/^(.*?)(?:\s*[,.।]?\s*)(?:नोकरी|व्यवसाय)\s*(?::\s*-\s*|[:>\-]\s*)(.+)$/u', $value, $m)) {
+            $value = trim((string) $m[1]);
+            $occupation = $occupation ?: $this->cleanOccupationText((string) $m[2]);
+        }
 
         return [$this->cleanPersonName($this->stripTrailingAddressAndPhones($value)), $occupation !== '' ? $occupation : null, $phone];
     }
@@ -3431,7 +3565,7 @@ class IntakeNormalizedBiodataDraftBuilder
             return '';
         }
 
-        return trim($value);
+        return trim((string) preg_replace('/[\s,.।]+$/u', '', $value));
     }
 
     private function looksLikeAddressText(string $value): bool
@@ -3772,25 +3906,7 @@ class IntakeNormalizedBiodataDraftBuilder
      */
     private function relativeRow(string $label, string $value, string $raw): array
     {
-        $relationType = match ($label) {
-            'वडिलांचे वडील', 'आजोबा' => 'paternal_grandfather',
-            'वडिलांची आई', 'आजी' => 'paternal_grandmother',
-            'चुलते', 'काका' => 'paternal_uncle',
-            'चुलती', 'काकू' => 'wife_paternal_uncle',
-            'आत्या', 'मुलाची आत्या' => 'paternal_aunt',
-            'वडिलांची बहीण', 'वडिलांची बहिण' => 'paternal_aunt',
-            'आत्याचे यजमान', 'आत्यांचे यजमान', 'आत्या यजमान' => 'husband_paternal_aunt',
-            'आईचे वडील' => 'maternal_grandfather',
-            'आईची आई' => 'maternal_grandmother',
-            'मुलाचे मामा', 'मुलीचे मामा', 'मामाचे नाव', 'मामा' => 'maternal_uncle',
-            'मामी' => 'wife_maternal_uncle',
-            'मावशी', 'माऊशी' => 'maternal_aunt',
-            'मावशीचे यजमान', 'मावशीचा नवरा' => 'husband_maternal_aunt',
-            'मावस भाऊ', 'मावस बहिण', 'मावस बहीण' => 'maternal_cousin',
-            'चुलत भाऊ', 'चुलत बहिण', 'चुलत बहीण' => 'Cousin',
-            'आजोळ' => 'maternal_address_ajol',
-            default => $label,
-        };
+        $relationType = app(WizardRelationSchema::class)->canonicalRelationTypeFromLabel($label) ?? $label;
 
         if ($relationType === 'maternal_address_ajol') {
             return [
@@ -3841,12 +3957,12 @@ class IntakeNormalizedBiodataDraftBuilder
             $work = trim(str_replace($m[0], '', $work));
         }
 
-        if (preg_match('/(?:पत्ता|पता|रा\.|राहणार|मु\.?\s*पो\.?)\s*[:\-.]?\s*(.+)$/u', $work, $m)) {
-            $address = $this->cleanRelativeAddress($m[1]);
-            $work = trim(substr($work, 0, (int) strpos($work, $m[0])));
-        } elseif (preg_match('/\(([^()]*(?:ता\.?|जि\.?|मु\.?\s*पो\.?|रा\.|रोड|नगर|गाव|वाडी|पुणे|कोल्हापूर|सांगली|सोलापूर|सातारा|करवीर|पन्हाळा)[^()]*)\)/u', $work, $m)) {
+        if (preg_match('/\(([^()]*(?:ता\.?|जि\.?|मु\.?\s*पो\.?|रा\.|रोड|नगर|गाव|वाडी|पुणे|कोल्हापूर|सांगली|सोलापूर|सातारा|करवीर|पन्हाळा)[^()]*)\)/u', $work, $m)) {
             $address = $this->cleanRelativeAddress($m[1]);
             $work = trim(str_replace($m[0], '', $work));
+        } elseif (preg_match('/(?:पत्ता|पता|रा\.|राहणार|मु\.?\s*पो\.?)\s*[:\-.]?\s*(.+)$/u', $work, $m)) {
+            $address = $this->cleanRelativeAddress($m[1]);
+            $work = trim(substr($work, 0, (int) strpos($work, $m[0])));
         } elseif (preg_match('/\(([^()]*)\)/u', $work, $m) && $this->looksLikeRelativeAddressText((string) $m[1])) {
             $address = $this->cleanRelativeAddress($m[1]);
             $work = trim(str_replace($m[0], '', $work));
@@ -3886,17 +4002,22 @@ class IntakeNormalizedBiodataDraftBuilder
 
     private function isOtherRelativesLabel(string $label): bool
     {
-        return (bool) preg_match('/^(?:इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|नातेवाईक|नातेसंबंध|नाते\s+संबंध|इतर\s+पाहूणे|इतर\s+पाहुणे|पाहुणे)$/u', trim($label));
+        return app(WizardRelationSchema::class)->isOtherRelativesTextLabel(trim($label));
     }
 
     private function startsOtherRelativesLine(string $line): bool
     {
-        return (bool) preg_match('/^\s*[-–—]?\s*(?:इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|नातेवाईक|नातेसंबंध|नाते\s+संबंध|इतर\s+पाहूणे|इतर\s+पाहुणे|पाहुणे)\s*(?::\s*-\s*|[:\-–—]|\s|$)/u', trim($line));
+        $labels = array_map(static fn (string $label): string => preg_quote($label, '/'), app(WizardRelationSchema::class)->otherRelativesTextLabels());
+        $pattern = implode('|', $labels);
+
+        return (bool) preg_match('/^\s*[-–—]?\s*(?:'.$pattern.')\s*(?::\s*-\s*|[:\-–—]|\s|$)/u', trim($line));
     }
 
     private function otherRelativesLabelFromLine(string $line): string
     {
-        if (preg_match('/^\s*[-–—]?\s*((?:इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|नातेवाईक|नातेसंबंध|नाते\s+संबंध|इतर\s+पाहूणे|इतर\s+पाहुणे|पाहुणे))/u', trim($line), $m)) {
+        $labels = array_map(static fn (string $label): string => preg_quote($label, '/'), app(WizardRelationSchema::class)->otherRelativesTextLabels());
+        $pattern = implode('|', $labels);
+        if (preg_match('/^\s*[-–—]?\s*((?:'.$pattern.'))/u', trim($line), $m)) {
             return trim((string) ($m[1] ?? 'इतर नातेवाईक'));
         }
 
@@ -3910,13 +4031,17 @@ class IntakeNormalizedBiodataDraftBuilder
     private function expandEmbeddedRelativeLabels(array $lines): array
     {
         $out = [];
-        $labelPattern = '(?:चुलते|चुलती|काका|काकू|आत्या|मामा|मामी|मावशी|माऊशी|आजोळ|इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|इतर\s+पाहूणे|इतर\s+पाहुणे|पाहुणे)';
-        $protectedAliases = [
-            'मुलाची आत्या' => 'मुलाची__REL_ALIAS__आत्या',
-            'मुलाचे मामा' => 'मुलाचे__REL_ALIAS__मामा',
-            'मामाचे नाव' => 'मामाचे__REL_ALIAS__नाव',
-            'मुलाची मावशी' => 'मुलाची__REL_ALIAS__मावशी',
-        ];
+        $allLabels = array_map(static fn (string $label): string => preg_quote($label, '/'), app(WizardRelationSchema::class)->allRelationLabels());
+        usort($allLabels, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+        $labelPattern = '(?:'.implode('|', $allLabels).')';
+        $protectedAliases = [];
+        foreach (app(WizardRelationSchema::class)->allRelationLabels() as $index => $label) {
+            if (! preg_match('/\s/u', $label)) {
+                continue;
+            }
+
+            $protectedAliases[$label] = '__REL_ALIAS_'.$index.'__';
+        }
         foreach ($lines as $line) {
             $line = trim((string) $line);
             if ($line === '') {
@@ -3975,7 +4100,7 @@ class IntakeNormalizedBiodataDraftBuilder
      */
     private function mergeRelativeContinuationLine(array &$relative, string $line): bool
     {
-        $line = trim($line);
+        $line = $this->trimLeadingListDecorators($line);
         if ($line === '') {
             return true;
         }
@@ -4031,6 +4156,13 @@ class IntakeNormalizedBiodataDraftBuilder
         }
 
         return false;
+    }
+
+    private function trimLeadingListDecorators(string $line): string
+    {
+        $line = trim($line);
+
+        return trim(preg_replace('/^\s*(?:[-–—•]+\s*)+/u', '', $line) ?? $line);
     }
 
     /**
@@ -4114,10 +4246,10 @@ class IntakeNormalizedBiodataDraftBuilder
     private function cleanRelativeAddress(string $value): string
     {
         $address = $this->trimSeparators($value);
-        $address = OcrNormalize::normalizeDigits($address);
-        $address = preg_replace('/(?:मो\.?|मो\s+नं\.?|मोबाईल|मोबाइल|संपर्क)\s*[:\-]?\s*[6-9][0-9\s\/-]{9,}/u', '', $address) ?? $address;
-        $address = preg_replace('/(?<!\d)[6-9]\d{9}(?!\d)/u', '', $address) ?? $address;
-        $address = preg_replace('/\s+(?:मो\.?|मोबाईल|मोबाइल|संपर्क)?\s*नं\.?\s*$/u', '', $address) ?? $address;
+        $address = preg_replace('/(?:मो\.?\s*नं?\.?|मोबाईल|मोबाइल|संपर्क)\s*[:\-\.]?\s*[6-9६-९][0-9०-९\s\/-]{9,}\.?/u', '', $address) ?? $address;
+        $address = preg_replace('/(?<![0-9०-९])[6-9६-९][0-9०-९]{9}(?![0-9०-९])/u', '', $address) ?? $address;
+        $address = preg_replace('/\s*(?:मो\.?\s*नं?\.?|मोबाईल|मोबाइल|संपर्क)\s*[:\-\.]*\s*$/u', '', $address) ?? $address;
+        $address = preg_replace('/\s+नं\.?\s*$/u', '', $address) ?? $address;
         $address = trim($address);
         if ($address !== '' && substr_count($address, '(') < substr_count($address, ')')) {
             $address = preg_replace('/\)+\s*$/u', '', $address) ?? $address;
@@ -4266,6 +4398,7 @@ class IntakeNormalizedBiodataDraftBuilder
      */
     private function extractLabeledValue(string $line, array $labels): ?string
     {
+        $line = $this->normalizeDecorativeLabelSeparators($line);
         foreach ($labels as $label) {
             $pattern = '/'.preg_quote($label, '/').'\s*(?::\s*-\s*|[:\-–—]\s*|\s+)(.+)$/u';
             if (! preg_match($pattern, $line, $m)) {
@@ -4273,7 +4406,7 @@ class IntakeNormalizedBiodataDraftBuilder
             }
             $value = trim($m[1]);
             $value = preg_split(
-                '/\s+(?:रास|राशी|नक्षत्र|देवक|कुलदैवत|कुलस्वामी|कुळस्वामी|नाडी|गण|चरण|गोत्र|वैरवर्ग|नावरस|ब्लड\s*ग्रुप|रक्त\s*गट|मोबाईल|मोबाइल|संपर्क|प्रोपर्टी|प्रॉपर्टी|स्थावर)'.self::LABEL_SUFFIX.'/u',
+                '/\s+(?:जन्म\s+तारीख|जन्मतारीख|जन्म\s+वेळ|जन्मवेळ|जन्म\s+ठिकाण|जन्म\s+स्थळ|धर्म|जात|कास्ट|उपजात|उंची|ऊंची|कुंची|वर्ण|रंग|शिक्षण|नोकरी|व्यवसाय|कंपनी|पित्याचे\s+नाव|वडिलांचे\s+नाव|वडीलांचे\s+नाव|वडील|आईचे\s+नाव|मातेचे\s+नाव|आई|रास|राशी|नक्षत्र|देवक|कुलदैवत|कुलस्वामी|कुळस्वामी|नाडी|गण|चरण|गोत्र|वैरवर्ग|नावरस|ब्लड\s*ग्रुप|रक्त\s*गट|मोबाईल|मोबाइल|संपर्क|प्रोपर्टी|प्रॉपर्टी|स्थावर|पत्ता|सध्याचा\s+पत्ता|घरचा\s+पत्ता|गावचा\s+पत्ता)'.self::LABEL_SUFFIX.'/u',
                 $value,
                 2
             )[0] ?? $value;
@@ -4284,6 +4417,25 @@ class IntakeNormalizedBiodataDraftBuilder
         }
 
         return null;
+    }
+
+    private function normalizeDecorativeLabelSeparatorsInText(string $text): string
+    {
+        $lines = array_map(fn (string $line): string => $this->normalizeDecorativeLabelSeparators($line), explode("\n", $text));
+
+        return implode("\n", $lines);
+    }
+
+    private function normalizeDecorativeLabelSeparators(string $line): string
+    {
+        static $pattern = null;
+        if ($pattern === null) {
+            $labels = array_map(static fn (string $label): string => preg_quote($label, '/'), self::OCR_DECORATIVE_LABELS);
+            usort($labels, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+            $pattern = '/(?<!\S)('.implode('|', $labels).')\s*[8८]\s*/u';
+        }
+
+        return preg_replace($pattern, '$1 : ', $line) ?? $line;
     }
 
     /**
@@ -4450,7 +4602,7 @@ class IntakeNormalizedBiodataDraftBuilder
             return false;
         }
 
-        if (! preg_match('/^(?:भाऊ|बहीण|बहिण|बहिणी)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $trimmed, $m)) {
+        if (! preg_match('/^(?:भाऊ|बहीण|बहिण|बहिणी|मुलाचा\s+भाऊ|मुलाचे\s+भाऊ|मुलाची\s+बहीण|मुलाची\s+बहिण)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $trimmed, $m)) {
             return false;
         }
 
@@ -4525,16 +4677,9 @@ class IntakeNormalizedBiodataDraftBuilder
      */
     private function relativeTargetSection(array $relative): string
     {
-        $type = mb_strtolower(trim((string) ($relative['relation_type'] ?? '')));
+        $type = trim((string) ($relative['relation_type'] ?? ''));
 
-        return in_array($type, [
-            'maternal_uncle',
-            'wife_maternal_uncle',
-            'maternal_aunt',
-            'husband_maternal_aunt',
-            'maternal_cousin',
-            'maternal_address_ajol',
-        ], true) ? 'alliance' : 'relatives';
+        return app(WizardRelationSchema::class)->sectionForRelationType($type) ?? 'review_needed';
     }
 
     private function stringifyExtractedFactValue(mixed $value): string

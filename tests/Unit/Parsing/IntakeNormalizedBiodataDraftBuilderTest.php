@@ -683,7 +683,7 @@ TXT);
 TXT);
 
         $core = $draft['normalized']['core'];
-        $this->assertSame('विशाल पांडुरंग डाकवे.', $core['full_name']);
+        $this->assertSame('विशाल पांडुरंग डाकवे', $core['full_name']);
         $this->assertSame('पांडुरंग डाकवे', $core['father_name']);
         $this->assertSame('नोकरी', $core['father_occupation']);
         $this->assertSame('सौ. सुनीता डाकवे', $core['mother_name']);
@@ -762,9 +762,9 @@ TXT);
         $this->assertCount(1, $maternalUncles);
         $this->assertCount(1, $paternalAunts);
         $this->assertSame('श्री. शिवाजी आनंदा साळुंखे', $maternalUncles[0]['name'] ?? null);
-        $this->assertSame('मिरजवाडी ता. वाळवा जि. सांगली', $maternalUncles[0]['address_line'] ?? null);
+        $this->assertSame('रा. मिरजवाडी ता. वाळवा जि. सांगली', $maternalUncles[0]['address_line'] ?? null);
         $this->assertSame('सौ. छाया शामराव जाधव', $paternalAunts[0]['name'] ?? null);
-        $this->assertSame('रेठरे बुः', $paternalAunts[0]['address_line'] ?? null);
+        $this->assertSame('रा.रेठरे बुः', $paternalAunts[0]['address_line'] ?? null);
         $this->assertSame('साळुंखे,पाटील,चव्हाण,जाधव', $core['other_relatives_text'] ?? null);
 
         $this->assertStringNotContainsString('candidate_name_from_heading_fallback', $reviewBlob);
@@ -861,6 +861,31 @@ TXT);
         $this->assertStringNotContainsString('\"name\":\"सर्व\"', json_encode($relatives, JSON_UNESCAPED_UNICODE));
         $this->assertStringNotContainsString('\"name\":\"इतर\"', json_encode($relatives, JSON_UNESCAPED_UNICODE));
         $this->assertStringNotContainsString('maternal_uncle सर्व', $relativeBlob);
+    }
+
+    public function test_relative_address_continuation_and_nate_sambandh_do_not_pollute_aunt_rows(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+चुलते :- १)श्री.दिलीप तुकाराम पाटील (शेती)
+कै.धनाजी तुकाराम पाटील
+मुलाचे मामा :- 1) श्री.हनुमंत दिनकर जगताप 2) चि.भोपाल दिनकर जगताप,
+पत्ता - मु.पो.येडेमच्छिंद्र, ता. वाळवा जि. सांगली.
+मुलाची आत्या :- श्री.बाबासो पांडुरंग पवार.
+पत्ता - मु.पो.रेठरे हरणाक्ष, ता.वाळवा, जि.सांगली.
+नाते संबंध :- येडेमच्छिंद्र,तुपारी,बहे,तासगाव,तांबवे (कासेगाव) कवलापूर
+TXT);
+
+        $relatives = $draft['normalized']['relatives'] ?? [];
+        $core = $draft['normalized']['core'] ?? [];
+        $flags = $draft['review_flags'] ?? [];
+
+        $paternalAunts = array_values(array_filter($relatives, static fn ($row) => ($row['relation_type'] ?? null) === 'paternal_aunt'));
+        $this->assertCount(1, $paternalAunts);
+        $this->assertSame('श्री.बाबासो पांडुरंग पवार', $paternalAunts[0]['name'] ?? null);
+        $this->assertSame('मु.पो.रेठरे हरणाक्ष, ता.वाळवा, जि.सांगली.', $paternalAunts[0]['address_line'] ?? null);
+        $this->assertSame('येडेमच्छिंद्र,तुपारी,बहे,तासगाव,तांबवे (कासेगाव) कवलापूर', $core['other_relatives_text'] ?? null);
+        $this->assertStringNotContainsString('"name":"नाते"', json_encode($relatives, JSON_UNESCAPED_UNICODE));
+        $this->assertFalse(collect($flags)->contains(static fn ($flag) => ($flag['field'] ?? null) === 'relatives.paternal_aunt.address_line'));
     }
 
     public function test_akshada_sample_extracts_salary_kuldaivat_parent_extra_property_sibling_addresses_and_horoscope_cleanly(): void
@@ -976,6 +1001,77 @@ TXT);
 
         $this->assertNull($draft['normalized']['core']['father_name'] ?? null);
         $this->assertNull($draft['normalized']['core']['mother_name'] ?? null);
+    }
+
+    public function test_decorative_eight_divider_does_not_pollute_parent_address_or_parent_name_fields(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+मुलाचे नाव ८ चि. आविनाश आवासी पाटील
+जन्म तारीख ८ २१.०६.१९९२. जन्म ठिकाण ८ कराड.
+जन्म वेळ ८ सायं.६ वा.३८ मि. नक्षत्र ८ श्रवण १ ला चरण
+शिक्षण ८ B. Com धर्म ८ हिंदू ९६ कुळी मराठा
+वडिलांचे नाव ८ श्री.आवासो भगवान पाटील . व्यवसाय ८ शेती
+आईचे नाव ८ सौ.शोभा आवासी पाटील.
+पत्ता ८ मु.पो.येडेमच्छिंद्र ता. वाळवा. जि. सांगली.मो.न.९६६५९१९२१५.
+TXT);
+
+        $core = $draft['normalized']['core'] ?? [];
+        $parentsAddresses = $draft['normalized']['parents_addresses'] ?? [];
+        $phones = $this->phones($draft);
+
+        $this->assertSame('चि. आविनाश आवासी पाटील', $core['full_name'] ?? null);
+        $this->assertSame('21.06.1992', OcrNormalize::normalizeDigits((string) ($core['date_of_birth'] ?? '')));
+        $this->assertSame('कराड', rtrim((string) ($core['birth_place_text'] ?? ''), '.'));
+        $this->assertSame('B. Com', $core['highest_education'] ?? null);
+        $this->assertSame('हिंदू', $core['religion'] ?? null);
+        $this->assertSame('96 कुळी', OcrNormalize::normalizeDigits((string) ($core['sub_caste'] ?? '')));
+        $this->assertSame('श्री.आवासो भगवान पाटील', $core['father_name'] ?? null);
+        $this->assertSame('शेती', $core['father_occupation'] ?? null);
+        $this->assertCount(1, $parentsAddresses);
+        $this->assertSame('मु.पो.येडेमच्छिंद्र ता. वाळवा. जि. सांगली', rtrim((string) ($parentsAddresses[0]['address_line'] ?? ''), '.'));
+        $this->assertContains('9665919215', $phones);
+    }
+
+    public function test_decorative_eight_sibling_context_stops_before_chulte_and_atya_blocks(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+भाऊ ८ एक (विवाहित) श्री.हेमंत आवासी पाटील(MCA) Whats App मो.नं.९८२३३२९९०३
+नोकरी- बी.जी.शिकें.कंन्स्ट्रक्शन कंपनी मुंबई.
+मुलाचे चुलते ८ श्री.मोहन भगवान पाटील
+श्री.सर्जेराव भगवान पाटील (माजी युनियन अध्यक्ष व.मो.कृष्णा सहकारी साग्नर कारखाना).
+मुलाची आत्त्या ८ श्री.शिवाजी ज्ञानदेव पाटील (मु.पो. रेथरे खुर्द)
+TXT);
+
+        $siblings = $draft['normalized']['siblings'] ?? [];
+        $relatives = $draft['normalized']['relatives'] ?? [];
+
+        $this->assertCount(1, $siblings);
+        $this->assertSame('हेमंत आवासी पाटील', $siblings[0]['name'] ?? null);
+        $this->assertSame('बी.जी.शिकें.कंन्स्ट्रक्शन कंपनी मुंबई.; MCA', $siblings[0]['occupation'] ?? null);
+        $this->assertCount(1, $relatives);
+        $this->assertSame('paternal_aunt', $relatives[0]['relation_type'] ?? null);
+        $this->assertSame('श्री.शिवाजी ज्ञानदेव पाटील', $relatives[0]['name'] ?? null);
+    }
+
+    public function test_decorative_eight_mulichi_bahin_routes_to_siblings_not_relatives(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+मुलाचे मामा ८ श्री.सुरेश राजाराम माने
+श्री.अनिल राजाराम माने
+श्री.विनायक राजाराम माने (मु.पो.सदाशिवगड ता.कराड.जि.सातारा)
+मुलाची बहिण ८ श्री.अशोक भगवान पाटील (मु.पो.तासगाव चिंचणी जि.सांगली)
+TXT);
+
+        $siblings = $draft['normalized']['siblings'] ?? [];
+        $relatives = $draft['normalized']['relatives'] ?? [];
+        $flags = $draft['review_flags'] ?? [];
+
+        $this->assertCount(1, $siblings);
+        $this->assertSame('sister', $siblings[0]['relation_type'] ?? null);
+        $this->assertSame('अशोक भगवान पाटील', $siblings[0]['name'] ?? null);
+        $this->assertSame('मु.पो.तासगाव चिंचणी जि.सांगली', $siblings[0]['address_line'] ?? null);
+        $this->assertStringNotContainsString('"name":"मुलाची"', json_encode($relatives, JSON_UNESCAPED_UNICODE));
+        $this->assertFalse(collect($flags)->contains(static fn ($flag) => ($flag['field'] ?? null) === 'siblings.sister.address_line'));
     }
 
     /**

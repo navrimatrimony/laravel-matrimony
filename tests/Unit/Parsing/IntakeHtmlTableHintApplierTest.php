@@ -413,4 +413,63 @@ HTML;
         $this->assertStringContainsString('केत्दूर', (string) ($parents[0]['address_line'] ?? ''));
         $this->assertStringContainsString('करमाळा', (string) ($parents[0]['address_line'] ?? ''));
     }
+
+    public function test_html_table_preview_474_family_address_and_caste_fields_stay_structured(): void
+    {
+        $html = <<<'HTML'
+<table>
+<tr><td>मुलीचे नांव</td><td>कु. शितल तानाजी कदम</td></tr>
+<tr><td>जन्म तारीख</td><td>03/09/1990</td></tr>
+<tr><td>जन्म वेल</td><td>सकाळी ९.१५ मि. सोमवार</td></tr>
+<tr><td>कुळ</td><td>९६ कुळी मराठा</td></tr>
+<tr><td>वडिलांचे नांव</td><td>श्री. तानाजी सोपान कदम Mob. 9922820735</td></tr>
+<tr><td>मुळगांव</td><td>सौंदरे, ता. बार्शी, जि. सोलापूर</td></tr>
+<tr><td>आईचे नांव</td><td>सौ. कुंदा तानाजी कदम (अविवाहित) महाराष्ट्र पोलिस</td></tr>
+<tr><td>भाऊ</td><td>चि. शुभम तानाजी कदम (अविवाहित) महाराष्ट्र पोलिस</td></tr>
+<tr><td>नातेसंबंध</td><td>शिंदे, घावटे, गोरे(काका), चव्हाण, जाधव</td></tr>
+<tr><td>संपर्क पत्ता</td><td>श्री. तानाजी सोपान कदम<br/>उपःकाल हौसिंग सोसायटी, गोसावी हॉस्पिटलजवळ,<br/>रुपीनगर,(तळवडे), ता. हवेली, जि. पुणे. Mob. 9922820735</td></tr>
+</table>
+HTML;
+
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($html);
+        $core = $draft['normalized']['core'] ?? [];
+        $siblings = $draft['normalized']['siblings'] ?? [];
+        $addresses = $draft['normalized']['addresses'] ?? [];
+
+        $this->assertSame('सकाळी ९.१५ मि. सोमवार', $core['birth_time'] ?? null);
+        $this->assertSame('मराठा', $core['caste'] ?? null);
+        $this->assertSame('96 कुळी', OcrNormalize::normalizeDigits((string) ($core['sub_caste'] ?? '')));
+        $this->assertSame('श्री. तानाजी सोपान कदम', $core['father_name'] ?? null);
+        $this->assertSame('9922820735', $core['father_contact_1'] ?? null);
+        $this->assertSame('सौ. कुंदा तानाजी कदम', $core['mother_name'] ?? null);
+        $this->assertSame('महाराष्ट्र पोलिस', $core['mother_occupation'] ?? null);
+        $this->assertSame('शिंदे, घावटे, गोरे(काका), चव्हाण, जाधव', $core['other_relatives_text'] ?? null);
+        $this->assertStringContainsString('उपःकाल हौसिंग सोसायटी', (string) ($core['address_line'] ?? ''));
+        $this->assertStringNotContainsString('श्री. तानाजी सोपान कदम', (string) ($core['address_line'] ?? ''));
+        $this->assertStringNotContainsString('9922820735', (string) ($core['address_line'] ?? ''));
+        $this->assertStringNotContainsString('Mob.', (string) ($core['address_line'] ?? ''));
+
+        $nativeRows = array_values(array_filter(
+            $addresses,
+            static fn (array $row): bool => ($row['type'] ?? null) === 'native'
+        ));
+        $currentRows = array_values(array_filter(
+            $addresses,
+            static fn (array $row): bool => ($row['type'] ?? null) === 'current'
+        ));
+
+        $this->assertCount(1, $nativeRows);
+        $this->assertSame('सौंदरे, ता. बार्शी, जि. सोलापूर', $nativeRows[0]['address_line'] ?? null);
+        $this->assertCount(1, $currentRows);
+        $this->assertStringContainsString('रुपीनगर', (string) ($currentRows[0]['address_line'] ?? ''));
+
+        $brothers = array_values(array_filter(
+            $siblings,
+            static fn (array $row): bool => ($row['relation_type'] ?? null) === 'brother'
+        ));
+        $this->assertCount(1, $brothers);
+        $this->assertSame('शुभम तानाजी कदम', $brothers[0]['name'] ?? null);
+        $this->assertSame('unmarried', $brothers[0]['marital_status'] ?? null);
+        $this->assertSame('महाराष्ट्र पोलिस', $brothers[0]['occupation'] ?? null);
+    }
 }

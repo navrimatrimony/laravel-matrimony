@@ -7,6 +7,7 @@ namespace App\Services\Intake;
 use App\Models\MasterRelative;
 use App\Services\Ocr\OcrNormalize;
 use App\Services\Parsing\IntakeNormalizedBiodataDraftBuilder;
+use App\Services\Parsing\WizardRelationSchema;
 use Throwable;
 
 /**
@@ -955,15 +956,7 @@ final class IntakePreviewNormalizedDraftPresenter
      */
     private function isPaternalRelative(array $relative): bool
     {
-        return in_array($this->stringify($relative['relation_type'] ?? null), [
-            'paternal_grandfather',
-            'paternal_grandmother',
-            'paternal_uncle',
-            'wife_paternal_uncle',
-            'paternal_aunt',
-            'husband_paternal_aunt',
-            'Cousin',
-        ], true);
+        return app(WizardRelationSchema::class)->isPaternalType($this->stringify($relative['relation_type'] ?? null));
     }
 
     /**
@@ -1019,26 +1012,19 @@ final class IntakePreviewNormalizedDraftPresenter
      */
     private function isMaternalRelative(array $relative): bool
     {
-        return in_array($this->stringify($relative['relation_type'] ?? null), [
-            'maternal_address_ajol',
-            'maternal_grandfather',
-            'maternal_grandmother',
-            'maternal_uncle',
-            'wife_maternal_uncle',
-            'maternal_aunt',
-            'husband_maternal_aunt',
-            'maternal_cousin',
-        ], true);
+        return app(WizardRelationSchema::class)->isMaternalType($this->stringify($relative['relation_type'] ?? null));
     }
 
     private function relativeGroupForType(string $relationType): ?string
     {
         $type = trim($relationType);
 
-        return match ($type) {
-            'brother', 'sister', 'brother_wife', 'sister_husband' => 'sibling',
-            'paternal_grandfather', 'paternal_grandmother', 'paternal_uncle', 'wife_paternal_uncle', 'paternal_aunt', 'husband_paternal_aunt', 'Cousin' => 'paternal',
-            'maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin' => 'maternal',
+        $schema = app(WizardRelationSchema::class);
+
+        return match (true) {
+            $schema->isSiblingType($type) => 'sibling',
+            $schema->isPaternalType($type) => 'paternal',
+            $schema->isMaternalType($type) => 'maternal',
             default => null,
         };
     }
@@ -1136,6 +1122,7 @@ final class IntakePreviewNormalizedDraftPresenter
     {
         $rows = [];
         $assetRows = $this->previewPropertyAssets($normalized, $rawText);
+        $notes = $this->previewPropertySectionNotes($normalized, $assetRows);
 
         foreach ($assetRows as $index => $asset) {
             $rows[] = $this->displayRow(__('intake.normalized_draft_property_asset_row', ['n' => $index + 1]), '', null, $reviewMap);
@@ -1144,7 +1131,11 @@ final class IntakePreviewNormalizedDraftPresenter
             }
         }
 
-        $rows[] = $this->displayRow(__('intake.normalized_draft_property_notes_label'), $this->previewPropertySectionNotes($normalized, $assetRows), null, $reviewMap);
+        if ($assetRows === [] && $notes === $this->propertyNotMentionedValue()) {
+            return [];
+        }
+
+        $rows[] = $this->displayRow(__('intake.normalized_draft_property_notes_label'), $notes, null, $reviewMap);
 
         return $rows;
     }

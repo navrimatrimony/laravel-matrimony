@@ -12,6 +12,10 @@ use App\Services\Ocr\OcrNormalize;
  */
 final class IntakeHtmlTableHintApplier
 {
+    private const FAMILY_MARITAL_STATUS_PATTERN = '/अविवाहित|अविवाहीत|विवाहित|विवाहीत|unmarried|married/ui';
+
+    private const FAMILY_OCCUPATION_HINT_PATTERN = '/(?:पोलिस|police|teacher|शिक्षक|शिक्षिका|प्राध्यापक|lecturer|professor|engineer|इंजिनिअर|इंजिनियर|doctor|डॉक्टर|business|व्यवसाय|व्यवसाईक|व्यावसायिक|service|नोकरी|job|army|navy|air\s*force|bank|सरकारी|private|खाजगी|factory|company|office|farmer|शेती|गृहिणी|retired|सेवानिवृत्त)/ui';
+
     /** @var list<string> */
     private const OTHER_RELATIVES_POLLUTION = [
         'अपेक्षा', 'शिक्षण', 'नोकरी', 'मोबाईल', 'मोबाइल', 'संपर्क',
@@ -139,7 +143,11 @@ final class IntakeHtmlTableHintApplier
             [$name, $occupation] = $this->splitNameOccupation(trim($hints['father_name']));
             $this->setCoreField($core, 'father_name', $name, true);
             if ($occupation !== null && $occupation !== '') {
-                $this->setCoreField($core, 'father_occupation', $occupation, false);
+                if ($this->shouldOverrideFamilyOccupation((string) ($core['father_occupation'] ?? ''))) {
+                    $core['father_occupation'] = $occupation;
+                } else {
+                    $this->setCoreField($core, 'father_occupation', $occupation, false);
+                }
             }
             $this->applyParentContactAndAddressHint(trim($hints['father_name']), 'father', $core, $normalized);
         }
@@ -148,7 +156,11 @@ final class IntakeHtmlTableHintApplier
             [$name, $occupation] = $this->splitNameOccupation(trim($hints['mother_name']));
             $this->setCoreField($core, 'mother_name', $name, true);
             if ($occupation !== null && $occupation !== '') {
-                $this->setCoreField($core, 'mother_occupation', $occupation, false);
+                if ($this->shouldOverrideFamilyOccupation((string) ($core['mother_occupation'] ?? ''))) {
+                    $core['mother_occupation'] = $occupation;
+                } else {
+                    $this->setCoreField($core, 'mother_occupation', $occupation, false);
+                }
             }
             $this->applyParentContactAndAddressHint(trim($hints['mother_name']), 'mother', $core, $normalized);
         }
@@ -332,21 +344,84 @@ final class IntakeHtmlTableHintApplier
      */
     private function splitNameOccupation(string $value): array
     {
+        [$name, $occupation] = $this->parseFamilyPersonHint($value);
+
+        return [$name, $occupation];
+    }
+
+    /**
+     * @return array{0: string, 1: ?string, 2: ?string}
+     */
+    private function parseFamilyPersonHint(string $value): array
+    {
         $value = trim($value);
+        $maritalStatus = null;
         $occupation = null;
-        if (preg_match('/[\(\{]\s*(.+?)\s*[\)\}]/u', $value, $m)) {
-            $occupation = $this->cleanOccupationText($m[1]);
+
+        if (preg_match_all('/[\(\{]\s*(.+?)\s*[\)\}]/u', $value, $matches)) {
+            foreach ($matches[1] as $segment) {
+                $segment = trim((string) $segment);
+                if ($segment === '') {
+                    continue;
+                }
+                if ($maritalStatus === null && preg_match(self::FAMILY_MARITAL_STATUS_PATTERN, $segment) === 1) {
+                    $maritalStatus = preg_match('/अविवाहित|अविवाहीत|unmarried/ui', $segment) === 1 ? 'unmarried' : 'married';
+
+                    continue;
+                }
+                if ($occupation === null && preg_match(self::FAMILY_OCCUPATION_HINT_PATTERN, $segment) === 1) {
+                    $occupation = $this->cleanOccupationText($segment);
+                }
+            }
             $value = trim(preg_replace('/[\(\{]\s*.+?\s*[\)\}]/u', '', $value) ?? $value);
         }
 
-        return [$this->cleanPersonName($this->stripTrailingAddressAndPhones($value)), $occupation !== '' ? $occupation : null];
+        if ($occupation === null) {
+            [$candidateName, $candidateOccupation] = $this->splitTrailingOccupationHint($value);
+            if ($candidateName !== null && $candidateOccupation !== null) {
+                $value = $candidateName;
+                $occupation = $candidateOccupation;
+            }
+        }
+
+        return [$this->cleanPersonName($this->stripTrailingAddressAndPhones($value)), $occupation !== '' ? $occupation : null, $maritalStatus];
+    }
+
+    /**
+     * @return array{0: ?string, 1: ?string}
+     */
+    private function splitTrailingOccupationHint(string $value): array
+    {
+        $tokens = preg_split('/\s+/u', trim($value)) ?: [];
+        $tokenCount = count($tokens);
+        if ($tokenCount < 3) {
+            return [null, null];
+        }
+
+        for ($suffixLength = min(2, $tokenCount - 1); $suffixLength >= 1; $suffixLength--) {
+            $occupationTokens = array_slice($tokens, -$suffixLength);
+            $nameTokens = array_slice($tokens, 0, $tokenCount - $suffixLength);
+            $candidateOccupation = $this->cleanOccupationText(implode(' ', $occupationTokens));
+            if ($candidateOccupation === '' || preg_match(self::FAMILY_OCCUPATION_HINT_PATTERN, $candidateOccupation) !== 1) {
+                continue;
+            }
+            $candidateName = $this->cleanPersonName(implode(' ', $nameTokens));
+            if ($candidateName === '' || mb_strlen($candidateName) < 4) {
+                continue;
+            }
+
+            return [$candidateName, $candidateOccupation];
+        }
+
+        return [null, null];
     }
 
     private function stripTrailingAddressAndPhones(string $value): string
     {
-        $value = preg_split('/\s+(?:घरचा\s+पत्ता|घराचा\s+पत्ता|सध्याचा\s+पत्ता|निवासी\s+पत्ता|पत्ता|मोबाईल|मोबाइल|संपर्क|मो\.?\s*नं\.?)\s*[:\-]/u', $value, 2)[0] ?? $value;
-        $value = preg_split('/(?:\R|\s)+(?:मू\.?\s*पो\.?|मु\.?\s*पो\.?|रा\.|-\s*\(?\s*मो\.?\s*नं\.?|\(?\s*मो\.?\s*नं\.?)/u', $value, 2)[0] ?? $value;
+        $value = preg_split('/\s+(?:घरचा\s+पत्ता|घराचा\s+पत्ता|सध्याचा\s+पत्ता|निवासी\s+पत्ता|संपर्क\s+पत्ता|पत्ता|मोबाईल|मोबाइल|mobile|mob\.?|संपर्क|मो\.?\s*नं\.?)\s*[:\-]/ui', $value, 2)[0] ?? $value;
+        $value = preg_split('/(?:\R|\s)+(?:मू\.?\s*पो\.?|मु\.?\s*पो\.?|रा\.|-\s*\(?\s*(?:मो\.?\s*नं\.?|mob\.?|mobile)|\(?\s*(?:मो\.?\s*नं\.?|mob\.?|mobile))/ui', $value, 2)[0] ?? $value;
         $value = preg_replace('/(?<!\d)[6-9]\d{9}(?!\d)/u', '', OcrNormalize::normalizeDigits($value)) ?? $value;
+        $value = preg_replace('/\b(?:mob\.?|mobile|phone)\b\s*$/ui', '', $value) ?? $value;
 
         return $this->trimSeparators($value);
     }
@@ -402,7 +477,7 @@ final class IntakeHtmlTableHintApplier
             return '';
         }
         $address = trim(($m[1] ?? '').' '.($m[2] ?? ''));
-        $address = preg_split('/(?:\R|\s)*-?\s*\(?\s*(?:मो\.?\s*नं\.?|मोबाईल|मोबाइल|संपर्क)\s*[:\-]?/u', $address, 2)[0] ?? $address;
+        $address = preg_split('/(?:\R|\s)*-?\s*\(?\s*(?:मो\.?\s*नं\.?|मोबाईल|मोबाइल|mobile|mob\.?|संपर्क)\s*[:\-]?/ui', $address, 2)[0] ?? $address;
 
         return $this->cleanAddressLine($address);
     }
@@ -410,8 +485,9 @@ final class IntakeHtmlTableHintApplier
     private function cleanOccupationText(string $value): string
     {
         $value = OcrNormalize::normalizeDigits($value);
-        $value = preg_replace('/(?:मो\.?\s*नं\.?|मोबाईल|मोबाइल|संपर्क)\s*[:\-]?\s*[6-9]\d{9}/u', '', $value) ?? $value;
+        $value = preg_replace('/(?:मो\.?\s*नं\.?|मोबाईल|मोबाइल|mobile|mob\.?|संपर्क)\s*[:\-]?\s*[6-9]\d{9}/ui', '', $value) ?? $value;
         $value = preg_replace('/(?<!\d)[6-9]\d{9}(?!\d)/u', '', $value) ?? $value;
+        $value = preg_replace('/\b(?:mob\.?|mobile|phone)\b\s*[:\-]?/ui', '', $value) ?? $value;
         $value = $this->trimSeparators($value);
 
         return trim(preg_replace('/\s+/u', ' ', $value) ?? $value);
@@ -518,14 +594,14 @@ final class IntakeHtmlTableHintApplier
         if ($nativeRaw !== null) {
             $nativeLine = $this->cleanAddressLine($nativeRaw);
             if ($nativeLine !== '') {
-                $this->upsertTypedAddress($normalized['addresses'], $nativeLine, 'native', $seen);
+                $this->replaceTypedAddress($normalized['addresses'], $nativeLine, 'native', $seen);
             }
         }
 
         if ($currentRaw !== null) {
             $currentLine = $this->cleanAddressLine($currentRaw);
             if ($currentLine !== '') {
-                $this->upsertTypedAddress($normalized['addresses'], $currentLine, 'current', $seen);
+                $this->replaceTypedAddress($normalized['addresses'], $currentLine, 'current', $seen);
             }
             if ($currentLine !== '') {
                 $this->setCoreField($core, 'address_line', $currentLine, true);
@@ -545,7 +621,14 @@ final class IntakeHtmlTableHintApplier
         }
 
         $clean = trim(preg_replace('/\s+/u', ' ', $raw) ?? $raw);
-        if ($clean === '' || $this->otherRelativesTextLooksPolluted($clean)) {
+        if ($clean === '') {
+            return;
+        }
+        if ($this->otherRelativesTextLooksPolluted($clean)) {
+            if ($this->otherRelativesTextLooksPolluted(trim((string) ($core['other_relatives_text'] ?? '')))) {
+                $core['other_relatives_text'] = null;
+            }
+
             return;
         }
 
@@ -649,7 +732,7 @@ final class IntakeHtmlTableHintApplier
                 if (! is_array($normalized['siblings'] ?? null)) {
                     $normalized['siblings'] = [];
                 }
-                [$name, $occupation] = $this->splitNameOccupation($line);
+                [$name, $occupation, $maritalStatus] = $this->parseFamilyPersonHint($line);
                 $name = $this->cleanSiblingHintName($name);
                 $sibling = ['relation_type' => $relation, 'name' => $name !== '' ? $name : $line];
                 if ($occupation !== null && $occupation !== '') {
@@ -659,11 +742,14 @@ final class IntakeHtmlTableHintApplier
                         $sibling['occupation'] = $occupation;
                     }
                 }
+                if ($maritalStatus !== null) {
+                    $sibling['marital_status'] = $maritalStatus;
+                }
                 $normalized['siblings'][] = $sibling;
             }
         }
         if (is_array($normalized['siblings'] ?? null)) {
-            $normalized['siblings'] = $this->dedupeRows($normalized['siblings'], ['relation_type', 'name', 'occupation', 'notes']);
+            $normalized['siblings'] = $this->mergeSiblingHintRows($normalized['siblings']);
         }
     }
 
@@ -700,6 +786,7 @@ final class IntakeHtmlTableHintApplier
 
     private function cleanAddressLine(string $value): string
     {
+        $value = $this->cleanAddressHintValue($value);
         $value = trim(preg_replace('/\s+/u', ' ', $value) ?? $value);
         if ($value === '') {
             return '';
@@ -709,12 +796,39 @@ final class IntakeHtmlTableHintApplier
             $value = trim(preg_replace('/(?:मोबाईल|मोबाइल|संपर्क|Mobile|Phone)\s*(?:नं\.?|नंबर|No\.?)?\s*[:\-]?\s*[\d०-९\s\-\/]+/ui', '', $value) ?? $value);
             $value = trim(preg_replace('/(?<!\d)([6-9]\d{9})(?!\d)/u', '', OcrNormalize::normalizeDigits($value)) ?? $value);
         }
+        $value = trim(preg_replace('/[\s,.;:-]*\b(?:mob\.?|mobile|phone)\b\.?\s*$/ui', '', $value) ?? $value);
 
         if (preg_match('/^(?:मोबाईल|मोबाइल|संपर्क|Print\s*Shop)/ui', $value)) {
             return '';
         }
 
         return trim(preg_replace('/\s+/u', ' ', $value) ?? $value);
+    }
+
+    private function cleanAddressHintValue(string $value): string
+    {
+        $parts = preg_split('/\R/u', trim($value)) ?: [];
+        $parts = array_values(array_filter(array_map(
+            static fn (string $part): string => trim($part),
+            $parts
+        ), static fn (string $part): bool => $part !== ''));
+
+        if (count($parts) >= 2 && $this->looksLikePersonNameLine($parts[0]) && $this->looksLikeAddressLine($parts[1])) {
+            array_shift($parts);
+        }
+
+        return implode(' ', $parts);
+    }
+
+    private function looksLikePersonNameLine(string $value): bool
+    {
+        return preg_match('/^(?:चि\.?|कु\.?|श्री\.?|सौ\.?)\s+/u', trim($value)) === 1
+            && preg_match('/(?:ता\.|जि\.|मु\.?\s*पो\.?|रोड|रस्ता|नगर|सोसायटी|हॉस्पिटल|मोबाईल|मोबाइल|mobile|mob\.?)/ui', $value) !== 1;
+    }
+
+    private function looksLikeAddressLine(string $value): bool
+    {
+        return preg_match('/(?:ता\.|जि\.|मु\.?\s*पो\.?|रोड|रस्ता|नगर|सोसायटी|हॉस्पिटल|पुणे|सोलापूर|बार्शी|हवेली)/ui', $value) === 1;
     }
 
     private function normalizeAddressKey(string $line): string
@@ -754,6 +868,25 @@ final class IntakeHtmlTableHintApplier
             return;
         }
 
+        $addresses[] = [
+            'address_line' => $line,
+            'raw' => $line,
+            'type' => $type,
+        ];
+        $seen[$key] = true;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $addresses
+     * @param  array<string, true>  $seen
+     */
+    private function replaceTypedAddress(array &$addresses, string $line, string $type, array &$seen): void
+    {
+        $addresses = array_values(array_filter(
+            $addresses,
+            static fn (array $row): bool => ($row['type'] ?? null) !== $type
+        ));
+        $key = $this->normalizeAddressKey($line);
         $addresses[] = [
             'address_line' => $line,
             'raw' => $line,
@@ -879,5 +1012,56 @@ final class IntakeHtmlTableHintApplier
         }
 
         return $out;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $siblings
+     * @return list<array<string, mixed>>
+     */
+    private function mergeSiblingHintRows(array $siblings): array
+    {
+        $merged = [];
+        foreach ($siblings as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $relation = trim((string) ($row['relation_type'] ?? ''));
+            $name = $this->normalizeSiblingMergeKey((string) ($row['name'] ?? ''));
+            $key = $relation.'|'.$name;
+            if (! isset($merged[$key])) {
+                $merged[$key] = $row;
+
+                continue;
+            }
+            foreach (['name', 'occupation', 'notes', 'marital_status'] as $field) {
+                if (empty($merged[$key][$field] ?? null) && ! empty($row[$field] ?? null)) {
+                    $merged[$key][$field] = $row[$field];
+                }
+            }
+            $existingName = trim((string) ($merged[$key]['name'] ?? ''));
+            $candidateName = trim((string) ($row['name'] ?? ''));
+            if ($candidateName !== '' && ($existingName === '' || mb_strlen($candidateName) < mb_strlen($existingName))) {
+                $merged[$key]['name'] = $candidateName;
+            }
+        }
+
+        return array_values($this->dedupeRows(array_values($merged), ['relation_type', 'name', 'occupation', 'notes', 'marital_status']));
+    }
+
+    private function normalizeSiblingMergeKey(string $value): string
+    {
+        [$nameOnly] = $this->splitTrailingOccupationHint($value);
+        if ($nameOnly !== null && $nameOnly !== '') {
+            $value = $nameOnly;
+        }
+
+        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $value) ?? $value));
+    }
+
+    private function shouldOverrideFamilyOccupation(string $value): bool
+    {
+        $value = trim($value);
+
+        return $value === '' || preg_match(self::FAMILY_MARITAL_STATUS_PATTERN, $value) === 1;
     }
 }
