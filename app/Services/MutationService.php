@@ -40,6 +40,7 @@ class MutationService
         'addresses' => 'profile_addresses',
         'property_assets' => 'profile_property_assets',
         'horoscope' => 'profile_horoscope_data',
+        'legal_cases' => 'profile_legal_cases',
         'extended_narrative' => 'profile_extended_attributes',
     ];
 
@@ -53,6 +54,7 @@ class MutationService
         'addresses',
         'property_assets',
         'horoscope',
+        'legal_cases',
     ];
 
     /** States that must NOT be auto-activated (contract §6). */

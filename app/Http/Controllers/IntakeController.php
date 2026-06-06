@@ -2020,6 +2020,7 @@ class IntakeController extends Controller
             'property_summary',
             'property_assets',
             'horoscope',
+            'legal_cases',
             'preferences',
             'extended_narrative',
             'confidence_map',

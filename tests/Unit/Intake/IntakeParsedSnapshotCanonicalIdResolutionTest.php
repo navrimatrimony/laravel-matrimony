@@ -103,6 +103,12 @@ class IntakeParsedSnapshotCanonicalIdResolutionTest extends TestCase
         $this->assertSame($subCaste->id, $core['sub_caste_id'] ?? null);
         $this->assertSame($gender->id, $core['gender_id'] ?? null);
         $this->assertSame($maritalStatus->id, $core['marital_status_id'] ?? null);
+        $this->assertArrayHasKey('section_order', $final);
+        $this->assertArrayHasKey('sectioned', $final);
+        $this->assertArrayHasKey('missing_map', $final);
+        $this->assertSame($religion->id, $final['sectioned']['basic-info']['religion_id']['value'] ?? null);
+        $this->assertSame($caste->id, $final['sectioned']['basic-info']['caste_id']['value'] ?? null);
+        $this->assertSame([], $final['legal_cases'] ?? null);
 
         $this->assertSame($religionCount, Religion::count());
         $this->assertSame($casteCount, Caste::count());

@@ -132,6 +132,61 @@ class IntakeNormalizedDraftToParsedJsonMapperTest extends TestCase
         }
     }
 
+    public function test_mapper_adds_section_contract_in_canonical_top_level_order(): void
+    {
+        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map([
+            'normalized' => [
+                'core' => [
+                    'full_name' => 'Asha Patil',
+                    'brother_count' => 1,
+                    'sister_count' => 2,
+                ],
+            ],
+        ]);
+
+        $this->assertSame([
+            'section_order',
+            'sectioned',
+            'missing_map',
+            'core',
+            'contacts',
+            'birth_place',
+            'native_place',
+            'children',
+            'marriages',
+            'education_history',
+            'career_history',
+            'addresses',
+            'parents_addresses',
+            'siblings',
+            'relatives',
+            'relatives_parents_family',
+            'relatives_maternal_family',
+            'relatives_sectioned',
+            'alliance_networks',
+            'property_summary',
+            'property_assets',
+            'horoscope',
+            'legal_cases',
+            'preferences',
+            'extended_narrative',
+            'confidence_map',
+        ], array_slice(array_keys($parsed), 0, 26));
+        $this->assertSame(1, $parsed['core']['brothers_count']);
+        $this->assertSame(2, $parsed['core']['sisters_count']);
+        $this->assertSame(1, $parsed['core']['brother_count']);
+        $this->assertSame(2, $parsed['core']['sister_count']);
+        $this->assertSame('derived', $parsed['sectioned']['family-details']['brothers_count']['status']);
+        $this->assertSame('derived', $parsed['sectioned']['family-details']['sisters_count']['status']);
+        $this->assertSame([], $parsed['legal_cases']);
+        $this->assertArrayHasKey('basic-info', $parsed['sectioned']);
+        $this->assertArrayHasKey('physical', $parsed['sectioned']);
+        $this->assertArrayHasKey('education-career', $parsed['sectioned']);
+        $this->assertArrayHasKey('family-details', $parsed['sectioned']);
+        $this->assertArrayHasKey('legal-cases', $parsed['sectioned']);
+        $this->assertArrayHasKey('basic-info.sub_caste', $parsed['missing_map']);
+    }
+
     public function test_mapper_preserves_core_ids_from_normalized_draft(): void
     {
         $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map([
@@ -503,7 +558,8 @@ TXT);
         $this->assertSame(202, $sibling['spouse']['taluka_id'] ?? null);
         $this->assertSame(203, $sibling['spouse']['district_id'] ?? null);
         $this->assertSame(204, $sibling['spouse']['state_id'] ?? null);
-        $this->assertArrayNotHasKey('marital_status', $parsed['siblings'][1] ?? []);
+        $this->assertArrayHasKey('marital_status', $parsed['siblings'][1] ?? []);
+        $this->assertNull($parsed['siblings'][1]['marital_status'] ?? null);
     }
 
     public function test_mapper_carries_parent_addresses_without_self_address_overwrite(): void

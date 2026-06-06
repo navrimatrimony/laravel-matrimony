@@ -5,6 +5,7 @@ namespace App\Services\Intake;
 use App\Models\MatrimonyProfile;
 use App\Services\Parsing\IntakeControlledFieldNormalizer;
 use App\Services\Parsing\IntakeDictionaryMapper;
+use App\Services\Parsing\IntakeParsedJsonSectionBuilder;
 use App\Services\Parsing\IntakeParsedJsonUtf8Sanitizer;
 use App\Services\Parsing\IntakeParsedSnapshotSkeleton;
 use App\Services\Ocr\OcrNormalize;
@@ -20,6 +21,7 @@ class IntakePipelineService
     public function __construct(
         private IntakeControlledFieldNormalizer $controlledFieldNormalizer,
         private IntakeParsedSnapshotSkeleton $snapshotSkeleton,
+        private IntakeParsedJsonSectionBuilder $sectionBuilder,
         private IntakeDictionaryMapper $dictionaryMapper,
         private IntakeSuggestionDiffBuilder $suggestionDiffBuilder,
     ) {}
@@ -80,6 +82,10 @@ class IntakePipelineService
             $suggestedByUserId
         );
         $out = OcrNormalize::normalizeDigitsDeep($this->snapshotSkeleton->ensure($out));
+        $out = $this->snapshotSkeleton->ensure(array_replace(
+            $out,
+            $this->sectionBuilder->build($out)
+        ));
         if ($utf8Stats !== null) {
             $utf8Stats = $stats;
         }

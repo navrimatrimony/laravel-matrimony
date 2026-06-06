@@ -12,14 +12,18 @@ class IntakeNormalizedDraftToParsedJsonMapper
 
     private const CONF_MISSING = 0.0;
 
+    public function __construct(
+        private IntakeParsedSnapshotSkeleton $skeleton,
+        private IntakeParsedJsonSectionBuilder $sectionBuilder,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $draft
      * @return array<string, mixed>
      */
     public function map(array $draft): array
     {
-        $skeleton = app(IntakeParsedSnapshotSkeleton::class);
-        $parsed = $skeleton->defaults();
+        $parsed = $this->skeleton->defaults();
 
         $core = $this->mapCore($draft);
         $contacts = $this->mapContacts($draft);
@@ -95,7 +99,10 @@ class IntakeNormalizedDraftToParsedJsonMapper
             $parsed['core']['address_line'] = (string) ($parsed['addresses'][0]['address_line'] ?? '');
         }
 
-        return $skeleton->ensure($parsed);
+        $contract = $this->sectionBuilder->build($parsed, $draft);
+        $parsed = $this->skeleton->ensure($parsed);
+
+        return $this->skeleton->ensure(array_replace($parsed, $contract));
     }
 
     /**

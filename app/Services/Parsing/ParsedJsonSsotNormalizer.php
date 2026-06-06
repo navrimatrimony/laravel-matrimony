@@ -77,6 +77,7 @@ final class ParsedJsonSsotNormalizer
         $parsed['siblings'] = self::normalizeSiblingRows($parsed['siblings'] ?? []);
         $parsed['relatives'] = self::normalizeRelativeRows($parsed['relatives'] ?? []);
         $parsed['horoscope'] = self::normalizeHoroscopeRows($parsed['horoscope'] ?? []);
+        $parsed['legal_cases'] = self::normalizeLegalCaseRows($parsed['legal_cases'] ?? []);
 
         if (isset($parsed['extended_narrative']) && is_array($parsed['extended_narrative'])) {
             $en = $parsed['extended_narrative'];
@@ -115,7 +116,7 @@ final class ParsedJsonSsotNormalizer
 
         foreach ($core as $key => $value) {
             $before = $value;
-            if (in_array($key, ['brother_count', 'sister_count', 'annual_income', 'family_income', 'height_cm', 'serious_intent_id'], true)) {
+            if (in_array($key, ['brothers_count', 'sisters_count', 'brother_count', 'sister_count', 'annual_income', 'family_income', 'height_cm', 'serious_intent_id'], true)) {
                 $core[$key] = self::normalizeNumericOrNull($value);
             } else {
                 $reject = in_array((string) $key, $stringRejectLabel, true);
@@ -311,6 +312,52 @@ final class ParsedJsonSsotNormalizer
         }
 
         return $rows;
+    }
+
+    private static function normalizeLegalCaseRows(array $rows): array
+    {
+        foreach ($rows as $i => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            foreach (['case_type', 'court_name', 'case_number', 'case_stage', 'next_hearing_date', 'notes'] as $field) {
+                if (array_key_exists($field, $row)) {
+                    $rows[$i][$field] = self::normalizeNullableString($row[$field], false);
+                }
+            }
+            if (array_key_exists('active_status', $row)) {
+                $rows[$i]['active_status'] = self::normalizeNullableBoolean($row['active_status']);
+            }
+        }
+
+        return $rows;
+    }
+
+    private static function normalizeNullableBoolean(mixed $value): ?bool
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_int($value) || is_float($value)) {
+            return match ($value) {
+                1, 1.0 => true,
+                0, 0.0 => false,
+                default => null,
+            };
+        }
+        if (! is_string($value)) {
+            return null;
+        }
+
+        return match (strtolower(trim($value))) {
+            '1', 'true' => true,
+            '0', 'false' => false,
+            '' => null,
+            default => null,
+        };
     }
 
     private static function normalizeNullableString(mixed $value, bool $rejectLabelOnly): ?string

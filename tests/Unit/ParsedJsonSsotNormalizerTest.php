@@ -239,9 +239,24 @@ class ParsedJsonSsotNormalizerTest extends TestCase
         $this->assertSame(204, $sibling['spouse']['state_id'] ?? null);
     }
 
-    public function test_schema_shape_unchanged_top_level_keys(): void
+    public function test_schema_shape_preserves_existing_keys_and_adds_legal_cases_default(): void
     {
+        $fieldObject = [
+            'value' => 'Asha Patil',
+            'raw' => 'Asha Patil',
+            'source_key' => 'core.full_name',
+            'source_section' => 'core',
+            'confidence' => 0.85,
+            'status' => 'filled',
+            'missing_reason' => null,
+        ];
         $in = [
+            'sectioned' => [
+                'basic-info' => [
+                    'full_name' => $fieldObject,
+                ],
+            ],
+            'missing_map' => [],
             'core' => [],
             'contacts' => [],
             'children' => [],
@@ -264,6 +279,34 @@ class ParsedJsonSsotNormalizerTest extends TestCase
 
         $out = ParsedJsonSsotNormalizer::normalize($in);
 
-        $this->assertSame(array_keys($in), array_keys($out));
+        foreach (array_keys($in) as $key) {
+            $this->assertArrayHasKey($key, $out);
+        }
+        $this->assertSame([], $out['legal_cases']);
+        $this->assertSame($fieldObject, $out['sectioned']['basic-info']['full_name']);
+    }
+
+    public function test_legal_case_active_status_preserves_nullable_boolean_values(): void
+    {
+        $values = [true, false, 1, 0, '1', '0', 'true', 'false', '', null];
+        $expected = [true, false, true, false, true, false, true, false, null, null];
+
+        $out = ParsedJsonSsotNormalizer::normalize([
+            'legal_cases' => array_map(
+                static fn (mixed $value): array => [
+                    'court_name' => ' District Court ',
+                    'next_hearing_date' => '2026-07-15',
+                    'active_status' => $value,
+                ],
+                $values
+            ),
+        ]);
+
+        $this->assertArrayHasKey('legal_cases', $out);
+        $this->assertSame($expected, array_column($out['legal_cases'], 'active_status'));
+        foreach ($out['legal_cases'] as $row) {
+            $this->assertSame('District Court', $row['court_name']);
+            $this->assertSame('2026-07-15', $row['next_hearing_date']);
+        }
     }
 }

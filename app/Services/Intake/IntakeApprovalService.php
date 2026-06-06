@@ -37,6 +37,7 @@ class IntakeApprovalService
         'property_summary',
         'property_assets',
         'horoscope',
+        'legal_cases',
     ];
 
     public function __construct(
