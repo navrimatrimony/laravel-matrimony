@@ -10,7 +10,6 @@ use App\Models\MatrimonyProfile;
 use App\Models\ProfileExtendedField;
 use App\Models\User;
 use App\Services\Core\ConflictPolicy;
-use App\Services\LocationService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use App\Services\Profile\ProfileTypedSelfAddressService;
 use Illuminate\Support\Facades\DB;
@@ -82,6 +81,36 @@ class MutationService
         'approved_pending_mutation',
         'conflict_pending',
     ];
+
+    /**
+     * Create the empty governed profile required before the existing wizard can apply its first snapshot.
+     * A locked user-level lookup prevents a second profile from being bootstrapped for the same member.
+     */
+    public function createDraftProfileForUser(User $user, array $attributes = []): MatrimonyProfile
+    {
+        return DB::transaction(function () use ($user, $attributes): MatrimonyProfile {
+            User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+
+            $existing = MatrimonyProfile::query()
+                ->where('user_id', $user->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing) {
+                return $existing;
+            }
+
+            $profile = new MatrimonyProfile;
+            $profile->user_id = $user->id;
+            $profile->lifecycle_state = 'draft';
+            $profile->full_name = $attributes['full_name'] ?? $user->defaultBootstrapProfileFullName();
+            $profile->gender_id = $attributes['gender_id'] ?? null;
+            $profile->is_suspended = (bool) ($attributes['is_suspended'] ?? false);
+            $profile->save();
+
+            return $profile;
+        });
+    }
 
     /** When set, writeProfileChangeHistory uses these for source/changed_by (manual mutation). */
     private ?string $historySourceContext = null;
@@ -1582,16 +1611,29 @@ class MutationService
             $mapped['occupation'] = isset($mapped['occupation']) && trim((string) $mapped['occupation']) !== '' ? trim((string) $mapped['occupation']) : null;
             $mapped['occupation_master_id'] = ! empty($mapped['occupation_master_id']) ? (int) $mapped['occupation_master_id'] : null;
             $mapped['occupation_custom_id'] = ! empty($mapped['occupation_custom_id']) ? (int) $mapped['occupation_custom_id'] : null;
-            $mapped['city_id'] = ! empty($mapped['city_id']) ? (int) $mapped['city_id'] : null;
+            $locationId = ! empty($mapped['location_id']) ? (int) $mapped['location_id'] : null;
+            $cityId = ! empty($mapped['city_id']) ? (int) $mapped['city_id'] : null;
+            $mapped['city_id'] = ($locationId && $locationId > 0) ? $locationId : (($cityId && $cityId > 0) ? $cityId : null);
             $mapped['state_id'] = ! empty($mapped['state_id']) ? (int) $mapped['state_id'] : null;
+            $mapped['taluka_id'] = ! empty($mapped['taluka_id']) ? (int) $mapped['taluka_id'] : null;
+            $mapped['district_id'] = ! empty($mapped['district_id']) ? (int) $mapped['district_id'] : null;
             $mapped['contact_number'] = isset($mapped['contact_number']) && trim((string) $mapped['contact_number']) !== '' ? trim((string) $mapped['contact_number']) : null;
             $notes = isset($mapped['notes']) && trim((string) $mapped['notes']) !== '' ? trim((string) $mapped['notes']) : null;
-            $addr = isset($mapped['address_line']) && trim((string) $mapped['address_line']) !== '' ? trim((string) $mapped['address_line']) : null;
-            $addr2 = isset($mapped['address']) && trim((string) $mapped['address']) !== '' ? trim((string) $mapped['address']) : null;
-            $addr3 = isset($mapped['Address']) && trim((string) $mapped['Address']) !== '' ? trim((string) $mapped['Address']) : null;
-            $parts = array_filter([$notes, $addr, $addr2, $addr3]);
-            $mapped['notes'] = $parts !== [] ? implode("\n", array_unique($parts)) : null;
-            unset($mapped['address_line'], $mapped['address'], $mapped['Address']);
+            if ($notes === null && isset($mapped['additional_info']) && trim((string) $mapped['additional_info']) !== '') {
+                $notes = trim((string) $mapped['additional_info']);
+            }
+            $addressLine = trim((string) ($mapped['address_line'] ?? $mapped['address'] ?? $mapped['Address'] ?? ''));
+            if ($addressLine === '' && isset($mapped['location_input']) && trim((string) $mapped['location_input']) !== '') {
+                $addressLine = trim((string) $mapped['location_input']);
+            }
+            if (Schema::hasColumn('profile_relatives', 'address_line')) {
+                $mapped['address_line'] = $addressLine !== '' ? $addressLine : null;
+                $mapped['notes'] = $notes;
+            } else {
+                $parts = array_filter([$notes, $addressLine !== '' ? $addressLine : null]);
+                $mapped['notes'] = $parts !== [] ? implode("\n", array_unique($parts)) : null;
+            }
+            unset($mapped['address'], $mapped['Address'], $mapped['additional_info'], $mapped['location_id'], $mapped['location_input']);
             $mapped['is_primary_contact'] = ! empty($mapped['is_primary_contact']);
 
             return $mapped;
@@ -1636,21 +1678,30 @@ class MutationService
             $mapped['occupation'] = isset($mapped['occupation']) && trim((string) $mapped['occupation']) !== '' ? trim((string) $mapped['occupation']) : null;
             $mapped['occupation_master_id'] = ! empty($mapped['occupation_master_id']) ? (int) $mapped['occupation_master_id'] : null;
             $mapped['occupation_custom_id'] = ! empty($mapped['occupation_custom_id']) ? (int) $mapped['occupation_custom_id'] : null;
-            $mapped['city_id'] = ! empty($mapped['city_id']) ? (int) $mapped['city_id'] : null;
+            $locationId = ! empty($mapped['location_id']) ? (int) $mapped['location_id'] : null;
+            $cityId = ! empty($mapped['city_id']) ? (int) $mapped['city_id'] : null;
+            $mapped['city_id'] = ($locationId && $locationId > 0) ? $locationId : (($cityId && $cityId > 0) ? $cityId : null);
             $mapped['contact_number'] = isset($mapped['contact_number']) && trim((string) $mapped['contact_number']) !== '' ? trim((string) $mapped['contact_number']) : null;
             $mapped['contact_number_2'] = isset($mapped['contact_number_2']) && trim((string) $mapped['contact_number_2']) !== '' ? trim((string) $mapped['contact_number_2']) : null;
             $mapped['contact_number_3'] = isset($mapped['contact_number_3']) && trim((string) $mapped['contact_number_3']) !== '' ? trim((string) $mapped['contact_number_3']) : null;
-            // Merge address + additional_info into notes so intake data shows in wizard (profile_siblings has only notes).
-            $notesParts = array_filter([
-                isset($mapped['notes']) && trim((string) $mapped['notes']) !== '' ? trim((string) $mapped['notes']) : null,
-                isset($mapped['address']) && trim((string) $mapped['address']) !== '' ? trim((string) $mapped['address']) : null,
-                isset($mapped['address_line']) && trim((string) $mapped['address_line']) !== '' ? trim((string) $mapped['address_line']) : null,
-                isset($mapped['Address']) && trim((string) $mapped['Address']) !== '' ? trim((string) $mapped['Address']) : null,
-                isset($mapped['additional_info']) && trim((string) $mapped['additional_info']) !== '' ? trim((string) $mapped['additional_info']) : null,
-            ]);
-            $mapped['notes'] = $notesParts !== [] ? implode("\n", $notesParts) : null;
+            $notes = isset($mapped['notes']) && trim((string) $mapped['notes']) !== '' ? trim((string) $mapped['notes']) : null;
+            if ($notes === null && isset($mapped['additional_info']) && trim((string) $mapped['additional_info']) !== '') {
+                $notes = trim((string) $mapped['additional_info']);
+            }
+            $addressLine = trim((string) ($mapped['address_line'] ?? $mapped['address'] ?? $mapped['Address'] ?? ''));
+            if ($addressLine === '' && isset($mapped['location_input']) && trim((string) $mapped['location_input']) !== '') {
+                $addressLine = trim((string) $mapped['location_input']);
+            }
+            if (Schema::hasColumn('profile_siblings', 'address_line')) {
+                $mapped['address_line'] = $addressLine !== '' ? $addressLine : null;
+                $mapped['notes'] = $notes;
+            } else {
+                // Legacy table: keep address + additional info in notes for intake compatibility.
+                $notesParts = array_filter([$notes, $addressLine !== '' ? $addressLine : null]);
+                $mapped['notes'] = $notesParts !== [] ? implode("\n", $notesParts) : null;
+            }
             $mapped['sort_order'] = isset($mapped['sort_order']) && $mapped['sort_order'] !== '' ? (int) $mapped['sort_order'] : 0;
-            unset($mapped['spouse'], $mapped['is_married'], $mapped['address'], $mapped['address_line'], $mapped['Address'], $mapped['additional_info']);
+            unset($mapped['spouse'], $mapped['is_married'], $mapped['address'], $mapped['Address'], $mapped['additional_info'], $mapped['location_id'], $mapped['location_input']);
             // profile_siblings has no contact_preference_* columns (those are on profile_contacts); drop so insert doesn't fail.
             foreach (array_keys($mapped) as $k) {
                 if (str_starts_with($k, 'contact_preference')) {

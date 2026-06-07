@@ -241,6 +241,13 @@
         </div>
     </div>
 
+    <div class="mb-6">
+        @include('intake.partials.normalized-draft-preview', [
+            'normalizedDraftPreview' => $normalizedDraftPreview ?? null,
+            'intakePhotoPreview' => $intakePhotoPreview ?? null,
+        ])
+    </div>
+
     @if (! empty($unresolvedLocationOptions) && is_array($unresolvedLocationOptions))
         <div class="bg-amber-900/20 border border-amber-700 rounded-xl p-5 mb-6">
             <h2 class="text-sm font-semibold text-amber-100 mb-1">Resolve unresolved locations</h2>

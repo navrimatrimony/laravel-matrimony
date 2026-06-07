@@ -331,8 +331,13 @@
                 if (found) found.value = displayLabel;
             }
         }
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        wrapper.dataset.applyingCanonicalSelection = '1';
+        try {
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        } finally {
+            delete wrapper.dataset.applyingCanonicalSelection;
+        }
     }
 
     function openSuggestModal(wrapper, name) {
@@ -801,6 +806,9 @@
 
         var debounce = null;
         input.addEventListener('input', function () {
+            if (wrapper.dataset.applyingCanonicalSelection === '1') {
+                return;
+            }
             clearTimeout(debounce);
             clearPendingSummary(wrapper);
             var q = input.value.trim();
@@ -858,6 +866,8 @@
             if (ht && ht.value) wrapper.dataset.resTalukaId = ht.value;
             if (hlid && hlid.value) wrapper.dataset.resLocationId = hlid.value;
         }
+
+        syncLocationHiddensFromVisible(wrapper);
     }
 
     /** Copy visible typeahead text into the named sync field (e.g. career_history[n][location]) so free-typed text posts. */
@@ -879,6 +889,25 @@
             if (!found) return;
             found.value = vis.value != null ? vis.value : '';
         });
+    }
+
+    /** Copy visible typeahead text into POSTed hidden fields (siblings/relatives rows). */
+    function syncLocationHiddensFromVisible(wrapper) {
+        if (!wrapper) return;
+        var vis = wrapper.querySelector('.location-typeahead-input');
+        if (!vis) return;
+        var typed = (vis.value || '').trim();
+        if (typed === '') return;
+        var locationIdEl = wrapper.querySelector('.location-hidden-location-id');
+        var locationInputEl = wrapper.querySelector('.location-hidden-location-input');
+        var addressLineEl = wrapper.querySelector('.location-hidden-address-line');
+        var locationId = locationIdEl ? (locationIdEl.value || '').trim() : '';
+        if (locationInputEl && locationId === '') {
+            locationInputEl.value = typed;
+        }
+        if (addressLineEl) {
+            addressLineEl.value = typed;
+        }
     }
 
     /** Before native submit: restore residence IDs from dataset if hiddens were cleared. */
@@ -917,6 +946,7 @@
         if (!t || t.tagName !== 'FORM') return;
         var invalidSelection = false;
         t.querySelectorAll('.location-typeahead-wrapper').forEach(function (wrapper) {
+            syncLocationHiddensFromVisible(wrapper);
             var vis = wrapper.querySelector('.location-typeahead-input');
             var locationIdEl = wrapper.querySelector('.location-hidden-location-id');
             var locationInputEl = wrapper.querySelector('.location-hidden-location-input');

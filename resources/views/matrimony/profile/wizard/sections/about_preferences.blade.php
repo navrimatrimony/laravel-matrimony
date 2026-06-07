@@ -109,10 +109,18 @@
     };
 @endphp
 @php
-    $activePref = $partnerPrefSection ?? 'basics';
+    $partnerPrefTabMode = ($currentSection ?? '') === 'full';
+    $activePref = $partnerPrefTabMode ? 'basics' : ($partnerPrefSection ?? 'basics');
+    $partnerPrefPanelVisible = function (string $slug) use ($partnerPrefTabMode, $activePref): bool {
+        if ($partnerPrefTabMode) {
+            return $slug === 'basics';
+        }
+
+        return $activePref === $slug;
+    };
 @endphp
 
-<div class="space-y-5" id="partner-pref-workspace">
+<div class="space-y-5 scroll-mt-28" id="partner-pref-workspace">
     <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2 flex-1">{{ __('wizard.partner_preferences') }}</h2>
         <div class="ml-4 flex items-center gap-2 text-xs">
@@ -132,13 +140,35 @@
     <p class="text-sm text-gray-600 dark:text-gray-400 -mt-1">{{ __('wizard.partner_pref_workspace_intro') }}</p>
     {{-- Day-38: trust copy only; request keys and save flow unchanged. --}}
     <p class="text-xs text-gray-500 dark:text-gray-400 -mt-1">{{ __('wizard.partner_preferences_trust_note') }}</p>
-    <p class="text-xs font-medium text-indigo-600 dark:text-indigo-400">{{ __('wizard.partner_pref_section_' . $activePref) }}</p>
 
-    <div class="space-y-4 {{ $activePref !== 'basics' ? 'hidden' : '' }}">
+    @if ($partnerPrefTabMode && ! empty($partnerPrefNavItems))
+        <div class="rounded-xl border border-indigo-200/80 dark:border-indigo-500/30 bg-indigo-50/50 dark:bg-indigo-950/20 p-3 sm:p-4">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-indigo-700/80 dark:text-indigo-300/80 mb-2">{{ __('wizard.partner_pref_submenu_label') }}</p>
+            <div class="flex flex-wrap gap-2" role="tablist" id="partner-pref-tablist" aria-label="{{ __('wizard.partner_preferences') }}">
+                @foreach ($partnerPrefNavItems as $pItem)
+                    @php
+                        $pSlug = $pItem['slug'] ?? 'basics';
+                        $tabActive = $pSlug === 'basics';
+                    @endphp
+                    <button type="button" role="tab" aria-selected="{{ $tabActive ? 'true' : 'false' }}"
+                        data-partner-pref-tab="{{ $pSlug }}"
+                        class="partner-pref-tab inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors
+                            {{ $tabActive ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-indigo-400 dark:hover:border-indigo-500' }}">
+                        <span>{{ __($pItem['label'] ?? '') }}</span>
+                        <span class="tabular-nums text-[10px] sm:text-xs opacity-90">· {{ $pItem['badge'] ?? '' }}</span>
+                    </button>
+                @endforeach
+            </div>
+        </div>
+    @elseif (! $partnerPrefTabMode)
+        <p class="text-xs font-medium text-indigo-600 dark:text-indigo-400">{{ __('wizard.partner_pref_section_' . $activePref) }}</p>
+    @endif
+
+    <div class="space-y-4 partner-pref-panel {{ $partnerPrefPanelVisible('basics') ? '' : 'hidden' }}" data-partner-pref-panel="basics">
         @include('matrimony.profile.wizard.partials.partner_pref_basics_core')
     </div>
 
-    <div class="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-4 mt-6 {{ $activePref !== 'location' ? 'hidden' : '' }}" id="partner-pref-location-section">
+    <div class="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-4 mt-6 partner-pref-panel {{ $partnerPrefPanelVisible('location') ? '' : 'hidden' }}" data-partner-pref-panel="location" id="partner-pref-location-section">
         <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">{{ __('wizard.partner_location_heading') }}</h3>
         <p class="text-xs text-gray-500 dark:text-gray-400 -mt-2 mb-1">{{ __('wizard.partner_pref_location_microcopy') }}</p>
         <div class="rounded-lg border border-indigo-200/90 dark:border-indigo-500/35 bg-indigo-50/80 dark:bg-indigo-950/30 p-3 sm:p-4 shadow-sm">
@@ -190,7 +220,7 @@
         </div>
     </div>
 
-    <div class="{{ $activePref !== 'education' ? 'hidden' : '' }}">
+    <div class="partner-pref-panel {{ $partnerPrefPanelVisible('education') ? '' : 'hidden' }}" data-partner-pref-panel="education">
         <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">{{ __('wizard.partner_pref_education_microcopy') }}</p>
         @include('matrimony.profile.wizard.partials.partner_preferences_education_career')
     </div>
@@ -744,7 +774,7 @@
         })();
     </script>
 
-    <div class="space-y-4 {{ $activePref !== 'community' ? 'hidden' : '' }}">
+    <div class="partner-pref-panel {{ $partnerPrefPanelVisible('community') ? '' : 'hidden' }}" data-partner-pref-panel="community">
     <div class="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-4 mt-6">
         <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">{{ __('wizard.community') }}</h3>
         <p class="text-xs text-gray-500 dark:text-gray-400 -mt-2 mb-1">{{ __('wizard.partner_pref_community_microcopy') }}</p>
@@ -918,15 +948,16 @@
     </script>
     </div>
 
-    <div class="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-4 mt-6 {{ $activePref !== 'lifestyle' ? 'hidden' : '' }}">
+    <div class="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-4 mt-6 partner-pref-panel {{ $partnerPrefPanelVisible('lifestyle') ? '' : 'hidden' }}" data-partner-pref-panel="lifestyle">
         <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">{{ __('wizard.partner_pref_lifestyle_microcopy') }}</p>
         @include('matrimony.profile.wizard.partials.partner_pref_lifestyle_diet')
     </div>
-    <div class="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-4 mt-6 {{ $activePref !== 'family' ? 'hidden' : '' }}">
+    <div class="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-4 mt-6 partner-pref-panel {{ $partnerPrefPanelVisible('family') ? '' : 'hidden' }}" data-partner-pref-panel="family">
         <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">{{ __('wizard.partner_pref_family_microcopy') }}</p>
         @include('matrimony.profile.wizard.partials.partner_pref_family_managed')
     </div>
 
+    @if (! $partnerPrefTabMode)
     @php
         $prefOrder = ['basics', 'community', 'location', 'education', 'lifestyle', 'family'];
         $pi = array_search($activePref, $prefOrder, true);
@@ -945,4 +976,39 @@
             @endif
         </div>
     </div>
+    @else
+    <script>
+        (function () {
+            var tablist = document.getElementById('partner-pref-tablist');
+            if (!tablist) {
+                return;
+            }
+            var tabs = tablist.querySelectorAll('[data-partner-pref-tab]');
+            var panels = document.querySelectorAll('[data-partner-pref-panel]');
+            var activeClass = ['border-indigo-600', 'bg-indigo-600', 'text-white', 'shadow-sm'];
+            var idleClass = ['border-gray-300', 'dark:border-gray-600', 'bg-white', 'dark:bg-gray-800', 'text-gray-700', 'dark:text-gray-300'];
+
+            function setTabVisual(btn, on) {
+                activeClass.forEach(function (c) { btn.classList.toggle(c, on); });
+                idleClass.forEach(function (c) { btn.classList.toggle(c, !on); });
+                btn.setAttribute('aria-selected', on ? 'true' : 'false');
+            }
+
+            function activate(slug) {
+                tabs.forEach(function (btn) {
+                    setTabVisual(btn, btn.getAttribute('data-partner-pref-tab') === slug);
+                });
+                panels.forEach(function (panel) {
+                    panel.classList.toggle('hidden', panel.getAttribute('data-partner-pref-panel') !== slug);
+                });
+            }
+
+            tabs.forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    activate(btn.getAttribute('data-partner-pref-tab'));
+                });
+            });
+        })();
+    </script>
+    @endif
 </div>

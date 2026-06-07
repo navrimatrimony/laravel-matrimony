@@ -23,5 +23,7 @@
 @include('matrimony.profile.wizard.sections.property', ['namePrefix' => $propertyPrefix])
 @include('matrimony.profile.wizard.sections.horoscope', ['namePrefix' => $horoscopePrefix])
 @include('matrimony.profile.wizard.sections.about_me', ['namePrefix' => $narrativePrefix])
+<div class="pt-8 mt-2 border-t-2 border-indigo-100 dark:border-indigo-900/40">
 @include('matrimony.profile.wizard.sections.about_preferences')
+</div>
 {{-- Photo is managed via the dedicated photo upload engine (upload-photo page). --}}

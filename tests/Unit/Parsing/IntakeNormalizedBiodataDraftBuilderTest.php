@@ -1119,6 +1119,77 @@ TXT);
         ));
     }
 
+    public function test_ashish_fixture_rejoins_split_label_value_blocks_from_ai_vision_ocr(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+## परिचय पञ्जक
+मुलाचे नांव
+जन्म तारीख
+जन्म वेळ
+जन्म ठिकाण
+शिक्षण
+व्यवसाय
+रक्तगट
+देवक
+कुलदैवत
+जात
+वडिलांचे नांव
+आईचे नांव
+भाऊ
+बहिण
+चुलते
+आत्या
+आजोळ मामा
+इतर पाहुणे
+: कु. आशिष बापूराव गायकवाड मो.८४६०७७७१४६
+: ३१.०७.१९९७
+: गुरूवार,पहाटे ०१ वा ५० मि. उंची : ५ फूट ६ इंच
+: विटा वर्ण : निमगोरा
+: B.Com
+: साईनाथ गोल्ड अँड सिल्व्हर टेस्टिंग व बुलियन,नवसारी,गुजरात
+: O+ve
+: सूर्यफूल
+: श्री. सिध्दनाथ,खरसुंडी
+: ९६ कुळी हिंदू-मराठा
+: कै.बापूराव निवृत्ती गायकवाड,रा. बलवडी,(खा)ता. खानापूर,जि. सांगली
+: श्रीमती.संगीता बापूराव गायकवाड
+: नाही .
+: कु.अंकिता बापूराव गायकवाड
+कु.दिपाली बापूराव गायकवाड
+: श्री. मुरलीधर निवृत्ती गायकवाड मो.७७०९२७२०७२
+: श्री.रामचंद्र निवृत्ती गायकवाड
+: श्रीमती.यशोदा भिवा यादव,रा.करंजे
+सौ.मालन विलास पाटील,रा.हातूर
+सौ.सुरेखा सुभाष मोहिते,रा.मांजर्डे
+: श्री.राजेश उत्तम थोरात,रा.भूड,ता.खानापूर
+: अशोक उत्तम थोरात मो.९५७००३३३२२
+: घरनिकी-पवार, हातनोली-जाधव,भूड-कदम,खंदारे-मोही, पाटील-आरवडे
+जगदाळे-धानवड,भगत-मादळमुठी
+||जन्म लग्नकुंडली||
+- राशी : मिथुन
+- नक्षत्र : मृग
+- चरण : ४ थे
+- नावरस नांव : कीरण
+- नाडी : मध्य
+- गण : देव
+- वैरवर्ग : मांजर
+TXT);
+
+        $core = $draft['normalized']['core'];
+        $horoscope = $draft['normalized']['horoscope'] ?? [];
+
+        $this->assertStringContainsString('आशिष बापूराव गायकवाड', (string) ($core['full_name'] ?? ''));
+        $this->assertSame('B.Com', $core['highest_education']);
+        $this->assertStringContainsString('साईनाथ', (string) ($core['company_name'] ?? $core['occupation_title'] ?? ''));
+        $this->assertStringContainsString('बापूराव', (string) ($core['father_name'] ?? ''));
+        $this->assertStringContainsString('संगीता', (string) ($core['mother_name'] ?? ''));
+        $this->assertSame('निमगोरा', $core['complexion']);
+        $this->assertSame('मराठा', $core['caste']);
+        $this->assertSame('सूर्यफूल', $horoscope['devak'] ?? null);
+        $this->assertSame('मिथुन', $horoscope['rashi'] ?? null);
+        $this->assertStringNotContainsString('परिचय पञ्जक', (string) ($core['full_name'] ?? ''));
+    }
+
     private function akshadaText(): string
     {
         return <<<'TXT'

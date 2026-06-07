@@ -1,8 +1,23 @@
 @extends('layouts.admin')
 
 @section('content')
+@php
+    $activeAdminProfileTab = 'intake';
+@endphp
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">Biodata Intakes</h1>
+    <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Create Profile</h1>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Upload for an existing member or create a member account before starting the governed intake pipeline.</p>
+        </div>
+        <a href="{{ route('admin.biodata-intakes.create') }}" class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
+            Create intake
+        </a>
+    </div>
+
+    @include('admin.intake._tabs')
+
+    <div class="h-6"></div>
 
     @if ($intakes->isEmpty())
         <p class="text-gray-600 dark:text-gray-400">No biodata intakes found.</p>

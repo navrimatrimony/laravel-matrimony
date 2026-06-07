@@ -3,12 +3,12 @@
 namespace App\Services\Intake;
 
 use App\Models\MatrimonyProfile;
+use App\Services\Ocr\OcrNormalize;
 use App\Services\Parsing\IntakeControlledFieldNormalizer;
 use App\Services\Parsing\IntakeDictionaryMapper;
 use App\Services\Parsing\IntakeParsedJsonSectionBuilder;
 use App\Services\Parsing\IntakeParsedJsonUtf8Sanitizer;
 use App\Services\Parsing\IntakeParsedSnapshotSkeleton;
-use App\Services\Ocr\OcrNormalize;
 
 /**
  * Central orchestration for intake snapshot shaping and pending suggestion storage.
@@ -101,6 +101,7 @@ class IntakePipelineService
      */
     public function normalizeApprovedSnapshot(array $snapshot, ?int $suggestedByUserId = null): array
     {
+        $snapshot = $this->mergeParentsAddressesIntoCanonicalAddresses($snapshot);
         $out = $this->controlledFieldNormalizer->normalizeSnapshot($snapshot, $suggestedByUserId);
         if (isset($out['core']['full_name']) && is_string($out['core']['full_name'])) {
             $cleaned = preg_replace('/\s*तपासा\s*/u', ' ', $out['core']['full_name']);
@@ -111,6 +112,75 @@ class IntakePipelineService
         }
 
         return $out;
+    }
+
+    /**
+     * Intake parsing keeps parent rows separate for wizard section parity.
+     * MutationService persists all profile-owned address rows through the canonical addresses entity.
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    private function mergeParentsAddressesIntoCanonicalAddresses(array $snapshot): array
+    {
+        $addresses = is_array($snapshot['addresses'] ?? null) ? array_values($snapshot['addresses']) : [];
+        $parents = is_array($snapshot['parents_addresses'] ?? null) ? $snapshot['parents_addresses'] : [];
+        $seen = [];
+
+        foreach ($addresses as $row) {
+            if (is_array($row)) {
+                $seen[$this->addressIdentity($row)] = true;
+            }
+        }
+
+        foreach ($parents as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $line = trim((string) ($row['address_line'] ?? $row['raw'] ?? ''));
+            $locationId = (int) ($row['location_id'] ?? $row['city_id'] ?? 0);
+            if ($line === '' && $locationId < 1) {
+                continue;
+            }
+
+            $type = trim((string) ($row['address_type'] ?? $row['address_type_key'] ?? 'permanent'));
+            if (! in_array($type, ['current', 'permanent', 'work', 'other', 'native'], true)) {
+                $type = 'permanent';
+            }
+
+            $canonical = $row;
+            $canonical['address_scope'] = 'parents';
+            $canonical['address_type'] = $type;
+            $canonical['address_line'] = $line !== '' ? $line : null;
+            unset($canonical['type'], $canonical['address_type_key'], $canonical['raw']);
+
+            $identity = $this->addressIdentity($canonical);
+            if (isset($seen[$identity])) {
+                continue;
+            }
+
+            $addresses[] = $canonical;
+            $seen[$identity] = true;
+        }
+
+        $snapshot['addresses'] = $addresses;
+        unset($snapshot['parents_addresses']);
+
+        return $snapshot;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    private function addressIdentity(array $row): string
+    {
+        $scope = trim((string) ($row['address_scope'] ?? 'self'));
+        $type = trim((string) ($row['address_type'] ?? $row['address_type_key'] ?? $row['type'] ?? ''));
+        $line = mb_strtolower(trim((string) ($row['address_line'] ?? $row['raw'] ?? '')));
+        $locationId = (int) ($row['location_id'] ?? $row['city_id'] ?? 0);
+
+        return implode('|', [$scope, $type, $line, $locationId]);
     }
 
     /**

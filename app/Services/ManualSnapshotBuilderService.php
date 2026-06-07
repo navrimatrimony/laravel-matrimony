@@ -20,6 +20,12 @@ class ManualSnapshotBuilderService
      */
     public function buildFullManualSnapshot(Request $request, MatrimonyProfile $profile): array
     {
+        if (Schema::hasColumn('matrimony_profiles', 'highest_education')) {
+            app(EducationService::class)->mergeMultiselectEducationIntoRequest($request);
+        }
+        if (Schema::hasColumn('matrimony_profiles', 'occupation_master_id')) {
+            app(OccupationService::class)->mergeOccupationIntoRequest($request);
+        }
         $this->resolveMasterLookupIds($request);
         $core = [
             'full_name' => $request->input('full_name'),
@@ -29,6 +35,7 @@ class ManualSnapshotBuilderService
             'religion_id' => $request->input('religion_id') ? (int) $request->input('religion_id') : null,
             'caste_id' => $request->input('caste_id') ? (int) $request->input('caste_id') : null,
             'sub_caste_id' => $request->input('sub_caste_id') ? (int) $request->input('sub_caste_id') : null,
+            'mother_tongue_id' => $request->input('mother_tongue_id') ? (int) $request->input('mother_tongue_id') : null,
             'marital_status_id' => $request->input('marital_status_id') ? (int) $request->input('marital_status_id') : null,
             'has_children' => $request->filled('has_children') ? ($request->input('has_children') === '1' || $request->input('has_children') === 1) : null,
             'height_cm' => $request->has('height_cm') && $request->input('height_cm') !== '' ? (int) $request->input('height_cm') : null,
@@ -38,10 +45,15 @@ class ManualSnapshotBuilderService
             'blood_group_id' => $request->input('blood_group_id') ? (int) $request->input('blood_group_id') : null,
             'spectacles_lens' => $request->input('spectacles_lens') ?: null,
             'physical_condition' => $request->input('physical_condition') ?: null,
+            'diet_id' => $request->input('diet_id') ? (int) $request->input('diet_id') : null,
+            'smoking_status_id' => $request->input('smoking_status_id') ? (int) $request->input('smoking_status_id') : null,
+            'drinking_status_id' => $request->input('drinking_status_id') ? (int) $request->input('drinking_status_id') : null,
             'highest_education' => $request->input('highest_education'),
             'highest_education_other' => $request->filled('highest_education_other') ? trim((string) $request->input('highest_education_other')) : null,
             'working_with_type_id' => $workingWithTypeId = $request->filled('working_with_type_id') ? (int) $request->input('working_with_type_id') : null,
             'profession_id' => $this->resolveProfessionIdForWorkingWith($request->input('profession_id'), $workingWithTypeId),
+            'occupation_master_id' => $request->filled('occupation_master_id') ? (int) $request->input('occupation_master_id') : null,
+            'occupation_custom_id' => $request->filled('occupation_custom_id') ? (int) $request->input('occupation_custom_id') : null,
             'occupation_type' => $request->input('occupation_type') ?: null,
             'occupation_title' => $request->input('occupation_title'),
             'company_name' => $request->input('company_name'),
@@ -63,6 +75,7 @@ class ManualSnapshotBuilderService
             $core['mother_occupation_master_id'] = $request->filled('mother_occupation_master_id') ? (int) $request->input('mother_occupation_master_id') : null;
             $core['mother_occupation_custom_id'] = $request->filled('mother_occupation_custom_id') ? (int) $request->input('mother_occupation_custom_id') : null;
         }
+        $core['father_extra_info'] = $request->filled('father_extra_info') ? trim((string) $request->input('father_extra_info')) : null;
         $core['father_contact_1'] = trim((string) ($request->input('father_contact_1') ?? '')) ?: null;
         $core['father_contact_2'] = trim((string) ($request->input('father_contact_2') ?? '')) ?: null;
         if (Schema::hasColumn('matrimony_profiles', 'father_contact_3')) {
@@ -70,12 +83,16 @@ class ManualSnapshotBuilderService
         }
         $core['mother_name'] = $request->input('mother_name');
         $core['mother_occupation'] = $request->input('mother_occupation');
+        $core['mother_extra_info'] = $request->filled('mother_extra_info') ? trim((string) $request->input('mother_extra_info')) : null;
         $core['mother_contact_1'] = trim((string) ($request->input('mother_contact_1') ?? '')) ?: null;
         $core['mother_contact_2'] = trim((string) ($request->input('mother_contact_2') ?? '')) ?: null;
         if (Schema::hasColumn('matrimony_profiles', 'mother_contact_3')) {
             $core['mother_contact_3'] = trim((string) ($request->input('mother_contact_3') ?? '')) ?: null;
         }
         $core['family_type_id'] = $request->input('family_type_id') ? (int) $request->input('family_type_id') : null;
+        $core['family_status'] = $request->input('family_status') ?: null;
+        $core['family_values'] = $request->input('family_values') ?: null;
+        $core['other_relatives_text'] = trim((string) $request->input('other_relatives_text', '')) ?: null;
         $core['country_id'] = ($v = $this->rawCoreInput($request, 'country_id')) !== null && $v !== '' ? $v : null;
         $core['state_id'] = ($v = $this->rawCoreInput($request, 'state_id')) !== null && $v !== '' ? $v : null;
         $core['district_id'] = ($v = $this->rawCoreInput($request, 'district_id')) !== null && $v !== '' ? $v : null;
@@ -139,18 +156,12 @@ class ManualSnapshotBuilderService
 
         $education_history = [];
 
-        $addresses = [];
-        foreach ($request->input('addresses', []) as $row) {
-            $addresses[] = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'address_scope' => trim((string) ($row['address_scope'] ?? 'self')) ?: 'self',
-                'address_type_id' => ! empty($row['address_type_id']) ? (int) $row['address_type_id'] : null,
-                'village_id' => $row['village_id'] ?? null,
-                'taluka' => trim((string) ($row['taluka'] ?? '')),
-                'district' => trim((string) ($row['district'] ?? '')),
-                'state' => trim((string) ($row['state'] ?? '')),
-                'country' => trim((string) ($row['country'] ?? '')),
-            ];
+        $addresses = array_merge(
+            $this->mapTypedAddressRows($request->input('self_addresses'), 'self', 'current'),
+            $this->mapTypedAddressRows($request->input('parents_addresses'), 'parents', 'permanent'),
+        );
+        if ($addresses === []) {
+            $addresses = $this->mapLegacyAddressRows($request->input('addresses'));
         }
 
         $property_summary = [];
@@ -168,6 +179,7 @@ class ManualSnapshotBuilderService
                 'location' => trim((string) ($row['location'] ?? '')),
                 'estimated_value' => isset($row['estimated_value']) && $row['estimated_value'] !== '' ? (float) $row['estimated_value'] : null,
                 'ownership_type_id' => ! empty($row['ownership_type_id']) ? (int) $row['ownership_type_id'] : null,
+                'additional_information' => trim((string) ($row['additional_information'] ?? '')) ?: null,
                 'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
                 'taluka_id' => ! empty($row['taluka_id']) ? (int) $row['taluka_id'] : null,
                 'district_id' => ! empty($row['district_id']) ? (int) $row['district_id'] : null,
@@ -193,6 +205,9 @@ class ManualSnapshotBuilderService
                 'gan_id' => ! empty($h['gan_id']) ? (int) $h['gan_id'] : null,
                 'nadi_id' => ! empty($h['nadi_id']) ? (int) $h['nadi_id'] : null,
                 'yoni_id' => ! empty($h['yoni_id']) ? (int) $h['yoni_id'] : null,
+                'varna_id' => ! empty($h['varna_id']) ? (int) $h['varna_id'] : null,
+                'vashya_id' => ! empty($h['vashya_id']) ? (int) $h['vashya_id'] : null,
+                'rashi_lord_id' => ! empty($h['rashi_lord_id']) ? (int) $h['rashi_lord_id'] : null,
                 'mangal_dosh_type_id' => ! empty($h['mangal_dosh_type_id']) ? (int) $h['mangal_dosh_type_id'] : null,
                 'devak' => trim((string) ($h['devak'] ?? '')),
                 'kul' => trim((string) ($h['kuldaivat'] ?? $h['kul'] ?? '')),
@@ -223,24 +238,9 @@ class ManualSnapshotBuilderService
         }
 
         $siblings = [];
-        foreach ($request->input('siblings', []) as $row) {
-            $relationType = in_array($row['relation_type'] ?? null, ['brother', 'sister', 'brother_wife', 'sister_husband'], true) ? $row['relation_type'] : null;
-            $maritalStatus = in_array($row['marital_status'] ?? null, ['unmarried', 'married'], true) ? $row['marital_status'] : null;
-            if (in_array($relationType, ['brother_wife', 'sister_husband'], true)) {
-                $maritalStatus = 'married';
-            }
-            $siblingRow = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'relation_type' => $relationType,
-                'name' => trim((string) ($row['name'] ?? '')) ?: null,
-                'marital_status' => $maritalStatus,
-                'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
-                'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
-                'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
-                'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
-                'sort_order' => isset($row['sort_order']) && $row['sort_order'] !== '' ? (int) $row['sort_order'] : 0,
-            ];
-            $siblings[] = $siblingRow;
+        $wizardController = app(\App\Http\Controllers\ProfileWizardController::class);
+        foreach ($core['has_siblings'] === false ? [] : $request->input('siblings', []) as $row) {
+            $siblings[] = $wizardController->mapSiblingFormRowFromRequest(is_array($row) ? $row : []);
         }
 
         $relatives = app(\App\Http\Controllers\ProfileWizardController::class)->collectRelativesFromRequest($request);
@@ -345,6 +345,74 @@ class ManualSnapshotBuilderService
         }
 
         return null;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function mapTypedAddressRows(mixed $input, string $scope, string $defaultType): array
+    {
+        if (! is_array($input)) {
+            return [];
+        }
+
+        $rows = [];
+        foreach ($input as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $addressLine = trim((string) ($row['address_line'] ?? ''));
+            $locationId = isset($row['location_id']) && $row['location_id'] !== ''
+                ? (int) $row['location_id']
+                : null;
+            if ($addressLine === '' && ! $locationId) {
+                continue;
+            }
+
+            $type = trim((string) ($row['address_type_key'] ?? $row['address_type'] ?? $defaultType));
+            $rows[] = [
+                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
+                'address_scope' => $scope,
+                'address_type' => $type !== '' ? $type : $defaultType,
+                'address_line' => $addressLine !== '' ? mb_substr($addressLine, 0, 255) : null,
+                'location_id' => $locationId,
+                'location_input' => null,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function mapLegacyAddressRows(mixed $input): array
+    {
+        if (! is_array($input)) {
+            return [];
+        }
+
+        $rows = [];
+        foreach ($input as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $rows[] = [
+                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
+                'address_scope' => trim((string) ($row['address_scope'] ?? 'self')) ?: 'self',
+                'address_type_id' => ! empty($row['address_type_id']) ? (int) $row['address_type_id'] : null,
+                'address_line' => trim((string) ($row['address_line'] ?? '')) ?: null,
+                'location_id' => ! empty($row['location_id']) ? (int) $row['location_id'] : null,
+                'village_id' => $row['village_id'] ?? null,
+                'taluka' => trim((string) ($row['taluka'] ?? '')),
+                'district' => trim((string) ($row['district'] ?? '')),
+                'state' => trim((string) ($row['state'] ?? '')),
+                'country' => trim((string) ($row['country'] ?? '')),
+            ];
+        }
+
+        return $rows;
     }
 
     /**
@@ -485,7 +553,8 @@ class ManualSnapshotBuilderService
                 || ! empty($asset['asset_type_id'])
                 || trim((string) ($asset['location'] ?? '')) !== ''
                 || ! empty($asset['ownership_type_id'])
-                || ($asset['estimated_value'] ?? null) !== null;
+                || ($asset['estimated_value'] ?? null) !== null
+                || trim((string) ($asset['additional_information'] ?? '')) !== '';
             if (! $hasData) {
                 continue;
             }
@@ -500,6 +569,7 @@ class ManualSnapshotBuilderService
             'location' => '',
             'estimated_value' => null,
             'ownership_type_id' => null,
+            'additional_information' => null,
             'city_id' => null,
             'taluka_id' => null,
             'district_id' => null,

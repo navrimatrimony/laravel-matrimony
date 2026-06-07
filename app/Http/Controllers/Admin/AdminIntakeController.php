@@ -7,21 +7,33 @@ use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Models\ConflictRecord;
+use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
+use App\Models\User;
 use App\Services\ExtendedFieldService;
+use App\Services\Intake\IntakeCreationService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
 use App\Services\Intake\IntakeLocationSuggestionLayerService;
 use App\Services\Intake\IntakePhotoCandidateApplyService;
+use App\Services\Intake\IntakePhotoCandidatePreviewService;
+use App\Services\Intake\IntakePreviewNormalizedDraftPresenter;
 use App\Services\Intake\IntakeReviewParseInputTextResolver;
 use App\Services\IntakeApprovalService;
 use App\Services\IntakeManualOcrPreparedService;
+use App\Services\MutationService;
 use App\Services\Parsing\ParserStrategyResolver;
 use App\Services\Parsing\ProviderResolver;
 use App\Support\IntakePreviewDiagnosticsPresenter;
+use App\Support\MobileNumber;
 use App\Support\Validation\AddressHierarchyRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 /*
 |--------------------------------------------------------------------------
@@ -34,6 +46,185 @@ use Illuminate\Support\Facades\Log;
 */
 class AdminIntakeController extends Controller
 {
+    public function createEntry()
+    {
+        $users = $this->recentMemberUsers();
+        $genders = $this->activeGenders();
+
+        return view('admin.intake.create', compact('users', 'genders'));
+    }
+
+    public function createProfileEntry()
+    {
+        $genders = $this->activeGenders();
+
+        return view('admin.intake.create-profile', compact('genders'));
+    }
+
+    public function storeEntry(Request $request, IntakeCreationService $intakeCreation)
+    {
+        $validated = $request->validate([
+            'user_mode' => ['required', Rule::in(['existing', 'new'])],
+            'existing_user_id' => ['nullable', 'required_if:user_mode,existing', 'integer', 'exists:users,id'],
+            'new_name' => ['nullable', 'required_if:user_mode,new', 'string', 'max:255'],
+            'new_mobile' => ['nullable', 'required_if:user_mode,new', 'string', 'max:32'],
+            'new_email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')],
+            'new_gender' => ['nullable', 'required_if:user_mode,new', Rule::exists('master_genders', 'key')->where('is_active', true)],
+            'registering_for' => [
+                'nullable',
+                'required_if:user_mode,new',
+                Rule::in(['self', 'parent_guardian', 'sibling', 'relative', 'friend', 'other']),
+            ],
+            'raw_text' => ['nullable', 'string', 'required_without:file'],
+            'file' => ['nullable', 'file', 'max:20480', 'required_without:raw_text'],
+        ]);
+
+        if ($validated['user_mode'] === 'existing') {
+            $targetUser = User::query()->findOrFail((int) $validated['existing_user_id']);
+            if ($targetUser->isAnyAdmin()) {
+                return back()
+                    ->withInput()
+                    ->withErrors(['existing_user_id' => 'Select a non-admin member account.']);
+            }
+
+            $intake = $intakeCreation->createForUser(
+                (int) $targetUser->id,
+                $request->file('file'),
+                $request->input('raw_text'),
+            );
+        } else {
+            $mobile = MobileNumber::normalize($validated['new_mobile']);
+            if ($mobile === null) {
+                return back()
+                    ->withInput()
+                    ->withErrors(['new_mobile' => __('otp.enter_valid_10_digit_mobile')]);
+            }
+
+            Validator::make(
+                ['new_mobile' => $mobile],
+                ['new_mobile' => ['required', Rule::unique('users', 'mobile')]],
+                ['new_mobile.unique' => __('auth.mobile_duplicate_register')]
+            )->validate();
+
+            $prepared = $intakeCreation->prepare(
+                null,
+                $request->file('file'),
+                $request->input('raw_text'),
+            );
+
+            [$targetUser, $intake] = DB::transaction(function () use ($validated, $mobile, $prepared, $intakeCreation): array {
+                $user = User::create([
+                    'name' => $validated['new_name'],
+                    'email' => ($validated['new_email'] ?? null) ?: null,
+                    'mobile' => $mobile,
+                    'password' => Hash::make(Str::random(40)),
+                    'registering_for' => $validated['registering_for'],
+                    'gender' => $validated['new_gender'],
+                    'referral_code' => User::generateUniqueReferralCode(),
+                ]);
+
+                return [
+                    $user,
+                    $intakeCreation->persistPrepared((int) $user->id, $prepared),
+                ];
+            });
+
+            $intakeCreation->dispatchParseIfEnabled($intake);
+        }
+
+        return redirect()
+            ->route('admin.biodata-intakes.show', $intake)
+            ->with('success', "Intake created for {$targetUser->name}. Review parsing before approval.");
+    }
+
+    public function storeProfileEntry(Request $request, MutationService $mutationService)
+    {
+        $validated = $request->validate([
+            'new_name' => ['required', 'string', 'max:255'],
+            'new_mobile' => ['required', 'string', 'max:32'],
+            'new_email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')],
+            'new_gender' => ['required', Rule::exists('master_genders', 'key')->where('is_active', true)],
+            'registering_for' => [
+                'required',
+                Rule::in(['self', 'parent_guardian', 'sibling', 'relative', 'friend', 'other']),
+            ],
+        ]);
+
+        $mobile = MobileNumber::normalize($validated['new_mobile']);
+        if ($mobile === null) {
+            return back()
+                ->withInput()
+                ->withErrors(['new_mobile' => __('otp.enter_valid_10_digit_mobile')]);
+        }
+
+        Validator::make(
+            ['new_mobile' => $mobile],
+            ['new_mobile' => ['required', Rule::unique('users', 'mobile')]],
+            ['new_mobile.unique' => __('auth.mobile_duplicate_register')]
+        )->validate();
+
+        $genderId = MasterGender::query()
+            ->where('key', $validated['new_gender'])
+            ->where('is_active', true)
+            ->value('id');
+
+        [$member, $profile] = DB::transaction(function () use ($validated, $mobile, $genderId, $mutationService): array {
+            $member = User::create([
+                'name' => $validated['new_name'],
+                'email' => ($validated['new_email'] ?? null) ?: null,
+                'mobile' => $mobile,
+                'password' => Hash::make(Str::random(40)),
+                'registering_for' => $validated['registering_for'],
+                'gender' => $validated['new_gender'],
+                'referral_code' => User::generateUniqueReferralCode(),
+            ]);
+
+            $profile = $mutationService->createDraftProfileForUser($member, [
+                'gender_id' => $genderId,
+                'is_suspended' => \App\Services\Admin\AdminSettingService::isManualProfileActivationRequired(),
+            ]);
+
+            return [$member, $profile];
+        });
+
+        session([
+            'admin_registration_profile_id' => (int) $profile->id,
+            'admin_edit_profile_id' => (int) $profile->id,
+        ]);
+
+        return redirect()
+            ->route('matrimony.profile.wizard.section', [
+                'section' => 'full',
+                'all' => 1,
+                'profile_id' => $profile->id,
+            ])
+            ->with('success', "Registration created for {$member->name}. Complete the existing Edit all form.");
+    }
+
+    private function recentMemberUsers()
+    {
+        return User::query()
+            ->where(function ($query): void {
+                $query->whereNull('admin_role')
+                    ->where(function ($legacyAdminQuery): void {
+                        $legacyAdminQuery->whereNull('is_admin')
+                            ->orWhere('is_admin', false);
+                    });
+            })
+            ->latest('id')
+            ->limit(500)
+            ->get(['id', 'name', 'mobile', 'email']);
+    }
+
+    private function activeGenders()
+    {
+        return MasterGender::query()
+            ->where('is_active', true)
+            ->whereIn('key', ['male', 'female'])
+            ->orderByRaw("CASE WHEN `key` = 'male' THEN 1 ELSE 2 END")
+            ->get(['id', 'key', 'label']);
+    }
+
     /**
      * Phase-4 Day-4: List biodata intakes (admin only).
      * Read-only list view.
@@ -59,6 +250,12 @@ class AdminIntakeController extends Controller
         $intake->load(['uploadedByUser:id,name,email', 'profile:id,full_name,lifecycle_state,pending_intake_suggestions_json']);
         $showAdminReextractAction = app(ProviderResolver::class)->parseJobUsesAiVisionExtraction();
         $reviewParse = app(IntakeReviewParseInputTextResolver::class)->resolve($intake);
+        $reviewTextSource = (string) ($reviewParse['source'] ?? 'empty');
+        $reviewTextIsBiodata = in_array($reviewTextSource, ['parse_snapshot', 'ai_vision_cache', 'ocr_transient'], true);
+        $normalizedDraftPreview = app(IntakePreviewNormalizedDraftPresenter::class)
+            ->present((string) ($reviewParse['text'] ?? ''), $reviewTextIsBiodata);
+        $intakePhotoPreview = app(IntakePhotoCandidatePreviewService::class)
+            ->preview($intake);
 
         // Display-only diagnostics: use existing cached parse_input_debug + current parser mode resolution.
         $active = app(ParserStrategyResolver::class)->resolveActiveMode();
@@ -162,6 +359,8 @@ class AdminIntakeController extends Controller
             'intake',
             'showAdminReextractAction',
             'reviewParse',
+            'normalizedDraftPreview',
+            'intakePhotoPreview',
             'dbg',
             'ocrQuality',
             'meta',

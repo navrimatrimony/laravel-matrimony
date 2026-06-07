@@ -7,6 +7,7 @@ use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Models\MasterRelative;
 use App\Services\EducationService;
+use App\Services\Intake\IntakeCreationService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
 use App\Services\Intake\IntakeLocationSuggestionLayerService;
 use App\Services\Intake\IntakePipelineService;
@@ -32,7 +33,6 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
-use Smalot\PdfParser\Parser as PdfParser;
 
 /*
 |--------------------------------------------------------------------------
@@ -69,7 +69,7 @@ class IntakeController extends Controller
      * Phase-5 Day-18 Step-1: OCR before create. Store biodata intake with final raw_ocr_text.
      * ParseIntakeJob only parses; does not modify raw_ocr_text.
      */
-    public function store(Request $request, OcrService $ocrService)
+    public function store(Request $request, IntakeCreationService $intakeCreation)
     {
         $request->validate([
             'raw_text' => ['nullable', 'string', 'required_without:file'],
@@ -77,139 +77,11 @@ class IntakeController extends Controller
             'file' => ['nullable', 'file', 'max:20480', 'required_without:raw_text'],
         ]);
 
-        // Day-35: Per-user intake rate limits (daily/monthly) from admin settings.
-        $userId = auth()->id();
-        $dailyLimit = (int) AdminSetting::getValue('intake_max_daily_per_user', '0');
-        $monthlyLimit = (int) AdminSetting::getValue('intake_max_monthly_per_user', '0');
-        $globalDailyCap = (int) AdminSetting::getValue('intake_global_daily_cap', '0');
-        if ($dailyLimit > 0) {
-            $todayCount = BiodataIntake::where('uploaded_by', $userId)
-                ->whereDate('created_at', today())
-                ->count();
-            if ($todayCount >= $dailyLimit) {
-                return redirect()->back()
-                    ->withErrors(['file' => __('intake.daily_limit_reached_try_tomorrow')])
-                    ->withInput();
-            }
-        }
-        if ($monthlyLimit > 0) {
-            $monthCount = BiodataIntake::where('uploaded_by', $userId)
-                ->whereYear('created_at', now()->year)
-                ->whereMonth('created_at', now()->month)
-                ->count();
-            if ($monthCount >= $monthlyLimit) {
-                return redirect()->back()
-                    ->withErrors(['file' => __('intake.monthly_limit_reached')])
-                    ->withInput();
-            }
-        }
-
-        // Global daily cap across all users (infrastructure safety).
-        if ($globalDailyCap > 0) {
-            $todaysTotal = BiodataIntake::whereDate('created_at', today())->count();
-            if ($todaysTotal >= $globalDailyCap) {
-                Log::warning('Intake global daily cap hit', [
-                    'user_id' => $userId,
-                    'cap' => $globalDailyCap,
-                ]);
-
-                return redirect()->back()
-                    ->withErrors(['file' => __('intake.global_cap_try_tomorrow')])
-                    ->withInput();
-            }
-        }
-
-        $path = null;
-        $originalName = null;
-        $rawText = null;
-
-        if ($request->hasFile('file')) {
-            $uploaded = $request->file('file');
-            $originalName = $uploaded->getClientOriginalName();
-            $ext = strtolower($uploaded->getClientOriginalExtension());
-
-            // Type-specific limits: PDF size/pages, images-per-intake placeholder (for future multi-upload).
-            $maxPdfMb = (int) AdminSetting::getValue('intake_max_pdf_mb', '10');
-            $maxPdfPages = (int) AdminSetting::getValue('intake_max_pdf_pages', '8');
-            $maxImagesPerIntake = (int) AdminSetting::getValue('intake_max_images_per_intake', '5');
-
-            if ($ext === 'pdf' && $maxPdfMb > 0) {
-                $sizeBytes = $uploaded->getSize();
-                $limitBytes = $maxPdfMb * 1024 * 1024;
-                if ($sizeBytes !== null && $sizeBytes > $limitBytes) {
-                    return redirect()->back()
-                        ->withErrors(['file' => __('intake.pdf_too_large', ['max_mb' => $maxPdfMb])])
-                        ->withInput();
-                }
-            }
-
-            if ($ext === 'pdf' && $maxPdfPages > 0) {
-                try {
-                    $parser = new PdfParser;
-                    $pdf = $parser->parseFile($uploaded->getRealPath());
-                    $pages = $pdf->getPages();
-                    $pageCount = is_array($pages) ? count($pages) : 0;
-                    if ($pageCount > $maxPdfPages) {
-                        return redirect()->back()
-                            ->withErrors(['file' => __('intake.pdf_too_many_pages', ['max_pages' => $maxPdfPages])])
-                            ->withInput();
-                    }
-                } catch (\Throwable $e) {
-                    // If page counting fails, do not block upload; size limit above still protects us.
-                    Log::warning('Failed to count PDF pages for intake', [
-                        'user_id' => $userId,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            }
-
-            // Single-image upload today; this is a placeholder for future multi-image engine.
-            if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true) && $maxImagesPerIntake > 0) {
-                $imagesInThisIntake = 1;
-                if ($imagesInThisIntake > $maxImagesPerIntake) {
-                    return redirect()->back()
-                        ->withErrors(['file' => __('intake.too_many_images_reduce')])
-                        ->withInput();
-                }
-            }
-
-            $path = $uploaded->store('intakes');
-            try {
-                $rawText = $ocrService->extractTextFromPath($path, $originalName);
-            } catch (\Throwable $e) {
-                return redirect()->back()
-                    ->withErrors(['file' => __('intake.ocr_extraction_failed').' '.$e->getMessage()])
-                    ->withInput();
-            }
-        } else {
-            $rawText = $request->input('raw_text', '');
-        }
-
-        $intake = null;
-        DB::transaction(function () use ($path, $originalName, $rawText, &$intake) {
-            $hash = $rawText !== null ? hash('sha256', (string) $rawText) : null;
-            $parserMode = app(\App\Services\Parsing\ParserStrategyResolver::class)->resolveActiveMode();
-
-            $intake = BiodataIntake::create([
-                'uploaded_by' => auth()->id(),
-                'file_path' => $path,
-                'original_filename' => $originalName,
-                'raw_ocr_text' => $rawText,
-                'intake_status' => 'uploaded',
-                'parse_status' => 'pending',
-                'parser_version' => $parserMode,
-                'content_hash' => $hash,
-                'approved_by_user' => false,
-                'intake_locked' => false,
-                'snapshot_schema_version' => 1,
-            ]);
-        });
-
-        // Honour admin toggle for auto-parse.
-        $autoParse = \App\Models\AdminSetting::getBool('intake_auto_parse_enabled', true);
-        if ($autoParse) {
-            ParseIntakeJob::dispatch($intake->id);
-        }
+        $intake = $intakeCreation->createForUser(
+            (int) auth()->id(),
+            $request->file('file'),
+            $request->input('raw_text'),
+        );
 
         return redirect()->route('intake.status', $intake->id)
             ->with('success', __('intake.uploaded_successfully'));
@@ -1915,8 +1787,7 @@ class IntakeController extends Controller
             } elseif ($fieldKey === 'work_location') {
                 $snapshot['core']['work_city_id'] = $cityId;
                 $snapshot['core']['work_state_id'] = $payload['state_id'] ?? null;
-            } elseif (str_starts_with((string) $fieldKey, 'addresses.')
-                || str_starts_with((string) $fieldKey, 'parents_addresses.')) {
+            } elseif (str_starts_with((string) $fieldKey, 'addresses.')) {
                 $idx = (int) explode('.', (string) $fieldKey)[1];
                 if (! is_array($snapshot['addresses'] ?? null)) {
                     $snapshot['addresses'] = [];
@@ -1929,12 +1800,22 @@ class IntakeController extends Controller
                 $snapshot['addresses'][$idx]['taluka_id'] = $payload['taluka_id'] ?? null;
                 $snapshot['addresses'][$idx]['district_id'] = $payload['district_id'] ?? null;
                 $snapshot['addresses'][$idx]['state_id'] = $payload['state_id'] ?? null;
+            } elseif (str_starts_with((string) $fieldKey, 'parents_addresses.')) {
+                $idx = (int) explode('.', (string) $fieldKey)[1];
                 if (is_array($approval['parents_addresses'][$idx] ?? null)) {
                     if (! is_array($snapshot['parents_addresses'] ?? null)) {
                         $snapshot['parents_addresses'] = [];
                     }
                     $snapshot['parents_addresses'][$idx] = $approval['parents_addresses'][$idx];
                 }
+                if (! isset($snapshot['parents_addresses'][$idx]) || ! is_array($snapshot['parents_addresses'][$idx])) {
+                    $snapshot['parents_addresses'][$idx] = [];
+                }
+                $snapshot['parents_addresses'][$idx]['city_id'] = $cityId;
+                $snapshot['parents_addresses'][$idx]['location_id'] = $cityId;
+                $snapshot['parents_addresses'][$idx]['taluka_id'] = $payload['taluka_id'] ?? null;
+                $snapshot['parents_addresses'][$idx]['district_id'] = $payload['district_id'] ?? null;
+                $snapshot['parents_addresses'][$idx]['state_id'] = $payload['state_id'] ?? null;
             } elseif (preg_match('/^self_addresses\.(\d+)$/', (string) $fieldKey, $selfM) === 1) {
                 $idx = (int) $selfM[1];
                 if (! is_array($snapshot['self_addresses'] ?? null)) {
@@ -2016,6 +1897,7 @@ class IntakeController extends Controller
             'education_history',
             'career_history',
             'addresses',
+            'parents_addresses',
             'relatives',
             'property_summary',
             'property_assets',

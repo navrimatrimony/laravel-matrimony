@@ -633,6 +633,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     | Phase-4 Day-4: Biodata Intake Sandbox & Attach (admin only)
     */
     Route::get('/biodata-intakes', [AdminIntakeController::class, 'biodataIntakesIndex'])->name('biodata-intakes.index');
+    Route::get('/biodata-intakes/create', [AdminIntakeController::class, 'createEntry'])->name('biodata-intakes.create');
+    Route::post('/biodata-intakes', [AdminIntakeController::class, 'storeEntry'])->name('biodata-intakes.store');
+    Route::get('/biodata-intakes/create-profile', [AdminIntakeController::class, 'createProfileEntry'])->name('biodata-intakes.create-profile');
+    Route::post('/biodata-intakes/create-profile', [AdminIntakeController::class, 'storeProfileEntry'])->name('biodata-intakes.store-profile');
     Route::get('/biodata-intakes/{intake}', [AdminIntakeController::class, 'showBiodataIntake'])->name('biodata-intakes.show');
     Route::patch('/biodata-intakes/{intake}/attach', [AdminIntakeController::class, 'attachBiodataIntake'])->name('biodata-intakes.attach');
     Route::post('/biodata-intakes/{intake}/reparse', [AdminIntakeController::class, 'reparse'])->name('biodata-intakes.reparse');

@@ -151,10 +151,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="min-w-0 relation-address-cell">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.address') }}</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][address_line]" value="{{ $r['address_line'] ?? $r['notes'] ?? '' }}" placeholder="{{ __('components.relation.address_city') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
-                </div>
+                @include('components.repeaters.partials.relation-location-address', ['namePrefix' => $namePrefix, 'idx' => $idx, 'r' => $r])
             </div>
             <div class="relation-fields-wrap relation-two-line-grid grid items-start" style="grid-template-columns: 1fr 1fr 1fr; display:{{ $isAddressOnly ? 'none' : 'grid' }}; gap: 0.75rem;">
                 <div class="min-w-0">
@@ -181,10 +178,7 @@
                         <input type="text" name="{{ $namePrefix }}[{{ $idx }}][occupation]" value="{{ $r['occupation'] ?? '' }}" placeholder="{{ __('components.relation.occupation_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                     @endif
                 </div>
-                <div class="min-w-0 relation-address-cell">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.address') }}</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][address_line]" value="{{ $r['address_line'] ?? $r['notes'] ?? '' }}" placeholder="Address / city" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
-                </div>
+                @include('components.repeaters.partials.relation-location-address', ['namePrefix' => $namePrefix, 'idx' => $idx, 'r' => $r])
                 <div class="min-w-0">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.additional_info') }}</label>
                     <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="{{ $notesPlaceholder }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
@@ -217,10 +211,7 @@
                         <input type="text" name="{{ $namePrefix }}[{{ $idx }}][occupation]" value="{{ $r['occupation'] ?? '' }}" placeholder="{{ __('components.relation.occupation_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                     @endif
                 </div>
-                <div class="min-w-0 relation-address-cell">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.address') }}</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][address_line]" value="{{ $r['address_line'] ?? $r['notes'] ?? '' }}" placeholder="{{ __('components.relation.address_city') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
-                </div>
+                @include('components.repeaters.partials.relation-location-address', ['namePrefix' => $namePrefix, 'idx' => $idx, 'r' => $r])
                 <div class="min-w-0">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.additional_info') }}</label>
                     <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="{{ $notesPlaceholder }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
@@ -244,7 +235,8 @@
                     <x-profile.location-typeahead
                         context="alliance"
                         namePrefix="{{ $namePrefix }}[{{ $idx }}]"
-                        :value="$r['location_display'] ?? $r['notes'] ?? $r['address_line'] ?? ''"
+                        :value="$r['location_display'] ?? $r['address_line'] ?? ''"
+                        :detailedValue="$r['address_line'] ?? ($r['location_display'] ?? '')"
                         placeholder="{{ __('components.relation.address_city') }}"
                         label="{{ __('components.relation.address') }}"
                         :data-city-id="$r['city_id'] ?? ''"
@@ -355,7 +347,7 @@
                     row.querySelectorAll('input[name*="[notes]"]').forEach(function(i) { i.value = ''; });
                     row.querySelectorAll('input[name*="[contact_number]"]').forEach(function(i) { i.value = ''; });
                     row.querySelectorAll('.location-typeahead-input').forEach(function(i) { i.value = ''; });
-                    row.querySelectorAll('.location-hidden-city, .location-hidden-taluka, .location-hidden-district, .location-hidden-state').forEach(function(h) { h.value = ''; });
+                    row.querySelectorAll('.location-hidden-location-id, .location-hidden-location-input, .location-hidden-address-line, .location-hidden-city, .location-hidden-taluka, .location-hidden-district, .location-hidden-state').forEach(function(h) { h.value = ''; });
                 }
             }
         });
@@ -409,7 +401,7 @@
             row.querySelectorAll('input[name*="[notes]"]').forEach(function(i) { i.value = ''; });
             row.querySelectorAll('input[name*="[contact_number]"]').forEach(function(i) { i.value = ''; });
             row.querySelectorAll('.location-typeahead-input').forEach(function(i) { i.value = ''; });
-            row.querySelectorAll('.location-hidden-city, .location-hidden-taluka, .location-hidden-district, .location-hidden-state').forEach(function(h) { h.value = ''; });
+            row.querySelectorAll('.location-hidden-location-id, .location-hidden-location-input, .location-hidden-address-line, .location-hidden-city, .location-hidden-taluka, .location-hidden-district, .location-hidden-state').forEach(function(h) { h.value = ''; });
         }
         if (!showMarried) {
             container.querySelectorAll('.relation-engine-row').forEach(clearRowFieldsIfNoRelation);
@@ -428,7 +420,7 @@
             if (ms) { ms.value = 'unmarried'; ms.classList.remove('marital-yes'); ms.classList.add('marital-no'); }
             row.querySelectorAll('.location-typeahead-wrapper').forEach(function(w) { w.removeAttribute('data-bound'); });
             row.querySelectorAll('.location-typeahead-input').forEach(function(i) { i.value = ''; });
-            row.querySelectorAll('.location-hidden-city, .location-hidden-taluka, .location-hidden-district, .location-hidden-state').forEach(function(h) { h.value = ''; });
+            row.querySelectorAll('.location-hidden-location-id, .location-hidden-location-input, .location-hidden-address-line, .location-hidden-city, .location-hidden-taluka, .location-hidden-district, .location-hidden-state').forEach(function(h) { h.value = ''; });
             updateMaritalStyles();
             if (addressOnlyRelation) initAddressOnlyToggles();
             if (window.LocationTypeahead && window.LocationTypeahead.init) window.LocationTypeahead.init();

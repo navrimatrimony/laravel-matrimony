@@ -118,7 +118,7 @@ class ProfileWizardController extends Controller
         }
         $previousSection = $minimal ? FieldCatalogService::getPreviousSection($section, true) : FieldCatalogService::getPreviousSection($section, false);
 
-        $completion = $this->profileCompletionEngine->for($user);
+        $completion = $this->profileCompletionEngine->for($profile->user ?? $user);
         $completionPct = $completion['detailed'];
         $sectionStatuses = $this->profileCompletionEngine->sectionStatuses($profile, $sections);
         $viewData = $this->getSectionViewData($section, $profile);
@@ -131,9 +131,12 @@ class ProfileWizardController extends Controller
         $viewData['previousSection'] = $previousSection;
         $viewData['sectionStatuses'] = $sectionStatuses;
         $viewData['wizardMinimal'] = $minimal;
+        $viewData['wizardAdminTarget'] = $this->isAllowedAdminWizardTarget($user, $profile);
 
-        if ($section === 'about-preferences') {
-            $viewData['partnerPrefSection'] = PartnerPreferenceNavService::resolveActiveSection($request);
+        if ($section === 'about-preferences' || $section === 'full') {
+            if ($section === 'about-preferences') {
+                $viewData['partnerPrefSection'] = PartnerPreferenceNavService::resolveActiveSection($request);
+            }
             $viewData['partnerPrefNavItems'] = PartnerPreferenceNavService::navItems($profile, $viewData);
         }
 
@@ -247,7 +250,8 @@ class ProfileWizardController extends Controller
         }
 
         try {
-            $result = app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
+            $mutationMode = $this->isAdminRegistrationTarget($user, $profile) ? 'admin' : 'manual';
+            $result = app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, $mutationMode);
             if ($request->attributes->get('matrimony_apply_pending_photo_review')) {
                 app(\App\Services\Image\ProfilePhotoPendingStateService::class)->applyPendingReviewState($profile);
             }
@@ -313,7 +317,7 @@ class ProfileWizardController extends Controller
             return null;
         }
 
-        // Admin override: allow using the wizard engine for a specific showcase profile (SSOT).
+        // Admin override: showcase profiles, plus the fresh draft created by this admin registration session.
         if ($request && method_exists($user, 'isAnyAdmin') && $user->isAnyAdmin()) {
             $targetId = (int) ($request->input('profile_id') ?? $request->query('profile_id') ?? 0);
             if ($targetId <= 0) {
@@ -321,11 +325,13 @@ class ProfileWizardController extends Controller
             }
             if ($targetId > 0) {
                 $target = MatrimonyProfile::withTrashed()->find($targetId);
-                if ($target && $target->isShowcaseProfile()) {
+                if ($target && $this->isAllowedAdminWizardTarget($user, $target)) {
                     session(['admin_edit_profile_id' => (int) $target->id]);
 
                     return $target;
                 }
+
+                abort(403, 'This profile is not available in the current admin registration session.');
             }
         }
 
@@ -347,6 +353,25 @@ class ProfileWizardController extends Controller
         ]);
 
         return $profile;
+    }
+
+    private function isAllowedAdminWizardTarget($user, MatrimonyProfile $profile): bool
+    {
+        if (! $user || ! method_exists($user, 'isAnyAdmin') || ! $user->isAnyAdmin()) {
+            return false;
+        }
+
+        return $profile->isShowcaseProfile() || $this->isAdminRegistrationTarget($user, $profile);
+    }
+
+    private function isAdminRegistrationTarget($user, MatrimonyProfile $profile): bool
+    {
+        if (! $user || ! method_exists($user, 'isAnyAdmin') || ! $user->isAnyAdmin()) {
+            return false;
+        }
+
+        return (int) session('admin_registration_profile_id', 0) === (int) $profile->id
+            && ! $profile->isShowcaseProfile();
     }
 
     private function getSectionViewData(string $section, MatrimonyProfile $profile): array
@@ -418,18 +443,22 @@ class ProfileWizardController extends Controller
                     ->get();
                 $data['profileSiblings'] = $siblings->map(function ($s) {
                     $relationType = $s->relation_type;
+                    $addressLine = trim((string) ($s->address_line ?? ''));
+                    $notes = trim((string) ($s->notes ?? ''));
                     $locationDisplay = $s->city?->name ?? '';
-                    if ($locationDisplay === '' && ! empty(trim((string) ($s->notes ?? '')))) {
-                        $locationDisplay = $s->notes;
+                    if ($locationDisplay === '' && $addressLine !== '') {
+                        $locationDisplay = $addressLine;
+                    } elseif ($locationDisplay === '' && $addressLine === '' && $notes !== '') {
+                        // Legacy rows: address was stored only in notes before address_line column existed.
+                        $locationDisplay = $notes;
+                        $addressLine = $notes;
                     }
                     $arr = array_merge($s->toArray(), [
                         'relation_type' => $relationType,
                         'location_display' => $locationDisplay,
+                        'address_line' => $addressLine,
+                        'notes' => $notes,
                     ]);
-                    // profile_siblings has only notes (no address_line); show notes in Address field for display.
-                    if (empty($arr['address_line']) && ! empty(trim((string) ($arr['notes'] ?? '')))) {
-                        $arr['address_line'] = $arr['notes'];
-                    }
 
                     return (object) $arr;
                 });
@@ -440,16 +469,7 @@ class ProfileWizardController extends Controller
                 $relRows = DB::table('profile_relatives')->where('profile_id', $profile->id)->orderBy('id')->get();
                 $cityIds = $relRows->pluck('city_id')->filter()->unique()->values()->all();
                 $cityNames = $cityIds ? \App\Models\City::whereIn('id', $cityIds)->pluck('name', 'id')->toArray() : [];
-                $mapRow = function ($row) use ($cityNames) {
-                    $arr = (array) $row;
-                    $arr['location_display'] = ! empty($row->city_id) ? ($cityNames[$row->city_id] ?? '') : '';
-                    // profile_relatives has no address_line column; we store address in notes — show in Address field for display.
-                    if (empty($arr['address_line']) && ! empty(trim((string) ($arr['notes'] ?? '')))) {
-                        $arr['address_line'] = $arr['notes'];
-                    }
-
-                    return (object) $arr;
-                };
+                $mapRow = fn ($row) => $this->mapRelativeRowForView($row, $cityNames);
                 $parentsFamilyTypes = ['paternal_grandfather', 'paternal_grandmother', 'paternal_uncle', 'wife_paternal_uncle', 'paternal_aunt', 'husband_paternal_aunt', 'Cousin'];
                 $maternalFamilyTypes = ['maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin'];
                 $parents = $relRows
@@ -477,15 +497,7 @@ class ProfileWizardController extends Controller
                 $relRows = DB::table('profile_relatives')->where('profile_id', $profile->id)->orderBy('id')->get();
                 $cityIds = $relRows->pluck('city_id')->filter()->unique()->values()->all();
                 $cityNames = $cityIds ? \App\Models\City::whereIn('id', $cityIds)->pluck('name', 'id')->toArray() : [];
-                $mapRow = function ($row) use ($cityNames) {
-                    $arr = (array) $row;
-                    $arr['location_display'] = ! empty($row->city_id) ? ($cityNames[$row->city_id] ?? '') : '';
-                    if (empty($arr['address_line']) && ! empty(trim((string) ($arr['notes'] ?? '')))) {
-                        $arr['address_line'] = $arr['notes'];
-                    }
-
-                    return (object) $arr;
-                };
+                $mapRow = fn ($row) => $this->mapRelativeRowForView($row, $cityNames);
                 $maternalFamilyTypes = ['maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin'];
                 $data['profileRelativesMaternalFamily'] = $relRows->filter(fn ($r) => in_array($r->relation_type ?? '', $maternalFamilyTypes, true))->map($mapRow)->values();
                 $data['relationTypesMaternalFamily'] = MasterRelative::optionsForGroup('maternal');
@@ -1333,6 +1345,116 @@ class ProfileWizardController extends Controller
         return $snapshot;
     }
 
+    /**
+     * Map one sibling repeater row from wizard/intake POST into snapshot shape for MutationService.
+     */
+    public function mapSiblingFormRowFromRequest(array $row): array
+    {
+        $occSvc = app(OccupationService::class);
+        $uid = auth()->id();
+        $allowedSiblingRelations = ['brother', 'sister', 'brother_wife', 'sister_husband'];
+        $relationType = in_array($row['relation_type'] ?? null, $allowedSiblingRelations, true) ? $row['relation_type'] : null;
+        $maritalStatus = in_array($row['marital_status'] ?? null, ['unmarried', 'married'], true) ? $row['marital_status'] : null;
+        if (in_array($relationType, ['brother_wife', 'sister_husband'], true)) {
+            $maritalStatus = 'married';
+        }
+        $sibMid = ! empty($row['occupation_master_id']) ? (int) $row['occupation_master_id'] : null;
+        $sibCid = ! empty($row['occupation_custom_id']) ? (int) $row['occupation_custom_id'] : null;
+        $sibOccText = $occSvc->resolvedOccupationText($sibMid, $sibCid, $uid)
+            ?: (trim((string) ($row['occupation'] ?? '')) !== '' ? trim((string) ($row['occupation'] ?? '')) : null);
+        $cityId = ! empty($row['location_id']) ? (int) $row['location_id'] : (! empty($row['city_id']) ? (int) $row['city_id'] : null);
+        $addressLine = trim((string) ($row['address_line'] ?? ''));
+        if ($addressLine === '') {
+            $addressLine = trim((string) ($row['location_input'] ?? ''));
+        }
+
+        return [
+            'id' => ! empty($row['id']) ? (int) $row['id'] : null,
+            'relation_type' => $relationType,
+            'name' => trim((string) ($row['name'] ?? '')) ?: null,
+            'marital_status' => $maritalStatus,
+            'occupation' => $sibOccText,
+            'occupation_master_id' => $sibMid && $sibMid > 0 ? $sibMid : null,
+            'occupation_custom_id' => $sibCid && $sibCid > 0 ? $sibCid : null,
+            'city_id' => $cityId && $cityId > 0 ? $cityId : null,
+            'address_line' => $addressLine !== '' ? $addressLine : null,
+            'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
+            'contact_number_2' => trim((string) ($row['contact_number_2'] ?? '')) ?: null,
+            'contact_number_3' => trim((string) ($row['contact_number_3'] ?? '')) ?: null,
+            'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
+            'sort_order' => isset($row['sort_order']) && $row['sort_order'] !== '' ? (int) $row['sort_order'] : 0,
+        ];
+    }
+
+    /**
+     * Map one relative repeater row from wizard/intake POST into snapshot shape for MutationService.
+     */
+    public function mapRelativeFormRowFromRequest(array $row): array
+    {
+        $relationType = trim((string) ($row['relation_type'] ?? ''));
+        if ($relationType === '') {
+            return [];
+        }
+        $occSvc = app(OccupationService::class);
+        $uid = auth()->id();
+        $name = trim((string) ($row['name'] ?? ''));
+        if ($relationType === 'maternal_address_ajol') {
+            $name = '';
+        }
+        $rMid = ! empty($row['occupation_master_id']) ? (int) $row['occupation_master_id'] : null;
+        $rCid = ! empty($row['occupation_custom_id']) ? (int) $row['occupation_custom_id'] : null;
+        $occText = $occSvc->resolvedOccupationText($rMid, $rCid, $uid)
+            ?: (trim((string) ($row['occupation'] ?? '')) !== '' ? trim((string) ($row['occupation'] ?? '')) : null);
+        $cityId = ! empty($row['location_id']) ? (int) $row['location_id'] : (! empty($row['city_id']) ? (int) $row['city_id'] : null);
+        $addressLine = trim((string) ($row['address_line'] ?? ''));
+        if ($addressLine === '') {
+            $addressLine = trim((string) ($row['location_input'] ?? ''));
+        }
+
+        return [
+            'id' => ! empty($row['id']) ? (int) $row['id'] : null,
+            'relation_type' => $relationType,
+            'name' => $name ?: '',
+            'occupation' => $occText,
+            'occupation_master_id' => $rMid && $rMid > 0 ? $rMid : null,
+            'occupation_custom_id' => $rCid && $rCid > 0 ? $rCid : null,
+            'city_id' => $cityId && $cityId > 0 ? $cityId : null,
+            'state_id' => ! empty($row['state_id']) ? (int) $row['state_id'] : null,
+            'taluka_id' => ! empty($row['taluka_id']) ? (int) $row['taluka_id'] : null,
+            'district_id' => ! empty($row['district_id']) ? (int) $row['district_id'] : null,
+            'address_line' => $addressLine !== '' ? $addressLine : null,
+            'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
+            'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
+            'is_primary_contact' => ! empty($row['is_primary_contact']),
+        ];
+    }
+
+    /**
+     * @param  object  $row  profile_relatives row
+     * @param  array<int, string>  $cityNames
+     */
+    private function mapRelativeRowForView(object $row, array $cityNames): object
+    {
+        $addressLine = trim((string) ($row->address_line ?? ''));
+        $notes = trim((string) ($row->notes ?? ''));
+        $locationDisplay = ! empty($row->city_id) ? ($cityNames[$row->city_id] ?? '') : '';
+        if ($locationDisplay === '' && $addressLine !== '') {
+            $locationDisplay = $addressLine;
+        } elseif ($locationDisplay === '' && $addressLine === '' && $notes !== '') {
+            // Legacy rows: address was stored only in notes before address_line column existed.
+            $locationDisplay = $notes;
+            $addressLine = $notes;
+        }
+
+        return (object) array_merge((array) $row, [
+            'location_display' => $locationDisplay,
+            'address_line' => $addressLine,
+            'notes' => $notes,
+            'taluka_id' => $row->taluka_id ?? null,
+            'district_id' => $row->district_id ?? null,
+        ]);
+    }
+
     private function buildSiblingsSnapshot(Request $request, MatrimonyProfile $profile): array
     {
         $hasSiblings = $request->has('has_siblings') ? ($request->input('has_siblings') === '1' || $request->input('has_siblings') === 1) : null;
@@ -1340,35 +1462,8 @@ class ProfileWizardController extends Controller
         if ($hasSiblings === false) {
             // User chose "No" — do not persist sibling rows
         } else {
-            $occSvc = app(OccupationService::class);
-            $uid = auth()->id();
-            $allowedSiblingRelations = ['brother', 'sister', 'brother_wife', 'sister_husband'];
             foreach ($request->input('siblings', []) as $row) {
-                $relationType = in_array($row['relation_type'] ?? null, $allowedSiblingRelations, true) ? $row['relation_type'] : null;
-                $maritalStatus = in_array($row['marital_status'] ?? null, ['unmarried', 'married'], true) ? $row['marital_status'] : null;
-                if (in_array($relationType, ['brother_wife', 'sister_husband'], true)) {
-                    $maritalStatus = 'married';
-                }
-                $sibMid = ! empty($row['occupation_master_id']) ? (int) $row['occupation_master_id'] : null;
-                $sibCid = ! empty($row['occupation_custom_id']) ? (int) $row['occupation_custom_id'] : null;
-                $sibOccText = $occSvc->resolvedOccupationText($sibMid, $sibCid, $uid)
-                    ?: (trim((string) ($row['occupation'] ?? '')) !== '' ? trim((string) ($row['occupation'] ?? '')) : null);
-                $siblingRow = [
-                    'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                    'relation_type' => $relationType,
-                    'name' => trim((string) ($row['name'] ?? '')) ?: null,
-                    'marital_status' => $maritalStatus,
-                    'occupation' => $sibOccText,
-                    'occupation_master_id' => $sibMid && $sibMid > 0 ? $sibMid : null,
-                    'occupation_custom_id' => $sibCid && $sibCid > 0 ? $sibCid : null,
-                    'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
-                    'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
-                    'contact_number_2' => trim((string) ($row['contact_number_2'] ?? '')) ?: null,
-                    'contact_number_3' => trim((string) ($row['contact_number_3'] ?? '')) ?: null,
-                    'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
-                    'sort_order' => isset($row['sort_order']) && $row['sort_order'] !== '' ? (int) $row['sort_order'] : 0,
-                ];
-                $siblings[] = $siblingRow;
+                $siblings[] = $this->mapSiblingFormRowFromRequest(is_array($row) ? $row : []);
             }
         }
 
@@ -1403,34 +1498,14 @@ class ProfileWizardController extends Controller
     private function collectRelativesFromRequestSource(array $rows): array
     {
         $relatives = [];
-        $occSvc = app(OccupationService::class);
-        $uid = auth()->id();
         foreach ($rows as $row) {
-            $relationType = trim((string) ($row['relation_type'] ?? ''));
-            if ($relationType === '') {
+            if (! is_array($row)) {
                 continue;
             }
-            $name = trim((string) ($row['name'] ?? ''));
-            if ($relationType === 'maternal_address_ajol') {
-                $name = '';
+            $mapped = $this->mapRelativeFormRowFromRequest($row);
+            if ($mapped !== []) {
+                $relatives[] = $mapped;
             }
-            $rMid = ! empty($row['occupation_master_id']) ? (int) $row['occupation_master_id'] : null;
-            $rCid = ! empty($row['occupation_custom_id']) ? (int) $row['occupation_custom_id'] : null;
-            $occText = $occSvc->resolvedOccupationText($rMid, $rCid, $uid)
-                ?: (trim((string) ($row['occupation'] ?? '')) !== '' ? trim((string) ($row['occupation'] ?? '')) : null);
-            $relatives[] = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'relation_type' => $relationType ?: '',
-                'name' => $name ?: '',
-                'occupation' => $occText,
-                'occupation_master_id' => $rMid && $rMid > 0 ? $rMid : null,
-                'occupation_custom_id' => $rCid && $rCid > 0 ? $rCid : null,
-                'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
-                'state_id' => ! empty($row['state_id']) ? (int) $row['state_id'] : null,
-                'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
-                'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
-                'is_primary_contact' => ! empty($row['is_primary_contact']),
-            ];
         }
 
         return $relatives;
@@ -1452,6 +1527,9 @@ class ProfileWizardController extends Controller
             'occupation_custom_id' => $r->occupation_custom_id ?? null,
             'city_id' => $r->city_id ?? null,
             'state_id' => $r->state_id ?? null,
+            'taluka_id' => $r->taluka_id ?? null,
+            'district_id' => $r->district_id ?? null,
+            'address_line' => $r->address_line ?? null,
             'contact_number' => $r->contact_number ?? null,
             'notes' => $r->notes ?? null,
             'is_primary_contact' => ! empty($r->is_primary_contact),

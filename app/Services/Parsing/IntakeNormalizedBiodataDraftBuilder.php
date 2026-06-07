@@ -38,6 +38,7 @@ class IntakeNormalizedBiodataDraftBuilder
         $this->candidateNameFromFallback = false;
         $prepared = app(IntakeNormalizedBiodataHtmlPreprocessor::class)->prepare($rawText);
         $cleanedText = $this->cleanText($prepared['text']);
+        $cleanedText = MarathiSplitLabelValueRejoiner::rejoin($cleanedText);
         $parsingText = $this->normalizeDecorativeLabelSeparatorsInText($cleanedText);
         $sections = $this->splitSections($parsingText);
         $normalized = $this->normalizeSectionValues($sections);
@@ -4462,7 +4463,7 @@ class IntakeNormalizedBiodataDraftBuilder
 
     private function isSuspiciousHeadingAsName(string $value): bool
     {
-        return (bool) preg_match('/^(?:वैयक्तिक\s+माहिती|वैयक्तिक\s+तपशील|कौटुंबिक\s+माहिती|कौटुंबिक\s+तपशील|शिक्षण|नोकरी|व्यवसाय|बायोडाटा)$/u', trim($value));
+        return (bool) preg_match('/^(?:वैयक्तिक\s+माहिती|वैयक्तिक\s+तपशील|कौटुंबिक\s+माहिती|कौटुंबिक\s+तपशील|परिचय\s*(?:पत्र|पञ्जक)|शिक्षण|नोकरी|व्यवसाय|बायोडाटा)$/u', trim($value));
     }
 
     /**
@@ -4746,7 +4747,7 @@ class IntakeNormalizedBiodataDraftBuilder
     {
         $line = trim($line);
 
-        return (bool) preg_match('/^(?:#+\s*\*?\s*)?(?:परिचय\s*पत्र|परिचयपत्र|कौटुंबिक\s+माहिती|कौटुंबिक\s+तपशील|मुलाची\s+माहिती|मुलीची\s+माहिती|बायोडेटा|बायोडाटा)\*?$/u', $line)
+        return (bool) preg_match('/^(?:#+\s*\*?\s*)?(?:परिचय\s*(?:पत्र|पञ्जक)|परिचयपत्र|कौटुंबिक\s+माहिती|कौटुंबिक\s+तपशील|मुलाची\s+माहिती|मुलीची\s+माहिती|बायोडेटा|बायोडाटा)\*?$/u', $line)
             || (bool) preg_match('/^(?:संपर्क\s+नंबर|मोबाईल\s+नंबर|मोबाइल\s+नंबर|कायमचा\s+पत्ता)\s*:?\s*$/u', $line)
             || (bool) preg_match('/श्री\s*(?:गणेश|गणेशाय|गजानन)|तुळजाभवानी\s+प्रसन्न|खंडोबा\s+प्रसन्न/u', $line);
     }

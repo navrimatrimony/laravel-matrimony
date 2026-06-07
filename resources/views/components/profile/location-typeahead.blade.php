@@ -121,8 +121,13 @@
         <input type="hidden" class="location-hidden-birth-district" value="{{ $attributes->get('data-birth-district-id', '') }}">
         <input type="hidden" class="location-hidden-birth-state" value="{{ $attributes->get('data-birth-state-id', '') }}">
     @elseif ($context === 'alliance' && $namePrefix !== '')
+        @php
+            $storedAddressLine = trim((string) ($detailedValue ?? ''));
+            $storedLocationInput = filled($dataCityId) ? '' : $storedAddressLine;
+        @endphp
         <input type="hidden" name="{{ $namePrefix }}[location_id]" class="location-hidden-location-id" value="{{ $dataCityId }}">
-        <input type="hidden" name="{{ $namePrefix }}[location_input]" class="location-hidden-location-input" value="">
+        <input type="hidden" name="{{ $namePrefix }}[location_input]" class="location-hidden-location-input" value="{{ $storedLocationInput }}">
+        <input type="hidden" name="{{ $namePrefix }}[address_line]" class="location-hidden-address-line" value="{{ $storedAddressLine }}">
         <input type="hidden" name="{{ $namePrefix }}[taluka_id]" class="location-hidden-taluka" value="{{ $dataTalukaId }}">
         <input type="hidden" name="{{ $namePrefix }}[district_id]" class="location-hidden-district" value="{{ $dataDistrictId }}">
         <input type="hidden" name="{{ $namePrefix }}[state_id]" class="location-hidden-state" value="{{ $dataStateId }}">

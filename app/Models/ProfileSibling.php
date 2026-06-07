@@ -24,6 +24,7 @@ class ProfileSibling extends Model
         'occupation_master_id',
         'occupation_custom_id',
         'city_id',
+        'address_line',
         'contact_number',
         'notes',
         'sort_order',
