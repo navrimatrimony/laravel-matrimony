@@ -3468,6 +3468,13 @@ class IntakeNormalizedBiodataDraftBuilder
     {
         $value = trim(str_replace(['{', '}'], ['(', ')'], $value));
         $kuliPattern = '(?:कुळी|क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कळी)';
+        if (preg_match('/([0-9०-९]+\s*'.$kuliPattern.')\s*हिंद[ुू]\s*[-–—]?\s*मराठा/u', $value, $m)) {
+            $core['religion'] = 'हिंदू';
+            $core['caste'] = 'मराठा';
+            $core['sub_caste'] = $this->normalizeKuli($m[1]);
+
+            return;
+        }
         if (preg_match('/हिंद[ुू]\s*[-–—]?\s*मराठा\s*\(?\s*([0-9०-९]+\s*'.$kuliPattern.')\s*\)?/u', $value, $m)
             || preg_match('/हिंद[ुू]\s*[-–]?\s*([0-9०-९]+\s*'.$kuliPattern.')\s*मराठा/u', $value, $m)) {
             $core['religion'] = 'हिंदू';

@@ -408,7 +408,7 @@ TXT, true);
         $physicalBlob = $this->sectionBlob($out['sections']['physical']);
         $horoscopeBlob = $this->sectionBlob($out['sections']['horoscope']);
         $relativesBlob = $this->sectionBlob($out['sections']['alliance']);
-        $reviewBlob = $this->sectionBlob($out['sections']['review_needed']);
+        $reviewBlob = $this->reviewAlertBlob($out['sections']['review_needed']);
 
         $this->assertStringContainsString('3.45 A.M', $basicBlob);
         $this->assertStringContainsString('cm', $physicalBlob);
@@ -417,7 +417,7 @@ TXT, true);
         $this->assertStringContainsString('अश्विनी', $horoscopeBlob);
         $this->assertStringContainsString('मोहन कदम', $relativesBlob);
         $this->assertStringContainsString('Education / career information was detected but not mapped cleanly', $reviewBlob);
-        $this->assertStringContainsString('Suggested section: Education & career', $reviewBlob);
+        $this->assertStringContainsString('Education & career', $reviewBlob);
     }
 
     public function test_horoscope_preview_uses_wizard_field_order_for_mapped_values(): void
@@ -1063,6 +1063,48 @@ TXT, true);
         $this->assertStringContainsString("Sister's husband 2 Address मुर्ती बारामती", $siblingsBlob);
     }
 
+    public function test_ashish_caste_line_maps_sub_caste_without_detected_coverage_row(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+मुलाचे नाव :- कु. आशिष बापूराव गायकवाड
+जात :- 96 कुळी हिंदू-मराठा
+TXT, true);
+
+        $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
+        $detected = $out['detected_but_not_included'] ?? [];
+        $reviewBlob = $this->reviewAlertBlob($out['sections']['review_needed']);
+
+        $this->assertStringContainsString('Religion हिंदू', $basicBlob);
+        $this->assertStringContainsString('Caste मराठा', $basicBlob);
+        $this->assertStringContainsString('Sub caste 96 कुळी', $basicBlob);
+        $this->assertSame([], $detected);
+
+        $casteRow = $this->findRowByField($out['sections']['basic-info'], 'core.caste');
+        $this->assertNotNull($casteRow);
+        $this->assertFalse((bool) ($casteRow['needs_review'] ?? false));
+        $this->assertStringNotContainsString('Coverage missing fact', $reviewBlob);
+    }
+
+    public function test_ashish_caste_line_marathi_locale_shows_sub_caste_in_basic_info(): void
+    {
+        $originalLocale = app()->getLocale();
+        app()->setLocale('mr');
+
+        try {
+            $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+मुलाचे नाव :- कु. आशिष बापूराव गायकवाड
+जात :- 96 कुळी हिंदू-मराठा
+TXT, true);
+
+            $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
+
+            $this->assertStringContainsString('उपजात 96 कुळी', $basicBlob);
+            $this->assertSame([], $out['detected_but_not_included'] ?? []);
+        } finally {
+            app()->setLocale($originalLocale);
+        }
+    }
+
     public function test_unavailable_when_not_biodata_text(): void
     {
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present('AI unavailable message', false);
@@ -1299,7 +1341,7 @@ TXT, true);
     }
 
     /**
-     * @param  list<array{label: string, value: string, reason?: ?string, suggested_section?: ?string}>  $rows
+     * @param  list<array{label: string, value: string, reason?: ?string, suggested_section?: ?string, draft_shows?: ?string, source_line_no?: ?int, missing_field?: ?string, missing_value?: ?string, correction_target?: ?string}>  $rows
      */
     private function detectedBlob(array $rows): string
     {
@@ -1307,7 +1349,32 @@ TXT, true);
             static fn (array $row): string => trim(
                 ($row['label'] ?? '').' '
                 .($row['value'] ?? '').' '
+                .($row['draft_shows'] ?? '').' '
+                .(! empty($row['source_line_no']) ? 'Line '.$row['source_line_no'].' ' : '')
+                .($row['missing_field'] ?? '').' '
+                .($row['missing_value'] ?? '').' '
+                .($row['correction_target'] ?? '').' '
                 .($row['reason'] ?? '').' '
+                .($row['suggested_section'] ?? '')
+            ),
+            $rows
+        ));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     */
+    private function reviewAlertBlob(array $rows): string
+    {
+        return implode(' ', array_map(
+            static fn (array $row): string => trim(
+                ($row['label'] ?? '').' '
+                .($row['value'] ?? '').' '
+                .($row['source_text'] ?? '').' '
+                .(! empty($row['source_line_no']) ? 'Line '.$row['source_line_no'].' ' : '')
+                .($row['missing_field'] ?? '').' '
+                .($row['missing_value'] ?? '').' '
+                .($row['correction_target'] ?? '').' '
                 .($row['suggested_section'] ?? '')
             ),
             $rows

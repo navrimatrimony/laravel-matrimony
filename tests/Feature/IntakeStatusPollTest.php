@@ -65,4 +65,25 @@ class IntakeStatusPollTest extends TestCase
             ->getJson(route('api.intake-status', $intake))
             ->assertForbidden();
     }
+
+    public function test_admin_can_view_status_and_poll_for_another_users_intake(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $owner = User::factory()->create();
+        $intake = BiodataIntake::create([
+            'raw_ocr_text' => 'sample',
+            'uploaded_by' => $owner->id,
+            'parse_status' => 'pending',
+            'intake_status' => 'uploaded',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('intake.status', $intake))
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->getJson(route('api.intake-status', $intake))
+            ->assertOk()
+            ->assertJson(['parse_status' => 'pending']);
+    }
 }

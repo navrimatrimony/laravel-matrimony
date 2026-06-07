@@ -356,6 +356,13 @@ class IntakeWizardSourceFactExtractor
             ];
         }
 
+        if ($field === 'core.caste') {
+            $splitFacts = $this->splitCompoundCasteFacts($value, $lineNo, $sourceText, $sourceLabel);
+            if ($splitFacts !== []) {
+                return $splitFacts;
+            }
+        }
+
         if ($field === 'core.height_cm' && preg_match('/(?:फूट|फुट|इंच|\')/u', $value)) {
             return [];
         }
@@ -653,5 +660,43 @@ class IntakeWizardSourceFactExtractor
         }
 
         return preg_replace($pattern, '$1 : ', $line) ?? $line;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function splitCompoundCasteFacts(string $value, int $lineNo, string $sourceText, string $sourceLabel): array
+    {
+        $value = trim(str_replace(['{', '}'], ['(', ')'], $value));
+        $kuliPattern = '(?:कुळी|क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कळी)';
+        $facts = [];
+
+        if (preg_match('/([0-9०-९]+\s*'.$kuliPattern.')\s*हिंद[ुू]\s*[-–—]?\s*मराठा/u', $value, $m)
+            || preg_match('/हिंद[ुू]\s*[-–—]?\s*मराठा\s*\(?\s*([0-9०-९]+\s*'.$kuliPattern.')\s*\)?/u', $value, $m)
+            || preg_match('/हिंद[ुू]\s*[-–]?\s*([0-9०-९]+\s*'.$kuliPattern.')\s*मराठा/u', $value, $m)
+            || preg_match('/([0-9०-९]+\s*'.$kuliPattern.')\s*मराठा/u', $value, $m)) {
+            $facts[] = $this->fact('field_value', 'हिंदू', $lineNo, $sourceText, $sourceLabel, 'basic-info', 'core.religion');
+            $facts[] = $this->fact('field_value', 'मराठा', $lineNo, $sourceText, $sourceLabel, 'basic-info', 'core.caste');
+            $facts[] = $this->fact(
+                'field_value',
+                OcrNormalize::normalizeDigits(trim($m[1])),
+                $lineNo,
+                $sourceText,
+                $sourceLabel,
+                'basic-info',
+                'core.sub_caste'
+            );
+
+            return $facts;
+        }
+
+        if (preg_match('/हिंद[ुू]\s*[-–—]?\s*मराठा/u', $value)) {
+            $facts[] = $this->fact('field_value', 'हिंदू', $lineNo, $sourceText, $sourceLabel, 'basic-info', 'core.religion');
+            $facts[] = $this->fact('field_value', 'मराठा', $lineNo, $sourceText, $sourceLabel, 'basic-info', 'core.caste');
+
+            return $facts;
+        }
+
+        return [];
     }
 }

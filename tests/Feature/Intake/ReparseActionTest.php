@@ -120,4 +120,29 @@ TXT;
         $this->assertSame('निम गोरा', $intake->parsed_json['core']['complexion'] ?? null);
         $this->assertSame('B+', $intake->parsed_json['core']['blood_group'] ?? null);
     }
+
+    public function test_admin_member_reparse_redirects_to_admin_intake_show_not_member_status(): void
+    {
+        config(['intake.testing_active_parser' => 'rules_only']);
+        config(['intake.use_normalized_draft_parser' => true]);
+
+        $admin = User::factory()->create(['is_admin' => true]);
+        $owner = User::factory()->create();
+
+        $intake = BiodataIntake::create([
+            'raw_ocr_text' => $this->marathiBiodataText(),
+            'parsed_json' => app(IntakeParsedSnapshotSkeleton::class)->ensure([
+                'core' => ['full_name' => 'चि.अनिकेत जयवंत पाटील'],
+            ]),
+            'uploaded_by' => $owner->id,
+            'parse_status' => 'parsed',
+            'intake_status' => 'DRAFT',
+            'intake_locked' => false,
+            'approved_by_user' => false,
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('intake.reparse', $intake))
+            ->assertRedirect(route('admin.biodata-intakes.show', $intake));
+    }
 }

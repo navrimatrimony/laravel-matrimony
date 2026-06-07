@@ -18,6 +18,9 @@ final class IntakePreviewNormalizedDraftPresenter
     /** @var array<string, array<string, string>>|null */
     private ?array $relativeLabelCache = null;
 
+    /** @var array<string, mixed>|null */
+    private ?array $parsedSnapshot = null;
+
     /** @var list<string> */
     private const FALLBACK_SECTION_ORDER = [
         'basic-info',
@@ -87,13 +90,18 @@ final class IntakePreviewNormalizedDraftPresenter
      *     skipped_reason: ?string,
      *     build_error: ?string,
      *     review_flags_by_field: array<string, list<array{reason: string, raw: string}>>,
-     *     detected_but_not_included: list<array{label: string, value: string, reason: ?string, suggested_section: ?string}>,
+     *     detected_but_not_included: list<array{label: string, value: string, reason: ?string, suggested_section: ?string, draft_shows: ?string, source_line_no: ?int, missing_field: ?string, missing_value: ?string, correction_target: ?string}>,
      *     sections: array<string, list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}>>,
      *     raw_draft_json: ?string
      * }
      */
-    public function present(string $text, bool $isBiodataText): array
+    /**
+     * @param  array<string, mixed>|null  $parsedSnapshot  Current intake parsed_json for apply eligibility.
+     */
+    public function present(string $text, bool $isBiodataText, ?array $parsedSnapshot = null): array
     {
+        $this->parsedSnapshot = $parsedSnapshot;
+
         if (! $isBiodataText) {
             return $this->unavailable('not_biodata_text');
         }
@@ -107,11 +115,16 @@ final class IntakePreviewNormalizedDraftPresenter
             $normalized = is_array($draft['normalized'] ?? null) ? $draft['normalized'] : [];
             $core = is_array($normalized['core'] ?? null) ? $normalized['core'] : [];
             $flags = is_array($draft['review_flags'] ?? null) ? $draft['review_flags'] : [];
+            [$coverageFlags, $builderFlags] = $this->partitionReviewFlags($flags);
             $reviewMap = $this->buildReviewMap($flags);
-            $detectedButNotIncluded = $this->detectedButNotIncludedRows($flags, $normalized, is_array($draft['source_lines'] ?? null) ? $draft['source_lines'] : []);
+            $detectedButNotIncluded = $this->detectedButNotIncludedRows(
+                $coverageFlags,
+                $normalized,
+                is_array($draft['source_lines'] ?? null) ? $draft['source_lines'] : []
+            );
 
             $sections = array_replace($this->emptySections(), [
-                'review_needed' => $this->reviewRows($flags),
+                'review_needed' => $this->reviewRows($builderFlags, $normalized),
                 'basic-info' => $this->basicInfoRows($core, $normalized, $reviewMap),
                 'physical' => $this->physicalRows($core, $reviewMap),
                 'education-career' => $this->educationCareerRows($core, $reviewMap),
@@ -125,18 +138,27 @@ final class IntakePreviewNormalizedDraftPresenter
                 'about-preferences' => $this->preferenceRows($normalized, $reviewMap),
                 'photo' => [],
             ]);
+            $sections = $this->enrichSectionsWithApplyActions($sections, $detectedButNotIncluded);
+            $draftParsedReconciliation = app(IntakeNormalizedDraftParsedReconciler::class)
+                ->reconcile($normalized, $parsedSnapshot);
 
-            return [
+            $result = [
                 'available' => true,
                 'skipped_reason' => null,
                 'build_error' => null,
                 'review_flags_by_field' => $reviewMap,
                 'detected_but_not_included' => $detectedButNotIncluded,
+                'draft_parsed_reconciliation' => $draftParsedReconciliation,
                 'sections' => $sections,
                 'raw_draft_json' => json_encode($draft, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ];
+            $this->parsedSnapshot = null;
+
+            return $result;
         } catch (Throwable $e) {
             report($e);
+
+            $this->parsedSnapshot = null;
 
             return [
                 'available' => false,
@@ -144,6 +166,11 @@ final class IntakePreviewNormalizedDraftPresenter
                 'build_error' => $e->getMessage(),
                 'review_flags_by_field' => [],
                 'detected_but_not_included' => [],
+                'draft_parsed_reconciliation' => [
+                    'available' => false,
+                    'draft_not_in_parsed' => [],
+                    'parsed_not_in_draft' => [],
+                ],
                 'sections' => $this->emptySections(),
                 'raw_draft_json' => null,
             ];
@@ -156,7 +183,7 @@ final class IntakePreviewNormalizedDraftPresenter
      *     skipped_reason: ?string,
      *     build_error: ?string,
      *     review_flags_by_field: array<string, list<array{reason: string, raw: string}>>,
-     *     detected_but_not_included: list<array{label: string, value: string, reason: ?string, suggested_section: ?string}>,
+     *     detected_but_not_included: list<array{label: string, value: string, reason: ?string, suggested_section: ?string, draft_shows: ?string, source_line_no: ?int, missing_field: ?string, missing_value: ?string, correction_target: ?string}>,
      *     sections: array<string, list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}>>,
      *     raw_draft_json: ?string
      * }
@@ -169,6 +196,11 @@ final class IntakePreviewNormalizedDraftPresenter
             'build_error' => null,
             'review_flags_by_field' => [],
             'detected_but_not_included' => [],
+            'draft_parsed_reconciliation' => [
+                'available' => false,
+                'draft_not_in_parsed' => [],
+                'parsed_not_in_draft' => [],
+            ],
             'sections' => $this->emptySections(),
             'raw_draft_json' => null,
         ];
@@ -210,8 +242,12 @@ final class IntakePreviewNormalizedDraftPresenter
             if ($field === '') {
                 continue;
             }
+            $reason = $this->stringify($flag['reason'] ?? null);
+            if (str_starts_with($reason, 'coverage_')) {
+                continue;
+            }
             $map[$field][] = [
-                'reason' => $this->stringify($flag['reason'] ?? null),
+                'reason' => $reason,
                 'raw' => $this->stringify($flag['raw'] ?? null),
             ];
             $suggested = $this->stringify($flag['suggested_section'] ?? null);
@@ -2046,9 +2082,10 @@ final class IntakePreviewNormalizedDraftPresenter
 
     /**
      * @param  list<array<string, mixed>>  $flags
-     * @return list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}>
+     * @param  array<string, mixed>  $normalized
+     * @return list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string, source_line_no: ?int, source_text: ?string, missing_field: ?string, missing_value: ?string, correction_target: ?string, suggested_section: ?string}>
      */
-    private function reviewRows(array $flags): array
+    private function reviewRows(array $flags, array $normalized): array
     {
         $rows = [];
         foreach ($flags as $index => $flag) {
@@ -2059,25 +2096,26 @@ final class IntakePreviewNormalizedDraftPresenter
             $reason = $this->stringify($flag['reason'] ?? null);
             $raw = $this->stringify($flag['raw'] ?? null);
             $suggested = $this->stringify($flag['suggested_section'] ?? null);
-            $sourceLineNo = $this->stringify($flag['source_line_no'] ?? null);
+            $sourceLineNo = (int) ($flag['source_line_no'] ?? 0);
             $sourceText = $this->stringify($flag['source_text'] ?? null);
             if ($field === '' && $reason === '' && $raw === '') {
                 continue;
             }
-            $valueParts = array_filter([
-                $this->reviewReasonLabel($reason),
-                $sourceLineNo !== '' ? 'Line '.$sourceLineNo : '',
-                $sourceText !== '' ? __('intake.normalized_draft_review_raw_prefix').' '.$sourceText : '',
-                $raw !== '' ? __('intake.normalized_draft_review_raw_prefix').' '.$raw : '',
-                $suggested !== '' ? __('intake.normalized_draft_review_suggested_section_prefix').' '.$this->reviewSectionLabel($suggested) : '',
-            ]);
+            $rawLine = $this->preferredFlagRawLine($sourceText, $raw);
+            $guidance = $this->correctionGuidanceForFlag($flag, $normalized);
             $row = $this->displayRow(
                 $field !== '' ? $this->reviewFieldLabel($field) : __('intake.normalized_draft_review_row', ['n' => $index + 1]),
-                $valueParts !== [] ? implode(' — ', $valueParts) : '—',
+                $this->reviewReasonLabel($reason),
                 $field !== '' ? $field : null,
                 [$field => [['reason' => $reason, 'raw' => $raw]]]
             );
             $row['needs_review'] = true;
+            $row['source_line_no'] = $sourceLineNo > 0 ? $sourceLineNo : null;
+            $row['source_text'] = $rawLine !== '' ? $rawLine : null;
+            $row['suggested_section'] = $suggested !== '' ? $this->reviewSectionLabel($suggested) : null;
+            $row['missing_field'] = $guidance['missing_field'];
+            $row['missing_value'] = $guidance['missing_value'];
+            $row['correction_target'] = $guidance['correction_target'];
             $rows[] = $row;
         }
 
@@ -2088,7 +2126,7 @@ final class IntakePreviewNormalizedDraftPresenter
      * @param  list<array<string, mixed>>  $flags
      * @param  array<string, mixed>  $normalized
      * @param  list<array<string, mixed>>  $sourceLines
-     * @return list<array{label: string, value: string, reason: ?string, suggested_section: ?string}>
+     * @return list<array{label: string, value: string, reason: ?string, suggested_section: ?string, draft_shows: ?string, source_line_no: ?int, missing_field: ?string, missing_value: ?string, correction_target: ?string}>
      */
     private function detectedButNotIncludedRows(array $flags, array $normalized, array $sourceLines): array
     {
@@ -2105,19 +2143,33 @@ final class IntakePreviewNormalizedDraftPresenter
                 continue;
             }
 
+            if ($this->coverageFlagIsFullyMapped($flag, $normalized)) {
+                continue;
+            }
+
             $field = $this->stringify($flag['field'] ?? null);
             $reason = $this->stringify($flag['reason'] ?? null);
             $suggested = $this->stringify($flag['suggested_section'] ?? null);
-            $sourceLineNo = $this->stringify($flag['source_line_no'] ?? null);
+            $sourceLineNo = (int) ($flag['source_line_no'] ?? 0);
             $sourceText = $this->stringify($flag['source_text'] ?? null);
+            $guidance = $this->correctionGuidanceForFlag($flag, $normalized);
 
             $this->appendDetectedButNotIncludedRow(
                 $rows,
                 $seen,
                 $field !== '' ? $this->reviewFieldLabel($field) : __('intake.normalized_draft_detected_item_label'),
                 $sourceText !== '' ? $sourceText : $raw,
-                $reason !== '' ? trim($this->reviewReasonLabel($reason).' '.($sourceLineNo !== '' ? '(Line '.$sourceLineNo.')' : '')) : ($sourceLineNo !== '' ? 'Line '.$sourceLineNo : null),
-                $suggested !== '' ? $this->reviewSectionLabel($suggested) : null
+                $this->coverageFlagExplanation($flag, $normalized),
+                $suggested !== '' ? $this->reviewSectionLabel($suggested) : null,
+                $this->draftSnapshotForCoverageField($field, $normalized),
+                $sourceLineNo > 0 ? $sourceLineNo : null,
+                $guidance['missing_field'],
+                $guidance['missing_value'],
+                $guidance['correction_target'],
+                $suggested !== '' ? $suggested : null,
+                $guidance['apply_field'],
+                $guidance['apply_value'],
+                $guidance['can_apply']
             );
         }
 
@@ -2164,7 +2216,9 @@ final class IntakePreviewNormalizedDraftPresenter
                     __('intake.normalized_draft_detected_not_included_reason'),
                     $this->findSourceLineNumber($sourceLines, $text)
                 ),
-                __('intake.normalized_draft_section_horoscope_religious')
+                __('intake.normalized_draft_section_horoscope_religious'),
+                null,
+                $this->findSourceLineNumber($sourceLines, $text)
             );
         }
 
@@ -2174,6 +2228,7 @@ final class IntakePreviewNormalizedDraftPresenter
                 continue;
             }
 
+            $lineNo = $this->findSourceLineNumber($sourceLines, $text);
             $this->appendDetectedButNotIncludedRow(
                 $rows,
                 $seen,
@@ -2181,9 +2236,11 @@ final class IntakePreviewNormalizedDraftPresenter
                 $text,
                 $this->detectedReasonWithLineNumber(
                     __('intake.normalized_draft_detected_not_included_reason'),
-                    $this->findSourceLineNumber($sourceLines, $text)
+                    $lineNo
                 ),
-                __('intake.normalized_draft_section_horoscope_religious')
+                __('intake.normalized_draft_section_horoscope_religious'),
+                null,
+                $lineNo
             );
         }
 
@@ -2231,11 +2288,26 @@ final class IntakePreviewNormalizedDraftPresenter
     }
 
     /**
-     * @param  list<array{label: string, value: string, reason: ?string, suggested_section: ?string}>  $rows
+     * @param  list<array{label: string, value: string, reason: ?string, suggested_section: ?string, draft_shows: ?string, source_line_no: ?int, missing_field: ?string, missing_value: ?string, correction_target: ?string}>  $rows
      * @param  array<string, bool>  $seen
      */
-    private function appendDetectedButNotIncludedRow(array &$rows, array &$seen, string $label, string $value, ?string $reason, ?string $suggestedSection): void
-    {
+    private function appendDetectedButNotIncludedRow(
+        array &$rows,
+        array &$seen,
+        string $label,
+        string $value,
+        ?string $reason,
+        ?string $suggestedSection,
+        ?string $draftShows = null,
+        ?int $sourceLineNo = null,
+        ?string $missingField = null,
+        ?string $missingValue = null,
+        ?string $correctionTarget = null,
+        ?string $targetSection = null,
+        ?string $applyField = null,
+        ?string $applyValue = null,
+        bool $canApply = false
+    ): void {
         $key = mb_strtolower(trim($label.'|'.$value));
         if ($key === '' || isset($seen[$key])) {
             return;
@@ -2246,8 +2318,688 @@ final class IntakePreviewNormalizedDraftPresenter
             'label' => $label,
             'value' => $value,
             'reason' => $reason,
+            'draft_shows' => $draftShows,
             'suggested_section' => $suggestedSection,
+            'target_section' => $targetSection,
+            'source_line_no' => $sourceLineNo,
+            'missing_field' => $missingField,
+            'missing_value' => $missingValue,
+            'correction_target' => $correctionTarget,
+            'apply_field' => $applyField,
+            'apply_value' => $applyValue,
+            'can_apply' => $canApply,
         ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $flags
+     * @return array{0: list<array<string, mixed>>, 1: list<array<string, mixed>>}
+     */
+    private function partitionReviewFlags(array $flags): array
+    {
+        $coverage = [];
+        $builder = [];
+        foreach ($flags as $flag) {
+            if (! is_array($flag)) {
+                continue;
+            }
+            $reason = (string) ($flag['reason'] ?? '');
+            if (str_starts_with($reason, 'coverage_')) {
+                $coverage[] = $flag;
+
+                continue;
+            }
+            $builder[] = $flag;
+        }
+
+        return [$coverage, $builder];
+    }
+
+    private function preferredFlagRawLine(string $sourceText, string $raw): string
+    {
+        $sourceText = trim($sourceText);
+        $raw = trim($raw);
+        if ($sourceText !== '') {
+            return $sourceText;
+        }
+
+        return $raw;
+    }
+
+    /**
+     * @param  array<string, mixed>  $flag
+     * @param  array<string, mixed>  $normalized
+     */
+    private function coverageFlagExplanation(array $flag, array $normalized): string
+    {
+        $reason = (string) ($flag['reason'] ?? '');
+        $field = (string) ($flag['field'] ?? '');
+        $sourceText = trim($this->preferredFlagRawLine(
+            $this->stringify($flag['source_text'] ?? null),
+            $this->stringify($flag['raw'] ?? null)
+        ));
+        $core = is_array($normalized['core'] ?? null) ? $normalized['core'] : [];
+
+        if ($field === 'core.caste' && $sourceText !== '') {
+            $religion = trim((string) ($core['religion'] ?? ''));
+            $caste = trim((string) ($core['caste'] ?? ''));
+            $subCaste = trim((string) ($core['sub_caste'] ?? ''));
+            if (preg_match('/(\d+\s*कुळी|९६\s*कुळी)/u', $sourceText) && $subCaste === '') {
+                return __('intake.normalized_draft_coverage_partial_caste', [
+                    'religion' => $religion !== '' ? $religion : __('intake.normalized_draft_empty_field'),
+                    'caste' => $caste !== '' ? $caste : __('intake.normalized_draft_empty_field'),
+                    'missing' => __('intake.normalized_draft_sub_caste_label'),
+                ]);
+            }
+        }
+
+        if ($field === 'core.occupation_title' && $sourceText !== '') {
+            $company = trim((string) ($core['company_name'] ?? ''));
+            $location = trim((string) ($core['work_location_text'] ?? ''));
+            $title = trim((string) ($core['occupation_title'] ?? ''));
+            if ($company !== '' || $location !== '') {
+                return __('intake.normalized_draft_coverage_partial_occupation', [
+                    'title' => $title !== '' ? $title : __('intake.normalized_draft_empty_field'),
+                    'company' => $company !== '' ? $company : __('intake.normalized_draft_empty_field'),
+                    'location' => $location !== '' ? $location : __('intake.normalized_draft_empty_field'),
+                ]);
+            }
+        }
+
+        if ($reason === 'coverage_wrong_section_fact') {
+            return __('intake.normalized_draft_coverage_wrong_section');
+        }
+        if ($reason === 'coverage_duplicate_fact') {
+            return __('intake.normalized_draft_coverage_duplicate');
+        }
+        if ($reason === 'coverage_mixed_fact') {
+            return __('intake.normalized_draft_coverage_mixed');
+        }
+        if ($reason === 'coverage_missing_fact') {
+            return __('intake.normalized_draft_coverage_missing');
+        }
+
+        $label = $this->reviewReasonLabel($reason);
+
+        return $label !== '' ? $label : __('intake.normalized_draft_coverage_missing');
+    }
+
+    /**
+     * @param  array<string, mixed>  $flag
+     * @param  array<string, mixed>  $normalized
+     * @return array{missing_field: ?string, missing_value: ?string, correction_target: ?string, apply_field: ?string, apply_value: ?string, can_apply: bool}
+     */
+    private function correctionGuidanceForFlag(array $flag, array $normalized): array
+    {
+        $field = (string) ($flag['field'] ?? '');
+        $reason = (string) ($flag['reason'] ?? '');
+        $suggested = (string) ($flag['suggested_section'] ?? '');
+        $sourceText = trim($this->preferredFlagRawLine(
+            $this->stringify($flag['source_text'] ?? null),
+            $this->stringify($flag['raw'] ?? null)
+        ));
+        $core = is_array($normalized['core'] ?? null) ? $normalized['core'] : [];
+        $sectionLabel = $suggested !== '' ? $this->reviewSectionLabel($suggested) : '';
+
+        if (($field === 'core.caste' || $field === 'core.sub_caste')
+            && preg_match('/(\d+\s*कुळी|९६\s*कुळी)/u', $sourceText, $matches)
+            && trim((string) ($core['sub_caste'] ?? '')) === '') {
+            $targetField = $this->fieldLabel('sub_caste');
+
+            return $this->finalizeCorrectionGuidance([
+                'missing_field' => $targetField,
+                'missing_value' => trim($matches[1]),
+                'correction_target' => $this->correctionTargetLabel(
+                    $sectionLabel !== '' ? $sectionLabel : $this->reviewSectionLabel('basic-info'),
+                    $targetField
+                ),
+            ], $flag, $normalized, 'core.sub_caste');
+        }
+
+        if ($field === 'core.occupation_title' && $sourceText !== '') {
+            $targetField = $this->fieldLabel('occupation_title');
+            $missingValue = trim((string) ($core['occupation_title'] ?? ''));
+            if ($missingValue === '') {
+                $missingValue = $this->extractValueFromSourceLine($sourceText);
+            }
+
+            return $this->finalizeCorrectionGuidance([
+                'missing_field' => $targetField,
+                'missing_value' => $missingValue !== '' ? $missingValue : null,
+                'correction_target' => $this->correctionTargetLabel(
+                    $sectionLabel !== '' ? $sectionLabel : $this->reviewSectionLabel('education-career'),
+                    $targetField
+                ),
+            ], $flag, $normalized, 'core.occupation_title');
+        }
+
+        if ($reason === 'mixed_field_value' && $sectionLabel !== '') {
+            return $this->finalizeCorrectionGuidance([
+                'missing_field' => __('intake.normalized_draft_correction_multiple_fields'),
+                'missing_value' => $sourceText !== '' ? $sourceText : null,
+                'correction_target' => __('intake.normalized_draft_correction_split_into_section', ['section' => $sectionLabel]),
+            ], $flag, $normalized, '');
+        }
+
+        if ($field !== '' && ! str_starts_with($field, 'review.')) {
+            $targetFieldLabel = $this->reviewFieldLabel($field);
+            if ($sectionLabel === '') {
+                $sectionLabel = $this->defaultSectionLabelForField($field);
+            }
+            if ($sectionLabel !== '' && $targetFieldLabel !== '') {
+                $missingValue = $this->resolveMissingValueForFlag($flag, $normalized, $field);
+                $applyField = $this->resolveApplyFieldPath($field);
+
+                return $this->finalizeCorrectionGuidance([
+                    'missing_field' => $targetFieldLabel,
+                    'missing_value' => $missingValue !== '' ? $missingValue : null,
+                    'correction_target' => $this->correctionTargetLabel($sectionLabel, $targetFieldLabel),
+                ], $flag, $normalized, $applyField);
+            }
+        }
+
+        return $this->finalizeCorrectionGuidance([
+            'missing_field' => null,
+            'missing_value' => null,
+            'correction_target' => null,
+        ], $flag, $normalized, '');
+    }
+
+    /**
+     * @param  array{missing_field: ?string, missing_value: ?string, correction_target: ?string}  $guidance
+     * @param  array<string, mixed>  $flag
+     * @param  array<string, mixed>  $normalized
+     * @return array{missing_field: ?string, missing_value: ?string, correction_target: ?string, apply_field: ?string, apply_value: ?string, can_apply: bool}
+     */
+    private function finalizeCorrectionGuidance(array $guidance, array $flag, array $normalized, string $defaultApplyField): array
+    {
+        $applyField = $this->resolveApplyFieldPath($defaultApplyField !== '' ? $defaultApplyField : (string) ($flag['field'] ?? ''));
+        $applyValue = $this->resolveApplyValue($flag, $normalized, $guidance, $applyField);
+        $canApply = IntakeNormalizedDraftCorrectionApplier::supportsField($applyField)
+            && $applyValue !== ''
+            && ! $this->isNegativeSiblingAssertion($applyField, $applyValue)
+            && ! $this->coverageFlagIsFullyMapped($flag, $normalized)
+            && $this->applyTargetNeedsCorrection($applyField, $applyValue, $normalized);
+
+        return array_merge($guidance, [
+            'apply_field' => $canApply ? $applyField : null,
+            'apply_value' => $canApply ? $applyValue : null,
+            'can_apply' => $canApply,
+        ]);
+    }
+
+    private function resolveApplyFieldPath(string $field): string
+    {
+        $field = trim($field);
+        if ($field === '') {
+            return '';
+        }
+
+        if (str_starts_with($field, 'core.')
+            || str_starts_with($field, 'siblings.')
+            || str_starts_with($field, 'relatives.')) {
+            return $field;
+        }
+
+        return '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $flag
+     * @param  array<string, mixed>  $normalized
+     * @param  array{missing_field: ?string, missing_value: ?string, correction_target: ?string}  $guidance
+     */
+    private function resolveApplyValue(array $flag, array $normalized, array $guidance, string $applyField): string
+    {
+        if ($applyField === 'core.other_relatives_text') {
+            $sourceText = trim($this->preferredFlagRawLine(
+                $this->stringify($flag['source_text'] ?? null),
+                $this->stringify($flag['raw'] ?? null)
+            ));
+            $fromSource = $this->extractValueFromSourceLine($sourceText);
+            if ($fromSource !== '') {
+                return $fromSource;
+            }
+        }
+
+        $fromNormalized = $this->normalizedValueForApplyPath($normalized, $applyField);
+        if ($fromNormalized !== '' && $applyField !== 'core.other_relatives_text') {
+            return $fromNormalized;
+        }
+
+        $fromGuidance = trim((string) ($guidance['missing_value'] ?? ''));
+        if ($fromGuidance !== '') {
+            return $fromGuidance;
+        }
+
+        $sourceText = trim($this->preferredFlagRawLine(
+            $this->stringify($flag['source_text'] ?? null),
+            $this->stringify($flag['raw'] ?? null)
+        ));
+
+        return $this->extractValueFromSourceLine($sourceText);
+    }
+
+    /**
+     * @param  array<string, mixed>  $flag
+     * @param  array<string, mixed>  $normalized
+     */
+    private function resolveMissingValueForFlag(array $flag, array $normalized, string $field): string
+    {
+        $applyField = $this->resolveApplyFieldPath($field);
+
+        if ($applyField === 'core.other_relatives_text') {
+            $sourceText = trim($this->preferredFlagRawLine(
+                $this->stringify($flag['source_text'] ?? null),
+                $this->stringify($flag['raw'] ?? null)
+            ));
+            $fromSource = $this->extractValueFromSourceLine($sourceText);
+            if ($fromSource !== '') {
+                return $fromSource;
+            }
+        }
+
+        $fromNormalized = $this->normalizedValueForApplyPath($normalized, $applyField);
+        if ($fromNormalized !== '' && $applyField !== 'core.other_relatives_text') {
+            return $fromNormalized;
+        }
+
+        $sourceText = trim($this->preferredFlagRawLine(
+            $this->stringify($flag['source_text'] ?? null),
+            $this->stringify($flag['raw'] ?? null)
+        ));
+
+        return $this->extractValueFromSourceLine($sourceText);
+    }
+
+    /**
+     * @param  array<string, mixed>  $normalized
+     */
+    private function normalizedValueForApplyPath(array $normalized, string $field): string
+    {
+        $field = trim($field);
+        if ($field === '') {
+            return '';
+        }
+
+        if (str_starts_with($field, 'core.')) {
+            $core = is_array($normalized['core'] ?? null) ? $normalized['core'] : [];
+            $key = substr($field, 5);
+
+            return trim((string) ($core[$key] ?? ''));
+        }
+
+        if (preg_match('/^(siblings|relatives)\.([a-z_]+)\.([a-z_]+)$/i', $field, $matches) !== 1) {
+            return '';
+        }
+
+        [, $collection, $relationType, $property] = $matches;
+        $rows = is_array($normalized[$collection] ?? null) ? $normalized[$collection] : [];
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            if ($this->canonicalRelationType((string) ($row['relation_type'] ?? '')) !== $this->canonicalRelationType($relationType)) {
+                continue;
+            }
+            $value = trim((string) ($row[$property] ?? ''));
+            if ($value !== '') {
+                if ($property === 'name' && trim((string) ($row['contact_number'] ?? '')) !== '') {
+                    return trim($value.' मो.'.($row['contact_number'] ?? ''));
+                }
+
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
+    private function canonicalRelationType(string $relationType): string
+    {
+        return mb_strtolower(trim(str_replace('-', '_', $relationType)));
+    }
+
+    private function isNegativeSiblingAssertion(string $applyField, string $applyValue): bool
+    {
+        if (! str_starts_with($applyField, 'siblings.')) {
+            return false;
+        }
+
+        $value = mb_strtolower(trim($applyValue));
+        if ($value === '') {
+            return false;
+        }
+
+        foreach (['नाही', 'नाहीत', 'no', 'none', 'nil', 'na'] as $negative) {
+            if ($value === $negative || str_starts_with($value, $negative.' ')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $normalized
+     */
+    private function applyTargetNeedsCorrection(string $applyField, string $applyValue, array $normalized): bool
+    {
+        if (is_array($this->parsedSnapshot)) {
+            return ! $this->parsedSnapshotContainsApplyValue($this->parsedSnapshot, $applyField, $applyValue);
+        }
+
+        if (str_starts_with($applyField, 'core.')) {
+            return ! $this->coreFieldAlreadyHasValue($normalized, $applyField);
+        }
+
+        return trim($applyValue) !== '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $parsed
+     */
+    private function parsedSnapshotContainsApplyValue(array $parsed, string $applyField, string $applyValue): bool
+    {
+        $applyValue = trim($applyValue);
+        if ($applyValue === '') {
+            return true;
+        }
+
+        if (str_starts_with($applyField, 'core.')) {
+            $core = is_array($parsed['core'] ?? null) ? $parsed['core'] : [];
+            $key = substr($applyField, 5);
+            $existing = trim((string) ($core[$key] ?? ''));
+            if ($existing === '') {
+                return false;
+            }
+            if ($key === 'other_relatives_text') {
+                return str_contains($existing, $applyValue);
+            }
+
+            return $this->normalizedCompareText($existing) === $this->normalizedCompareText($applyValue);
+        }
+
+        if (preg_match('/^(siblings|relatives)\.([a-z_]+)\.([a-z_]+)$/i', $applyField, $matches) !== 1) {
+            return false;
+        }
+
+        [, $collection, $relationType, $property] = $matches;
+        $rows = is_array($parsed[$collection] ?? null) ? $parsed[$collection] : [];
+        $needle = $this->normalizedCompareText($applyValue);
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            if ($this->canonicalRelationType((string) ($row['relation_type'] ?? '')) !== $this->canonicalRelationType($relationType)) {
+                continue;
+            }
+            $candidate = trim((string) ($row[$property] ?? ''));
+            if ($property === 'name') {
+                [$name] = $this->splitNameAndPhoneForCompare($applyValue);
+                $candidateNorm = $this->normalizedCompareText($candidate);
+                if ($candidateNorm !== '' && ($candidateNorm === $this->normalizedCompareText($name) || str_contains($needle, $candidateNorm))) {
+                    return true;
+                }
+
+                continue;
+            }
+            if ($candidate !== '' && $this->normalizedCompareText($candidate) === $needle) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private function splitNameAndPhoneForCompare(string $value): array
+    {
+        $phone = '';
+        if (preg_match('/(?:मो\.?|mob\.?|mobile\.?|phone\.?)\s*([6-9]\d{9})/iu', $value, $matches) === 1) {
+            $phone = OcrNormalize::normalizeDigits($matches[1]);
+            $value = trim(preg_replace('/(?:मो\.?|mob\.?|mobile\.?|phone\.?)\s*[6-9]\d{9}/iu', '', $value) ?? $value);
+        }
+
+        return [trim($value), $phone];
+    }
+
+    private function normalizedCompareText(string $value): string
+    {
+        return mb_strtolower(trim(OcrNormalize::normalizeDigits($value)));
+    }
+
+    /**
+     * @param  array<string, mixed>  $normalized
+     */
+    private function coreFieldAlreadyHasValue(array $normalized, string $field): bool
+    {
+        $core = is_array($normalized['core'] ?? null) ? $normalized['core'] : [];
+        $key = str_starts_with($field, 'core.') ? substr($field, 5) : $field;
+
+        return trim((string) ($core[$key] ?? '')) !== '';
+    }
+
+    /**
+     * @param  array<string, list<array<string, mixed>>>  $sections
+     * @param  list<array<string, mixed>>  $detectedRows
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function enrichSectionsWithApplyActions(array $sections, array $detectedRows): array
+    {
+        foreach ($detectedRows as $row) {
+            if (! is_array($row) || empty($row['can_apply']) || empty($row['apply_field']) || empty($row['apply_value'])) {
+                continue;
+            }
+
+            $sectionKey = trim((string) ($row['target_section'] ?? ''));
+            if ($sectionKey === '' || ! isset($sections[$sectionKey])) {
+                continue;
+            }
+
+            $applyField = (string) $row['apply_field'];
+            $applyValue = (string) $row['apply_value'];
+            $attached = false;
+
+            if ($applyField !== 'core.other_relatives_text') {
+                foreach ($sections[$sectionKey] as $index => $sectionRow) {
+                    if (! is_array($sectionRow) || (($sectionRow['field'] ?? null) !== $applyField)) {
+                        continue;
+                    }
+                    if (! empty($sectionRow['can_apply'])) {
+                        continue;
+                    }
+                    $sections[$sectionKey][$index]['can_apply'] = true;
+                    $sections[$sectionKey][$index]['apply_field'] = $applyField;
+                    $sections[$sectionKey][$index]['apply_value'] = $applyValue;
+                    $sections[$sectionKey][$index]['correction_hint'] = __('intake.normalized_draft_section_suggestion_hint');
+                    $attached = true;
+                    break;
+                }
+            }
+
+            if ($attached) {
+                continue;
+            }
+
+            $sections[$sectionKey][] = [
+                'label' => (string) ($row['missing_field'] ?? $this->reviewFieldLabel($applyField)),
+                'value' => $applyValue,
+                'field' => $applyField,
+                'row_variant' => 'suggested_correction',
+                'needs_review' => false,
+                'can_apply' => true,
+                'apply_field' => $applyField,
+                'apply_value' => $applyValue,
+                'source_line_no' => $row['source_line_no'] ?? null,
+                'correction_hint' => __('intake.normalized_draft_section_suggestion_hint'),
+            ];
+        }
+
+        return $sections;
+    }
+
+    private function correctionTargetLabel(string $sectionLabel, string $fieldLabel): string
+    {
+        return trim($sectionLabel).' → '.trim($fieldLabel);
+    }
+
+    private function defaultSectionLabelForField(string $field): string
+    {
+        if (str_starts_with($field, 'core.')) {
+            $coreField = substr($field, 5);
+            if (in_array($coreField, self::EDUCATION_CAREER_FIELDS, true)) {
+                return $this->reviewSectionLabel('education-career');
+            }
+            if (in_array($coreField, self::PHYSICAL_FIELDS, true)) {
+                return $this->reviewSectionLabel('physical');
+            }
+            if (in_array($coreField, self::FAMILY_DETAIL_FIELDS, true)) {
+                return $this->reviewSectionLabel('family-details');
+            }
+
+            return $this->reviewSectionLabel('basic-info');
+        }
+
+        if (str_starts_with($field, 'siblings.')) {
+            return $this->reviewSectionLabel('siblings');
+        }
+
+        if (str_starts_with($field, 'relatives.') || str_starts_with($field, 'preferences.')) {
+            return $this->reviewSectionLabel('alliance');
+        }
+
+        return '';
+    }
+
+    private function extractValueFromSourceLine(string $sourceText): string
+    {
+        $sourceText = trim($sourceText);
+        if ($sourceText === '') {
+            return '';
+        }
+
+        if (preg_match('/(\d+\s*कुळी|९६\s*कुळी)/u', $sourceText, $matches)) {
+            return trim($matches[1]);
+        }
+
+        if (preg_match('/:-\s*(.+)$/u', $sourceText, $matches)) {
+            return trim($matches[1]);
+        }
+
+        if (preg_match('/:\s*(.+)$/u', $sourceText, $matches)) {
+            return trim($matches[1]);
+        }
+
+        return $sourceText;
+    }
+
+    /**
+     * @param  array<string, mixed>  $flag
+     * @param  array<string, mixed>  $normalized
+     */
+    private function coverageFlagIsFullyMapped(array $flag, array $normalized): bool
+    {
+        $field = (string) ($flag['field'] ?? '');
+        if (! in_array($field, ['core.caste', 'core.sub_caste', 'core.religion'], true)) {
+            return false;
+        }
+
+        $core = is_array($normalized['core'] ?? null) ? $normalized['core'] : [];
+        $religion = trim((string) ($core['religion'] ?? ''));
+        $caste = trim((string) ($core['caste'] ?? ''));
+        $subCaste = trim((string) ($core['sub_caste'] ?? ''));
+        $sourceText = trim($this->preferredFlagRawLine(
+            $this->stringify($flag['source_text'] ?? null),
+            $this->stringify($flag['raw'] ?? null)
+        ));
+
+        if ($religion === '' || $caste === '') {
+            return false;
+        }
+
+        if (preg_match('/(\d+\s*कुळी|९६\s*कुळी)/u', $sourceText)) {
+            return $subCaste !== '';
+        }
+
+        if (preg_match('/हिंद[ुू]/u', $sourceText) && preg_match('/मराठा/u', $sourceText)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function draftSnapshotForCoverageField(string $field, array $normalized): ?string
+    {
+        $core = is_array($normalized['core'] ?? null) ? $normalized['core'] : [];
+        if ($field === 'core.caste' || $field === 'core.religion' || $field === 'core.sub_caste') {
+            $parts = [];
+            $religion = trim((string) ($core['religion'] ?? ''));
+            $caste = trim((string) ($core['caste'] ?? ''));
+            $subCaste = trim((string) ($core['sub_caste'] ?? ''));
+            $parts[] = __('intake.normalized_draft_draft_religion', [
+                'value' => $religion !== '' ? $religion : __('intake.normalized_draft_empty_field'),
+            ]);
+            $parts[] = __('intake.normalized_draft_draft_caste', [
+                'value' => $caste !== '' ? $caste : __('intake.normalized_draft_empty_field'),
+            ]);
+            $parts[] = __('intake.normalized_draft_draft_sub_caste', [
+                'value' => $subCaste !== '' ? $subCaste : __('intake.normalized_draft_empty_field'),
+            ]);
+
+            return implode(' · ', $parts);
+        }
+
+        if (in_array($field, ['core.occupation_title', 'core.company_name', 'core.work_location_text', 'core.highest_education'], true)) {
+            $parts = [];
+            $education = trim((string) ($core['highest_education'] ?? ''));
+            $title = trim((string) ($core['occupation_title'] ?? ''));
+            $company = trim((string) ($core['company_name'] ?? ''));
+            $location = trim((string) ($core['work_location_text'] ?? ''));
+            if ($education !== '') {
+                $parts[] = __('intake.normalized_draft_draft_education', ['value' => $education]);
+            }
+            if ($title !== '') {
+                $parts[] = __('intake.normalized_draft_draft_occupation', ['value' => $title]);
+            }
+            if ($company !== '') {
+                $parts[] = __('intake.normalized_draft_draft_company', ['value' => $company]);
+            }
+            if ($location !== '') {
+                $parts[] = __('intake.normalized_draft_draft_work_location', ['value' => $location]);
+            }
+
+            return $parts !== [] ? implode(' · ', $parts) : null;
+        }
+
+        $value = $this->normalizedCoreValueForField($field, $core);
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return $this->reviewFieldLabel($field).' = '.$value;
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function normalizedCoreValueForField(string $field, array $core): ?string
+    {
+        if (! str_starts_with($field, 'core.')) {
+            return null;
+        }
+        $key = substr($field, 5);
+        if ($key === '') {
+            return null;
+        }
+        $value = $core[$key] ?? null;
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return $this->formatFieldValue($key, (string) $value);
     }
 
     private function fieldLabel(string $field): string

@@ -410,6 +410,20 @@ TXT);
         $this->assertFalse($this->hasReviewFlag($draft, 'review.missing', 'mixed_field_value'));
     }
 
+    public function test_caste_line_with_kuli_before_hindu_maratha_sets_sub_caste(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+मुलाचे नाव :- कु. आशिष बापूराव गायकवाड
+जात :- 96 कुळी हिंदू-मराठा
+TXT);
+
+        $core = $draft['normalized']['core'] ?? [];
+
+        $this->assertSame('हिंदू', $core['religion'] ?? null);
+        $this->assertSame('मराठा', $core['caste'] ?? null);
+        $this->assertSame('96 कुळी', OcrNormalize::normalizeDigits((string) ($core['sub_caste'] ?? '')));
+    }
+
     public function test_property_descriptor_is_inherited_for_numbered_locations(): void
     {
         $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'

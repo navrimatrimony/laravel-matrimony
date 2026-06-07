@@ -253,7 +253,11 @@ class AdminIntakeController extends Controller
         $reviewTextSource = (string) ($reviewParse['source'] ?? 'empty');
         $reviewTextIsBiodata = in_array($reviewTextSource, ['parse_snapshot', 'ai_vision_cache', 'ocr_transient'], true);
         $normalizedDraftPreview = app(IntakePreviewNormalizedDraftPresenter::class)
-            ->present((string) ($reviewParse['text'] ?? ''), $reviewTextIsBiodata);
+            ->present(
+                (string) ($reviewParse['text'] ?? ''),
+                $reviewTextIsBiodata,
+                is_array($intake->parsed_json) ? $intake->parsed_json : null
+            );
         $intakePhotoPreview = app(IntakePhotoCandidatePreviewService::class)
             ->preview($intake);
 
@@ -460,6 +464,30 @@ class AdminIntakeController extends Controller
         return redirect()
             ->route('admin.biodata-intakes.show', $intake)
             ->with('success', 'Re-parse started in background. Refresh after a few seconds to see updated JSON.');
+    }
+
+    public function applyDraftCorrection(BiodataIntake $intake)
+    {
+        $validated = request()->validate([
+            'field' => ['required', 'string', 'max:120'],
+            'value' => ['required', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $result = app(\App\Services\Intake\IntakeNormalizedDraftCorrectionApplier::class)->apply(
+                $intake,
+                (string) $validated['field'],
+                (string) $validated['value']
+            );
+        } catch (\InvalidArgumentException $e) {
+            return redirect()
+                ->route('admin.biodata-intakes.show', $intake)
+                ->with('error', $e->getMessage());
+        }
+
+        return redirect()
+            ->route('admin.biodata-intakes.show', $intake)
+            ->with('success', (string) ($result['message'] ?? __('intake.normalized_draft_apply_success')));
     }
 
     /**

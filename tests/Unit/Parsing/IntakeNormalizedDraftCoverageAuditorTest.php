@@ -37,4 +37,28 @@ class IntakeNormalizedDraftCoverageAuditorTest extends TestCase
         $this->assertSame(9, $audit['review_flags'][0]['source_line_no'] ?? null);
         $this->assertSame('basic-info', $audit['review_flags'][0]['suggested_section'] ?? null);
     }
+
+    public function test_decomposed_caste_line_is_not_reported_as_missing_when_religion_caste_and_sub_caste_are_mapped(): void
+    {
+        $audit = app(IntakeNormalizedDraftCoverageAuditor::class)->audit([
+            'normalized' => [
+                'core' => [
+                    'religion' => 'हिंदू',
+                    'caste' => 'मराठा',
+                    'sub_caste' => '96 कुळी',
+                ],
+            ],
+            'extracted_facts' => [[
+                'fact_type' => 'field_value',
+                'value' => '96 कुळी हिंदू-मराठा',
+                'source_line_no' => 14,
+                'source_text' => 'जात :- 96 कुळी हिंदू-मराठा',
+                'target_section' => 'basic-info',
+                'target_field' => 'core.caste',
+            ]],
+        ]);
+
+        $this->assertSame([], $audit['missing_facts'] ?? []);
+        $this->assertSame([], $audit['review_flags'] ?? []);
+    }
 }

@@ -62,6 +62,10 @@ class IntakeNormalizedDraftCoverageAuditor
                 continue;
             }
 
+            if ($this->isDecomposedCasteLineFullyMapped($fact, $draft)) {
+                continue;
+            }
+
             $missingFacts[] = $this->coverageFactSummary($fact);
         }
 
@@ -471,5 +475,37 @@ class IntakeNormalizedDraftCoverageAuditor
         }
 
         return '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $fact
+     * @param  array<string, mixed>  $draft
+     */
+    private function isDecomposedCasteLineFullyMapped(array $fact, array $draft): bool
+    {
+        $field = trim((string) ($fact['target_field'] ?? ''));
+        if ($field !== 'core.caste') {
+            return false;
+        }
+
+        $core = is_array($draft['normalized']['core'] ?? null) ? $draft['normalized']['core'] : [];
+        $religion = trim($this->stringify($core['religion'] ?? null));
+        $caste = trim($this->stringify($core['caste'] ?? null));
+        $subCaste = trim($this->stringify($core['sub_caste'] ?? null));
+        $sourceText = trim($this->stringify($fact['source_text'] ?? $fact['value'] ?? null));
+
+        if ($religion === '' || $caste === '') {
+            return false;
+        }
+
+        if (preg_match('/(\d+\s*कुळी|९६\s*कुळी)/u', $sourceText)) {
+            return $subCaste !== '';
+        }
+
+        if (preg_match('/हिंद[ुू]/u', $sourceText) && preg_match('/मराठा/u', $sourceText)) {
+            return true;
+        }
+
+        return false;
     }
 }

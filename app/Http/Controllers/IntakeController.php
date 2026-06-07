@@ -1493,14 +1493,18 @@ class IntakeController extends Controller
         if (app()->environment('testing')) {
             ParseIntakeJob::dispatchSync($intake->id, true);
 
-            return redirect()->route('intake.index')
-                ->with('success', 'पुन्हा पार्स पूर्ण झाले. या intake चे प्रिव्ह्यू उघडा — अद्ययावत माहिती दिसेल.');
+            return $this->reparseSuccessRedirect(
+                $intake,
+                'पुन्हा पार्स पूर्ण झाले. या intake चे प्रिव्ह्यू उघडा — अद्ययावत माहिती दिसेल.'
+            );
         }
 
         ParseIntakeJob::dispatch($intake->id, true);
 
-        return redirect()->route('intake.status', $intake->id)
-            ->with('success', 'पुन्हा पार्स सुरू झाले. पूर्ण झाल्यावर प्रिव्ह्यू आपोआप उघडेल.');
+        return $this->reparseSuccessRedirect(
+            $intake,
+            'पुन्हा पार्स सुरू झाले. पूर्ण झाल्यावर प्रिव्ह्यू आपोआप उघडेल.'
+        );
     }
 
     /**
@@ -3245,7 +3249,7 @@ class IntakeController extends Controller
      */
     public function pollStatus(BiodataIntake $intake): \Illuminate\Http\JsonResponse
     {
-        if ((int) $intake->uploaded_by !== (int) auth()->id()) {
+        if (! $this->canAccessIntakeUpload($intake)) {
             abort(403, __('intake.only_view_status_own'));
         }
 
@@ -3265,7 +3269,7 @@ class IntakeController extends Controller
      */
     public function status(BiodataIntake $intake)
     {
-        if ((int) $intake->uploaded_by !== (int) auth()->id()) {
+        if (! $this->canAccessIntakeUpload($intake)) {
             abort(403, __('intake.only_view_status_own'));
         }
 
@@ -4091,5 +4095,33 @@ class IntakeController extends Controller
         }
 
         return true;
+    }
+
+    private function canAccessIntakeUpload(BiodataIntake $intake): bool
+    {
+        $isOwner = (int) $intake->uploaded_by === (int) auth()->id();
+        $isAdmin = auth()->user()?->isAnyAdmin() ?? false;
+
+        return $isOwner || $isAdmin;
+    }
+
+    private function reparseSuccessRedirect(BiodataIntake $intake, string $message): \Illuminate\Http\RedirectResponse
+    {
+        $isOwner = (int) $intake->uploaded_by === (int) auth()->id();
+        if ((auth()->user()?->isAnyAdmin() ?? false) && ! $isOwner) {
+            return redirect()
+                ->route('admin.biodata-intakes.show', $intake)
+                ->with('success', $message);
+        }
+
+        if (app()->environment('testing')) {
+            return redirect()
+                ->route('intake.index')
+                ->with('success', $message);
+        }
+
+        return redirect()
+            ->route('intake.status', $intake)
+            ->with('success', $message);
     }
 }

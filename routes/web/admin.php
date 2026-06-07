@@ -640,6 +640,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/biodata-intakes/{intake}', [AdminIntakeController::class, 'showBiodataIntake'])->name('biodata-intakes.show');
     Route::patch('/biodata-intakes/{intake}/attach', [AdminIntakeController::class, 'attachBiodataIntake'])->name('biodata-intakes.attach');
     Route::post('/biodata-intakes/{intake}/reparse', [AdminIntakeController::class, 'reparse'])->name('biodata-intakes.reparse');
+    Route::post('/biodata-intakes/{intake}/apply-draft-correction', [AdminIntakeController::class, 'applyDraftCorrection'])->name('biodata-intakes.apply-draft-correction');
     Route::post('/biodata-intakes/{intake}/re-extract', [AdminIntakeController::class, 'reExtract'])->name('biodata-intakes.re-extract');
     Route::post('/biodata-intakes/{intake}/apply', [AdminIntakeController::class, 'applyToProfile'])->name('biodata-intakes.apply');
     Route::patch('/biodata-intakes/{intake}/resolve-location', [AdminIntakeController::class, 'resolveLocationSuggestion'])->name('biodata-intakes.resolve-location');
