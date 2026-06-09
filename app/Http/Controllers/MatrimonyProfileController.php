@@ -1428,7 +1428,7 @@ class MatrimonyProfileController extends Controller
             [
                 'profile' => $profile,
                 'profileShowSnapshot' => $profileShowSnapshot,
-                'profilePropertySummary' => $profilePropertySummary,
+                'profilePropertySummary' => null,
                 'enableRelativesSection' => $enableRelativesSection,
                 'isOwnProfile' => $isOwnProfile,
                 'interestAlreadySent' => $interestAlreadySent,

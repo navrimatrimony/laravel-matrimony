@@ -1,24 +1,57 @@
 <?php
 
+use App\Models\City;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Models\Plan;
 use App\Models\PlanTerm;
 use App\Models\User;
 use App\Services\ContactRequestService;
+use App\Services\Profile\ProfileCanonicalResidenceService;
 use App\Services\SubscriptionService;
+use Database\Seeders\MinimalLocationSeeder;
 use Database\Seeders\PlanStandardFeatureKeysSeeder;
 use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
+beforeEach(function () {
+    $this->seed(MinimalLocationSeeder::class);
+    ProfileCanonicalResidenceService::forgetCachedMasters();
+});
+
+function contactRequestFlowActiveProfile(array $attributes = []): MatrimonyProfile
+{
+    $profile = MatrimonyProfile::factory()->create(array_merge([
+        'lifecycle_state' => 'draft',
+    ], $attributes, [
+        'lifecycle_state' => 'draft',
+    ]));
+
+    $leafId = (int) City::query()->where('name', 'Pune City')->firstOrFail()->id;
+
+    if (Schema::hasColumn($profile->getTable(), 'location_id')) {
+        DB::table($profile->getTable())->where('id', $profile->id)->update(['location_id' => $leafId]);
+        $profile->refresh();
+    } else {
+        ProfileCanonicalResidenceService::upsertSelfCurrent((int) $profile->id, $leafId, null, true, false);
+    }
+
+    $profile->update([
+        'lifecycle_state' => 'active',
+        'is_suspended' => false,
+    ]);
+
+    return $profile->fresh();
+}
+
 test('contact request is blocked until receiver accepts interest (no mutual required)', function () {
-    $senderProfile = MatrimonyProfile::factory()->create([
-        'lifecycle_state' => 'active',
-    ]);
-    $receiverProfile = MatrimonyProfile::factory()->create([
-        'lifecycle_state' => 'active',
-    ]);
+    $this->seed(SubscriptionPlansSeeder::class);
+    $this->seed(PlanStandardFeatureKeysSeeder::class);
+
+    $senderProfile = contactRequestFlowActiveProfile();
+    $receiverProfile = contactRequestFlowActiveProfile();
 
     DB::table('profile_contacts')->insert([
         'profile_id' => $receiverProfile->id,
@@ -41,12 +74,15 @@ test('contact request is blocked until receiver accepts interest (no mutual requ
     $senderProfile->update(['user_id' => $senderUser->id]);
     $receiverProfile->update(['user_id' => $receiverUser->id]);
 
+    $service = app(ContactRequestService::class);
+    expect($service->canSendContactRequest($senderUser, $receiverUser))->toBeFalse();
+
     // UI: Request Contact CTA must not be clickable.
     $response = $this->actingAs($senderUser)->get(route('matrimony.profile.show', $receiverProfile->id));
-    $response->assertDontSee('$root.openRequestModal = true', false);
+    $response->assertOk();
+    $response->assertDontSee('<span class="min-w-0 flex-1 leading-snug">Request Contact</span>', false);
 
     // Backend: contact request must fail without accepted interest.
-    $service = app(ContactRequestService::class);
     try {
         $service->createRequest($senderUser, $receiverUser, 'meet', ['phone']);
         $this->fail('Expected ValidationException was not thrown.');
@@ -59,12 +95,8 @@ test('contact request works after accepted interest only + reveals only primary 
     $this->seed(SubscriptionPlansSeeder::class);
     $this->seed(PlanStandardFeatureKeysSeeder::class);
 
-    $senderProfile = MatrimonyProfile::factory()->create([
-        'lifecycle_state' => 'active',
-    ]);
-    $receiverProfile = MatrimonyProfile::factory()->create([
-        'lifecycle_state' => 'active',
-    ]);
+    $senderProfile = contactRequestFlowActiveProfile();
+    $receiverProfile = contactRequestFlowActiveProfile();
 
     DB::table('profile_contacts')->insert([
         'profile_id' => $receiverProfile->id,
