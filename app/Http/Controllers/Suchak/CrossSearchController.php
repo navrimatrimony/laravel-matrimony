@@ -27,6 +27,7 @@ class CrossSearchController extends Controller
         return view('suchak.search.index', [
             'filters' => $filters,
             'results' => $searchService->search($account, $filters),
+            'ownRepresentationOptions' => $searchService->ownRepresentationOptions($account),
         ]);
     }
 }

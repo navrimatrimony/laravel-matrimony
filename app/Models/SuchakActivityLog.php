@@ -33,6 +33,9 @@ class SuchakActivityLog extends Model
     public const ACTION_USER_REQUEST_CREATED = 'user_request_created';
     public const ACTION_PIPELINE_STATUS_CHANGED = 'pipeline_status_changed';
     public const ACTION_COLLABORATION_REQUEST_CREATED = 'collaboration_request_created';
+    public const ACTION_COLLABORATION_REQUEST_ACCEPTED = 'collaboration_request_accepted';
+    public const ACTION_COLLABORATION_REQUEST_REJECTED = 'collaboration_request_rejected';
+    public const ACTION_COLLABORATION_REQUEST_EXPIRED = 'collaboration_request_expired';
     public const ACTION_CRM_NOTE_ADDED = 'crm_note_added';
     public const ACTION_LEDGER_ENTRY_CREATED = 'ledger_entry_created';
     public const ACTION_BILLING_LIMIT_CHANGED = 'billing_limit_changed';

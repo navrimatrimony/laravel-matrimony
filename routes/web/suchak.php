@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Suchak\AccountRequestController;
+use App\Http\Controllers\Suchak\CollaborationController;
 use App\Http\Controllers\Suchak\CrossSearchController;
 use App\Http\Controllers\Suchak\DashboardController;
 use App\Http\Controllers\Suchak\IntakeSourceController;
@@ -37,4 +38,13 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
         Route::get('/intakes/create', [IntakeSourceController::class, 'create'])->name('intakes.create');
         Route::post('/intakes', [IntakeSourceController::class, 'store'])->name('intakes.store');
         Route::get('/search', [CrossSearchController::class, 'index'])->name('search.index');
+        Route::post('/collaborations', [CollaborationController::class, 'store'])
+            ->middleware('throttle:15,1')
+            ->name('collaborations.store');
+        Route::post('/collaborations/{collaborationRequest}/accept', [CollaborationController::class, 'accept'])
+            ->middleware('throttle:15,1')
+            ->name('collaborations.accept');
+        Route::post('/collaborations/{collaborationRequest}/reject', [CollaborationController::class, 'reject'])
+            ->middleware('throttle:15,1')
+            ->name('collaborations.reject');
     });

@@ -53,6 +53,7 @@ class SuchakCandidateMaskingService
                 'broad' => $this->lookupLabel($profile->occupationMaster),
             ],
             'representation' => [
+                'id' => $representation?->id,
                 'status' => $representation?->representation_status,
                 'mode' => $representation?->representation_mode,
                 'consent_status' => $representation?->consent_status,

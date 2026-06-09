@@ -15426,6 +15426,42 @@ Purpose:
 * explicit acknowledgement of commission/ownership rules.
 * no automatic payment execution.
 
+Day-12 implementation contract:
+
+* Day-12 may create only these Suchak collaboration foundation tables:
+  * `suchak_collaboration_requests`
+  * `suchak_commission_agreements`
+* `suchak_collaboration_requests` must store:
+  * requesting Suchak account
+  * target Suchak account
+  * requesting matrimony profile
+  * target matrimony profile
+  * requesting representation
+  * target representation
+  * status
+  * optional message
+  * requested/responded/expiry timestamps
+* Allowed collaboration request statuses are:
+  * `pending`
+  * `accepted`
+  * `rejected`
+  * `expired`
+  * `cancelled`
+  * `admin_review`
+* Default timeout is 7 days.
+* `suchak_commission_agreements` must store acknowledgement evidence for the collaboration request.
+* MVP acknowledgement text is: `मी या match साठी commission / credit sharing terms मान्य करतो.`
+* Contact exchange is allowed only when:
+  * collaboration request status is `accepted`
+  * both Suchak-side acknowledgement timestamps are present
+  * commission agreement status is `accepted`
+* Day-12 must not reveal candidate/family contact details.
+* Day-12 must not execute payment, PayU, settlement, invoice, or subscription behavior.
+* Day-12 must not mutate canonical profile data or alter `MutationService`.
+* Foreign keys must use `restrictOnDelete`; no cascade delete is allowed.
+* Soft deletes are forbidden for Day-12 tables.
+* Day-12 business actions must write `suchak_activity_logs` without candidate/family private contact metadata.
+
 Day-13:
 CRM notes + ledger foundation.
 

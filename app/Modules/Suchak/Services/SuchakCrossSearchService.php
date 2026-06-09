@@ -7,6 +7,7 @@ use App\Models\SuchakAccount;
 use App\Models\SuchakProfileRepresentation;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 
@@ -54,6 +55,39 @@ class SuchakCrossSearchService
             ->paginate(12)
             ->withQueryString()
             ->through(function (SuchakProfileRepresentation $representation): array {
+                /** @var MatrimonyProfile $profile */
+                $profile = $representation->matrimonyProfile;
+
+                return $this->maskingService->maskedSummary($profile, $representation);
+            });
+    }
+
+    /**
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function ownRepresentationOptions(SuchakAccount $actorAccount): Collection
+    {
+        return SuchakProfileRepresentation::query()
+            ->with([
+                'suchakAccount',
+                'matrimonyProfile.gender',
+                'matrimonyProfile.maritalStatus',
+                'matrimonyProfile.location.parent.parent.parent',
+                'matrimonyProfile.occupationMaster',
+            ])
+            ->withValidConsent()
+            ->where('suchak_account_id', (int) $actorAccount->id)
+            ->whereHas('matrimonyProfile', function (Builder $query): void {
+                $query
+                    ->where('lifecycle_state', 'active')
+                    ->where(function (Builder $query): void {
+                        $query->whereNull('is_suspended')->orWhere('is_suspended', false);
+                    });
+            })
+            ->orderByDesc('first_verified_consent_at')
+            ->orderByDesc('id')
+            ->get()
+            ->map(function (SuchakProfileRepresentation $representation): array {
                 /** @var MatrimonyProfile $profile */
                 $profile = $representation->matrimonyProfile;
 
