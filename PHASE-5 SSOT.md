@@ -15269,6 +15269,96 @@ Forbidden:
 * direct candidate contact reveal
 * request actions without audit/activity trace
 
+Day-9 implementation contract:
+
+* Create `suchak_profile_requests`, `suchak_pipelines`, and `suchak_pipeline_events` only as persisted request/pipeline foundation tables.
+* Do not add public contact routes, public contact UI, dashboard UI, navigation, direct candidate/family contact reveal, search, collaboration, CRM, billing, staff, PDF, or QR behavior on Day-9.
+* `suchak_profile_requests` columns are:
+  * `id`
+  * `requesting_user_id` not nullable
+  * `requesting_matrimony_profile_id` not nullable
+  * `target_matrimony_profile_id` not nullable
+  * `selected_suchak_account_id` not nullable
+  * `representation_id` not nullable
+  * `request_status` not nullable
+  * `request_reason` nullable
+  * `message` nullable
+  * `created_at`
+  * `updated_at`
+* `suchak_profile_requests.request_status` allowed values are:
+  * `pending`
+  * `viewed_by_suchak`
+  * `accepted_by_suchak`
+  * `forwarded_to_candidate`
+  * `candidate_interested`
+  * `candidate_not_interested`
+  * `closed`
+  * `expired`
+  * `cancelled`
+* `suchak_pipelines` columns are:
+  * `id`
+  * `request_id` not nullable and unique
+  * `target_matrimony_profile_id` not nullable
+  * `requesting_matrimony_profile_id` not nullable
+  * `selected_suchak_account_id` not nullable
+  * `representation_id` not nullable
+  * `pipeline_status` not nullable
+  * `attribution_locked_at` not nullable
+  * `lock_expires_at` not nullable
+  * `sla_status` not nullable
+  * `converted_at` nullable
+  * `closed_at` nullable
+  * `created_at`
+  * `updated_at`
+* `suchak_pipelines.pipeline_status` allowed Day-9 values are:
+  * `pending`
+  * `expired`
+  * `closed`
+  * `converted`
+  * `cancelled`
+* `suchak_pipelines.sla_status` allowed Day-9 values are:
+  * `within_sla`
+  * `expired`
+* `suchak_pipeline_events` columns are:
+  * `id`
+  * `pipeline_id` not nullable
+  * `event_type` not nullable
+  * `actor_type` not nullable
+  * `actor_id` nullable
+  * `event_note` nullable
+  * `created_at`
+* `suchak_pipeline_events.event_type` allowed values are:
+  * `request_created`
+  * `suchak_viewed`
+  * `suchak_accepted`
+  * `forwarded_to_candidate`
+  * `candidate_interested`
+  * `candidate_not_interested`
+  * `meeting_scheduled`
+  * `meeting_completed`
+  * `converted`
+  * `closed`
+  * `expired`
+* Foreign keys must use `restrictOnDelete`; no cascade delete is allowed.
+* Soft deletes are forbidden for all Day-9 tables.
+* `suchak_pipeline_events` are append-only and immutable after creation.
+* Request creation must require:
+  * requesting user owns the requesting matrimony profile
+  * requesting profile is active and not suspended
+  * target profile is active and not suspended
+  * selected Suchak account is verified and publicly active
+  * selected representation is active with valid consent
+  * selected representation belongs to the selected Suchak and target profile
+* Request SLA must be read from active `suchak_policies.request_action_sla_hours`; service/controller logic must not hardcode `72 hours`.
+* A duplicate open request for the same requesting profile, target profile, and selected Suchak must be blocked until the earlier request is closed, expired, or cancelled.
+* Request creation must create:
+  * one `suchak_profile_requests` row
+  * one `suchak_pipelines` row
+  * one `suchak_pipeline_events` row with `request_created`
+  * one `suchak_activity_logs` row with `user_request_created`
+* SLA expiry must mark the pipeline and request expired, create `expired` pipeline event, and write `pipeline_status_changed` activity.
+* Activity metadata must not store candidate/family private contact details and must not replace structured request/pipeline rows.
+
 Day-10:
 Public Suchak contact routing through request pipeline.
 

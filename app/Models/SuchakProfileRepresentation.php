@@ -121,6 +121,16 @@ class SuchakProfileRepresentation extends Model
         return $this->hasMany(SuchakQrToken::class, 'representation_id');
     }
 
+    public function profileRequests(): HasMany
+    {
+        return $this->hasMany(SuchakProfileRequest::class, 'representation_id');
+    }
+
+    public function pipelines(): HasMany
+    {
+        return $this->hasMany(SuchakPipeline::class, 'representation_id');
+    }
+
     public function hasValidConsent(): bool
     {
         if ($this->consent_status !== self::CONSENT_ACCEPTED) {

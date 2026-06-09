@@ -86,6 +86,16 @@ class SuchakAccount extends Model
         return $this->hasMany(SuchakQrToken::class);
     }
 
+    public function profileRequests(): HasMany
+    {
+        return $this->hasMany(SuchakProfileRequest::class, 'selected_suchak_account_id');
+    }
+
+    public function pipelines(): HasMany
+    {
+        return $this->hasMany(SuchakPipeline::class, 'selected_suchak_account_id');
+    }
+
     public function isVerified(): bool
     {
         return $this->verification_status === self::VERIFICATION_VERIFIED;
