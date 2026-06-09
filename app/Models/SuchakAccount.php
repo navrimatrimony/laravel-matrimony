@@ -106,6 +106,16 @@ class SuchakAccount extends Model
         return $this->hasMany(SuchakPipeline::class, 'selected_suchak_account_id');
     }
 
+    public function profileNotes(): HasMany
+    {
+        return $this->hasMany(SuchakProfileNote::class);
+    }
+
+    public function ledgerEntries(): HasMany
+    {
+        return $this->hasMany(SuchakLedgerEntry::class);
+    }
+
     public function isVerified(): bool
     {
         return $this->verification_status === self::VERIFICATION_VERIFIED;

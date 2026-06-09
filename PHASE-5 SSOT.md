@@ -15471,6 +15471,62 @@ Purpose:
 
 * Suchak notes, follow-up records, and ledger-like trace entries.
 
+Day-13 implementation contract:
+
+* Day-13 may create only these Suchak CRM/ledger foundation tables:
+  * `suchak_profile_notes`
+  * `suchak_ledger_entries`
+* `suchak_profile_notes` must store:
+  * Suchak account
+  * matrimony profile
+  * optional collaboration request context
+  * note type
+  * private note text
+  * visibility
+  * optional follow-up timestamp
+  * timestamps
+* Allowed note types are:
+  * `general`
+  * `follow_up`
+  * `meeting`
+  * `call`
+  * `collaboration`
+* Allowed note visibility value for MVP is:
+  * `private`
+* `suchak_ledger_entries` must store:
+  * Suchak account
+  * matrimony profile
+  * optional Suchak pipeline context
+  * optional collaboration request context
+  * entry type
+  * optional amount
+  * currency
+  * status
+  * optional due/paid timestamps
+  * optional private note
+  * timestamps
+* Allowed ledger entry types are:
+  * `registration_fee_expected`
+  * `success_fee_expected`
+  * `payment_reminder`
+  * `converted_match`
+  * `adjustment`
+* Allowed ledger statuses are:
+  * `expected`
+  * `due`
+  * `paid`
+  * `waived`
+  * `cancelled`
+* Day-13 notes and ledger entries are Suchak-private evidence/business records.
+* Day-13 must not reveal notes or ledger data to other Suchaks, public users, or candidate users.
+* Day-13 must not store ungoverned candidate/family contact details.
+* Day-13 must not mutate canonical profile data or alter `MutationService`.
+* Day-13 must not execute payment, PayU, settlement, invoice, subscription, or plan enforcement behavior.
+* Day-13 must not add public routes, dashboard CRM UI, navigation links, admin UI, or staff module behavior.
+* Foreign keys must use `restrictOnDelete`; no cascade delete is allowed.
+* Soft deletes are forbidden for Day-13 tables. The older suggested `deleted_at` note column is intentionally not used because Suchak notes/ledger must not be deleted.
+* Day-13 business actions must write `suchak_activity_logs` without candidate/family private contact metadata.
+
 Forbidden:
 
 * hidden profile mutation
