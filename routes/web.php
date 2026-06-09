@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 | Web routes — Phase 1 surface loaders
 |--------------------------------------------------------------------------
-| Order: public → member → admin → auth (same as pre-split), then legacy web JSON.
+| Order: public → member → suchak → admin → admin-suchak → auth, then legacy web JSON.
 | Admin intake suggestion queue: routes/web/admin.php → prefix admin/intake (names admin.intake.*).
 | Member matches: routes/web/member.php → GET /matches, GET /profiles/{id}/matches.
 | Member plans: GET /plans + coupon validate are auth-only (avoids guest catalog / gender edge cases); POST /subscribe uses auth + card onboarding.
@@ -18,7 +18,9 @@ use Illuminate\Support\Facades\Route;
 
 require __DIR__.'/web/public.php';
 require __DIR__.'/web/member.php';
+require __DIR__.'/web/suchak.php';
 require __DIR__.'/web/admin.php';
+require __DIR__.'/web/admin-suchak.php';
 require __DIR__.'/auth.php';
 
 use App\Http\Controllers\PlansController;
