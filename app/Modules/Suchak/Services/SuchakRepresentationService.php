@@ -1,0 +1,131 @@
+<?php
+
+namespace App\Modules\Suchak\Services;
+
+use App\Models\MatrimonyProfile;
+use App\Models\SuchakAccount;
+use App\Models\SuchakActivityLog;
+use App\Models\SuchakBiodataIntakeLink;
+use App\Models\SuchakProfileRepresentation;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
+
+class SuchakRepresentationService
+{
+    public function __construct(
+        private readonly SuchakActivityLogger $activityLogger,
+    ) {
+    }
+
+    public function canCreate(SuchakAccount $account): bool
+    {
+        return $account->verification_status === SuchakAccount::VERIFICATION_VERIFIED;
+    }
+
+    public function createPendingFromSourceLink(
+        SuchakAccount $account,
+        User $actor,
+        SuchakBiodataIntakeLink $sourceLink,
+        MatrimonyProfile $profile,
+        string $representationMode = SuchakProfileRepresentation::MODE_UPLOADED_BY_SUCHAK,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): SuchakProfileRepresentation {
+        $account->refresh();
+        $sourceLink->refresh();
+        $profile->refresh();
+
+        $this->assertCanCreate($account);
+        $this->assertSourceLinkMatches($account, $actor, $sourceLink, $profile);
+        $this->assertValidSourceLinkMode($representationMode);
+
+        return DB::transaction(function () use ($account, $actor, $sourceLink, $profile, $representationMode, $ipAddress, $userAgent): SuchakProfileRepresentation {
+            $duplicate = SuchakProfileRepresentation::query()
+                ->where('suchak_account_id', $account->id)
+                ->where('matrimony_profile_id', $profile->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($duplicate !== null) {
+                throw new InvalidArgumentException('This Suchak already has a representation for this canonical profile.');
+            }
+
+            $representation = SuchakProfileRepresentation::query()->create([
+                'suchak_account_id' => $account->id,
+                'matrimony_profile_id' => $profile->id,
+                'biodata_intake_id' => $sourceLink->biodata_intake_id,
+                'representation_status' => SuchakProfileRepresentation::STATUS_PENDING,
+                'representation_mode' => $representationMode,
+                'consent_status' => SuchakProfileRepresentation::CONSENT_NOT_REQUESTED,
+                'first_uploaded_at' => $sourceLink->created_at,
+                'first_identified_at' => now(),
+            ]);
+
+            $this->activityLogger->record([
+                'suchak_account_id' => $account->id,
+                'actor_user_id' => $actor->id,
+                'actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
+                'action_type' => SuchakActivityLog::ACTION_REPRESENTATION_CREATED,
+                'target_type' => 'suchak_profile_representation',
+                'target_id' => $representation->id,
+                'matrimony_profile_id' => $profile->id,
+                'ip_address' => $ipAddress,
+                'user_agent' => Str::limit((string) $userAgent, 512, ''),
+                'metadata_json' => [
+                    'representation_mode' => $representationMode,
+                    'representation_status' => SuchakProfileRepresentation::STATUS_PENDING,
+                    'consent_status' => SuchakProfileRepresentation::CONSENT_NOT_REQUESTED,
+                    'source_link_id' => $sourceLink->id,
+                ],
+            ]);
+
+            return $representation->load(['suchakAccount', 'matrimonyProfile', 'biodataIntake']);
+        });
+    }
+
+    private function assertCanCreate(SuchakAccount $account): void
+    {
+        if (! $this->canCreate($account)) {
+            throw new InvalidArgumentException('Only verified Suchak accounts can create profile representations.');
+        }
+    }
+
+    private function assertSourceLinkMatches(
+        SuchakAccount $account,
+        User $actor,
+        SuchakBiodataIntakeLink $sourceLink,
+        MatrimonyProfile $profile,
+    ): void {
+        if ((int) $sourceLink->suchak_account_id !== (int) $account->id) {
+            throw new InvalidArgumentException('Source link does not belong to this Suchak account.');
+        }
+
+        if ((int) $sourceLink->created_by_user_id !== (int) $actor->id) {
+            throw new InvalidArgumentException('Source link actor does not match the Suchak user.');
+        }
+
+        if ($sourceLink->source_status === SuchakBiodataIntakeLink::STATUS_CANCELLED) {
+            throw new InvalidArgumentException('Cancelled source links cannot create profile representations.');
+        }
+
+        if ($sourceLink->matrimony_profile_id === null) {
+            throw new InvalidArgumentException('Source link must reference a canonical profile before representation creation.');
+        }
+
+        if ((int) $sourceLink->matrimony_profile_id !== (int) $profile->id) {
+            throw new InvalidArgumentException('Source link canonical profile does not match the requested representation profile.');
+        }
+    }
+
+    private function assertValidSourceLinkMode(string $representationMode): void
+    {
+        if (! in_array($representationMode, [
+            SuchakProfileRepresentation::MODE_UPLOADED_BY_SUCHAK,
+            SuchakProfileRepresentation::MODE_MATCHED_EXISTING_PROFILE,
+        ], true)) {
+            throw new InvalidArgumentException('Source-link representation mode is not allowed on Day-6.');
+        }
+    }
+}

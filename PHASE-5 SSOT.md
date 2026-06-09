@@ -16013,3 +16013,550 @@ Day-5 compatibility:
 
 END OF PHASE-6 SUCHAK MODULE ADDENDUM — DAY-4 REGULAR-USER UPGRADE CORRECTION PATCH
 ############################################################
+
+============================================================
+PHASE-6 SUCHAK MODULE ADDENDUM - DAY-6 REPRESENTATION + MASKING CLARIFICATION PATCH
+(SUCHAK PROFILE REPRESENTATION FOUNDATION CONTRACT)
+============================================================
+
+Status:
+OFFICIAL CLARIFICATION PATCH
+
+Authority:
+This patch extends the existing "PHASE-6 - SUCHAK MODULE ADDENDUM".
+It defines exact Day-6 representation schema, masking boundary, duplicate-safe creation boundary, and rollback rules.
+
+This patch does NOT authorize consent request/verification/revocation flow, PDF/QR, billing, search, collaboration, CRM, public contact routing, staff module, dashboard business logic, navigation changes, direct `MatrimonyProfile` mutation, or `MutationService` changes.
+
+============================================================
+1) DAY-6 PURPOSE
+============================================================
+
+Day-6 creates the Suchak-to-candidate representation foundation and a masking service only.
+
+Allowed:
+
+* `suchak_profile_representations` table
+* `SuchakProfileRepresentation` model
+* a minimal representation creation service tied to Day-5 source links
+* a masking service that never exposes candidate/family private contact data
+* factories/tests for representation and masking foundation
+
+Forbidden:
+
+* public registration UI
+* consent request/verification/revocation UI or business flow
+* public/admin representation transition UI
+* approve/reject/suspend/archive representation business transitions
+* document upload changes
+* PDF/QR generation
+* billing/payment/search/collaboration/CRM logic
+* staff module
+* navigation links
+* `MutationService` changes
+* direct `matrimony_profiles` update/save mutations
+
+============================================================
+2) TABLE: suchak_profile_representations
+============================================================
+
+Purpose:
+Persist one Suchak's representation of one canonical `matrimony_profiles` row.
+
+Columns:
+
+* id
+* suchak_account_id unsignedBigInteger NOT NULL
+* matrimony_profile_id unsignedBigInteger NOT NULL
+* biodata_intake_id unsignedBigInteger NULL
+* representation_status string NOT NULL default pending
+* representation_mode string NOT NULL
+* consent_status string NOT NULL default not_requested
+* first_uploaded_at timestamp NULL
+* first_identified_at timestamp NULL
+* first_verified_consent_at timestamp NULL
+* consent_verified_at timestamp NULL
+* consent_valid_until timestamp NULL
+* revoked_at timestamp NULL
+* candidate_deactivated_at timestamp NULL
+* created_at timestamp NULL
+* updated_at timestamp NULL
+
+No `profile_id`.
+No `deleted_at`.
+No soft deletes.
+
+Allowed `representation_status` values:
+
+* pending
+* consent_pending
+* active
+* revoked
+* expired
+* rejected
+* suspended
+* candidate_deactivated
+
+Allowed `representation_mode` values:
+
+* uploaded_by_suchak
+* matched_existing_profile
+* candidate_invited_suchak
+* admin_assigned
+* primary_suchak
+
+Allowed Day-6 `consent_status` values:
+
+* not_requested
+* requested
+* accepted
+* rejected
+* expired
+* revoked
+
+Day-6 may only create `consent_status = not_requested`.
+Day-7 must implement consent request/verification/revocation before any other consent status is changed by business flow.
+
+============================================================
+3) INDEXES / FOREIGN KEYS
+============================================================
+
+Required indexes:
+
+* unique(suchak_account_id, matrimony_profile_id)
+* index(suchak_account_id)
+* index(matrimony_profile_id)
+* index(biodata_intake_id)
+* index(representation_status)
+* index(representation_mode)
+* index(consent_status)
+* index(created_at)
+* index(suchak_account_id, representation_status, created_at)
+* index(matrimony_profile_id, representation_status)
+
+Foreign keys:
+
+* suchak_account_id references suchak_accounts(id) with restrictOnDelete
+* matrimony_profile_id references matrimony_profiles(id) with restrictOnDelete
+* biodata_intake_id references biodata_intakes(id) with restrictOnDelete
+
+No cascade delete is allowed.
+
+Reason:
+Suchak business records must not disappear when candidate/user/account lifecycle changes.
+
+============================================================
+4) DUPLICATE-SAFE CREATION BOUNDARY
+============================================================
+
+Day-6 representation creation may run only after a canonical `matrimony_profile_id` is known.
+
+Rules:
+
+1. Do not create duplicate candidate profiles.
+2. Do not expose duplicate detection identity to another Suchak as a lead-discovery tool.
+3. A single Suchak account may have only one representation for one canonical `matrimony_profile_id`.
+4. Multiple Suchak accounts may represent the same canonical `matrimony_profile_id`.
+5. Verified Suchak accounts may create pending representations only through an already-linked Day-5 source link.
+6. Pending/rejected/suspended/archived Suchak accounts must not create representations.
+7. Day-6 must not create active representations.
+8. Day-6 must not verify consent.
+9. Day-6 must not mutate `matrimony_profiles` directly.
+
+============================================================
+5) MASKING BOUNDARY
+============================================================
+
+Masked candidate visibility must not expose:
+
+* full name
+* exact date of birth
+* primary contact number
+* WhatsApp number
+* email
+* address line
+* father/mother/family contact numbers
+* raw parsed biodata text
+* duplicate match identity
+
+Only active representation with accepted and currently valid consent may be treated as public-user visible.
+Pending, consent_pending, revoked, expired, rejected, suspended, and candidate_deactivated representations must not be public-user visible.
+
+Day-6 masking service may return a safe placeholder/reference and coarse non-contact metadata only.
+
+============================================================
+6) ACTIVITY TRACE RULE
+============================================================
+
+When Day-6 creates a representation:
+
+* write `suchak_activity_logs`
+* actor_type = suchak
+* actor_user_id = authenticated Suchak user id
+* suchak_account_id = Suchak account id
+* action_type = representation_created
+* target_type = suchak_profile_representation
+* target_id = suchak_profile_representations.id
+* matrimony_profile_id = canonical `matrimony_profiles.id`
+
+`metadata_json` may store small scalar context only.
+It must not store candidate/family private contact data.
+
+============================================================
+7) DAY-6 IMPLEMENTATION SCOPE
+============================================================
+
+Day-6 may touch only:
+
+* PHASE-5 SSOT.md
+* database/migrations/*create_suchak_profile_representations*
+* app/Models/SuchakProfileRepresentation.php
+* app/Models/SuchakAccount.php
+* database/factories/SuchakProfileRepresentationFactory.php
+* app/Modules/Suchak/Services/*Representation*
+* app/Modules/Suchak/Services/*Masking*
+* tests/Feature/Suchak/*Representation*
+
+Day-6 must not touch:
+
+* MutationService
+* MatrimonyProfile mutation paths
+* intake parser/OCR
+* contact/mediator service logic
+* payment/billing execution files
+* public/admin Suchak route/controller/view business logic
+* navigation/layout files
+* consent/PDF/QR/search/collaboration/CRM/staff files
+
+============================================================
+8) DAY-6 COMPLETION GATE
+============================================================
+
+Day-6 is complete only if:
+
+* `suchak_profile_representations` table exists with exact columns above
+* no `profile_id` column exists on the table
+* no `deleted_at` column exists on the table
+* duplicate `(suchak_account_id, matrimony_profile_id)` rows are blocked
+* one canonical profile can have multiple Suchak representations
+* unverified/suspended/archived Suchak accounts cannot create representations
+* representation creation writes a `suchak_activity_logs` row
+* masked summary does not reveal full name/contact/email/address/date of birth/private family contact
+* pending representations are not public-user visible
+* no Day-7+ flow was added
+
+END OF PHASE-6 SUCHAK MODULE ADDENDUM - DAY-6 REPRESENTATION + MASKING CLARIFICATION PATCH
+############################################################
+
+============================================================
+PHASE-6 SUCHAK MODULE ADDENDUM - DAY-7 CONSENT FOUNDATION CLARIFICATION PATCH
+(SUCHAK CONSENT REQUEST / VERIFICATION / REVOCATION CONTRACT)
+============================================================
+
+Status:
+OFFICIAL CLARIFICATION PATCH
+
+Authority:
+This patch extends the existing "PHASE-6 - SUCHAK MODULE ADDENDUM".
+It defines exact Day-7 consent schema, token/OTP hardening, representation update boundary, event traceability, and rollback rules.
+
+This patch does NOT authorize public consent UI, public contact routing, PDF/QR, billing/payment, search, collaboration, CRM, staff module, navigation changes, direct `MatrimonyProfile` mutation, or `MutationService` changes.
+
+============================================================
+1) DAY-7 PURPOSE
+============================================================
+
+Day-7 creates the consent foundation only.
+
+Allowed:
+
+* `suchak_consents` table
+* `suchak_consent_events` table
+* `SuchakConsent` model
+* `SuchakConsentEvent` model
+* a minimal consent service for request / OTP verification / revocation
+* factories/tests for consent foundation
+* representation consent/status updates needed to keep validity explicit
+
+Forbidden:
+
+* public consent page UI
+* public registration UI
+* WhatsApp sending integration
+* public contact routing
+* PDF/QR generation
+* billing/payment/search/collaboration/CRM logic
+* staff module
+* navigation links
+* direct `matrimony_profiles` update/save mutations
+* `MutationService` changes
+
+============================================================
+2) TABLE: suchak_consents
+============================================================
+
+Purpose:
+Store consent state for one Suchak representation with hardened token and OTP storage.
+
+Columns:
+
+* id
+* suchak_account_id unsignedBigInteger NOT NULL
+* matrimony_profile_id unsignedBigInteger NOT NULL
+* representation_id unsignedBigInteger NOT NULL
+* consent_status string NOT NULL default requested
+* consent_type string NOT NULL default one_year
+* consent_text_snapshot text NOT NULL
+* consent_template_version string NOT NULL default v1
+* consent_given_by_name string NULL
+* relationship_to_candidate string NULL
+* consent_mobile_number string NULL
+* token_hash string(64) NOT NULL
+* token_expires_at timestamp NOT NULL
+* otp_hash string NULL
+* otp_attempts unsignedSmallInteger NOT NULL default 0
+* last_otp_sent_at timestamp NULL
+* accepted_at timestamp NULL
+* rejected_at timestamp NULL
+* revoked_at timestamp NULL
+* used_at timestamp NULL
+* otp_verified_at timestamp NULL
+* consent_channel string NOT NULL default whatsapp_deep_link
+* valid_from timestamp NULL
+* valid_until timestamp NULL
+* revocation_reason text NULL
+* ip_address string(45) NULL
+* user_agent string(512) NULL
+* created_at timestamp NULL
+* updated_at timestamp NULL
+
+No `raw_token`.
+No `otp`.
+No `deleted_at`.
+No soft deletes.
+
+Allowed `consent_status` values:
+
+* requested
+* link_opened
+* otp_sent
+* otp_verified
+* accepted
+* rejected
+* expired
+* revoked
+
+Allowed `consent_type` values:
+
+* one_year
+* two_year
+* until_revoked
+
+Allowed `consent_channel` values:
+
+* whatsapp_deep_link
+* sms_otp
+* voice_otp
+* offline_proof
+* admin_assisted
+
+Day-7 default token expiry:
+
+* consent request token expires after 7 days unless a future SSOT patch changes this.
+
+Day-7 default OTP attempt limit:
+
+* max 5 failed OTP verification attempts unless a future SSOT patch changes this.
+
+============================================================
+3) TABLE: suchak_consent_events
+============================================================
+
+Purpose:
+Append-only consent timeline.
+
+Columns:
+
+* id
+* consent_id unsignedBigInteger NOT NULL
+* event_type string NOT NULL
+* event_note text NULL
+* actor_type string NOT NULL
+* actor_id unsignedBigInteger NULL
+* created_at timestamp NULL
+
+No `updated_at`.
+No `deleted_at`.
+
+Allowed `event_type` values:
+
+* requested
+* whatsapp_link_opened
+* otp_sent
+* otp_verified
+* consent_accepted
+* consent_rejected
+* consent_expired
+* consent_revoked
+* fallback_triggered
+
+Allowed `actor_type` values:
+
+* suchak
+* user
+* admin
+* candidate
+* system
+
+============================================================
+4) INDEXES / FOREIGN KEYS
+============================================================
+
+`suchak_consents` required indexes:
+
+* unique(token_hash)
+* index(token_expires_at)
+* index(suchak_account_id)
+* index(matrimony_profile_id)
+* index(representation_id)
+* index(consent_status)
+* index(consent_type)
+* index(consent_channel)
+* index(suchak_account_id, matrimony_profile_id)
+* index(suchak_account_id, matrimony_profile_id, representation_id)
+* index(created_at)
+
+`suchak_consents` foreign keys:
+
+* suchak_account_id references suchak_accounts(id) with restrictOnDelete
+* matrimony_profile_id references matrimony_profiles(id) with restrictOnDelete
+* representation_id references suchak_profile_representations(id) with restrictOnDelete
+
+`suchak_consent_events` required indexes:
+
+* index(consent_id)
+* index(event_type)
+* index(actor_type)
+* index(actor_id)
+* index(created_at)
+
+`suchak_consent_events` foreign keys:
+
+* consent_id references suchak_consents(id) with restrictOnDelete
+* actor_id references users(id) with restrictOnDelete, nullable for candidate/system events
+
+No cascade delete is allowed.
+
+============================================================
+5) TOKEN / OTP HARDENING
+============================================================
+
+Rules:
+
+1. Raw token must never be stored.
+2. Store only `token_hash`.
+3. Raw OTP must never be stored.
+4. Store only `otp_hash`.
+5. `token_hash` must be unique.
+6. `token_expires_at` must be set.
+7. OTP failures must increment `otp_attempts`.
+8. Accepted/rejected/revoked/expired statuses must be explicit.
+9. Consent activity metadata must not store private candidate/family contact data.
+
+============================================================
+6) REPRESENTATION UPDATE BOUNDARY
+============================================================
+
+Consent must always be tied to `suchak_profile_representations.id`.
+
+Day-7 may update only Suchak representation consent/status fields:
+
+* request consent: representation_status = consent_pending, consent_status = requested
+* accepted consent: representation_status = active, consent_status = accepted, first_verified_consent_at / consent_verified_at / consent_valid_until set
+* revoked consent: representation_status = revoked, consent_status = revoked, revoked_at set
+* expired consent: representation_status = expired, consent_status = expired
+
+Day-7 must not mutate `matrimony_profiles`.
+
+Only one active/open consent may exist for the same representation at a time.
+Open/active consent statuses are:
+
+* requested
+* link_opened
+* otp_sent
+* otp_verified
+* accepted
+
+============================================================
+7) ACTIVITY TRACE RULE
+============================================================
+
+When consent is requested:
+
+* write `suchak_activity_logs`
+* actor_type = suchak
+* action_type = consent_requested
+* target_type = suchak_consent
+* target_id = suchak_consents.id
+* matrimony_profile_id = consent.matrimony_profile_id
+
+When consent is accepted/verified:
+
+* write `suchak_activity_logs`
+* actor_type may be candidate or system via `suchak_consent_events`
+* business activity action_type = consent_verified
+
+When consent is revoked:
+
+* write `suchak_activity_logs`
+* action_type = consent_revoked
+
+============================================================
+8) DAY-7 IMPLEMENTATION SCOPE
+============================================================
+
+Day-7 may touch only:
+
+* PHASE-5 SSOT.md
+* database/migrations/*create_suchak_consent*
+* app/Models/SuchakConsent.php
+* app/Models/SuchakConsentEvent.php
+* app/Models/SuchakAccount.php
+* app/Models/SuchakProfileRepresentation.php
+* database/factories/SuchakConsentFactory.php
+* database/factories/SuchakConsentEventFactory.php
+* app/Modules/Suchak/Services/*Consent*
+* tests/Feature/Suchak/*Consent*
+
+Day-7 must not touch:
+
+* MutationService
+* MatrimonyProfile mutation paths
+* intake parser/OCR
+* contact/mediator service logic
+* payment/billing execution files
+* public/admin route/controller/view UI logic
+* navigation/layout files
+* PDF/QR/search/collaboration/CRM/staff files
+
+============================================================
+9) DAY-7 COMPLETION GATE
+============================================================
+
+Day-7 is complete only if:
+
+* `suchak_consents` table exists with exact columns above
+* `suchak_consent_events` table exists with exact columns above
+* no `raw_token` column exists
+* no `otp` column exists
+* no `deleted_at` column exists on either table
+* raw token is returned only once and never persisted
+* raw OTP is never persisted
+* duplicate open consent for the same representation is blocked
+* consent request writes consent event and Suchak activity
+* OTP verification accepts consent and activates the representation
+* revocation revokes consent and representation
+* no public contact reveal or public consent UI was added
+
+END OF PHASE-6 SUCHAK MODULE ADDENDUM - DAY-7 CONSENT FOUNDATION CLARIFICATION PATCH
+############################################################

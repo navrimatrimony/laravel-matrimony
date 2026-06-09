@@ -66,6 +66,16 @@ class SuchakAccount extends Model
         return $this->hasMany(SuchakVerificationRecord::class);
     }
 
+    public function profileRepresentations(): HasMany
+    {
+        return $this->hasMany(SuchakProfileRepresentation::class);
+    }
+
+    public function consents(): HasMany
+    {
+        return $this->hasMany(SuchakConsent::class);
+    }
+
     public function isVerified(): bool
     {
         return $this->verification_status === self::VERIFICATION_VERIFIED;
