@@ -8,11 +8,11 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 | Web — Suchak surface (authenticated users)
 |--------------------------------------------------------------------------
-| Phase-6 Day-1 only: route surface placeholder.
-| TODO Phase-6 Day-2: add Suchak account verification gating.
+| Phase-6 Day-2: route surface remains placeholder; account foundation gate only.
+| Verification-specific blocking is intentionally deferred.
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', EnforceCardOnboarding::class])
+Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
     ->prefix('suchak')
     ->name('suchak.')
     ->group(function () {

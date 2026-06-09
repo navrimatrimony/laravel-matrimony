@@ -122,6 +122,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasOne(\App\Models\MatrimonyProfile::class);
     }
 
+    public function suchakAccount(): HasOne
+    {
+        return $this->hasOne(SuchakAccount::class);
+    }
+
     public function moderationStat(): HasOne
     {
         return $this->hasOne(UserModerationStat::class);
