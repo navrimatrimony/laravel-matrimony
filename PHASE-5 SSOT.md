@@ -14550,3 +14550,478 @@ Phase-6 Suchak MVP ready for controlled launch.
 ============================================================
 END OF PHASE-6 — SUCHAK MODULE ADDENDUM
 ============================================================
+############################################################
+PHASE-6 SUCHAK MODULE ADDENDUM — DAY-2 SCHEMA CLARIFICATION PATCH
+(SUCHAK ACCOUNT FOUNDATION CONTRACT)
+############################################################
+
+Status:
+OFFICIAL CLARIFICATION PATCH
+
+Authority:
+This patch extends the existing “PHASE-6 — SUCHAK MODULE ADDENDUM”.
+It defines exact Day-2 schema, status, access, deletion, and audit rules.
+
+This patch does NOT authorize registration UI, consent, upload, PDF, QR, billing, search, collaboration, CRM, dashboard business logic, staff module, or navigation changes.
+
+============================================================
+1️⃣ DAY-2 PURPOSE
+=================
+
+Day-2 creates Suchak account foundation only.
+
+Allowed:
+
+* `suchak_accounts` table
+* `suchak_verification_records` table
+* `suchak_policies` table
+* related Eloquent models
+* `User::suchakAccount()` relation
+* Suchak access middleware foundation
+* route gating for existing Suchak dashboard placeholder
+* tests for schema, model relations, route gate
+
+Not allowed:
+
+* public Suchak registration UI
+* admin verification UI
+* approve/reject/suspend/archive service actions
+* document upload flow
+* candidate profile upload
+* consent flow
+* contact reveal
+* PDF generation
+* QR code
+* billing
+* search
+* collaboration
+* CRM
+* staff module
+* dashboard business logic
+* navigation links
+
+============================================================
+2️⃣ SUCHAK ACCOUNT IDENTITY RULE
+================================
+
+Suchak is NOT a candidate profile.
+
+`users` remains authentication/account identity only.
+
+Suchak business identity MUST be stored only in `suchak_accounts`.
+
+Do NOT store Suchak business fields in:
+
+* users
+* matrimony_profiles
+* profile_extended_attributes
+
+A Suchak account must never be represented as `MatrimonyProfile`.
+
+============================================================
+3️⃣ TABLE: suchak_accounts
+==========================
+
+Purpose:
+Stores Suchak business identity.
+
+Columns:
+
+* id
+* user_id unsignedBigInteger NOT NULL
+* suchak_name string NOT NULL
+* office_name string NULL
+* business_type string NOT NULL DEFAULT 'individual'
+* mobile_number string NULL
+* whatsapp_number string NULL
+* email string NULL
+* address_line text NULL
+* city_id unsignedBigInteger NULL
+* taluka_id unsignedBigInteger NULL
+* district_id unsignedBigInteger NULL
+* state_id unsignedBigInteger NULL
+* verification_status string NOT NULL DEFAULT 'pending'
+* public_status string NOT NULL DEFAULT 'hidden'
+* verified_at timestamp NULL
+* rejected_at timestamp NULL
+* suspended_at timestamp NULL
+* archived_at timestamp NULL
+* suspension_reason text NULL
+* created_at timestamp NULL
+* updated_at timestamp NULL
+
+Allowed business_type values:
+
+* individual
+* bureau
+* organization
+
+Allowed verification_status values:
+
+* pending
+* verified
+* rejected
+* suspended
+* archived
+
+Allowed public_status values:
+
+* hidden
+* active
+* inactive
+
+Indexes / constraints:
+
+* unique(user_id)
+* index(verification_status)
+* index(public_status)
+* index(district_id)
+* index(city_id)
+* index(created_at)
+
+Foreign keys:
+
+* user_id references users(id) with restrictOnDelete
+* city_id references cities(id) with nullOnDelete, if cities table exists
+* taluka_id references talukas(id) with nullOnDelete, if talukas table exists
+* district_id references districts(id) with nullOnDelete, if districts table exists
+* state_id references states(id) with nullOnDelete, if states table exists
+
+Deletion policy:
+
+* No hard delete route.
+* No cascade delete from users.
+* Archive must be represented by `verification_status = archived` and `archived_at`.
+* Do not add softDeletes on Day-2 unless a future SSOT patch explicitly requires it.
+
+Visibility rule:
+A Suchak account is publicly visible only when:
+
+* verification_status = verified
+  AND
+* public_status = active
+
+============================================================
+4️⃣ TABLE: suchak_verification_records
+======================================
+
+Purpose:
+Stores verification evidence and admin review trail.
+
+Columns:
+
+* id
+* suchak_account_id unsignedBigInteger NOT NULL
+* verification_type string NOT NULL
+* document_path string NULL
+* admin_status string NOT NULL DEFAULT 'pending'
+* admin_user_id unsignedBigInteger NULL
+* remarks text NULL
+* verified_at timestamp NULL
+* rejected_at timestamp NULL
+* created_at timestamp NULL
+* updated_at timestamp NULL
+
+Allowed verification_type values:
+
+* identity
+* office
+* business
+* phone
+* other
+
+Allowed admin_status values:
+
+* pending
+* approved
+* rejected
+
+Indexes / constraints:
+
+* index(suchak_account_id)
+* index(admin_status)
+* index(verification_type)
+* index(admin_user_id)
+* index(created_at)
+
+Foreign keys:
+
+* suchak_account_id references suchak_accounts(id) with restrictOnDelete
+* admin_user_id references users(id) with nullOnDelete
+
+Deletion policy:
+
+* No hard delete route.
+* No cascade delete.
+* Do not add softDeletes on Day-2.
+* Verification records are audit-support records and must remain preserved.
+
+Day-2 upload rule:
+
+* Day-2 may include `document_path` column only.
+* Day-2 must NOT implement document upload/storage UI or processing.
+
+============================================================
+5️⃣ TABLE: suchak_policies
+==========================
+
+Purpose:
+Stores platform-level Suchak policy settings.
+
+Schema:
+
+* id
+* policy_key string NOT NULL
+* policy_value text NOT NULL
+* value_type string NOT NULL DEFAULT 'string'
+* description text NULL
+* is_active boolean NOT NULL DEFAULT true
+* created_at timestamp NULL
+* updated_at timestamp NULL
+
+Allowed value_type values:
+
+* string
+* integer
+* boolean
+* json
+
+Indexes / constraints:
+
+* unique(policy_key)
+* index(is_active)
+
+Deletion policy:
+
+* No hard delete route.
+* No cascade delete.
+* Do not add softDeletes on Day-2.
+* Policy changes must be admin-audited when admin UI/actions are later implemented.
+
+Required default policy rows:
+
+* default_consent_validity_months = 12, value_type integer
+* allow_two_year_consent = true, value_type boolean
+* allow_until_revoked_consent = true, value_type boolean
+* request_action_sla_hours = 48, value_type integer
+* collaboration_sla_days = 7, value_type integer
+* pdf_download_limit_per_day = 20, value_type integer
+* qr_token_expiry_days = 30, value_type integer
+* suchak_upload_daily_limit = 25, value_type integer
+* suchak_active_profile_limit_by_plan = 0, value_type integer
+
+Day-2 seeding rule:
+
+* Day-2 may seed these default rows inside the same migration or a dedicated seeder.
+* If seeded in migration, use idempotent insert/upsert logic.
+* No admin policy UI on Day-2.
+
+============================================================
+6️⃣ SUCHAK ACCESS MIDDLEWARE CONTRACT
+=====================================
+
+Middleware concept:
+Suchak-access middleware is allowed on Day-2.
+
+Recommended class name:
+
+* App\Http\Middleware\EnsureSuchakAccount
+
+Allowed alias:
+
+* suchak.account
+
+Route behavior:
+
+* `routes/web/suchak.php` must remain under auth.
+* Existing onboarding middleware may remain if already used by member route convention.
+* Add Suchak access middleware only to Suchak user routes.
+
+Access behavior:
+
+* Authenticated user with no suchak_accounts row:
+
+  * must be redirected away from `/suchak/*`
+  * must see a safe placeholder/message through redirect or abort response
+  * must NOT auto-create a Suchak account
+
+* Authenticated user with suchak_accounts row and verification_status in:
+
+  * pending
+  * verified
+  * rejected
+  * suspended
+  * archived
+    may access the placeholder dashboard route on Day-2 only.
+
+Reason:
+Day-2 is foundation only. Verification-specific dashboard restrictions will be implemented in later days.
+
+Public visibility remains stricter:
+
+* verified + active only
+
+Admin routes:
+
+* `routes/web/admin-suchak.php` remains under auth + admin.
+* Do not add admin Suchak business actions on Day-2.
+
+============================================================
+7️⃣ AUDIT CONTRACT
+==================
+
+Day-2 does not implement admin approve/reject/suspend/archive actions.
+
+When those actions are implemented later, every admin action must write `admin_audit_logs`.
+
+Future admin actions requiring audit:
+
+* approve Suchak account
+* reject Suchak account
+* suspend Suchak account
+* archive Suchak account
+* reactivate Suchak account
+* change Suchak policy
+* change public_status manually
+* update verification record admin_status
+
+Minimum future audit payload:
+
+* admin_user_id
+* action_type
+* target_type = suchak_account / suchak_verification_record / suchak_policy
+* target_id
+* old_value
+* new_value
+* reason
+* created_at
+
+Day-2 may prepare models/constants only.
+Day-2 must NOT implement these transitions.
+
+============================================================
+8️⃣ STATUS TRANSITION RULES
+===========================
+
+Day-2 does NOT implement state transition services.
+
+Allowed future transitions:
+
+verification_status:
+
+* pending → verified
+* pending → rejected
+* verified → suspended
+* suspended → verified
+* verified → archived
+* rejected → pending
+* suspended → archived
+
+Forbidden:
+
+* archived → verified without explicit future SSOT reactivation rule
+* silent status changes without audit
+* status changes from controller without governed service
+
+public_status:
+
+* hidden → active only if verification_status = verified
+* active → inactive
+* inactive → active only if verification_status = verified
+* any status → hidden by admin/governance action
+
+============================================================
+9️⃣ DAY-2 MODEL CONSTANTS
+=========================
+
+Models must define constants or equivalent enum-like arrays for:
+
+SuchakAccount:
+
+* BUSINESS_TYPE_INDIVIDUAL = individual
+* BUSINESS_TYPE_BUREAU = bureau
+* BUSINESS_TYPE_ORGANIZATION = organization
+* VERIFICATION_PENDING = pending
+* VERIFICATION_VERIFIED = verified
+* VERIFICATION_REJECTED = rejected
+* VERIFICATION_SUSPENDED = suspended
+* VERIFICATION_ARCHIVED = archived
+* PUBLIC_HIDDEN = hidden
+* PUBLIC_ACTIVE = active
+* PUBLIC_INACTIVE = inactive
+
+SuchakVerificationRecord:
+
+* TYPE_IDENTITY = identity
+* TYPE_OFFICE = office
+* TYPE_BUSINESS = business
+* TYPE_PHONE = phone
+* TYPE_OTHER = other
+* STATUS_PENDING = pending
+* STATUS_APPROVED = approved
+* STATUS_REJECTED = rejected
+
+SuchakPolicy:
+
+* TYPE_STRING = string
+* TYPE_INTEGER = integer
+* TYPE_BOOLEAN = boolean
+* TYPE_JSON = json
+
+============================================================
+🔟 DAY-2 COMPLETION CRITERIA
+============================
+
+Day-2 is complete only if:
+
+* `suchak_accounts` table exists with exact columns above
+* `suchak_verification_records` table exists with exact columns above
+* `suchak_policies` table exists with exact columns above
+* no Suchak business data added to users
+* no Suchak data added to matrimony_profiles
+* no candidate profile upload logic added
+* no contact reveal logic added
+* no consent flow added
+* no billing/search/PDF/QR/staff/CRM logic added
+* User has one-to-one suchakAccount relation
+* Suchak route gate does not auto-create account
+* Suchak dashboard route still resolves
+* Admin Suchak dashboard route still resolves
+* migration rollback works
+* route-list passes
+* tests for Suchak foundation pass
+* git diff contains only Day-2 allowed files
+
+============================================================
+1️⃣1️⃣ ROLLBACK RULE
+====================
+
+If Day-2 breaks:
+
+1. Run:
+   php artisan migrate:rollback --step=1
+
+2. Revert only:
+
+   * Day-2 migration/seeder files
+   * app/Models/SuchakAccount.php
+   * app/Models/SuchakVerificationRecord.php
+   * app/Models/SuchakPolicy.php
+   * app/Http/Middleware/EnsureSuchakAccount.php
+   * app/Models/User.php
+   * bootstrap/app.php
+   * routes/web/suchak.php
+   * Day-2 Suchak tests/factories if added
+
+Do NOT revert or touch:
+
+* MutationService
+* MatrimonyProfile
+* intake parser/OCR
+* contact/mediator files
+* billing/payment files
+* existing route files except `routes/web/suchak.php`
+
+############################################################
+END OF PHASE-6 SUCHAK MODULE ADDENDUM — DAY-2 SCHEMA CLARIFICATION PATCH
+############################################################
