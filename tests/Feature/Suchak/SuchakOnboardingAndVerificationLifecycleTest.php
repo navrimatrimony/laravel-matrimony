@@ -14,22 +14,32 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_authenticated_user_can_request_suchak_account_without_auto_creation_gate(): void
+    public function test_separate_suchak_registration_placeholder_is_available_without_creating_account(): void
+    {
+        $this->get(route('suchak.register.info'))
+            ->assertOk()
+            ->assertSee('Suchak Registration', false)
+            ->assertSee('Suchak registration is separate from regular user accounts.', false);
+
+        $this->assertDatabaseCount('suchak_accounts', 0);
+    }
+
+    public function test_authenticated_regular_user_cannot_apply_to_become_suchak(): void
     {
         $user = User::factory()->create([
-            'name' => 'Test Suchak',
-            'email' => 'suchak@example.test',
+            'name' => 'Regular Member',
+            'email' => 'regular-member@example.test',
             'mobile' => '9999999999',
+            'is_admin' => false,
         ]);
 
         $this->actingAs($user)
             ->get(route('suchak.apply.create'))
-            ->assertOk()
-            ->assertSee('Suchak Account Request', false);
+            ->assertRedirect(route('suchak.register.info'));
 
         $this->actingAs($user)
             ->post(route('suchak.apply.store'), [
-                'suchak_name' => 'Test Suchak',
+                'suchak_name' => 'Wrong Upgrade Attempt',
                 'office_name' => 'Test Bureau',
                 'business_type' => SuchakAccount::BUSINESS_TYPE_BUREAU,
                 'mobile_number' => '9999999999',
@@ -37,47 +47,36 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
                 'email' => 'business@example.test',
                 'address_line' => 'Test address',
             ])
-            ->assertRedirect(route('suchak.dashboard'));
+            ->assertRedirect(route('suchak.register.info'));
 
-        $this->assertDatabaseHas('suchak_accounts', [
-            'user_id' => $user->id,
-            'suchak_name' => 'Test Suchak',
-            'business_type' => SuchakAccount::BUSINESS_TYPE_BUREAU,
-            'verification_status' => SuchakAccount::VERIFICATION_PENDING,
-            'public_status' => SuchakAccount::PUBLIC_HIDDEN,
-        ]);
-
-        $account = $user->fresh()->suchakAccount;
-
-        $this->assertDatabaseHas('suchak_activity_logs', [
-            'suchak_account_id' => $account->id,
+        $this->assertFalse($user->fresh()->is_admin);
+        $this->assertNull($user->fresh()->suchakAccount);
+        $this->assertDatabaseCount('suchak_accounts', 0);
+        $this->assertDatabaseMissing('suchak_activity_logs', [
             'actor_user_id' => $user->id,
             'actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
             'action_type' => SuchakActivityLog::ACTION_SUCHAK_ONBOARDING_REQUESTED,
-            'target_type' => 'suchak_account',
-            'target_id' => $account->id,
         ]);
     }
 
-    public function test_guest_cannot_access_suchak_account_request_form(): void
+    public function test_guest_apply_route_is_still_auth_protected(): void
     {
         $this->get(route('suchak.apply.create'))
             ->assertRedirect(route('login'));
     }
 
-    public function test_duplicate_suchak_account_request_does_not_create_second_account(): void
+    public function test_apply_route_does_not_attach_existing_suchak_account_to_regular_upgrade_flow(): void
     {
         $user = User::factory()->create();
-        SuchakAccount::factory()->create(['user_id' => $user->id]);
 
         $this->actingAs($user)
             ->post(route('suchak.apply.store'), [
-                'suchak_name' => 'Duplicate Suchak',
+                'suchak_name' => 'Blocked Suchak',
                 'business_type' => SuchakAccount::BUSINESS_TYPE_INDIVIDUAL,
             ])
-            ->assertRedirect(route('suchak.dashboard'));
+            ->assertRedirect(route('suchak.register.info'));
 
-        $this->assertSame(1, SuchakAccount::query()->where('user_id', $user->id)->count());
+        $this->assertSame(0, SuchakAccount::query()->where('user_id', $user->id)->count());
     }
 
     public function test_admin_can_review_and_approve_pending_suchak_account_with_audit_links(): void
