@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\MatrimonyProfile;
+use App\Models\ProfileVisibilitySetting;
+use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Services\ContactAccessService;
 use App\Services\FeatureUsageService;
@@ -11,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ProfileContactActionController extends Controller
 {
@@ -27,6 +30,9 @@ class ProfileContactActionController extends Controller
         }
         if ($user->matrimonyProfile->id === $matrimony_profile->id) {
             abort(403);
+        }
+        if ($this->isSuchakOnlyProfile($matrimony_profile)) {
+            abort(403, 'Suchak-managed profiles must use the Suchak request pipeline.');
         }
 
         /** @var int Same authenticated user id as {@see MatrimonyProfileController::show} (GET). */
@@ -124,6 +130,9 @@ class ProfileContactActionController extends Controller
         if ($user->matrimonyProfile->id === $matrimony_profile->id) {
             abort(403);
         }
+        if ($this->isSuchakOnlyProfile($matrimony_profile)) {
+            abort(403, 'Suchak-managed profiles must use the Suchak request pipeline.');
+        }
 
         try {
             $this->mediationRequestService->createFromProfile($user, $matrimony_profile);
@@ -136,5 +145,24 @@ class ProfileContactActionController extends Controller
         return redirect()
             ->route('matrimony.profile.show', $matrimony_profile)
             ->with('success', __('contact_access.mediator_success'));
+    }
+
+    private function isSuchakOnlyProfile(MatrimonyProfile $profile): bool
+    {
+        $hasPubliclyRoutableSuchak = SuchakProfileRepresentation::query()
+            ->publiclyRoutable()
+            ->where('matrimony_profile_id', $profile->id)
+            ->exists();
+
+        if (! $hasPubliclyRoutableSuchak || ! Schema::hasColumn('profile_visibility_settings', 'contact_routing_mode')) {
+            return false;
+        }
+
+        $mode = DB::table('profile_visibility_settings')
+            ->where('profile_id', $profile->id)
+            ->value('contact_routing_mode');
+
+        return ProfileVisibilitySetting::normalizeContactRoutingMode(is_string($mode) ? $mode : null)
+            === ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY;
     }
 }

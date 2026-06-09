@@ -173,6 +173,17 @@ class SuchakProfileRepresentation extends Model
             });
     }
 
+    public function scopePubliclyRoutable(Builder $query): Builder
+    {
+        return $query
+            ->withValidConsent()
+            ->whereHas('suchakAccount', function (Builder $query): void {
+                $query
+                    ->where('verification_status', SuchakAccount::VERIFICATION_VERIFIED)
+                    ->where('public_status', SuchakAccount::PUBLIC_ACTIVE);
+            });
+    }
+
     public function delete(): ?bool
     {
         throw new RuntimeException('Suchak profile representations cannot be deleted.');

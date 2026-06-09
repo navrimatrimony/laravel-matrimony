@@ -26,6 +26,7 @@ use App\Http\Controllers\ProfileContactVerificationController;
 use App\Http\Controllers\ProfileHideController;
 use App\Http\Controllers\ProfilePhotoReportController;
 use App\Http\Controllers\ProfileVerificationController;
+use App\Http\Controllers\Suchak\PublicProfileRequestController;
 use App\Http\Controllers\ProfileWizardController;
 use App\Http\Controllers\ShortlistController;
 use App\Http\Controllers\SubscriptionController;
@@ -305,6 +306,9 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
     Route::post('/matrimony/profile/{matrimony_profile}/mediator-request', [ProfileContactActionController::class, 'mediatorRequest'])
         ->middleware('throttle:15,1')
         ->name('matrimony.profile.mediator-request');
+    Route::post('/matrimony/profile/{matrimony_profile}/suchak-requests/{representation}', [PublicProfileRequestController::class, 'store'])
+        ->middleware('throttle:15,1')
+        ->name('matrimony.profile.suchak-requests.store');
 
     /*
     | Chat (governed messaging)

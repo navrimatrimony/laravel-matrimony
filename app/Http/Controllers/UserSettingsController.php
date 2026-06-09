@@ -47,11 +47,14 @@ class UserSettingsController extends Controller
 
         $contactVisibilityResolved = $visibilitySettings?->resolvedContactVisibility()
             ?? ProfileVisibilitySetting::defaultResolvedContactVisibility();
+        $contactRoutingMode = $visibilitySettings?->resolvedContactRoutingMode()
+            ?? ProfileVisibilitySetting::CONTACT_ROUTING_DIRECT_AND_SUCHAK;
 
         return view('settings.privacy', [
             'profile' => $profile,
             'visibilitySettings' => $visibilitySettings,
             'contactVisibilityResolved' => $contactVisibilityResolved,
+            'contactRoutingMode' => $contactRoutingMode,
         ]);
     }
 
@@ -71,6 +74,7 @@ class UserSettingsController extends Controller
             'contact_visibility_photo_only' => 'nullable|boolean',
             'contact_visibility_require_contact_request' => 'nullable|boolean',
             'contact_visibility_approval_required' => 'nullable|boolean',
+            'contact_routing_mode' => 'required|in:direct_and_suchak,suchak_only',
         ]);
 
         $showContactTo = self::deriveLegacyShowContactTo(
@@ -97,6 +101,7 @@ class UserSettingsController extends Controller
                 'show_contact_to' => $showContactTo,
                 'hide_from_blocked_users' => true,
                 'contact_visibility_json' => $contactVisibilityJson,
+                'contact_routing_mode' => $validated['contact_routing_mode'],
             ]
         );
 
@@ -217,4 +222,3 @@ class UserSettingsController extends Controller
         ]);
     }
 }
-

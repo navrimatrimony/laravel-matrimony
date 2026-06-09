@@ -15373,6 +15373,30 @@ Purpose:
 Important:
 Day-14 may harden/retest deactivation/revocation behavior, but Day-10 must already enforce minimum revoked/expired/deactivated blocking.
 
+Day-10 implementation contract:
+
+* Public/member-facing Suchak contact routing must use the Day-9 persisted request pipeline.
+* Day-10 may add an authenticated member POST route that creates a `suchak_profile_requests` row through `SuchakRequestPipelineService`.
+* The route must remain behind existing authenticated member/onboarding middleware.
+* A Suchak-managed profile is publicly routable only when it has at least one `suchak_profile_representations` row that is:
+  * `representation_status = active`
+  * `consent_status = accepted`
+  * not revoked
+  * not candidate-deactivated
+  * not expired by `consent_valid_until`
+  * linked to a verified and publicly active Suchak account
+* Profile show may display valid Suchak options for routing, but must not reveal candidate/family private contact details.
+* Suchak representation alone must not automatically hide or block candidate direct contact.
+* Candidate/profile owner controls contact routing through `profile_visibility_settings.contact_routing_mode`.
+* Allowed `contact_routing_mode` values are:
+  * `direct_and_suchak` — show valid Suchak routing options while keeping existing direct member contact request, paid contact reveal, and mediator/WhatsApp-response actions governed by ordinary privacy/plan rules.
+  * `suchak_only` — show valid Suchak routing options and block existing direct member contact request, paid contact reveal, and mediator/WhatsApp-response actions from bypassing the Suchak request pipeline.
+* Default `contact_routing_mode` must be `direct_and_suchak`.
+* Day-10 may add a narrow migration only for `profile_visibility_settings.contact_routing_mode`; it must not create new Suchak tables.
+* Day-10 must not add QR, PDF, billing, search, collaboration, commission, staff, CRM, dashboard business logic, or navigation links.
+* Day-10 must not mutate governed profile data or alter `MutationService`.
+* Day-10 request creation must write the existing Day-9 request, pipeline, pipeline event, and activity trace.
+
 Day-11:
 Cross-Suchak masked search only.
 

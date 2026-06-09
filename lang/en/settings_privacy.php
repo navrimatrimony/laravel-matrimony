@@ -17,5 +17,11 @@ return [
     'filter_photo_only' => 'Profiles with a photo',
     'require_contact_request_label' => 'Share my contact details only after I accept a contact request',
     'ask_permission_before_sharing' => 'Ask my permission before sharing my contact details',
+    'contact_routing_mode_heading' => 'Suchak contact routing',
+    'contact_routing_mode_intro' => 'When a Suchak represents your profile, choose whether viewers can use direct contact options too.',
+    'contact_routing_direct_and_suchak' => 'Direct contact and Suchak',
+    'contact_routing_direct_and_suchak_help' => 'Show the Suchak option and keep direct contact options governed by your normal privacy and plan rules.',
+    'contact_routing_suchak_only' => 'Suchak only',
+    'contact_routing_suchak_only_help' => 'Route contact through Suchak and hide direct contact, mediator, and contact-request actions for this profile.',
     'blocked_users_never_see_contact' => 'Blocked users will never see your contact details.',
 ];

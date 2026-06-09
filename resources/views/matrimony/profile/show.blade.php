@@ -1215,6 +1215,58 @@
                         : 'XXXX';
                 @endphp
 
+                {{-- Valid Suchak options can be shown without automatically hiding direct contact. --}}
+                @if (($suchakContactOptionsAvailable ?? false) && ! empty($suchakContactRepresentations ?? null) && $suchakContactRepresentations->isNotEmpty())
+                    <div class="space-y-4">
+                        <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-left dark:border-emerald-800 dark:bg-emerald-950/25">
+                            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">{{ __('profile.suchak_contact_kicker') }}</p>
+                            <h4 class="mt-1 text-base font-semibold text-stone-900 dark:text-stone-50">{{ __('profile.suchak_contact_title') }}</h4>
+                            <p class="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{{ __('profile.suchak_contact_body') }}</p>
+                        </div>
+
+                        <div class="space-y-3">
+                            @foreach ($suchakContactRepresentations as $suchakRepresentation)
+                                @php
+                                    $existingSuchakRequest = ($openSuchakRequestsByRepresentationId ?? collect())->get($suchakRepresentation->id);
+                                    $suchakAccount = $suchakRepresentation->suchakAccount;
+                                @endphp
+                                <div class="rounded-xl border border-stone-200 bg-white px-4 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/70">
+                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                        <div class="min-w-0">
+                                            <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $suchakAccount?->suchak_name ?? __('Suchak') }}</p>
+                                            @if (! empty($suchakAccount?->office_name))
+                                                <p class="mt-0.5 text-xs text-stone-500 dark:text-stone-400">{{ $suchakAccount->office_name }}</p>
+                                            @endif
+                                        </div>
+                                        @if ($existingSuchakRequest)
+                                            <span class="inline-flex items-center justify-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900 dark:bg-amber-900/35 dark:text-amber-100">
+                                                {{ __('profile.suchak_contact_pending_badge') }}
+                                            </span>
+                                        @endif
+                                    </div>
+
+                                    @if ($existingSuchakRequest)
+                                        <p class="mt-3 text-sm text-stone-600 dark:text-stone-300">{{ __('profile.suchak_contact_pending_help') }}</p>
+                                    @else
+                                        <form method="POST" action="{{ route('matrimony.profile.suchak-requests.store', [$profile, $suchakRepresentation]) }}" class="mt-3 space-y-3">
+                                            @csrf
+                                            <input type="hidden" name="request_reason" value="profile_show_contact">
+                                            <div>
+                                                <label class="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">{{ __('profile.suchak_contact_message_label') }}</label>
+                                                <textarea name="message" rows="2" maxlength="2000" class="w-full rounded-md border border-stone-300 shadow-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100" placeholder="{{ __('profile.suchak_contact_message_placeholder') }}">{{ old('message') }}</textarea>
+                                            </div>
+                                            <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900">
+                                                {{ __('profile.suchak_contact_send_button') }}
+                                            </button>
+                                        </form>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+
+                @if (! ($suchakContactRoutingRequired ?? false))
                 {{-- CASE 1: Already unlocked (paid reveal / grant) — phone + email per {@see ContactAccessService::resolveViewerContext} --}}
                 @if (! empty($contactAccess['paid_contact_phone']) || ! empty($contactAccess['paid_contact_email']))
                     <div class="text-center space-y-2">
@@ -1353,6 +1405,7 @@
                             {{ __('contact_access.upgrade_plan_button') }}
                         </a>
                     </div>
+                @endif
                 @endif
                 </div>{{-- #profile-contact-reveal-root --}}
                 @if (! ($isOwnProfile ?? false) && (($contactAccess['show_mediator_cta'] ?? false) || ($latestMediatorRequestIncoming ?? null)))

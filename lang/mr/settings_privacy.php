@@ -17,5 +17,11 @@ return [
     'filter_photo_only' => 'फोटो असलेले प्रोफाइल्स',
     'require_contact_request_label' => 'मी संपर्क विनंती स्वीकारल्यानंतरच माझे संपर्क तपशील द्या',
     'ask_permission_before_sharing' => 'माझे संपर्क तपशील दाखवण्यापूर्वी माझी परवानगी घ्या',
+    'contact_routing_mode_heading' => 'Suchak संपर्क routing',
+    'contact_routing_mode_intro' => 'तुमच्या profile ला Suchak जोडलेला असेल, तेव्हा viewers ना direct contact options सुद्धा दाखवायचे का ते निवडा.',
+    'contact_routing_direct_and_suchak' => 'Direct contact आणि Suchak',
+    'contact_routing_direct_and_suchak_help' => 'Suchak option दाखवा आणि direct contact options तुमच्या नेहमीच्या privacy आणि plan rules नुसार चालू ठेवा.',
+    'contact_routing_suchak_only' => 'फक्त Suchak',
+    'contact_routing_suchak_only_help' => 'Contact Suchak मार्फत route करा आणि या profile साठी direct contact, mediator, contact-request actions लपवा.',
     'blocked_users_never_see_contact' => 'ज्यांना तुम्ही ब्लॉक केले आहे, त्यांना तुमचे संपर्क तपशील कधीच दिसणार नाहीत.',
 ];

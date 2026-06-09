@@ -8,6 +8,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProfileVisibilitySetting extends Model
 {
+    public const CONTACT_ROUTING_DIRECT_AND_SUCHAK = 'direct_and_suchak';
+    public const CONTACT_ROUTING_SUCHAK_ONLY = 'suchak_only';
+
+    public const CONTACT_ROUTING_MODES = [
+        self::CONTACT_ROUTING_DIRECT_AND_SUCHAK,
+        self::CONTACT_ROUTING_SUCHAK_ONLY,
+    ];
+
     protected $table = 'profile_visibility_settings';
 
     protected $fillable = [
@@ -17,6 +25,7 @@ class ProfileVisibilitySetting extends Model
         'show_contact_to',
         'hide_from_blocked_users',
         'contact_visibility_json',
+        'contact_routing_mode',
     ];
 
     protected $casts = [
@@ -48,6 +57,22 @@ class ProfileVisibilitySetting extends Model
         ]);
 
         return $tmp->resolvedContactVisibility();
+    }
+
+    public static function normalizeContactRoutingMode(?string $mode): string
+    {
+        $normalized = strtolower(trim((string) $mode));
+
+        if (! in_array($normalized, self::CONTACT_ROUTING_MODES, true)) {
+            return self::CONTACT_ROUTING_DIRECT_AND_SUCHAK;
+        }
+
+        return $normalized;
+    }
+
+    public function resolvedContactRoutingMode(): string
+    {
+        return self::normalizeContactRoutingMode($this->contact_routing_mode ?? null);
     }
 
     /**

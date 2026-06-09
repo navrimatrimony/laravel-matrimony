@@ -52,6 +52,7 @@
             $cvPhoto = old('contact_visibility_photo_only', ($cvR['filters']['photo_only'] ?? false) ? '1' : '0');
             $cvRequireRequest = old('contact_visibility_require_contact_request', ($cvR['require_contact_request'] ?? false) ? '1' : '0');
             $cvApproval = old('contact_visibility_approval_required', ($cvR['approval_required'] ?? false) ? '1' : '0');
+            $contactRoutingMode = old('contact_routing_mode', $contactRoutingMode ?? \App\Models\ProfileVisibilitySetting::CONTACT_ROUTING_DIRECT_AND_SUCHAK);
         @endphp
 
         <form method="POST" action="{{ route('user.settings.privacy.update') }}" class="space-y-6">
@@ -162,6 +163,27 @@
                             <span class="text-sm text-gray-700 dark:text-gray-200">{{ __('settings_privacy.ask_permission_before_sharing') }}</span>
                         </label>
                     </div>
+
+                    <div class="mt-6 border-t border-gray-200 pt-5 dark:border-gray-700">
+                        <div class="text-base font-semibold text-gray-900 dark:text-gray-100">{{ __('settings_privacy.contact_routing_mode_heading') }}</div>
+                        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">{{ __('settings_privacy.contact_routing_mode_intro') }}</p>
+                        <div class="mt-4 space-y-3">
+                            <label class="flex items-start gap-3 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                                <input type="radio" name="contact_routing_mode" value="direct_and_suchak" class="mt-1 border-gray-400 text-red-600" @checked($contactRoutingMode === 'direct_and_suchak') required>
+                                <span>
+                                    <span class="block text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('settings_privacy.contact_routing_direct_and_suchak') }}</span>
+                                    <span class="mt-1 block text-sm text-gray-600 dark:text-gray-400">{{ __('settings_privacy.contact_routing_direct_and_suchak_help') }}</span>
+                                </span>
+                            </label>
+                            <label class="flex items-start gap-3 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                                <input type="radio" name="contact_routing_mode" value="suchak_only" class="mt-1 border-gray-400 text-red-600" @checked($contactRoutingMode === 'suchak_only') required>
+                                <span>
+                                    <span class="block text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('settings_privacy.contact_routing_suchak_only') }}</span>
+                                    <span class="mt-1 block text-sm text-gray-600 dark:text-gray-400">{{ __('settings_privacy.contact_routing_suchak_only_help') }}</span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -204,4 +226,3 @@
 })();
 </script>
 @endsection
-

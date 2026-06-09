@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\MatrimonyProfile;
+use App\Models\ProfileVisibilitySetting;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -43,6 +44,7 @@ class ProfileVisibilitySettingsDefaultsService
             'show_photo_to' => 'all',
             'show_contact_to' => ContactRevealPolicyService::SHOW_CONTACT_EVERYONE,
             'hide_from_blocked_users' => true,
+            'contact_routing_mode' => ProfileVisibilitySetting::CONTACT_ROUTING_DIRECT_AND_SUCHAK,
         ];
     }
 
@@ -58,6 +60,7 @@ class ProfileVisibilitySettingsDefaultsService
             'show_photo_to' => 'all',
             'show_contact_to' => ContactRevealPolicyService::SHOW_CONTACT_NO_ONE,
             'hide_from_blocked_users' => true,
+            'contact_routing_mode' => ProfileVisibilitySetting::CONTACT_ROUTING_DIRECT_AND_SUCHAK,
         ];
     }
 }

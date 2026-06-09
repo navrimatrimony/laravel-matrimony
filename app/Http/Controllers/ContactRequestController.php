@@ -4,10 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\ContactRequest;
 use App\Models\MatrimonyProfile;
+use App\Models\ProfileVisibilitySetting;
+use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use App\Services\ContactRequestService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -23,14 +26,18 @@ class ContactRequestController extends Controller
     /**
      * Create contact request (sender = auth user, receiver = profile owner).
      */
-    public function store(Request $request, MatrimonyProfile $profile)
+    public function store(Request $request, MatrimonyProfile $matrimony_profile)
     {
+        $profile = $matrimony_profile;
         $user = auth()->user();
         if (! $user || ! $user->matrimonyProfile) {
             abort(403);
         }
         if ($user->matrimonyProfile->id === $profile->id) {
             abort(403, 'Cannot request your own contact.');
+        }
+        if ($this->isSuchakOnlyProfile($profile)) {
+            abort(403, 'Suchak-managed profiles must use the Suchak request pipeline.');
         }
 
         $receiver = $profile->user;
@@ -96,5 +103,24 @@ class ContactRequestController extends Controller
         }
 
         return back()->with('success', 'Contact request cancelled.');
+    }
+
+    private function isSuchakOnlyProfile(MatrimonyProfile $profile): bool
+    {
+        $hasPubliclyRoutableSuchak = SuchakProfileRepresentation::query()
+            ->publiclyRoutable()
+            ->where('matrimony_profile_id', $profile->id)
+            ->exists();
+
+        if (! $hasPubliclyRoutableSuchak || ! Schema::hasColumn('profile_visibility_settings', 'contact_routing_mode')) {
+            return false;
+        }
+
+        $mode = DB::table('profile_visibility_settings')
+            ->where('profile_id', $profile->id)
+            ->value('contact_routing_mode');
+
+        return ProfileVisibilitySetting::normalizeContactRoutingMode(is_string($mode) ? $mode : null)
+            === ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY;
     }
 }

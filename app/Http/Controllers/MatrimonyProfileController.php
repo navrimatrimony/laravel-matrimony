@@ -16,11 +16,14 @@ use App\Models\MatrimonyProfile;
 use App\Models\Message;
 use App\Models\Profession;
 use App\Models\ProfilePhoto;
+use App\Models\ProfileVisibilitySetting;
 use App\Models\Religion;
 use App\Models\SeriousIntent;
 use App\Models\Shortlist;
 use App\Models\State;
 use App\Models\SubCaste;
+use App\Models\SuchakProfileRepresentation;
+use App\Models\SuchakProfileRequest;
 use App\Models\Taluka;
 use App\Models\User;
 use App\Services\Admin\AdminSettingService;
@@ -1247,7 +1250,28 @@ class MatrimonyProfileController extends Controller
         $contactRequestDisabled = true;
         $contactGrantReveal = null; // [ 'phone' => ... ] when viewer has valid grant
         $canSendContactRequest = false;
+        $suchakContactRepresentations = collect();
+        $openSuchakRequestsByRepresentationId = collect();
         if (auth()->check() && ! $isOwnProfile && $user->matrimonyProfile) {
+            $suchakContactRepresentations = SuchakProfileRepresentation::query()
+                ->with('suchakAccount')
+                ->publiclyRoutable()
+                ->where('matrimony_profile_id', $profile->id)
+                ->orderBy('id')
+                ->get();
+
+            if ($suchakContactRepresentations->isNotEmpty()) {
+                $openSuchakRequestsByRepresentationId = SuchakProfileRequest::query()
+                    ->where('requesting_user_id', (int) $user->id)
+                    ->where('requesting_matrimony_profile_id', (int) $user->matrimonyProfile->id)
+                    ->where('target_matrimony_profile_id', (int) $profile->id)
+                    ->whereIn('representation_id', $suchakContactRepresentations->pluck('id')->all())
+                    ->whereIn('request_status', SuchakProfileRequest::OPEN_STATUSES)
+                    ->latest('id')
+                    ->get()
+                    ->keyBy('representation_id');
+            }
+
             $contactRequestService = app(\App\Services\ContactRequestService::class);
             $contactRequestDisabled = $contactRequestService->isContactRequestDisabled();
             $receiver = $profile->user;
@@ -1262,6 +1286,20 @@ class MatrimonyProfileController extends Controller
                 }
             }
         }
+        $contactRoutingMode = ProfileVisibilitySetting::CONTACT_ROUTING_DIRECT_AND_SUCHAK;
+        if ($visibilitySettings !== null && property_exists($visibilitySettings, 'contact_routing_mode')) {
+            $contactRoutingMode = ProfileVisibilitySetting::normalizeContactRoutingMode($visibilitySettings->contact_routing_mode);
+        }
+
+        $suchakContactOptionsAvailable = $suchakContactRepresentations->isNotEmpty();
+        $suchakContactRoutingRequired = $suchakContactOptionsAvailable
+            && $contactRoutingMode === ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY;
+
+        if ($suchakContactRoutingRequired) {
+            $contactRequestDisabled = true;
+            $canSendContactRequest = false;
+            $contactGrantReveal = null;
+        }
 
         // Contact gating: visibility + interest — quota via {@see FeatureUsageService} / {@see ContactAccessService::resolveViewerContext}.
         $contactAccess = $isOwnProfile
@@ -1273,6 +1311,15 @@ class MatrimonyProfileController extends Controller
                 $visibilitySettings,
                 $contactGrantReveal,
             );
+
+        if ($suchakContactRoutingRequired) {
+            $contactAccess['has_contact_unlock'] = false;
+            $contactAccess['paid_contact_phone'] = null;
+            $contactAccess['paid_contact_email'] = null;
+            $contactAccess['show_paid_reveal_button'] = false;
+            $contactAccess['show_contact_request_rail'] = false;
+            $contactAccess['show_mediator_cta'] = false;
+        }
 
         $latestMediatorRequest = null;
         $latestMediatorRequestIncoming = null;
@@ -1337,7 +1384,7 @@ class MatrimonyProfileController extends Controller
         $canProfileWhatsappDirect = ! $isOwnProfile
             && app(EntitlementService::class)->hasAccess((int) $user->id, PlanFeatureKeys::PROFILE_WHATSAPP_DIRECT);
         $whatsappWaMeHref = null;
-        if ($canProfileWhatsappDirect && $canViewContact) {
+        if (! $suchakContactRoutingRequired && $canProfileWhatsappDirect && $canViewContact) {
             $phoneRaw = trim((string) ($contactAccess['paid_contact_phone'] ?? ''));
             if ($phoneRaw === '') {
                 $phoneRaw = trim((string) ($primaryContactPhone ?? ''));
@@ -1472,6 +1519,11 @@ class MatrimonyProfileController extends Controller
                 'contactRequestDisabled' => $contactRequestDisabled,
                 'contactGrantReveal' => $contactGrantReveal,
                 'canSendContactRequest' => $canSendContactRequest,
+                'suchakContactRoutingRequired' => $suchakContactRoutingRequired,
+                'suchakContactOptionsAvailable' => $suchakContactOptionsAvailable,
+                'suchakContactRoutingMode' => $contactRoutingMode,
+                'suchakContactRepresentations' => $suchakContactRepresentations,
+                'openSuchakRequestsByRepresentationId' => $openSuchakRequestsByRepresentationId,
                 'interestAllowsContact' => $interestAllowsContact,
                 'photoLocked' => $photoLocked,
                 'photoLockMode' => $showPhotoTo ?? 'all',
