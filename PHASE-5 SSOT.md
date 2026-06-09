@@ -15784,4 +15784,232 @@ Do NOT revert or touch:
 
 ############################################################
 END OF PHASE-6 SUCHAK MODULE ADDENDUM — DAY-3 AUDIT/ACTIVITY SCHEMA CLARIFICATION PATCH
+
+============================================================
+PHASE-6 SUCHAK MODULE ADDENDUM — DAY-5 SOURCE-LINK SCHEMA CLARIFICATION PATCH
+(SUCHAK SOURCE-LINK / EXISTING INTAKE REUSE CONTRACT)
+============================================================
+
+This patch extends the existing “PHASE-6 — SUCHAK MODULE ADDENDUM”.
+
+It clarifies the exact Day-5 implementation contract for:
+
+* `suchak_biodata_intake_links`
+* verified Suchak source-link creation
+* existing `biodata_intakes` / intake engine reuse
+* Day-3 activity trace integration
+
+Day-5 creates the source-link foundation only.
+
+Allowed on Day-5:
+
+* create `suchak_biodata_intake_links` table
+* create a model/factory for source-link records
+* create a minimal service for verified Suchak source-link creation
+* create a minimal authenticated Suchak upload/source-link form that reuses the existing intake creation service
+* create `biodata_intakes` rows only through the existing intake creation path
+* write `suchak_activity_logs` with `action_type = source_link_created`
+* redirect to the existing intake status/preview flow after source-link creation
+
+Forbidden on Day-5:
+
+* direct insert/update of `matrimony_profiles`
+* direct profile mutation by Suchak
+* changing OCR/parser behavior
+* duplicating the intake engine
+* bypassing existing intake review/approval/governed apply
+* representation creation
+* consent flow
+* public Suchak visibility/contact routing
+* candidate contact reveal
+* duplicate resolution UI/business logic
+* billing/search/collaboration/CRM/staff module
+
+============================================================
+1️⃣ TABLE: suchak_biodata_intake_links
+============================================================
+
+Purpose:
+Source tracking for a verified Suchak upload/intake before canonical representation exists.
+
+This table must not duplicate intake data or profile data.
+
+Columns:
+
+* id
+* suchak_account_id unsignedBigInteger NOT NULL
+* biodata_intake_id unsignedBigInteger NOT NULL
+* matrimony_profile_id unsignedBigInteger NULL
+* source_status string NOT NULL DEFAULT 'intake_uploaded'
+* created_by_user_id unsignedBigInteger NOT NULL
+* created_at timestamp NULL
+* updated_at timestamp NULL
+
+Allowed source_status values:
+
+* intake_uploaded
+* intake_parsed
+* review_pending
+* linked_to_existing_profile
+* created_new_profile
+* duplicate_pending_consent
+* cancelled
+
+Indexes / constraints:
+
+* index(suchak_account_id)
+* index(biodata_intake_id)
+* index(matrimony_profile_id)
+* index(source_status)
+* index(created_by_user_id)
+* index(created_at)
+* index(suchak_account_id, source_status, created_at)
+
+Foreign keys:
+
+* suchak_account_id references suchak_accounts(id) with restrictOnDelete
+* biodata_intake_id references biodata_intakes(id) with restrictOnDelete
+* matrimony_profile_id references matrimony_profiles(id) with restrictOnDelete
+* created_by_user_id references users(id) with restrictOnDelete
+
+Deletion policy:
+
+* No hard delete route.
+* No cascade delete.
+* Do not add softDeletes.
+* Model-level delete/forceDelete prevention is required.
+
+============================================================
+2️⃣ VERIFIED SUCHAK SOURCE-LINK ACCESS RULE
+============================================================
+
+Only Suchak accounts with:
+
+* verification_status = verified
+
+may start Day-5 source-link actions.
+
+The following statuses must be blocked from creating source-links:
+
+* pending
+* rejected
+* suspended
+* archived
+
+`public_status` is not the Day-5 source-link gate.
+Public visibility remains a separate rule.
+
+Day-5 routes remain under:
+
+* auth
+* existing onboarding middleware, if already used
+* suchak.account
+
+The source-link service/controller must not auto-create Suchak accounts.
+
+============================================================
+3️⃣ EXISTING INTAKE REUSE RULE
+============================================================
+
+Day-5 source-link creation must reuse the existing intake creation boundary.
+
+Required behavior:
+
+* OCR/text preparation must use the existing intake service path.
+* `biodata_intakes.raw_ocr_text` remains immutable after create.
+* parse dispatch must remain the existing intake parse path.
+* source-link row must be created before redirecting to intake status/preview.
+* source-link row must be traceable through `suchak_activity_logs`.
+
+Forbidden behavior:
+
+* no new OCR/parser service
+* no duplicate parser pipeline
+* no copying parsed_json between intake rows
+* no profile apply outside existing governed apply / MutationService path
+
+============================================================
+4️⃣ DAY-5 ACTIVITY TRACE RULE
+============================================================
+
+When a verified Suchak creates a source-link:
+
+* write `suchak_activity_logs`
+* actor_type = suchak
+* actor_user_id = authenticated user id
+* suchak_account_id = source Suchak account id
+* action_type = source_link_created
+* target_type = suchak_biodata_intake_link
+* target_id = suchak_biodata_intake_links.id
+* matrimony_profile_id remains NULL unless a governed later step links a canonical profile
+
+`metadata_json` may store small scalar context only.
+It must not store canonical biodata/profile/contact data.
+
+============================================================
+5️⃣ DAY-5 COMPLETION GATE
+============================================================
+
+Day-5 is complete only if:
+
+* `suchak_biodata_intake_links` table exists with exact columns above
+* no `profile_id` column exists on the table
+* no `deleted_at` column exists on the table
+* verified Suchak can create a source-link via existing intake creation path
+* pending/rejected/suspended/archived Suchak cannot create source-links
+* source-link creation creates a `biodata_intakes` row
+* source-link creation creates a `suchak_biodata_intake_links` row
+* source-link creation creates a `suchak_activity_logs` row
+* normal member intake upload still creates no Suchak source-link
+* Day-1 through Day-4 Suchak tests still pass
+* base contact/mediation/WhatsApp regression tests still pass
+
+END OF PHASE-6 SUCHAK MODULE ADDENDUM — DAY-5 SOURCE-LINK SCHEMA CLARIFICATION PATCH
+
+============================================================
+PHASE-6 SUCHAK MODULE ADDENDUM — DAY-4 REGULAR-USER UPGRADE CORRECTION PATCH
+(SEPARATE SUCHAK IDENTITY CONTRACT)
+============================================================
+
+This patch corrects the Day-4 interpretation of “authenticated Suchak onboarding”.
+
+Superseded behavior:
+
+* A logged-in regular matrimony user must NOT be able to apply to become a Suchak through `/suchak/apply`.
+* Suchak must NOT be treated as an upgrade path for an existing regular member account.
+
+Correct business rule:
+
+1. Regular matrimony users and Suchaks are separate identity categories.
+2. A regular user must NOT self-create a `suchak_accounts` row through the public/member flow.
+3. A Suchak must NOT automatically become or behave as a regular matrimony user.
+4. Suchak registration/onboarding must be a separate route/process.
+5. Until the separate Suchak registration schema/process is explicitly defined, only a safe placeholder is allowed.
+6. Admin verification may remain, but it verifies valid Suchak-specific registrations/provisioned accounts, not regular-user upgrade requests.
+
+Temporary compatibility rule:
+
+* `/suchak/apply` may remain only as a disabled legacy route.
+* It must redirect to the separate Suchak registration placeholder or show an explanatory page.
+* It must NOT create `suchak_accounts`.
+* It must NOT write `suchak_activity_logs`.
+* It must NOT attach a Suchak account to an existing regular member through the member flow.
+
+Route direction:
+
+* `/suchak/register` may exist as a placeholder explaining that Suchak registration is separate from regular user accounts.
+* The placeholder must not create users, accounts, verification records, source links, uploads, consent, or profiles.
+
+Schema note:
+
+* Existing `suchak_accounts.user_id` remains a technical auth identity link for now.
+* That relation must not be used to justify regular-member self-upgrade.
+* A future SSOT patch must define the true separate Suchak registration/provisioning process before implementation.
+
+Day-5 compatibility:
+
+* Day-5 verified source-link actions remain allowed only for verified Suchak accounts.
+* Those accounts must come from a valid Suchak-specific onboarding/provisioning path, not `/suchak/apply` regular-user upgrade.
+
+END OF PHASE-6 SUCHAK MODULE ADDENDUM — DAY-4 REGULAR-USER UPGRADE CORRECTION PATCH
 ############################################################
