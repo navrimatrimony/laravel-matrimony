@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Suchak\AccountRequestController;
+use App\Http\Controllers\Suchak\CrossSearchController;
 use App\Http\Controllers\Suchak\DashboardController;
 use App\Http\Controllers\Suchak\IntakeSourceController;
 use App\Http\Middleware\EnforceCardOnboarding;
@@ -35,4 +36,5 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::get('/intakes/create', [IntakeSourceController::class, 'create'])->name('intakes.create');
         Route::post('/intakes', [IntakeSourceController::class, 'store'])->name('intakes.store');
+        Route::get('/search', [CrossSearchController::class, 'index'])->name('search.index');
     });
