@@ -15515,3 +15515,273 @@ Examples:
 ############################################################
 END OF PHASE-6 SUCHAK MODULE ADDENDUM — DAYWISE PLAN CORRECTION PATCH
 ############################################################
+
+############################################################
+PHASE-6 SUCHAK MODULE ADDENDUM — DAY-3 AUDIT/ACTIVITY SCHEMA CLARIFICATION PATCH
+(SUCHAK ACTIVITY FOUNDATION CONTRACT)
+############################################################
+
+Status:
+OFFICIAL CLARIFICATION PATCH
+
+Authority:
+This patch extends the existing “PHASE-6 — SUCHAK MODULE ADDENDUM”.
+It defines exact Day-3 activity/audit schema, actor separation, implementation scope, and rollback rules.
+
+This patch does NOT authorize onboarding UI, admin verification UI, approve/reject/suspend/archive transitions, upload, consent, PDF, QR, billing, search, collaboration, CRM dashboard logic, staff module, or navigation changes.
+
+============================================================
+1️⃣ DAY-3 PURPOSE
+=================
+
+Day-3 creates the Suchak activity/audit foundation only.
+
+Allowed:
+
+* `suchak_activity_logs` table
+* `SuchakActivityLog` model
+* a minimal Suchak activity logger/service
+* factories/tests for the activity foundation
+* no business action implementation
+
+Forbidden:
+
+* public Suchak registration UI
+* admin verification UI
+* approve/reject/suspend/archive transitions
+* upload/source-link business flow
+* representation business flow
+* consent flow
+* PDF/QR generation
+* public contact routing
+* user-to-Suchak request flow
+* collaboration
+* CRM/ledger UI
+* billing/payment/plan enforcement
+* staff module
+* navigation links
+
+============================================================
+2️⃣ ADMIN AUDIT VS SUCHAK ACTIVITY BOUNDARY
+===========================================
+
+Admin/governance actions must use `admin_audit_logs`.
+
+Examples:
+
+* admin verification approval
+* admin verification rejection
+* admin suspension
+* admin archive
+* admin policy change
+* admin override
+
+Suchak/user/business timeline events must use `suchak_activity_logs`.
+
+Examples:
+
+* Suchak onboarding request submitted
+* source-link created
+* representation created/changed
+* consent requested/verified/revoked
+* PDF/QR generated/accessed
+* public contact routed
+* user-to-Suchak request created
+* pipeline status changed
+* collaboration request created
+* CRM note added
+* ledger entry created
+
+Admin actor rule:
+
+* If an admin action also needs a Suchak business timeline event, write the admin action to `admin_audit_logs` first.
+* The related `suchak_activity_logs` row may use actor_type = `admin` only when `admin_audit_log_id` is present.
+* Do not store admin governance actions only in `suchak_activity_logs`.
+
+============================================================
+3️⃣ TABLE: suchak_activity_logs
+===============================
+
+Purpose:
+Append-only Suchak business activity timeline.
+
+Columns:
+
+* id
+* suchak_account_id unsignedBigInteger NULL
+* actor_user_id unsignedBigInteger NULL
+* actor_type string NOT NULL
+* action_type string NOT NULL
+* target_type string NULL
+* target_id unsignedBigInteger NULL
+* matrimony_profile_id unsignedBigInteger NULL
+* admin_audit_log_id unsignedBigInteger NULL
+* ip_address string(45) NULL
+* user_agent string(512) NULL
+* metadata_json json NULL
+* occurred_at timestamp NOT NULL
+* created_at timestamp NULL
+
+No `updated_at`.
+No `deleted_at`.
+
+Allowed actor_type values:
+
+* admin
+* suchak
+* user
+* system
+
+Admin actor constraint:
+
+* actor_type = admin requires admin_audit_log_id.
+
+Initial allowed action_type values:
+
+* suchak_onboarding_requested
+* source_link_created
+* representation_created
+* representation_status_changed
+* consent_requested
+* consent_verified
+* consent_revoked
+* pdf_generated
+* pdf_downloaded
+* qr_generated
+* qr_scanned
+* public_contact_routed
+* user_request_created
+* pipeline_status_changed
+* collaboration_request_created
+* crm_note_added
+* ledger_entry_created
+* billing_limit_changed
+* admin_audit_linked
+
+Metadata rule:
+
+* `metadata_json` is non-authoritative audit context only.
+* It must not store canonical Suchak entity data.
+* It must not store candidate/family private contact details.
+* It must not replace structured Suchak tables.
+* It may store small scalar context needed for audit/debugging.
+
+============================================================
+4️⃣ INDEXES / FOREIGN KEYS
+==========================
+
+Required indexes:
+
+* index(suchak_account_id)
+* index(actor_user_id)
+* index(actor_type)
+* index(action_type)
+* index(target_type, target_id)
+* index(matrimony_profile_id)
+* index(admin_audit_log_id)
+* index(occurred_at)
+* index(created_at)
+* index(suchak_account_id, action_type, occurred_at)
+
+Foreign keys:
+
+* suchak_account_id references suchak_accounts(id) with restrictOnDelete
+* actor_user_id references users(id) with restrictOnDelete
+* matrimony_profile_id references matrimony_profiles(id) with restrictOnDelete
+* admin_audit_log_id references admin_audit_logs(id) with restrictOnDelete
+
+No cascade delete is allowed.
+
+Reason:
+Activity records are evidence records. They must not disappear because a parent record is changed or archived.
+
+============================================================
+5️⃣ IMMUTABILITY / DELETION POLICY
+==================================
+
+`suchak_activity_logs` is append-only.
+
+Rules:
+
+* no update route
+* no delete route
+* no softDeletes
+* no hard delete route
+* no cascade delete
+* model-level update/delete prevention required
+
+If a correction is needed later, write a new corrective activity row.
+
+============================================================
+6️⃣ DAY-3 IMPLEMENTATION SCOPE
+==============================
+
+Day-3 may touch only:
+
+* PHASE-5 SSOT.md
+* database/migrations/*create_suchak_activity_logs*
+* app/Models/SuchakActivityLog.php
+* database/factories/SuchakActivityLogFactory.php
+* app/Modules/Suchak/Services/SuchakActivityLogger.php
+* tests/Feature/Suchak/*Activity*
+
+Day-3 must not touch:
+
+* MutationService
+* MatrimonyProfile mutation paths
+* intake parser/OCR
+* contact/mediator service logic
+* payment/billing execution files
+* Suchak route/controller/view business logic
+* admin verification transitions
+* navigation/layout files
+
+============================================================
+7️⃣ COMPLETION CRITERIA
+=======================
+
+Day-3 is complete only if:
+
+* `suchak_activity_logs` table exists with exact columns above
+* no `updated_at` column exists
+* no `deleted_at` column exists
+* FK delete behavior is no-cascade
+* model constants exist for actor/action values
+* model prevents update/delete
+* logger requires admin_audit_log_id when actor_type = admin
+* Day-1 and Day-2 Suchak route/schema tests still pass
+* Day-3 activity foundation tests pass
+* route-list still shows Suchak placeholder routes
+* no onboarding/admin verification/upload/consent/PDF/QR/search/collaboration/CRM/billing logic was added
+
+============================================================
+8️⃣ ROLLBACK RULE
+=================
+
+If Day-3 breaks:
+
+1. Run:
+   php artisan migrate:rollback --step=1
+
+2. Revert only:
+
+   * Day-3 migration file
+   * app/Models/SuchakActivityLog.php
+   * database/factories/SuchakActivityLogFactory.php
+   * app/Modules/Suchak/Services/SuchakActivityLogger.php
+   * Day-3 activity foundation tests
+   * this Day-3 SSOT patch if needed
+
+Do NOT revert or touch:
+
+* Day-1 route/module skeleton
+* Day-2 account foundation files
+* MutationService
+* MatrimonyProfile
+* intake parser/OCR
+* contact/mediator files
+* billing/payment files
+
+############################################################
+END OF PHASE-6 SUCHAK MODULE ADDENDUM — DAY-3 AUDIT/ACTIVITY SCHEMA CLARIFICATION PATCH
+############################################################
