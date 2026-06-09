@@ -12275,3 +12275,2278 @@ Add:
 
 Ensure this section is clearly visible in the SSOT document.
 Do not remove existing structure; only extend it.
+
+============================================================
+PHASE-6 — SUCHAK MODULE ADDENDUM
+============================================================
+
+Status:
+PLANNED — NOT IMPLEMENTED
+
+Authority:
+This section extends the existing Phase-5 SSOT.
+It does NOT replace Phase-5 governance.
+It does NOT weaken MutationService, Intake, Profile, Contact, Conflict, Lifecycle, Audit, Privacy, or Payment rules.
+
+Day-0 scope:
+This addendum is documentation-only.
+No production code, routes, controllers, models, services, migrations, views, composer files, or environment files are changed by this Day-0 authority cleanup.
+
+Purpose:
+Build a governed Suchak module inside the existing Laravel Matrimony project.
+
+Suchak = विवाह जुळवणारा mediator / vadhuvar suchak / bureau operator.
+
+Suchak is NOT a candidate profile.
+Suchak is a professional/business user who uploads, manages, represents, follows up, and coordinates candidate profiles.
+
+Core goal:
+Navri Mile Navryala must become a primary earning and workflow platform for Suchak users while preserving all existing Phase-5 governance boundaries.
+
+============================================================
+1) PHASE-6 NON-NEGOTIABLE LAWS
+============================================================
+
+1. Candidate profile duplicate करायची नाही.
+2. Candidate profile truth existing `matrimony_profiles` and existing `profile_*` tables मध्येच राहील.
+3. Suchak candidate profile नाही.
+4. Suchak-specific data must live only in `suchak_*` tables.
+5. Suchak upload must reuse existing `biodata_intakes` / intake engine.
+6. New duplicate parser / duplicate profile engine forbidden.
+7. All governed profile mutation remains under `MutationService` / existing governance path.
+8. No direct profile `update()` / `save()` bypass.
+9. No JSON blob storage for structured Suchak entities.
+10. Sensitive existing profile data must stay masked until valid consent.
+11. Candidate/family contact public ला direct दिसणार नाही.
+12. Suchak-mediated contact/request flow वापरायचा.
+13. Consent is single and simple.
+14. Consent validity: 1 year / 2 years / until revoked.
+15. Multiple Suchak per candidate allowed.
+16. Specific match pipeline locks one selected Suchak route.
+17. Pipeline lock must have SLA expiry.
+18. White-labeled biodata PDF must use secure random QR token.
+19. QR scan must not reveal contact directly.
+20. Suchak-private notes / ledger / commission records never become profile truth.
+21. Candidate deactivation hides public/Suchak route but preserves Suchak business records.
+22. Staff module is future only and NOT in this phase.
+23. Actor-aware activity logging must remain future-compatible by storing `actor_user_id`.
+24. Suchak billing is only a limit/catalog foundation in this phase, not full payment/subscription execution.
+25. No PayU/payment execution for Suchak until a separate payment design is approved.
+26. Normal user plans must not show Suchak plans.
+27. No fake AI matching, fake score, fake rating, or unsupported public claim.
+28. Existing OCR/parser behavior must not change just because Suchak module is added.
+29. Existing contact/mediator system must not be duplicated blindly; integration boundary must be explicit.
+30. All new Suchak tables must use `matrimony_profile_id` when referencing `matrimony_profiles.id`; do not use ambiguous `profile_id`.
+31. `users` table remains authentication/account identity only. Suchak business data belongs in `suchak_accounts`.
+
+============================================================
+2) FILE / FOLDER PLACEMENT DIRECTION
+============================================================
+
+Suchak module must remain inside the same Laravel app.
+
+Preferred future folders:
+
+```text
+app/Modules/Suchak/
+app/Http/Controllers/Suchak/
+app/Http/Controllers/Admin/Suchak/
+resources/views/suchak/
+resources/views/admin/suchak/
+```
+
+Preferred future routes:
+
+```text
+routes/web/suchak.php
+routes/web/admin-suchak.php
+```
+
+Route loading rule:
+Current project route loading style must be respected.
+
+Current `routes/web.php` loads:
+
+```text
+routes/web/public.php
+routes/web/member.php
+routes/web/admin.php
+auth.php
+```
+
+Therefore:
+
+1. Do NOT dump Suchak routes directly into `routes/web.php`.
+2. Add `require` lines only after verifying current route loading style.
+3. Suchak public/member/admin routes must remain surface-separated.
+4. Admin Suchak routes must remain under admin middleware.
+5. Suchak dashboard routes must remain under auth and Suchak-access middleware.
+
+============================================================
+3) DATABASE NAMING RULE
+============================================================
+
+All Suchak-owned tables must start with:
+
+```text
+suchak_
+```
+
+Canonical profile/intake/contact tables must NOT be renamed or duplicated.
+
+New Suchak tables must use:
+
+```text
+matrimony_profile_id
+```
+
+when referencing `matrimony_profiles.id`.
+
+Do NOT use ambiguous `profile_id` in new Suchak tables.
+
+Every `matrimony_profile_id` foreign-key reference in a Suchak table must be indexed.
+
+============================================================
+4) PHASE-6 TABLE LIST
+============================================================
+
+Core Suchak account / governance:
+
+```text
+suchak_accounts
+suchak_verification_records
+suchak_policies
+```
+
+Intake source link:
+
+```text
+suchak_biodata_intake_links
+```
+
+Representation:
+
+```text
+suchak_profile_representations
+```
+
+Consent:
+
+```text
+suchak_consents
+suchak_consent_events
+```
+
+Biodata PDF / QR:
+
+```text
+suchak_biodata_exports
+suchak_qr_tokens
+```
+
+Request / pipeline:
+
+```text
+suchak_profile_requests
+suchak_pipelines
+suchak_pipeline_events
+```
+
+Collaboration:
+
+```text
+suchak_collaboration_requests
+suchak_commission_agreements
+```
+
+CRM / ledger:
+
+```text
+suchak_profile_notes
+suchak_ledger_entries
+```
+
+Update suggestions:
+
+```text
+suchak_profile_update_suggestions
+```
+
+Audit / disputes:
+
+```text
+suchak_activity_logs
+suchak_disputes
+```
+
+Billing limit/catalog foundation only:
+
+```text
+suchak_plans
+suchak_plan_features
+suchak_subscriptions
+```
+
+Future only — NOT in this phase:
+
+```text
+suchak_staff_users
+suchak_staff_roles
+suchak_staff_permissions
+```
+
+============================================================
+5) SUCHAK ACCOUNT MODEL
+============================================================
+
+Table:
+`suchak_accounts`
+
+Purpose:
+Store Suchak business identity.
+
+Rules:
+
+1. `users` table remains authentication only.
+2. `suchak_accounts.user_id` links auth user to Suchak business account.
+3. Suchak business data must not be stored in `users`.
+4. Suchak account is not `MatrimonyProfile`.
+
+Suggested columns:
+
+```text
+id
+user_id
+suchak_name
+office_name
+business_type
+mobile_number
+whatsapp_number
+email
+address_line
+city_id
+taluka_id
+district_id
+state_id
+verification_status
+public_status
+verified_at
+suspended_at
+suspension_reason
+created_at
+updated_at
+```
+
+Verification statuses:
+
+```text
+pending
+verified
+rejected
+suspended
+archived
+```
+
+Public visibility requires:
+
+```text
+verification_status = verified
+public_status = active
+```
+
+============================================================
+6) SUCHAK VERIFICATION
+============================================================
+
+Table:
+`suchak_verification_records`
+
+Purpose:
+Store admin verification evidence.
+
+Suggested columns:
+
+```text
+id
+suchak_account_id
+verification_type
+document_path
+admin_status
+admin_user_id
+remarks
+verified_at
+rejected_at
+created_at
+updated_at
+```
+
+Admin actions:
+
+```text
+approve Suchak
+reject Suchak
+suspend Suchak
+archive Suchak
+```
+
+Every admin action must be auditable.
+
+============================================================
+7) SUCHAK POLICIES
+============================================================
+
+Table:
+`suchak_policies`
+
+Purpose:
+Admin-configurable Suchak module settings.
+
+Suggested settings:
+
+```text
+default_consent_validity_months
+allow_two_year_consent
+allow_until_revoked_consent
+request_action_sla_hours
+collaboration_sla_days
+pdf_download_limit_per_day
+qr_token_expiry_days
+suchak_upload_daily_limit
+suchak_active_profile_limit_by_plan
+```
+
+Default:
+
+```text
+default_consent_validity_months = 12
+```
+
+All policy changes must be admin-audited.
+
+============================================================
+8) SUCHAK UPLOAD SOURCE LINK + EXISTING INTAKE REUSE
+============================================================
+
+Suchak upload must reuse the existing biodata intake engine.
+
+Flow:
+
+```text
+Suchak uploads biodata
+-> biodata_intakes record created
+-> suchak_biodata_intake_links record created
+-> existing intake parse/preview/review flow
+-> Suchak reviews
+-> duplicate detection
+-> governed apply through MutationService / existing governance
+-> canonical matrimony profile created or matched
+-> suchak_profile_representations row created after matrimony_profile_id exists
+-> consent request flow begins
+```
+
+Rules:
+
+1. No new parser.
+2. No direct insert into `matrimony_profiles`.
+3. No duplicate intake engine.
+4. `raw_ocr_text` remains immutable.
+5. Parsed output is not profile truth until governed apply.
+6. Suchak source tracking must not require representation before canonical `matrimony_profile_id` exists.
+7. Existing OCR/parser behavior must not change just because Suchak module is added.
+
+Table:
+`suchak_biodata_intake_links`
+
+Purpose:
+Link a Suchak upload to `biodata_intakes` before canonical `matrimony_profile_id` is known.
+
+Suggested columns:
+
+```text
+id
+suchak_account_id
+biodata_intake_id
+matrimony_profile_id nullable
+source_status
+created_by_user_id
+created_at
+updated_at
+```
+
+Source statuses:
+
+```text
+intake_uploaded
+intake_parsed
+review_pending
+linked_to_existing_profile
+created_new_profile
+duplicate_pending_consent
+cancelled
+```
+
+Rules:
+
+1. This table is source tracking only.
+2. It must not duplicate intake data.
+3. It must not duplicate profile data.
+4. It resolves the gap where profile representation cannot exist before `matrimony_profile_id` exists.
+
+============================================================
+9) SUCHAK PROFILE REPRESENTATION
+============================================================
+
+Table:
+`suchak_profile_representations`
+
+Purpose:
+Link one canonical candidate profile with one Suchak.
+
+Suggested columns:
+
+```text
+id
+suchak_account_id
+matrimony_profile_id
+biodata_intake_id nullable
+representation_status
+representation_mode
+consent_status
+first_uploaded_at
+first_identified_at
+first_verified_consent_at
+consent_verified_at
+consent_valid_until
+revoked_at
+candidate_deactivated_at
+created_at
+updated_at
+```
+
+Representation statuses:
+
+```text
+pending
+consent_pending
+active
+revoked
+expired
+rejected
+suspended
+candidate_deactivated
+```
+
+Representation modes:
+
+```text
+uploaded_by_suchak
+matched_existing_profile
+candidate_invited_suchak
+admin_assigned
+primary_suchak
+```
+
+Rules:
+
+1. One canonical matrimony profile may have many Suchak representations.
+2. Only active + valid consent representations are user-visible.
+3. Pending/revoked/expired/rejected/suspended Suchak must not be shown to public users.
+4. Duplicate detection result must not become a lead discovery tool.
+
+============================================================
+10) CONSENT SYSTEM
+============================================================
+
+Consent is single and simple.
+
+One consent covers:
+
+```text
+Suchak can manage profile for marriage matching,
+show/share biodata for suitable matches,
+print/share biodata PDF,
+receive matching requests,
+contact candidate/family for suitable matches,
+and handle introduction process.
+```
+
+Consent text:
+
+```text
+मी / आम्ही [Suchak Name / Office Name] यांना माझी / आमची profile विवाह-जुळवणीसाठी manage करणे, योग्य matches ला दाखवणे, matching request handle करणे, biodata PDF/share करणे, आणि candidate/family शी संपर्क साधणे यासाठी परवानगी देत आहोत.
+
+मला / आम्हाला माहिती आहे की ही profile Navri Mile Navryala platform वर Suchak मार्फत वापरली जाईल. Public user ला माझा / आमचा private contact direct दिसणार नाही; contact Suchak मार्फतच होईल.
+```
+
+Consent expiry options:
+
+```text
+1 year
+2 years
+until revoked
+```
+
+Recommended default:
+
+```text
+1 year
+```
+
+Table:
+`suchak_consents`
+
+Purpose:
+Store active consent record with token hardening and replay protection.
+
+Suggested columns:
+
+```text
+id
+suchak_account_id
+matrimony_profile_id
+representation_id
+consent_status
+consent_type
+consent_text_snapshot
+consent_template_version
+consent_given_by_name
+relationship_to_candidate
+consent_mobile_number
+token_hash
+token_expires_at
+otp_hash nullable
+otp_attempts
+last_otp_sent_at
+accepted_at
+rejected_at
+revoked_at
+used_at
+otp_verified_at
+consent_channel
+valid_from
+valid_until
+revocation_reason
+ip_address
+user_agent
+created_at
+updated_at
+```
+
+Consent statuses:
+
+```text
+requested
+link_opened
+otp_sent
+otp_verified
+accepted
+rejected
+expired
+revoked
+```
+
+Consent types:
+
+```text
+one_year
+two_year
+until_revoked
+```
+
+Consent channels:
+
+```text
+whatsapp_deep_link
+sms_otp
+voice_otp
+offline_proof
+admin_assisted
+```
+
+Hardening rules:
+
+1. Raw token must never be stored.
+2. Store `token_hash` only.
+3. Raw OTP must never be stored.
+4. Store `otp_hash` only if OTP is used.
+5. Token must expire via `token_expires_at`.
+6. OTP attempts must be limited via `otp_attempts`.
+7. Reused links must be blocked via `used_at`.
+8. Accepted/rejected/revoked state must be explicit.
+
+Index / uniqueness rules:
+
+1. Unique or logically unique active consent per `suchak_account_id + matrimony_profile_id + representation_id` where status is active/verified.
+2. Index `token_hash`.
+3. Index `token_expires_at`.
+4. Index `suchak_account_id, matrimony_profile_id`.
+5. Index all `matrimony_profile_id` foreign-key references in Suchak tables.
+
+Table:
+`suchak_consent_events`
+
+Purpose:
+Full consent timeline.
+
+Suggested columns:
+
+```text
+id
+consent_id
+event_type
+event_note
+actor_type
+actor_id
+created_at
+```
+
+Events:
+
+```text
+requested
+whatsapp_link_opened
+otp_sent
+otp_verified
+consent_accepted
+consent_rejected
+consent_expired
+consent_revoked
+fallback_triggered
+```
+
+MVP flow:
+
+```text
+Suchak clicks Send Consent Request
+-> system generates secure consent link
+-> system generates WhatsApp deep link text
+-> Suchak sends message from own WhatsApp
+-> candidate/family opens Suchak-branded consent page
+-> OTP verification
+-> consent verified
+```
+
+Candidate/family should feel the request came from Suchak, not directly from Navri Mile Navryala.
+
+Consent page branding:
+
+```text
+[Suchak Office Name]
+[Suchak Name] यांनी तुमची profile विवाह-जुळवणीसाठी manage करण्याची परवानगी मागितली आहे.
+```
+
+============================================================
+11) DUPLICATE-SAFE REPRESENTATION + MASKING
+============================================================
+
+Duplicate detection must not expose sensitive existing profile identity to another Suchak.
+
+If Suchak B uploads biodata matching an existing profile, show only:
+
+```text
+या biodata शी मिळती-जुळती profile system मध्ये आधीच असू शकते.
+ही profile represent करण्यासाठी candidate/family ची consent आवश्यक आहे.
+Existing profile details consent शिवाय दाखवले जाणार नाहीत.
+```
+
+Mask before consent:
+
+```text
+full name
+surname
+exact address
+father/mother names
+contact numbers
+exact DOB if sensitive
+family details
+private notes
+existing Suchak identity where policy requires
+```
+
+Allow Suchak B to send consent only to contact details he already provided/uploaded.
+
+Hard rule:
+
+```text
+Duplicate detection result must not become lead discovery tool.
+```
+
+============================================================
+12) FIRST MOVER AND CREDIT PROTECTION
+============================================================
+
+Store separate timestamps:
+
+```text
+first_uploaded_at
+first_identified_at
+first_verified_consent_at
+```
+
+Priority:
+
+```text
+Upload without consent = weak claim.
+Verified consent = valid representation claim.
+```
+
+Admin dispute evidence should show:
+
+```text
+who uploaded first
+who got consent first
+who generated PDF
+who received request
+who forwarded profile
+who scheduled meeting
+who converted
+```
+
+============================================================
+13) CANDIDATE CONTACT VISIBILITY
+============================================================
+
+Suchak-managed profile public surface:
+
+```text
+ही profile Suchak मार्फत उपलब्ध आहे.
+Candidate contact private आहे.
+Bhet / discussion साठी Suchak शी संपर्क करा.
+```
+
+User actions:
+
+```text
+View Suchak Contact
+Request Suchak to suggest my profile
+Send introduction request through Suchak
+```
+
+Candidate/family direct contact hidden unless separate platform policy and candidate permission allow.
+
+============================================================
+14) CONTACT / MEDIATOR INTEGRATION BOUNDARY
+============================================================
+
+Existing project already has contact request / mediation concepts.
+
+Phase-6 must not blindly duplicate those policies.
+
+Suchak request/pipeline may have its own tables because:
+
+1. Suchak is a professional representative.
+2. Pipeline attribution and commission evidence are Suchak-specific.
+3. Suchak-to-Suchak collaboration requires B2B tracking.
+
+But contact reveal policy must remain consistent with existing contact/mediator privacy rules.
+
+Rules:
+
+1. Suchak route must not bypass `ContactAccessService` / `ContactRevealPolicyService` where user contact visibility is involved.
+2. Existing mediation/contact request flows remain valid for normal users.
+3. Suchak-specific requests must not expose candidate/family contact directly.
+4. If Suchak flow uses existing `ContactRequest` or `MediationRequest` concepts, it must map explicitly, not by hidden duplication.
+5. Normal mediator request quota and Suchak professional request quota must be kept conceptually separate unless SSOT later merges them.
+
+============================================================
+15) USER TO SUCHAK REQUEST / PIPELINE LOCK
+============================================================
+
+Table:
+`suchak_profile_requests`
+
+Purpose:
+User requests Suchak to introduce / suggest profile.
+
+Suggested columns:
+
+```text
+id
+requesting_user_id
+requesting_matrimony_profile_id
+target_matrimony_profile_id
+selected_suchak_account_id
+representation_id
+request_status
+request_reason
+message
+created_at
+updated_at
+```
+
+Statuses:
+
+```text
+pending
+viewed_by_suchak
+accepted_by_suchak
+forwarded_to_candidate
+candidate_interested
+candidate_not_interested
+closed
+expired
+cancelled
+```
+
+Table:
+`suchak_pipelines`
+
+Purpose:
+Track one specific match journey.
+
+Suggested columns:
+
+```text
+id
+request_id
+target_matrimony_profile_id
+requesting_matrimony_profile_id
+selected_suchak_account_id
+representation_id
+pipeline_status
+attribution_locked_at
+lock_expires_at
+sla_status
+converted_at
+closed_at
+created_at
+updated_at
+```
+
+Rule:
+
+```text
+One specific match request = one selected Suchak attribution lock.
+```
+
+If selected Suchak does not act within SLA:
+
+```text
+pipeline becomes expired
+user may choose another valid Suchak
+admin may review if dispute
+```
+
+Table:
+`suchak_pipeline_events`
+
+Purpose:
+Append-only event trail.
+
+Suggested columns:
+
+```text
+id
+pipeline_id
+event_type
+actor_type
+actor_id
+event_note
+created_at
+```
+
+Events:
+
+```text
+request_created
+suchak_viewed
+suchak_accepted
+forwarded_to_candidate
+candidate_interested
+candidate_not_interested
+meeting_scheduled
+meeting_completed
+converted
+closed
+expired
+```
+
+============================================================
+16) REVOCATION AND CANDIDATE DEACTIVATION
+============================================================
+
+If candidate/family revokes Suchak consent:
+
+```text
+future public visibility for that Suchak stops
+new requests to that Suchak stop
+active pipelines become review/closed depending status
+```
+
+Revocation must not delete:
+
+```text
+Suchak private notes
+ledger
+pipeline evidence
+PDF generation history
+commission agreements
+```
+
+If candidate/profile owner deactivates profile:
+
+```text
+public profile hidden
+Suchak public routes hidden
+all active representations become candidate_deactivated
+new requests disabled
+active pipelines paused or admin-reviewed
+Suchak private data preserved
+```
+
+Do not delete Suchak notes or ledger.
+
+============================================================
+17) CROSS-SUCHAK SEARCH
+============================================================
+
+Suchak can search profiles uploaded/represented by other Suchak, but masked.
+
+Visible:
+
+```text
+age range
+height
+district/city broad
+education
+occupation broad
+religion/caste if policy allows
+photo blurred or policy-based
+profile quality indicators
+```
+
+Hidden:
+
+```text
+full name
+exact address
+contact number
+father/mother names
+private notes
+PDF download
+direct family identity
+```
+
+Action:
+
+```text
+Request Collaboration
+```
+
+============================================================
+18) SUCHAK-TO-SUCHAK COLLABORATION + COMMISSION ACK
+============================================================
+
+Table:
+`suchak_collaboration_requests`
+
+Purpose:
+Suchak-to-Suchak B2B request.
+
+Suggested columns:
+
+```text
+id
+requesting_suchak_account_id
+target_suchak_account_id
+requesting_matrimony_profile_id
+target_matrimony_profile_id
+status
+message
+requested_at
+responded_at
+expires_at
+created_at
+updated_at
+```
+
+Statuses:
+
+```text
+pending
+accepted
+rejected
+expired
+cancelled
+admin_review
+```
+
+Default timeout:
+
+```text
+7 days
+```
+
+No automatic direct candidate contact leak.
+
+Table:
+`suchak_commission_agreements`
+
+Purpose:
+Lock collaboration terms before contact exchange.
+
+Suggested columns:
+
+```text
+id
+collaboration_request_id
+groom_side_suchak_account_id
+bride_side_suchak_account_id
+agreement_type
+split_type
+groom_side_share
+bride_side_share
+fixed_amount
+currency
+accepted_by_groom_suchak_at
+accepted_by_bride_suchak_at
+agreement_status
+created_at
+updated_at
+```
+
+MVP agreement text:
+
+```text
+मी या match साठी commission / credit sharing terms मान्य करतो.
+```
+
+This is evidence, not full legal digital signature in MVP.
+
+Contact exchange only after both sides accept, unless admin override.
+
+============================================================
+19) CRM NOTES + LEDGER
+============================================================
+
+Table:
+`suchak_profile_notes`
+
+Purpose:
+Suchak-private notes.
+
+Suggested columns:
+
+```text
+id
+suchak_account_id
+matrimony_profile_id
+note_type
+note_text
+visibility
+created_at
+updated_at
+deleted_at
+```
+
+Notes are private to that Suchak.
+Other Suchak, public users, candidate users cannot see them.
+
+Table:
+`suchak_ledger_entries`
+
+Purpose:
+Internal business ledger for Suchak.
+
+Suggested columns:
+
+```text
+id
+suchak_account_id
+matrimony_profile_id
+pipeline_id nullable
+entry_type
+amount
+currency
+status
+due_date
+paid_at
+note
+created_at
+updated_at
+```
+
+This is Suchak-private business data.
+It must not change candidate canonical profile.
+
+============================================================
+20) WHITE-LABELED BIODATA PDF + SECURE QR
+============================================================
+
+Suchak dashboard actions:
+
+```text
+Generate PDF
+Print PDF
+Share PDF on WhatsApp
+```
+
+PDF content:
+
+```text
+Suchak office logo
+Suchak name
+Suchak phone
+Suchak address
+candidate biodata
+QR code
+small footer: Powered by Navri Mile Navryala
+```
+
+Candidate/family private contact must not be printed unless explicit future policy allows.
+
+Table:
+`suchak_biodata_exports`
+
+Suggested columns:
+
+```text
+id
+suchak_account_id
+matrimony_profile_id
+representation_id
+export_type
+file_path
+generated_by_user_id
+downloaded_at
+shared_at
+created_at
+```
+
+Table:
+`suchak_qr_tokens`
+
+Purpose:
+Secure QR routes.
+
+Suggested columns:
+
+```text
+id
+token_hash
+suchak_account_id
+matrimony_profile_id
+representation_id
+export_id
+expires_at
+scan_count
+last_scanned_at
+created_at
+updated_at
+```
+
+QR URL must be:
+
+```text
+/r/{random_token}
+```
+
+Not allowed:
+
+```text
+?profile_id=501&suchak_id=10
+```
+
+QR rules:
+
+1. Raw QR token must not be stored; store `token_hash`.
+2. QR scan must not reveal contact directly.
+3. User must login/register/request through allowed governed flow.
+4. Candidate/family private contact remains hidden unless user passes login/request/governed contact policy.
+
+============================================================
+21) PROFILE UPDATE SUGGESTIONS FROM SUCHAK
+============================================================
+
+Suchak cannot directly update canonical profile truth.
+Suchak can submit update suggestions.
+
+Table:
+`suchak_profile_update_suggestions`
+
+Suggested columns:
+
+```text
+id
+suchak_account_id
+matrimony_profile_id
+field_key
+old_value
+suggested_value
+suggestion_status
+candidate_verified_at
+admin_reviewed_at
+created_at
+updated_at
+```
+
+Statuses:
+
+```text
+pending_candidate_confirmation
+approved_by_candidate
+rejected_by_candidate
+admin_review_required
+applied
+cancelled
+```
+
+Candidate/family confirmation message:
+
+```text
+Suchak [Office Name] यांनी तुमच्या profile मध्ये खालील बदल सुचवला आहे:
+Annual income: 5 lakh -> 7 lakh
+
+हा बदल बरोबर आहे का?
+[होय] [नाही]
+```
+
+Only after confirmation, governed mutation applies.
+
+Truth priority:
+
+```text
+Candidate verified value
+-> Admin verified value
+-> Existing canonical value
+-> Suchak reported value as suggestion only
+```
+
+If multiple Suchak suggest conflicting values, admin sees:
+
+```text
+Suchak A reported: 10 lakh
+Suchak B reported: 12 lakh
+Candidate verified: pending
+```
+
+============================================================
+22) SUCHAK DASHBOARD
+============================================================
+
+Dashboard must show:
+
+```text
+pending consent
+consent expiring soon
+new requests
+SLA expiring requests
+profiles without PDF
+profile interest count
+follow-up due today
+meeting scheduled
+payment due
+commission expected
+converted matches
+collaboration pending
+duplicate/consent issues
+```
+
+Later retention hook:
+
+```text
+Today's top matches for your profiles
+```
+
+This should be added only after deterministic matching foundation is ready.
+No fake AI match alerts.
+
+============================================================
+23) SUCHAK BILLING LIMIT/CATALOG FOUNDATION
+============================================================
+
+Normal user plans must not accidentally expose Suchak plans.
+
+Decision for Phase-6:
+Use separate Suchak billing limit/catalog foundation.
+
+Tables:
+
+```text
+suchak_plans
+suchak_plan_features
+suchak_subscriptions
+```
+
+Purpose:
+Represent Suchak catalog and limits separately from normal member plans.
+
+Important boundary:
+This is not full payment/subscription execution in Phase-6.
+No PayU/payment execution for Suchak until a separate payment design is approved.
+
+Possible plan names:
+
+```text
+Suchak Starter
+Suchak Professional
+Suchak Bureau
+Suchak Enterprise
+```
+
+Plan limits:
+
+```text
+active profile limit
+monthly upload limit
+lead request limit
+collaboration request limit
+PDF download/share limit
+ledger features
+CRM features
+priority support
+bulk upload access
+```
+
+Rules:
+
+1. Normal user `/plans` page must not show Suchak plans.
+2. Suchak billing UI must be Suchak/admin-only.
+3. No fake pricing if not configured.
+4. Payment execution must remain future scope until approved by separate payment SSOT/design.
+
+============================================================
+24) DISPUTE CENTER
+============================================================
+
+Table:
+`suchak_disputes`
+
+Purpose:
+Admin dispute handling.
+
+Suggested columns:
+
+```text
+id
+dispute_type
+raised_by_type
+raised_by_id
+suchak_account_id
+matrimony_profile_id
+pipeline_id nullable
+collaboration_request_id nullable
+status
+summary
+admin_resolution
+resolved_by_admin_id
+resolved_at
+created_at
+updated_at
+```
+
+Dispute types:
+
+```text
+duplicate_representation_dispute
+poaching_complaint
+unauthorized_profile
+commission_split_dispute
+consent_revoke_dispute
+wrong_data_dispute
+payment_dispute
+data_misuse_report
+```
+
+Dispute evidence must show:
+
+```text
+who uploaded first
+who got consent first
+who sent PDF
+who received request
+who forwarded profile
+who scheduled meeting
+who claimed conversion
+who revoked consent
+commission agreement
+```
+
+============================================================
+25) ACTIVITY / DATA LEAKAGE AUDIT
+============================================================
+
+Table:
+`suchak_activity_logs`
+
+Purpose:
+Track sensitive actions.
+
+Suggested columns:
+
+```text
+id
+suchak_account_id
+actor_user_id
+action_type
+matrimony_profile_id nullable
+request_id nullable
+pipeline_id nullable
+ip_address
+user_agent
+created_at
+```
+
+Actions:
+
+```text
+profile_viewed
+pdf_downloaded
+pdf_shared
+qr_generated
+qr_scanned
+request_opened
+contact_viewed
+consent_sent
+consent_verified
+ledger_updated
+note_added
+```
+
+Use this for misuse / poaching investigation.
+
+Staff module is future, but activity log should already store `actor_user_id` so future staff audit becomes easy.
+
+============================================================
+26) ABUSE / SAFETY CONTROLS
+============================================================
+
+System must support:
+
+```text
+user can report Suchak
+candidate can report Suchak
+Suchak can block abusive user
+admin can suspend Suchak
+admin can freeze representation
+admin can pause pipeline
+admin can revoke representation
+admin can hide public route
+```
+
+Serious complaint result:
+
+```text
+representation_frozen
+pipelines_paused
+contact hidden
+admin review required
+```
+
+============================================================
+27) CANDIDATE CLAIM PROFILE
+============================================================
+
+Candidate can later claim profile:
+
+```text
+ही माझी profile आहे
+```
+
+Verification:
+
+```text
+OTP
+admin review
+identity confirmation
+```
+
+After claim approved:
+
+```text
+candidate user account linked to canonical profile
+Suchak representation continues if consent valid
+candidate can revoke Suchak
+candidate can approve/reject data updates
+```
+
+Candidate claim does not delete Suchak evidence, notes, ledger, or historical pipeline data.
+
+============================================================
+28) STAFF MODULE FUTURE SCOPE
+============================================================
+
+Staff module is NOT in this phase.
+
+Do not implement now:
+
+```text
+suchak_staff_users
+suchak_staff_roles
+suchak_staff_permissions
+staff dashboard
+staff login separation
+```
+
+Future compatibility:
+
+```text
+activity logs must include actor_user_id
+tables should not assume one human forever
+Suchak account owner remains primary
+```
+
+============================================================
+29) PHASE-6 DAYWISE PLAN RULE
+============================================================
+
+Day plan must be reality-based.
+No Phase-6 day may start without status capture.
+
+Every Phase-6 day starts with:
+
+```text
+git status
+git branch --show-current
+php artisan --version
+php artisan migrate:status
+php artisan route:list relevant filter
+table existence checks
+exact file scan for in-scope feature
+```
+
+If prerequisite is incomplete, that day becomes Preparation Day.
+No day may depend on incomplete previous work.
+No partial day closure allowed.
+
+============================================================
+PHASE-6 DAY-0 — AUTHORITY + BASELINE LOCK
+============================================================
+
+Goal:
+Convert Suchak blueprint into SSOT-authorized Phase-6 scope.
+
+Allowed:
+
+```text
+append Phase-6 Suchak section to existing PHASE-5 SSOT.md
+confirm no file rename
+confirm no production code changes
+confirm no route/model/migration/controller/service/view changes
+```
+
+Rules:
+
+1. Do NOT rename `PHASE-5 SSOT.md`.
+2. Do NOT create a separate SSOT authority.
+3. `docs/SUCHAK_MODULE_BLUEPRINT_DRAFT.md` is reference only, not authority.
+4. If draft exists untracked, leave it untracked or report it; do not blindly delete.
+
+Verification:
+
+```text
+git diff -- "PHASE-5 SSOT.md"
+git diff --check
+git status --short
+```
+
+Completion:
+Phase-6 is documented but not implemented.
+
+============================================================
+PHASE-6 DAY-1 — ROUTE SURFACE + MODULE SKELETON PREPARATION
+============================================================
+
+Goal:
+Prepare clean Suchak surface without feature behavior.
+
+Allowed:
+
+```text
+route file loader setup
+empty route groups
+empty controller folders
+module folder skeleton
+minimal navigation placeholder only if safe
+```
+
+Required actual checks:
+
+```text
+routes/web.php current loaders
+routes/web folder contents
+admin route group pattern
+member auth middleware pattern
+```
+
+Likely files:
+
+```text
+routes/web.php
+routes/web/suchak.php
+routes/web/admin-suchak.php
+app/Modules/Suchak/
+app/Http/Controllers/Suchak/
+app/Http/Controllers/Admin/Suchak/
+```
+
+Rules:
+
+1. Do not add DB schema.
+2. Do not add profile mutation.
+3. Do not add business logic.
+4. Do not break existing public/member/admin routes.
+
+Verification:
+
+```text
+php artisan route:list
+no duplicate route names
+existing admin/member/intake routes still work
+```
+
+Completion:
+Suchak route surfaces exist but no real feature yet.
+
+============================================================
+PHASE-6 DAY-2 — SUCHAK ACCOUNT + ADMIN VERIFICATION FOUNDATION
+============================================================
+
+Goal:
+Create Suchak identity and admin verification base.
+
+Tables:
+
+```text
+suchak_accounts
+suchak_verification_records
+suchak_policies
+```
+
+Features:
+
+```text
+Suchak registration request
+office details
+verification status
+admin approve/reject/suspend
+public_status / verification_status separation
+```
+
+Rules:
+
+1. Suchak account is not `MatrimonyProfile`.
+2. `users` table remains auth-only.
+3. No candidate profile upload in this day.
+4. No contact reveal in this day.
+
+Verification:
+
+```text
+migrations run
+rollback tested
+model relationships tested
+admin can approve/reject Suchak
+normal user plans unaffected
+```
+
+Completion:
+Verified Suchak account can exist.
+
+============================================================
+PHASE-6 DAY-3 — CONSENT FOUNDATION
+============================================================
+
+Goal:
+Create single-consent system before profile representation goes public.
+
+Tables:
+
+```text
+suchak_consents
+suchak_consent_events
+```
+
+Features:
+
+```text
+single consent text
+secure consent link
+token_hash
+token_expires_at
+OTP hash and attempts if OTP is used
+WhatsApp deep-link message generated for Suchak to send
+Suchak-branded consent page
+consent event timeline
+```
+
+Rules:
+
+1. Consent request should feel Suchak-originated.
+2. Raw token / raw OTP must not be stored.
+3. No profile public route until consent valid.
+4. No multiple granular consent scopes.
+
+Verification:
+
+```text
+consent request created
+consent event timeline created
+token hash stored, raw token not stored
+OTP hash stored, raw OTP not stored
+OTP verified consent works
+expired/revoked consent blocks representation visibility
+```
+
+Completion:
+Consent can be requested, verified, expired, revoked.
+
+============================================================
+PHASE-6 DAY-4 — SUCHAK UPLOAD SOURCE LINK + EXISTING INTAKE REUSE
+============================================================
+
+Goal:
+Allow Suchak to upload biodata through existing intake pipeline while tracking source safely.
+
+New:
+
+```text
+suchak_biodata_intake_links
+```
+
+Reused:
+
+```text
+biodata_intakes
+existing intake services
+parse/preview/approval flow
+MutationService governed apply
+```
+
+Rules:
+
+1. No direct insert into `matrimony_profiles`.
+2. No duplicate profile engine.
+3. `raw_ocr_text` immutable.
+4. Source link must exist before representation if `matrimony_profile_id` is not yet known.
+
+Verification:
+
+```text
+Suchak upload creates biodata_intakes record
+suchak_biodata_intake_links row created
+existing intake preview works
+MutationService remains apply authority
+normal user intake unaffected
+```
+
+Completion:
+Suchak can upload biodata using existing intake engine with source tracking.
+
+============================================================
+PHASE-6 DAY-5 — DUPLICATE-SAFE REPRESENTATION + MASKING
+============================================================
+
+Goal:
+Same candidate = one canonical profile + many Suchak representations.
+
+Table:
+
+```text
+suchak_profile_representations
+```
+
+Features:
+
+```text
+consent_status linkage
+active/revoked/expired representation states
+first_uploaded_at
+first_verified_consent_at
+duplicate match response masking
+```
+
+Rules:
+
+1. Duplicate detection result must not leak existing profile identity.
+2. Sensitive profile data masked until consent.
+3. Suchak can send consent only to contact he already provided/uploaded.
+4. Use `matrimony_profile_id`, not ambiguous `profile_id`.
+
+Verification:
+
+```text
+same biodata by two Suchak does not create duplicate profile
+second Suchak sees masked duplicate notice
+no full name/contact/address leak before consent
+valid consent creates active representation
+```
+
+Completion:
+Multiple Suchak can represent one canonical profile safely.
+
+============================================================
+PHASE-6 DAY-6 — WHITE-LABELED BIODATA PDF + SECURE QR
+============================================================
+
+Goal:
+Give Suchak immediate practical value.
+
+Tables:
+
+```text
+suchak_biodata_exports
+suchak_qr_tokens
+```
+
+Features:
+
+```text
+PDF generation
+Suchak logo/name/phone/address
+small Powered by Navri Mile Navryala footer
+secure random QR route /r/{token}
+QR scan tracking
+```
+
+Rules:
+
+1. No plain `profile_id` / `suchak_id` in QR URL.
+2. Raw QR token must not be stored; store `token_hash`.
+3. QR scan must not reveal contact directly.
+4. Candidate/family private contact hidden unless future policy allows.
+
+Verification:
+
+```text
+PDF generated
+QR token random
+only token_hash stored
+unauthenticated scan does not reveal contact
+expired token blocked
+```
+
+Completion:
+Suchak gets branded PDF safely.
+
+============================================================
+PHASE-6 DAY-7 — PUBLIC SUCHAK CONTACT ROUTING
+============================================================
+
+Goal:
+On profile show/search, route contact through valid Suchak when profile is Suchak-managed.
+
+Features:
+
+```text
+candidate contact hidden
+"This profile is available through Suchak"
+show valid Suchak options
+request/contact Suchak action
+```
+
+Suchak visible only if:
+
+```text
+Suchak verified
+representation active
+consent valid
+profile active
+Suchak not suspended
+candidate not deactivated
+```
+
+Verification:
+
+```text
+direct candidate contact not shown
+valid Suchak shown
+expired/revoked consent hides Suchak
+normal non-Suchak profiles unaffected
+existing contact/mediator rules not bypassed
+```
+
+Completion:
+Public user sees Suchak-mediated contact route.
+
+============================================================
+PHASE-6 DAY-8 — USER -> SUCHAK REQUEST + PIPELINE SLA
+============================================================
+
+Goal:
+User can request Suchak to suggest/introduce their profile.
+
+Tables:
+
+```text
+suchak_profile_requests
+suchak_pipelines
+suchak_pipeline_events
+```
+
+Features:
+
+```text
+request Suchak
+selected Suchak
+pipeline status
+event timeline
+72h SLA or configured SLA
+```
+
+Rules:
+
+1. One specific pipeline locks one selected Suchak.
+2. SLA expiry allows user to choose another valid Suchak.
+3. Opening/viewing request alone is not enough to lock conversion forever.
+4. Contact privacy remains governed.
+
+Verification:
+
+```text
+request created
+pipeline event created
+SLA expiry works
+user can choose alternate Suchak after expiry
+contact not leaked
+```
+
+Completion:
+User-to-Suchak request and SLA lock works.
+
+============================================================
+PHASE-6 DAY-9 — CROSS-SUCHAK SEARCH
+============================================================
+
+Goal:
+Suchak can search other Suchak-managed profiles for collaboration.
+
+Features:
+
+```text
+masked profile search
+no direct contact
+broad location
+age range
+education/occupation broad
+policy-based photo visibility
+```
+
+Hidden:
+
+```text
+full name
+exact address
+contact
+father/mother names
+private notes
+direct PDF download
+```
+
+Verification:
+
+```text
+search works
+masking enforced
+no contact leak
+collaboration request action available
+```
+
+Completion:
+B2B Suchak discovery exists safely.
+
+============================================================
+PHASE-6 DAY-10 — SUCHAK-TO-SUCHAK COLLABORATION + COMMISSION ACK
+============================================================
+
+Goal:
+Collaboration and commission/credit evidence before contact exchange.
+
+Tables:
+
+```text
+suchak_collaboration_requests
+suchak_commission_agreements
+```
+
+Features:
+
+```text
+collaboration request
+7-day timeout
+accept/reject
+commission split acknowledgement
+contact exchange only after both accept
+```
+
+Rules:
+
+1. No automatic direct candidate route.
+2. Timeout -> alternate route/admin escalation only.
+3. Agreement is evidence, not full legal digital signature in MVP.
+
+Verification:
+
+```text
+request accepted/rejected/expired
+commission ACK stored
+contact exchange blocked before agreement
+candidate contact still governed
+```
+
+Completion:
+Suchak-to-Suchak collaboration is controlled.
+
+============================================================
+PHASE-6 DAY-11 — CRM NOTES + LEDGER
+============================================================
+
+Goal:
+Make Suchak dashboard useful for daily business.
+
+Tables:
+
+```text
+suchak_profile_notes
+suchak_ledger_entries
+```
+
+Features:
+
+```text
+follow-up notes
+meeting notes
+registration fee expected
+success fee expected
+payment reminders
+converted match ledger
+```
+
+Rules:
+
+1. Suchak private notes not visible to other Suchak/public/candidate.
+2. Ledger does not mutate candidate profile.
+3. Billing plans separate from user plans.
+
+Verification:
+
+```text
+notes created
+ledger entry created
+privacy enforced
+canonical profile unchanged
+```
+
+Completion:
+Suchak gets CRM + earning tracker.
+
+============================================================
+PHASE-6 DAY-12 — CANDIDATE DEACTIVATION + REVOCATION HANDLING
+============================================================
+
+Goal:
+Handle candidate global deactivation and consent revoke safely.
+
+Features:
+
+```text
+revoked consent
+expired consent
+candidate_deactivated representation state
+public route hidden
+Suchak private notes/ledger/evidence preserved
+```
+
+Rules:
+
+1. No hard delete of Suchak business records.
+2. Deactivation hides public route.
+3. Revocation hides future visibility.
+4. Historical pipeline/evidence preserved.
+
+Verification:
+
+```text
+profile deactivation hides Suchak route
+revoked consent hides future visibility
+notes/ledger still present
+new requests blocked
+```
+
+Completion:
+Deactivation/revocation safe.
+
+============================================================
+PHASE-6 DAY-13 — PROFILE UPDATE SUGGESTIONS FROM SUCHAK
+============================================================
+
+Goal:
+Suchak can suggest profile updates without direct mutation.
+
+Table:
+
+```text
+suchak_profile_update_suggestions
+```
+
+Features:
+
+```text
+field suggestion
+candidate OTP confirmation
+admin review if conflict
+MutationService apply only after approval
+```
+
+Truth order:
+
+```text
+Candidate verified value
+-> Admin verified value
+-> Existing canonical value
+-> Suchak reported value as suggestion only
+```
+
+Rules:
+
+1. Suchak cannot directly update canonical profile.
+2. Multiple conflicting Suchak suggestions remain pending/reviewable.
+3. Apply path must stay governed.
+
+Verification:
+
+```text
+suggestion created
+candidate approves/rejects
+approved suggestion applies via MutationService only
+conflicting suggestions visible to admin
+```
+
+Completion:
+Suchak updates are governed suggestions only.
+
+============================================================
+PHASE-6 DAY-14 — ACTIVITY LOGS + DISPUTE CENTER
+============================================================
+
+Goal:
+Create evidence system for poaching, consent, commission, misuse disputes.
+
+Tables:
+
+```text
+suchak_activity_logs
+suchak_disputes
+```
+
+Features:
+
+```text
+profile viewed
+PDF downloaded
+QR scanned
+request opened
+consent sent
+consent verified
+note/ledger update
+dispute timeline
+```
+
+Rules:
+
+1. Sensitive action must be logged.
+2. Activity log `actor_user_id` required for future staff support.
+3. No staff module yet.
+4. Dispute evidence must not expose private data to unauthorized actor.
+
+Verification:
+
+```text
+activity logs created
+dispute opened/resolved
+admin sees evidence timeline
+privacy enforced
+```
+
+Completion:
+Dispute evidence foundation ready.
+
+============================================================
+PHASE-6 DAY-15 — SUCHAK BILLING LIMIT/CATALOG FOUNDATION
+============================================================
+
+Goal:
+Separate Suchak plans from normal user plans.
+
+Tables:
+
+```text
+suchak_plans
+suchak_plan_features
+suchak_subscriptions
+```
+
+Features:
+
+```text
+Suchak plan catalog
+active profile limit
+upload limit
+PDF limit
+collaboration request limit
+ledger/CRM features by plan
+```
+
+Rules:
+
+1. Normal user must not see Suchak plans.
+2. No fake pricing if not configured.
+3. Payment execution is NOT in this day.
+4. No PayU/payment execution until a separate payment design is approved.
+5. User plan system must remain unaffected.
+
+Verification:
+
+```text
+Suchak plan visible only to Suchak/admin
+limits enforced where implemented
+normal user plan system unaffected
+no payment execution path added
+```
+
+Completion:
+Suchak billing limit/catalog foundation exists.
+
+============================================================
+PHASE-6 DAY-16 — INTEGRATED SUCHAK QA
+============================================================
+
+Goal:
+Full end-to-end Suchak flow test.
+
+Test journey:
+
+```text
+Suchak registration
+-> admin verification
+-> consent request
+-> biodata upload via intake
+-> representation
+-> PDF generation
+-> public profile Suchak route
+-> user request
+-> pipeline lock
+-> collaboration
+-> ledger
+-> deactivation/revocation
+-> dispute timeline
+```
+
+Rules:
+
+1. No route missing.
+2. No blade crash.
+3. No direct candidate contact leak.
+4. No duplicate profile creation.
+5. No MutationService bypass.
+6. No normal user plan contamination.
+7. No raw QR token storage.
+8. No raw OTP storage.
+9. No payment execution path unless separate payment design is approved.
+
+Completion:
+Phase-6 Suchak MVP ready for controlled launch.
+
+============================================================
+END OF PHASE-6 — SUCHAK MODULE ADDENDUM
+============================================================
