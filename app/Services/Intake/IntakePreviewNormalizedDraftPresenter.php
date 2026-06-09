@@ -2169,7 +2169,8 @@ final class IntakePreviewNormalizedDraftPresenter
                 $suggested !== '' ? $suggested : null,
                 $guidance['apply_field'],
                 $guidance['apply_value'],
-                $guidance['can_apply']
+                $guidance['can_apply'],
+                $guidance['apply_reason']
             );
         }
 
@@ -2306,7 +2307,8 @@ final class IntakePreviewNormalizedDraftPresenter
         ?string $targetSection = null,
         ?string $applyField = null,
         ?string $applyValue = null,
-        bool $canApply = false
+        bool $canApply = false,
+        ?string $applyReason = null
     ): void {
         $key = mb_strtolower(trim($label.'|'.$value));
         if ($key === '' || isset($seen[$key])) {
@@ -2328,6 +2330,7 @@ final class IntakePreviewNormalizedDraftPresenter
             'apply_field' => $applyField,
             'apply_value' => $applyValue,
             'can_apply' => $canApply,
+            'apply_reason' => $canApply ? ($applyReason ?? 'detected_not_included') : null,
         ];
     }
 
@@ -2509,7 +2512,7 @@ final class IntakePreviewNormalizedDraftPresenter
      * @param  array{missing_field: ?string, missing_value: ?string, correction_target: ?string}  $guidance
      * @param  array<string, mixed>  $flag
      * @param  array<string, mixed>  $normalized
-     * @return array{missing_field: ?string, missing_value: ?string, correction_target: ?string, apply_field: ?string, apply_value: ?string, can_apply: bool}
+     * @return array{missing_field: ?string, missing_value: ?string, correction_target: ?string, apply_field: ?string, apply_value: ?string, can_apply: bool, apply_reason: ?string}
      */
     private function finalizeCorrectionGuidance(array $guidance, array $flag, array $normalized, string $defaultApplyField): array
     {
@@ -2520,12 +2523,61 @@ final class IntakePreviewNormalizedDraftPresenter
             && ! $this->isNegativeSiblingAssertion($applyField, $applyValue)
             && ! $this->coverageFlagIsFullyMapped($flag, $normalized)
             && $this->applyTargetNeedsCorrection($applyField, $applyValue, $normalized);
+        $applyReason = $canApply
+            ? $this->resolveApplyReason($applyField, $applyValue, $normalized)
+            : null;
 
         return array_merge($guidance, [
             'apply_field' => $canApply ? $applyField : null,
             'apply_value' => $canApply ? $applyValue : null,
             'can_apply' => $canApply,
+            'apply_reason' => $applyReason,
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $normalized
+     */
+    private function resolveApplyReason(string $applyField, string $applyValue, array $normalized): string
+    {
+        if (! is_array($this->parsedSnapshot)) {
+            if (str_starts_with($applyField, 'core.')) {
+                $core = is_array($normalized['core'] ?? null) ? $normalized['core'] : [];
+
+                return trim((string) ($core[substr($applyField, 5)] ?? '')) !== ''
+                    ? 'draft_not_in_parsed'
+                    : 'detected_not_included';
+            }
+
+            return 'detected_not_included';
+        }
+
+        if ($applyField === '') {
+            return 'detected_not_included';
+        }
+
+        if ($this->parsedSnapshotContainsApplyValue($this->parsedSnapshot, $applyField, $applyValue)) {
+            return 'detected_not_included';
+        }
+
+        if (str_starts_with($applyField, 'core.')) {
+            $core = is_array($this->parsedSnapshot['core'] ?? null) ? $this->parsedSnapshot['core'] : [];
+            $existing = trim((string) ($core[substr($applyField, 5)] ?? ''));
+
+            return $existing !== '' ? 'value_mismatch' : 'draft_not_in_parsed';
+        }
+
+        return 'draft_not_in_parsed';
+    }
+
+    private function applyHintForReason(?string $reason): ?string
+    {
+        return match ($reason) {
+            'detected_not_included' => __('intake.normalized_draft_apply_reason_detected_not_included'),
+            'value_mismatch' => __('intake.normalized_draft_apply_reason_value_mismatch'),
+            'draft_not_in_parsed' => __('intake.normalized_draft_apply_reason_draft_not_in_parsed'),
+            default => null,
+        };
     }
 
     private function resolveApplyFieldPath(string $field): string
@@ -2801,6 +2853,8 @@ final class IntakePreviewNormalizedDraftPresenter
 
             $applyField = (string) $row['apply_field'];
             $applyValue = (string) $row['apply_value'];
+            $applyReason = (string) ($row['apply_reason'] ?? 'draft_not_in_parsed');
+            $applyHint = $this->applyHintForReason($applyReason);
             $attached = false;
 
             if ($applyField !== 'core.other_relatives_text') {
@@ -2814,7 +2868,8 @@ final class IntakePreviewNormalizedDraftPresenter
                     $sections[$sectionKey][$index]['can_apply'] = true;
                     $sections[$sectionKey][$index]['apply_field'] = $applyField;
                     $sections[$sectionKey][$index]['apply_value'] = $applyValue;
-                    $sections[$sectionKey][$index]['correction_hint'] = __('intake.normalized_draft_section_suggestion_hint');
+                    $sections[$sectionKey][$index]['apply_reason'] = $applyReason;
+                    $sections[$sectionKey][$index]['correction_hint'] = $applyHint;
                     $attached = true;
                     break;
                 }
@@ -2833,8 +2888,9 @@ final class IntakePreviewNormalizedDraftPresenter
                 'can_apply' => true,
                 'apply_field' => $applyField,
                 'apply_value' => $applyValue,
+                'apply_reason' => $applyReason,
                 'source_line_no' => $row['source_line_no'] ?? null,
-                'correction_hint' => __('intake.normalized_draft_section_suggestion_hint'),
+                'correction_hint' => $applyHint,
             ];
         }
 

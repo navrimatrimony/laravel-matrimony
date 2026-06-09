@@ -6412,7 +6412,8 @@ class BiodataParserService
         if ($n === '') {
             return null;
         }
-        $n = preg_replace('/^(?:नावरस|नवरस|नांवटस)\s+नाव\s*[:\-.\s]*/u', '', $n) ?? '';
+        $n = preg_replace('/^(?:नावरस|नवरस|नांवटस)\s+(?:नाव|नांव)\s*[:\-.\s]*/u', '', $n) ?? '';
+        $n = preg_replace('/^(?:नाव|नांव)\s*[:\-.\s]+/u', '', $n) ?? '';
         $n = trim(preg_replace('/\s+/u', ' ', $n) ?? '');
         $n = trim($n, " \t.:;,|'\")");
         $n = preg_replace('/^[।]+|[।]+$/u', '', $n) ?? $n;

@@ -2,6 +2,7 @@
 
 namespace App\Services\Parsing;
 
+use App\Services\BiodataParserService;
 use App\Services\Ocr\OcrNormalize;
 
 class IntakeNormalizedDraftToParsedJsonMapper
@@ -390,7 +391,7 @@ class IntakeNormalizedDraftToParsedJsonMapper
             'varna' => $this->scalarHoroscopeValue($horoscope, 'varna') ?? $this->extractHoroscopeField($blob, ['वर्ण']),
             'vashya' => $this->scalarHoroscopeValue($horoscope, 'vashya') ?? $this->extractHoroscopeField($blob, ['वश्य', 'वैरवर्ग']),
             'rashi_lord' => $this->scalarHoroscopeValue($horoscope, 'rashi_lord') ?? $this->extractHoroscopeField($blob, ['राशी स्वामी', 'रास स्वामी']),
-            'navras_name' => $this->scalarHoroscopeValue($horoscope, 'navras_name') ?? $this->extractHoroscopeField($blob, ['नावरस', 'रास नाव', 'राशी नाव']),
+            'navras_name' => $this->mapNavrasName($horoscope, $blob),
             'yog' => $this->scalarHoroscopeValue($horoscope, 'yog') ?? $this->extractHoroscopeField($blob, ['योग']),
             'birth_weekday' => $this->scalarHoroscopeValue($horoscope, 'birth_weekday'),
         ];
@@ -771,6 +772,28 @@ class IntakeNormalizedDraftToParsedJsonMapper
         }
 
         return $narrative;
+    }
+
+    /**
+     * @param  array<string, mixed>  $horoscope
+     */
+    private function mapNavrasName(array $horoscope, string $blob): ?string
+    {
+        $value = $this->scalarHoroscopeValue($horoscope, 'navras_name')
+            ?? $this->extractHoroscopeField($blob, [
+                'नावरस नांव',
+                'नावरस नाव',
+                'नावास नाव',
+                'रास नाव',
+                'राशी नाव',
+                'नावरस',
+            ]);
+
+        if ($value === null) {
+            return null;
+        }
+
+        return BiodataParserService::sanitizeNavrasDisplayText($value) ?? $value;
     }
 
     /**

@@ -66,6 +66,10 @@ class IntakeNormalizedDraftCoverageAuditor
                 continue;
             }
 
+            if ($this->isCompoundFactFullyMapped($fact, $visibleFacts)) {
+                continue;
+            }
+
             $missingFacts[] = $this->coverageFactSummary($fact);
         }
 
@@ -507,5 +511,69 @@ class IntakeNormalizedDraftCoverageAuditor
         }
 
         return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $fact
+     * @param  list<array<string, mixed>>  $visibleFacts
+     */
+    private function isCompoundFactFullyMapped(array $fact, array $visibleFacts): bool
+    {
+        $value = trim((string) ($fact['value'] ?? ''));
+        if ($value === '' || ! str_contains($value, ',')) {
+            return false;
+        }
+
+        if (preg_match('/(?:पत्ता|पता|रा\.|राहणार|मु\.?\s*पो\.?)/u', $value)
+            || preg_match('/\([^()]*,[^()]*\)/u', $value)
+            || preg_match('/,\s*[\p{L}\p{M}\s.]+\([^()]+\)\s*$/u', $value)
+            || preg_match('/,\s*(?:पुणे|मुंबई|सोलापूर|सांगली|सातारा|कोल्हापूर|ठाणे|कराड|नाशिक)$/u', $value)) {
+            return false;
+        }
+
+        $parts = preg_split('/\s*,\s*(?=(?:\d+\)|[०-९]+\)|श्री|सौ|कै|कु|डॉ|[[:alpha:]\p{L}]))/u', $value) ?: [];
+        $parts = array_values(array_filter(array_map(
+            function (string $part): string {
+                return trim((string) preg_replace('/^\s*(?:\d+|[०-९]+)[\).]\s*/u', '', trim($part)));
+            },
+            $parts
+        )));
+
+        if (count($parts) < 2) {
+            return false;
+        }
+
+        $factType = trim((string) ($fact['fact_type'] ?? ''));
+        $targetField = $this->canonicalTargetField((string) ($fact['target_field'] ?? ''));
+        $relationType = trim((string) ($fact['relation_type'] ?? ''));
+        $visibleKeys = [];
+
+        foreach ($visibleFacts as $visible) {
+            if (! is_array($visible)) {
+                continue;
+            }
+            if (trim((string) ($visible['fact_type'] ?? '')) !== $factType) {
+                continue;
+            }
+            if ($this->canonicalTargetField((string) ($visible['target_field'] ?? '')) !== $targetField) {
+                continue;
+            }
+            if ($relationType !== '' && $relationType !== trim((string) ($visible['relation_type'] ?? ''))) {
+                continue;
+            }
+            $canonical = $this->canonicalScalar((string) ($visible['value'] ?? ''), $factType);
+            if ($canonical !== '') {
+                $visibleKeys[$canonical] = true;
+            }
+        }
+
+        foreach ($parts as $part) {
+            $canonical = $this->canonicalScalar($part, $factType);
+            if ($canonical === '' || ! isset($visibleKeys[$canonical])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

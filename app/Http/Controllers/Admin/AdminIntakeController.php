@@ -490,6 +490,15 @@ class AdminIntakeController extends Controller
             ->with('success', (string) ($result['message'] ?? __('intake.normalized_draft_apply_success')));
     }
 
+    public function parseStatus(BiodataIntake $intake)
+    {
+        return response()->json([
+            'parse_status' => (string) ($intake->parse_status ?? ''),
+            'last_error' => $intake->last_error,
+            'parsed_at' => $intake->parsed_at?->toIso8601String(),
+        ]);
+    }
+
     /**
      * Dispatch parse with a fresh paid vision extraction (skips parse-input-only and transient reuse).
      */

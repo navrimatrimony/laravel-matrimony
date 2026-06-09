@@ -3334,6 +3334,7 @@ class IntakeNormalizedBiodataDraftBuilder
             'राशी नाव' => 'navras_name',
             'रास नाव' => 'navras_name',
             'नावास नाव' => 'navras_name',
+            'नावरस नांव' => 'navras_name',
             'नावरस नाव' => 'navras_name',
             'नावरस' => 'navras_name',
             'जन्मनक्षत्र' => 'nakshatra',

@@ -419,7 +419,7 @@ class IntakeWizardSourceFactExtractor
 
         $occupation = '';
         if (preg_match('/\(([^()]*(?:teacher|engineer|doctor|business|service|job|शिक्षक|शिक्षिका|प्राध्यापक|शेती|गृहिणी|सेवानिवृत्त|डॉक्टर|इंजिनियर|व्यवसाय|व्यवसाईक|नोकरी|सदस्य)[^()]*)\)/ui', $work, $m)) {
-            $occupation = trim((string) $m[1]);
+            $occupation = $this->cleanOccupationFragment(trim((string) $m[1]));
             $work = trim(str_replace($m[0], '', $work));
         }
 
@@ -462,7 +462,30 @@ class IntakeWizardSourceFactExtractor
      */
     private function splitNumberedPersonValues(string $value): array
     {
-        $parts = preg_split('/\s+(?=(?:\d+|[०-९]+)[\).])/u', trim($value)) ?: [trim($value)];
+        $value = trim($value);
+        $numberedParts = preg_split('/(?:\R|\s+)(?=(?:\d+|[०-९]+)[\).])/u', $value) ?: [];
+        if (count($numberedParts) > 1) {
+            $out = [];
+            foreach ($numberedParts as $part) {
+                $part = trim((string) preg_replace('/^\s*(?:\d+|[०-९]+)[\).]\s*/u', '', $part));
+                if ($part !== '') {
+                    $out[] = $part;
+                }
+            }
+
+            if ($out !== []) {
+                return $out;
+            }
+        }
+
+        if (preg_match('/(?:पत्ता|पता|रा\.|राहणार|मु\.?\s*पो\.?)/u', $value)
+            || preg_match('/\([^()]*,[^()]*\)/u', $value)
+            || preg_match('/,\s*[\p{L}\p{M}\s.]+\([^()]+\)\s*$/u', $value)
+            || preg_match('/,\s*(?:पुणे|मुंबई|सोलापूर|सांगली|सातारा|कोल्हापूर|ठाणे|कराड|नाशिक)$/u', $value)) {
+            return [$value];
+        }
+
+        $parts = preg_split('/\s*,\s*(?=(?:\d+\)|[०-९]+\)|श्री|सौ|कै|कु|डॉ|[[:alpha:]\p{L}]))/u', $value) ?: [$value];
         $out = [];
         foreach ($parts as $part) {
             $part = trim((string) preg_replace('/^\s*(?:\d+|[०-९]+)[\).]\s*/u', '', $part));
@@ -482,15 +505,31 @@ class IntakeWizardSourceFactExtractor
         $value = $this->normalizeDecorativeLabelSeparators($value);
         $inlineOccupation = '';
         if (preg_match('/^(.*?)(?:\s*[,.।]?\s*)(?:नोकरी|व्यवसाय)\s*(?::\s*-\s*|[:>\-]\s*)(.+)$/u', $value, $m)) {
-            $value = trim((string) $m[1]);
-            $inlineOccupation = trim((string) $m[2]);
+            $prefix = (string) $m[1];
+            $openParens = substr_count($prefix, '(') + substr_count($prefix, '{');
+            $closeParens = substr_count($prefix, ')') + substr_count($prefix, '}');
+            if ($openParens <= $closeParens) {
+                $value = trim($prefix);
+                $inlineOccupation = trim((string) $m[2]);
+            }
         }
-        [$name, $occupation] = $this->parsePersonLikeValue($value);
+        [$name, $occupation, $address, $notes] = $this->parsePersonLikeValue($value);
+        unset($address, $notes);
         if ($occupation === '' && $inlineOccupation !== '') {
-            $occupation = $inlineOccupation;
+            $occupation = $this->cleanOccupationFragment($inlineOccupation);
         }
 
         return [$name, $occupation];
+    }
+
+    private function cleanOccupationFragment(string $value): string
+    {
+        $value = OcrNormalize::normalizeDigits($value);
+        $value = preg_replace('/(?:मो\.?\s*नं\.?|मोबाईल|मोबाइल|संपर्क)\s*[-: ]*[6-9]\d{9}/u', '', $value) ?? $value;
+        $value = preg_replace('/(?<!\d)[6-9]\d{9}(?!\d)/u', '', $value) ?? $value;
+        $value = trim((string) preg_replace('/[\s,;:|\/\-–—]+$/u', '', trim($value)));
+
+        return trim(preg_replace('/\s+/u', ' ', $value) ?? $value);
     }
 
     private function targetFieldForRelation(string $relationType): string

@@ -835,6 +835,7 @@ TXT, true);
         $this->assertStringContainsString('वासनलिवेल', $horoscopeBlob);
         $this->assertStringContainsString('जोतिबा', $horoscopeBlob);
         $this->assertSame('', $aboutBlob);
+        $this->assertSame([], $out['detected_but_not_included'] ?? []);
     }
 
     public function test_horoscope_birth_weekday_line_does_not_repeat_when_birth_time_is_already_mapped_elsewhere(): void

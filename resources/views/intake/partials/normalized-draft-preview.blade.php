@@ -49,6 +49,15 @@
         <div class="rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
             {{ __('intake.normalized_draft_error') }}
         </div>
+    @elseif (! empty($parseInProgress))
+        <div class="rounded-lg border border-indigo-200 dark:border-indigo-700 bg-indigo-50/80 dark:bg-indigo-950/30 px-4 py-6 flex flex-col items-center justify-center text-center gap-3">
+            <svg class="animate-spin h-8 w-8 text-indigo-600 dark:text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="text-sm font-semibold text-indigo-950 dark:text-indigo-100">{{ __('intake.admin_intake_parse_in_progress_title') }}</p>
+            <p class="text-xs text-indigo-900/90 dark:text-indigo-100/90 max-w-md">{{ __('intake.admin_intake_parse_in_progress_draft_hint') }}</p>
+        </div>
     @elseif (! $draftAvailable)
         <p class="text-xs text-gray-500 dark:text-gray-400">
             {{ __('intake.normalized_draft_unavailable') }}
@@ -114,11 +123,21 @@
                                                 <span class="text-gray-800 dark:text-gray-100 break-words">{{ (string) $row['correction_target'] }}</span>
                                             </div>
                                         @endif
+                                        @if (! empty($row['apply_reason']))
+                                            <p class="text-[11px] font-medium text-rose-900 dark:text-rose-100">
+                                                {{ match ((string) $row['apply_reason']) {
+                                                    'detected_not_included' => __('intake.normalized_draft_apply_reason_detected_not_included'),
+                                                    'value_mismatch' => __('intake.normalized_draft_apply_reason_value_mismatch'),
+                                                    default => __('intake.normalized_draft_apply_reason_draft_not_in_parsed'),
+                                                } }}
+                                            </p>
+                                        @endif
                                         @if (! empty($row['can_apply']))
                                             <div class="pt-0.5">
                                                 @include('intake.partials._draft-correction-apply-form', [
                                                     'applyField' => $row['apply_field'] ?? '',
                                                     'applyValue' => $row['apply_value'] ?? '',
+                                                    'applyReason' => $row['apply_reason'] ?? 'detected_not_included',
                                                     'draftCorrectionApplyEnabled' => $draftCorrectionApplyEnabled,
                                                     'draftCorrectionApplyRoute' => $draftCorrectionApplyRoute,
                                                 ])
@@ -527,19 +546,19 @@
                                         <div class="flex flex-wrap items-start gap-2">
                                             <span class="font-medium text-emerald-900 dark:text-emerald-100 break-words">{{ $rowLabel }}:</span>
                                             <span class="text-gray-800 dark:text-gray-100 whitespace-pre-wrap break-words">{{ $rowValue }}</span>
-                                            <span class="inline-flex items-center rounded-full border border-emerald-500 bg-emerald-100 dark:bg-emerald-900/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-900 dark:text-emerald-100">
-                                                {{ __('intake.normalized_draft_section_suggestion_badge') }}
-                                            </span>
-                                            @include('intake.partials._draft-correction-apply-form', [
-                                                'applyField' => $row['apply_field'] ?? '',
-                                                'applyValue' => $row['apply_value'] ?? '',
-                                                'draftCorrectionApplyEnabled' => $draftCorrectionApplyEnabled,
-                                                'draftCorrectionApplyRoute' => $draftCorrectionApplyRoute,
-                                            ])
                                         </div>
                                         @if (! empty($row['correction_hint']))
                                             <p class="mt-1 text-[11px] text-emerald-900 dark:text-emerald-100">{{ (string) $row['correction_hint'] }}</p>
                                         @endif
+                                        <div class="mt-1">
+                                            @include('intake.partials._draft-correction-apply-form', [
+                                                'applyField' => $row['apply_field'] ?? '',
+                                                'applyValue' => $row['apply_value'] ?? '',
+                                                'applyReason' => $row['apply_reason'] ?? 'draft_not_in_parsed',
+                                                'draftCorrectionApplyEnabled' => $draftCorrectionApplyEnabled,
+                                                'draftCorrectionApplyRoute' => $draftCorrectionApplyRoute,
+                                            ])
+                                        </div>
                                     @elseif ($isPropertyAssetHeading)
                                         <dt class="font-semibold text-gray-900 dark:text-gray-100 break-words flex flex-wrap items-center gap-2 pt-1">
                                             <span>{{ $rowLabel }}</span>
@@ -620,11 +639,17 @@
                                                 {{ $row['review_hint'] }}
                                             </p>
                                         @endif
+                                        @if (! empty($row['correction_hint']))
+                                            <p class="mt-1 text-[11px] font-medium text-emerald-800 dark:text-emerald-200">
+                                                {{ $row['correction_hint'] }}
+                                            </p>
+                                        @endif
                                         @if (! empty($row['can_apply']))
                                             <div class="mt-1">
                                                 @include('intake.partials._draft-correction-apply-form', [
                                                     'applyField' => $row['apply_field'] ?? '',
                                                     'applyValue' => $row['apply_value'] ?? '',
+                                                    'applyReason' => $row['apply_reason'] ?? 'draft_not_in_parsed',
                                                     'draftCorrectionApplyEnabled' => $draftCorrectionApplyEnabled,
                                                     'draftCorrectionApplyRoute' => $draftCorrectionApplyRoute,
                                                 ])
@@ -648,4 +673,51 @@
             <pre class="mt-2 whitespace-pre-wrap break-words font-mono text-gray-800 dark:text-gray-200 max-h-64 overflow-auto">{{ $draftPreview['raw_draft_json'] }}</pre>
         </details>
     @endif
+
+    <script>
+        document.addEventListener('click', function (event) {
+            var editBtn = event.target.closest('[data-apply-edit]');
+            if (editBtn) {
+                var block = editBtn.closest('[data-draft-apply]');
+                if (! block) {
+                    return;
+                }
+                var display = block.querySelector('[data-apply-display]');
+                var input = block.querySelector('[data-apply-input]');
+                var hidden = block.querySelector('[data-apply-hidden]');
+                var doneBtn = block.querySelector('[data-apply-done]');
+                if (! display || ! input || ! hidden || ! doneBtn) {
+                    return;
+                }
+                input.value = hidden.value;
+                display.classList.add('hidden');
+                input.classList.remove('hidden');
+                editBtn.classList.add('hidden');
+                doneBtn.classList.remove('hidden');
+                input.focus();
+                return;
+            }
+
+            var doneBtn = event.target.closest('[data-apply-done]');
+            if (doneBtn) {
+                var block = doneBtn.closest('[data-draft-apply]');
+                if (! block) {
+                    return;
+                }
+                var display = block.querySelector('[data-apply-display]');
+                var input = block.querySelector('[data-apply-input]');
+                var hidden = block.querySelector('[data-apply-hidden]');
+                var editBtn = block.querySelector('[data-apply-edit]');
+                if (! display || ! input || ! hidden || ! editBtn) {
+                    return;
+                }
+                hidden.value = input.value.trim();
+                display.textContent = hidden.value;
+                display.classList.remove('hidden');
+                input.classList.add('hidden');
+                editBtn.classList.remove('hidden');
+                doneBtn.classList.add('hidden');
+            }
+        });
+    </script>
 </section>

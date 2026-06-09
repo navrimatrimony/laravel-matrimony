@@ -638,6 +638,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/biodata-intakes/create-profile', [AdminIntakeController::class, 'createProfileEntry'])->name('biodata-intakes.create-profile');
     Route::post('/biodata-intakes/create-profile', [AdminIntakeController::class, 'storeProfileEntry'])->name('biodata-intakes.store-profile');
     Route::get('/biodata-intakes/{intake}', [AdminIntakeController::class, 'showBiodataIntake'])->name('biodata-intakes.show');
+    Route::get('/biodata-intakes/{intake}/parse-status', [AdminIntakeController::class, 'parseStatus'])->name('biodata-intakes.parse-status');
     Route::patch('/biodata-intakes/{intake}/attach', [AdminIntakeController::class, 'attachBiodataIntake'])->name('biodata-intakes.attach');
     Route::post('/biodata-intakes/{intake}/reparse', [AdminIntakeController::class, 'reparse'])->name('biodata-intakes.reparse');
     Route::post('/biodata-intakes/{intake}/apply-draft-correction', [AdminIntakeController::class, 'applyDraftCorrection'])->name('biodata-intakes.apply-draft-correction');

@@ -27,6 +27,7 @@
     $cardHint = 'text-xs text-gray-500';
     $label = 'text-xs font-semibold text-gray-500 uppercase tracking-wide';
     $value = 'text-sm text-gray-900';
+    $parseInProgress = (string) ($intake->parse_status ?? '') === 'pending';
 @endphp
 
 <div class="max-w-6xl mx-auto text-gray-900" x-data="{ tab: 'review' }">
@@ -53,16 +54,37 @@
         </div>
     @endif
 
+    @if ($parseInProgress)
+        <div id="admin-intake-parse-progress" class="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 flex flex-wrap items-start gap-3" role="status" aria-live="polite">
+            <svg class="animate-spin h-6 w-6 text-indigo-600 shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <div class="min-w-0 flex-1">
+                <p class="text-sm font-semibold text-indigo-950">{{ __('intake.admin_intake_parse_in_progress_title') }}</p>
+                <p class="text-xs text-indigo-900/90 mt-0.5">{{ __('intake.admin_intake_parse_in_progress_help') }}</p>
+            </div>
+        </div>
+    @endif
+
     {{-- Compact status strip --}}
     <div class="{{ $card }} p-4 mb-4 flex flex-wrap items-center gap-3 text-sm">
         @php
             $parse = (string) ($intake->parse_status ?? '');
             $parseChip = $parse === 'parsed'
                 ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                : ($parse === 'error' ? 'bg-red-50 text-red-800 border-red-200' : 'bg-gray-100 text-gray-700 border-gray-200');
+                : ($parse === 'error' ? 'bg-red-50 text-red-800 border-red-200' : 'bg-indigo-50 text-indigo-800 border-indigo-200');
         @endphp
         <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border border-gray-200 bg-gray-50">{{ $intake->intake_status }}</span>
-        <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border {{ $parseChip }}">{{ $parse !== '' ? $parse : '—' }}</span>
+        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold border {{ $parseChip }}">
+            @if ($parseInProgress)
+                <svg class="animate-spin h-3.5 w-3.5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+            @endif
+            {{ $parse !== '' ? $parse : '—' }}
+        </span>
         <span class="text-gray-600">Owner: <strong class="text-gray-900">{{ $intake->uploadedByUser->name ?? '—' }}</strong></span>
         @if ($intake->profile)
             <span class="text-gray-600">Profile: <strong class="text-gray-900">#{{ $intake->profile->id }}</strong> {{ $intake->profile->full_name }}</span>
@@ -80,7 +102,8 @@
             'intakePhotoPreview' => $intakePhotoPreview ?? null,
             'adminLightMode' => true,
             'hideEmptySections' => true,
-            'draftCorrectionApplyEnabled' => ! $intake->approved_by_user && ! $intake->intake_locked,
+            'parseInProgress' => $parseInProgress,
+            'draftCorrectionApplyEnabled' => ! $intake->approved_by_user && ! $intake->intake_locked && ! $parseInProgress,
             'draftCorrectionApplyRoute' => route('admin.biodata-intakes.apply-draft-correction', $intake),
         ])
 
@@ -164,12 +187,12 @@
                 </div>
                 <form method="POST" action="{{ route('admin.biodata-intakes.reparse', $intake) }}">
                     @csrf
-                    <button type="submit" class="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-sm font-semibold text-gray-900">Re-parse (no new AI extraction)</button>
+                    <button type="submit" @disabled($parseInProgress) class="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-sm font-semibold text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed">Re-parse (no new AI extraction)</button>
                 </form>
                 @if (! empty($showAdminReextractAction))
                     <form method="POST" action="{{ route('admin.biodata-intakes.re-extract', $intake) }}" onsubmit="return confirm('Run paid vision extraction again?');">
                         @csrf
-                        <button type="submit" class="w-full px-3 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-sm font-semibold text-gray-900">Re-extract (vision again)</button>
+                        <button type="submit" @disabled($parseInProgress) class="w-full px-3 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-sm font-semibold text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed">Re-extract (vision again)</button>
                         <p class="mt-1 text-[11px] text-amber-800">Paid API — re-reads text from the uploaded file.</p>
                     </form>
                 @endif
@@ -338,6 +361,53 @@ ocr_quality.score: {{ $get($oq, 'score') }}</pre>
                 }).catch(function () { btn.disabled = false; window.alert('Network error.'); });
         });
     });
+
+    @if ($parseInProgress)
+    (function () {
+        var statusUrl = @json(route('admin.biodata-intakes.parse-status', $intake));
+        var timeoutMessage = @json(__('intake.admin_intake_parse_poll_timeout'));
+        var attempts = 0;
+        var maxAttempts = 120;
+
+        function pollParseStatus() {
+            attempts += 1;
+            fetch(statusUrl, {
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }).then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var status = String((data && data.parse_status) || '');
+                    if (status === 'parsed' || status === 'error') {
+                        window.location.reload();
+                        return;
+                    }
+                    if (attempts >= maxAttempts) {
+                        var banner = document.getElementById('admin-intake-parse-progress');
+                        if (banner) {
+                            banner.classList.remove('border-indigo-200', 'bg-indigo-50');
+                            banner.classList.add('border-amber-300', 'bg-amber-50');
+                            var help = banner.querySelector('p.text-xs');
+                            if (help) {
+                                help.textContent = timeoutMessage;
+                            }
+                        }
+                        return;
+                    }
+                    window.setTimeout(pollParseStatus, 3000);
+                })
+                .catch(function () {
+                    if (attempts < maxAttempts) {
+                        window.setTimeout(pollParseStatus, 5000);
+                    }
+                });
+        }
+
+        window.setTimeout(pollParseStatus, 2500);
+    })();
+    @endif
 })();
 </script>
 @endsection
