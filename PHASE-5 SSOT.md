@@ -15210,6 +15210,48 @@ Forbidden:
 * static QR without expiry/governance
 * contact leak
 
+Day-8 implementation contract:
+
+* Create `suchak_biodata_exports` and `suchak_qr_tokens` only as governed foundation tables.
+* Do not add public PDF routes, public QR routes, dashboard UI, navigation, contact reveal, billing, search, CRM, collaboration, or staff features on Day-8.
+* `suchak_biodata_exports` columns are:
+  * `id`
+  * `suchak_account_id` not nullable
+  * `matrimony_profile_id` not nullable
+  * `representation_id` not nullable
+  * `export_type` not nullable; allowed Day-8 value: `biodata_pdf`
+  * `file_path` nullable until the future renderer writes an actual file
+  * `generated_by_user_id` not nullable
+  * `downloaded_at` nullable
+  * `shared_at` nullable
+  * `created_at`
+* `suchak_qr_tokens` columns are:
+  * `id`
+  * `token_hash` not nullable and unique
+  * `suchak_account_id` not nullable
+  * `matrimony_profile_id` not nullable
+  * `representation_id` not nullable
+  * `export_id` not nullable
+  * `expires_at` not nullable
+  * `scan_count` not nullable and defaults to 0
+  * `last_scanned_at` nullable
+  * `created_at`
+  * `updated_at`
+* Foreign keys must use `restrictOnDelete`; no cascade delete is allowed.
+* Soft deletes are forbidden for both Day-8 tables.
+* Raw QR tokens must never be stored in database columns or audit metadata.
+* QR path must use `/r/{random_token}` shape only; Day-8 may return this path from service code but must not expose a public route yet.
+* Day-8 export creation must require:
+  * verified Suchak account
+  * the actor is the owning Suchak account user
+  * active `suchak_profile_representations` row
+  * valid accepted consent on the representation
+  * not revoked
+  * candidate not deactivated
+* QR scan foundation may resolve a token and update scan tracking, but it must return only masked candidate summary and must not reveal private candidate/family contact.
+* Expired QR tokens must be blocked.
+* Activity trace must be written for governed PDF export creation, QR token creation, and QR scan attempts.
+
 Day-9:
 User-to-Suchak request pipeline + policy SLA.
 

@@ -76,6 +76,16 @@ class SuchakAccount extends Model
         return $this->hasMany(SuchakConsent::class);
     }
 
+    public function biodataExports(): HasMany
+    {
+        return $this->hasMany(SuchakBiodataExport::class);
+    }
+
+    public function qrTokens(): HasMany
+    {
+        return $this->hasMany(SuchakQrToken::class);
+    }
+
     public function isVerified(): bool
     {
         return $this->verification_status === self::VERIFICATION_VERIFIED;
