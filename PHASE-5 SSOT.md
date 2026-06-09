@@ -15025,3 +15025,493 @@ Do NOT revert or touch:
 ############################################################
 END OF PHASE-6 SUCHAK MODULE ADDENDUM — DAY-2 SCHEMA CLARIFICATION PATCH
 ############################################################
+
+############################################################
+PHASE-6 SUCHAK MODULE ADDENDUM — DAYWISE PLAN CORRECTION PATCH
+(BASE-FIRST DEPENDENCY ORDER FREEZE)
+############################################################
+
+Status:
+OFFICIAL CORRECTION PATCH
+
+Authority:
+This patch supersedes any older Phase-6 Suchak daywise order where dependency order conflicts exist.
+It does not weaken any earlier SSOT governance law.
+It corrects implementation order only.
+
+Core rule:
+No Phase-6 day may begin on incomplete base.
+If existing project tests fail, or the previous Phase-6 day is incomplete, the next Phase-6 day must not begin.
+
+============================================================
+1️⃣ BASE-FIRST RULE
+===================
+
+Phase-6 Suchak work must follow base-first dependency order.
+
+A feature may not be implemented before its required tables, state records, access boundary, audit boundary, ownership boundary, and verification boundary exist.
+
+Forbidden examples:
+
+* admin verification transitions before activity/audit foundation
+* consent before representation/source-link
+* public request/contact routing before request pipeline foundation
+* collaboration action before collaboration request foundation
+* PDF/QR before valid consent boundary
+* business actions before activity/audit foundation
+* plan-based billing limits before billing/catalog foundation
+* direct candidate contact reveal without SSOT-approved consent boundary
+
+============================================================
+2️⃣ CORRECTED PHASE-6 DAY ORDER
+===============================
+
+Day-1:
+Suchak route surface + module skeleton.
+No business logic.
+
+Day-2:
+Suchak account foundation only.
+
+Allowed:
+
+* suchak_accounts
+* suchak_verification_records
+* suchak_policies
+* models
+* User::suchakAccount relation
+* Suchak access middleware
+* route gate
+* schema/model/route tests
+
+Forbidden:
+
+* registration UI
+* admin verification UI
+* approve/reject/suspend/archive business actions
+* upload
+* consent
+* PDF/QR
+* search
+* billing
+* CRM
+* staff
+* dashboard business logic
+* navigation links
+
+Day-3:
+Suchak activity/audit foundation planning + schema clarification.
+
+Depends on Day-2.
+
+Purpose:
+
+* define exact Suchak activity/audit schema before implementation.
+* define whether `suchak_activity_logs` already exists or must be created.
+* define exact columns, actor model, target model, indexes, FK behavior, retention, and rollback rules.
+* define integration boundary with existing `admin_audit_logs`.
+* define how later Suchak business actions write trace records.
+
+Strict rule:
+Day-3 implementation must NOT start until exact activity/audit schema and admin_audit_logs integration contract are defined in a Day-3 schema clarification patch.
+
+Actor separation rule:
+
+* Admin/governance actions must use `admin_audit_logs`.
+* Suchak/user/business events must use `suchak_activity_logs`.
+* Do not mix admin actor records and Suchak business activity records ambiguously.
+
+Forbidden:
+
+* heavy dashboard logic
+* candidate upload
+* consent
+* PDF/QR
+* billing/search/collaboration/CRM
+* admin approve/reject/suspend actions until audit contract is clarified
+
+Day-4:
+Authenticated Suchak onboarding + admin verification lifecycle.
+
+Depends on Day-2 and Day-3 audit/activity contract.
+
+Allowed:
+
+* authenticated Suchak account request/onboarding flow only
+* admin verification review surface
+* audited approve/reject/suspend transitions
+* no guest public registration unless a future SSOT patch explicitly allows it
+
+Forbidden:
+
+* candidate profile upload
+* consent
+* contact reveal
+* PDF/QR
+* billing/search/collaboration/CRM
+
+Day-5:
+Suchak source-link / existing intake reuse foundation.
+
+Depends on:
+
+* Day-2 account foundation
+* Day-3 audit/activity contract
+* Day-4 verified/allowed Suchak lifecycle
+
+Purpose:
+
+* Suchak may create a governed source-link toward an existing or future candidate/intake flow.
+* Must reuse governed intake/profile boundaries.
+* Suchak action must be traceable through Day-3 audit/activity foundation.
+
+Forbidden:
+
+* direct MatrimonyProfile mutation
+* candidate contact reveal
+* final representation without duplicate-safe boundary
+* unverified/suspended/archived Suchak starting source-link actions
+
+Day-6:
+Suchak representation foundation + masking.
+
+Depends on Day-5.
+
+Purpose:
+
+* define Suchak-to-candidate representation records.
+* enforce masked candidate visibility.
+* no contact leak.
+* duplicate-safe boundaries required.
+
+Day-7:
+Consent request / verification / revocation foundation.
+
+Depends on Day-6 representation.
+
+Purpose:
+
+* consent must be tied to representation.
+* consent validity/revocation must be explicit.
+* no implicit/untracked consent.
+
+Day-8:
+PDF + secure QR foundation.
+
+Depends on Day-7 valid consent and active representation.
+
+Purpose:
+
+* controlled biodata PDF/QR access only under valid consent rules.
+
+Forbidden:
+
+* unrestricted public PDF
+* static QR without expiry/governance
+* contact leak
+
+Day-9:
+User-to-Suchak request pipeline + policy SLA.
+
+Depends on Day-2 policies and Day-3 activity/audit foundation.
+
+Purpose:
+
+* create persisted request pipeline state.
+* request SLA must read `suchak_policies.request_action_sla_hours`.
+* no hardcoded 72h.
+
+Forbidden:
+
+* public contact routing without persisted request state
+* direct candidate contact reveal
+* request actions without audit/activity trace
+
+Day-10:
+Public Suchak contact routing through request pipeline.
+
+Depends on Day-9 request pipeline and Day-7 consent rules where candidate privacy is involved.
+
+Purpose:
+
+* route public interest/contact to Suchak safely through persisted request pipeline.
+* must not reveal candidate private contact.
+* must block expired/revoked/deactivated/invalid representation or consent states from the first implementation.
+
+Important:
+Day-14 may harden/retest deactivation/revocation behavior, but Day-10 must already enforce minimum revoked/expired/deactivated blocking.
+
+Day-11:
+Cross-Suchak masked search only.
+
+Depends on Day-6 representation + masking and Day-7 consent.
+
+Purpose:
+
+* allow safe masked discovery across Suchaks.
+* MVP default: only active representation with valid consent may appear.
+* any pre-consent masked discovery or broader visibility mode requires a future SSOT patch.
+
+Forbidden:
+
+* collaboration request action in this day
+* commission logic
+* contact leak
+* exposing sensitive candidate data without consent boundary
+
+Day-12:
+Collaboration request + commission acknowledgement foundation.
+
+Depends on Day-11.
+
+Purpose:
+
+* create collaboration request records.
+* explicit acknowledgement of commission/ownership rules.
+* no automatic payment execution.
+
+Day-13:
+CRM notes + ledger foundation.
+
+Depends on Day-3 activity/audit and Day-12 collaboration.
+
+Purpose:
+
+* Suchak notes, follow-up records, and ledger-like trace entries.
+
+Forbidden:
+
+* hidden profile mutation
+* ungoverned private contact storage
+
+Day-14:
+Candidate deactivation / consent revocation hardening.
+
+Depends on representation + consent + activity/audit.
+
+Purpose:
+
+* harden and regression-test deactivation, revocation, and visibility shutdown flows.
+* this is not the first enforcement point.
+* earlier days that expose routes/actions must already block invalid revoked/expired/deactivated states.
+
+Forbidden:
+
+* silent data loss
+* first-time introduction of core revoked/expired blocking
+
+Day-15:
+Profile update suggestions through governed MutationService path only.
+
+Depends on representation/source-link and existing profile governance.
+
+Purpose:
+
+* Suchak may suggest profile updates.
+* final profile mutation must remain through MutationService or approved governed mutation path.
+
+Forbidden:
+
+* direct profile update by Suchak
+* silent overwrite
+* conflict bypass
+
+Day-16:
+Suchak billing/catalog/limit foundation.
+
+Depends on policy and ledger/activity foundation.
+
+Purpose:
+
+* define billing/catalog/limit groundwork only.
+
+Important:
+
+* Days before Day-16 may use only global `suchak_policies` limits.
+* plan-based Suchak entitlement limits must not be enforced before Day-16.
+
+Forbidden:
+
+* payment execution unless separately SSOT-approved
+* fake subscription enforcement
+* hidden entitlement writes
+
+Day-17:
+Integrated Suchak QA.
+
+Purpose:
+
+* full route/schema/model/access/audit/representation/consent/search/collaboration regression sweep.
+* no new feature implementation.
+
+============================================================
+3️⃣ SLA RULE
+============
+
+Suchak request SLA must be policy-driven.
+
+Use:
+
+* `suchak_policies.request_action_sla_hours`
+
+Do NOT hardcode:
+
+* 72 hours
+* any fixed SLA value in controller/service logic
+
+Default value remains controlled by Suchak policy rows.
+
+============================================================
+4️⃣ ACTIVITY / AUDIT TIMING RULE
+================================
+
+Suchak activity/audit foundation must exist before business actions that need traceability.
+
+The following actions must not be implemented without traceability:
+
+* admin verification transitions
+* onboarding/account request actions
+* upload/source-link actions
+* representation changes
+* consent grant/revoke
+* PDF/QR generation/access
+* public contact routing
+* user-to-Suchak requests
+* collaboration requests
+* CRM notes
+* billing/limit changes
+
+============================================================
+5️⃣ ADMIN AUDIT VS SUCHAK ACTIVITY SEPARATION RULE
+==================================================
+
+Admin/governance actions:
+
+* use `admin_audit_logs`
+* examples:
+
+  * admin verification approval
+  * admin verification rejection
+  * admin suspension
+  * admin archive
+  * policy change
+  * admin override
+
+Suchak/user/business events:
+
+* use `suchak_activity_logs`
+* examples:
+
+  * Suchak onboarding request submitted
+  * source-link created
+  * representation created/changed
+  * consent requested/revoked
+  * PDF/QR accessed
+  * user-to-Suchak request created
+  * collaboration request created
+  * CRM note added
+
+No action may be logged into the wrong system just for convenience.
+
+============================================================
+6️⃣ DAY-3 SCHEMA CLARIFICATION GATE
+===================================
+
+Day-3 implementation must not start until a separate Day-3 audit/activity schema clarification exists.
+
+That clarification must define:
+
+* whether `suchak_activity_logs` already exists or must be created
+* exact table columns
+* actor fields
+* target fields
+* metadata rules
+* indexes
+* FK behavior
+* no-cascade/no-data-loss rules
+* retention/deletion rules
+* admin_audit_logs integration boundary
+* verification commands
+* rollback notes
+
+If these are not defined, Day-3 remains planning-only.
+
+============================================================
+7️⃣ CONTACT / REQUEST PIPELINE ORDER RULE
+=========================================
+
+Public Suchak contact routing must not exist before a persisted user-to-Suchak request pipeline exists.
+
+Therefore:
+
+* Day-9 creates request/pipeline foundation.
+* Day-10 wires public contact routing through that pipeline.
+
+No direct public contact action may bypass the pipeline.
+
+============================================================
+8️⃣ MASKED SEARCH CONSENT RULE
+==============================
+
+Cross-Suchak masked search must not expose sensitive candidate data.
+
+MVP default:
+
+* only active representation with valid consent may appear.
+
+Any pre-consent masked discovery, weaker visibility, or broader discovery mode requires a future SSOT patch.
+
+============================================================
+9️⃣ BILLING LIMIT TIMING RULE
+=============================
+
+Before Day-16:
+
+* only global Suchak policies may limit actions.
+
+After Day-16:
+
+* Suchak billing/catalog/plan limits may be introduced only as explicitly implemented and verified.
+
+No earlier day may enforce plan-based limits.
+
+============================================================
+🔟 IMPLEMENTATION GATE
+======================
+
+Before each Phase-6 day starts:
+
+1. Working tree must be clean or intentionally scoped.
+2. Previous day must be committed or intentionally stashed.
+3. DB migrations must be in expected state.
+4. Existing relevant tests must pass, or failures must be proven unrelated and documented.
+5. The day scope must list:
+
+   * exact files allowed
+   * exact files forbidden
+   * verification commands
+   * rollback notes
+
+If any of these are missing, implementation must not start.
+
+============================================================
+1️⃣1️⃣ STALE PLAN OVERRIDE
+==========================
+
+If an older Phase-6 plan conflicts with this corrected order, this patch wins.
+
+Examples:
+
+* Old Day-2 references to admin approve/reject/suspend are superseded by Day-2 clarification patch and this correction patch.
+* Admin verification transitions must not precede activity/audit foundation.
+* Consent must not precede representation.
+* Public contact routing must not precede request pipeline foundation.
+* Collaboration action must not precede collaboration request foundation.
+* Hardcoded SLA is forbidden.
+* Cross-Suchak masked search requires representation + consent boundary.
+* Plan-based limits must not be enforced before Day-16.
+* Day-3 implementation must not start without exact audit/activity schema clarification.
+
+############################################################
+END OF PHASE-6 SUCHAK MODULE ADDENDUM — DAYWISE PLAN CORRECTION PATCH
+############################################################
