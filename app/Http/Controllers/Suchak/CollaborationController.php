@@ -19,8 +19,11 @@ use InvalidArgumentException;
 
 class CollaborationController extends Controller
 {
-    public function index(Request $request, SuchakLimitService $limitService): View
-    {
+    public function index(
+        Request $request,
+        SuchakLimitService $limitService,
+        SuchakCollaborationService $collaborationService,
+    ): View {
         $account = $request->user()?->suchakAccount;
         if (! $account) {
             abort(403, 'Suchak account is required.');
@@ -35,7 +38,7 @@ class CollaborationController extends Controller
                 'targetSuchakAccount.user',
                 'requestingRepresentation.matrimonyProfile.gender',
                 'targetRepresentation.matrimonyProfile.gender',
-                'commissionAgreement',
+                'commissionAgreement.collectorSuchakAccount',
                 'ledgerEntries' => fn ($query) => $query
                     ->where('suchak_account_id', $account->id)
                     ->latest(),
@@ -59,6 +62,7 @@ class CollaborationController extends Controller
             'ledgerTypeOptions' => SuchakLedgerEntry::TYPES,
             'ledgerStatusOptions' => SuchakLedgerEntry::STATUSES,
             'paymentCollectorOptions' => SuchakPaymentContext::PAYMENT_COLLECTORS,
+            'suggestedOpportunities' => $collaborationService->suggestedOpportunities($account),
             'collaborationSlaDays' => $limitService->collaborationSlaDays(),
             'stats' => [
                 'incoming_pending' => SuchakCollaborationRequest::query()
@@ -257,7 +261,12 @@ class CollaborationController extends Controller
         ]);
 
         try {
-            $collaborationService->assertAcceptedParticipant($collaborationRequest, $account, $request->user());
+            $collaborationService->assertCanRecordCollaborationIncome(
+                $collaborationRequest,
+                $account,
+                $request->user(),
+                $validated['payment_collector'],
+            );
             $profile = ((int) $account->id === (int) $collaborationRequest->requesting_suchak_account_id)
                 ? $collaborationRequest->targetMatrimonyProfile()->firstOrFail()
                 : $collaborationRequest->requestingMatrimonyProfile()->firstOrFail();
@@ -269,6 +278,7 @@ class CollaborationController extends Controller
                 array_merge($validated, [
                     'collaboration_request_id' => $collaborationRequest->id,
                     'source_owner' => SuchakPaymentContext::SOURCE_COLLABORATION,
+                    'payment_collector' => SuchakPaymentContext::COLLECTOR_SUCHAK,
                 ]),
                 $request->ip(),
                 $request->userAgent(),

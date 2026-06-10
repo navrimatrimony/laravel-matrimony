@@ -37,6 +37,7 @@ class SuchakCommissionAgreement extends Model
         'collaboration_request_id',
         'groom_side_suchak_account_id',
         'bride_side_suchak_account_id',
+        'collector_suchak_account_id',
         'agreement_type',
         'split_type',
         'groom_side_share',
@@ -70,6 +71,11 @@ class SuchakCommissionAgreement extends Model
     public function brideSideSuchakAccount(): BelongsTo
     {
         return $this->belongsTo(SuchakAccount::class, 'bride_side_suchak_account_id');
+    }
+
+    public function collectorSuchakAccount(): BelongsTo
+    {
+        return $this->belongsTo(SuchakAccount::class, 'collector_suchak_account_id');
     }
 
     public function isAcceptedByBothSides(): bool

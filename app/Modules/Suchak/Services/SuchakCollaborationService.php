@@ -7,8 +7,11 @@ use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakCommissionAgreement;
+use App\Models\SuchakPaymentContext;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -19,7 +22,91 @@ class SuchakCollaborationService
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakAccessService $accessService,
         private readonly SuchakLimitService $limitService,
+        private readonly SuchakCandidateMaskingService $maskingService,
     ) {
+    }
+
+    /**
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function suggestedOpportunities(SuchakAccount $account, int $limit = 6): Collection
+    {
+        $account->refresh();
+        if (! $this->accessService->canOperate($account)) {
+            return collect();
+        }
+
+        $ownRepresentations = SuchakProfileRepresentation::query()
+            ->with([
+                'matrimonyProfile.religion',
+                'matrimonyProfile.caste',
+                'matrimonyProfile.location.parent.parent.parent',
+                'matrimonyProfile.occupationMaster',
+            ])
+            ->where('suchak_account_id', $account->id)
+            ->withValidConsent()
+            ->whereHas('matrimonyProfile', fn (Builder $query) => $this->activeProfileQuery($query))
+            ->orderBy('id')
+            ->get();
+
+        if ($ownRepresentations->isEmpty()) {
+            return collect();
+        }
+
+        return SuchakProfileRepresentation::query()
+            ->with([
+                'suchakAccount.user',
+                'matrimonyProfile.gender',
+                'matrimonyProfile.maritalStatus',
+                'matrimonyProfile.religion',
+                'matrimonyProfile.caste',
+                'matrimonyProfile.location.parent.parent.parent',
+                'matrimonyProfile.occupationMaster',
+            ])
+            ->publiclyRoutable()
+            ->where('suchak_account_id', '!=', $account->id)
+            ->whereHas('matrimonyProfile', fn (Builder $query) => $this->activeProfileQuery($query))
+            ->orderBy('id')
+            ->limit(max($limit * 10, 30))
+            ->get()
+            ->map(function (SuchakProfileRepresentation $candidate) use ($account, $ownRepresentations): ?array {
+                $match = $this->firstDeterministicMatch($ownRepresentations, $candidate);
+                if ($match === null) {
+                    return null;
+                }
+
+                /** @var SuchakProfileRepresentation $ownRepresentation */
+                $ownRepresentation = $match['own_representation'];
+                if ($this->hasOpenCollaborationPair($account, $ownRepresentation, $candidate)) {
+                    return null;
+                }
+
+                if (! $ownRepresentation->matrimonyProfile instanceof MatrimonyProfile
+                    || ! $candidate->matrimonyProfile instanceof MatrimonyProfile) {
+                    return null;
+                }
+
+                $ownSummary = $this->maskingService->maskedSummary($ownRepresentation->matrimonyProfile, $ownRepresentation);
+                $targetSummary = $this->maskingService->maskedSummary($candidate->matrimonyProfile, $candidate);
+                $targetSuchakName = trim((string) ($candidate->suchakAccount?->suchak_name ?: 'Public Suchak'));
+                $targetSuchakLabel = '#'.$candidate->suchak_account_id.' '.Str::limit($targetSuchakName, 80, '');
+
+                return [
+                    'requesting_representation_id' => (int) $ownRepresentation->id,
+                    'target_representation_id' => (int) $candidate->id,
+                    'requesting_candidate_reference' => $ownSummary['candidate_reference'] ?? null,
+                    'target_candidate_reference' => $targetSummary['candidate_reference'] ?? null,
+                    'target_summary' => $targetSummary,
+                    'reason' => $match['reason'],
+                    'target_suchak_label' => $targetSuchakLabel,
+                    'collector_label' => $targetSuchakLabel,
+                    'split_type' => SuchakCommissionAgreement::SPLIT_TO_BE_DISCUSSED,
+                    'currency' => 'INR',
+                ];
+            })
+            ->filter()
+            ->values()
+            ->take($limit);
     }
 
     /**
@@ -92,6 +179,7 @@ class SuchakCollaborationService
                 'collaboration_request_id' => $collaboration->id,
                 'groom_side_suchak_account_id' => $groomAccountId,
                 'bride_side_suchak_account_id' => $brideAccountId,
+                'collector_suchak_account_id' => $lockedTargetRepresentation->suchak_account_id,
                 'agreement_type' => SuchakCommissionAgreement::TYPE_COLLABORATION_ACK,
                 'split_type' => $commissionTerms['split_type'],
                 'groom_side_share' => $commissionTerms['groom_side_share'],
@@ -320,6 +408,48 @@ class SuchakCollaborationService
         }
     }
 
+    public function assertCanRecordCollaborationIncome(
+        SuchakCollaborationRequest $collaboration,
+        SuchakAccount $account,
+        User $actor,
+        string $paymentCollector,
+    ): SuchakCommissionAgreement {
+        $account->refresh();
+        $collaboration->refresh()->loadMissing('commissionAgreement');
+        $this->assertAcceptedParticipant($collaboration, $account, $actor);
+
+        $agreement = $collaboration->commissionAgreement ?? $this->createMissingAgreement($collaboration);
+        $collectorAccountId = $this->collectorAccountId($collaboration, $agreement);
+        if ($agreement->collector_suchak_account_id === null) {
+            SuchakCommissionAgreement::query()
+                ->whereKey($agreement->id)
+                ->update(['collector_suchak_account_id' => $collectorAccountId]);
+            $agreement->refresh();
+        }
+
+        if ($paymentCollector !== SuchakPaymentContext::COLLECTOR_SUCHAK) {
+            throw new InvalidArgumentException('Collaboration income must use the locked Suchak collector.');
+        }
+
+        if ((int) $account->id !== $collectorAccountId) {
+            throw new InvalidArgumentException('Only the locked collector Suchak can record collaboration income for this request.');
+        }
+
+        $hasNonCollectorContext = SuchakPaymentContext::query()
+            ->where('collaboration_request_id', $collaboration->id)
+            ->where('source_owner', SuchakPaymentContext::SOURCE_COLLABORATION)
+            ->where('payment_collector', SuchakPaymentContext::COLLECTOR_SUCHAK)
+            ->where('context_status', SuchakPaymentContext::STATUS_ACTIVE)
+            ->where('suchak_account_id', '<>', $collectorAccountId)
+            ->exists();
+
+        if ($hasNonCollectorContext) {
+            throw new InvalidArgumentException('Collaboration income collector is already locked to another Suchak account.');
+        }
+
+        return $agreement->fresh(['collectorSuchakAccount', 'collaborationRequest']) ?? $agreement;
+    }
+
     public function expireIfPastDue(SuchakCollaborationRequest $collaboration): SuchakCollaborationRequest
     {
         $collaboration->refresh()->loadMissing('commissionAgreement');
@@ -520,6 +650,93 @@ class SuchakCollaborationService
         return $this->accessService->canOperate($representation->suchakAccount);
     }
 
+    private function activeProfileQuery(Builder $query): Builder
+    {
+        return $query
+            ->where('lifecycle_state', 'active')
+            ->where('is_suspended', false);
+    }
+
+    private function firstDeterministicMatch(Collection $ownRepresentations, SuchakProfileRepresentation $candidate): ?array
+    {
+        foreach ($ownRepresentations as $ownRepresentation) {
+            if (! $ownRepresentation instanceof SuchakProfileRepresentation) {
+                continue;
+            }
+
+            $ownProfile = $ownRepresentation->matrimonyProfile;
+            $candidateProfile = $candidate->matrimonyProfile;
+
+            if (! $ownProfile instanceof MatrimonyProfile || ! $candidateProfile instanceof MatrimonyProfile) {
+                continue;
+            }
+
+            if ($ownProfile->caste_id !== null && $ownProfile->caste_id === $candidateProfile->caste_id) {
+                return [
+                    'own_representation' => $ownRepresentation,
+                    'reason' => 'Same caste as an active Suchak representation.',
+                ];
+            }
+
+            if ($ownProfile->religion_id !== null && $ownProfile->religion_id === $candidateProfile->religion_id) {
+                return [
+                    'own_representation' => $ownRepresentation,
+                    'reason' => 'Same religion as an active Suchak representation.',
+                ];
+            }
+
+            $ownDistrictId = $this->districtId($ownProfile);
+            if ($ownDistrictId !== null && $ownDistrictId === $this->districtId($candidateProfile)) {
+                return [
+                    'own_representation' => $ownRepresentation,
+                    'reason' => 'Same residence district as an active Suchak representation.',
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    private function hasOpenCollaborationPair(
+        SuchakAccount $account,
+        SuchakProfileRepresentation $ownRepresentation,
+        SuchakProfileRepresentation $candidate,
+    ): bool {
+        return SuchakCollaborationRequest::query()
+            ->whereIn('status', SuchakCollaborationRequest::OPEN_STATUSES)
+            ->where(function (Builder $query) use ($account, $ownRepresentation, $candidate): void {
+                $query->where(function (Builder $query) use ($account, $ownRepresentation, $candidate): void {
+                    $query
+                        ->where('requesting_suchak_account_id', $account->id)
+                        ->where('requesting_representation_id', $ownRepresentation->id)
+                        ->where('target_representation_id', $candidate->id);
+                })->orWhere(function (Builder $query) use ($account, $ownRepresentation, $candidate): void {
+                    $query
+                        ->where('target_suchak_account_id', $account->id)
+                        ->where('requesting_representation_id', $candidate->id)
+                        ->where('target_representation_id', $ownRepresentation->id);
+                });
+            })
+            ->exists();
+    }
+
+    private function districtId(MatrimonyProfile $profile): ?int
+    {
+        $addressIds = $profile->residenceGeoAddressIds();
+
+        return $addressIds['district_id'] ?? null;
+    }
+
+    private function collectorAccountId(SuchakCollaborationRequest $collaboration, SuchakCommissionAgreement $agreement): int
+    {
+        return (int) (
+            $agreement->collector_suchak_account_id
+            ?? $collaboration->target_suchak_account_id
+            ?? $agreement->bride_side_suchak_account_id
+            ?? $agreement->groom_side_suchak_account_id
+        );
+    }
+
     /**
      * @return array{0: int, 1: int}
      */
@@ -549,6 +766,7 @@ class SuchakCollaborationService
             'collaboration_request_id' => $collaboration->id,
             'groom_side_suchak_account_id' => $collaboration->requesting_suchak_account_id,
             'bride_side_suchak_account_id' => $collaboration->target_suchak_account_id,
+            'collector_suchak_account_id' => $collaboration->target_suchak_account_id,
             'agreement_type' => SuchakCommissionAgreement::TYPE_COLLABORATION_ACK,
             'split_type' => SuchakCommissionAgreement::SPLIT_TO_BE_DISCUSSED,
             'currency' => 'INR',
