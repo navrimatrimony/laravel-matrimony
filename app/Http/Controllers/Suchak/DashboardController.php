@@ -8,6 +8,8 @@ use App\Models\SuchakBiodataExport;
 use App\Models\SuchakBiodataIntakeLink;
 use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakConsent;
+use App\Models\SuchakLedgerEntry;
+use App\Models\SuchakProfileNote;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakProfileUpdateSuggestion;
 use App\Modules\Suchak\Services\SuchakBillingCatalogService;
@@ -17,6 +19,7 @@ use App\Modules\Suchak\Services\SuchakEntitlementService;
 use App\Modules\Suchak\Services\SuchakPaymentStatusService;
 use App\Modules\Suchak\Services\SuchakProfileUpdateSuggestionService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
@@ -35,6 +38,7 @@ class DashboardController extends Controller
             ->suchakAccount()
             ->with('user')
             ->firstOrFail();
+        $businessRecordFilters = $this->businessRecordFilters($request);
 
         $representations = $account->profileRepresentations()
             ->with([
@@ -50,10 +54,20 @@ class DashboardController extends Controller
             ->limit(8)
             ->get();
 
-        $representationCards = $representations->map(function (SuchakProfileRepresentation $representation) use ($account, $accessService, $maskingService): array {
+        $representationCards = $representations->map(function (SuchakProfileRepresentation $representation) use ($account, $accessService, $maskingService, $businessRecordFilters): array {
             $summary = $representation->matrimonyProfile
                 ? $maskingService->maskedSummary($representation->matrimonyProfile, $representation)
                 : [];
+            $crmNotes = $this->crmNotesForRepresentation(
+                (int) $account->id,
+                (int) $representation->matrimony_profile_id,
+                $businessRecordFilters,
+            );
+            $ledgerEntries = $this->ledgerEntriesForRepresentation(
+                (int) $account->id,
+                (int) $representation->matrimony_profile_id,
+                $businessRecordFilters,
+            );
 
             $hasActionableConsent = $representation->representation_status === SuchakProfileRepresentation::STATUS_ACTIVE
                 && $representation->hasValidConsent();
@@ -77,6 +91,8 @@ class DashboardController extends Controller
                 'pending_consent' => $pendingConsent,
                 'accepted_consent' => $acceptedConsent,
                 'consent_timeline' => $consentTimeline,
+                'crm_notes' => $crmNotes,
+                'ledger_entries' => $ledgerEntries,
                 'can_export' => $canOperate && $hasActionableConsent,
                 'can_request_consent' => $canOperate
                     && $pendingConsent === null
@@ -158,6 +174,10 @@ class DashboardController extends Controller
             'allowedSuggestionFields' => $suggestionService->allowedCoreFieldKeys(),
             'consentChannelOptions' => SuchakConsent::CHANNELS,
             'consentTypeOptions' => SuchakConsent::TYPES,
+            'noteTypeOptions' => SuchakProfileNote::TYPES,
+            'ledgerTypeOptions' => SuchakLedgerEntry::TYPES,
+            'ledgerStatusOptions' => SuchakLedgerEntry::STATUSES,
+            'businessRecordFilters' => $businessRecordFilters,
             'stats' => [
                 'representations_total' => $account->profileRepresentations()->count(),
                 'representations_active' => $account->profileRepresentations()->withValidConsent()->count(),
@@ -166,5 +186,75 @@ class DashboardController extends Controller
                 'pending_collaborations' => $pendingCollaborations->count(),
             ],
         ]);
+    }
+
+    /**
+     * @return array{business_q: string, note_type: ?string, ledger_status: ?string}
+     */
+    private function businessRecordFilters(Request $request): array
+    {
+        $search = trim((string) $request->query('business_q', ''));
+        if (strlen($search) > 80) {
+            $search = substr($search, 0, 80);
+        }
+
+        $noteType = trim((string) $request->query('note_type', ''));
+        if (! in_array($noteType, SuchakProfileNote::TYPES, true)) {
+            $noteType = null;
+        }
+
+        $ledgerStatus = trim((string) $request->query('ledger_status', ''));
+        if (! in_array($ledgerStatus, SuchakLedgerEntry::STATUSES, true)) {
+            $ledgerStatus = null;
+        }
+
+        return [
+            'business_q' => $search,
+            'note_type' => $noteType,
+            'ledger_status' => $ledgerStatus,
+        ];
+    }
+
+    /**
+     * @param  array{business_q: string, note_type: ?string, ledger_status: ?string}  $filters
+     */
+    private function crmNotesForRepresentation(int $accountId, int $profileId, array $filters): Collection
+    {
+        return SuchakProfileNote::query()
+            ->where('suchak_account_id', $accountId)
+            ->where('matrimony_profile_id', $profileId)
+            ->when($filters['note_type'], fn ($query, string $noteType) => $query->where('note_type', $noteType))
+            ->when($filters['business_q'] !== '', function ($query) use ($filters): void {
+                $query->where(function ($query) use ($filters): void {
+                    $query
+                        ->where('note_text', 'like', '%'.$filters['business_q'].'%')
+                        ->orWhere('note_type', 'like', '%'.$filters['business_q'].'%');
+                });
+            })
+            ->latest()
+            ->limit(5)
+            ->get();
+    }
+
+    /**
+     * @param  array{business_q: string, note_type: ?string, ledger_status: ?string}  $filters
+     */
+    private function ledgerEntriesForRepresentation(int $accountId, int $profileId, array $filters): Collection
+    {
+        return SuchakLedgerEntry::query()
+            ->where('suchak_account_id', $accountId)
+            ->where('matrimony_profile_id', $profileId)
+            ->when($filters['ledger_status'], fn ($query, string $status) => $query->where('status', $status))
+            ->when($filters['business_q'] !== '', function ($query) use ($filters): void {
+                $query->where(function ($query) use ($filters): void {
+                    $query
+                        ->where('note', 'like', '%'.$filters['business_q'].'%')
+                        ->orWhere('entry_type', 'like', '%'.$filters['business_q'].'%')
+                        ->orWhere('status', 'like', '%'.$filters['business_q'].'%');
+                });
+            })
+            ->latest()
+            ->limit(5)
+            ->get();
     }
 }

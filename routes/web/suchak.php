@@ -4,6 +4,7 @@ use App\Http\Controllers\Suchak\AccountRequestController;
 use App\Http\Controllers\Suchak\BiodataExportController;
 use App\Http\Controllers\Suchak\CollaborationController;
 use App\Http\Controllers\Suchak\ConsentController;
+use App\Http\Controllers\Suchak\CrmLedgerController;
 use App\Http\Controllers\Suchak\CrossSearchController;
 use App\Http\Controllers\Suchak\DashboardController;
 use App\Http\Controllers\Suchak\IntakeSourceController;
@@ -101,6 +102,12 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
         Route::post('/representations/{representation}/profile-update-suggestions', [ProfileUpdateSuggestionController::class, 'store'])
             ->middleware('throttle:20,1')
             ->name('representations.profile-update-suggestions.store');
+        Route::post('/representations/{representation}/crm-notes', [CrmLedgerController::class, 'storeNote'])
+            ->middleware('throttle:20,1')
+            ->name('representations.crm-notes.store');
+        Route::post('/representations/{representation}/ledger-entries', [CrmLedgerController::class, 'storeLedgerEntry'])
+            ->middleware('throttle:20,1')
+            ->name('representations.ledger-entries.store');
         Route::post('/collaborations', [CollaborationController::class, 'store'])
             ->middleware('throttle:15,1')
             ->name('collaborations.store');

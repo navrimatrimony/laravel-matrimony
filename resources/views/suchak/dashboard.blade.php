@@ -16,6 +16,15 @@
     $consentChannelLabels = collect($consentChannelOptions)
         ->mapWithKeys(fn (string $channel) => [$channel => ucwords(str_replace('_', ' ', $channel))])
         ->all();
+    $noteTypeLabels = collect($noteTypeOptions)
+        ->mapWithKeys(fn (string $type) => [$type => ucwords(str_replace('_', ' ', $type))])
+        ->all();
+    $ledgerTypeLabels = collect($ledgerTypeOptions)
+        ->mapWithKeys(fn (string $type) => [$type => ucwords(str_replace('_', ' ', $type))])
+        ->all();
+    $ledgerStatusLabels = collect($ledgerStatusOptions)
+        ->mapWithKeys(fn (string $status) => [$status => ucwords(str_replace('_', ' ', $status))])
+        ->all();
 @endphp
 
 @section('content')
@@ -121,6 +130,26 @@
                 <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
                     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Represented Profiles</h2>
                     <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Only masked candidate information is shown on this work surface.</p>
+                    <form method="GET" action="{{ route('suchak.dashboard') }}" class="mt-4 grid gap-3 md:grid-cols-[1fr_12rem_12rem_auto_auto]">
+                        <label class="sr-only" for="business_q">Search CRM and ledger</label>
+                        <input id="business_q" name="business_q" value="{{ $businessRecordFilters['business_q'] }}" maxlength="80" placeholder="Search CRM or ledger" class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                        <label class="sr-only" for="note_type_filter">Note type</label>
+                        <select id="note_type_filter" name="note_type" class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                            <option value="">All notes</option>
+                            @foreach ($noteTypeLabels as $type => $label)
+                                <option value="{{ $type }}" @selected($businessRecordFilters['note_type'] === $type)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        <label class="sr-only" for="ledger_status_filter">Ledger status</label>
+                        <select id="ledger_status_filter" name="ledger_status" class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                            <option value="">All payments</option>
+                            @foreach ($ledgerStatusLabels as $status => $label)
+                                <option value="{{ $status }}" @selected($businessRecordFilters['ledger_status'] === $status)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        <button type="submit" class="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white">Filter</button>
+                        <a href="{{ route('suchak.dashboard') }}" class="rounded-md border border-gray-300 px-4 py-2 text-center text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">Clear</a>
+                    </form>
                 </div>
                 <div class="divide-y divide-gray-200 dark:divide-gray-700">
                     @forelse ($representationCards as $card)
@@ -131,6 +160,8 @@
                             $pendingConsent = $card['pending_consent'];
                             $acceptedConsent = $card['accepted_consent'];
                             $consentTimeline = $card['consent_timeline'];
+                            $crmNotes = $card['crm_notes'];
+                            $ledgerEntries = $card['ledger_entries'];
                         @endphp
                         <article class="p-5">
                             <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -296,6 +327,107 @@
                                         </p>
                                     @endif
                                 </div>
+                            </div>
+
+                            <div class="mt-5 grid gap-4 xl:grid-cols-2">
+                                <section class="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                                    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">CRM Notes & Follow-ups</h3>
+                                    <form method="POST" action="{{ route('suchak.representations.crm-notes.store', $representation) }}" class="mt-3 grid gap-2">
+                                        @csrf
+                                        <label class="sr-only" for="note_type_{{ $representation->id }}">Note type</label>
+                                        <select id="note_type_{{ $representation->id }}" name="note_type" required class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                            @foreach ($noteTypeLabels as $type => $label)
+                                                <option value="{{ $type }}" @selected(old('note_type') === $type)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                        <label class="sr-only" for="follow_up_at_{{ $representation->id }}">Follow-up at</label>
+                                        <input id="follow_up_at_{{ $representation->id }}" name="follow_up_at" type="datetime-local" value="{{ old('follow_up_at') }}" class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                        <label class="sr-only" for="note_text_{{ $representation->id }}">Note</label>
+                                        <textarea id="note_text_{{ $representation->id }}" name="note_text" rows="3" required maxlength="4000" placeholder="Private note or follow-up" class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">{{ old('note_text') }}</textarea>
+                                        <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Add note</button>
+                                    </form>
+
+                                    <div class="mt-4 space-y-2">
+                                        @forelse ($crmNotes as $note)
+                                            <div class="rounded-md border border-gray-200 bg-white p-3 text-sm dark:border-gray-700 dark:bg-gray-800">
+                                                <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                                    <span class="font-semibold text-gray-900 dark:text-gray-100">{{ $noteTypeLabels[$note->note_type] ?? ucfirst(str_replace('_', ' ', $note->note_type)) }}</span>
+                                                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ $note->created_at?->format('Y-m-d H:i') }}</span>
+                                                </div>
+                                                @if ($note->follow_up_at)
+                                                    <div class="mt-1 text-xs font-semibold text-amber-700 dark:text-amber-200">Follow-up: {{ $note->follow_up_at->format('Y-m-d H:i') }}</div>
+                                                @endif
+                                                <p class="mt-2 text-gray-700 dark:text-gray-300">{{ $note->note_text }}</p>
+                                            </div>
+                                        @empty
+                                            <p class="rounded-md border border-dashed border-gray-300 px-3 py-4 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">No CRM notes match.</p>
+                                        @endforelse
+                                    </div>
+                                </section>
+
+                                <section class="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                                    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Ledger & Customer Payments</h3>
+                                    <form method="POST" action="{{ route('suchak.representations.ledger-entries.store', $representation) }}" class="mt-3 grid gap-2 sm:grid-cols-2">
+                                        @csrf
+                                        <label class="sr-only" for="entry_type_{{ $representation->id }}">Entry type</label>
+                                        <select id="entry_type_{{ $representation->id }}" name="entry_type" required class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                            @foreach ($ledgerTypeLabels as $type => $label)
+                                                <option value="{{ $type }}" @selected(old('entry_type') === $type)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                        <label class="sr-only" for="status_{{ $representation->id }}">Status</label>
+                                        <select id="status_{{ $representation->id }}" name="status" required class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                            @foreach ($ledgerStatusLabels as $status => $label)
+                                                <option value="{{ $status }}" @selected(old('status', \App\Models\SuchakLedgerEntry::STATUS_EXPECTED) === $status)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                        <label class="sr-only" for="amount_{{ $representation->id }}">Amount</label>
+                                        <input id="amount_{{ $representation->id }}" name="amount" value="{{ old('amount') }}" inputmode="decimal" placeholder="Amount" class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                        <label class="sr-only" for="currency_{{ $representation->id }}">Currency</label>
+                                        <input id="currency_{{ $representation->id }}" name="currency" value="{{ old('currency', 'INR') }}" maxlength="3" required class="rounded-md border-gray-300 text-sm uppercase shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                        <label class="sr-only" for="due_date_{{ $representation->id }}">Due date</label>
+                                        <input id="due_date_{{ $representation->id }}" name="due_date" type="date" value="{{ old('due_date') }}" class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                        <label class="sr-only" for="paid_at_{{ $representation->id }}">Paid at</label>
+                                        <input id="paid_at_{{ $representation->id }}" name="paid_at" type="datetime-local" value="{{ old('paid_at') }}" class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                        <label class="sr-only" for="ledger_note_{{ $representation->id }}">Ledger note</label>
+                                        <textarea id="ledger_note_{{ $representation->id }}" name="note" rows="2" maxlength="2000" placeholder="Ledger note" class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 sm:col-span-2">{{ old('note') }}</textarea>
+                                        <button type="submit" class="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 sm:col-span-2">Add ledger entry</button>
+                                    </form>
+
+                                    <div class="mt-4 space-y-2">
+                                        @forelse ($ledgerEntries as $entry)
+                                            <div class="rounded-md border border-gray-200 bg-white p-3 text-sm dark:border-gray-700 dark:bg-gray-800">
+                                                <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                                    <span class="font-semibold text-gray-900 dark:text-gray-100">{{ $ledgerTypeLabels[$entry->entry_type] ?? ucfirst(str_replace('_', ' ', $entry->entry_type)) }}</span>
+                                                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ $entry->created_at?->format('Y-m-d H:i') }}</span>
+                                                </div>
+                                                <dl class="mt-2 grid gap-2 text-xs text-gray-600 dark:text-gray-300 sm:grid-cols-2">
+                                                    <div>
+                                                        <dt class="font-semibold uppercase text-gray-500 dark:text-gray-400">Amount</dt>
+                                                        <dd>{{ $entry->amount !== null ? $entry->currency.' '.$entry->amount : 'Not set' }}</dd>
+                                                    </div>
+                                                    <div>
+                                                        <dt class="font-semibold uppercase text-gray-500 dark:text-gray-400">Payment status</dt>
+                                                        <dd>{{ $ledgerStatusLabels[$entry->status] ?? ucfirst($entry->status) }}</dd>
+                                                    </div>
+                                                    <div>
+                                                        <dt class="font-semibold uppercase text-gray-500 dark:text-gray-400">Due</dt>
+                                                        <dd>{{ $entry->due_date?->format('Y-m-d') ?: '-' }}</dd>
+                                                    </div>
+                                                    <div>
+                                                        <dt class="font-semibold uppercase text-gray-500 dark:text-gray-400">Receipt</dt>
+                                                        <dd>{{ $entry->paid_at ? 'Paid '.$entry->paid_at->format('Y-m-d H:i') : ($entry->status === \App\Models\SuchakLedgerEntry::STATUS_PAID ? 'Paid timestamp pending' : 'Not paid') }}</dd>
+                                                    </div>
+                                                </dl>
+                                                @if ($entry->note)
+                                                    <p class="mt-2 text-gray-700 dark:text-gray-300">{{ $entry->note }}</p>
+                                                @endif
+                                            </div>
+                                        @empty
+                                            <p class="rounded-md border border-dashed border-gray-300 px-3 py-4 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">No ledger entries match.</p>
+                                        @endforelse
+                                    </div>
+                                </section>
                             </div>
                         </article>
                     @empty
