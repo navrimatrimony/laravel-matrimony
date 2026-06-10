@@ -14,9 +14,10 @@ use App\Models\SuchakPlanPayment;
 use App\Models\SuchakProfileNote;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakProfileUpdateSuggestion;
-use App\Modules\Suchak\Services\SuchakBillingCatalogService;
 use App\Modules\Suchak\Services\SuchakAccessService;
+use App\Modules\Suchak\Services\SuchakBillingCatalogService;
 use App\Modules\Suchak\Services\SuchakCandidateMaskingService;
+use App\Modules\Suchak\Services\SuchakDailyOpportunityService;
 use App\Modules\Suchak\Services\SuchakEntitlementService;
 use App\Modules\Suchak\Services\SuchakPaymentStatusService;
 use App\Modules\Suchak\Services\SuchakPolicyService;
@@ -32,6 +33,7 @@ class DashboardController extends Controller
         SuchakAccessService $accessService,
         SuchakBillingCatalogService $billingCatalog,
         SuchakCandidateMaskingService $maskingService,
+        SuchakDailyOpportunityService $dailyOpportunityService,
         SuchakEntitlementService $entitlementService,
         SuchakPaymentStatusService $paymentStatusService,
         SuchakPolicyService $policyService,
@@ -183,6 +185,7 @@ class DashboardController extends Controller
             'recentExports' => $recentExports,
             'recentSuggestions' => $recentSuggestions,
             'activityLogs' => $activityLogs,
+            'dailyOpportunities' => $dailyOpportunityService->dailyWorklist($account),
             'activeSubscription' => $activeSubscription,
             'featureLimits' => $featureLimits,
             'billingUsageSummary' => $billingUsageSummary,

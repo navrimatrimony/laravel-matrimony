@@ -101,6 +101,50 @@
         </div>
     </div>
 
+    <section id="daily-opportunities" class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Daily Opportunities</h2>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Deterministic worklist for follow-ups, consent, PDFs, SLA risk, payments, and collaboration.</p>
+            </div>
+            <span class="inline-flex w-fit rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase text-gray-600 dark:bg-gray-900 dark:text-gray-300">
+                {{ $dailyOpportunities->count() }} open
+            </span>
+        </div>
+
+        <div class="mt-5 space-y-3">
+            @forelse ($dailyOpportunities as $opportunity)
+                <article class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                    <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div class="min-w-0 space-y-2">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 shadow-sm dark:bg-gray-800 dark:text-gray-200">
+                                    {{ $opportunity['label'] }}
+                                </span>
+                                @if ($opportunity['due_at'])
+                                    <span class="text-xs font-semibold text-red-700 dark:text-red-300">
+                                        Due {{ $opportunity['due_at']->format('Y-m-d H:i') }}
+                                    </span>
+                                @endif
+                            </div>
+                            <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ $opportunity['reason'] }}</p>
+                            @if ($opportunity['candidate_reference'])
+                                <p class="text-sm text-gray-600 dark:text-gray-300">Candidate: {{ $opportunity['candidate_reference'] }}</p>
+                            @endif
+                        </div>
+                        <a href="{{ $opportunity['action_url'] }}" class="inline-flex shrink-0 justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
+                            {{ $opportunity['action_label'] }}
+                        </a>
+                    </div>
+                </article>
+            @empty
+                <div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                    No deterministic daily opportunities are due right now.
+                </div>
+            @endforelse
+        </div>
+    </section>
+
     <section class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
