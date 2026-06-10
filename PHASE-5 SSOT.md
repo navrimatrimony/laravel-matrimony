@@ -17488,3 +17488,1056 @@ Advanced Suchak is complete only when:
 
 END OF PHASE-6 ADVANCED SUCHAK COMPLETION PATCH - DAY-18
 ############################################################
+
+############################################################
+PHASE-6 ADVANCED SUCHAK GROWTH AMENDMENT - DAY-32
+(DAY-31-AFTER DELTA MATRIX + REVISED DAY-32 THROUGH DAY-62 PLAN)
+############################################################
+
+Day-32 is a planning and SSOT-lock day only.
+
+Day-32 must not edit runtime code.
+Day-32 must not create or edit PHP files, routes, migrations, models, controllers, services, views, jobs, factories, seeders, or tests.
+
+Only `PHASE-5 SSOT.md` may change on Day-32.
+
+This amendment does not paste any external/business planning document as-is. It merges only the rules needed to prevent duplicate implementation and future rework.
+
+============================================================
+1) SUPERSESSION NOTE
+============================================================
+
+The earlier future sequence under "PHASE-6 ADVANCED SUCHAK COMPLETION PATCH - DAY-18" remains binding for Day-18 through Day-31.
+
+The earlier Day-32 through Day-37 future sections are superseded by this Day-32 amendment because Day-31 introduced Suchak platform-plan PayU payment and the next work must first lock:
+
+* who owns a customer/request
+* who is allowed to collect payment
+* how Suchak-customer payments differ from platform payments
+* how agreement, invoice, receipt, refund, dispute, payout, and reward state machines remain separate
+
+No old Day-32 through Day-37 text should be used as implementation authority after this amendment where it conflicts with the revised plan below.
+
+Day numbering continues from the current actual state:
+
+* Day-31 = Suchak-to-platform PayU plan payment foundation.
+* Day-32 = this SSOT amendment only.
+* Day-33 = first runtime/code day after this amendment.
+
+============================================================
+2) GOVERNANCE CONTINUITY
+============================================================
+
+All Phase-5 and Phase-6 rules remain binding:
+
+* Suchak is not a candidate profile.
+* Candidate profile truth remains in `matrimony_profiles` and existing governed `profile_*` tables.
+* Suchak business records must remain in `suchak_*` tables.
+* Governed profile mutations must pass through `MutationService` or the approved governed mutation layer.
+* No direct `update()` / `save()` bypass for governed profile data.
+* No silent overwrite.
+* No data loss.
+* No stored age field.
+* No JSON blob storage for structured entities.
+* No fake AI matching, fake score, fake rating, fake success count, or unsupported public trust claim.
+* Suchak private notes, payment records, ledger records, payout records, agreement records, invoices, receipts, and dispute evidence never become canonical profile truth.
+
+============================================================
+3) PAYMENT FLOW SEPARATION
+============================================================
+
+There are three separate financial flows. They must not be merged.
+
+1. Suchak platform-plan payment
+
+Meaning:
+
+Suchak pays Navri Mile Navryala for a Suchak plan.
+
+Rules:
+
+* Uses existing PayU/testing payment boundary.
+* Belongs to Suchak plan/subscription system.
+* Records stay in Suchak platform-plan payment tables.
+* This is platform revenue.
+
+2. Suchak-customer direct payment
+
+Meaning:
+
+Customer/family pays the Suchak directly.
+
+Rules:
+
+* Must not use PayU.
+* Platform does not process money.
+* Suchak may record UPI/cash/bank/cheque payment evidence.
+* Records stay Suchak-private unless an admin role has an approved operational view.
+* This is not platform revenue.
+
+3. Platform customer payment
+
+Meaning:
+
+Customer/user pays Navri Mile Navryala.
+
+Rules:
+
+* Customer must pay platform only.
+* Suchak must not request direct payment from a platform-sourced customer for the same service.
+* Suchak may become eligible for platform payout/reward only after platform-confirmed payment and policy qualification.
+
+============================================================
+4) SOURCE OWNER + ONE COLLECTOR RULE
+============================================================
+
+Every payment-capable Suchak customer/request context must resolve ownership before any manual payment request or invoice can be created.
+
+Allowed `source_owner` values:
+
+* `platform`
+* `suchak`
+* `collaboration`
+
+Allowed `payment_collector` values:
+
+* `platform`
+* `suchak`
+
+Rules:
+
+* `source_owner = platform` requires `payment_collector = platform`.
+* `source_owner = suchak` may allow `payment_collector = suchak`.
+* `source_owner = collaboration` must resolve collector through collaboration agreement/admin policy before payment request creation.
+* One customer/service context may have only one payment collector.
+* Multiple Suchaks may share internal commission, but multiple Suchaks must not independently charge the same customer for the same service.
+
+Hard block:
+
+If the customer/request is platform-sourced, the Suchak direct payment request action must be disabled.
+
+Required user-facing message:
+
+```text
+This is a platform customer. Do not request direct payment.
+Any eligible payout will be handled by Navri Mile Navryala.
+```
+
+============================================================
+5) STATE BOUNDARIES
+============================================================
+
+Do not mix independent state machines into a single status column.
+
+Terms acceptance state must use `terms_status`.
+
+Allowed values:
+
+* `not_required`
+* `pending`
+* `accepted`
+* `declined`
+* `bypassed`
+* `expired`
+* `superseded`
+
+Payment collection state must use `payment_status`.
+
+Allowed values:
+
+* `draft`
+* `sent`
+* `opened`
+* `pending`
+* `partially_paid`
+* `paid`
+* `overdue`
+* `cancelled`
+* `expired`
+* `failed`
+
+Refund/reversal state must use `refund_status`.
+
+Allowed values:
+
+* `none`
+* `requested`
+* `approved`
+* `rejected`
+* `paid`
+* `waived`
+* `credit_note_issued`
+* `reversed`
+
+Dispute state must use `dispute_status`.
+
+Allowed values:
+
+* `none`
+* `opened`
+* `under_review`
+* `resolved`
+* `rejected`
+* `escalated`
+
+State transition rules must be enforced in services, not scattered through controllers.
+
+============================================================
+6) DOCUMENT BOUNDARIES
+============================================================
+
+Payment request:
+
+* Ask/pay instruction only.
+* Not accounting proof.
+* May expire or be cancelled.
+
+Proforma:
+
+* Optional pre-payment commercial document.
+* Not proof of payment.
+
+Invoice:
+
+* Payment-due or paid commercial document depending on configured policy.
+* Must have immutable numbering once issued.
+* Cancelled invoice number must never be reused.
+
+Receipt:
+
+* Proof that payment was recorded as paid.
+* Must reference payment record and collector.
+
+Credit note / reversal:
+
+* Corrects or reverses an issued invoice/receipt.
+* Must not delete the original payment/invoice/receipt.
+
+Receipt verification QR:
+
+* Must show only verification-safe fields.
+* Must not reveal private candidate/family contact details.
+
+============================================================
+7) STRUCTURED TABLE RULE
+============================================================
+
+Suchak customer payment, agreement, invoice, receipt, package, package stage, proof, refund, payout, reward, and settlement entities must use structured `suchak_*` tables.
+
+Do not store these entities only as `suchak_ledger_entries`.
+
+`suchak_ledger_entries` may be used only as:
+
+* activity/accounting timeline
+* derived ledger line
+* contextual business note
+
+It must not become the only source of truth for customer agreements, invoices, receipts, payment requests, refunds, payouts, or rewards.
+
+============================================================
+8) PUBLIC MARKETPLACE PAYMENT PRIVACY
+============================================================
+
+Public Suchak marketplace/profile pages must not expose direct Suchak UPI/payment details publicly.
+
+Payment details may be shown only inside a guarded customer/payment request context where:
+
+* source owner and payment collector are already resolved
+* terms policy is applied
+* warning/disclosure is visible
+* audit/activity logging exists
+
+Customer-facing Suchak-direct payment disclosure:
+
+```text
+This payment goes directly to the Suchak.
+Navri Mile Navryala does not process this payment.
+This receipt is Suchak-issued and verification-backed.
+```
+
+Customer-facing platform payment disclosure:
+
+```text
+This payment must be made to Navri Mile Navryala only.
+Do not pay the Suchak directly for this platform-sourced service.
+```
+
+============================================================
+9) QUALITY SCORE AND PUBLIC CLAIM RULE
+============================================================
+
+Suchak quality score, risk score, trust score, abuse score, payout risk score, or payment proof score is admin-only unless a future SSOT patch explicitly approves a public-safe badge.
+
+Public UI must not show:
+
+* fake rating
+* fake success count
+* "best Suchak"
+* "100% success"
+* unsupported "trusted" claim
+* internal score
+
+============================================================
+10) DAY-31-AFTER DELTA / GAP MATRIX
+============================================================
+
+Status values:
+
+* `Implemented`
+* `Partial`
+* `Missing`
+* `Future`
+
+| Area | Current status after Day-31 | Gap | Owning future day |
+| --- | --- | --- | --- |
+| Suchak registration + KYC | Implemented | Keep regression-covered | Day-60 |
+| Central Suchak access/policy/limits | Implemented | Extend policy keys for growth/payment/payout | Day-33, Day-42, Day-54 |
+| Consent/PDF/QR/CRM/ledger foundations | Implemented | Connect to package/payment/timeline where needed | Day-37, Day-38, Day-49 |
+| Suchak disputes/freeze/revoke | Implemented | Add double-charging and payment-risk complaint types | Day-41, Day-53 |
+| Collaboration foundation | Implemented | Add marketplace suggestions and collector enforcement | Day-51 |
+| Suchak plan catalog | Implemented | Keep separate from customer packages | Day-60 |
+| Suchak platform-plan PayU payment | Implemented | Regression/hardening only; no duplicate payment engine | Day-60 |
+| Source ownership | Missing | Required before manual customer payment | Day-33 |
+| One payment collector guard | Missing | Required before manual customer payment | Day-33 |
+| Suchak customer lifecycle/source tracking | Missing | Required before package/payment flow | Day-34 |
+| Package templates/rate cards | Missing | Structured package/stage data needed | Day-35 |
+| Customer agreement snapshot | Missing | Immutable agreement revision needed | Day-36 |
+| Terms acceptance/bypass | Missing | Separate terms state and bypass audit needed | Day-36, Day-37 |
+| Payment request | Missing | Secure request lifecycle needed before paid ledger | Day-37 |
+| Manual customer payment ledger/invoice/receipt | Partial | Existing ledger is not enough; structured records needed | Day-38 |
+| Refund/credit note/overdue service rules | Missing | No-delete financial correction model needed | Day-39 |
+| Customer/family portal | Missing | Needed for trust, receipt, claim/revoke | Day-40 |
+| Double-charging complaint flow | Missing | Required trust and abuse protection | Day-41 |
+| Platform-to-Suchak payout | Missing | Must be platform-confirmed only | Day-42, Day-43 |
+| Visit/meeting confirmation | Missing | Needed for visit payouts/refunds/disputes | Day-44 |
+| Referral/coupon/reward | Partial outside Suchak | Suchak reward must qualify only from platform-confirmed payment | Day-45 |
+| Lead allocation | Missing | Platform must provide business value | Day-46 |
+| Public Suchak marketplace | Missing | Public-safe identity without fake claims | Day-47 |
+| Daily opportunity engine | Missing | Deterministic daily worklist only | Day-48 |
+| Follow-up automation/timeline/templates | Partial CRM only | Needs reminders/templates/jobs | Day-49 |
+| Income dashboard/package analytics | Partial | Needs Suchak value/revenue cockpit | Day-50 |
+| White-label sharing kit | Partial PDF/QR only | Add marketing assets and receipt verification | Day-52 |
+| Risk/compliance center | Partial safety dashboard | Add payment/proof/bypass/refund risk | Day-53 |
+| Quality score/granular suspension | Partial pause/freeze | Add admin-only scoring and feature-level suspension | Day-54 |
+| Campaigns/loyalty/monthly value report | Missing | Retention engine needed | Day-55 |
+| Training/templates | Missing | Operator education and messaging library needed | Day-56 |
+| Offline camp/biodata drive | Future | Only after core payment/customer flows are stable | Day-57 |
+| Export/retention/backup | Missing | Sensitive export and retention rules needed | Day-58 |
+| Scheduled jobs consolidation | Partial | Add growth/payment/payout/report jobs | Day-59 |
+| Role/privacy/security regression | Partial | Expand matrix for new financial/customer surfaces | Day-60 |
+| Browser/mobile QA | Future | Full persona QA after runtime work | Day-61 |
+| Production readiness | Future | Final launch gate | Day-62 |
+
+============================================================
+11) REVISED DAY-32 THROUGH DAY-62 PLAN
+============================================================
+
+============================================================
+DAY-32 - GROWTH SSOT AMENDMENT + DELTA GAP MATRIX
+============================================================
+
+Goal:
+
+Lock this growth/business expansion plan before runtime work.
+
+Allowed scope:
+
+* `PHASE-5 SSOT.md` only.
+
+Required work:
+
+* supersede outdated Day-32 through Day-37 future sequence
+* define source/payment/document/state boundaries
+* define Day-31-after delta matrix
+* lock revised Day-32 through Day-62 sequence
+
+Completion gate:
+
+* only `PHASE-5 SSOT.md` changed
+* `git diff --check` passes
+* no runtime code changed
+
+============================================================
+DAY-33 - SOURCE OWNERSHIP + ONE COLLECTOR ENGINE
+============================================================
+
+Goal:
+
+Prevent double charging before any Suchak-customer payment work.
+
+Required work:
+
+* source owner model/table fields or structured context table
+* payment collector resolver service
+* platform customer direct Suchak payment block
+* collaboration collector resolution rule
+* tests for platform/suchak/collaboration ownership
+
+Completion gate:
+
+* manual Suchak payment cannot be created without resolved source owner and collector
+* platform-sourced customer blocks Suchak direct payment request
+* no profile truth mutation
+
+============================================================
+DAY-34 - SUCHAK CUSTOMER LIFECYCLE + SOURCE TRACKING
+============================================================
+
+Goal:
+
+Track Suchak customer journey separately from canonical profile truth.
+
+Required work:
+
+* Suchak customer/service context
+* source tracking
+* payer/candidate/consent-giver separation
+* lifecycle statuses
+* basic timeline events
+
+Completion gate:
+
+* Suchak can classify customer source
+* payer and candidate may differ
+* records remain in `suchak_*`
+
+============================================================
+DAY-35 - PACKAGE TEMPLATES + RATE CARD
+============================================================
+
+Goal:
+
+Create structured Suchak package/rate-card foundation.
+
+Required work:
+
+* admin package template library
+* Suchak clone/custom package flow
+* structured package stages
+* deliverables
+* publish approval policy
+* misleading claim guard
+
+Completion gate:
+
+* package stages are structured, not JSON-only
+* Suchak package is separate from Suchak platform plan
+* admin approval mode is policy-driven
+
+============================================================
+DAY-36 - CUSTOMER AGREEMENT SNAPSHOT + TERMS POLICY
+============================================================
+
+Goal:
+
+Create immutable customer agreement revisions and terms state.
+
+Required work:
+
+* agreement snapshot
+* agreement revision/supersession
+* `terms_status`
+* strict/recommended/optional terms policy
+* bypass reason, actor, activity log, invoice note
+
+Completion gate:
+
+* accepted agreement is immutable
+* package changes require new revision/re-acceptance
+* bypass is never silent
+
+============================================================
+DAY-37 - PAYMENT REQUEST FLOW
+============================================================
+
+Goal:
+
+Create secure request-before-payment flow.
+
+Required work:
+
+* secure payment request link
+* terms page
+* QR/payment detail visibility by policy
+* sent/opened/expired/cancelled tracking
+* customer-facing collector disclosure
+
+Completion gate:
+
+* payment request does not count as paid receipt
+* Suchak UPI/payment details are not public marketplace data
+* source owner/collector guard is enforced
+
+============================================================
+DAY-38 - MANUAL PAYMENT LEDGER + PROOF + INVOICE/RECEIPT
+============================================================
+
+Goal:
+
+Support Suchak-customer direct payments without platform processing.
+
+Required work:
+
+* structured payment record
+* UPI/cash/bank/cheque modes
+* partial/pending/paid tracking
+* proof rules
+* invoice/receipt numbering
+* receipt verification QR
+* ledger entry linkage
+
+Completion gate:
+
+* customer payment does not use PayU
+* platform revenue reports exclude Suchak customer ledger
+* no payment/invoice hard delete
+
+============================================================
+DAY-39 - REFUND / WAIVER / CREDIT NOTE / OVERDUE RULES
+============================================================
+
+Goal:
+
+Create no-delete financial correction and overdue service controls.
+
+Required work:
+
+* refund request/approval/paid lifecycle
+* waiver
+* credit note
+* reversal
+* overdue service action policy
+* no canonical profile hide/delete due to payment overdue
+
+Completion gate:
+
+* original payment/invoice remains preserved
+* credit note/reversal records corrections
+* overdue affects Suchak service only
+
+============================================================
+DAY-40 - CUSTOMER MINI PORTAL + FAMILY/PAYER MANAGEMENT
+============================================================
+
+Goal:
+
+Give customer/family a trust and self-service surface.
+
+Required work:
+
+* customer portal
+* package/payment/terms status
+* invoices/receipts
+* claim/revoke links
+* shared payer and family candidate context
+
+Completion gate:
+
+* customer can verify payment/receipt context
+* private contact remains protected
+* multiple candidate/family context is structured
+
+============================================================
+DAY-41 - DOUBLE-CHARGING COMPLAINT + TRUST PROTECTION
+============================================================
+
+Goal:
+
+Protect platform customers and detect direct payment abuse.
+
+Required work:
+
+* direct payment complaint type
+* evidence capture
+* payment feature freeze
+* payout hold hook
+* admin review workflow
+* customer warnings
+
+Completion gate:
+
+* platform customer can report Suchak direct payment request
+* admin can freeze relevant payment ability
+* audit trail is complete
+
+============================================================
+DAY-42 - PLATFORM-TO-SUCHAK PAYOUT FOUNDATION
+============================================================
+
+Goal:
+
+Record payouts owed by platform to Suchak after qualified platform events.
+
+Required work:
+
+* payout records
+* payout reasons
+* payout details
+* verified/on-hold rules
+* approve/reverse/cancel statuses
+
+Completion gate:
+
+* payout qualification never depends only on Suchak self-claim
+* payout details verification can hold payment
+* platform liability is separate from Suchak customer ledger
+
+============================================================
+DAY-43 - SETTLEMENT STATEMENTS + PAYOUT ADMIN WORKFLOW
+============================================================
+
+Goal:
+
+Make payout liability and payout history auditable.
+
+Required work:
+
+* monthly settlement statement
+* approve/pay/reverse workflow
+* payout reference number
+* deductions/reversals
+* admin reports
+
+Completion gate:
+
+* settlement statement is reproducible
+* paid/reversed payouts remain immutable/auditable
+* payout liability report is separated from revenue
+
+============================================================
+DAY-44 - VISIT / MEETING CONFIRMATION FLOW
+============================================================
+
+Goal:
+
+Qualify platform visit/introduction payouts safely.
+
+Required work:
+
+* visit scheduled/completed states
+* Suchak completion mark
+* user/admin confirmation
+* payout qualification hook
+* refund/dispute path
+
+Completion gate:
+
+* disputed visit holds payout
+* confirmation policy is admin-configurable
+* no direct contact leak
+
+============================================================
+DAY-45 - REFERRAL / COUPON / REWARD ENGINE
+============================================================
+
+Goal:
+
+Support Suchak growth rewards without fraud or revenue confusion.
+
+Required work:
+
+* Suchak referral/coupon attribution
+* reward rules
+* cash/credit/admin options
+* first-touch/last-touch/coupon/admin policy
+* fraud controls
+* refund reversal
+
+Completion gate:
+
+* reward qualifies only from platform-confirmed payment
+* Suchak customer ledger paid status does not qualify platform reward
+* self-referral and duplicate abuse are blocked/reviewed
+
+============================================================
+DAY-46 - LEAD GENERATION + ALLOCATION ENGINE
+============================================================
+
+Goal:
+
+Give Suchak platform-sourced business safely.
+
+Required work:
+
+* lead types
+* area/community allocation
+* plan-wise lead limits
+* SLA
+* rotation policy
+* lead status
+
+Completion gate:
+
+* lead assignment is policy-driven
+* lead does not reveal private contact prematurely
+* platform-sourced lead payment collector is platform
+
+============================================================
+DAY-47 - PUBLIC SUCHAK MARKETPLACE
+============================================================
+
+Goal:
+
+Expose Suchak discovery without fake trust claims.
+
+Required work:
+
+* public Suchak profile
+* verified badge
+* district/taluka/community/service filters
+* factual service card
+* request through platform
+
+Completion gate:
+
+* no fake rating/success/best claim
+* no public UPI/payment detail exposure
+* suspended/unverified Suchaks are hidden
+
+============================================================
+DAY-48 - DAILY OPPORTUNITY ENGINE
+============================================================
+
+Goal:
+
+Give Suchak deterministic daily worklist.
+
+Required work:
+
+* follow-up due
+* consent expiring
+* PDF missing
+* SLA risk
+* payment due
+* suitable collaboration opportunities with explanation
+
+Completion gate:
+
+* no fake AI score
+* each opportunity has deterministic reason
+* private contact remains masked
+
+============================================================
+DAY-49 - FOLLOW-UP AUTOMATION + TIMELINE + TEMPLATES
+============================================================
+
+Goal:
+
+Make daily Suchak workflow repeatable.
+
+Required work:
+
+* follow-up reminders
+* payment reminders
+* consent reminders
+* meeting reminders
+* WhatsApp copy templates
+* timeline events
+
+Completion gate:
+
+* reminders are idempotent
+* live provider credentials may remain pending only
+* templates do not leak protected contact data
+
+============================================================
+DAY-50 - INCOME DASHBOARD + PACKAGE ANALYTICS
+============================================================
+
+Goal:
+
+Show Suchak the business value generated through the platform.
+
+Required work:
+
+* expected income
+* received income
+* pending/overdue
+* platform payout due
+* referral rewards
+* package/source performance
+* plan cost and net benefit
+
+Completion gate:
+
+* platform revenue, Suchak customer ledger, and payout liability are separate
+* analytics are based on persisted records
+* dashboard is Suchak-scoped
+
+============================================================
+DAY-51 - COLLABORATION MARKETPLACE ADVANCED
+============================================================
+
+Goal:
+
+Suggest B2B collaboration opportunities safely.
+
+Required work:
+
+* suggested collaboration opportunities
+* masked discovery
+* commission split enforcement
+* one collector enforcement
+* dispute link
+
+Completion gate:
+
+* sensitive exchange requires agreement
+* no double collection
+* collaboration income is traceable
+
+============================================================
+DAY-52 - WHITE-LABEL SHARING KIT + RECEIPT VERIFICATION
+============================================================
+
+Goal:
+
+Give Suchak marketing assets tied to verified platform records.
+
+Required work:
+
+* WhatsApp profile card
+* QR poster
+* office poster
+* visiting card QR
+* powered-by footer
+* receipt verification QR
+
+Completion gate:
+
+* assets do not reveal private contact beyond policy
+* receipt QR verifies status safely
+* generated assets are Suchak-scoped
+
+============================================================
+DAY-53 - RISK + COMPLIANCE CENTER
+============================================================
+
+Goal:
+
+Give admin visibility into payment and trust risk.
+
+Required work:
+
+* high bypass dashboard
+* high refund dashboard
+* cash/proof risk
+* direct payment complaint queue
+* QR/PDF abuse signals
+* coupon/referral suspicious signals
+
+Completion gate:
+
+* risk signals are admin-only
+* actions link to evidence records
+* no public score leak
+
+============================================================
+DAY-54 - QUALITY SCORE + GRANULAR SUSPENSION
+============================================================
+
+Goal:
+
+Control specific Suchak capabilities without deleting history.
+
+Required work:
+
+* admin-only quality score
+* upload/PDF/payment/payout/referral/collaboration/public-request suspension modes
+* override with reason
+* audit log
+
+Completion gate:
+
+* score is not public
+* suspension blocks relevant actions before mutation
+* history remains preserved
+
+============================================================
+DAY-55 - CAMPAIGNS + LOYALTY + MONTHLY VALUE REPORT
+============================================================
+
+Goal:
+
+Improve Suchak retention and motivation.
+
+Required work:
+
+* campaign rules
+* bonus qualification
+* loyalty tiers
+* monthly value report
+* renewal discount/revenue share offer tracking
+
+Completion gate:
+
+* campaign rewards are auditable
+* loyalty tier is policy-driven
+* report separates platform value from unsupported claims
+
+============================================================
+DAY-56 - TRAINING ACADEMY + TEMPLATE LIBRARY
+============================================================
+
+Goal:
+
+Help Suchak use the platform safely and professionally.
+
+Required work:
+
+* training modules
+* internal certificate
+* payment/dispute/privacy training
+* message template library
+
+Completion gate:
+
+* public badge remains optional/future unless separately approved
+* templates are reusable and policy-safe
+
+============================================================
+DAY-57 - OFFLINE CAMP / BIODATA DRIVE MODULE
+============================================================
+
+Goal:
+
+Support large Suchak/bureau offline collection workflows.
+
+Required work:
+
+* camp creation
+* source tag
+* bulk intake linking
+* consent pending list
+* package assignment
+* conversion report
+
+Completion gate:
+
+* no direct profile bulk insert
+* intake pipeline remains governed
+* duplicate detection remains privacy-safe
+
+============================================================
+DAY-58 - EXPORT / RETENTION / BACKUP RULES
+============================================================
+
+Goal:
+
+Control Suchak business exports and long-term retention.
+
+Required work:
+
+* ledger export
+* invoice/receipt export
+* report export
+* sensitive export restrictions
+* retention jobs
+* archive rules
+
+Completion gate:
+
+* private contact export is permission-controlled
+* invoices/ledger/disputes are retained according to policy
+* exports are audited
+
+============================================================
+DAY-59 - SCHEDULED JOBS CONSOLIDATION
+============================================================
+
+Goal:
+
+Automate time-based Suchak operations.
+
+Required work:
+
+* overdue payments
+* payout cycles
+* reward qualification
+* consent expiry
+* QR expiry
+* follow-up reminders
+* monthly reports
+* loyalty recalculation
+
+Completion gate:
+
+* jobs are idempotent
+* due/not-due behavior is tested
+* no private contact leak in notifications
+
+============================================================
+DAY-60 - ROLE MATRIX + PRIVACY/SECURITY REGRESSION
+============================================================
+
+Goal:
+
+Prove all new customer/payment/payout surfaces are role-safe.
+
+Required work:
+
+* admin/Suchak/customer/public matrix tests
+* platform customer direct payment blocked tests
+* Suchak customer payment allowed tests
+* payout admin-only tests
+* receipt QR privacy tests
+* marketplace privacy tests
+
+Completion gate:
+
+* protected routes deny wrong roles
+* Suchak-private records do not leak
+* revenue reports do not mix platform and Suchak ledger money
+
+============================================================
+DAY-61 - REAL BROWSER / MOBILE QA
+============================================================
+
+Goal:
+
+Complete hands-on QA for the expanded Suchak engine.
+
+Required personas:
+
+* admin
+* verified Suchak
+* pending Suchak
+* suspended Suchak
+* customer/family portal user
+* regular platform user
+* public visitor
+
+Completion gate:
+
+* mobile layout has no obvious overlap
+* primary flows are usable by non-technical operators
+* QA notes are recorded
+
+============================================================
+DAY-62 - FINAL ADVANCED SUCHAK PRODUCTION READINESS
+============================================================
+
+Goal:
+
+Known internal functional gaps zero, except live external provider credentials.
+
+Required checklist:
+
+* all relevant tests pass
+* full Suchak suite passes
+* route list reviewed
+* migration status reviewed
+* browser/mobile QA complete
+* no fake public claims
+* no double charging path
+* no contact leak
+* no platform revenue confusion
+* final tag/commit/push ready
+
+Completion gate:
+
+* only live external credentials/provider activation may remain pending
+* all internal DB/UI/service/test-mode/payment/invoice/receipt/refund/payout/lead/customer/marketplace flows are complete and tested
+
+END OF PHASE-6 ADVANCED SUCHAK GROWTH AMENDMENT - DAY-32
+############################################################
