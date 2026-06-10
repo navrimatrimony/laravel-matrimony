@@ -16,24 +16,28 @@ class SuchakPlatformPayout extends Model
     public const REASON_PLATFORM_CUSTOMER_PAYMENT_REWARD = 'platform_customer_payment_reward';
     public const REASON_PLATFORM_LEAD_QUALIFICATION = 'platform_lead_qualification';
     public const REASON_PLATFORM_VISIT_REWARD = 'platform_visit_reward';
+    public const REASON_PLATFORM_GROWTH_REWARD = 'platform_growth_reward';
     public const REASON_ADMIN_ADJUSTMENT = 'admin_adjustment';
 
     public const REASONS = [
         self::REASON_PLATFORM_CUSTOMER_PAYMENT_REWARD,
         self::REASON_PLATFORM_LEAD_QUALIFICATION,
         self::REASON_PLATFORM_VISIT_REWARD,
+        self::REASON_PLATFORM_GROWTH_REWARD,
         self::REASON_ADMIN_ADJUSTMENT,
     ];
 
     public const EVENT_PLATFORM_CUSTOMER_PAYMENT = 'platform_customer_payment';
     public const EVENT_PLATFORM_LEAD_ACCEPTED = 'platform_lead_accepted';
     public const EVENT_PLATFORM_VISIT_CONFIRMED = 'platform_visit_confirmed';
+    public const EVENT_PLATFORM_GROWTH_REWARD_CONFIRMED = 'platform_growth_reward_confirmed';
     public const EVENT_ADMIN_CONFIRMED = 'admin_confirmed';
 
     public const PLATFORM_EVENT_TYPES = [
         self::EVENT_PLATFORM_CUSTOMER_PAYMENT,
         self::EVENT_PLATFORM_LEAD_ACCEPTED,
         self::EVENT_PLATFORM_VISIT_CONFIRMED,
+        self::EVENT_PLATFORM_GROWTH_REWARD_CONFIRMED,
         self::EVENT_ADMIN_CONFIRMED,
     ];
 
@@ -174,6 +178,11 @@ class SuchakPlatformPayout extends Model
     public function settlementLine(): HasOne
     {
         return $this->hasOne(SuchakPlatformPayoutSettlementLine::class, 'platform_payout_id');
+    }
+
+    public function growthReward(): HasOne
+    {
+        return $this->hasOne(SuchakGrowthReward::class, 'platform_payout_id');
     }
 
     public function latestDetail(): ?SuchakPlatformPayoutDetail

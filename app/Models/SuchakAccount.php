@@ -216,6 +216,16 @@ class SuchakAccount extends Model
         return $this->hasMany(SuchakVisitConfirmation::class);
     }
 
+    public function growthAttributions(): HasMany
+    {
+        return $this->hasMany(SuchakGrowthAttribution::class);
+    }
+
+    public function growthRewards(): HasMany
+    {
+        return $this->hasMany(SuchakGrowthReward::class);
+    }
+
     public function isVerified(): bool
     {
         return $this->verification_status === self::VERIFICATION_VERIFIED;

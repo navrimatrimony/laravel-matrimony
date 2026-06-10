@@ -195,6 +195,14 @@ class SuchakActivityLog extends Model
 
     public const ACTION_VISIT_PAYOUT_QUALIFIED = 'visit_payout_qualified';
 
+    public const ACTION_GROWTH_ATTRIBUTION_RECORDED = 'growth_attribution_recorded';
+
+    public const ACTION_GROWTH_REWARD_RULE_CREATED = 'growth_reward_rule_created';
+
+    public const ACTION_GROWTH_REWARD_QUALIFIED = 'growth_reward_qualified';
+
+    public const ACTION_GROWTH_REWARD_REVERSED = 'growth_reward_reversed';
+
     protected $table = 'suchak_activity_logs';
 
     protected $fillable = [
