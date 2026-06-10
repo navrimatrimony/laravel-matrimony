@@ -32,6 +32,7 @@
     $paymentCollectorLabels = collect($paymentCollectorOptions)
         ->mapWithKeys(fn (string $collector) => [$collector => ucwords(str_replace('_', ' ', $collector))])
         ->all();
+    $formatAnalyticsMoney = fn ($amount, string $currency = 'INR') => $currency.' '.number_format((float) ($amount ?? 0), 2);
 @endphp
 
 @section('content')
@@ -101,6 +102,151 @@
         </div>
     </div>
 
+    <section id="income-analytics" class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Income Dashboard</h2>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Suchak-scoped value summary from persisted payment, ledger, payout, reward, package, and source records.</p>
+            </div>
+            <span class="inline-flex w-fit rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase text-gray-600 dark:bg-gray-900 dark:text-gray-300">
+                Persisted records only
+            </span>
+        </div>
+
+        <div class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Expected income</div>
+                <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ $formatAnalyticsMoney($incomeAnalytics['customer_ledger']['expected_income_amount'], $incomeAnalytics['currency']) }}</div>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Suchak customer ledger and direct requests.</p>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Received income</div>
+                <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ $formatAnalyticsMoney($incomeAnalytics['customer_ledger']['received_income_amount'], $incomeAnalytics['currency']) }}</div>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Direct Suchak customer payments only.</p>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Pending / overdue</div>
+                <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ $formatAnalyticsMoney($incomeAnalytics['customer_ledger']['pending_amount'], $incomeAnalytics['currency']) }}</div>
+                <p class="mt-1 text-xs text-red-700 dark:text-red-300">Overdue {{ $formatAnalyticsMoney($incomeAnalytics['customer_ledger']['overdue_amount'], $incomeAnalytics['currency']) }}</p>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Net benefit</div>
+                <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ $formatAnalyticsMoney($incomeAnalytics['net_benefit_amount'], $incomeAnalytics['currency']) }}</div>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Customer net + payout due + credits - plan cost.</p>
+            </div>
+        </div>
+
+        <div class="mt-5 grid gap-4 lg:grid-cols-3">
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Platform revenue</h3>
+                <dl class="mt-3 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                    <div class="flex justify-between gap-3">
+                        <dt>Plan payments received</dt>
+                        <dd class="font-semibold text-gray-900 dark:text-gray-100">{{ $formatAnalyticsMoney($incomeAnalytics['platform_revenue']['plan_payment_received_amount'], $incomeAnalytics['currency']) }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                        <dt>Plan cost</dt>
+                        <dd class="font-semibold text-gray-900 dark:text-gray-100">{{ $formatAnalyticsMoney($incomeAnalytics['plan_cost_amount'], $incomeAnalytics['currency']) }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                        <dt>Pending plan payments</dt>
+                        <dd class="font-semibold text-gray-900 dark:text-gray-100">{{ $formatAnalyticsMoney($incomeAnalytics['platform_revenue']['plan_payment_pending_amount'], $incomeAnalytics['currency']) }}</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Payout liability</h3>
+                <dl class="mt-3 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                    <div class="flex justify-between gap-3">
+                        <dt>Platform payout due</dt>
+                        <dd class="font-semibold text-gray-900 dark:text-gray-100">{{ $formatAnalyticsMoney($incomeAnalytics['payout_liability']['due_amount'], $incomeAnalytics['currency']) }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                        <dt>On hold</dt>
+                        <dd class="font-semibold text-gray-900 dark:text-gray-100">{{ $formatAnalyticsMoney($incomeAnalytics['payout_liability']['held_amount'], $incomeAnalytics['currency']) }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                        <dt>Paid</dt>
+                        <dd class="font-semibold text-gray-900 dark:text-gray-100">{{ $formatAnalyticsMoney($incomeAnalytics['payout_liability']['paid_amount'], $incomeAnalytics['currency']) }}</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Referral rewards</h3>
+                <dl class="mt-3 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                    <div class="flex justify-between gap-3">
+                        <dt>Cash rewards</dt>
+                        <dd class="font-semibold text-gray-900 dark:text-gray-100">{{ $formatAnalyticsMoney($incomeAnalytics['referral_rewards']['cash_amount'], $incomeAnalytics['currency']) }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                        <dt>Credits</dt>
+                        <dd class="font-semibold text-gray-900 dark:text-gray-100">{{ $formatAnalyticsMoney($incomeAnalytics['referral_rewards']['credit_value'], $incomeAnalytics['currency']) }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                        <dt>Admin actions</dt>
+                        <dd class="font-semibold text-gray-900 dark:text-gray-100">{{ number_format($incomeAnalytics['referral_rewards']['admin_action_count']) }}</dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+
+        <div class="mt-5 grid gap-4 lg:grid-cols-2">
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Package performance</h3>
+                <div class="mt-3 space-y-3">
+                    @forelse ($incomeAnalytics['package_performance'] as $packageMetric)
+                        <div class="rounded-md bg-white px-3 py-2 text-sm dark:bg-gray-800">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <p class="font-semibold text-gray-900 dark:text-gray-100">{{ $packageMetric['package_name'] }}</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ ucwords(str_replace('_', ' ', $packageMetric['package_status'])) }} · {{ $formatAnalyticsMoney($packageMetric['price_amount'], $incomeAnalytics['currency']) }}</p>
+                                </div>
+                                <div class="text-right text-xs text-gray-600 dark:text-gray-300">
+                                    <div>{{ number_format($packageMetric['request_count']) }} requests</div>
+                                    <div>{{ number_format($packageMetric['payment_count']) }} payments</div>
+                                </div>
+                            </div>
+                            <div class="mt-2 grid gap-2 text-xs text-gray-600 dark:text-gray-300 sm:grid-cols-3">
+                                <div>Requested {{ $formatAnalyticsMoney($packageMetric['requested_amount'], $incomeAnalytics['currency']) }}</div>
+                                <div>Received {{ $formatAnalyticsMoney($packageMetric['received_amount'], $incomeAnalytics['currency']) }}</div>
+                                <div>Balance {{ $formatAnalyticsMoney($packageMetric['balance_amount'], $incomeAnalytics['currency']) }}</div>
+                            </div>
+                        </div>
+                    @empty
+                        <p class="text-sm text-gray-600 dark:text-gray-300">No service packages have persisted payment analytics yet.</p>
+                    @endforelse
+                </div>
+            </div>
+
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Source performance</h3>
+                <div class="mt-3 space-y-3">
+                    @forelse ($incomeAnalytics['source_performance'] as $sourceMetric)
+                        <div class="rounded-md bg-white px-3 py-2 text-sm dark:bg-gray-800">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <p class="font-semibold text-gray-900 dark:text-gray-100">{{ ucwords(str_replace('_', ' ', $sourceMetric['source_type'])) }}</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Owner: {{ ucwords(str_replace('_', ' ', $sourceMetric['source_owner'])) }}</p>
+                                </div>
+                                <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600 dark:bg-gray-900 dark:text-gray-300">
+                                    {{ number_format($sourceMetric['customer_count']) }} customers
+                                </span>
+                            </div>
+                            <div class="mt-2 grid gap-2 text-xs text-gray-600 dark:text-gray-300 sm:grid-cols-2">
+                                <div>Requested {{ $formatAnalyticsMoney($sourceMetric['requested_amount'], $incomeAnalytics['currency']) }}</div>
+                                <div>Received {{ $formatAnalyticsMoney($sourceMetric['received_amount'], $incomeAnalytics['currency']) }}</div>
+                            </div>
+                        </div>
+                    @empty
+                        <p class="text-sm text-gray-600 dark:text-gray-300">No customer source records are available yet.</p>
+                    @endforelse
+                </div>
+            </div>
+        </div>
+    </section>
+
     <section id="daily-opportunities" class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
@@ -142,6 +288,81 @@
                     No deterministic daily opportunities are due right now.
                 </div>
             @endforelse
+        </div>
+    </section>
+
+    <section id="workflow-reminders" class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Workflow Reminders</h2>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Follow-up, payment, consent, and meeting reminder copies with immutable workflow timeline.</p>
+            </div>
+            <span class="inline-flex w-fit rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase text-amber-800 dark:bg-amber-950/50 dark:text-amber-100">
+                Provider pending
+            </span>
+        </div>
+
+        <div class="mt-5 grid gap-4 lg:grid-cols-2">
+            <div>
+                <h3 class="text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Recent reminders</h3>
+                <div class="mt-3 space-y-3">
+                    @forelse ($workflowReminders as $reminder)
+                        <article class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 shadow-sm dark:bg-gray-800 dark:text-gray-200">
+                                    {{ ucwords(str_replace('_', ' ', $reminder->reminder_type)) }}
+                                </span>
+                                <span class="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                                    {{ str_replace('_', ' ', $reminder->provider_status) }}
+                                </span>
+                            </div>
+                            <p class="mt-2 text-sm text-gray-900 dark:text-gray-100">{{ $reminder->message_copy }}</p>
+                            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                Due {{ $reminder->due_at->format('Y-m-d H:i') }} · {{ $reminder->source_type }} #{{ $reminder->source_id }}
+                            </p>
+                        </article>
+                    @empty
+                        <div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                            No workflow reminders have been generated yet.
+                        </div>
+                    @endforelse
+                </div>
+            </div>
+
+            <div>
+                <h3 class="text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Timeline</h3>
+                <div class="mt-3 space-y-3">
+                    @forelse ($workflowTimeline as $event)
+                        <article class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $event->event_title }}</p>
+                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $event->event_summary }}</p>
+                            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                {{ $event->occurred_at->format('Y-m-d H:i') }} · {{ $event->event_type }}
+                            </p>
+                        </article>
+                    @empty
+                        <div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                            No workflow timeline events are recorded yet.
+                        </div>
+                    @endforelse
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-5">
+            <h3 class="text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">WhatsApp copy templates</h3>
+            <div class="mt-3 grid gap-3 md:grid-cols-2">
+                @foreach ($workflowTemplates as $templateKey => $template)
+                    <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $template['label'] }}</span>
+                            <span class="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300">{{ $template['provider_status'] }}</span>
+                        </div>
+                        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{{ $template['body'] }}</p>
+                        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ $templateKey }}</p>
+                    </div>
+                @endforeach
+            </div>
         </div>
     </section>
 

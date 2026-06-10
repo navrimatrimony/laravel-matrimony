@@ -19,9 +19,11 @@ use App\Modules\Suchak\Services\SuchakBillingCatalogService;
 use App\Modules\Suchak\Services\SuchakCandidateMaskingService;
 use App\Modules\Suchak\Services\SuchakDailyOpportunityService;
 use App\Modules\Suchak\Services\SuchakEntitlementService;
+use App\Modules\Suchak\Services\SuchakIncomeAnalyticsService;
 use App\Modules\Suchak\Services\SuchakPaymentStatusService;
 use App\Modules\Suchak\Services\SuchakPolicyService;
 use App\Modules\Suchak\Services\SuchakProfileUpdateSuggestionService;
+use App\Modules\Suchak\Services\SuchakWorkflowAutomationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
@@ -35,9 +37,11 @@ class DashboardController extends Controller
         SuchakCandidateMaskingService $maskingService,
         SuchakDailyOpportunityService $dailyOpportunityService,
         SuchakEntitlementService $entitlementService,
+        SuchakIncomeAnalyticsService $incomeAnalyticsService,
         SuchakPaymentStatusService $paymentStatusService,
         SuchakPolicyService $policyService,
         SuchakProfileUpdateSuggestionService $suggestionService,
+        SuchakWorkflowAutomationService $workflowAutomationService,
     ): View
     {
         $account = $request->user()
@@ -186,6 +190,10 @@ class DashboardController extends Controller
             'recentSuggestions' => $recentSuggestions,
             'activityLogs' => $activityLogs,
             'dailyOpportunities' => $dailyOpportunityService->dailyWorklist($account),
+            'incomeAnalytics' => $incomeAnalyticsService->summary($account),
+            'workflowReminders' => $workflowAutomationService->recentReminders($account),
+            'workflowTimeline' => $workflowAutomationService->recentTimeline($account),
+            'workflowTemplates' => $workflowAutomationService->whatsappTemplateCatalog(),
             'activeSubscription' => $activeSubscription,
             'featureLimits' => $featureLimits,
             'billingUsageSummary' => $billingUsageSummary,
