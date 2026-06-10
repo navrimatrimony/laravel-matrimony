@@ -45,6 +45,7 @@ Route::middleware('auth')
         Route::post('/register/otp/resend', [AccountRequestController::class, 'resendRegistrationOtp'])
             ->middleware('throttle:5,1')
             ->name('register.otp.resend');
+        Route::get('/register/status', [AccountRequestController::class, 'status'])->name('register.status');
     });
 
 Route::middleware(['auth', EnforceCardOnboarding::class])

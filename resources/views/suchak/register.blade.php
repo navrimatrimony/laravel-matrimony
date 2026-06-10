@@ -44,7 +44,7 @@
     @else
         <div class="grid gap-6 lg:grid-cols-[2fr_1fr]">
             <section class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <form id="suchak-register-form" method="POST" action="{{ route('suchak.register.store') }}" class="space-y-5">
+                <form id="suchak-register-form" method="POST" action="{{ route('suchak.register.store') }}" enctype="multipart/form-data" class="space-y-5">
                     @csrf
 
                     <div class="grid gap-4 md:grid-cols-2">
@@ -56,6 +56,7 @@
                         <div>
                             <label for="office_name" class="block text-sm font-semibold text-gray-700 dark:text-gray-300">Office / Bureau name</label>
                             <input id="office_name" name="office_name" value="{{ old('office_name') }}" maxlength="255" class="mt-2 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Bureau किंवा organization असल्यास required.</p>
                         </div>
                     </div>
 
@@ -88,7 +89,21 @@
 
                     <div>
                         <label for="address_line" class="block text-sm font-semibold text-gray-700 dark:text-gray-300">Address</label>
-                        <textarea id="address_line" name="address_line" rows="3" maxlength="1000" class="mt-2 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('address_line') }}</textarea>
+                        <textarea id="address_line" name="address_line" rows="3" required maxlength="1000" class="mt-2 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('address_line') }}</textarea>
+                    </div>
+
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <div>
+                            <label for="identity_document" class="block text-sm font-semibold text-gray-700 dark:text-gray-300">Identity proof</label>
+                            <input id="identity_document" name="identity_document" type="file" required accept=".pdf,.jpg,.jpeg,.png" class="mt-2 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-gray-700 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:file:bg-gray-800 dark:file:text-gray-100">
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Aadhaar, PAN किंवा equivalent ID. PDF/JPG/PNG, max 5 MB.</p>
+                        </div>
+
+                        <div>
+                            <label for="office_document" class="block text-sm font-semibold text-gray-700 dark:text-gray-300">Office / business proof</label>
+                            <input id="office_document" name="office_document" type="file" accept=".pdf,.jpg,.jpeg,.png" class="mt-2 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-gray-700 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:file:bg-gray-800 dark:file:text-gray-100">
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Bureau किंवा organization साठी required. Individual असल्यास optional.</p>
+                        </div>
                     </div>
 
                     <div class="grid gap-4 md:grid-cols-2">
@@ -121,7 +136,7 @@
                     <h2 class="text-lg font-bold text-gray-900 dark:text-gray-100">पुढे काय होईल?</h2>
                     <ol class="mt-4 space-y-3 text-sm leading-6 text-gray-700 dark:text-gray-300">
                         <li>1. Mobile OTP verify.</li>
-                        <li>2. Request admin कडे pending.</li>
+                        <li>2. KYC documents admin review साठी जातील.</li>
                         <li>3. Admin approve.</li>
                         <li>4. Dashboard मधून customer biodata entry.</li>
                     </ol>
@@ -142,6 +157,19 @@
     (function () {
         var form = document.getElementById('suchak-register-form');
         if (!form) return;
+        var businessType = document.getElementById('business_type');
+        var officeDocument = document.getElementById('office_document');
+        var officeName = document.getElementById('office_name');
+        var syncOfficeRequirements = function () {
+            if (!businessType || !officeDocument || !officeName) return;
+            var required = businessType.value === 'bureau' || businessType.value === 'organization';
+            officeDocument.required = required;
+            officeName.required = required;
+        };
+        syncOfficeRequirements();
+        if (businessType) {
+            businessType.addEventListener('change', syncOfficeRequirements);
+        }
         form.addEventListener('submit', function () {
             var button = form.querySelector('button[type="submit"]');
             if (!button || button.dataset.once) return;

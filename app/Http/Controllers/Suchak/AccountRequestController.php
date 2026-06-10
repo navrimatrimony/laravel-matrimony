@@ -28,7 +28,7 @@ class AccountRequestController extends Controller
     {
         $account = $request->user()?->suchakAccount;
         if ($account) {
-            return redirect()->route('suchak.dashboard');
+            return redirect()->route('suchak.register.status');
         }
 
         return view('suchak.register', [
@@ -55,7 +55,15 @@ class AccountRequestController extends Controller
 
         $validated = $request->validate([
             'suchak_name' => ['required', 'string', 'max:255'],
-            'office_name' => ['nullable', 'string', 'max:255'],
+            'office_name' => [
+                Rule::requiredIf(fn (): bool => in_array((string) $request->input('business_type'), [
+                    SuchakAccount::BUSINESS_TYPE_BUREAU,
+                    SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
+                ], true)),
+                'nullable',
+                'string',
+                'max:255',
+            ],
             'business_type' => ['required', 'string', Rule::in([
                 SuchakAccount::BUSINESS_TYPE_INDIVIDUAL,
                 SuchakAccount::BUSINESS_TYPE_BUREAU,
@@ -64,7 +72,18 @@ class AccountRequestController extends Controller
             'mobile_number' => ['required', 'string', 'max:32'],
             'whatsapp_number' => ['nullable', 'string', 'max:32'],
             'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')],
-            'address_line' => ['nullable', 'string', 'max:1000'],
+            'address_line' => ['required', 'string', 'max:1000'],
+            'identity_document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'office_document' => [
+                Rule::requiredIf(fn (): bool => in_array((string) $request->input('business_type'), [
+                    SuchakAccount::BUSINESS_TYPE_BUREAU,
+                    SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
+                ], true)),
+                'nullable',
+                'file',
+                'mimes:pdf,jpg,jpeg,png',
+                'max:5120',
+            ],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
@@ -110,7 +129,7 @@ class AccountRequestController extends Controller
 
         if ($user->mobile_verified_at) {
             return redirect()
-                ->route('suchak.dashboard')
+                ->route('suchak.register.status')
                 ->with('status', 'Mobile number already verified. Your Suchak request is waiting for admin review.');
         }
 
@@ -154,8 +173,26 @@ class AccountRequestController extends Controller
         $registrationService->verifyOtp($user, (string) $validated['otp']);
 
         return redirect()
-            ->route('suchak.dashboard')
+            ->route('suchak.register.status')
             ->with('success', 'Mobile OTP verified. Your Suchak account is now waiting for admin approval.');
+    }
+
+    public function status(Request $request): View|RedirectResponse
+    {
+        $account = $request->user()?->suchakAccount;
+
+        if (! $account) {
+            return redirect()->route('suchak.home');
+        }
+
+        $account->load([
+            'verificationRecords' => fn ($query) => $query->latest('id'),
+        ]);
+
+        return view('suchak.register-status', [
+            'suchakAccount' => $account,
+            'verificationRecords' => $account->verificationRecords,
+        ]);
     }
 
     public function create(): RedirectResponse

@@ -5,9 +5,11 @@ namespace App\Modules\Suchak\Services;
 use App\Models\AdminSetting;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
+use App\Models\SuchakVerificationRecord;
 use App\Models\User;
 use App\Services\Messaging\MetaWhatsAppCloudService;
 use App\Support\MobileNumber;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -59,6 +61,8 @@ class SuchakRegistrationService
                 'public_status' => SuchakAccount::PUBLIC_HIDDEN,
             ]);
 
+            $documentCount = $this->createVerificationRecords($account, $attributes);
+
             $this->activityLogger->record([
                 'suchak_account_id' => $account->id,
                 'actor_user_id' => $user->id,
@@ -71,6 +75,7 @@ class SuchakRegistrationService
                 'metadata_json' => [
                     'source' => 'public_suchak_registration',
                     'mobile_verification_required' => true,
+                    'kyc_document_count' => $documentCount,
                 ],
             ]);
 
@@ -232,5 +237,59 @@ class SuchakRegistrationService
         $value = trim((string) $value);
 
         return $value === '' ? null : $value;
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    private function createVerificationRecords(SuchakAccount $account, array $attributes): int
+    {
+        $count = 0;
+
+        $identityDocument = $attributes['identity_document'] ?? null;
+        if ($identityDocument instanceof UploadedFile) {
+            $this->storeVerificationDocument(
+                $account,
+                $identityDocument,
+                SuchakVerificationRecord::TYPE_IDENTITY,
+                'identity_document',
+            );
+            $count++;
+        }
+
+        $officeDocument = $attributes['office_document'] ?? null;
+        if ($officeDocument instanceof UploadedFile) {
+            $this->storeVerificationDocument(
+                $account,
+                $officeDocument,
+                SuchakVerificationRecord::TYPE_OFFICE,
+                'office_document',
+            );
+            $count++;
+        }
+
+        return $count;
+    }
+
+    private function storeVerificationDocument(
+        SuchakAccount $account,
+        UploadedFile $document,
+        string $verificationType,
+        string $field,
+    ): SuchakVerificationRecord {
+        $path = $document->store('suchak/verification-documents/'.$account->id, 'local');
+
+        if (! is_string($path) || $path === '') {
+            throw ValidationException::withMessages([
+                $field => 'Unable to store Suchak verification document.',
+            ]);
+        }
+
+        return SuchakVerificationRecord::query()->create([
+            'suchak_account_id' => $account->id,
+            'verification_type' => $verificationType,
+            'document_path' => $path,
+            'admin_status' => SuchakVerificationRecord::STATUS_PENDING,
+        ]);
     }
 }

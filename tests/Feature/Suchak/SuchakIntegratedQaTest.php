@@ -265,6 +265,10 @@ class SuchakIntegratedQaTest extends TestCase
     {
         foreach ([
             'suchak.register.info',
+            'suchak.register.verify',
+            'suchak.register.verify.submit',
+            'suchak.register.otp.resend',
+            'suchak.register.status',
             'suchak.apply.create',
             'suchak.apply.store',
             'suchak.dashboard',

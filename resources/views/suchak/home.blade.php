@@ -29,11 +29,19 @@
             <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">Registration नंतर mobile OTP verify करा. Local testing मध्ये OTP page वर दिसतो.</p>
         </a>
 
-        <a href="{{ route('admin.suchak.accounts.index') }}" class="block rounded-lg border border-gray-200 bg-white p-5 shadow-sm hover:border-red-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-red-700">
-            <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Admin</div>
-            <h2 class="mt-2 text-lg font-bold text-gray-900 dark:text-gray-100">Admin Approval</h2>
-            <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">Admin pending Suchak request review करून approve किंवा reject करतो.</p>
+        <a href="{{ auth()->check() ? route('suchak.register.status') : route('login') }}" class="block rounded-lg border border-gray-200 bg-white p-5 shadow-sm hover:border-red-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-red-700">
+            <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Step 3</div>
+            <h2 class="mt-2 text-lg font-bold text-gray-900 dark:text-gray-100">Request Status</h2>
+            <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">OTP, KYC documents आणि admin approval pending आहे का ते इथे बघा.</p>
         </a>
+
+        @if (auth()->user()?->is_admin)
+            <a href="{{ route('admin.suchak.accounts.index') }}" class="block rounded-lg border border-gray-200 bg-white p-5 shadow-sm hover:border-red-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-red-700">
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Admin</div>
+                <h2 class="mt-2 text-lg font-bold text-gray-900 dark:text-gray-100">Admin Approval</h2>
+                <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">Admin pending Suchak request review करून approve किंवा reject करतो.</p>
+            </a>
+        @endif
 
         <a href="{{ route('suchak.dashboard') }}" class="block rounded-lg border border-gray-200 bg-white p-5 shadow-sm hover:border-red-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-red-700">
             <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Work</div>

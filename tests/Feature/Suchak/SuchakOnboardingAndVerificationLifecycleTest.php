@@ -8,8 +8,10 @@ use App\Models\SuchakActivityLog;
 use App\Models\SuchakVerificationRecord;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
@@ -28,6 +30,8 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
 
     public function test_guest_can_register_separate_suchak_account_and_reaches_otp_step(): void
     {
+        Storage::fake('local');
+
         $this->post(route('suchak.register.store'), [
             'suchak_name' => 'Ganesh Suchak',
             'office_name' => 'Ganesh Marriage Bureau',
@@ -36,6 +40,8 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
             'whatsapp_number' => '9876543210',
             'email' => 'ganesh-suchak@example.test',
             'address_line' => 'Pune office',
+            'identity_document' => UploadedFile::fake()->create('identity-proof.pdf', 128, 'application/pdf'),
+            'office_document' => UploadedFile::fake()->create('office-proof.pdf', 128, 'application/pdf'),
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
         ])
@@ -52,6 +58,19 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
         $this->assertSame(SuchakAccount::VERIFICATION_PENDING, $account->verification_status);
         $this->assertSame(SuchakAccount::PUBLIC_HIDDEN, $account->public_status);
 
+        $verificationRecords = SuchakVerificationRecord::query()
+            ->where('suchak_account_id', $account->id)
+            ->get()
+            ->keyBy('verification_type');
+
+        $this->assertCount(2, $verificationRecords);
+        $this->assertSame(SuchakVerificationRecord::STATUS_PENDING, $verificationRecords[SuchakVerificationRecord::TYPE_IDENTITY]->admin_status);
+        $this->assertSame(SuchakVerificationRecord::STATUS_PENDING, $verificationRecords[SuchakVerificationRecord::TYPE_OFFICE]->admin_status);
+        $this->assertNotEmpty($verificationRecords[SuchakVerificationRecord::TYPE_IDENTITY]->document_path);
+        $this->assertNotEmpty($verificationRecords[SuchakVerificationRecord::TYPE_OFFICE]->document_path);
+        Storage::disk('local')->assertExists($verificationRecords[SuchakVerificationRecord::TYPE_IDENTITY]->document_path);
+        Storage::disk('local')->assertExists($verificationRecords[SuchakVerificationRecord::TYPE_OFFICE]->document_path);
+
         $otpPayload = Cache::get('suchak_registration_otp:'.$user->id);
         $this->assertIsArray($otpPayload);
         $this->assertArrayHasKey('hash', $otpPayload);
@@ -63,6 +82,25 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
             'actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
             'action_type' => SuchakActivityLog::ACTION_SUCHAK_ONBOARDING_REQUESTED,
         ]);
+    }
+
+    public function test_bureau_suchak_registration_requires_office_document(): void
+    {
+        Storage::fake('local');
+
+        $this->post(route('suchak.register.store'), [
+            'suchak_name' => 'Missing Office Proof',
+            'office_name' => 'Missing Proof Bureau',
+            'business_type' => SuchakAccount::BUSINESS_TYPE_BUREAU,
+            'mobile_number' => '9876543209',
+            'address_line' => 'Pune office',
+            'identity_document' => UploadedFile::fake()->create('identity-proof.pdf', 128, 'application/pdf'),
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+        ])
+            ->assertSessionHasErrors('office_document');
+
+        $this->assertDatabaseCount('suchak_accounts', 0);
     }
 
     public function test_suchak_registration_otp_verification_marks_mobile_verified_without_profile(): void
@@ -87,11 +125,41 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
             ->post(route('suchak.register.verify.submit'), [
                 'otp' => '123456',
             ])
-            ->assertRedirect(route('suchak.dashboard'));
+            ->assertRedirect(route('suchak.register.status'));
 
         $this->assertNotNull($user->fresh()->mobile_verified_at);
         $this->assertNull($user->fresh()->matrimonyProfile);
         $this->assertNull(Cache::get('suchak_registration_otp:'.$user->id));
+    }
+
+    public function test_suchak_applicant_can_view_registration_status_with_kyc_records(): void
+    {
+        $user = User::factory()->create([
+            'mobile' => '9876543214',
+            'mobile_verified_at' => now(),
+        ]);
+        $account = SuchakAccount::factory()->create([
+            'user_id' => $user->id,
+            'mobile_number' => '9876543214',
+            'verification_status' => SuchakAccount::VERIFICATION_PENDING,
+            'public_status' => SuchakAccount::PUBLIC_HIDDEN,
+        ]);
+        SuchakVerificationRecord::factory()->create([
+            'suchak_account_id' => $account->id,
+            'verification_type' => SuchakVerificationRecord::TYPE_IDENTITY,
+            'document_path' => 'suchak/verification-documents/'.$account->id.'/identity-proof.pdf',
+            'admin_status' => SuchakVerificationRecord::STATUS_PENDING,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('suchak.register.status'))
+            ->assertOk()
+            ->assertSee('Suchak Request Status', false)
+            ->assertSee('Mobile OTP', false)
+            ->assertSee('Verified', false)
+            ->assertSee('KYC Documents', false)
+            ->assertSee('Uploaded', false)
+            ->assertDontSee('suchak/verification-documents/'.$account->id.'/identity-proof.pdf', false);
     }
 
     public function test_authenticated_regular_user_cannot_post_separate_suchak_registration(): void
