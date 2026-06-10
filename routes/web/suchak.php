@@ -23,10 +23,28 @@ Route::get('/r/{token}', [QrScanController::class, 'show'])
     ->where('token', '[A-Za-z0-9]{64}')
     ->name('suchak.qr.show');
 
+Route::get('/suchak', [AccountRequestController::class, 'home'])->name('suchak.home');
+
 Route::prefix('suchak')
     ->name('suchak.')
     ->group(function () {
         Route::get('/register', [AccountRequestController::class, 'registrationInfo'])->name('register.info');
+        Route::post('/register', [AccountRequestController::class, 'storeRegistration'])
+            ->middleware('throttle:5,1')
+            ->name('register.store');
+    });
+
+Route::middleware('auth')
+    ->prefix('suchak')
+    ->name('suchak.')
+    ->group(function () {
+        Route::get('/register/verify', [AccountRequestController::class, 'verify'])->name('register.verify');
+        Route::post('/register/verify', [AccountRequestController::class, 'verifyRegistrationOtp'])
+            ->middleware('throttle:10,1')
+            ->name('register.verify.submit');
+        Route::post('/register/otp/resend', [AccountRequestController::class, 'resendRegistrationOtp'])
+            ->middleware('throttle:5,1')
+            ->name('register.otp.resend');
     });
 
 Route::middleware(['auth', EnforceCardOnboarding::class])

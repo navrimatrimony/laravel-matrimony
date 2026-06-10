@@ -9,6 +9,7 @@ return [
     'home' => 'मुख्यपृष्ठ',
     'discover' => 'शोध',
     'connect' => 'जोडणी',
+    'suchak' => 'सूचक',
     'activity' => 'क्रियाकलाप',
     'upgrade' => 'अपग्रेड',
     'partner_preferences' => 'जोडीदार पसंती',

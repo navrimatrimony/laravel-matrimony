@@ -35,6 +35,12 @@
                     <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ $suchakAccount->mobile_number ?: '-' }}</dd>
                 </div>
                 <div>
+                    <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Mobile OTP</dt>
+                    <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                        {{ $suchakAccount->user?->mobile_verified_at ? 'Verified' : 'Not verified' }}
+                    </dd>
+                </div>
+                <div>
                     <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">WhatsApp</dt>
                     <dd class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ $suchakAccount->whatsapp_number ?: '-' }}</dd>
                 </div>

@@ -8,18 +8,108 @@ use App\Models\SuchakActivityLog;
 use App\Models\SuchakVerificationRecord;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_separate_suchak_registration_placeholder_is_available_without_creating_account(): void
+    public function test_separate_suchak_registration_page_is_available_without_creating_account_on_get(): void
     {
         $this->get(route('suchak.register.info'))
             ->assertOk()
             ->assertSee('Suchak Registration', false)
-            ->assertSee('Suchak registration is separate from regular user accounts.', false);
+            ->assertSee('Register and send OTP', false);
+
+        $this->assertDatabaseCount('suchak_accounts', 0);
+    }
+
+    public function test_guest_can_register_separate_suchak_account_and_reaches_otp_step(): void
+    {
+        $this->post(route('suchak.register.store'), [
+            'suchak_name' => 'Ganesh Suchak',
+            'office_name' => 'Ganesh Marriage Bureau',
+            'business_type' => SuchakAccount::BUSINESS_TYPE_BUREAU,
+            'mobile_number' => '9876543210',
+            'whatsapp_number' => '9876543210',
+            'email' => 'ganesh-suchak@example.test',
+            'address_line' => 'Pune office',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+        ])
+            ->assertRedirect(route('suchak.register.verify'))
+            ->assertSessionHas('suchak_registration_otp_display');
+
+        $this->assertAuthenticated();
+
+        $user = User::query()->where('mobile', '9876543210')->firstOrFail();
+        $account = SuchakAccount::query()->where('user_id', $user->id)->firstOrFail();
+
+        $this->assertNull($user->mobile_verified_at);
+        $this->assertNull($user->matrimonyProfile);
+        $this->assertSame(SuchakAccount::VERIFICATION_PENDING, $account->verification_status);
+        $this->assertSame(SuchakAccount::PUBLIC_HIDDEN, $account->public_status);
+
+        $otpPayload = Cache::get('suchak_registration_otp:'.$user->id);
+        $this->assertIsArray($otpPayload);
+        $this->assertArrayHasKey('hash', $otpPayload);
+        $this->assertNotSame(session('suchak_registration_otp_display'), $otpPayload['hash']);
+
+        $this->assertDatabaseHas('suchak_activity_logs', [
+            'suchak_account_id' => $account->id,
+            'actor_user_id' => $user->id,
+            'actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
+            'action_type' => SuchakActivityLog::ACTION_SUCHAK_ONBOARDING_REQUESTED,
+        ]);
+    }
+
+    public function test_suchak_registration_otp_verification_marks_mobile_verified_without_profile(): void
+    {
+        $user = User::factory()->create([
+            'mobile' => '9876543211',
+            'mobile_verified_at' => null,
+        ]);
+        SuchakAccount::factory()->create([
+            'user_id' => $user->id,
+            'mobile_number' => '9876543211',
+            'verification_status' => SuchakAccount::VERIFICATION_PENDING,
+        ]);
+
+        Cache::put('suchak_registration_otp:'.$user->id, [
+            'hash' => Hash::make('123456'),
+            'attempts' => 0,
+            'mobile' => '9876543211',
+        ], 600);
+
+        $this->actingAs($user)
+            ->post(route('suchak.register.verify.submit'), [
+                'otp' => '123456',
+            ])
+            ->assertRedirect(route('suchak.dashboard'));
+
+        $this->assertNotNull($user->fresh()->mobile_verified_at);
+        $this->assertNull($user->fresh()->matrimonyProfile);
+        $this->assertNull(Cache::get('suchak_registration_otp:'.$user->id));
+    }
+
+    public function test_authenticated_regular_user_cannot_post_separate_suchak_registration(): void
+    {
+        $user = User::factory()->create([
+            'mobile' => '9876543212',
+            'is_admin' => false,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('suchak.register.store'), [
+                'suchak_name' => 'Wrong Suchak Upgrade',
+                'business_type' => SuchakAccount::BUSINESS_TYPE_INDIVIDUAL,
+                'mobile_number' => '9876543213',
+                'password' => 'Password123!',
+                'password_confirmation' => 'Password123!',
+            ])
+            ->assertRedirect(route('suchak.register.info'));
 
         $this->assertDatabaseCount('suchak_accounts', 0);
     }

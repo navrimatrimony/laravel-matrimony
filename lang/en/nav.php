@@ -10,6 +10,7 @@ return [
     'home' => 'Home',
     'discover' => 'Discover',
     'connect' => 'Connect',
+    'suchak' => 'Suchak',
     'activity' => 'Activity',
     'upgrade' => 'Upgrade',
     'partner_preferences' => 'Partner Preferences',

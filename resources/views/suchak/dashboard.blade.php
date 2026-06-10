@@ -64,13 +64,35 @@
     <section class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Quick Actions</h2>
-                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Core Suchak tasks are available from here and from the menu.</p>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Suchak Quick Links</h2>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">नवीन Suchak साठी सर्व मुख्य कामांचे सोपे links.</p>
             </div>
             <div class="flex flex-wrap gap-3">
-                <a href="{{ route('suchak.intakes.create') }}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Create intake source</a>
+                <a href="{{ route('suchak.home') }}" class="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">Suchak Centre</a>
+                <a href="{{ route('suchak.intakes.create') }}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Customer biodata entry</a>
                 <a href="{{ route('suchak.search.index') }}" class="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">Masked search</a>
             </div>
+        </div>
+
+        <div class="mt-5 grid gap-3 md:grid-cols-4">
+            <div class="rounded-md bg-gray-50 p-4 text-sm dark:bg-gray-900">
+                <p class="font-semibold text-gray-900 dark:text-gray-100">1. Account status</p>
+                <p class="mt-2 text-gray-600 dark:text-gray-300">
+                    {{ $suchakAccount->isVerified() ? 'Approved. You can start Suchak work.' : 'Pending. Admin approval is required before customer entry.' }}
+                </p>
+            </div>
+            <a href="{{ route('suchak.intakes.create') }}" class="rounded-md bg-gray-50 p-4 text-sm hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-950">
+                <p class="font-semibold text-gray-900 dark:text-gray-100">2. Customer entry</p>
+                <p class="mt-2 text-gray-600 dark:text-gray-300">Create intake source: customer चा biodata paste किंवा upload करा.</p>
+            </a>
+            <a href="{{ route('suchak.search.index') }}" class="rounded-md bg-gray-50 p-4 text-sm hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-950">
+                <p class="font-semibold text-gray-900 dark:text-gray-100">3. Search</p>
+                <p class="mt-2 text-gray-600 dark:text-gray-300">Masked profiles शोधा, contact leak नाही.</p>
+            </a>
+            <a href="{{ route('suchak.home') }}" class="rounded-md bg-gray-50 p-4 text-sm hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-950">
+                <p class="font-semibold text-gray-900 dark:text-gray-100">4. Help links</p>
+                <p class="mt-2 text-gray-600 dark:text-gray-300">Registration, OTP, admin approval links.</p>
+            </a>
         </div>
     </section>
 

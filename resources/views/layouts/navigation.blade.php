@@ -29,7 +29,7 @@
         && (int) request()->route('matrimony_profile_id') === (int) $mpNav->id;
 
     $navMainSection = 'none';
-    if ($suchakAccountNav && request()->routeIs('suchak.*')) {
+    if (request()->routeIs('suchak.*')) {
         $navMainSection = 'suchak';
     } elseif (request()->routeIs('plans.*')) {
         $navMainSection = 'plans';
@@ -111,14 +111,12 @@
         @endif
     </a>
 
-    @if ($suchakAccountNav)
-        <a href="{{ route('suchak.dashboard') }}" class="{{ $navMainLink($navMainSection === 'suchak') }}">
-            <span class="whitespace-nowrap">Suchak</span>
-            @if ($navMainSection === 'suchak')
-                <span class="{{ $navMainCaret }}" aria-hidden="true"></span>
-            @endif
-        </a>
-    @endif
+    <a href="{{ $suchakAccountNav ? route('suchak.dashboard') : route('suchak.home') }}" class="{{ $navMainLink($navMainSection === 'suchak') }}">
+        <span class="whitespace-nowrap">{{ __('nav.suchak') }}</span>
+        @if ($navMainSection === 'suchak')
+            <span class="{{ $navMainCaret }}" aria-hidden="true"></span>
+        @endif
+    </a>
 
     <a href="{{ route('who-viewed.index') }}" class="{{ $navMainLink($navMainSection === 'activity') }}">
         <span class="whitespace-nowrap">{{ __('nav.activity') }}</span>
@@ -364,13 +362,13 @@
     </div>
 </details>
 
-@auth
-    @if ($suchakAccountNav)
-        <details class="px-2">
-            <summary class="cursor-pointer px-3 py-2 text-white font-medium">
-                Suchak
-            </summary>
-            <div class="ml-3 space-y-1">
+<details class="px-2">
+    <summary class="cursor-pointer px-3 py-2 text-white font-medium">
+        {{ __('nav.suchak') }}
+    </summary>
+    <div class="ml-3 space-y-1">
+        @auth
+            @if ($suchakAccountNav)
                 <x-responsive-nav-link :href="route('suchak.dashboard')" :active="request()->routeIs('suchak.dashboard')">
                     Suchak Dashboard
                 </x-responsive-nav-link>
@@ -382,10 +380,30 @@
                 <x-responsive-nav-link :href="route('suchak.search.index')" :active="request()->routeIs('suchak.search.*')">
                     Masked Search
                 </x-responsive-nav-link>
-            </div>
-        </details>
-    @endif
-@endauth
+            @else
+                <x-responsive-nav-link :href="route('suchak.home')" :active="request()->routeIs('suchak.home')">
+                    Suchak Centre
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('suchak.register.info')" :active="request()->routeIs('suchak.register.*')">
+                    Suchak Registration
+                </x-responsive-nav-link>
+            @endif
+        @else
+            <x-responsive-nav-link :href="route('suchak.home')" :active="request()->routeIs('suchak.home')">
+                Suchak Centre
+            </x-responsive-nav-link>
+
+            <x-responsive-nav-link :href="route('suchak.register.info')" :active="request()->routeIs('suchak.register.*')">
+                Suchak Registration
+            </x-responsive-nav-link>
+
+            <x-responsive-nav-link :href="route('login')">
+                Suchak Login
+            </x-responsive-nav-link>
+        @endauth
+    </div>
+</details>
 
 {{-- Activity --}}
 <details class="px-2">
