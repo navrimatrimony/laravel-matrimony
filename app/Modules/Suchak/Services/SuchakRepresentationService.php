@@ -16,12 +16,13 @@ class SuchakRepresentationService
 {
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
+        private readonly SuchakAccessService $accessService,
     ) {
     }
 
     public function canCreate(SuchakAccount $account): bool
     {
-        return $account->verification_status === SuchakAccount::VERIFICATION_VERIFIED;
+        return $this->accessService->canOperate($account);
     }
 
     public function createPendingFromSourceLink(
@@ -87,9 +88,10 @@ class SuchakRepresentationService
 
     private function assertCanCreate(SuchakAccount $account): void
     {
-        if (! $this->canCreate($account)) {
-            throw new InvalidArgumentException('Only verified Suchak accounts can create profile representations.');
-        }
+        $this->accessService->assertCanOperate(
+            $account,
+            'Only verified Suchak accounts can create profile representations.',
+        );
     }
 
     private function assertSourceLinkMatches(

@@ -6,7 +6,6 @@ use App\Models\MatrimonyProfile;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakPipeline;
 use App\Models\SuchakPipelineEvent;
-use App\Models\SuchakPolicy;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakProfileRequest;
 use App\Models\User;
@@ -16,11 +15,10 @@ use InvalidArgumentException;
 
 class SuchakRequestPipelineService
 {
-    private const REQUEST_SLA_POLICY = 'request_action_sla_hours';
-    private const DEFAULT_REQUEST_SLA_HOURS = 48;
-
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
+        private readonly SuchakAccessService $accessService,
+        private readonly SuchakLimitService $limitService,
     ) {
     }
 
@@ -215,7 +213,7 @@ class SuchakRequestPipelineService
             throw new InvalidArgumentException('Selected representation does not belong to the selected Suchak account.');
         }
 
-        if (! $representation->suchakAccount?->isPubliclyVisible()) {
+        if (! $this->accessService->canPubliclyRoute($representation->suchakAccount)) {
             throw new InvalidArgumentException('Selected Suchak must be verified and publicly active.');
         }
 
@@ -242,20 +240,7 @@ class SuchakRequestPipelineService
 
     private function requestSlaHours(): int
     {
-        $policy = SuchakPolicy::query()
-            ->where('policy_key', self::REQUEST_SLA_POLICY)
-            ->where('is_active', true)
-            ->first();
-
-        if ($policy === null) {
-            return self::DEFAULT_REQUEST_SLA_HOURS;
-        }
-
-        $hours = filter_var($policy->policy_value, FILTER_VALIDATE_INT);
-
-        return is_int($hours) && $hours > 0
-            ? $hours
-            : self::DEFAULT_REQUEST_SLA_HOURS;
+        return $this->limitService->requestActionSlaHours();
     }
 
     private function profileIsActive(?MatrimonyProfile $profile): bool

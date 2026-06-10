@@ -4,7 +4,6 @@ namespace App\Modules\Suchak\Services;
 
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakBiodataExport;
-use App\Models\SuchakPolicy;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakQrToken;
 use App\Models\User;
@@ -14,12 +13,11 @@ use InvalidArgumentException;
 
 class SuchakPdfQrFoundationService
 {
-    private const QR_TOKEN_EXPIRY_POLICY = 'qr_token_expiry_days';
-    private const DEFAULT_QR_TOKEN_EXPIRY_DAYS = 30;
-
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakCandidateMaskingService $candidateMaskingService,
+        private readonly SuchakAccessService $accessService,
+        private readonly SuchakLimitService $limitService,
     ) {
     }
 
@@ -124,7 +122,7 @@ class SuchakPdfQrFoundationService
 
     private function assertExportAllowed(SuchakProfileRepresentation $representation, User $actor): void
     {
-        if (! $representation->suchakAccount?->isVerified()) {
+        if (! $this->accessService->canOperate($representation->suchakAccount)) {
             throw new InvalidArgumentException('Only verified Suchak accounts can create governed PDF/QR exports.');
         }
 
@@ -142,7 +140,7 @@ class SuchakPdfQrFoundationService
         $representation = $qrToken->representation;
         $representation?->loadMissing('suchakAccount');
 
-        if ($representation === null || ! $representation->suchakAccount?->isVerified()) {
+        if ($representation === null || ! $this->accessService->canOperate($representation->suchakAccount)) {
             $this->recordQrActivity($qrToken, SuchakActivityLog::ACTION_QR_SCANNED, 'qr_token_blocked_unverified_suchak');
 
             throw new InvalidArgumentException('QR token is no longer available.');
@@ -157,20 +155,7 @@ class SuchakPdfQrFoundationService
 
     private function qrTokenExpiryDays(): int
     {
-        $policy = SuchakPolicy::query()
-            ->where('policy_key', self::QR_TOKEN_EXPIRY_POLICY)
-            ->where('is_active', true)
-            ->first();
-
-        if ($policy === null) {
-            return self::DEFAULT_QR_TOKEN_EXPIRY_DAYS;
-        }
-
-        $days = filter_var($policy->policy_value, FILTER_VALIDATE_INT);
-
-        return is_int($days) && $days > 0
-            ? $days
-            : self::DEFAULT_QR_TOKEN_EXPIRY_DAYS;
+        return $this->limitService->qrTokenExpiryDays();
     }
 
     private function generateUniqueRawQrToken(): string

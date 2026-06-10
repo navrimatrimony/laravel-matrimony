@@ -6,7 +6,6 @@ use App\Models\AdminAuditLog;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakPlan;
-use App\Models\SuchakPlanFeature;
 use App\Models\SuchakSubscription;
 use App\Models\User;
 use App\Services\AuditLogService;
@@ -19,6 +18,9 @@ class SuchakBillingCatalogService
 {
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
+        private readonly SuchakAccessService $accessService,
+        private readonly SuchakPaymentStatusService $paymentStatusService,
+        private readonly SuchakEntitlementService $entitlementService,
     ) {
     }
 
@@ -127,16 +129,7 @@ class SuchakBillingCatalogService
 
     public function activeSubscriptionFor(SuchakAccount $account, ?CarbonInterface $at = null): ?SuchakSubscription
     {
-        $at ??= now();
-
-        return SuchakSubscription::query()
-            ->where('suchak_account_id', $account->id)
-            ->activeAt($at)
-            ->whereHas('suchakPlan', fn ($query) => $query->where('is_active', true))
-            ->with(['suchakPlan.enabledFeatures'])
-            ->orderByDesc('starts_at')
-            ->orderByDesc('id')
-            ->first();
+        return $this->paymentStatusService->activeSubscriptionFor($account, $at);
     }
 
     /**
@@ -144,50 +137,27 @@ class SuchakBillingCatalogService
      */
     public function currentFeatureLimits(SuchakAccount $account, ?CarbonInterface $at = null): array
     {
-        $subscription = $this->activeSubscriptionFor($account, $at);
-        if ($subscription === null || $subscription->suchakPlan === null) {
-            return [];
-        }
-
-        $limits = [];
-        foreach ($subscription->suchakPlan->enabledFeatures as $feature) {
-            if (! in_array($feature->feature_key, SuchakPlanFeature::FEATURE_KEYS, true)) {
-                continue;
-            }
-
-            $limits[$feature->feature_key] = $feature->typedValue();
-        }
-
-        return $limits;
+        return $this->entitlementService->currentFeatureLimits($account, $at);
     }
 
     public function currentFeatureValue(SuchakAccount $account, string $featureKey, mixed $default = null): mixed
     {
-        if (! in_array($featureKey, SuchakPlanFeature::FEATURE_KEYS, true)) {
-            throw new InvalidArgumentException('Invalid Suchak billing feature key.');
-        }
-
-        $limits = $this->currentFeatureLimits($account);
-
-        return array_key_exists($featureKey, $limits) ? $limits[$featureKey] : $default;
+        return $this->entitlementService->currentFeatureValue($account, $featureKey, $default);
     }
 
     private function assertVerifiedOwner(SuchakAccount $account, User $actor): void
     {
-        if ((int) $account->user_id !== (int) $actor->id) {
-            throw new InvalidArgumentException('Only the owning Suchak account can view Suchak billing catalog.');
-        }
-
-        if (! $account->isVerified()) {
-            throw new InvalidArgumentException('Only verified Suchak accounts can view Suchak billing catalog.');
-        }
+        $this->accessService->assertOwnerCanOperate(
+            $account,
+            $actor,
+            'Only the owning Suchak account can view Suchak billing catalog.',
+            'Only verified Suchak accounts can view Suchak billing catalog.',
+        );
     }
 
     private function assertAdmin(User $admin): void
     {
-        if (! (bool) $admin->is_admin) {
-            throw new InvalidArgumentException('Only admins can manage Suchak billing catalog foundation.');
-        }
+        $this->accessService->assertAdmin($admin, 'Only admins can manage Suchak billing catalog foundation.');
     }
 
     private function assertAssignablePlan(SuchakPlan $plan): void

@@ -19,6 +19,7 @@ class SuchakCrmLedgerService
 {
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
+        private readonly SuchakAccessService $accessService,
     ) {
     }
 
@@ -187,13 +188,12 @@ class SuchakCrmLedgerService
 
     private function assertVerifiedOwner(SuchakAccount $account, User $actor): void
     {
-        if ((int) $account->user_id !== (int) $actor->id) {
-            throw new InvalidArgumentException('Only the owning Suchak account can manage private CRM records.');
-        }
-
-        if (! $account->isVerified()) {
-            throw new InvalidArgumentException('Only verified Suchak accounts can manage private CRM records.');
-        }
+        $this->accessService->assertOwnerCanOperate(
+            $account,
+            $actor,
+            'Only the owning Suchak account can manage private CRM records.',
+            'Only verified Suchak accounts can manage private CRM records.',
+        );
     }
 
     private function optionalPipeline(mixed $pipelineId, SuchakAccount $account, MatrimonyProfile $profile): ?SuchakPipeline

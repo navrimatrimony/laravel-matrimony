@@ -18,6 +18,8 @@ class SuchakConsentService
 
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
+        private readonly SuchakAccessService $accessService,
+        private readonly SuchakPolicyService $policyService,
     ) {
     }
 
@@ -39,6 +41,7 @@ class SuchakConsentService
         $consentType = (string) ($attributes['consent_type'] ?? SuchakConsent::TYPE_ONE_YEAR);
         $consentChannel = (string) ($attributes['consent_channel'] ?? SuchakConsent::CHANNEL_WHATSAPP_DEEP_LINK);
         $this->assertAllowedValue($consentType, SuchakConsent::TYPES, 'Consent type is not allowed.');
+        $this->assertConsentTypeAllowedByPolicy($consentType);
         $this->assertAllowedValue($consentChannel, SuchakConsent::CHANNELS, 'Consent channel is not allowed.');
 
         return DB::transaction(function () use ($representation, $actor, $attributes, $consentType, $consentChannel, $ipAddress, $userAgent): array {
@@ -212,7 +215,7 @@ class SuchakConsentService
 
     private function assertSuchakActor(SuchakProfileRepresentation $representation, User $actor): void
     {
-        if (! $representation->suchakAccount?->isVerified()) {
+        if (! $this->accessService->canOperate($representation->suchakAccount)) {
             throw new InvalidArgumentException('Only verified Suchak accounts can request consent.');
         }
 
@@ -223,7 +226,7 @@ class SuchakConsentService
 
     private function assertConsentSuchakActor(SuchakConsent $consent, User $actor): void
     {
-        if (! $consent->suchakAccount?->isVerified()) {
+        if (! $this->accessService->canOperate($consent->suchakAccount)) {
             throw new InvalidArgumentException('Only verified Suchak accounts can manage consent.');
         }
 
@@ -282,11 +285,22 @@ class SuchakConsentService
     private function validUntilFor(string $consentType, mixed $validFrom): mixed
     {
         return match ($consentType) {
-            SuchakConsent::TYPE_ONE_YEAR => $validFrom->copy()->addYear(),
+            SuchakConsent::TYPE_ONE_YEAR => $validFrom->copy()->addMonths($this->policyService->consentValidityMonths()),
             SuchakConsent::TYPE_TWO_YEAR => $validFrom->copy()->addYears(2),
             SuchakConsent::TYPE_UNTIL_REVOKED => null,
             default => throw new InvalidArgumentException('Consent type is not allowed.'),
         };
+    }
+
+    private function assertConsentTypeAllowedByPolicy(string $consentType): void
+    {
+        if ($consentType === SuchakConsent::TYPE_TWO_YEAR && ! $this->policyService->allowsTwoYearConsent()) {
+            throw new InvalidArgumentException('Two year Suchak consent is disabled by policy.');
+        }
+
+        if ($consentType === SuchakConsent::TYPE_UNTIL_REVOKED && ! $this->policyService->allowsUntilRevokedConsent()) {
+            throw new InvalidArgumentException('Until-revoked Suchak consent is disabled by policy.');
+        }
     }
 
     private function recordEvent(

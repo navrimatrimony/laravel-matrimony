@@ -10,7 +10,10 @@ use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakProfileUpdateSuggestion;
 use App\Modules\Suchak\Services\SuchakBillingCatalogService;
+use App\Modules\Suchak\Services\SuchakAccessService;
 use App\Modules\Suchak\Services\SuchakCandidateMaskingService;
+use App\Modules\Suchak\Services\SuchakEntitlementService;
+use App\Modules\Suchak\Services\SuchakPaymentStatusService;
 use App\Modules\Suchak\Services\SuchakProfileUpdateSuggestionService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -19,8 +22,11 @@ class DashboardController extends Controller
 {
     public function index(
         Request $request,
+        SuchakAccessService $accessService,
         SuchakBillingCatalogService $billingCatalog,
         SuchakCandidateMaskingService $maskingService,
+        SuchakEntitlementService $entitlementService,
+        SuchakPaymentStatusService $paymentStatusService,
         SuchakProfileUpdateSuggestionService $suggestionService,
     ): View
     {
@@ -42,7 +48,7 @@ class DashboardController extends Controller
             ->limit(8)
             ->get();
 
-        $representationCards = $representations->map(function (SuchakProfileRepresentation $representation) use ($account, $maskingService): array {
+        $representationCards = $representations->map(function (SuchakProfileRepresentation $representation) use ($account, $accessService, $maskingService): array {
             $summary = $representation->matrimonyProfile
                 ? $maskingService->maskedSummary($representation->matrimonyProfile, $representation)
                 : [];
@@ -53,8 +59,8 @@ class DashboardController extends Controller
             return [
                 'representation' => $representation,
                 'summary' => $summary,
-                'can_export' => $account->isVerified() && $hasActionableConsent,
-                'can_suggest_updates' => $account->isVerified() && $hasActionableConsent,
+                'can_export' => $accessService->canOperate($account) && $hasActionableConsent,
+                'can_suggest_updates' => $accessService->canOperate($account) && $hasActionableConsent,
             ];
         });
 
@@ -95,15 +101,15 @@ class DashboardController extends Controller
             ->limit(8)
             ->get();
 
-        $activeSubscription = $account->isVerified()
-            ? $billingCatalog->activeSubscriptionFor($account)
+        $activeSubscription = $accessService->canOperate($account)
+            ? $paymentStatusService->activeSubscriptionFor($account)
             : null;
 
         $featureLimits = $activeSubscription
-            ? $billingCatalog->currentFeatureLimits($account)
+            ? $entitlementService->currentFeatureLimits($account)
             : [];
 
-        $catalogPlans = $account->isVerified()
+        $catalogPlans = $accessService->canOperate($account)
             ? $billingCatalog->visibleCatalogForSuchak($account, $request->user())
             : collect();
 

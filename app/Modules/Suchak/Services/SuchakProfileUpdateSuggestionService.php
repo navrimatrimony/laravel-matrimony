@@ -32,6 +32,7 @@ class SuchakProfileUpdateSuggestionService
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
         private readonly MutationService $mutationService,
+        private readonly SuchakAccessService $accessService,
     ) {
     }
 
@@ -330,7 +331,7 @@ class SuchakProfileUpdateSuggestionService
             throw new InvalidArgumentException('Only the owning Suchak account can suggest profile updates.');
         }
 
-        if (! $account->isVerified()) {
+        if (! $this->accessService->canOperate($account)) {
             throw new InvalidArgumentException('Only verified Suchak accounts can suggest profile updates.');
         }
 
@@ -353,7 +354,7 @@ class SuchakProfileUpdateSuggestionService
             throw new InvalidArgumentException('Only the owning Suchak account can manage this update suggestion.');
         }
 
-        if (! $suggestion->suchakAccount?->isVerified()) {
+        if (! $this->accessService->canOperate($suggestion->suchakAccount)) {
             throw new InvalidArgumentException('Only verified Suchak accounts can manage profile update suggestions.');
         }
     }

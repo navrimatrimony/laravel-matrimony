@@ -3,27 +3,27 @@
 namespace App\Modules\Suchak\Services;
 
 use App\Models\BiodataIntake;
-use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
+use App\Models\SuchakAccount;
 use App\Models\SuchakBiodataIntakeLink;
 use App\Models\User;
 use App\Services\Intake\IntakeCreationService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use InvalidArgumentException;
 
 class SuchakSourceLinkService
 {
     public function __construct(
         private readonly IntakeCreationService $intakeCreationService,
         private readonly SuchakActivityLogger $activityLogger,
+        private readonly SuchakAccessService $accessService,
     ) {
     }
 
     public function canCreate(SuchakAccount $account): bool
     {
-        return $account->verification_status === SuchakAccount::VERIFICATION_VERIFIED;
+        return $this->accessService->canOperate($account);
     }
 
     public function createFromIntakeUpload(
@@ -79,8 +79,9 @@ class SuchakSourceLinkService
 
     private function assertCanCreate(SuchakAccount $account): void
     {
-        if (! $this->canCreate($account)) {
-            throw new InvalidArgumentException('Only verified Suchak accounts can create biodata intake source links.');
-        }
+        $this->accessService->assertCanOperate(
+            $account,
+            'Only verified Suchak accounts can create biodata intake source links.',
+        );
     }
 }

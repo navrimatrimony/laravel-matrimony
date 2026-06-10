@@ -9,18 +9,18 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Carbon;
-use InvalidArgumentException;
 
 class SuchakCrossSearchService
 {
     public function __construct(
         private readonly SuchakCandidateMaskingService $maskingService,
+        private readonly SuchakAccessService $accessService,
     ) {
     }
 
     public function canSearch(SuchakAccount $account): bool
     {
-        return $account->verification_status === SuchakAccount::VERIFICATION_VERIFIED;
+        return $this->accessService->canOperate($account);
     }
 
     /**
@@ -29,9 +29,10 @@ class SuchakCrossSearchService
     public function search(SuchakAccount $actorAccount, array $filters = []): LengthAwarePaginator
     {
         $actorAccount->refresh();
-        if (! $this->canSearch($actorAccount)) {
-            throw new InvalidArgumentException('Only verified Suchak accounts can use masked search.');
-        }
+        $this->accessService->assertCanOperate(
+            $actorAccount,
+            'Only verified Suchak accounts can use masked search.',
+        );
 
         $query = SuchakProfileRepresentation::query()
             ->with([

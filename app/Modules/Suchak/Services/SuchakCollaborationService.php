@@ -15,10 +15,10 @@ use InvalidArgumentException;
 
 class SuchakCollaborationService
 {
-    private const TIMEOUT_DAYS = 7;
-
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
+        private readonly SuchakAccessService $accessService,
+        private readonly SuchakLimitService $limitService,
     ) {
     }
 
@@ -69,7 +69,7 @@ class SuchakCollaborationService
                 'status' => SuchakCollaborationRequest::STATUS_PENDING,
                 'message' => $this->nullableLimitedString($attributes['message'] ?? null, 2000),
                 'requested_at' => $requestedAt,
-                'expires_at' => $requestedAt->copy()->addDays(self::TIMEOUT_DAYS),
+                'expires_at' => $requestedAt->copy()->addDays($this->limitService->collaborationSlaDays()),
             ]);
 
             [$groomAccountId, $brideAccountId] = $this->agreementSideAccountIds(
@@ -260,7 +260,7 @@ class SuchakCollaborationService
             throw new InvalidArgumentException('Only the requesting Suchak account owner can create collaboration requests.');
         }
 
-        if (! $requestingAccount->isVerified()) {
+        if (! $this->accessService->canOperate($requestingAccount)) {
             throw new InvalidArgumentException('Only verified Suchak accounts can create collaboration requests.');
         }
 
@@ -298,7 +298,7 @@ class SuchakCollaborationService
             throw new InvalidArgumentException('Collaboration request is not assigned to this Suchak account.');
         }
 
-        if (! $targetAccount->isVerified()) {
+        if (! $this->accessService->canOperate($targetAccount)) {
             throw new InvalidArgumentException('Only verified Suchak accounts can respond to collaboration requests.');
         }
     }
@@ -345,10 +345,10 @@ class SuchakCollaborationService
         }
 
         if ($requirePublicAccount) {
-            return $representation->suchakAccount?->isPubliclyVisible() === true;
+            return $this->accessService->canPubliclyRoute($representation->suchakAccount);
         }
 
-        return $representation->suchakAccount?->isVerified() === true;
+        return $this->accessService->canOperate($representation->suchakAccount);
     }
 
     /**
