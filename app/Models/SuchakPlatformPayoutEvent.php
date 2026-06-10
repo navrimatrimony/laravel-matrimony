@@ -16,11 +16,21 @@ class SuchakPlatformPayoutEvent extends Model
     public const EVENT_QUALIFIED = 'qualified';
     public const EVENT_DETAILS_UPDATED = 'details_updated';
     public const EVENT_STATUS_HELD = 'status_held';
+    public const EVENT_APPROVED = 'approved';
+    public const EVENT_PAID = 'paid';
+    public const EVENT_REVERSED = 'reversed';
+    public const EVENT_CANCELLED = 'cancelled';
+    public const EVENT_SETTLEMENT_REGENERATED = 'settlement_regenerated';
 
     public const EVENTS = [
         self::EVENT_QUALIFIED,
         self::EVENT_DETAILS_UPDATED,
         self::EVENT_STATUS_HELD,
+        self::EVENT_APPROVED,
+        self::EVENT_PAID,
+        self::EVENT_REVERSED,
+        self::EVENT_CANCELLED,
+        self::EVENT_SETTLEMENT_REGENERATED,
     ];
 
     public const ACTOR_ADMIN = 'admin';
@@ -30,6 +40,7 @@ class SuchakPlatformPayoutEvent extends Model
 
     protected $fillable = [
         'platform_payout_id',
+        'settlement_statement_id',
         'suchak_account_id',
         'event_type',
         'actor_type',
@@ -49,6 +60,11 @@ class SuchakPlatformPayoutEvent extends Model
     public function platformPayout(): BelongsTo
     {
         return $this->belongsTo(SuchakPlatformPayout::class, 'platform_payout_id');
+    }
+
+    public function settlementStatement(): BelongsTo
+    {
+        return $this->belongsTo(SuchakPlatformPayoutSettlement::class, 'settlement_statement_id');
     }
 
     public function suchakAccount(): BelongsTo

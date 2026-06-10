@@ -173,6 +173,16 @@ class SuchakActivityLog extends Model
 
     public const ACTION_PLATFORM_PAYOUT_DETAILS_UPDATED = 'platform_payout_details_updated';
 
+    public const ACTION_PLATFORM_PAYOUT_APPROVED = 'platform_payout_approved';
+
+    public const ACTION_PLATFORM_PAYOUT_PAID = 'platform_payout_paid';
+
+    public const ACTION_PLATFORM_PAYOUT_REVERSED = 'platform_payout_reversed';
+
+    public const ACTION_PLATFORM_PAYOUT_CANCELLED = 'platform_payout_cancelled';
+
+    public const ACTION_PLATFORM_PAYOUT_SETTLEMENT_GENERATED = 'platform_payout_settlement_generated';
+
     protected $table = 'suchak_activity_logs';
 
     protected $fillable = [

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\Suchak\AccountVerificationController;
 use App\Http\Controllers\Admin\Suchak\DashboardController;
 use App\Http\Controllers\Admin\Suchak\PlanCatalogController;
+use App\Http\Controllers\Admin\Suchak\PayoutController;
 use App\Http\Controllers\Admin\Suchak\SafetyController;
 use App\Http\Controllers\Admin\Suchak\SettingsController;
 use Illuminate\Support\Facades\Route;
@@ -33,6 +34,12 @@ Route::middleware(['auth', 'admin'])
         Route::post('/plans', [PlanCatalogController::class, 'store'])->name('plans.store');
         Route::put('/plans/{suchakPlan}', [PlanCatalogController::class, 'update'])->name('plans.update');
         Route::post('/plans/accounts/{suchakAccount}/assign', [PlanCatalogController::class, 'assignAccountPlan'])->name('plans.accounts.assign');
+        Route::get('/payouts', [PayoutController::class, 'index'])->name('payouts.index');
+        Route::post('/payouts/settlements/generate', [PayoutController::class, 'generateSettlement'])->name('payouts.settlements.generate');
+        Route::post('/payouts/{payout}/approve', [PayoutController::class, 'approve'])->name('payouts.approve');
+        Route::post('/payouts/{payout}/pay', [PayoutController::class, 'pay'])->name('payouts.pay');
+        Route::post('/payouts/{payout}/reverse', [PayoutController::class, 'reverse'])->name('payouts.reverse');
+        Route::post('/payouts/{payout}/cancel', [PayoutController::class, 'cancel'])->name('payouts.cancel');
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
         Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
         Route::get('/accounts', [AccountVerificationController::class, 'index'])->name('accounts.index');
