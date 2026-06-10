@@ -1,10 +1,13 @@
 <?php
 
 use App\Http\Controllers\Suchak\AccountRequestController;
+use App\Http\Controllers\Suchak\BiodataExportController;
 use App\Http\Controllers\Suchak\CollaborationController;
 use App\Http\Controllers\Suchak\CrossSearchController;
 use App\Http\Controllers\Suchak\DashboardController;
 use App\Http\Controllers\Suchak\IntakeSourceController;
+use App\Http\Controllers\Suchak\ProfileUpdateSuggestionController;
+use App\Http\Controllers\Suchak\QrScanController;
 use App\Http\Middleware\EnforceCardOnboarding;
 use Illuminate\Support\Facades\Route;
 
@@ -12,10 +15,14 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 | Web — Suchak surface (authenticated users)
 |--------------------------------------------------------------------------
-| Phase-6 Day-2: route surface remains placeholder; account foundation gate only.
-| Verification-specific blocking is intentionally deferred.
+| Phase-6 Suchak MVP routes. Verification-specific action blocking remains inside
+| the governed services used by these thin web controllers.
 |--------------------------------------------------------------------------
 */
+Route::get('/r/{token}', [QrScanController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->name('suchak.qr.show');
+
 Route::prefix('suchak')
     ->name('suchak.')
     ->group(function () {
@@ -38,6 +45,12 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
         Route::get('/intakes/create', [IntakeSourceController::class, 'create'])->name('intakes.create');
         Route::post('/intakes', [IntakeSourceController::class, 'store'])->name('intakes.store');
         Route::get('/search', [CrossSearchController::class, 'index'])->name('search.index');
+        Route::post('/representations/{representation}/exports', [BiodataExportController::class, 'store'])
+            ->middleware('throttle:10,1')
+            ->name('representations.exports.store');
+        Route::post('/representations/{representation}/profile-update-suggestions', [ProfileUpdateSuggestionController::class, 'store'])
+            ->middleware('throttle:20,1')
+            ->name('representations.profile-update-suggestions.store');
         Route::post('/collaborations', [CollaborationController::class, 'store'])
             ->middleware('throttle:15,1')
             ->name('collaborations.store');

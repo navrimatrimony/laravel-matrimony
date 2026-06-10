@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 | Web — admin Suchak surface (auth + admin middleware)
 |--------------------------------------------------------------------------
-| Phase-6 Day-1 only: route surface placeholder.
+| Phase-6 Suchak account verification and admin review surface.
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', 'admin'])

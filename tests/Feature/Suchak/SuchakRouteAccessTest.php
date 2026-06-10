@@ -26,7 +26,7 @@ class SuchakRouteAccessTest extends TestCase
             ->assertRedirect(route('dashboard'));
     }
 
-    public function test_authenticated_user_with_suchak_account_can_access_placeholder_dashboard(): void
+    public function test_authenticated_user_with_suchak_account_can_access_dashboard(): void
     {
         $user = User::factory()->create();
         SuchakAccount::factory()->create([

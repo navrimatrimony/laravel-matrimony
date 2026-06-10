@@ -15,6 +15,7 @@
 
 @php
     $mpNav = auth()->check() ? auth()->user()->matrimonyProfile : null;
+    $suchakAccountNav = auth()->check() ? auth()->user()->suchakAccount : null;
     $chatUnreadCount = 0;
     if ($mpNav) {
         $chatUnreadCount = (int) \Illuminate\Support\Facades\DB::table('messages')
@@ -28,7 +29,9 @@
         && (int) request()->route('matrimony_profile_id') === (int) $mpNav->id;
 
     $navMainSection = 'none';
-    if (request()->routeIs('plans.*')) {
+    if ($suchakAccountNav && request()->routeIs('suchak.*')) {
+        $navMainSection = 'suchak';
+    } elseif (request()->routeIs('plans.*')) {
         $navMainSection = 'plans';
     } elseif (request()->routeIs('who-viewed.*')
         || request()->routeIs('notifications.index', 'notifications.show')) {
@@ -107,6 +110,15 @@
             <span class="{{ $navMainCaret }}" aria-hidden="true"></span>
         @endif
     </a>
+
+    @if ($suchakAccountNav)
+        <a href="{{ route('suchak.dashboard') }}" class="{{ $navMainLink($navMainSection === 'suchak') }}">
+            <span class="whitespace-nowrap">Suchak</span>
+            @if ($navMainSection === 'suchak')
+                <span class="{{ $navMainCaret }}" aria-hidden="true"></span>
+            @endif
+        </a>
+    @endif
 
     <a href="{{ route('who-viewed.index') }}" class="{{ $navMainLink($navMainSection === 'activity') }}">
         <span class="whitespace-nowrap">{{ __('nav.activity') }}</span>
@@ -192,6 +204,22 @@
                         <x-dropdown-link :href="route('intake.index')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('nav.my_biodata_uploads') }}
                         </x-dropdown-link>
+
+                        @if ($suchakAccountNav)
+                            <div class="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+                            <div class="block px-4 py-2 text-xs text-gray-500 dark:text-gray-400 font-semibold">
+                                Suchak
+                            </div>
+                            <x-dropdown-link :href="route('suchak.dashboard')" class="hover:bg-gray-100 transition rounded-md">
+                                Suchak Dashboard
+                            </x-dropdown-link>
+                            <x-dropdown-link :href="route('suchak.intakes.create')" class="hover:bg-gray-100 transition rounded-md">
+                                Create Intake Source
+                            </x-dropdown-link>
+                            <x-dropdown-link :href="route('suchak.search.index')" class="hover:bg-gray-100 transition rounded-md">
+                                Masked Search
+                            </x-dropdown-link>
+                        @endif
 
                         <x-dropdown-link :href="route('blocks.index')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('nav.blocked') }}
@@ -335,6 +363,29 @@
         </x-responsive-nav-link>
     </div>
 </details>
+
+@auth
+    @if ($suchakAccountNav)
+        <details class="px-2">
+            <summary class="cursor-pointer px-3 py-2 text-white font-medium">
+                Suchak
+            </summary>
+            <div class="ml-3 space-y-1">
+                <x-responsive-nav-link :href="route('suchak.dashboard')" :active="request()->routeIs('suchak.dashboard')">
+                    Suchak Dashboard
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('suchak.intakes.create')" :active="request()->routeIs('suchak.intakes.*')">
+                    Create Intake Source
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('suchak.search.index')" :active="request()->routeIs('suchak.search.*')">
+                    Masked Search
+                </x-responsive-nav-link>
+            </div>
+        </details>
+    @endif
+@endauth
 
 {{-- Activity --}}
 <details class="px-2">

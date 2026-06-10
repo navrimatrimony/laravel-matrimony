@@ -39,6 +39,9 @@ class SuchakActivityLog extends Model
     public const ACTION_COLLABORATION_REQUEST_EXPIRED = 'collaboration_request_expired';
     public const ACTION_CRM_NOTE_ADDED = 'crm_note_added';
     public const ACTION_LEDGER_ENTRY_CREATED = 'ledger_entry_created';
+    public const ACTION_PROFILE_UPDATE_SUGGESTION_CREATED = 'profile_update_suggestion_created';
+    public const ACTION_PROFILE_UPDATE_SUGGESTION_STATUS_CHANGED = 'profile_update_suggestion_status_changed';
+    public const ACTION_PROFILE_UPDATE_SUGGESTION_APPLIED = 'profile_update_suggestion_applied';
     public const ACTION_BILLING_LIMIT_CHANGED = 'billing_limit_changed';
     public const ACTION_ADMIN_AUDIT_LINKED = 'admin_audit_linked';
 

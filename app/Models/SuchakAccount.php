@@ -116,6 +116,16 @@ class SuchakAccount extends Model
         return $this->hasMany(SuchakLedgerEntry::class);
     }
 
+    public function profileUpdateSuggestions(): HasMany
+    {
+        return $this->hasMany(SuchakProfileUpdateSuggestion::class);
+    }
+
+    public function suchakSubscriptions(): HasMany
+    {
+        return $this->hasMany(SuchakSubscription::class);
+    }
+
     public function isVerified(): bool
     {
         return $this->verification_status === self::VERIFICATION_VERIFIED;

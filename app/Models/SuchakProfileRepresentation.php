@@ -141,6 +141,11 @@ class SuchakProfileRepresentation extends Model
         return $this->hasMany(SuchakCollaborationRequest::class, 'target_representation_id');
     }
 
+    public function profileUpdateSuggestions(): HasMany
+    {
+        return $this->hasMany(SuchakProfileUpdateSuggestion::class, 'representation_id');
+    }
+
     public function hasValidConsent(): bool
     {
         if ($this->consent_status !== self::CONSENT_ACCEPTED) {
