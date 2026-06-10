@@ -36,7 +36,12 @@ class SuchakConsentService
     ): array {
         $representation->refresh()->loadMissing('suchakAccount');
         $this->assertSuchakActor($representation, $actor);
-        $this->assertRepresentationCanRequestConsent($representation);
+        $isRenewal = (bool) ($attributes['_renewal'] ?? false);
+        if ($isRenewal) {
+            $this->assertRepresentationCanRenewConsent($representation);
+        } else {
+            $this->assertRepresentationCanRequestConsent($representation);
+        }
 
         $consentType = (string) ($attributes['consent_type'] ?? SuchakConsent::TYPE_ONE_YEAR);
         $consentChannel = (string) ($attributes['consent_channel'] ?? SuchakConsent::CHANNEL_WHATSAPP_DEEP_LINK);
@@ -44,10 +49,10 @@ class SuchakConsentService
         $this->assertConsentTypeAllowedByPolicy($consentType);
         $this->assertAllowedValue($consentChannel, SuchakConsent::CHANNELS, 'Consent channel is not allowed.');
 
-        return DB::transaction(function () use ($representation, $actor, $attributes, $consentType, $consentChannel, $ipAddress, $userAgent): array {
+        return DB::transaction(function () use ($representation, $actor, $attributes, $consentType, $consentChannel, $ipAddress, $userAgent, $isRenewal): array {
             $openConsent = SuchakConsent::query()
                 ->where('representation_id', $representation->id)
-                ->whereIn('consent_status', SuchakConsent::OPEN_STATUSES)
+                ->whereIn('consent_status', SuchakConsent::PENDING_ACTION_STATUSES)
                 ->lockForUpdate()
                 ->first();
 
@@ -76,15 +81,30 @@ class SuchakConsentService
                 'user_agent' => Str::limit((string) $userAgent, 512, ''),
             ]);
 
-            SuchakProfileRepresentation::query()
-                ->whereKey($representation->id)
-                ->update([
-                    'representation_status' => SuchakProfileRepresentation::STATUS_CONSENT_PENDING,
-                    'consent_status' => SuchakProfileRepresentation::CONSENT_REQUESTED,
-                ]);
+            if (! (bool) ($attributes['_preserve_representation_status'] ?? false)) {
+                SuchakProfileRepresentation::query()
+                    ->whereKey($representation->id)
+                    ->update([
+                        'representation_status' => SuchakProfileRepresentation::STATUS_CONSENT_PENDING,
+                        'consent_status' => SuchakProfileRepresentation::CONSENT_REQUESTED,
+                    ]);
+            }
 
-            $this->recordEvent($consent, SuchakConsentEvent::EVENT_REQUESTED, SuchakConsentEvent::ACTOR_SUCHAK, $actor->id);
-            $this->recordActivity($consent, $actor, SuchakActivityLog::ACTION_CONSENT_REQUESTED, 'consent_requested', $ipAddress, $userAgent);
+            $this->recordEvent(
+                $consent,
+                SuchakConsentEvent::EVENT_REQUESTED,
+                SuchakConsentEvent::ACTOR_SUCHAK,
+                $actor->id,
+                $isRenewal ? 'Consent renewal requested.' : null,
+            );
+            $this->recordActivity(
+                $consent,
+                $actor,
+                $isRenewal ? SuchakActivityLog::ACTION_CONSENT_RENEWED : SuchakActivityLog::ACTION_CONSENT_REQUESTED,
+                $isRenewal ? 'consent_renewal_requested' : 'consent_requested',
+                $ipAddress,
+                $userAgent,
+            );
 
             return [
                 'consent' => $consent->fresh(['representation', 'events']),
@@ -93,13 +113,71 @@ class SuchakConsentService
         });
     }
 
-    public function recordOtpSent(SuchakConsent $consent, string $otp, User $actor): SuchakConsent
-    {
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @return array{consent: SuchakConsent, raw_token: string}
+     */
+    public function renewConsent(
+        SuchakProfileRepresentation $representation,
+        User $actor,
+        array $attributes = [],
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): array {
+        $attributes['_renewal'] = true;
+        $attributes['_preserve_representation_status'] = true;
+
+        return $this->requestConsent($representation, $actor, $attributes, $ipAddress, $userAgent);
+    }
+
+    /**
+     * @return array{consent: SuchakConsent, raw_token: string}
+     */
+    public function resendConsent(
+        SuchakConsent $consent,
+        User $actor,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): array {
         $consent->refresh()->loadMissing('suchakAccount');
         $this->assertConsentSuchakActor($consent, $actor);
         $this->assertConsentCanReceiveOtp($consent);
 
-        return DB::transaction(function () use ($consent, $otp, $actor): SuchakConsent {
+        return DB::transaction(function () use ($consent, $actor, $ipAddress, $userAgent): array {
+            $rawToken = Str::random(64);
+
+            SuchakConsent::query()
+                ->whereKey($consent->id)
+                ->update([
+                    'token_hash' => hash('sha256', $rawToken),
+                    'token_expires_at' => now()->addDays(SuchakConsent::DEFAULT_TOKEN_EXPIRY_DAYS),
+                ]);
+
+            $updated = $consent->fresh(['representation', 'events']);
+            $this->recordEvent($updated, SuchakConsentEvent::EVENT_REQUESTED, SuchakConsentEvent::ACTOR_SUCHAK, $actor->id, 'Consent request resent.');
+            $this->recordActivity($updated, $actor, SuchakActivityLog::ACTION_CONSENT_REQUESTED, 'consent_request_resent', $ipAddress, $userAgent);
+
+            return [
+                'consent' => $updated,
+                'raw_token' => $rawToken,
+            ];
+        });
+    }
+
+    public function recordOtpSent(
+        SuchakConsent $consent,
+        string $otp,
+        User $actor,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): SuchakConsent
+    {
+        $this->assertOtpFormat($otp);
+        $consent->refresh()->loadMissing('suchakAccount');
+        $this->assertConsentSuchakActor($consent, $actor);
+        $this->assertConsentCanReceiveOtp($consent);
+
+        return DB::transaction(function () use ($consent, $otp, $actor, $ipAddress, $userAgent): SuchakConsent {
             SuchakConsent::query()
                 ->whereKey($consent->id)
                 ->update([
@@ -110,6 +188,7 @@ class SuchakConsentService
 
             $updated = $consent->fresh();
             $this->recordEvent($updated, SuchakConsentEvent::EVENT_OTP_SENT, SuchakConsentEvent::ACTOR_SUCHAK, $actor->id);
+            $this->recordActivity($updated, $actor, SuchakActivityLog::ACTION_CONSENT_OTP_SENT, 'consent_otp_sent', $ipAddress, $userAgent);
 
             return $updated;
         });
@@ -120,6 +199,7 @@ class SuchakConsentService
      */
     public function verifyOtpAndAccept(SuchakConsent $consent, string $otp, array $attributes = []): SuchakConsent
     {
+        $this->assertOtpFormat($otp);
         $consent->refresh()->loadMissing('representation');
         $this->assertConsentCanBeAccepted($consent);
 
@@ -164,6 +244,61 @@ class SuchakConsentService
             $this->recordEvent($updated, SuchakConsentEvent::EVENT_OTP_VERIFIED, SuchakConsentEvent::ACTOR_CANDIDATE, null);
             $this->recordEvent($updated, SuchakConsentEvent::EVENT_CONSENT_ACCEPTED, SuchakConsentEvent::ACTOR_CANDIDATE, null);
             $this->recordActivity($updated, null, SuchakActivityLog::ACTION_CONSENT_VERIFIED, 'consent_verified');
+
+            return $updated;
+        });
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    public function acceptManualProof(
+        SuchakConsent $consent,
+        User $actor,
+        array $attributes,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): SuchakConsent {
+        $consent->refresh()->loadMissing(['representation', 'suchakAccount']);
+        $this->assertConsentSuchakActor($consent, $actor);
+        $this->assertManualAcceptanceAllowed($consent);
+
+        $evidenceNote = trim((string) ($attributes['evidence_note'] ?? ''));
+        if (mb_strlen($evidenceNote) < 10) {
+            throw new InvalidArgumentException('Manual consent evidence note is required.');
+        }
+
+        $validFrom = now();
+        $validUntil = $this->validUntilFor($consent->consent_type, $validFrom);
+
+        return DB::transaction(function () use ($consent, $actor, $attributes, $evidenceNote, $validFrom, $validUntil, $ipAddress, $userAgent): SuchakConsent {
+            SuchakConsent::query()
+                ->whereKey($consent->id)
+                ->update([
+                    'consent_status' => SuchakConsent::STATUS_ACCEPTED,
+                    'consent_given_by_name' => $attributes['consent_given_by_name'] ?? $consent->consent_given_by_name,
+                    'relationship_to_candidate' => $attributes['relationship_to_candidate'] ?? $consent->relationship_to_candidate,
+                    'consent_mobile_number' => $attributes['consent_mobile_number'] ?? $consent->consent_mobile_number,
+                    'accepted_at' => $validFrom,
+                    'used_at' => $validFrom,
+                    'valid_from' => $validFrom,
+                    'valid_until' => $validUntil,
+                ]);
+
+            SuchakProfileRepresentation::query()
+                ->whereKey($consent->representation_id)
+                ->update([
+                    'representation_status' => SuchakProfileRepresentation::STATUS_ACTIVE,
+                    'consent_status' => SuchakProfileRepresentation::CONSENT_ACCEPTED,
+                    'first_verified_consent_at' => $consent->representation->first_verified_consent_at ?? $validFrom,
+                    'consent_verified_at' => $validFrom,
+                    'consent_valid_until' => $validUntil,
+                    'revoked_at' => null,
+                ]);
+
+            $updated = $consent->fresh(['representation']);
+            $this->recordEvent($updated, SuchakConsentEvent::EVENT_CONSENT_ACCEPTED, SuchakConsentEvent::ACTOR_SUCHAK, $actor->id, $evidenceNote);
+            $this->recordActivity($updated, $actor, SuchakActivityLog::ACTION_CONSENT_VERIFIED, 'consent_manual_proof_accepted', $ipAddress, $userAgent);
 
             return $updated;
         });
@@ -249,6 +384,17 @@ class SuchakConsentService
         }
     }
 
+    private function assertRepresentationCanRenewConsent(SuchakProfileRepresentation $representation): void
+    {
+        if ($representation->representation_status !== SuchakProfileRepresentation::STATUS_ACTIVE || ! $representation->hasValidConsent()) {
+            throw new InvalidArgumentException('Consent renewal requires active representation with valid consent.');
+        }
+
+        if ($representation->revoked_at !== null || $representation->candidate_deactivated_at !== null) {
+            throw new InvalidArgumentException('Revoked or deactivated representations cannot renew consent.');
+        }
+    }
+
     private function assertConsentCanReceiveOtp(SuchakConsent $consent): void
     {
         if (! in_array($consent->consent_status, [
@@ -257,6 +403,29 @@ class SuchakConsentService
             SuchakConsent::STATUS_OTP_SENT,
         ], true)) {
             throw new InvalidArgumentException('OTP can only be sent for open consent requests.');
+        }
+
+        if ($consent->isTokenExpired()) {
+            throw new InvalidArgumentException('Consent token has expired.');
+        }
+    }
+
+    private function assertManualAcceptanceAllowed(SuchakConsent $consent): void
+    {
+        if (! in_array($consent->consent_status, [
+            SuchakConsent::STATUS_REQUESTED,
+            SuchakConsent::STATUS_LINK_OPENED,
+            SuchakConsent::STATUS_OTP_SENT,
+            SuchakConsent::STATUS_OTP_VERIFIED,
+        ], true)) {
+            throw new InvalidArgumentException('Manual consent can only be accepted for open consent requests.');
+        }
+
+        if (! in_array($consent->consent_channel, [
+            SuchakConsent::CHANNEL_OFFLINE_PROOF,
+            SuchakConsent::CHANNEL_ADMIN_ASSISTED,
+        ], true)) {
+            throw new InvalidArgumentException('Manual consent proof requires offline or admin-assisted channel.');
         }
 
         if ($consent->isTokenExpired()) {
@@ -279,6 +448,13 @@ class SuchakConsentService
 
         if ($consent->otp_attempts >= SuchakConsent::MAX_OTP_ATTEMPTS) {
             throw new InvalidArgumentException('OTP attempt limit exceeded for Suchak consent.');
+        }
+    }
+
+    private function assertOtpFormat(string $otp): void
+    {
+        if (! preg_match('/^[0-9]{6}$/', $otp)) {
+            throw new InvalidArgumentException('Consent OTP must be a 6 digit number.');
         }
     }
 

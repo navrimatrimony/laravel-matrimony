@@ -181,6 +181,100 @@
     </section>
 
     <section class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Consent Evidence</h2>
+        <div class="mt-4 space-y-4">
+            @forelse ($consentEvidence as $consent)
+                <article class="rounded-md border border-gray-200 p-4 text-sm dark:border-gray-700">
+                    <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                        <div>
+                            <p class="font-semibold text-gray-900 dark:text-gray-100">
+                                Consent #{{ $consent->id }} · Representation #{{ $consent->representation_id }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                {{ ucfirst(str_replace('_', ' ', $consent->consent_status)) }}
+                                · {{ ucfirst(str_replace('_', ' ', $consent->consent_type)) }}
+                                · {{ ucfirst(str_replace('_', ' ', $consent->consent_channel)) }}
+                            </p>
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                            Created: {{ $consent->created_at?->format('Y-m-d H:i') }}
+                        </div>
+                    </div>
+
+                    <dl class="mt-4 grid gap-3 md:grid-cols-3">
+                        <div>
+                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Consent giver</dt>
+                            <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ $consent->consent_given_by_name ?: '-' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Relationship</dt>
+                            <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ $consent->relationship_to_candidate ?: '-' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Mobile</dt>
+                            <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ $consent->consent_mobile_number ?: '-' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Valid from</dt>
+                            <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ $consent->valid_from?->format('Y-m-d H:i') ?: '-' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Valid until</dt>
+                            <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ $consent->valid_until?->format('Y-m-d H:i') ?: 'Until revoked / not active' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">OTP evidence</dt>
+                            <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ $consent->otp_hash ? 'Hashed OTP stored' : 'No OTP hash' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Token expiry</dt>
+                            <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ $consent->token_expires_at?->format('Y-m-d H:i') ?: '-' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Accepted</dt>
+                            <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ $consent->accepted_at?->format('Y-m-d H:i') ?: '-' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Revoked</dt>
+                            <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ $consent->revoked_at?->format('Y-m-d H:i') ?: '-' }}</dd>
+                        </div>
+                        @if ($consent->revocation_reason)
+                            <div class="md:col-span-3">
+                                <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Revocation reason</dt>
+                                <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ $consent->revocation_reason }}</dd>
+                            </div>
+                        @endif
+                    </dl>
+
+                    <div class="mt-4 rounded-md bg-gray-50 p-3 dark:bg-gray-900">
+                        <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Consent timeline</p>
+                        <div class="mt-2 space-y-2">
+                            @forelse ($consent->events as $event)
+                                <div>
+                                    <div class="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                                        <span class="font-medium text-gray-900 dark:text-gray-100">{{ ucfirst(str_replace('_', ' ', $event->event_type)) }}</span>
+                                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ $event->created_at?->format('Y-m-d H:i') }}</span>
+                                    </div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                        Actor: {{ $event->actor_type }}{{ $event->actorUser?->email ? ' / '.$event->actorUser->email : '' }}
+                                    </div>
+                                    @if ($event->event_note)
+                                        <div class="mt-1 text-xs text-gray-600 dark:text-gray-300">{{ $event->event_note }}</div>
+                                    @endif
+                                </div>
+                            @empty
+                                <p class="text-xs text-gray-500 dark:text-gray-400">No consent events recorded.</p>
+                            @endforelse
+                        </div>
+                    </div>
+                </article>
+            @empty
+                <p class="text-sm text-gray-500 dark:text-gray-400">No consent evidence recorded yet.</p>
+            @endforelse
+        </div>
+    </section>
+
+    <section class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Recent Suchak Activity</h2>
         <div class="mt-4 space-y-3">
             @forelse ($activityLogs as $activity)

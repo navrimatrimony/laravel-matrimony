@@ -10,6 +10,12 @@
     $fieldLabels = collect($allowedSuggestionFields)
         ->mapWithKeys(fn (string $field) => [$field => ucwords(str_replace('_', ' ', $field))])
         ->all();
+    $consentTypeLabels = collect($consentTypeOptions)
+        ->mapWithKeys(fn (string $type) => [$type => ucwords(str_replace('_', ' ', $type))])
+        ->all();
+    $consentChannelLabels = collect($consentChannelOptions)
+        ->mapWithKeys(fn (string $channel) => [$channel => ucwords(str_replace('_', ' ', $channel))])
+        ->all();
 @endphp
 
 @section('content')
@@ -121,6 +127,10 @@
                         @php
                             $representation = $card['representation'];
                             $summary = $card['summary'];
+                            $latestConsent = $card['latest_consent'];
+                            $pendingConsent = $card['pending_consent'];
+                            $acceptedConsent = $card['accepted_consent'];
+                            $consentTimeline = $card['consent_timeline'];
                         @endphp
                         <article class="p-5">
                             <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -147,9 +157,117 @@
                                             <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Profile state</dt>
                                             <dd>{{ ucfirst((string) ($representation->matrimonyProfile?->lifecycle_state ?? 'unknown')) }}</dd>
                                         </div>
+                                        <div>
+                                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Consent valid until</dt>
+                                            <dd>{{ $representation->consent_valid_until?->format('Y-m-d H:i') ?: ($representation->consent_status === \App\Models\SuchakProfileRepresentation::CONSENT_ACCEPTED ? 'Until revoked' : 'Not active') }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Latest consent</dt>
+                                            <dd>{{ $latestConsent ? ucfirst(str_replace('_', ' ', $latestConsent->consent_status)).' / '.ucwords(str_replace('_', ' ', $latestConsent->consent_channel)) : 'Not requested' }}</dd>
+                                        </div>
                                     </dl>
+
+                                    @if ($consentTimeline->isNotEmpty())
+                                        <div class="mt-4 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs dark:border-gray-700 dark:bg-gray-900">
+                                            <p class="font-semibold text-gray-700 dark:text-gray-200">Consent timeline</p>
+                                            <div class="mt-2 space-y-1">
+                                                @foreach ($consentTimeline as $event)
+                                                    <div class="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
+                                                        <span class="text-gray-700 dark:text-gray-300">{{ ucfirst(str_replace('_', ' ', $event->event_type)) }} · {{ $event->actor_type }}</span>
+                                                        <span class="text-gray-500 dark:text-gray-400">{{ $event->created_at?->format('Y-m-d H:i') }}</span>
+                                                    </div>
+                                                    @if ($event->event_note)
+                                                        <div class="text-gray-500 dark:text-gray-400">{{ $event->event_note }}</div>
+                                                    @endif
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    @endif
                                 </div>
                                 <div class="flex min-w-[16rem] flex-col gap-3">
+                                    @if ($card['can_request_consent'] || $card['can_renew_consent'])
+                                        <form method="POST" action="{{ $card['can_renew_consent'] ? route('suchak.representations.consents.renew', $representation) : route('suchak.representations.consents.request', $representation) }}" class="space-y-2 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900">
+                                            @csrf
+                                            <label class="sr-only" for="consent_type_{{ $representation->id }}">Consent type</label>
+                                            <select id="consent_type_{{ $representation->id }}" name="consent_type" required class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                                @foreach ($consentTypeLabels as $type => $label)
+                                                    <option value="{{ $type }}">{{ $label }}</option>
+                                                @endforeach
+                                            </select>
+                                            <label class="sr-only" for="consent_channel_{{ $representation->id }}">Consent channel</label>
+                                            <select id="consent_channel_{{ $representation->id }}" name="consent_channel" required class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                                @foreach ($consentChannelLabels as $channel => $label)
+                                                    <option value="{{ $channel }}">{{ $label }}</option>
+                                                @endforeach
+                                            </select>
+                                            <input name="consent_given_by_name" maxlength="255" placeholder="Consent giver name" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                            <input name="relationship_to_candidate" maxlength="255" placeholder="Relationship" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                            <input name="consent_mobile_number" maxlength="20" placeholder="Mobile number" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                            <button type="submit" class="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+                                                {{ $card['can_renew_consent'] ? 'Renew consent' : 'Request consent' }}
+                                            </button>
+                                        </form>
+                                    @endif
+
+                                    @if ($pendingConsent)
+                                        @php
+                                            $manualConsentChannel = in_array($pendingConsent->consent_channel, [\App\Models\SuchakConsent::CHANNEL_OFFLINE_PROOF, \App\Models\SuchakConsent::CHANNEL_ADMIN_ASSISTED], true);
+                                        @endphp
+                                        <div class="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30">
+                                            <div class="text-xs font-semibold uppercase text-amber-900 dark:text-amber-100">Open consent #{{ $pendingConsent->id }}</div>
+                                            <p class="text-xs text-amber-900 dark:text-amber-100">
+                                                {{ $consentChannelLabels[$pendingConsent->consent_channel] ?? ucfirst(str_replace('_', ' ', $pendingConsent->consent_channel)) }}
+                                                · {{ ucfirst(str_replace('_', ' ', $pendingConsent->consent_status)) }}
+                                            </p>
+                                            <form method="POST" action="{{ route('suchak.consents.resend', $pendingConsent) }}">
+                                                @csrf
+                                                <button type="submit" class="w-full rounded-md border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-100 dark:hover:bg-amber-900">
+                                                    Resend request
+                                                </button>
+                                            </form>
+                                            @unless ($manualConsentChannel)
+                                                <form method="POST" action="{{ route('suchak.consents.send-otp', $pendingConsent) }}" class="space-y-2">
+                                                    @csrf
+                                                    <input name="otp" required inputmode="numeric" minlength="6" maxlength="6" placeholder="6 digit OTP" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                                    <button type="submit" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">
+                                                        Record OTP sent
+                                                    </button>
+                                                </form>
+                                                <form method="POST" action="{{ route('suchak.consents.verify-otp', $pendingConsent) }}" class="space-y-2">
+                                                    @csrf
+                                                    <input name="otp" required inputmode="numeric" minlength="6" maxlength="6" placeholder="Verify OTP" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                                    <input name="consent_given_by_name" maxlength="255" placeholder="Consent giver name" value="{{ $pendingConsent->consent_given_by_name }}" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                                    <input name="relationship_to_candidate" maxlength="255" placeholder="Relationship" value="{{ $pendingConsent->relationship_to_candidate }}" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                                    <input name="consent_mobile_number" maxlength="20" placeholder="Mobile number" value="{{ $pendingConsent->consent_mobile_number }}" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                                    <button type="submit" class="w-full rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+                                                        Verify consent
+                                                    </button>
+                                                </form>
+                                            @else
+                                                <form method="POST" action="{{ route('suchak.consents.manual-accept', $pendingConsent) }}" class="space-y-2">
+                                                    @csrf
+                                                    <input name="consent_given_by_name" maxlength="255" placeholder="Consent giver name" value="{{ $pendingConsent->consent_given_by_name }}" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                                    <input name="relationship_to_candidate" maxlength="255" placeholder="Relationship" value="{{ $pendingConsent->relationship_to_candidate }}" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                                    <input name="consent_mobile_number" maxlength="20" placeholder="Mobile number" value="{{ $pendingConsent->consent_mobile_number }}" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                                    <textarea name="evidence_note" rows="2" required minlength="10" maxlength="1000" placeholder="Evidence note" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"></textarea>
+                                                    <button type="submit" class="w-full rounded-md bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800">
+                                                        Accept manual proof
+                                                    </button>
+                                                </form>
+                                            @endunless
+                                        </div>
+                                    @endif
+
+                                    @if ($card['can_revoke_consent'] && $acceptedConsent)
+                                        <form method="POST" action="{{ route('suchak.consents.revoke', $acceptedConsent) }}" class="space-y-2 rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/30">
+                                            @csrf
+                                            <textarea name="reason" rows="2" required minlength="10" maxlength="500" placeholder="Revocation reason" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"></textarea>
+                                            <button type="submit" class="w-full rounded-md border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-950/50">
+                                                Revoke consent
+                                            </button>
+                                        </form>
+                                    @endif
+
                                     <form method="POST" action="{{ route('suchak.representations.exports.store', $representation) }}">
                                         @csrf
                                         <button type="submit" @disabled(! $card['can_export']) class="w-full rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600 dark:disabled:bg-gray-700 dark:disabled:text-gray-300">

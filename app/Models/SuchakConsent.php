@@ -40,6 +40,13 @@ class SuchakConsent extends Model
         self::STATUS_ACCEPTED,
     ];
 
+    public const PENDING_ACTION_STATUSES = [
+        self::STATUS_REQUESTED,
+        self::STATUS_LINK_OPENED,
+        self::STATUS_OTP_SENT,
+        self::STATUS_OTP_VERIFIED,
+    ];
+
     public const TYPE_ONE_YEAR = 'one_year';
     public const TYPE_TWO_YEAR = 'two_year';
     public const TYPE_UNTIL_REVOKED = 'until_revoked';

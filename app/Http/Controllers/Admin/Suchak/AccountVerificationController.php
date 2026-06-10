@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin\Suchak;
 use App\Http\Controllers\Controller;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
+use App\Models\SuchakConsent;
 use App\Models\SuchakVerificationRecord;
 use App\Modules\Suchak\Services\SuchakAccountLifecycleService;
 use Illuminate\Http\RedirectResponse;
@@ -57,9 +58,17 @@ class AccountVerificationController extends Controller
             ->limit(20)
             ->get();
 
+        $consentEvidence = SuchakConsent::query()
+            ->with(['events.actorUser', 'representation'])
+            ->where('suchak_account_id', $suchakAccount->id)
+            ->latest()
+            ->limit(20)
+            ->get();
+
         return view('admin.suchak.accounts.show', [
             'suchakAccount' => $suchakAccount,
             'activityLogs' => $activityLogs,
+            'consentEvidence' => $consentEvidence,
         ]);
     }
 

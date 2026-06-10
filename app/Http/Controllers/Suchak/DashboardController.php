@@ -7,6 +7,7 @@ use App\Models\SuchakActivityLog;
 use App\Models\SuchakBiodataExport;
 use App\Models\SuchakBiodataIntakeLink;
 use App\Models\SuchakCollaborationRequest;
+use App\Models\SuchakConsent;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakProfileUpdateSuggestion;
 use App\Modules\Suchak\Services\SuchakBillingCatalogService;
@@ -43,6 +44,7 @@ class DashboardController extends Controller
                 'matrimonyProfile.caste',
                 'matrimonyProfile.location.parent.parent.parent',
                 'matrimonyProfile.occupationMaster',
+                'consents.events.actorUser',
             ])
             ->latest()
             ->limit(8)
@@ -55,12 +57,41 @@ class DashboardController extends Controller
 
             $hasActionableConsent = $representation->representation_status === SuchakProfileRepresentation::STATUS_ACTIVE
                 && $representation->hasValidConsent();
+            $canOperate = $accessService->canOperate($account);
+            $consents = $representation->consents->sortByDesc('created_at')->values();
+            $pendingConsent = $consents
+                ->first(fn (SuchakConsent $consent): bool => in_array($consent->consent_status, SuchakConsent::PENDING_ACTION_STATUSES, true));
+            $acceptedConsent = $consents
+                ->first(fn (SuchakConsent $consent): bool => $consent->consent_status === SuchakConsent::STATUS_ACCEPTED && $consent->revoked_at === null);
+            $latestConsent = $consents->first();
+            $consentTimeline = $consents
+                ->flatMap(fn (SuchakConsent $consent) => $consent->events)
+                ->sortByDesc('created_at')
+                ->take(6)
+                ->values();
 
             return [
                 'representation' => $representation,
                 'summary' => $summary,
-                'can_export' => $accessService->canOperate($account) && $hasActionableConsent,
-                'can_suggest_updates' => $accessService->canOperate($account) && $hasActionableConsent,
+                'latest_consent' => $latestConsent,
+                'pending_consent' => $pendingConsent,
+                'accepted_consent' => $acceptedConsent,
+                'consent_timeline' => $consentTimeline,
+                'can_export' => $canOperate && $hasActionableConsent,
+                'can_request_consent' => $canOperate
+                    && $pendingConsent === null
+                    && in_array($representation->representation_status, [
+                        SuchakProfileRepresentation::STATUS_PENDING,
+                        SuchakProfileRepresentation::STATUS_CONSENT_PENDING,
+                    ], true)
+                    && $representation->revoked_at === null
+                    && $representation->candidate_deactivated_at === null,
+                'can_renew_consent' => $canOperate
+                    && $pendingConsent === null
+                    && $representation->representation_status === SuchakProfileRepresentation::STATUS_ACTIVE
+                    && $representation->hasValidConsent(),
+                'can_revoke_consent' => $canOperate && $acceptedConsent !== null && $representation->hasValidConsent(),
+                'can_suggest_updates' => $canOperate && $hasActionableConsent,
             ];
         });
 
@@ -125,6 +156,8 @@ class DashboardController extends Controller
             'featureLimits' => $featureLimits,
             'catalogPlans' => $catalogPlans,
             'allowedSuggestionFields' => $suggestionService->allowedCoreFieldKeys(),
+            'consentChannelOptions' => SuchakConsent::CHANNELS,
+            'consentTypeOptions' => SuchakConsent::TYPES,
             'stats' => [
                 'representations_total' => $account->profileRepresentations()->count(),
                 'representations_active' => $account->profileRepresentations()->withValidConsent()->count(),

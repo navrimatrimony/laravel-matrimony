@@ -3,6 +3,7 @@
 use App\Http\Controllers\Suchak\AccountRequestController;
 use App\Http\Controllers\Suchak\BiodataExportController;
 use App\Http\Controllers\Suchak\CollaborationController;
+use App\Http\Controllers\Suchak\ConsentController;
 use App\Http\Controllers\Suchak\CrossSearchController;
 use App\Http\Controllers\Suchak\DashboardController;
 use App\Http\Controllers\Suchak\IntakeSourceController;
@@ -67,6 +68,27 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
         Route::post('/representations/{representation}/exports', [BiodataExportController::class, 'store'])
             ->middleware('throttle:10,1')
             ->name('representations.exports.store');
+        Route::post('/representations/{representation}/consents', [ConsentController::class, 'request'])
+            ->middleware('throttle:10,1')
+            ->name('representations.consents.request');
+        Route::post('/representations/{representation}/consents/renew', [ConsentController::class, 'renew'])
+            ->middleware('throttle:10,1')
+            ->name('representations.consents.renew');
+        Route::post('/consents/{consent}/resend', [ConsentController::class, 'resend'])
+            ->middleware('throttle:10,1')
+            ->name('consents.resend');
+        Route::post('/consents/{consent}/send-otp', [ConsentController::class, 'sendOtp'])
+            ->middleware('throttle:10,1')
+            ->name('consents.send-otp');
+        Route::post('/consents/{consent}/verify-otp', [ConsentController::class, 'verifyOtp'])
+            ->middleware('throttle:10,1')
+            ->name('consents.verify-otp');
+        Route::post('/consents/{consent}/manual-accept', [ConsentController::class, 'acceptManual'])
+            ->middleware('throttle:10,1')
+            ->name('consents.manual-accept');
+        Route::post('/consents/{consent}/revoke', [ConsentController::class, 'revoke'])
+            ->middleware('throttle:10,1')
+            ->name('consents.revoke');
         Route::get('/exports/{export}/download', [BiodataExportController::class, 'download'])
             ->middleware('throttle:30,1')
             ->name('exports.download');
