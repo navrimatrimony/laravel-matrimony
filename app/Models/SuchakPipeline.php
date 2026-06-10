@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use RuntimeException;
 
 class SuchakPipeline extends Model
@@ -81,6 +82,11 @@ class SuchakPipeline extends Model
     public function events(): HasMany
     {
         return $this->hasMany(SuchakPipelineEvent::class, 'pipeline_id');
+    }
+
+    public function visitConfirmation(): HasOne
+    {
+        return $this->hasOne(SuchakVisitConfirmation::class, 'pipeline_id');
     }
 
     public function isPastSla(?CarbonInterface $at = null): bool

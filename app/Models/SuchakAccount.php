@@ -211,6 +211,11 @@ class SuchakAccount extends Model
         return $this->hasMany(SuchakPlatformPayoutSettlement::class);
     }
 
+    public function visitConfirmations(): HasMany
+    {
+        return $this->hasMany(SuchakVisitConfirmation::class);
+    }
+
     public function isVerified(): bool
     {
         return $this->verification_status === self::VERIFICATION_VERIFIED;

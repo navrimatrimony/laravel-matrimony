@@ -17,6 +17,7 @@ class SuchakDispute extends Model
     public const TYPE_PAYMENT_LEDGER = 'payment_ledger';
     public const TYPE_ABUSE_REPORT = 'abuse_report';
     public const TYPE_DIRECT_PAYMENT_REQUEST = 'direct_payment_request';
+    public const TYPE_VISIT_CONFIRMATION = 'visit_confirmation';
     public const TYPE_OTHER = 'other';
 
     public const TYPES = [
@@ -25,6 +26,7 @@ class SuchakDispute extends Model
         self::TYPE_PAYMENT_LEDGER,
         self::TYPE_ABUSE_REPORT,
         self::TYPE_DIRECT_PAYMENT_REQUEST,
+        self::TYPE_VISIT_CONFIRMATION,
         self::TYPE_OTHER,
     ];
 
@@ -62,10 +64,12 @@ class SuchakDispute extends Model
 
     public const RISK_SOURCE_ADMIN_CASE = 'admin_case';
     public const RISK_SOURCE_CUSTOMER_DIRECT_PAYMENT_REPORT = 'customer_direct_payment_report';
+    public const RISK_SOURCE_VISIT_CONFIRMATION_DISPUTE = 'visit_confirmation_dispute';
 
     public const RISK_SOURCES = [
         self::RISK_SOURCE_ADMIN_CASE,
         self::RISK_SOURCE_CUSTOMER_DIRECT_PAYMENT_REPORT,
+        self::RISK_SOURCE_VISIT_CONFIRMATION_DISPUTE,
     ];
 
     protected $table = 'suchak_disputes';

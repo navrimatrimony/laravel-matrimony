@@ -183,6 +183,18 @@ class SuchakActivityLog extends Model
 
     public const ACTION_PLATFORM_PAYOUT_SETTLEMENT_GENERATED = 'platform_payout_settlement_generated';
 
+    public const ACTION_VISIT_SCHEDULED = 'visit_scheduled';
+
+    public const ACTION_VISIT_COMPLETION_MARKED = 'visit_completion_marked';
+
+    public const ACTION_VISIT_USER_CONFIRMED = 'visit_user_confirmed';
+
+    public const ACTION_VISIT_ADMIN_CONFIRMED = 'visit_admin_confirmed';
+
+    public const ACTION_VISIT_DISPUTED = 'visit_disputed';
+
+    public const ACTION_VISIT_PAYOUT_QUALIFIED = 'visit_payout_qualified';
+
     protected $table = 'suchak_activity_logs';
 
     protected $fillable = [

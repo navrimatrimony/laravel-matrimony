@@ -12,9 +12,11 @@ class SuchakPayoutHold extends Model
     use HasFactory;
 
     public const SCOPE_DIRECT_PAYMENT_RISK = 'direct_payment_risk';
+    public const SCOPE_VISIT_CONFIRMATION_DISPUTE = 'visit_confirmation_dispute';
 
     public const SCOPES = [
         self::SCOPE_DIRECT_PAYMENT_RISK,
+        self::SCOPE_VISIT_CONFIRMATION_DISPUTE,
     ];
 
     public const STATUS_ACTIVE = 'active';

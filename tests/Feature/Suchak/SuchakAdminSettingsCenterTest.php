@@ -22,6 +22,7 @@ class SuchakAdminSettingsCenterTest extends TestCase
             ->assertOk()
             ->assertSee('Suchak Settings Center', false)
             ->assertSee('Platform payment mode', false)
+            ->assertSee('Visit payout confirmation policy', false)
             ->assertSee('Commission Rules', false)
             ->assertSee(route('admin.suchak.settings.update'), false);
     }
@@ -53,6 +54,12 @@ class SuchakAdminSettingsCenterTest extends TestCase
             'value_type' => SuchakPolicy::TYPE_STRING,
             'is_active' => true,
         ]);
+        $this->assertDatabaseHas('suchak_policies', [
+            'policy_key' => SuchakPolicyService::KEY_SUCHAK_VISIT_CONFIRMATION_POLICY_MODE,
+            'policy_value' => 'admin_only',
+            'value_type' => SuchakPolicy::TYPE_STRING,
+            'is_active' => true,
+        ]);
 
         $commissionRules = app(SuchakPolicyService::class)->commissionRules();
         $this->assertSame('percentage', $commissionRules['mode']);
@@ -67,6 +74,7 @@ class SuchakAdminSettingsCenterTest extends TestCase
         $this->assertSame(3, $policyService->gracePeriodDays());
         $this->assertSame('free_trial_then_manual', $policyService->planPricingMode());
         $this->assertSame('payu_test_mode', $policyService->paymentMode());
+        $this->assertSame('admin_only', $policyService->visitConfirmationPolicyMode());
 
         $this->assertDatabaseHas('admin_audit_logs', [
             'admin_id' => $admin->id,
@@ -89,6 +97,7 @@ class SuchakAdminSettingsCenterTest extends TestCase
             'request_action_sla_hours' => 0,
             'qr_token_expiry_days' => 366,
             'suchak_payment_mode' => 'unknown',
+            'suchak_visit_confirmation_policy_mode' => 'unknown',
         ]);
 
         $this->actingAs($admin)
@@ -99,6 +108,7 @@ class SuchakAdminSettingsCenterTest extends TestCase
                 'request_action_sla_hours',
                 'qr_token_expiry_days',
                 'suchak_payment_mode',
+                'suchak_visit_confirmation_policy_mode',
             ]);
 
         $this->assertDatabaseHas('suchak_policies', [
@@ -131,6 +141,7 @@ class SuchakAdminSettingsCenterTest extends TestCase
             'suchak_grace_period_days' => 3,
             'suchak_plan_pricing_mode' => 'free_trial_then_manual',
             'suchak_payment_mode' => 'payu_test_mode',
+            'suchak_visit_confirmation_policy_mode' => 'admin_only',
             'commission_mode' => 'percentage',
             'commission_default_percent' => 15,
             'commission_default_amount' => 2500,

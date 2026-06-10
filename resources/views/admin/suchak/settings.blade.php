@@ -120,6 +120,15 @@
                     <label for="suchak_grace_period_days" class="{{ $labelClass }}">Grace period days</label>
                     <input id="suchak_grace_period_days" type="number" name="suchak_grace_period_days" min="0" max="365" value="{{ old('suchak_grace_period_days', $current['suchak_grace_period_days'] ?? 0) }}" class="{{ $fieldClass }} mt-1">
                 </div>
+                <div class="md:col-span-2">
+                    <label for="suchak_visit_confirmation_policy_mode" class="{{ $labelClass }}">Visit payout confirmation policy</label>
+                    <select id="suchak_visit_confirmation_policy_mode" name="suchak_visit_confirmation_policy_mode" class="{{ $fieldClass }} mt-1">
+                        @foreach ($visitConfirmationModes as $value => $label)
+                            <option value="{{ $value }}" @selected(old('suchak_visit_confirmation_policy_mode', $current['suchak_visit_confirmation_policy_mode'] ?? 'user_and_admin') === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                    <p class="{{ $helpClass }}">Controls which confirmations are required before a platform visit payout can be qualified.</p>
+                </div>
             </div>
         </section>
 

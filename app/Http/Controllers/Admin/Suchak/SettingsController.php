@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin\Suchak;
 
 use App\Http\Controllers\Controller;
 use App\Models\SuchakPolicy;
+use App\Models\SuchakVisitConfirmation;
 use App\Modules\Suchak\Services\SuchakPolicyService;
 use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
@@ -21,6 +22,7 @@ class SettingsController extends Controller
             'pricingModes' => $this->pricingModes(),
             'paymentModes' => $this->paymentModes(),
             'commissionModes' => $this->commissionModes(),
+            'visitConfirmationModes' => $this->visitConfirmationModes(),
         ]);
     }
 
@@ -41,6 +43,7 @@ class SettingsController extends Controller
             'suchak_grace_period_days' => ['required', 'integer', 'min:0', 'max:365'],
             'suchak_plan_pricing_mode' => ['required', 'string', Rule::in(array_keys($this->pricingModes()))],
             'suchak_payment_mode' => ['required', 'string', Rule::in(array_keys($this->paymentModes()))],
+            'suchak_visit_confirmation_policy_mode' => ['required', 'string', Rule::in(array_keys($this->visitConfirmationModes()))],
             'commission_mode' => ['required', 'string', Rule::in(array_keys($this->commissionModes()))],
             'commission_default_percent' => ['required', 'integer', 'min:0', 'max:100'],
             'commission_default_amount' => ['required', 'numeric', 'min:0', 'max:10000000'],
@@ -122,6 +125,7 @@ class SettingsController extends Controller
             SuchakPolicyService::KEY_SUCHAK_GRACE_PERIOD_DAYS => $policyService->gracePeriodDays(),
             SuchakPolicyService::KEY_SUCHAK_PLAN_PRICING_MODE => $policyService->planPricingMode(),
             SuchakPolicyService::KEY_SUCHAK_PAYMENT_MODE => $policyService->paymentMode(),
+            SuchakPolicyService::KEY_SUCHAK_VISIT_CONFIRMATION_POLICY_MODE => $policyService->visitConfirmationPolicyMode(),
             'commission_mode' => (string) $commissionRules['mode'],
             'commission_default_percent' => (int) $commissionRules['default_percent'],
             'commission_default_amount' => (float) $commissionRules['default_amount'],
@@ -156,6 +160,7 @@ class SettingsController extends Controller
             SuchakPolicyService::KEY_SUCHAK_GRACE_PERIOD_DAYS => $this->integerRow($validated, 'suchak_grace_period_days', 'Default grace period days after Suchak plan expiry.'),
             SuchakPolicyService::KEY_SUCHAK_PLAN_PRICING_MODE => $this->stringRow($validated, 'suchak_plan_pricing_mode', 'Suchak plan pricing mode.'),
             SuchakPolicyService::KEY_SUCHAK_PAYMENT_MODE => $this->stringRow($validated, 'suchak_payment_mode', 'Suchak platform payment mode.'),
+            SuchakPolicyService::KEY_SUCHAK_VISIT_CONFIRMATION_POLICY_MODE => $this->stringRow($validated, 'suchak_visit_confirmation_policy_mode', 'Confirmation policy required before platform visit payouts can be qualified.'),
             SuchakPolicyService::KEY_SUCHAK_COMMISSION_RULES_JSON => [
                 'policy_value' => json_encode($commissionRules, JSON_THROW_ON_ERROR),
                 'value_type' => SuchakPolicy::TYPE_JSON,
@@ -236,6 +241,18 @@ class SettingsController extends Controller
             'none' => 'No commission',
             'percentage' => 'Percentage',
             'fixed_amount' => 'Fixed amount',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function visitConfirmationModes(): array
+    {
+        return [
+            SuchakVisitConfirmation::POLICY_USER_AND_ADMIN => 'User and admin confirmation',
+            SuchakVisitConfirmation::POLICY_ADMIN_ONLY => 'Admin confirmation only',
+            SuchakVisitConfirmation::POLICY_USER_ONLY => 'User confirmation only',
         ];
     }
 }
