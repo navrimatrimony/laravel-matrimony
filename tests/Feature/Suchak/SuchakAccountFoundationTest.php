@@ -83,6 +83,11 @@ class SuchakAccountFoundationTest extends TestCase
             'qr_token_expiry_days' => [SuchakPolicy::TYPE_INTEGER, '30'],
             'suchak_upload_daily_limit' => [SuchakPolicy::TYPE_INTEGER, '25'],
             'suchak_active_profile_limit_by_plan' => [SuchakPolicy::TYPE_INTEGER, '0'],
+            'suchak_free_trial_days' => [SuchakPolicy::TYPE_INTEGER, '0'],
+            'suchak_grace_period_days' => [SuchakPolicy::TYPE_INTEGER, '0'],
+            'suchak_plan_pricing_mode' => [SuchakPolicy::TYPE_STRING, 'manual_catalog'],
+            'suchak_payment_mode' => [SuchakPolicy::TYPE_STRING, 'manual_only'],
+            'suchak_commission_rules_json' => [SuchakPolicy::TYPE_JSON, '{"mode":"to_be_discussed","default_percent":0,"default_amount":0,"require_ack":true}'],
         ] as $key => [$type, $value]) {
             $this->assertDatabaseHas('suchak_policies', [
                 'policy_key' => $key,

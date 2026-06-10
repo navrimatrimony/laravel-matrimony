@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\Suchak\AccountVerificationController;
 use App\Http\Controllers\Admin\Suchak\DashboardController;
+use App\Http\Controllers\Admin\Suchak\SettingsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -16,6 +17,8 @@ Route::middleware(['auth', 'admin'])
     ->name('admin.suchak.')
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+        Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
         Route::get('/accounts', [AccountVerificationController::class, 'index'])->name('accounts.index');
         Route::get('/accounts/{suchakAccount}', [AccountVerificationController::class, 'show'])->name('accounts.show');
         Route::post('/accounts/{suchakAccount}/approve', [AccountVerificationController::class, 'approve'])->name('accounts.approve');

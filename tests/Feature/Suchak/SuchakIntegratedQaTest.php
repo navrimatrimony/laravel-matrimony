@@ -282,6 +282,8 @@ class SuchakIntegratedQaTest extends TestCase
             'suchak.collaborations.accept',
             'suchak.collaborations.reject',
             'admin.suchak.dashboard',
+            'admin.suchak.settings.index',
+            'admin.suchak.settings.update',
             'admin.suchak.accounts.index',
             'admin.suchak.accounts.show',
             'admin.suchak.accounts.approve',

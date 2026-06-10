@@ -119,6 +119,8 @@ class SuchakWebUiCompletionTest extends TestCase
             ->assertOk()
             ->assertSee('Review accounts', false)
             ->assertSee(route('admin.suchak.accounts.index'), false)
+            ->assertSee('Settings', false)
+            ->assertSee(route('admin.suchak.settings.index'), false)
             ->assertSee('Suchak', false);
     }
 

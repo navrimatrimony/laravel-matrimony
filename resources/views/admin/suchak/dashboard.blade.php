@@ -8,9 +8,14 @@
                 <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Suchak Admin Dashboard</h1>
                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">Review account verification status and recent Suchak activity.</p>
             </div>
-            <a href="{{ route('admin.suchak.accounts.index') }}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
-                Review accounts
-            </a>
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ route('admin.suchak.accounts.index') }}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+                    Review accounts
+                </a>
+                <a href="{{ route('admin.suchak.settings.index') }}" class="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700">
+                    Settings
+                </a>
+            </div>
         </div>
     </div>
 

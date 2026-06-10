@@ -15,6 +15,11 @@ class SuchakPolicyService
     public const KEY_QR_TOKEN_EXPIRY_DAYS = 'qr_token_expiry_days';
     public const KEY_SUCHAK_UPLOAD_DAILY_LIMIT = 'suchak_upload_daily_limit';
     public const KEY_SUCHAK_ACTIVE_PROFILE_LIMIT_BY_PLAN = 'suchak_active_profile_limit_by_plan';
+    public const KEY_SUCHAK_FREE_TRIAL_DAYS = 'suchak_free_trial_days';
+    public const KEY_SUCHAK_GRACE_PERIOD_DAYS = 'suchak_grace_period_days';
+    public const KEY_SUCHAK_PLAN_PRICING_MODE = 'suchak_plan_pricing_mode';
+    public const KEY_SUCHAK_PAYMENT_MODE = 'suchak_payment_mode';
+    public const KEY_SUCHAK_COMMISSION_RULES_JSON = 'suchak_commission_rules_json';
 
     public const DEFAULT_CONSENT_VALIDITY_MONTHS = 12;
     public const DEFAULT_REQUEST_ACTION_SLA_HOURS = 48;
@@ -23,6 +28,16 @@ class SuchakPolicyService
     public const DEFAULT_QR_TOKEN_EXPIRY_DAYS = 30;
     public const DEFAULT_SUCHAK_UPLOAD_DAILY_LIMIT = 25;
     public const DEFAULT_SUCHAK_ACTIVE_PROFILE_LIMIT_BY_PLAN = 0;
+    public const DEFAULT_SUCHAK_FREE_TRIAL_DAYS = 0;
+    public const DEFAULT_SUCHAK_GRACE_PERIOD_DAYS = 0;
+    public const DEFAULT_SUCHAK_PLAN_PRICING_MODE = 'manual_catalog';
+    public const DEFAULT_SUCHAK_PAYMENT_MODE = 'manual_only';
+    public const DEFAULT_SUCHAK_COMMISSION_RULES = [
+        'mode' => 'to_be_discussed',
+        'default_percent' => 0,
+        'default_amount' => 0,
+        'require_ack' => true,
+    ];
 
     public function value(string $key, mixed $default = null): mixed
     {
@@ -54,6 +69,24 @@ class SuchakPolicyService
         $value = $this->value($key, $default);
 
         return is_bool($value) ? $value : $default;
+    }
+
+    public function string(string $key, string $default): string
+    {
+        $value = $this->value($key, $default);
+
+        return is_string($value) && $value !== '' ? $value : $default;
+    }
+
+    /**
+     * @param  array<string, mixed>  $default
+     * @return array<string, mixed>
+     */
+    public function array(string $key, array $default): array
+    {
+        $value = $this->value($key, $default);
+
+        return is_array($value) ? $value : $default;
     }
 
     public function consentValidityMonths(): int
@@ -119,6 +152,49 @@ class SuchakPolicyService
         return $this->integer(
             self::KEY_SUCHAK_ACTIVE_PROFILE_LIMIT_BY_PLAN,
             self::DEFAULT_SUCHAK_ACTIVE_PROFILE_LIMIT_BY_PLAN,
+        );
+    }
+
+    public function freeTrialDays(): int
+    {
+        return max(0, $this->integer(
+            self::KEY_SUCHAK_FREE_TRIAL_DAYS,
+            self::DEFAULT_SUCHAK_FREE_TRIAL_DAYS,
+        ));
+    }
+
+    public function gracePeriodDays(): int
+    {
+        return max(0, $this->integer(
+            self::KEY_SUCHAK_GRACE_PERIOD_DAYS,
+            self::DEFAULT_SUCHAK_GRACE_PERIOD_DAYS,
+        ));
+    }
+
+    public function planPricingMode(): string
+    {
+        return $this->string(
+            self::KEY_SUCHAK_PLAN_PRICING_MODE,
+            self::DEFAULT_SUCHAK_PLAN_PRICING_MODE,
+        );
+    }
+
+    public function paymentMode(): string
+    {
+        return $this->string(
+            self::KEY_SUCHAK_PAYMENT_MODE,
+            self::DEFAULT_SUCHAK_PAYMENT_MODE,
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function commissionRules(): array
+    {
+        return $this->array(
+            self::KEY_SUCHAK_COMMISSION_RULES_JSON,
+            self::DEFAULT_SUCHAK_COMMISSION_RULES,
         );
     }
 

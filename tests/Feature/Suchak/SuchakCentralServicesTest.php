@@ -73,12 +73,40 @@ class SuchakCentralServicesTest extends TestCase
         SuchakPolicy::query()
             ->where('policy_key', SuchakPolicyService::KEY_QR_TOKEN_EXPIRY_DAYS)
             ->update(['policy_value' => 'not-an-int']);
+        SuchakPolicy::query()
+            ->where('policy_key', SuchakPolicyService::KEY_SUCHAK_FREE_TRIAL_DAYS)
+            ->update(['policy_value' => '14']);
+        SuchakPolicy::query()
+            ->where('policy_key', SuchakPolicyService::KEY_SUCHAK_PLAN_PRICING_MODE)
+            ->update(['policy_value' => 'paid_required']);
+        SuchakPolicy::query()
+            ->where('policy_key', SuchakPolicyService::KEY_SUCHAK_PAYMENT_MODE)
+            ->update(['policy_value' => 'payu_test_mode']);
+        SuchakPolicy::query()
+            ->where('policy_key', SuchakPolicyService::KEY_SUCHAK_COMMISSION_RULES_JSON)
+            ->update([
+                'policy_value' => json_encode([
+                    'mode' => 'percentage',
+                    'default_percent' => 12,
+                    'default_amount' => 0,
+                    'require_ack' => false,
+                ], JSON_THROW_ON_ERROR),
+            ]);
 
         $service = app(SuchakPolicyService::class);
 
         $this->assertSame(72, $service->requestActionSlaHours());
         $this->assertFalse($service->allowsTwoYearConsent());
         $this->assertSame(SuchakPolicyService::DEFAULT_QR_TOKEN_EXPIRY_DAYS, $service->qrTokenExpiryDays());
+        $this->assertSame(14, $service->freeTrialDays());
+        $this->assertSame('paid_required', $service->planPricingMode());
+        $this->assertSame('payu_test_mode', $service->paymentMode());
+        $this->assertSame([
+            'mode' => 'percentage',
+            'default_percent' => 12,
+            'default_amount' => 0,
+            'require_ack' => false,
+        ], $service->commissionRules());
 
         SuchakPolicy::query()
             ->where('policy_key', SuchakPolicyService::KEY_REQUEST_ACTION_SLA_HOURS)
