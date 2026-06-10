@@ -3,6 +3,7 @@
 namespace App\Modules\Suchak\Services;
 
 use App\Models\SuchakPolicy;
+use App\Models\SuchakCustomerAgreement;
 
 class SuchakPolicyService
 {
@@ -21,6 +22,7 @@ class SuchakPolicyService
     public const KEY_SUCHAK_PAYMENT_MODE = 'suchak_payment_mode';
     public const KEY_SUCHAK_COMMISSION_RULES_JSON = 'suchak_commission_rules_json';
     public const KEY_SUCHAK_PACKAGE_PUBLISH_APPROVAL_MODE = 'suchak_package_publish_approval_mode';
+    public const KEY_SUCHAK_TERMS_POLICY_MODE = 'suchak_terms_policy_mode';
 
     public const DEFAULT_CONSENT_VALIDITY_MONTHS = 12;
     public const DEFAULT_REQUEST_ACTION_SLA_HOURS = 48;
@@ -34,6 +36,7 @@ class SuchakPolicyService
     public const DEFAULT_SUCHAK_PLAN_PRICING_MODE = 'manual_catalog';
     public const DEFAULT_SUCHAK_PAYMENT_MODE = 'manual_only';
     public const DEFAULT_SUCHAK_PACKAGE_PUBLISH_APPROVAL_MODE = 'admin_review';
+    public const DEFAULT_SUCHAK_TERMS_POLICY_MODE = 'strict';
     public const DEFAULT_SUCHAK_COMMISSION_RULES = [
         'mode' => 'to_be_discussed',
         'default_percent' => 0,
@@ -199,6 +202,18 @@ class SuchakPolicyService
         return in_array($mode, ['admin_review', 'auto_publish'], true)
             ? $mode
             : self::DEFAULT_SUCHAK_PACKAGE_PUBLISH_APPROVAL_MODE;
+    }
+
+    public function termsPolicyMode(): string
+    {
+        $mode = $this->string(
+            self::KEY_SUCHAK_TERMS_POLICY_MODE,
+            self::DEFAULT_SUCHAK_TERMS_POLICY_MODE,
+        );
+
+        return in_array($mode, SuchakCustomerAgreement::POLICY_MODES, true)
+            ? $mode
+            : self::DEFAULT_SUCHAK_TERMS_POLICY_MODE;
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Suchak;
 
 use App\Models\SuchakAccount;
+use App\Models\SuchakCustomerAgreement;
 use App\Models\SuchakPlan;
 use App\Models\SuchakPlanFeature;
 use App\Models\SuchakPolicy;
@@ -87,6 +88,9 @@ class SuchakCentralServicesTest extends TestCase
             ->where('policy_key', SuchakPolicyService::KEY_SUCHAK_PACKAGE_PUBLISH_APPROVAL_MODE)
             ->update(['policy_value' => SuchakServicePackage::APPROVAL_MODE_AUTO_PUBLISH]);
         SuchakPolicy::query()
+            ->where('policy_key', SuchakPolicyService::KEY_SUCHAK_TERMS_POLICY_MODE)
+            ->update(['policy_value' => SuchakCustomerAgreement::POLICY_RECOMMENDED]);
+        SuchakPolicy::query()
             ->where('policy_key', SuchakPolicyService::KEY_SUCHAK_COMMISSION_RULES_JSON)
             ->update([
                 'policy_value' => json_encode([
@@ -106,6 +110,7 @@ class SuchakCentralServicesTest extends TestCase
         $this->assertSame('paid_required', $service->planPricingMode());
         $this->assertSame('payu_test_mode', $service->paymentMode());
         $this->assertSame(SuchakServicePackage::APPROVAL_MODE_AUTO_PUBLISH, $service->packagePublishApprovalMode());
+        $this->assertSame(SuchakCustomerAgreement::POLICY_RECOMMENDED, $service->termsPolicyMode());
         $this->assertSame([
             'mode' => 'percentage',
             'default_percent' => 12,

@@ -109,6 +109,14 @@ class SuchakActivityLog extends Model
 
     public const ACTION_SERVICE_PACKAGE_APPROVED = 'service_package_approved';
 
+    public const ACTION_CUSTOMER_AGREEMENT_CREATED = 'customer_agreement_created';
+
+    public const ACTION_CUSTOMER_AGREEMENT_TERMS_ACCEPTED = 'customer_agreement_terms_accepted';
+
+    public const ACTION_CUSTOMER_AGREEMENT_TERMS_BYPASSED = 'customer_agreement_terms_bypassed';
+
+    public const ACTION_CUSTOMER_AGREEMENT_REVISED = 'customer_agreement_revised';
+
     protected $table = 'suchak_activity_logs';
 
     protected $fillable = [

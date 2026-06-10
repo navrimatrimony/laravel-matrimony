@@ -112,6 +112,13 @@ class SuchakServicePackage extends Model
             ->orderBy('id');
     }
 
+    public function customerAgreements(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerAgreement::class, 'service_package_id')
+            ->orderByDesc('agreement_revision')
+            ->orderByDesc('id');
+    }
+
     public function isPublished(): bool
     {
         return $this->package_status === self::STATUS_PUBLISHED;

@@ -151,6 +151,11 @@ class SuchakAccount extends Model
         return $this->hasMany(SuchakServicePackage::class);
     }
 
+    public function customerAgreements(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerAgreement::class);
+    }
+
     public function isVerified(): bool
     {
         return $this->verification_status === self::VERIFICATION_VERIFIED;
