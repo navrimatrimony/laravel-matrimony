@@ -10,9 +10,12 @@ use App\Models\PlanQuotaPolicy;
 use App\Models\PlanTerm;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\Profile\ProfileCanonicalResidenceService;
 use App\Support\PayuHasher;
+use Database\Seeders\MinimalLocationSeeder;
 use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class SubscriptionPlansTest extends TestCase
@@ -303,13 +306,18 @@ class SubscriptionPlansTest extends TestCase
     private function createUserWithMatrimonyGender(string $genderKey): User
     {
         self::seedMasterGendersForPlansTests();
+        $this->seed(MinimalLocationSeeder::class);
         $user = User::factory()->create();
         $genderId = MasterGender::query()->where('key', $genderKey)->where('is_active', true)->value('id');
         $this->assertNotNull($genderId);
-        MatrimonyProfile::factory()->for($user)->create([
+        $profile = MatrimonyProfile::factory()->for($user)->create([
             'gender_id' => $genderId,
-            'lifecycle_state' => 'active',
+            'lifecycle_state' => 'draft',
         ]);
+        $locationId = DB::table('addresses')->where('type', 'city')->value('id');
+        $this->assertNotNull($locationId);
+        ProfileCanonicalResidenceService::upsertSelfCurrent((int) $profile->id, (int) $locationId, null, true, false);
+        $profile->update(['lifecycle_state' => 'active']);
 
         return $user->fresh();
     }

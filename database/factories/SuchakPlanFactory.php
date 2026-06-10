@@ -23,6 +23,7 @@ class SuchakPlanFactory extends Factory
             'description' => null,
             'price_amount' => null,
             'currency' => null,
+            'billing_period_days' => 30,
             'is_active' => true,
             'is_visible' => true,
             'sort_order' => 10,

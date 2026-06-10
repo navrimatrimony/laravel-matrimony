@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use RuntimeException;
 
 class SuchakSubscription extends Model
@@ -76,6 +77,11 @@ class SuchakSubscription extends Model
     public function assignedByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_by_user_id');
+    }
+
+    public function planPayments(): HasMany
+    {
+        return $this->hasMany(SuchakPlanPayment::class);
     }
 
     public function delete(): ?bool

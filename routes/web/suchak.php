@@ -8,6 +8,7 @@ use App\Http\Controllers\Suchak\CrmLedgerController;
 use App\Http\Controllers\Suchak\CrossSearchController;
 use App\Http\Controllers\Suchak\DashboardController;
 use App\Http\Controllers\Suchak\IntakeSourceController;
+use App\Http\Controllers\Suchak\PlanPaymentController;
 use App\Http\Controllers\Suchak\ProfileUpdateSuggestionController;
 use App\Http\Controllers\Suchak\QrScanController;
 use App\Http\Middleware\EnforceCardOnboarding;
@@ -34,6 +35,9 @@ Route::prefix('suchak')
         Route::post('/register', [AccountRequestController::class, 'storeRegistration'])
             ->middleware('throttle:5,1')
             ->name('register.store');
+        Route::post('/plans/payu/success', [PlanPaymentController::class, 'success'])->name('plans.payu.success');
+        Route::post('/plans/payu/failure', [PlanPaymentController::class, 'failure'])->name('plans.payu.failure');
+        Route::post('/plans/payu/webhook', [PlanPaymentController::class, 'webhook'])->name('plans.payu.webhook');
     });
 
 Route::middleware('auth')
@@ -63,6 +67,12 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
     ->name('suchak.')
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+        Route::post('/plans/{suchakPlan}/payu/start', [PlanPaymentController::class, 'start'])
+            ->middleware('throttle:10,1')
+            ->name('plans.payu.start');
+        Route::get('/plans/{suchakPlan}/payu/test-success', [PlanPaymentController::class, 'testSuccessSimulate'])
+            ->middleware('throttle:10,1')
+            ->name('plans.payu.test-success');
         Route::get('/intakes/create', [IntakeSourceController::class, 'create'])->name('intakes.create');
         Route::post('/intakes', [IntakeSourceController::class, 'store'])->name('intakes.store');
         Route::get('/search', [CrossSearchController::class, 'index'])->name('search.index');

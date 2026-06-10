@@ -18,6 +18,7 @@ class SuchakPlan extends Model
         'description',
         'price_amount',
         'currency',
+        'billing_period_days',
         'is_active',
         'is_visible',
         'sort_order',
@@ -25,6 +26,7 @@ class SuchakPlan extends Model
 
     protected $casts = [
         'price_amount' => 'decimal:2',
+        'billing_period_days' => 'integer',
         'is_active' => 'boolean',
         'is_visible' => 'boolean',
         'sort_order' => 'integer',
@@ -43,6 +45,11 @@ class SuchakPlan extends Model
     public function subscriptions(): HasMany
     {
         return $this->hasMany(SuchakSubscription::class);
+    }
+
+    public function planPayments(): HasMany
+    {
+        return $this->hasMany(SuchakPlanPayment::class);
     }
 
     public function hasConfiguredPrice(): bool

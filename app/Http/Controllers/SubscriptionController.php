@@ -37,7 +37,9 @@ class SubscriptionController extends Controller
             return;
         }
         Auth::guard('web')->loginUsingId($userId, false);
-        $request->session()->regenerate();
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+        }
     }
 
     public function subscribe(Request $request, SubscriptionService $subscriptions, RevenueOrchestratorService $revenueOrchestrator)

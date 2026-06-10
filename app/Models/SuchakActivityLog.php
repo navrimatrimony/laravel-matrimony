@@ -87,6 +87,14 @@ class SuchakActivityLog extends Model
 
     public const ACTION_BILLING_LIMIT_CHANGED = 'billing_limit_changed';
 
+    public const ACTION_PLAN_PAYMENT_INITIATED = 'plan_payment_initiated';
+
+    public const ACTION_PLAN_PAYMENT_COMPLETED = 'plan_payment_completed';
+
+    public const ACTION_PLAN_PAYMENT_FAILED = 'plan_payment_failed';
+
+    public const ACTION_PLAN_INVOICE_CREATED = 'plan_invoice_created';
+
     public const ACTION_ADMIN_AUDIT_LINKED = 'admin_audit_linked';
 
     protected $table = 'suchak_activity_logs';

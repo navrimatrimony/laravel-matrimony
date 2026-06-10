@@ -9,8 +9,11 @@ use App\Models\Plan;
 use App\Models\PlanTerm;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\Profile\ProfileCanonicalResidenceService;
+use Database\Seeders\MinimalLocationSeeder;
 use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class PayuTestSuccessSimulateRouteTest extends TestCase
@@ -30,6 +33,7 @@ class PayuTestSuccessSimulateRouteTest extends TestCase
     public function test_simulate_route_finishes_checkout_and_redirects_to_dashboard(): void
     {
         $this->seed(SubscriptionPlansSeeder::class);
+        $this->seed(MinimalLocationSeeder::class);
         MasterGender::query()->firstOrCreate(
             ['key' => 'male'],
             ['label' => 'Male', 'is_active' => true],
@@ -37,10 +41,14 @@ class PayuTestSuccessSimulateRouteTest extends TestCase
         $user = User::factory()->create();
         $maleGenderId = MasterGender::query()->where('key', 'male')->value('id');
         $this->assertNotNull($maleGenderId);
-        MatrimonyProfile::factory()->for($user)->create([
+        $profile = MatrimonyProfile::factory()->for($user)->create([
             'gender_id' => $maleGenderId,
-            'lifecycle_state' => 'active',
+            'lifecycle_state' => 'draft',
         ]);
+        $locationId = DB::table('addresses')->where('type', 'city')->value('id');
+        $this->assertNotNull($locationId);
+        ProfileCanonicalResidenceService::upsertSelfCurrent((int) $profile->id, (int) $locationId, null, true, false);
+        $profile->update(['lifecycle_state' => 'active']);
         $paidPlan = Plan::query()->where('slug', 'gold_male')->firstOrFail();
         $term = PlanTerm::query()
             ->where('plan_id', $paidPlan->id)

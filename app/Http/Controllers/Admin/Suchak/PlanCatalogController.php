@@ -191,6 +191,7 @@ class PlanCatalogController extends Controller
             'description' => ['nullable', 'string', 'max:2000'],
             'price_amount' => ['nullable', 'numeric', 'min:0', 'max:999999999.99'],
             'currency' => ['nullable', 'string', 'size:3', 'required_with:price_amount'],
+            'billing_period_days' => ['required', 'integer', 'min:1', 'max:3650'],
             'is_active' => ['required', 'boolean'],
             'is_visible' => ['required', 'boolean'],
             'sort_order' => ['required', 'integer', 'min:0', 'max:65535'],

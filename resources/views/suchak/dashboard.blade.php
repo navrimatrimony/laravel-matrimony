@@ -552,7 +552,18 @@
                                     <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $plan->name }}</div>
                                     <div class="text-xs text-gray-500 dark:text-gray-400">
                                         {{ $plan->hasConfiguredPrice() ? $plan->currency.' '.$plan->price_amount : 'Manual assignment' }}
+                                        · {{ number_format($plan->billing_period_days ?? 30) }} days
                                     </div>
+                                    @if (($billingPolicySummary['payment_mode'] ?? '') === 'payu_test_mode' && $plan->hasConfiguredPrice() && strtoupper((string) $plan->currency) === 'INR')
+                                        <form method="POST" action="{{ route('suchak.plans.payu.start', $plan) }}" class="mt-3">
+                                            @csrf
+                                            <button type="submit" class="w-full rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700">
+                                                Pay with PayU test
+                                            </button>
+                                        </form>
+                                    @elseif (($billingPolicySummary['payment_mode'] ?? '') !== 'payu_test_mode')
+                                        <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">PayU test checkout is not enabled.</div>
+                                    @endif
                                     @if ($plan->enabledFeatures->isNotEmpty())
                                         <div class="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-300">
                                             @foreach ($plan->enabledFeatures->take(4) as $feature)
@@ -566,6 +577,29 @@
                                             @endforeach
                                         </div>
                                     @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+
+                @if ($recentPlanPayments->isNotEmpty())
+                    <div class="mt-5 border-t border-gray-200 pt-4 dark:border-gray-700">
+                        <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Payment history</p>
+                        <div class="mt-3 space-y-2">
+                            @foreach ($recentPlanPayments as $payment)
+                                <div class="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-gray-900 dark:text-gray-300">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div>
+                                            <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $payment->plan_name }}</div>
+                                            <div>{{ $payment->currency }} {{ $payment->amount }} · {{ ucfirst($payment->payment_status) }}</div>
+                                            <div>Txn {{ $payment->txnid }}</div>
+                                        </div>
+                                        <div class="text-right">
+                                            <div>{{ $payment->created_at?->format('Y-m-d') }}</div>
+                                            <div>{{ $payment->invoice?->invoice_number ?: 'No receipt yet' }}</div>
+                                        </div>
+                                    </div>
                                 </div>
                             @endforeach
                         </div>

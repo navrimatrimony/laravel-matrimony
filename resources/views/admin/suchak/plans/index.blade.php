@@ -89,6 +89,10 @@
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="new_plan_currency">Currency</label>
                     <input id="new_plan_currency" name="currency" value="{{ old('currency', 'INR') }}" maxlength="3" class="mt-1 w-full rounded-md border-gray-300 text-sm uppercase dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                 </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="new_plan_billing_period_days">Billing period days</label>
+                    <input id="new_plan_billing_period_days" name="billing_period_days" value="{{ old('billing_period_days', 30) }}" type="number" min="1" max="3650" required class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                </div>
                 <div class="lg:col-span-2">
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="new_plan_description">Description</label>
                     <textarea id="new_plan_description" name="description" rows="3" maxlength="2000" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('description') }}</textarea>
@@ -163,7 +167,7 @@
                         <div>
                             <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">{{ $plan->name }}</h3>
                             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                {{ $plan->slug }} · {{ $plan->hasConfiguredPrice() ? $plan->currency.' '.$plan->price_amount : 'Manual assignment / price not configured' }}
+                                {{ $plan->slug }} · {{ $plan->hasConfiguredPrice() ? $plan->currency.' '.$plan->price_amount : 'Manual assignment / price not configured' }} · {{ number_format($plan->billing_period_days ?? 30) }} days
                             </p>
                         </div>
                         <div class="flex flex-wrap gap-2 text-xs font-semibold">
@@ -195,6 +199,10 @@
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="plan_{{ $plan->id }}_currency">Currency</label>
                                 <input id="plan_{{ $plan->id }}_currency" name="currency" value="{{ old('currency', $plan->currency ?? 'INR') }}" maxlength="3" class="mt-1 w-full rounded-md border-gray-300 text-sm uppercase dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="plan_{{ $plan->id }}_billing_period_days">Billing period days</label>
+                                <input id="plan_{{ $plan->id }}_billing_period_days" name="billing_period_days" value="{{ old('billing_period_days', $plan->billing_period_days ?? 30) }}" type="number" min="1" max="3650" required class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                             </div>
                             <div class="lg:col-span-2">
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="plan_{{ $plan->id }}_description">Description</label>

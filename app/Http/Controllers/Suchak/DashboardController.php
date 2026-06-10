@@ -9,6 +9,7 @@ use App\Models\SuchakBiodataIntakeLink;
 use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakConsent;
 use App\Models\SuchakLedgerEntry;
+use App\Models\SuchakPlanPayment;
 use App\Models\SuchakProfileNote;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakProfileUpdateSuggestion;
@@ -166,6 +167,13 @@ class DashboardController extends Controller
             ? $billingCatalog->usageSummary($account)
             : [];
 
+        $recentPlanPayments = SuchakPlanPayment::query()
+            ->with(['invoice', 'suchakPlan'])
+            ->where('suchak_account_id', $account->id)
+            ->latest()
+            ->limit(5)
+            ->get();
+
         return view('suchak.dashboard', [
             'suchakAccount' => $account,
             'representationCards' => $representationCards,
@@ -185,6 +193,7 @@ class DashboardController extends Controller
                 'payment_mode' => $policyService->paymentMode(),
             ],
             'catalogPlans' => $catalogPlans,
+            'recentPlanPayments' => $recentPlanPayments,
             'allowedSuggestionFields' => $suggestionService->allowedCoreFieldKeys(),
             'consentChannelOptions' => SuchakConsent::CHANNELS,
             'consentTypeOptions' => SuchakConsent::TYPES,

@@ -372,6 +372,7 @@ class SuchakBillingCatalogService
             'description' => $description !== '' ? $description : null,
             'price_amount' => $priceAmount,
             'currency' => $currency,
+            'billing_period_days' => max(1, min(3650, (int) ($attributes['billing_period_days'] ?? 30))),
             'is_active' => filter_var($attributes['is_active'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'is_visible' => filter_var($attributes['is_visible'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'sort_order' => max(0, (int) ($attributes['sort_order'] ?? 0)),

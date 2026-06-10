@@ -39,6 +39,7 @@ class SuchakPlanCatalogEntitlementUiTest extends TestCase
             'description' => 'Growth plan for active Suchak bureaus.',
             'price_amount' => '1499',
             'currency' => 'INR',
+            'billing_period_days' => '45',
             'is_active' => '1',
             'is_visible' => '1',
             'sort_order' => '20',
@@ -56,6 +57,7 @@ class SuchakPlanCatalogEntitlementUiTest extends TestCase
 
         $this->assertSame('1499.00', $plan->price_amount);
         $this->assertSame('INR', $plan->currency);
+        $this->assertSame(45, $plan->billing_period_days);
         $this->assertTrue($plan->is_active);
         $this->assertTrue($plan->is_visible);
         $this->assertSame(0, Plan::query()->count());
@@ -79,6 +81,7 @@ class SuchakPlanCatalogEntitlementUiTest extends TestCase
             'description' => 'Updated growth plan.',
             'price_amount' => '',
             'currency' => '',
+            'billing_period_days' => '30',
             'is_active' => '1',
             'is_visible' => '0',
             'sort_order' => '25',
@@ -97,6 +100,7 @@ class SuchakPlanCatalogEntitlementUiTest extends TestCase
         $this->assertSame('suchak-growth-plus', $plan->slug);
         $this->assertNull($plan->price_amount);
         $this->assertNull($plan->currency);
+        $this->assertSame(30, $plan->billing_period_days);
         $this->assertFalse($plan->is_visible);
         $this->assertSame(9, $plan->features->count());
         $this->assertDatabaseHas('suchak_plan_features', [
