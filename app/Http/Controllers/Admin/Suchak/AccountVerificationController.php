@@ -8,6 +8,8 @@ use App\Models\SuchakActivityLog;
 use App\Models\SuchakConsent;
 use App\Models\SuchakVerificationRecord;
 use App\Modules\Suchak\Services\SuchakAccountLifecycleService;
+use App\Modules\Suchak\Services\SuchakBillingCatalogService;
+use App\Modules\Suchak\Services\SuchakPaymentStatusService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -44,7 +46,12 @@ class AccountVerificationController extends Controller
         ]);
     }
 
-    public function show(SuchakAccount $suchakAccount): View
+    public function show(
+        Request $request,
+        SuchakAccount $suchakAccount,
+        SuchakBillingCatalogService $billingCatalogService,
+        SuchakPaymentStatusService $paymentStatusService
+    ): View
     {
         $suchakAccount->load([
             'user',
@@ -69,6 +76,11 @@ class AccountVerificationController extends Controller
             'suchakAccount' => $suchakAccount,
             'activityLogs' => $activityLogs,
             'consentEvidence' => $consentEvidence,
+            'assignablePlans' => $billingCatalogService
+                ->catalogForAdmin($request->user())
+                ->where('is_active', true)
+                ->values(),
+            'activeSubscription' => $paymentStatusService->activeSubscriptionFor($suchakAccount),
         ]);
     }
 

@@ -129,6 +129,62 @@
     </div>
 
     <section class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Plan & Entitlement Assignment</h2>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Assign an active Suchak plan manually. No member subscription or payment execution is triggered here.</p>
+            </div>
+            <a href="{{ route('admin.suchak.plans.index') }}" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-200">Manage plans</a>
+        </div>
+
+        <div class="mt-5 grid gap-5 lg:grid-cols-[1fr_2fr]">
+            <div class="rounded-md bg-gray-50 p-4 text-sm dark:bg-gray-900">
+                <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Current active plan</p>
+                @if ($activeSubscription?->suchakPlan)
+                    <p class="mt-2 font-semibold text-gray-900 dark:text-gray-100">{{ $activeSubscription->suchakPlan->name }}</p>
+                    <p class="mt-1 text-gray-600 dark:text-gray-300">
+                        Starts: {{ $activeSubscription->starts_at?->format('Y-m-d H:i') ?: '-' }}
+                        <br>
+                        Ends: {{ $activeSubscription->ends_at?->format('Y-m-d H:i') ?: 'No end date' }}
+                    </p>
+                @else
+                    <p class="mt-2 text-gray-600 dark:text-gray-300">No active Suchak plan is assigned.</p>
+                @endif
+            </div>
+
+            <form method="POST" action="{{ route('admin.suchak.plans.accounts.assign', $suchakAccount) }}" class="grid gap-4 md:grid-cols-2">
+                @csrf
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="suchak_plan_id">Plan</label>
+                    <select id="suchak_plan_id" name="suchak_plan_id" required class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                        <option value="">Select plan</option>
+                        @foreach ($assignablePlans as $plan)
+                            <option value="{{ $plan->id }}" @selected((int) old('suchak_plan_id') === (int) $plan->id)>
+                                {{ $plan->name }} - {{ $plan->hasConfiguredPrice() ? $plan->currency.' '.$plan->price_amount : 'manual price' }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="starts_at">Starts at</label>
+                    <input id="starts_at" name="starts_at" type="datetime-local" value="{{ old('starts_at') }}" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="ends_at">Ends at</label>
+                    <input id="ends_at" name="ends_at" type="datetime-local" value="{{ old('ends_at') }}" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="plan_assign_reason">Assignment reason</label>
+                    <textarea id="plan_assign_reason" name="reason" rows="2" required minlength="10" maxlength="500" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('reason') }}</textarea>
+                </div>
+                <div class="md:col-span-2">
+                    <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Assign Suchak plan</button>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <section class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Verification Records</h2>
         <div class="mt-4 overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">

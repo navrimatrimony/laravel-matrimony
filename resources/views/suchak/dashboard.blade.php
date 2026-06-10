@@ -475,13 +475,65 @@
         <aside class="space-y-6">
             <section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Billing & Limits</h2>
+                <div class="mt-3 rounded-md bg-gray-50 p-3 text-sm dark:bg-gray-900">
+                    <div class="flex items-center justify-between gap-3">
+                        <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Subscription status</span>
+                        <span class="font-semibold text-gray-900 dark:text-gray-100">{{ ucwords(str_replace('_', ' ', $paymentStatus['status'] ?? 'none')) }}</span>
+                    </div>
+                    <div class="mt-2 grid gap-2 text-xs text-gray-600 dark:text-gray-300">
+                        <div>Free trial policy: {{ number_format($billingPolicySummary['free_trial_days']) }} days</div>
+                        <div>Grace policy: {{ number_format($billingPolicySummary['grace_period_days']) }} days</div>
+                        <div>Payment mode: {{ ucwords(str_replace('_', ' ', $billingPolicySummary['payment_mode'])) }}</div>
+                    </div>
+                </div>
+
                 @if ($activeSubscription?->suchakPlan)
-                    <p class="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $activeSubscription->suchakPlan->name }}</p>
-                    <dl class="mt-3 space-y-2 text-sm text-gray-700 dark:text-gray-300">
-                        @forelse ($featureLimits as $feature => $value)
+                    <div class="mt-4">
+                        <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $activeSubscription->suchakPlan->name }}</p>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {{ $activeSubscription->suchakPlan->hasConfiguredPrice() ? $activeSubscription->suchakPlan->currency.' '.$activeSubscription->suchakPlan->price_amount : 'Manual assignment / price not configured' }}
+                        </p>
+                        <dl class="mt-3 grid gap-2 text-xs text-gray-600 dark:text-gray-300">
                             <div class="flex justify-between gap-3">
+                                <dt>Starts</dt>
+                                <dd class="font-semibold text-gray-900 dark:text-gray-100">{{ $activeSubscription->starts_at?->format('Y-m-d') ?: '-' }}</dd>
+                            </div>
+                            <div class="flex justify-between gap-3">
+                                <dt>Ends</dt>
+                                <dd class="font-semibold text-gray-900 dark:text-gray-100">{{ $activeSubscription->ends_at?->format('Y-m-d') ?: 'No end date' }}</dd>
+                            </div>
+                        </dl>
+                    </div>
+
+                    <div class="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+                        <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Usage</p>
+                    </div>
+
+                    <dl class="mt-3 space-y-3 text-sm text-gray-700 dark:text-gray-300">
+                        @forelse ($featureLimits as $feature => $value)
+                            @php
+                                $usage = $billingUsageSummary[$feature] ?? null;
+                                $limitDisplay = is_bool($value) ? ($value ? 'Enabled' : 'Disabled') : (string) $value;
+                                $usageDisplay = null;
+
+                                if ($usage && $usage['used'] !== null) {
+                                    $usageDisplay = is_int($value)
+                                        ? number_format($usage['used']).' / '.number_format($value)
+                                        : number_format($usage['used']).' used';
+
+                                    if ($usage['window']) {
+                                        $usageDisplay .= ' '.$usage['window'];
+                                    }
+                                }
+                            @endphp
+                            <div class="rounded-md border border-gray-200 px-3 py-2 dark:border-gray-700">
+                                <div class="flex justify-between gap-3">
                                 <dt>{{ ucwords(str_replace('_', ' ', $feature)) }}</dt>
-                                <dd class="font-semibold">{{ is_bool($value) ? ($value ? 'Yes' : 'No') : $value }}</dd>
+                                    <dd class="font-semibold text-gray-900 dark:text-gray-100">{{ $usageDisplay ?: $limitDisplay }}</dd>
+                                </div>
+                                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Limit: {{ $limitDisplay }}{{ $usage && $usage['label'] ? ' · '.$usage['label'] : '' }}
+                                </div>
                             </div>
                         @empty
                             <div>No feature limits configured.</div>
@@ -501,6 +553,19 @@
                                     <div class="text-xs text-gray-500 dark:text-gray-400">
                                         {{ $plan->hasConfiguredPrice() ? $plan->currency.' '.$plan->price_amount : 'Manual assignment' }}
                                     </div>
+                                    @if ($plan->enabledFeatures->isNotEmpty())
+                                        <div class="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-300">
+                                            @foreach ($plan->enabledFeatures->take(4) as $feature)
+                                                @php
+                                                    $typedValue = $feature->typedValue();
+                                                @endphp
+                                                <div class="flex justify-between gap-2">
+                                                    <span>{{ ucwords(str_replace('_', ' ', $feature->feature_key)) }}</span>
+                                                    <span class="font-semibold">{{ is_bool($typedValue) ? ($typedValue ? 'Yes' : 'No') : $typedValue }}</span>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                 </div>
                             @endforeach
                         </div>

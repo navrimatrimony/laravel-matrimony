@@ -17,6 +17,7 @@ use App\Modules\Suchak\Services\SuchakAccessService;
 use App\Modules\Suchak\Services\SuchakCandidateMaskingService;
 use App\Modules\Suchak\Services\SuchakEntitlementService;
 use App\Modules\Suchak\Services\SuchakPaymentStatusService;
+use App\Modules\Suchak\Services\SuchakPolicyService;
 use App\Modules\Suchak\Services\SuchakProfileUpdateSuggestionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -31,6 +32,7 @@ class DashboardController extends Controller
         SuchakCandidateMaskingService $maskingService,
         SuchakEntitlementService $entitlementService,
         SuchakPaymentStatusService $paymentStatusService,
+        SuchakPolicyService $policyService,
         SuchakProfileUpdateSuggestionService $suggestionService,
     ): View
     {
@@ -160,6 +162,10 @@ class DashboardController extends Controller
             ? $billingCatalog->visibleCatalogForSuchak($account, $request->user())
             : collect();
 
+        $billingUsageSummary = $activeSubscription
+            ? $billingCatalog->usageSummary($account)
+            : [];
+
         return view('suchak.dashboard', [
             'suchakAccount' => $account,
             'representationCards' => $representationCards,
@@ -170,6 +176,14 @@ class DashboardController extends Controller
             'activityLogs' => $activityLogs,
             'activeSubscription' => $activeSubscription,
             'featureLimits' => $featureLimits,
+            'billingUsageSummary' => $billingUsageSummary,
+            'paymentStatus' => $paymentStatusService->statusFor($account),
+            'billingPolicySummary' => [
+                'free_trial_days' => $policyService->freeTrialDays(),
+                'grace_period_days' => $policyService->gracePeriodDays(),
+                'pricing_mode' => $policyService->planPricingMode(),
+                'payment_mode' => $policyService->paymentMode(),
+            ],
             'catalogPlans' => $catalogPlans,
             'allowedSuggestionFields' => $suggestionService->allowedCoreFieldKeys(),
             'consentChannelOptions' => SuchakConsent::CHANNELS,

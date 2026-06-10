@@ -116,6 +116,7 @@
                         <li><a href="{{ route('admin.suchak.dashboard') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.suchak.dashboard') ? 'active' : '' }}">Dashboard</a></li>
                         <li><a href="{{ route('admin.suchak.safety.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.suchak.safety.*') ? 'active' : '' }}">Safety</a></li>
                         <li><a href="{{ route('admin.suchak.accounts.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.suchak.accounts.*') ? 'active' : '' }}">Accounts</a></li>
+                        <li><a href="{{ route('admin.suchak.plans.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.suchak.plans.*') ? 'active' : '' }}">Plans</a></li>
                         <li><a href="{{ route('admin.suchak.settings.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.suchak.settings.*') ? 'active' : '' }}">Settings</a></li>
                     </ul>
                 </div>

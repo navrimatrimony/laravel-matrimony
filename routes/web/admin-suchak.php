@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\Suchak\AccountVerificationController;
 use App\Http\Controllers\Admin\Suchak\DashboardController;
+use App\Http\Controllers\Admin\Suchak\PlanCatalogController;
 use App\Http\Controllers\Admin\Suchak\SafetyController;
 use App\Http\Controllers\Admin\Suchak\SettingsController;
 use Illuminate\Support\Facades\Route;
@@ -27,6 +28,10 @@ Route::middleware(['auth', 'admin'])
         Route::post('/safety/accounts/{suchakAccount}/pause', [SafetyController::class, 'pauseAccount'])->name('safety.accounts.pause');
         Route::post('/safety/accounts/{suchakAccount}/resume', [SafetyController::class, 'resumeAccount'])->name('safety.accounts.resume');
         Route::post('/safety/representations/{representation}/revoke', [SafetyController::class, 'revokeRepresentation'])->name('safety.representations.revoke');
+        Route::get('/plans', [PlanCatalogController::class, 'index'])->name('plans.index');
+        Route::post('/plans', [PlanCatalogController::class, 'store'])->name('plans.store');
+        Route::put('/plans/{suchakPlan}', [PlanCatalogController::class, 'update'])->name('plans.update');
+        Route::post('/plans/accounts/{suchakAccount}/assign', [PlanCatalogController::class, 'assignAccountPlan'])->name('plans.accounts.assign');
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
         Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
         Route::get('/accounts', [AccountVerificationController::class, 'index'])->name('accounts.index');
