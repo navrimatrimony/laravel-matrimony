@@ -6,6 +6,7 @@ use App\Http\Controllers\Suchak\CollaborationController;
 use App\Http\Controllers\Suchak\ConsentController;
 use App\Http\Controllers\Suchak\CrmLedgerController;
 use App\Http\Controllers\Suchak\CrossSearchController;
+use App\Http\Controllers\Suchak\CustomerPortalController;
 use App\Http\Controllers\Suchak\DashboardController;
 use App\Http\Controllers\Suchak\IntakeSourceController;
 use App\Http\Controllers\Suchak\PaymentRequestPublicController;
@@ -44,6 +45,18 @@ Route::prefix('suchak')
             ->where('token', '[A-Za-z0-9]{64}')
             ->middleware('throttle:30,1')
             ->name('payment-requests.show');
+        Route::get('/customer-portal/{token}', [CustomerPortalController::class, 'show'])
+            ->where('token', '[A-Za-z0-9]{64}')
+            ->middleware('throttle:30,1')
+            ->name('customer-portal.show');
+        Route::post('/customer-portal/{token}/claim', [CustomerPortalController::class, 'claim'])
+            ->where('token', '[A-Za-z0-9]{64}')
+            ->middleware('throttle:10,1')
+            ->name('customer-portal.claim');
+        Route::post('/customer-portal/{token}/revoke', [CustomerPortalController::class, 'revoke'])
+            ->where('token', '[A-Za-z0-9]{64}')
+            ->middleware('throttle:10,1')
+            ->name('customer-portal.revoke');
         Route::get('/receipts/verify/{code}', [ReceiptVerificationController::class, 'show'])
             ->where('code', '[A-Za-z0-9]{32}')
             ->middleware('throttle:30,1')

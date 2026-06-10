@@ -188,6 +188,19 @@ class SuchakCustomerContext extends Model
         return $this->hasMany(SuchakCustomerOverdueServiceAction::class, 'customer_context_id');
     }
 
+    public function familyMembers(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerFamilyMember::class, 'customer_context_id')
+            ->orderBy('member_role')
+            ->orderBy('id');
+    }
+
+    public function portalLinks(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerPortalLink::class, 'customer_context_id')
+            ->orderByDesc('id');
+    }
+
     public function delete(): ?bool
     {
         throw new RuntimeException('Suchak customer contexts cannot be deleted.');

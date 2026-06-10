@@ -5,6 +5,7 @@ namespace App\Modules\Suchak\Services;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakCustomerAgreement;
+use App\Models\SuchakCustomerPortalLink;
 use App\Models\SuchakCustomerContext;
 use App\Models\SuchakPaymentContext;
 use App\Models\SuchakPaymentRequest;
@@ -24,12 +25,13 @@ class SuchakPaymentRequestService
         private readonly SuchakPaymentCollectorResolver $paymentCollectorResolver,
         private readonly SuchakPolicyService $policyService,
         private readonly SuchakActivityLogger $activityLogger,
+        private readonly SuchakCustomerPortalService $customerPortalService,
     ) {
     }
 
     /**
      * @param  array<string, mixed>  $attributes
-     * @return array{payment_request: SuchakPaymentRequest, public_url: string, plain_token: string}
+     * @return array{payment_request: SuchakPaymentRequest, public_url: string, plain_token: string, portal_url: string, plain_portal_token: string}
      */
     public function createAndSend(
         SuchakServicePackage $package,
@@ -126,10 +128,24 @@ class SuchakPaymentRequestService
             return $fresh;
         });
 
+        $portal = $this->customerPortalService->issuePaymentPortalLink(
+            $request,
+            $actor,
+            [
+                'recipient_role' => SuchakCustomerPortalLink::RECIPIENT_PAYER,
+                'recipient_label' => 'Customer family',
+                'expires_at' => $request->expires_at ?? now()->addDays(14),
+            ],
+            $ipAddress,
+            $userAgent,
+        );
+
         return [
             'payment_request' => $request,
             'public_url' => $this->publicUrl($plainToken),
             'plain_token' => $plainToken,
+            'portal_url' => $portal['portal_url'],
+            'plain_portal_token' => $portal['plain_token'],
         ];
     }
 

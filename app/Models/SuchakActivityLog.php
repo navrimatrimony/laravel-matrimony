@@ -147,6 +147,20 @@ class SuchakActivityLog extends Model
 
     public const ACTION_CUSTOMER_OVERDUE_ACTION_RESOLVED = 'customer_overdue_action_resolved';
 
+    public const ACTION_CUSTOMER_FAMILY_MEMBER_LINKED = 'customer_family_member_linked';
+
+    public const ACTION_CUSTOMER_FAMILY_MEMBER_REVOKED = 'customer_family_member_revoked';
+
+    public const ACTION_CUSTOMER_PORTAL_LINK_ISSUED = 'customer_portal_link_issued';
+
+    public const ACTION_CUSTOMER_PORTAL_LINK_OPENED = 'customer_portal_link_opened';
+
+    public const ACTION_CUSTOMER_PORTAL_LINK_CLAIMED = 'customer_portal_link_claimed';
+
+    public const ACTION_CUSTOMER_PORTAL_LINK_REVOKED = 'customer_portal_link_revoked';
+
+    public const ACTION_CUSTOMER_PORTAL_LINK_EXPIRED = 'customer_portal_link_expired';
+
     protected $table = 'suchak_activity_logs';
 
     protected $fillable = [

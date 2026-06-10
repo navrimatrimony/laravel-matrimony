@@ -141,6 +141,12 @@ class SuchakPaymentRequest extends Model
             ->orderByDesc('id');
     }
 
+    public function customerPortalLinks(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerPortalLink::class, 'payment_request_id')
+            ->orderByDesc('id');
+    }
+
     public function hasExpired(): bool
     {
         return $this->expires_at !== null && $this->expires_at->isPast();

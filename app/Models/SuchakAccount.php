@@ -176,6 +176,16 @@ class SuchakAccount extends Model
         return $this->hasMany(SuchakCustomerOverdueServiceAction::class);
     }
 
+    public function customerFamilyMembers(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerFamilyMember::class);
+    }
+
+    public function customerPortalLinks(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerPortalLink::class);
+    }
+
     public function isVerified(): bool
     {
         return $this->verification_status === self::VERIFICATION_VERIFIED;
