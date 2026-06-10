@@ -203,6 +203,14 @@ class SuchakActivityLog extends Model
 
     public const ACTION_GROWTH_REWARD_REVERSED = 'growth_reward_reversed';
 
+    public const ACTION_LEAD_ALLOCATION_PREFERENCE_RECORDED = 'lead_allocation_preference_recorded';
+
+    public const ACTION_PLATFORM_LEAD_CREATED = 'platform_lead_created';
+
+    public const ACTION_PLATFORM_LEAD_ALLOCATED = 'platform_lead_allocated';
+
+    public const ACTION_PLATFORM_LEAD_STATUS_CHANGED = 'platform_lead_status_changed';
+
     protected $table = 'suchak_activity_logs';
 
     protected $fillable = [

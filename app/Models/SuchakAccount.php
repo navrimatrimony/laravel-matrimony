@@ -226,6 +226,16 @@ class SuchakAccount extends Model
         return $this->hasMany(SuchakGrowthReward::class);
     }
 
+    public function leadAllocationPreferences(): HasMany
+    {
+        return $this->hasMany(SuchakLeadAllocationPreference::class);
+    }
+
+    public function platformLeadAllocations(): HasMany
+    {
+        return $this->hasMany(SuchakPlatformLeadAllocation::class);
+    }
+
     public function isVerified(): bool
     {
         return $this->verification_status === self::VERIFICATION_VERIFIED;

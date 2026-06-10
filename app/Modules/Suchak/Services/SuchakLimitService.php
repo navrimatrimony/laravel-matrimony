@@ -7,6 +7,7 @@ use App\Models\SuchakBiodataExport;
 use App\Models\SuchakBiodataIntakeLink;
 use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakPlanFeature;
+use App\Models\SuchakPlatformLeadAllocation;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakProfileRequest;
 use Carbon\CarbonInterface;
@@ -188,7 +189,12 @@ class SuchakLimitService
             ->whereIn('request_status', SuchakProfileRequest::OPEN_STATUSES)
             ->count();
 
-        if ($openRequests >= $limit) {
+        $openPlatformAllocations = SuchakPlatformLeadAllocation::query()
+            ->where('suchak_account_id', $account->id)
+            ->whereIn('allocation_status', SuchakPlatformLeadAllocation::OPEN_STATUSES)
+            ->count();
+
+        if (($openRequests + $openPlatformAllocations) >= $limit) {
             throw new InvalidArgumentException('Open Suchak lead request limit reached for this account.');
         }
     }

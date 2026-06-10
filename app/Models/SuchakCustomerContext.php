@@ -225,6 +225,12 @@ class SuchakCustomerContext extends Model
             ->orderByDesc('id');
     }
 
+    public function platformLeadAllocations(): HasMany
+    {
+        return $this->hasMany(SuchakPlatformLeadAllocation::class, 'customer_context_id')
+            ->orderByDesc('id');
+    }
+
     public function delete(): ?bool
     {
         throw new RuntimeException('Suchak customer contexts cannot be deleted.');
