@@ -20,6 +20,7 @@ class SuchakPolicyService
     public const KEY_SUCHAK_PLAN_PRICING_MODE = 'suchak_plan_pricing_mode';
     public const KEY_SUCHAK_PAYMENT_MODE = 'suchak_payment_mode';
     public const KEY_SUCHAK_COMMISSION_RULES_JSON = 'suchak_commission_rules_json';
+    public const KEY_SUCHAK_PACKAGE_PUBLISH_APPROVAL_MODE = 'suchak_package_publish_approval_mode';
 
     public const DEFAULT_CONSENT_VALIDITY_MONTHS = 12;
     public const DEFAULT_REQUEST_ACTION_SLA_HOURS = 48;
@@ -32,6 +33,7 @@ class SuchakPolicyService
     public const DEFAULT_SUCHAK_GRACE_PERIOD_DAYS = 0;
     public const DEFAULT_SUCHAK_PLAN_PRICING_MODE = 'manual_catalog';
     public const DEFAULT_SUCHAK_PAYMENT_MODE = 'manual_only';
+    public const DEFAULT_SUCHAK_PACKAGE_PUBLISH_APPROVAL_MODE = 'admin_review';
     public const DEFAULT_SUCHAK_COMMISSION_RULES = [
         'mode' => 'to_be_discussed',
         'default_percent' => 0,
@@ -185,6 +187,18 @@ class SuchakPolicyService
             self::KEY_SUCHAK_PAYMENT_MODE,
             self::DEFAULT_SUCHAK_PAYMENT_MODE,
         );
+    }
+
+    public function packagePublishApprovalMode(): string
+    {
+        $mode = $this->string(
+            self::KEY_SUCHAK_PACKAGE_PUBLISH_APPROVAL_MODE,
+            self::DEFAULT_SUCHAK_PACKAGE_PUBLISH_APPROVAL_MODE,
+        );
+
+        return in_array($mode, ['admin_review', 'auto_publish'], true)
+            ? $mode
+            : self::DEFAULT_SUCHAK_PACKAGE_PUBLISH_APPROVAL_MODE;
     }
 
     /**

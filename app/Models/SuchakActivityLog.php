@@ -103,6 +103,12 @@ class SuchakActivityLog extends Model
 
     public const ACTION_ADMIN_AUDIT_LINKED = 'admin_audit_linked';
 
+    public const ACTION_PACKAGE_TEMPLATE_CREATED = 'package_template_created';
+
+    public const ACTION_SERVICE_PACKAGE_CREATED = 'service_package_created';
+
+    public const ACTION_SERVICE_PACKAGE_APPROVED = 'service_package_approved';
+
     protected $table = 'suchak_activity_logs';
 
     protected $fillable = [

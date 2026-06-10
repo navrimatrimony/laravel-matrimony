@@ -88,6 +88,7 @@ class SuchakAccountFoundationTest extends TestCase
             'suchak_plan_pricing_mode' => [SuchakPolicy::TYPE_STRING, 'manual_catalog'],
             'suchak_payment_mode' => [SuchakPolicy::TYPE_STRING, 'manual_only'],
             'suchak_commission_rules_json' => [SuchakPolicy::TYPE_JSON, '{"mode":"to_be_discussed","default_percent":0,"default_amount":0,"require_ack":true}'],
+            'suchak_package_publish_approval_mode' => [SuchakPolicy::TYPE_STRING, 'admin_review'],
         ] as $key => [$type, $value]) {
             $this->assertDatabaseHas('suchak_policies', [
                 'policy_key' => $key,
