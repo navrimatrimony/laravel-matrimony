@@ -103,6 +103,21 @@ class SuchakPaymentContext extends Model
         return $this->hasMany(SuchakCustomerPayment::class, 'payment_context_id');
     }
 
+    public function directPaymentEvidence(): HasMany
+    {
+        return $this->hasMany(SuchakDirectPaymentEvidence::class, 'payment_context_id');
+    }
+
+    public function paymentFeatureFreezes(): HasMany
+    {
+        return $this->hasMany(SuchakPaymentFeatureFreeze::class, 'payment_context_id');
+    }
+
+    public function payoutHolds(): HasMany
+    {
+        return $this->hasMany(SuchakPayoutHold::class, 'payment_context_id');
+    }
+
     public function delete(): ?bool
     {
         throw new RuntimeException('Suchak payment contexts cannot be deleted.');

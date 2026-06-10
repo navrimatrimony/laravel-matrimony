@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin\Suchak;
 use App\Http\Controllers\Controller;
 use App\Models\SuchakAccount;
 use App\Models\SuchakDispute;
+use App\Models\SuchakPaymentFeatureFreeze;
+use App\Models\SuchakPayoutHold;
 use App\Models\SuchakProfileRepresentation;
 use App\Modules\Suchak\Services\SuchakAccountLifecycleService;
 use App\Modules\Suchak\Services\SuchakSafetyService;
@@ -26,7 +28,7 @@ class SafetyController extends Controller
         $type = in_array($type, SuchakDispute::TYPES, true) ? $type : null;
 
         $disputes = SuchakDispute::query()
-            ->with(['suchakAccount.user', 'representation'])
+            ->with(['suchakAccount.user', 'representation', 'paymentFeatureFreezes', 'payoutHolds'])
             ->when($status, fn ($query) => $query->where('status', $status))
             ->when($type, fn ($query) => $query->where('dispute_type', $type))
             ->latest('opened_at')
@@ -128,6 +130,25 @@ class SafetyController extends Controller
                 $this->userAgent($request),
             ),
             'Suchak dispute closed.'
+        );
+    }
+
+    public function freezePaymentAbility(
+        Request $request,
+        SuchakDispute $dispute,
+        SuchakSafetyService $safetyService
+    ): RedirectResponse {
+        $validated = $this->validateReason($request, 'freeze_reason');
+
+        return $this->runSafetyAction(
+            fn () => $safetyService->freezeDirectPaymentAbility(
+                $dispute,
+                $request->user(),
+                $validated['freeze_reason'],
+                $request->ip(),
+                $this->userAgent($request),
+            ),
+            'Suchak payment ability frozen.'
         );
     }
 
@@ -241,6 +262,9 @@ class SafetyController extends Controller
             'open_disputes' => SuchakDispute::query()->where('status', SuchakDispute::STATUS_OPEN)->count(),
             'under_review' => SuchakDispute::query()->where('status', SuchakDispute::STATUS_UNDER_REVIEW)->count(),
             'abuse_reports' => SuchakDispute::query()->where('dispute_type', SuchakDispute::TYPE_ABUSE_REPORT)->count(),
+            'direct_payment_complaints' => SuchakDispute::query()->where('dispute_type', SuchakDispute::TYPE_DIRECT_PAYMENT_REQUEST)->count(),
+            'active_payment_freezes' => SuchakPaymentFeatureFreeze::query()->where('freeze_status', SuchakPaymentFeatureFreeze::STATUS_ACTIVE)->count(),
+            'active_payout_holds' => SuchakPayoutHold::query()->where('hold_status', SuchakPayoutHold::STATUS_ACTIVE)->count(),
             'frozen_accounts' => SuchakAccount::query()->where('verification_status', SuchakAccount::VERIFICATION_SUSPENDED)->count(),
             'paused_public_accounts' => SuchakAccount::query()
                 ->where('verification_status', SuchakAccount::VERIFICATION_VERIFIED)

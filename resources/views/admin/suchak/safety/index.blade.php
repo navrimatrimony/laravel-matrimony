@@ -41,6 +41,18 @@
             <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ number_format($stats['abuse_reports']) }}</div>
         </div>
         <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Direct payment complaints</div>
+            <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ number_format($stats['direct_payment_complaints']) }}</div>
+        </div>
+        <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Payment freezes</div>
+            <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ number_format($stats['active_payment_freezes']) }}</div>
+        </div>
+        <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Payout holds</div>
+            <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ number_format($stats['active_payout_holds']) }}</div>
+        </div>
+        <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Frozen accounts</div>
             <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ number_format($stats['frozen_accounts']) }}</div>
         </div>
@@ -139,11 +151,17 @@
                             <td class="px-4 py-3 align-top">
                                 <div class="font-semibold text-gray-900 dark:text-gray-100">#{{ $dispute->id }} {{ $label($dispute->dispute_type) }}</div>
                                 <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $label($dispute->priority) }} priority · Opened {{ $dispute->opened_at?->format('Y-m-d H:i') }}</div>
+                                @if ($dispute->risk_source !== \App\Models\SuchakDispute::RISK_SOURCE_ADMIN_CASE)
+                                    <div class="mt-2 inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-100">{{ $label($dispute->risk_source) }}</div>
+                                @endif
                                 <p class="mt-2 max-w-xl text-gray-700 dark:text-gray-300">{{ $dispute->summary }}</p>
                             </td>
                             <td class="px-4 py-3 align-top">
                                 <a href="{{ route('admin.suchak.accounts.show', $dispute->suchakAccount) }}" class="font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-200">{{ $dispute->suchakAccount?->suchak_name ?: 'Unknown Suchak' }}</a>
                                 <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">Representation #{{ $dispute->representation_id ?: '-' }}</div>
+                                @if ($dispute->customer_context_id || $dispute->payment_context_id)
+                                    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">Customer #{{ $dispute->customer_context_id ?: '-' }} · Payment context #{{ $dispute->payment_context_id ?: '-' }}</div>
+                                @endif
                             </td>
                             <td class="px-4 py-3 align-top text-gray-700 dark:text-gray-300">
                                 {{ $dispute->evidence_summary ?: '-' }}
@@ -153,8 +171,27 @@
                                 @if ($dispute->resolved_at)
                                     <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">Resolved {{ $dispute->resolved_at->format('Y-m-d H:i') }}</div>
                                 @endif
+                                @php
+                                    $hasActiveFreeze = $dispute->paymentFeatureFreezes->contains('freeze_status', \App\Models\SuchakPaymentFeatureFreeze::STATUS_ACTIVE);
+                                    $hasActivePayoutHold = $dispute->payoutHolds->contains('hold_status', \App\Models\SuchakPayoutHold::STATUS_ACTIVE);
+                                @endphp
+                                <div class="mt-2 flex flex-wrap gap-1">
+                                    @if ($hasActiveFreeze)
+                                        <span class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-900 dark:bg-red-950 dark:text-red-100">Payment frozen</span>
+                                    @endif
+                                    @if ($hasActivePayoutHold)
+                                        <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-100">Payout hold</span>
+                                    @endif
+                                </div>
                                 @if (in_array($dispute->status, [\App\Models\SuchakDispute::STATUS_OPEN, \App\Models\SuchakDispute::STATUS_UNDER_REVIEW], true))
                                     <div class="mt-3 space-y-3">
+                                        @if (! $hasActiveFreeze)
+                                            <form method="POST" action="{{ route('admin.suchak.safety.disputes.payment-freeze', $dispute) }}" class="space-y-2">
+                                                @csrf
+                                                <textarea name="freeze_reason" rows="2" required minlength="10" maxlength="500" placeholder="Freeze direct payment reason" class="w-full rounded-md border-gray-300 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"></textarea>
+                                                <button type="submit" class="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700">Freeze payment ability</button>
+                                            </form>
+                                        @endif
                                         @if ($dispute->status === \App\Models\SuchakDispute::STATUS_OPEN)
                                             <form method="POST" action="{{ route('admin.suchak.safety.disputes.review', $dispute) }}" class="space-y-2">
                                                 @csrf

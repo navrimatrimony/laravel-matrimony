@@ -186,6 +186,21 @@ class SuchakAccount extends Model
         return $this->hasMany(SuchakCustomerPortalLink::class);
     }
 
+    public function directPaymentEvidence(): HasMany
+    {
+        return $this->hasMany(SuchakDirectPaymentEvidence::class);
+    }
+
+    public function paymentFeatureFreezes(): HasMany
+    {
+        return $this->hasMany(SuchakPaymentFeatureFreeze::class);
+    }
+
+    public function payoutHolds(): HasMany
+    {
+        return $this->hasMany(SuchakPayoutHold::class);
+    }
+
     public function isVerified(): bool
     {
         return $this->verification_status === self::VERIFICATION_VERIFIED;

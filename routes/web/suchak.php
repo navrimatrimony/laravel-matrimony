@@ -8,6 +8,7 @@ use App\Http\Controllers\Suchak\CrmLedgerController;
 use App\Http\Controllers\Suchak\CrossSearchController;
 use App\Http\Controllers\Suchak\CustomerPortalController;
 use App\Http\Controllers\Suchak\DashboardController;
+use App\Http\Controllers\Suchak\DirectPaymentComplaintController;
 use App\Http\Controllers\Suchak\IntakeSourceController;
 use App\Http\Controllers\Suchak\PaymentRequestPublicController;
 use App\Http\Controllers\Suchak\PlanPaymentController;
@@ -67,6 +68,9 @@ Route::middleware('auth')
     ->prefix('suchak')
     ->name('suchak.')
     ->group(function () {
+        Route::post('/direct-payment-complaints', [DirectPaymentComplaintController::class, 'store'])
+            ->middleware('throttle:5,1')
+            ->name('direct-payment-complaints.store');
         Route::get('/register/verify', [AccountRequestController::class, 'verify'])->name('register.verify');
         Route::post('/register/verify', [AccountRequestController::class, 'verifyRegistrationOtp'])
             ->middleware('throttle:10,1')

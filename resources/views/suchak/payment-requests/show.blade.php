@@ -89,6 +89,9 @@
             This page is not a paid receipt, invoice, credit note, refund record, or payment confirmation. Direct UPI or QR payment details are not shown on public Suchak marketplace/profile pages.
         </p>
         <p class="mt-2">
+            Platform-collected customers should not make direct Suchak payments. If any Suchak asks for payment outside this verified platform context, use your logged-in account to report it with evidence.
+        </p>
+        <p class="mt-2">
             Visibility policy: {{ ucwords(str_replace('_', ' ', $paymentRequest->payment_detail_visibility_policy)) }}.
         </p>
     </section>

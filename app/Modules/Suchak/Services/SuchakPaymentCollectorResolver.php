@@ -7,6 +7,7 @@ use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakCustomerContext;
+use App\Models\SuchakPaymentFeatureFreeze;
 use App\Models\SuchakPaymentContext;
 use App\Models\SuchakPipeline;
 use App\Models\User;
@@ -145,6 +146,10 @@ class SuchakPaymentCollectorResolver
 
     public function assertAllowsDirectSuchakCollection(SuchakPaymentContext $context): void
     {
+        if (SuchakPaymentFeatureFreeze::query()->activeForPaymentContext($context)->exists()) {
+            throw new InvalidArgumentException('Suchak direct payment collection is frozen for this customer context during a payment risk review.');
+        }
+
         if ($context->source_owner === SuchakPaymentContext::SOURCE_PLATFORM) {
             throw new InvalidArgumentException(SuchakPaymentContext::PLATFORM_DIRECT_PAYMENT_BLOCK_MESSAGE);
         }

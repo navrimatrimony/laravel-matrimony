@@ -201,6 +201,24 @@ class SuchakCustomerContext extends Model
             ->orderByDesc('id');
     }
 
+    public function directPaymentEvidence(): HasMany
+    {
+        return $this->hasMany(SuchakDirectPaymentEvidence::class, 'customer_context_id')
+            ->orderByDesc('id');
+    }
+
+    public function paymentFeatureFreezes(): HasMany
+    {
+        return $this->hasMany(SuchakPaymentFeatureFreeze::class, 'customer_context_id')
+            ->orderByDesc('id');
+    }
+
+    public function payoutHolds(): HasMany
+    {
+        return $this->hasMany(SuchakPayoutHold::class, 'customer_context_id')
+            ->orderByDesc('id');
+    }
+
     public function delete(): ?bool
     {
         throw new RuntimeException('Suchak customer contexts cannot be deleted.');

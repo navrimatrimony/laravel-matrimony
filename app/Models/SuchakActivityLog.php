@@ -161,6 +161,14 @@ class SuchakActivityLog extends Model
 
     public const ACTION_CUSTOMER_PORTAL_LINK_EXPIRED = 'customer_portal_link_expired';
 
+    public const ACTION_DIRECT_PAYMENT_COMPLAINT_OPENED = 'direct_payment_complaint_opened';
+
+    public const ACTION_DIRECT_PAYMENT_EVIDENCE_ADDED = 'direct_payment_evidence_added';
+
+    public const ACTION_PAYMENT_FEATURE_FREEZE_OPENED = 'payment_feature_freeze_opened';
+
+    public const ACTION_PAYOUT_HOLD_OPENED = 'payout_hold_opened';
+
     protected $table = 'suchak_activity_logs';
 
     protected $fillable = [

@@ -93,6 +93,9 @@
 
     <section class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Payments And Documents</h2>
+        <div class="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+            Platform-collected customers should not make direct Suchak payments. If any Suchak asks for payment outside this verified platform context, use your logged-in account to report it with evidence.
+        </div>
         <div class="mt-4 space-y-4">
             @forelse ($payments as $payment)
                 <div class="rounded-md bg-gray-50 p-4 dark:bg-gray-900">

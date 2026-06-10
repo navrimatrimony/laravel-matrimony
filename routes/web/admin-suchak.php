@@ -23,6 +23,7 @@ Route::middleware(['auth', 'admin'])
         Route::post('/safety/disputes', [SafetyController::class, 'storeDispute'])->name('safety.disputes.store');
         Route::post('/safety/disputes/{dispute}/review', [SafetyController::class, 'reviewDispute'])->name('safety.disputes.review');
         Route::post('/safety/disputes/{dispute}/close', [SafetyController::class, 'closeDispute'])->name('safety.disputes.close');
+        Route::post('/safety/disputes/{dispute}/payment-freeze', [SafetyController::class, 'freezePaymentAbility'])->name('safety.disputes.payment-freeze');
         Route::post('/safety/accounts/{suchakAccount}/freeze', [SafetyController::class, 'freezeAccount'])->name('safety.accounts.freeze');
         Route::post('/safety/accounts/{suchakAccount}/unfreeze', [SafetyController::class, 'unfreezeAccount'])->name('safety.accounts.unfreeze');
         Route::post('/safety/accounts/{suchakAccount}/pause', [SafetyController::class, 'pauseAccount'])->name('safety.accounts.pause');
