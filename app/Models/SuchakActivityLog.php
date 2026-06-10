@@ -22,6 +22,7 @@ class SuchakActivityLog extends Model
     public const ACTION_SOURCE_LINK_CREATED = 'source_link_created';
     public const ACTION_REPRESENTATION_CREATED = 'representation_created';
     public const ACTION_REPRESENTATION_STATUS_CHANGED = 'representation_status_changed';
+    public const ACTION_REPRESENTATION_CANDIDATE_DEACTIVATED = 'representation_candidate_deactivated';
     public const ACTION_CONSENT_REQUESTED = 'consent_requested';
     public const ACTION_CONSENT_VERIFIED = 'consent_verified';
     public const ACTION_CONSENT_REVOKED = 'consent_revoked';
