@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use RuntimeException;
 
@@ -89,6 +90,11 @@ class SuchakCollaborationRequest extends Model
     public function commissionAgreement(): HasOne
     {
         return $this->hasOne(SuchakCommissionAgreement::class, 'collaboration_request_id');
+    }
+
+    public function ledgerEntries(): HasMany
+    {
+        return $this->hasMany(SuchakLedgerEntry::class, 'collaboration_request_id');
     }
 
     public function isOpen(): bool

@@ -64,6 +64,7 @@ class SuchakCollaborationService
             $this->assertCanCreate($lockedRequestingAccount, $actor, $lockedRequestingRepresentation, $lockedTargetRepresentation);
             $this->limitService->assertCollaborationRequestAllowed($lockedRequestingAccount);
             $this->assertNoDuplicateOpenRequest($lockedRequestingRepresentation, $lockedTargetRepresentation);
+            $commissionTerms = $this->normalizeCommissionTerms($attributes);
 
             $requestedAt = now();
             $collaboration = SuchakCollaborationRequest::query()->create([
@@ -92,8 +93,11 @@ class SuchakCollaborationService
                 'groom_side_suchak_account_id' => $groomAccountId,
                 'bride_side_suchak_account_id' => $brideAccountId,
                 'agreement_type' => SuchakCommissionAgreement::TYPE_COLLABORATION_ACK,
-                'split_type' => SuchakCommissionAgreement::SPLIT_TO_BE_DISCUSSED,
-                'currency' => 'INR',
+                'split_type' => $commissionTerms['split_type'],
+                'groom_side_share' => $commissionTerms['groom_side_share'],
+                'bride_side_share' => $commissionTerms['bride_side_share'],
+                'fixed_amount' => $commissionTerms['fixed_amount'],
+                'currency' => $commissionTerms['currency'],
                 'agreement_text_snapshot' => SuchakCommissionAgreement::MVP_ACK_TEXT,
                 $requesterAckColumn => $requestedAt,
                 'agreement_status' => SuchakCommissionAgreement::STATUS_PENDING,
@@ -206,6 +210,116 @@ class SuchakCollaborationService
         });
     }
 
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    public function updateCommissionTerms(
+        SuchakCollaborationRequest $collaboration,
+        SuchakAccount $requestingAccount,
+        User $actor,
+        array $attributes,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): SuchakCommissionAgreement {
+        $requestingAccount->refresh();
+        $this->assertRequestingActor($collaboration, $requestingAccount, $actor);
+        $terms = $this->normalizeCommissionTerms($attributes);
+
+        return DB::transaction(function () use ($collaboration, $requestingAccount, $actor, $terms, $ipAddress, $userAgent): SuchakCommissionAgreement {
+            /** @var SuchakCollaborationRequest $locked */
+            $locked = SuchakCollaborationRequest::query()
+                ->whereKey($collaboration->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $locked->loadMissing('commissionAgreement');
+            $this->assertRequestingActor($locked, $requestingAccount, $actor);
+            $this->assertPendingAndNotExpired($locked);
+
+            $agreement = $locked->commissionAgreement ?? $this->createMissingAgreement($locked);
+            $requesterAckColumn = (int) $requestingAccount->id === (int) $agreement->groom_side_suchak_account_id
+                ? 'accepted_by_groom_suchak_at'
+                : 'accepted_by_bride_suchak_at';
+
+            $updates = [
+                'split_type' => $terms['split_type'],
+                'groom_side_share' => $terms['groom_side_share'],
+                'bride_side_share' => $terms['bride_side_share'],
+                'fixed_amount' => $terms['fixed_amount'],
+                'currency' => $terms['currency'],
+                'accepted_by_groom_suchak_at' => null,
+                'accepted_by_bride_suchak_at' => null,
+                'agreement_status' => SuchakCommissionAgreement::STATUS_PENDING,
+            ];
+            $updates[$requesterAckColumn] = now();
+
+            SuchakCommissionAgreement::query()
+                ->whereKey($agreement->id)
+                ->update($updates);
+
+            $updated = $agreement->fresh(['collaborationRequest']);
+            $this->recordActivity(
+                SuchakActivityLog::ACTION_COMMISSION_AGREEMENT_UPDATED,
+                $locked->fresh(['commissionAgreement']),
+                $actor,
+                $ipAddress,
+                $userAgent,
+                [
+                    'context' => 'commission_agreement_updated',
+                    'split_type' => $updated->split_type,
+                    'has_fixed_amount' => $updated->fixed_amount !== null,
+                    'has_percent_split' => $updated->groom_side_share !== null || $updated->bride_side_share !== null,
+                ],
+            );
+
+            return $updated;
+        });
+    }
+
+    public function expireForAccount(
+        SuchakCollaborationRequest $collaboration,
+        SuchakAccount $account,
+        User $actor,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): SuchakCollaborationRequest {
+        $account->refresh();
+        $this->assertParticipantActor($collaboration, $account, $actor);
+
+        return DB::transaction(function () use ($collaboration, $account, $actor, $ipAddress, $userAgent): SuchakCollaborationRequest {
+            /** @var SuchakCollaborationRequest $locked */
+            $locked = SuchakCollaborationRequest::query()
+                ->whereKey($collaboration->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $locked->loadMissing('commissionAgreement');
+            $this->assertParticipantActor($locked, $account, $actor);
+
+            if ($locked->status !== SuchakCollaborationRequest::STATUS_PENDING) {
+                throw new InvalidArgumentException('Only pending collaboration requests can be expired.');
+            }
+
+            if ($locked->expires_at === null || $locked->expires_at->isFuture()) {
+                throw new InvalidArgumentException('Collaboration request is not past its policy timeout.');
+            }
+
+            return $this->expireLockedCollaboration($locked, $actor, $ipAddress, $userAgent);
+        });
+    }
+
+    public function assertAcceptedParticipant(
+        SuchakCollaborationRequest $collaboration,
+        SuchakAccount $account,
+        User $actor,
+    ): void {
+        $account->refresh();
+        $collaboration->refresh()->loadMissing('commissionAgreement');
+        $this->assertParticipantActor($collaboration, $account, $actor);
+
+        if (! $this->canExchangeContact($collaboration)) {
+            throw new InvalidArgumentException('Collaboration must be accepted with commission acknowledgement before ledger linkage.');
+        }
+    }
+
     public function expireIfPastDue(SuchakCollaborationRequest $collaboration): SuchakCollaborationRequest
     {
         $collaboration->refresh()->loadMissing('commissionAgreement');
@@ -225,27 +339,7 @@ class SuchakCollaborationService
                 return $locked;
             }
 
-            SuchakCollaborationRequest::query()
-                ->whereKey($locked->id)
-                ->update(['status' => SuchakCollaborationRequest::STATUS_EXPIRED]);
-
-            if ($locked->commissionAgreement) {
-                SuchakCommissionAgreement::query()
-                    ->whereKey($locked->commissionAgreement->id)
-                    ->update(['agreement_status' => SuchakCommissionAgreement::STATUS_CANCELLED]);
-            }
-
-            $expired = $locked->fresh(['commissionAgreement']);
-            $this->recordActivity(
-                SuchakActivityLog::ACTION_COLLABORATION_REQUEST_EXPIRED,
-                $expired,
-                null,
-                null,
-                null,
-                ['context' => 'collaboration_request_expired'],
-            );
-
-            return $expired;
+            return $this->expireLockedCollaboration($locked, null, null, null);
         });
     }
 
@@ -310,6 +404,45 @@ class SuchakCollaborationService
         }
     }
 
+    private function assertRequestingActor(
+        SuchakCollaborationRequest $collaboration,
+        SuchakAccount $requestingAccount,
+        User $actor,
+    ): void {
+        if ((int) $requestingAccount->user_id !== (int) $actor->id) {
+            throw new InvalidArgumentException('Only the requesting Suchak account owner can change commission terms.');
+        }
+
+        if ((int) $collaboration->requesting_suchak_account_id !== (int) $requestingAccount->id) {
+            throw new InvalidArgumentException('Only the requesting Suchak account can change commission terms.');
+        }
+
+        if (! $this->accessService->canOperate($requestingAccount)) {
+            throw new InvalidArgumentException('Only verified Suchak accounts can change commission terms.');
+        }
+    }
+
+    private function assertParticipantActor(
+        SuchakCollaborationRequest $collaboration,
+        SuchakAccount $account,
+        User $actor,
+    ): void {
+        if ((int) $account->user_id !== (int) $actor->id) {
+            throw new InvalidArgumentException('Only a participating Suchak account owner can use this collaboration.');
+        }
+
+        if (! in_array((int) $account->id, [
+            (int) $collaboration->requesting_suchak_account_id,
+            (int) $collaboration->target_suchak_account_id,
+        ], true)) {
+            throw new InvalidArgumentException('Suchak account is not part of this collaboration.');
+        }
+
+        if (! $this->accessService->canOperate($account)) {
+            throw new InvalidArgumentException('Only verified Suchak accounts can use collaboration actions.');
+        }
+    }
+
     private function assertPendingAndNotExpired(SuchakCollaborationRequest $collaboration): void
     {
         if ($collaboration->status !== SuchakCollaborationRequest::STATUS_PENDING) {
@@ -319,6 +452,35 @@ class SuchakCollaborationService
         if ($collaboration->expires_at !== null && $collaboration->expires_at->isPast()) {
             throw new InvalidArgumentException('Collaboration request has expired.');
         }
+    }
+
+    private function expireLockedCollaboration(
+        SuchakCollaborationRequest $locked,
+        ?User $actor,
+        ?string $ipAddress,
+        ?string $userAgent,
+    ): SuchakCollaborationRequest {
+        SuchakCollaborationRequest::query()
+            ->whereKey($locked->id)
+            ->update(['status' => SuchakCollaborationRequest::STATUS_EXPIRED]);
+
+        if ($locked->commissionAgreement) {
+            SuchakCommissionAgreement::query()
+                ->whereKey($locked->commissionAgreement->id)
+                ->update(['agreement_status' => SuchakCommissionAgreement::STATUS_CANCELLED]);
+        }
+
+        $expired = $locked->fresh(['commissionAgreement']);
+        $this->recordActivity(
+            SuchakActivityLog::ACTION_COLLABORATION_REQUEST_EXPIRED,
+            $expired,
+            $actor,
+            $ipAddress,
+            $userAgent,
+            ['context' => 'collaboration_request_expired'],
+        );
+
+        return $expired;
     }
 
     private function assertNoDuplicateOpenRequest(
@@ -393,6 +555,90 @@ class SuchakCollaborationService
             'agreement_text_snapshot' => SuchakCommissionAgreement::MVP_ACK_TEXT,
             'agreement_status' => SuchakCommissionAgreement::STATUS_PENDING,
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @return array{split_type: string, groom_side_share: ?string, bride_side_share: ?string, fixed_amount: ?string, currency: string}
+     */
+    private function normalizeCommissionTerms(array $attributes): array
+    {
+        $splitType = trim((string) ($attributes['split_type'] ?? SuchakCommissionAgreement::SPLIT_TO_BE_DISCUSSED));
+        if (! in_array($splitType, SuchakCommissionAgreement::SPLIT_TYPES, true)) {
+            throw new InvalidArgumentException('Invalid Suchak commission split type.');
+        }
+
+        $currency = strtoupper(trim((string) ($attributes['currency'] ?? 'INR')));
+        if (! preg_match('/^[A-Z]{3}$/', $currency)) {
+            throw new InvalidArgumentException('Commission currency must be a three-letter code.');
+        }
+
+        if ($splitType === SuchakCommissionAgreement::SPLIT_EQUAL_PERCENT) {
+            return [
+                'split_type' => $splitType,
+                'groom_side_share' => '50.00',
+                'bride_side_share' => '50.00',
+                'fixed_amount' => null,
+                'currency' => $currency,
+            ];
+        }
+
+        if ($splitType === SuchakCommissionAgreement::SPLIT_CUSTOM_PERCENT) {
+            $groomShare = $this->percentage($attributes['groom_side_share'] ?? null, 'Groom-side commission share is required.');
+            $brideShare = $this->percentage($attributes['bride_side_share'] ?? null, 'Bride-side commission share is required.');
+            if (abs(((float) $groomShare + (float) $brideShare) - 100.0) > 0.01) {
+                throw new InvalidArgumentException('Suchak commission percentage split must total 100.');
+            }
+
+            return [
+                'split_type' => $splitType,
+                'groom_side_share' => $groomShare,
+                'bride_side_share' => $brideShare,
+                'fixed_amount' => null,
+                'currency' => $currency,
+            ];
+        }
+
+        if ($splitType === SuchakCommissionAgreement::SPLIT_FIXED_AMOUNT) {
+            return [
+                'split_type' => $splitType,
+                'groom_side_share' => null,
+                'bride_side_share' => null,
+                'fixed_amount' => $this->positiveAmount($attributes['fixed_amount'] ?? null),
+                'currency' => $currency,
+            ];
+        }
+
+        return [
+            'split_type' => SuchakCommissionAgreement::SPLIT_TO_BE_DISCUSSED,
+            'groom_side_share' => null,
+            'bride_side_share' => null,
+            'fixed_amount' => null,
+            'currency' => $currency,
+        ];
+    }
+
+    private function percentage(mixed $value, string $message): string
+    {
+        if ($value === null || $value === '' || ! is_numeric($value)) {
+            throw new InvalidArgumentException($message);
+        }
+
+        $percent = (float) $value;
+        if ($percent < 0 || $percent > 100) {
+            throw new InvalidArgumentException('Suchak commission percentage must be between 0 and 100.');
+        }
+
+        return number_format($percent, 2, '.', '');
+    }
+
+    private function positiveAmount(mixed $value): string
+    {
+        if ($value === null || $value === '' || ! is_numeric($value) || (float) $value <= 0) {
+            throw new InvalidArgumentException('Fixed commission amount must be greater than zero.');
+        }
+
+        return number_format((float) $value, 2, '.', '');
     }
 
     private function acknowledgeAgreementForAccount(SuchakCommissionAgreement $agreement, int $accountId): void

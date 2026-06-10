@@ -67,6 +67,8 @@ class SuchakActivityLog extends Model
 
     public const ACTION_COLLABORATION_REQUEST_EXPIRED = 'collaboration_request_expired';
 
+    public const ACTION_COMMISSION_AGREEMENT_UPDATED = 'commission_agreement_updated';
+
     public const ACTION_CRM_NOTE_ADDED = 'crm_note_added';
 
     public const ACTION_LEDGER_ENTRY_CREATED = 'ledger_entry_created';

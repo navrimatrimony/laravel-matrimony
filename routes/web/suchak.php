@@ -108,13 +108,24 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
         Route::post('/representations/{representation}/ledger-entries', [CrmLedgerController::class, 'storeLedgerEntry'])
             ->middleware('throttle:20,1')
             ->name('representations.ledger-entries.store');
+        Route::get('/collaborations', [CollaborationController::class, 'index'])
+            ->name('collaborations.index');
         Route::post('/collaborations', [CollaborationController::class, 'store'])
             ->middleware('throttle:15,1')
             ->name('collaborations.store');
+        Route::post('/collaborations/{collaborationRequest}/commission', [CollaborationController::class, 'updateCommission'])
+            ->middleware('throttle:15,1')
+            ->name('collaborations.commission.update');
         Route::post('/collaborations/{collaborationRequest}/accept', [CollaborationController::class, 'accept'])
             ->middleware('throttle:15,1')
             ->name('collaborations.accept');
         Route::post('/collaborations/{collaborationRequest}/reject', [CollaborationController::class, 'reject'])
             ->middleware('throttle:15,1')
             ->name('collaborations.reject');
+        Route::post('/collaborations/{collaborationRequest}/expire', [CollaborationController::class, 'expire'])
+            ->middleware('throttle:15,1')
+            ->name('collaborations.expire');
+        Route::post('/collaborations/{collaborationRequest}/ledger-entries', [CollaborationController::class, 'storeLedgerEntry'])
+            ->middleware('throttle:20,1')
+            ->name('collaborations.ledger-entries.store');
     });

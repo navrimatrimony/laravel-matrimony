@@ -64,9 +64,14 @@
                 Manage represented profiles, source biodata, masked discovery, collaborations, and governed profile update suggestions.
             </p>
         </div>
-        <div class="rounded-md border px-4 py-3 text-sm font-semibold {{ $statusTone }}">
-            Verification: {{ ucfirst($suchakAccount->verification_status) }}
-            <span class="ml-2 font-normal">Public: {{ ucfirst($suchakAccount->public_status) }}</span>
+        <div class="flex flex-col gap-2 md:items-end">
+            <div class="rounded-md border px-4 py-3 text-sm font-semibold {{ $statusTone }}">
+                Verification: {{ ucfirst($suchakAccount->verification_status) }}
+                <span class="ml-2 font-normal">Public: {{ ucfirst($suchakAccount->public_status) }}</span>
+            </div>
+            <a href="{{ route('suchak.collaborations.index') }}" class="inline-flex justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+                Collaboration center
+            </a>
         </div>
     </div>
 

@@ -13,6 +13,17 @@ class SuchakCommissionAgreement extends Model
 
     public const TYPE_COLLABORATION_ACK = 'collaboration_commission_ack';
     public const SPLIT_TO_BE_DISCUSSED = 'to_be_discussed';
+    public const SPLIT_EQUAL_PERCENT = 'equal_percent';
+    public const SPLIT_CUSTOM_PERCENT = 'custom_percent';
+    public const SPLIT_FIXED_AMOUNT = 'fixed_amount';
+
+    public const SPLIT_TYPES = [
+        self::SPLIT_TO_BE_DISCUSSED,
+        self::SPLIT_EQUAL_PERCENT,
+        self::SPLIT_CUSTOM_PERCENT,
+        self::SPLIT_FIXED_AMOUNT,
+    ];
+
     public const STATUS_PENDING = 'pending';
     public const STATUS_ACCEPTED = 'accepted';
     public const STATUS_REJECTED = 'rejected';
