@@ -14,6 +14,7 @@ use App\Models\SuchakActivityLog;
 use App\Models\SuchakBiodataIntakeLink;
 use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakConsent;
+use App\Models\SuchakDispute;
 use App\Models\SuchakLedgerEntry;
 use App\Models\SuchakPipelineEvent;
 use App\Models\SuchakPlan;
@@ -282,12 +283,38 @@ class SuchakIntegratedQaTest extends TestCase
             'admin.suchak.accounts.approve',
             'admin.suchak.accounts.reject',
             'admin.suchak.accounts.suspend',
+            'admin.suchak.accounts.archive',
+            'admin.suchak.accounts.reactivate',
+            'admin.suchak.accounts.public-status.update',
+            'admin.suchak.accounts.verification-records.approve',
+            'admin.suchak.accounts.verification-records.reject',
             'matrimony.profile.suchak-requests.store',
         ] as $routeName) {
             $this->assertTrue(Route::has($routeName), $routeName);
         }
 
-        $this->assertFalse(Schema::hasTable('suchak_disputes'));
+        $this->assertTrue(Schema::hasTable('suchak_disputes'));
+        foreach ([
+            'suchak_account_id',
+            'matrimony_profile_id',
+            'representation_id',
+            'opened_by_user_id',
+            'assigned_admin_user_id',
+            'dispute_type',
+            'status',
+            'priority',
+            'summary',
+            'evidence_summary',
+            'resolution_note',
+            'opened_at',
+            'resolved_at',
+        ] as $column) {
+            $this->assertTrue(Schema::hasColumn('suchak_disputes', $column), $column);
+        }
+
+        $dispute = SuchakDispute::factory()->create();
+        $this->assertSame(SuchakDispute::STATUS_OPEN, $dispute->status);
+
         $this->assertFalse(Route::has('suchak.payments.start'));
         $this->assertFalse(Route::has('suchak.subscriptions.payu.start'));
     }

@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Admin\Suchak;
 use App\Http\Controllers\Controller;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
+use App\Models\SuchakVerificationRecord;
 use App\Modules\Suchak\Services\SuchakAccountLifecycleService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use InvalidArgumentException;
 
@@ -121,6 +123,106 @@ class AccountVerificationController extends Controller
         );
     }
 
+    public function archive(
+        Request $request,
+        SuchakAccount $suchakAccount,
+        SuchakAccountLifecycleService $lifecycleService
+    ): RedirectResponse {
+        $validated = $this->validateReason($request);
+
+        return $this->runLifecycleAction(
+            fn () => $lifecycleService->archive(
+                $suchakAccount,
+                $request->user(),
+                $validated['reason'],
+                $request->ip(),
+                Str::limit((string) $request->userAgent(), 512, '')
+            ),
+            $suchakAccount,
+            'Suchak account archived.'
+        );
+    }
+
+    public function reactivate(
+        Request $request,
+        SuchakAccount $suchakAccount,
+        SuchakAccountLifecycleService $lifecycleService
+    ): RedirectResponse {
+        $validated = $this->validateReason($request);
+
+        return $this->runLifecycleAction(
+            fn () => $lifecycleService->reactivate(
+                $suchakAccount,
+                $request->user(),
+                $validated['reason'],
+                $request->ip(),
+                Str::limit((string) $request->userAgent(), 512, '')
+            ),
+            $suchakAccount,
+            'Suchak account reactivated.'
+        );
+    }
+
+    public function updatePublicStatus(
+        Request $request,
+        SuchakAccount $suchakAccount,
+        SuchakAccountLifecycleService $lifecycleService
+    ): RedirectResponse {
+        $validated = $request->validate([
+            'public_status' => ['required', 'string', Rule::in([
+                SuchakAccount::PUBLIC_HIDDEN,
+                SuchakAccount::PUBLIC_ACTIVE,
+                SuchakAccount::PUBLIC_INACTIVE,
+            ])],
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        return $this->runLifecycleAction(
+            fn () => $lifecycleService->updatePublicStatus(
+                $suchakAccount,
+                $request->user(),
+                $validated['public_status'],
+                $validated['reason'],
+                $request->ip(),
+                Str::limit((string) $request->userAgent(), 512, '')
+            ),
+            $suchakAccount,
+            'Suchak public status updated.'
+        );
+    }
+
+    public function approveVerificationRecord(
+        Request $request,
+        SuchakAccount $suchakAccount,
+        SuchakVerificationRecord $verificationRecord,
+        SuchakAccountLifecycleService $lifecycleService
+    ): RedirectResponse {
+        return $this->reviewVerificationRecord(
+            $request,
+            $suchakAccount,
+            $verificationRecord,
+            $lifecycleService,
+            SuchakVerificationRecord::STATUS_APPROVED,
+            'Suchak verification record approved.'
+        );
+    }
+
+    public function rejectVerificationRecord(
+        Request $request,
+        SuchakAccount $suchakAccount,
+        SuchakVerificationRecord $verificationRecord,
+        SuchakAccountLifecycleService $lifecycleService
+    ): RedirectResponse {
+        return $this->reviewVerificationRecord(
+            $request,
+            $suchakAccount,
+            $verificationRecord,
+            $lifecycleService,
+            SuchakVerificationRecord::STATUS_REJECTED,
+            'Suchak verification record rejected.'
+        );
+    }
+
     /**
      * @return array{reason: string}
      */
@@ -142,5 +244,31 @@ class AccountVerificationController extends Controller
         return redirect()
             ->route('admin.suchak.accounts.show', $account)
             ->with('success', $successMessage);
+    }
+
+    private function reviewVerificationRecord(
+        Request $request,
+        SuchakAccount $suchakAccount,
+        SuchakVerificationRecord $verificationRecord,
+        SuchakAccountLifecycleService $lifecycleService,
+        string $adminStatus,
+        string $successMessage
+    ): RedirectResponse {
+        abort_unless($verificationRecord->suchak_account_id === $suchakAccount->id, 404);
+
+        $validated = $this->validateReason($request);
+
+        return $this->runLifecycleAction(
+            fn () => $lifecycleService->updateVerificationRecordStatus(
+                $verificationRecord,
+                $request->user(),
+                $adminStatus,
+                $validated['reason'],
+                $request->ip(),
+                Str::limit((string) $request->userAgent(), 512, '')
+            ),
+            $suchakAccount,
+            $successMessage
+        );
     }
 }

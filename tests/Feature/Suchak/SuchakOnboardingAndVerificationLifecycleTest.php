@@ -302,6 +302,204 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_archive_verified_suchak_account_with_audit_links(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $account = SuchakAccount::factory()->create([
+            'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+            'public_status' => SuchakAccount::PUBLIC_ACTIVE,
+            'verified_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.suchak.accounts.archive', $account), [
+                'reason' => 'Archiving after Suchak office closure.',
+            ])
+            ->assertRedirect(route('admin.suchak.accounts.show', $account));
+
+        $account->refresh();
+
+        $this->assertSame(SuchakAccount::VERIFICATION_ARCHIVED, $account->verification_status);
+        $this->assertSame(SuchakAccount::PUBLIC_HIDDEN, $account->public_status);
+        $this->assertNotNull($account->archived_at);
+
+        $adminAuditLog = AdminAuditLog::query()
+            ->where('action_type', 'suchak_account_archived')
+            ->where('entity_id', $account->id)
+            ->first();
+
+        $this->assertNotNull($adminAuditLog);
+
+        $this->assertDatabaseHas('suchak_activity_logs', [
+            'suchak_account_id' => $account->id,
+            'actor_user_id' => $admin->id,
+            'actor_type' => SuchakActivityLog::ACTOR_ADMIN,
+            'admin_audit_log_id' => $adminAuditLog->id,
+        ]);
+    }
+
+    public function test_admin_can_reactivate_suspended_suchak_account_to_verified_hidden(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $account = SuchakAccount::factory()->create([
+            'verification_status' => SuchakAccount::VERIFICATION_SUSPENDED,
+            'public_status' => SuchakAccount::PUBLIC_HIDDEN,
+            'verified_at' => now()->subDay(),
+            'suspended_at' => now(),
+            'suspension_reason' => 'Old suspension reason.',
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.suchak.accounts.reactivate', $account), [
+                'reason' => 'Reactivating after admin review cleared issue.',
+            ])
+            ->assertRedirect(route('admin.suchak.accounts.show', $account));
+
+        $account->refresh();
+
+        $this->assertSame(SuchakAccount::VERIFICATION_VERIFIED, $account->verification_status);
+        $this->assertSame(SuchakAccount::PUBLIC_HIDDEN, $account->public_status);
+        $this->assertNull($account->suspended_at);
+        $this->assertNull($account->suspension_reason);
+
+        $this->assertDatabaseHas('admin_audit_logs', [
+            'action_type' => 'suchak_account_reactivated',
+            'entity_type' => 'SuchakAccount',
+            'entity_id' => $account->id,
+        ]);
+    }
+
+    public function test_admin_reactivation_from_archived_reopens_pending_review_without_direct_verified_jump(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $account = SuchakAccount::factory()->create([
+            'verification_status' => SuchakAccount::VERIFICATION_ARCHIVED,
+            'public_status' => SuchakAccount::PUBLIC_HIDDEN,
+            'verified_at' => now()->subDays(3),
+            'archived_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.suchak.accounts.reactivate', $account), [
+                'reason' => 'Reopening archived Suchak for fresh verification.',
+            ])
+            ->assertRedirect(route('admin.suchak.accounts.show', $account));
+
+        $account->refresh();
+
+        $this->assertSame(SuchakAccount::VERIFICATION_PENDING, $account->verification_status);
+        $this->assertSame(SuchakAccount::PUBLIC_HIDDEN, $account->public_status);
+        $this->assertNull($account->verified_at);
+        $this->assertNull($account->archived_at);
+
+        $this->assertDatabaseHas('suchak_verification_records', [
+            'suchak_account_id' => $account->id,
+            'admin_status' => SuchakVerificationRecord::STATUS_PENDING,
+            'admin_user_id' => $admin->id,
+        ]);
+    }
+
+    public function test_admin_can_change_verified_suchak_public_status_with_audit(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $account = SuchakAccount::factory()->create([
+            'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+            'public_status' => SuchakAccount::PUBLIC_HIDDEN,
+            'verified_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.suchak.accounts.public-status.update', $account), [
+                'public_status' => SuchakAccount::PUBLIC_ACTIVE,
+                'reason' => 'Making verified Suchak publicly visible.',
+            ])
+            ->assertRedirect(route('admin.suchak.accounts.show', $account));
+
+        $this->assertSame(SuchakAccount::PUBLIC_ACTIVE, $account->fresh()->public_status);
+
+        $this->actingAs($admin)
+            ->post(route('admin.suchak.accounts.public-status.update', $account), [
+                'public_status' => SuchakAccount::PUBLIC_INACTIVE,
+                'reason' => 'Temporarily making public listing inactive.',
+            ])
+            ->assertRedirect(route('admin.suchak.accounts.show', $account));
+
+        $this->assertSame(SuchakAccount::PUBLIC_INACTIVE, $account->fresh()->public_status);
+
+        $this->assertDatabaseHas('admin_audit_logs', [
+            'action_type' => 'suchak_public_status_changed',
+            'entity_type' => 'SuchakAccount',
+            'entity_id' => $account->id,
+        ]);
+    }
+
+    public function test_admin_cannot_make_unverified_suchak_public_active(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $account = SuchakAccount::factory()->create([
+            'verification_status' => SuchakAccount::VERIFICATION_PENDING,
+            'public_status' => SuchakAccount::PUBLIC_HIDDEN,
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.suchak.accounts.show', $account))
+            ->post(route('admin.suchak.accounts.public-status.update', $account), [
+                'public_status' => SuchakAccount::PUBLIC_ACTIVE,
+                'reason' => 'Trying to expose unverified Suchak publicly.',
+            ])
+            ->assertRedirect(route('admin.suchak.accounts.show', $account));
+
+        $this->assertSame(SuchakAccount::PUBLIC_HIDDEN, $account->fresh()->public_status);
+        $this->assertDatabaseMissing('admin_audit_logs', [
+            'action_type' => 'suchak_public_status_changed',
+            'entity_id' => $account->id,
+        ]);
+    }
+
+    public function test_admin_can_review_document_verification_record_status_with_audit_links(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $account = SuchakAccount::factory()->create([
+            'verification_status' => SuchakAccount::VERIFICATION_PENDING,
+        ]);
+        $record = SuchakVerificationRecord::factory()->create([
+            'suchak_account_id' => $account->id,
+            'verification_type' => SuchakVerificationRecord::TYPE_OFFICE,
+            'document_path' => 'suchak-documents/office-proof.pdf',
+            'admin_status' => SuchakVerificationRecord::STATUS_PENDING,
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.suchak.accounts.verification-records.approve', [$account, $record]), [
+                'reason' => 'Office document looks valid.',
+            ])
+            ->assertRedirect(route('admin.suchak.accounts.show', $account));
+
+        $record->refresh();
+
+        $this->assertSame(SuchakVerificationRecord::STATUS_APPROVED, $record->admin_status);
+        $this->assertSame($admin->id, $record->admin_user_id);
+        $this->assertNotNull($record->verified_at);
+        $this->assertNull($record->rejected_at);
+
+        $adminAuditLog = AdminAuditLog::query()
+            ->where('action_type', 'suchak_verification_record_status_changed')
+            ->where('entity_type', 'SuchakVerificationRecord')
+            ->where('entity_id', $record->id)
+            ->first();
+
+        $this->assertNotNull($adminAuditLog);
+
+        $this->assertDatabaseHas('suchak_activity_logs', [
+            'suchak_account_id' => $account->id,
+            'actor_user_id' => $admin->id,
+            'actor_type' => SuchakActivityLog::ACTOR_ADMIN,
+            'target_type' => 'suchak_verification_record',
+            'target_id' => $record->id,
+            'admin_audit_log_id' => $adminAuditLog->id,
+        ]);
+    }
+
     public function test_admin_cannot_approve_non_pending_suchak_account_on_day_4(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);

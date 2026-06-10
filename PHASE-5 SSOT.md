@@ -16808,3 +16808,683 @@ Day-7 is complete only if:
 
 END OF PHASE-6 SUCHAK MODULE ADDENDUM - DAY-7 CONSENT FOUNDATION CLARIFICATION PATCH
 ############################################################
+
+############################################################
+PHASE-6 ADVANCED SUCHAK COMPLETION PATCH - DAY-18
+(ADVANCED SUCHAK DAYWISE COMPLETION CONTRACT)
+############################################################
+
+This patch extends the existing "PHASE-6 - SUCHAK MODULE ADDENDUM".
+
+Day-18 is a planning and SSOT-lock day only.
+
+Day-18 does NOT implement runtime behavior.
+Day-18 does NOT create migrations, controllers, routes, views, services, jobs, payment code, PDF code, notification code, or UI changes.
+
+The purpose of Day-18 is to lock the advanced Suchak completion sequence so that all later implementation days have a clear, testable, non-ambiguous contract.
+
+============================================================
+1) GOVERNANCE CONTINUITY
+============================================================
+
+All existing Phase-5 and Phase-6 governance remains binding.
+
+This patch does NOT weaken:
+
+* MutationService authority
+* governed profile mutation boundaries
+* no silent overwrite
+* no direct profile update/save paths for governed profile data
+* no stored age field
+* no JSON blob storage for structured entities
+* no lifecycle changes outside governed services
+* intake/OCR/parser isolation
+* contact/privacy masking rules
+* audit/activity trace rules
+* Suchak-private business data separation
+
+All governed profile writes must still pass through MutationService or the already approved governed mutation layer.
+
+Suchak business records remain in `suchak_*` tables.
+Suchak-private notes, ledger entries, commission records, payment records, and CRM data must never become canonical profile truth.
+
+============================================================
+2) ADVANCED COMPLETION NON-NEGOTIABLE RULE
+============================================================
+
+After Advanced Suchak completion, only live external credentials may remain pending:
+
+* live PayU production credentials
+* live SMS provider credentials
+* live WhatsApp provider activation/API keys
+
+No internal DB flow, UI flow, service flow, test-mode payment flow, invoice flow, subscription activation flow, consent flow, PDF/QR flow, dispute flow, ledger flow, policy enforcement flow, registration flow, approval flow, or permission flow may remain incomplete.
+
+If an internal flow is not implemented, tested, reachable through UI, and covered by the relevant role/access rules, Advanced Suchak completion cannot be claimed.
+
+============================================================
+3) SEPARATE SUCHAK REGISTRATION LOCK
+============================================================
+
+Suchak registration must be a separate onboarding process.
+
+Rules:
+
+1. `/suchak/register` must become a real separate Suchak onboarding flow.
+2. Regular matrimony users must NOT upgrade themselves into Suchak accounts through the member flow.
+3. Suchak must NOT be treated as a candidate profile.
+4. Suchak auth identity and Suchak business identity must remain separate.
+5. `users` remains authentication/account identity only.
+6. Suchak business data belongs in `suchak_accounts` and related `suchak_*` tables.
+7. Suchak onboarding must collect business/KYC data required for admin verification.
+8. Suchak onboarding must support document upload where verification requires documents.
+9. Suchak onboarding must support OTP/test-channel verification where the local environment has an available verification path.
+10. If live SMS/WhatsApp provider credentials are missing, test/manual verification mode may be used, but the UI, DB, service, and test flow must still be complete.
+11. Suchak registration must create a trackable request/status that admin can approve, reject, suspend, archive, or reactivate according to the later lifecycle contract.
+12. Suchak registration must be visible and usable for a non-technical Suchak user.
+
+The old placeholder-only `/suchak/register` interpretation ends after Day-18.
+Implementation begins only on Day-20 after Day-19 base closure.
+
+============================================================
+4) SUCHAK PLATFORM PAYMENT DESIGN
+============================================================
+
+Suchak platform-plan payment is in scope for Advanced Suchak completion.
+
+This flow means:
+
+Suchak pays Navri Mile Navryala for a Suchak plan.
+
+Rules:
+
+1. Reuse the existing project PayU/testing payment engine where verified by current code audit.
+2. Do NOT create a new payment gateway engine for Suchak.
+3. Do NOT assume payment route presence means full purchase-flow readiness.
+4. Day-31 must audit the existing PayU controller/service/provider boundary before implementation.
+5. Suchak plan purchase must support test-mode PayU flow.
+6. Payment success must activate or renew the Suchak subscription.
+7. Payment failure must not activate the subscription.
+8. Payment callback/webhook handling must be idempotent.
+9. Invoice/receipt record must be created or recorded.
+10. Plan limits must apply only after valid activation.
+11. Normal user plans and Suchak plans must remain fully separated.
+12. Production PayU credentials/live activation may remain pending.
+13. Internal DB flow, UI flow, test-mode flow, subscription activation, invoice/receipt, and tests must not remain pending.
+
+============================================================
+5) SUCHAK CUSTOMER PAYMENT DESIGN
+============================================================
+
+Suchak-customer payment is separate from platform-plan payment.
+
+This flow means:
+
+Customer pays Suchak directly.
+
+Rules:
+
+1. Customer payment must NOT use PayU.
+2. Platform must not process the money for this flow.
+3. Suchak may collect money through their own UPI QR/scanner, cash, or bank transfer.
+4. Suchak can manually mark the customer payment as pending, partial, paid, cancelled, or refunded where supported by the local ledger contract.
+5. The system must record ledger entry, amount, payment mode, reference number, payment date, status, and related candidate/customer context.
+6. The system must create or record an invoice/receipt for Suchak business use.
+7. Suchak customer payment records must remain Suchak-private business records.
+8. Suchak customer payment records must not mutate canonical profile truth.
+9. Admin may inspect customer payment evidence only through approved operational/admin views.
+
+============================================================
+6) STAFF AND BULK IMPORT BOUNDARY
+============================================================
+
+Staff module remains out of the Advanced Suchak completion sequence unless a separate SSOT amendment explicitly approves it.
+
+Bulk import remains out of the core Advanced Suchak completion sequence.
+Bulk import may be planned only after Day-37 if the core Suchak engine is complete and stable.
+
+============================================================
+7) DAYWISE COMPLETION MATRIX
+============================================================
+
+The following days are the approved Advanced Suchak implementation sequence.
+No implementation day may start until the previous day is either fully complete or explicitly converted into a preparation day with a clear remaining-gap note.
+
+============================================================
+DAY-18 - ADVANCED SUCHAK SSOT PATCH
+============================================================
+
+Goal:
+
+Lock the advanced Suchak completion contract before runtime work.
+
+Allowed scope:
+
+* PHASE-5 SSOT.md only
+
+Must include:
+
+* governance continuity
+* separate Suchak registration lock
+* Suchak platform payment design
+* Suchak customer payment design
+* live external credentials-only pending rule
+* Day-19 through Day-37 matrix
+
+Completion gate:
+
+* Day-18 patch appended to PHASE-5 SSOT.md
+* no implementation files changed
+* no migrations/controllers/routes/views/services/jobs/payment/PDF/UI files changed
+* `git diff -- PHASE-5 SSOT.md` reviewed
+
+============================================================
+DAY-19 - CURRENT-CODE AUDIT + BASE CLOSURE
+============================================================
+
+Goal:
+
+Close verified base gaps before advanced features are added.
+
+Required work:
+
+* audit current Suchak routes, tables, models, services, policies, views, tests
+* create/update the completion matrix with current pass/fail status
+* add or complete `suchak_disputes`
+* complete admin lifecycle transitions: approve, reject, suspend, archive, reactivate
+* complete public status controls where needed
+* complete document verification status handling
+* flip tests that currently assert missing advanced base behavior
+
+Completion gate:
+
+* base tables expected by SSOT exist
+* admin lifecycle has guarded route/service/test coverage
+* public status behavior is tested
+* document verification status is test-covered
+* no governed profile mutation bypass introduced
+
+============================================================
+DAY-20 - REAL SUCHAK REGISTRATION + OTP/KYC INTAKE
+============================================================
+
+Goal:
+
+Replace the placeholder Suchak registration with a real separate onboarding flow.
+
+Required work:
+
+* `/suchak/register` real registration UI
+* separate Suchak account request flow
+* no regular-user upgrade path
+* business/office/contact/KYC data capture
+* document upload where required
+* OTP/test verification or manual verification fallback
+* request status page
+* admin approval queue integration
+* Marathi-friendly non-technical copy
+
+Completion gate:
+
+* unauthenticated Suchak applicant can submit registration
+* regular member cannot self-upgrade through member flow
+* admin can see and process onboarding request
+* registration creates only approved Suchak business records
+* tests cover allowed and blocked paths
+
+============================================================
+DAY-21 - CENTRAL SUCHAK SERVICES
+============================================================
+
+Goal:
+
+Create a single reliable decision layer for access, policy, limits, entitlements, and payment status.
+
+Required services:
+
+* SuchakAccessService
+* SuchakPolicyService
+* SuchakLimitService
+* SuchakEntitlementService
+* SuchakPaymentStatusService
+
+Rules:
+
+* services must not mutate governed profile truth
+* services must centralize decisions instead of scattering status checks
+* controllers must use these services after they exist
+
+Completion gate:
+
+* role/status/access decisions are unit or feature tested
+* unverified/suspended/archived Suchaks are blocked consistently
+* policies and limits are read from the approved source
+
+============================================================
+DAY-22 - ADMIN SETTINGS CENTER
+============================================================
+
+Goal:
+
+Give admin a controlled settings surface for Suchak module policy.
+
+Required settings:
+
+* consent validity
+* request SLA
+* QR expiry
+* PDF/QR limits
+* upload limits
+* active profile limits
+* collaboration limits
+* pricing/free trial/grace period
+* commission rules
+* payment mode settings
+
+Completion gate:
+
+* admin can view/edit settings
+* changes are audited
+* invalid values are blocked
+* existing behavior reads settings through the central policy service where applicable
+
+============================================================
+DAY-23 - POLICY/LIMIT ENFORCEMENT EVERYWHERE
+============================================================
+
+Goal:
+
+Apply policies and limits across all Suchak operations.
+
+Required enforcement:
+
+* upload limits
+* PDF limits
+* active profile limits
+* collaboration limits
+* QR expiry
+* consent validity
+* SLA windows
+* plan entitlement limits
+
+Completion gate:
+
+* limits block actions before data mutation
+* error messages are usable
+* all limits have tests
+* no hardcoded timeout remains where policy must control it
+
+============================================================
+DAY-24 - REAL BRANDED BIODATA PDF + QR LIFECYCLE
+============================================================
+
+Goal:
+
+Generate real Suchak-branded biodata PDFs with secure QR lifecycle.
+
+Required work:
+
+* real PDF file generation
+* Suchak branding
+* secure random QR token
+* token hash storage where applicable
+* QR scan logging
+* expiry/revoke support
+* no direct contact reveal
+
+Completion gate:
+
+* PDF file exists after generation
+* QR token is secure and non-contact-revealing
+* expired/revoked QR cannot expose protected data
+* tests cover generation, scan, expiry, revoke
+
+============================================================
+DAY-25 - CONSENT OPERATIONAL UI
+============================================================
+
+Goal:
+
+Make consent practical for Suchak users and admin operations.
+
+Required work:
+
+* send consent request UI
+* resend consent request UI
+* revoke consent UI
+* renew consent UI
+* consent timeline
+* manual/WhatsApp/SMS channel modes using existing integrations only
+* consent evidence visibility
+
+Completion gate:
+
+* Suchak can operate consent from UI
+* admin can inspect consent evidence
+* live provider credentials may remain pending
+* test/manual channel flow is complete
+* no raw OTP/token persistence
+
+============================================================
+DAY-26 - CRM NOTES + LEDGER UI
+============================================================
+
+Goal:
+
+Expose practical Suchak-private CRM and ledger workflows.
+
+Required work:
+
+* notes UI
+* follow-up UI
+* ledger UI
+* customer payment status display
+* invoice/receipt visibility where applicable
+* filters/search for Suchak business records
+
+Completion gate:
+
+* Suchak can create and review notes
+* Suchak can manage ledger entries
+* CRM/ledger records stay Suchak-private
+* no canonical profile mutation occurs
+
+============================================================
+DAY-27 - ADMIN OPERATIONAL DASHBOARD + EVIDENCE TIMELINE
+============================================================
+
+Goal:
+
+Give admin an operational view of Suchak health and risk.
+
+Required work:
+
+* registrations summary
+* approvals summary
+* active/suspended/archived Suchaks
+* consent health
+* payment/subscription health
+* disputes/abuse summary
+* PDF/QR activity
+* evidence timeline
+
+Completion gate:
+
+* admin can inspect Suchak operational state
+* dashboard links to source records
+* sensitive data remains masked where required
+
+============================================================
+DAY-28 - DISPUTE / ABUSE / FREEZE / PAUSE / REVOKE CENTER
+============================================================
+
+Goal:
+
+Provide controlled safety and dispute operations.
+
+Required work:
+
+* dispute case lifecycle
+* abuse report handling
+* freeze/pause controls
+* representation revoke controls
+* evidence capture
+* admin action audit
+
+Completion gate:
+
+* disputes can be opened, reviewed, resolved
+* freeze/pause blocks relevant actions
+* revoke preserves business history
+* audit trail is complete
+
+============================================================
+DAY-29 - COLLABORATION + COMMISSION ADVANCED COMPLETION
+============================================================
+
+Goal:
+
+Complete Suchak-to-Suchak collaboration and commission workflows.
+
+Required work:
+
+* collaboration request lifecycle
+* policy-driven timeout
+* accept/reject/expire flow
+* commission agreement UI
+* commission ledger linkage
+
+Completion gate:
+
+* collaboration lifecycle is tested
+* timeout is policy-driven
+* commission records remain Suchak-private business records
+
+============================================================
+DAY-30 - SUCHAK PLAN CATALOG + ENTITLEMENT UI
+============================================================
+
+Goal:
+
+Make Suchak plans manageable and visible before payment execution.
+
+Required work:
+
+* admin plan catalog
+* plan pricing
+* plan features
+* free trial
+* grace period
+* usage/limit display
+* normal user plan separation
+
+Completion gate:
+
+* admin can manage Suchak plans
+* Suchak can see plan, limits, and usage
+* normal user plans do not show Suchak plans
+* entitlement service controls limits
+
+============================================================
+DAY-31 - EXISTING PAYU ENGINE REUSE FOR SUCHAK PLAN PAYMENTS
+============================================================
+
+Goal:
+
+Enable Suchak-to-platform plan payment using the existing PayU/testing engine.
+
+Required work:
+
+* audit existing PayU files before code changes
+* create Suchak plan checkout flow through existing payment boundary
+* success/failure handling
+* idempotent webhook/callback mapping
+* subscription activation
+* invoice/receipt record
+* payment history visibility
+
+Completion gate:
+
+* test-mode PayU Suchak plan payment works
+* success activates subscription
+* failure does not activate subscription
+* duplicate callback does not duplicate subscription/invoice
+* live credentials may remain pending only
+
+============================================================
+DAY-32 - SUCHAK CUSTOMER MANUAL PAYMENT LEDGER + INVOICE
+============================================================
+
+Goal:
+
+Support Suchak-customer payments without platform processing.
+
+Required work:
+
+* Suchak own UPI QR/scanner details display or record
+* cash/UPI/bank transfer manual mark
+* pending/partial/paid/cancelled/refunded status where supported
+* invoice/receipt
+* ledger entry
+* amount/mode/reference/date
+
+Completion gate:
+
+* Suchak can record customer payment
+* customer payment does not use PayU
+* ledger and invoice/receipt are visible
+* records remain Suchak-private
+
+============================================================
+DAY-33 - CANDIDATE CLAIM + REVOKE + UPDATE APPROVAL FLOW
+============================================================
+
+Goal:
+
+Allow candidate/family control without bypassing governed profile mutation.
+
+Required work:
+
+* candidate claim request
+* candidate revoke representation
+* Suchak profile update suggestion flow
+* admin/candidate approval where required
+* governed apply through MutationService or approved governed layer
+
+Completion gate:
+
+* candidate can claim or revoke through guarded flow
+* Suchak cannot silently overwrite candidate data
+* update suggestions do not mutate profile until approved
+* tests cover conflict/no-overwrite cases
+
+============================================================
+DAY-34 - NOTIFICATIONS, REMINDERS, SCHEDULED JOBS
+============================================================
+
+Goal:
+
+Automate operational reminders and expiries.
+
+Required work:
+
+* consent expiry jobs
+* QR expiry jobs
+* trial/grace expiry jobs
+* unpaid reminders
+* follow-up reminders
+* admin alert hooks where applicable
+* test/manual notification mode when live provider credentials are missing
+
+Completion gate:
+
+* scheduled jobs are registered
+* jobs are idempotent
+* reminders do not leak private contact data
+* tests cover due/not-due behavior
+
+============================================================
+DAY-35 - SUCHAK UX/MOBILE HARDENING
+============================================================
+
+Goal:
+
+Make Suchak usable for non-technical operators.
+
+Required work:
+
+* simple Suchak home/dashboard page
+* all important Suchak links in one place
+* Marathi-friendly labels and empty states
+* mobile layout checks
+* clear next-action buttons
+* no dead-end workflow pages
+
+Completion gate:
+
+* new Suchak can find registration, dashboard, upload, consent, PDF, CRM, ledger, plan, and support flows
+* mobile layout has no obvious overlap
+* UI avoids technical-only wording for core flows
+
+============================================================
+DAY-36 - PRIVACY/SECURITY LEAK AUDIT + PERMISSION REGRESSION
+============================================================
+
+Goal:
+
+Prove role separation and data masking before launch QA.
+
+Required work:
+
+* route permission matrix tests
+* admin vs Suchak vs regular user vs public visitor tests
+* contact masking tests
+* QR privacy tests
+* direct URL access denial tests
+* suspended/archived Suchak denial tests
+* payment/invoice visibility tests
+
+Completion gate:
+
+* protected routes deny wrong roles
+* private contact does not leak
+* Suchak-private ledger/notes do not leak
+* QR does not reveal direct contact
+* tests pass
+
+============================================================
+DAY-37 - REAL BROWSER/MOBILE QA + FINAL LAUNCH CHECKLIST
+============================================================
+
+Goal:
+
+Complete hands-on QA and final launch readiness.
+
+Required manual QA personas:
+
+* admin
+* new Suchak applicant
+* approved Suchak
+* Suchak-created/represented customer profile
+* regular user
+* public visitor
+
+Required manual QA flows:
+
+* Suchak registration
+* admin approval
+* Suchak login/dashboard
+* upload/source-link flow
+* consent flow
+* PDF/QR flow
+* CRM/ledger flow
+* customer manual payment flow
+* platform plan payment test flow
+* dispute/freeze/revoke flow
+* candidate claim/update approval flow
+* mobile navigation
+
+Completion gate:
+
+* automated Suchak tests pass
+* route lists are reviewed
+* migrate status is reviewed
+* real browser QA notes are recorded
+* only live external credentials remain pending
+* final tag/commit/push is ready
+
+============================================================
+8) ADVANCED SUCHAK FINAL COMPLETION DEFINITION
+============================================================
+
+Advanced Suchak is complete only when:
+
+1. Day-19 through Day-37 completion gates are satisfied.
+2. All internal Suchak DB, UI, service, policy, payment-test, invoice, consent, PDF/QR, dispute, ledger, registration, approval, and permission flows are implemented.
+3. All relevant automated tests pass.
+4. Manual browser/mobile QA has been performed for admin, Suchak, Suchak-created customer/profile, regular user, and public visitor personas.
+5. No known internal Suchak feature remains intentionally deferred.
+6. Only live external credentials/provider activation may remain pending.
+
+END OF PHASE-6 ADVANCED SUCHAK COMPLETION PATCH - DAY-18
+############################################################

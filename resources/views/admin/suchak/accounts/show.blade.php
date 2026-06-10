@@ -73,14 +73,55 @@
                         <button type="submit" class="w-full rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700">Reject</button>
                     </form>
                 @elseif ($suchakAccount->verification_status === \App\Models\SuchakAccount::VERIFICATION_VERIFIED)
+                    <form method="POST" action="{{ route('admin.suchak.accounts.public-status.update', $suchakAccount) }}" class="space-y-2">
+                        @csrf
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Public status</label>
+                        <select name="public_status" required class="w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                            <option value="{{ \App\Models\SuchakAccount::PUBLIC_HIDDEN }}" @selected($suchakAccount->public_status === \App\Models\SuchakAccount::PUBLIC_HIDDEN)>Hidden</option>
+                            <option value="{{ \App\Models\SuchakAccount::PUBLIC_ACTIVE }}" @selected($suchakAccount->public_status === \App\Models\SuchakAccount::PUBLIC_ACTIVE)>Active</option>
+                            <option value="{{ \App\Models\SuchakAccount::PUBLIC_INACTIVE }}" @selected($suchakAccount->public_status === \App\Models\SuchakAccount::PUBLIC_INACTIVE)>Inactive</option>
+                        </select>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Public status reason</label>
+                        <textarea name="reason" rows="2" required minlength="10" maxlength="500" class="w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('reason') }}</textarea>
+                        <button type="submit" class="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Update public status</button>
+                    </form>
+
                     <form method="POST" action="{{ route('admin.suchak.accounts.suspend', $suchakAccount) }}" class="space-y-2">
                         @csrf
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Suspend reason</label>
                         <textarea name="reason" rows="2" required minlength="10" maxlength="500" class="w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('reason') }}</textarea>
                         <button type="submit" class="w-full rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700">Suspend</button>
                     </form>
+
+                    <form method="POST" action="{{ route('admin.suchak.accounts.archive', $suchakAccount) }}" class="space-y-2">
+                        @csrf
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Archive reason</label>
+                        <textarea name="reason" rows="2" required minlength="10" maxlength="500" class="w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('reason') }}</textarea>
+                        <button type="submit" class="w-full rounded-md bg-gray-700 px-3 py-2 text-sm font-semibold text-white hover:bg-gray-800">Archive</button>
+                    </form>
+                @elseif ($suchakAccount->verification_status === \App\Models\SuchakAccount::VERIFICATION_SUSPENDED)
+                    <form method="POST" action="{{ route('admin.suchak.accounts.reactivate', $suchakAccount) }}" class="space-y-2">
+                        @csrf
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Reactivate reason</label>
+                        <textarea name="reason" rows="2" required minlength="10" maxlength="500" class="w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('reason') }}</textarea>
+                        <button type="submit" class="w-full rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Reactivate</button>
+                    </form>
+
+                    <form method="POST" action="{{ route('admin.suchak.accounts.archive', $suchakAccount) }}" class="space-y-2">
+                        @csrf
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Archive reason</label>
+                        <textarea name="reason" rows="2" required minlength="10" maxlength="500" class="w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('reason') }}</textarea>
+                        <button type="submit" class="w-full rounded-md bg-gray-700 px-3 py-2 text-sm font-semibold text-white hover:bg-gray-800">Archive</button>
+                    </form>
+                @elseif (in_array($suchakAccount->verification_status, [\App\Models\SuchakAccount::VERIFICATION_REJECTED, \App\Models\SuchakAccount::VERIFICATION_ARCHIVED], true))
+                    <form method="POST" action="{{ route('admin.suchak.accounts.reactivate', $suchakAccount) }}" class="space-y-2">
+                        @csrf
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Reopen for review reason</label>
+                        <textarea name="reason" rows="2" required minlength="10" maxlength="500" class="w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('reason') }}</textarea>
+                        <button type="submit" class="w-full rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Reopen for review</button>
+                    </form>
                 @else
-                    <p class="text-sm text-gray-600 dark:text-gray-300">No Day-4 action is available for this verification status.</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-300">No admin action is available for this verification status.</p>
                 @endif
             </div>
         </section>
@@ -94,9 +135,11 @@
                     <tr>
                         <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Type</th>
                         <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Status</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Document</th>
                         <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Admin</th>
                         <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Remarks</th>
                         <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Created</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Review</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -104,13 +147,32 @@
                         <tr>
                             <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ ucfirst($record->verification_type) }}</td>
                             <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ ucfirst($record->admin_status) }}</td>
+                            <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ $record->document_path ?: '-' }}</td>
                             <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ $record->adminUser?->email ?: '-' }}</td>
                             <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ $record->remarks ?: '-' }}</td>
                             <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ $record->created_at?->format('Y-m-d H:i') }}</td>
+                            <td class="px-3 py-2 text-gray-700 dark:text-gray-300">
+                                @if ($record->admin_status === \App\Models\SuchakVerificationRecord::STATUS_PENDING)
+                                    <div class="space-y-2">
+                                        <form method="POST" action="{{ route('admin.suchak.accounts.verification-records.approve', [$suchakAccount, $record]) }}" class="space-y-1">
+                                            @csrf
+                                            <textarea name="reason" rows="2" required minlength="10" maxlength="500" placeholder="Approval reason" class="w-full rounded-md border-gray-300 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('reason') }}</textarea>
+                                            <button type="submit" class="rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700">Approve record</button>
+                                        </form>
+                                        <form method="POST" action="{{ route('admin.suchak.accounts.verification-records.reject', [$suchakAccount, $record]) }}" class="space-y-1">
+                                            @csrf
+                                            <textarea name="reason" rows="2" required minlength="10" maxlength="500" placeholder="Reject reason" class="w-full rounded-md border-gray-300 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('reason') }}</textarea>
+                                            <button type="submit" class="rounded-md bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700">Reject record</button>
+                                        </form>
+                                    </div>
+                                @else
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">Reviewed</span>
+                                @endif
+                            </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="px-3 py-5 text-center text-gray-500 dark:text-gray-400">No verification records yet.</td>
+                            <td colspan="7" class="px-3 py-5 text-center text-gray-500 dark:text-gray-400">No verification records yet.</td>
                         </tr>
                     @endforelse
                 </tbody>

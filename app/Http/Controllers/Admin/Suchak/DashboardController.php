@@ -16,6 +16,7 @@ class DashboardController extends Controller
                 'pending' => SuchakAccount::query()->where('verification_status', SuchakAccount::VERIFICATION_PENDING)->count(),
                 'verified' => SuchakAccount::query()->where('verification_status', SuchakAccount::VERIFICATION_VERIFIED)->count(),
                 'suspended' => SuchakAccount::query()->where('verification_status', SuchakAccount::VERIFICATION_SUSPENDED)->count(),
+                'archived' => SuchakAccount::query()->where('verification_status', SuchakAccount::VERIFICATION_ARCHIVED)->count(),
                 'public_active' => SuchakAccount::query()->where('public_status', SuchakAccount::PUBLIC_ACTIVE)->count(),
             ],
             'recentAccounts' => SuchakAccount::query()

@@ -21,4 +21,9 @@ Route::middleware(['auth', 'admin'])
         Route::post('/accounts/{suchakAccount}/approve', [AccountVerificationController::class, 'approve'])->name('accounts.approve');
         Route::post('/accounts/{suchakAccount}/reject', [AccountVerificationController::class, 'reject'])->name('accounts.reject');
         Route::post('/accounts/{suchakAccount}/suspend', [AccountVerificationController::class, 'suspend'])->name('accounts.suspend');
+        Route::post('/accounts/{suchakAccount}/archive', [AccountVerificationController::class, 'archive'])->name('accounts.archive');
+        Route::post('/accounts/{suchakAccount}/reactivate', [AccountVerificationController::class, 'reactivate'])->name('accounts.reactivate');
+        Route::post('/accounts/{suchakAccount}/public-status', [AccountVerificationController::class, 'updatePublicStatus'])->name('accounts.public-status.update');
+        Route::post('/accounts/{suchakAccount}/verification-records/{verificationRecord}/approve', [AccountVerificationController::class, 'approveVerificationRecord'])->name('accounts.verification-records.approve');
+        Route::post('/accounts/{suchakAccount}/verification-records/{verificationRecord}/reject', [AccountVerificationController::class, 'rejectVerificationRecord'])->name('accounts.verification-records.reject');
     });

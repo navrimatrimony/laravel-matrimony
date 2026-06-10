@@ -14,7 +14,7 @@
         </div>
     </div>
 
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Pending</div>
             <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ $stats['pending'] }}</div>
@@ -26,6 +26,10 @@
         <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Suspended</div>
             <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ $stats['suspended'] }}</div>
+        </div>
+        <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Archived</div>
+            <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ $stats['archived'] }}</div>
         </div>
         <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Public active</div>
