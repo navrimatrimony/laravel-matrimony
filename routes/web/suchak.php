@@ -67,6 +67,15 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
         Route::post('/representations/{representation}/exports', [BiodataExportController::class, 'store'])
             ->middleware('throttle:10,1')
             ->name('representations.exports.store');
+        Route::get('/exports/{export}/download', [BiodataExportController::class, 'download'])
+            ->middleware('throttle:30,1')
+            ->name('exports.download');
+        Route::post('/exports/{export}/mark-shared', [BiodataExportController::class, 'markShared'])
+            ->middleware('throttle:30,1')
+            ->name('exports.mark-shared');
+        Route::post('/qr-tokens/{qrToken}/revoke', [BiodataExportController::class, 'revokeQrToken'])
+            ->middleware('throttle:30,1')
+            ->name('qr-tokens.revoke');
         Route::post('/representations/{representation}/profile-update-suggestions', [ProfileUpdateSuggestionController::class, 'store'])
             ->middleware('throttle:20,1')
             ->name('representations.profile-update-suggestions.store');

@@ -28,6 +28,9 @@ class SuchakQrTokenFactory extends Factory
             'expires_at' => now()->addDays(30),
             'scan_count' => 0,
             'last_scanned_at' => null,
+            'revoked_at' => null,
+            'revoked_reason' => null,
+            'replaced_by_token_id' => null,
         ];
     }
 }

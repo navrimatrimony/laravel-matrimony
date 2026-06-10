@@ -18,12 +18,25 @@
         <section class="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 shadow-sm dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                    <p class="font-semibold">Secure QR link generated</p>
+                    <p class="font-semibold">Secure PDF/QR generated</p>
                     <p class="mt-1 break-all font-mono text-xs">{{ url(session('qr_url_path')) }}</p>
                 </div>
-                <a href="{{ url(session('qr_url_path')) }}" target="_blank" rel="noopener" class="inline-flex justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800">
-                    Open QR preview
-                </a>
+                <div class="flex flex-wrap gap-2">
+                    <a href="{{ url(session('qr_url_path')) }}" target="_blank" rel="noopener" class="inline-flex justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800">
+                        Open QR preview
+                    </a>
+                    @if (session('export_id'))
+                        <a href="{{ route('suchak.exports.download', session('export_id')) }}" class="inline-flex justify-center rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white">
+                            Download PDF
+                        </a>
+                        <form method="POST" action="{{ route('suchak.exports.mark-shared', session('export_id')) }}">
+                            @csrf
+                            <button type="submit" class="inline-flex justify-center rounded-md border border-emerald-700 px-4 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 dark:border-emerald-300 dark:text-emerald-100 dark:hover:bg-emerald-900">
+                                Mark shared
+                            </button>
+                        </form>
+                    @endif
+                </div>
             </div>
         </section>
     @endif
@@ -258,10 +271,43 @@
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Recent PDF/QR Records</h2>
                 <div class="mt-4 space-y-3">
                     @forelse ($recentExports as $export)
+                        @php
+                            $latestQrToken = $export->qrTokens->first();
+                        @endphp
                         <div class="text-sm">
                             <div class="font-medium text-gray-900 dark:text-gray-100">Export #{{ $export->id }}</div>
                             <div class="text-xs text-gray-500 dark:text-gray-400">
                                 {{ $export->created_at?->format('Y-m-d H:i') }} · QR records: {{ $export->qrTokens->count() }}
+                                · {{ $export->file_path ? 'PDF ready' : 'PDF missing' }}
+                            </div>
+                            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Downloaded: {{ $export->downloaded_at?->format('Y-m-d H:i') ?: 'Not yet' }} · Shared: {{ $export->shared_at?->format('Y-m-d H:i') ?: 'Not yet' }}
+                            </div>
+                            @if ($latestQrToken)
+                                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Latest QR: {{ $latestQrToken->revoked_at ? 'Revoked' : 'Active' }} · Expires: {{ $latestQrToken->expires_at?->format('Y-m-d H:i') ?: 'Not configured' }}
+                                </div>
+                            @endif
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                @if ($export->file_path)
+                                    <a href="{{ route('suchak.exports.download', $export) }}" class="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white">
+                                        Download
+                                    </a>
+                                @endif
+                                <form method="POST" action="{{ route('suchak.exports.mark-shared', $export) }}">
+                                    @csrf
+                                    <button type="submit" class="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">
+                                        Mark shared
+                                    </button>
+                                </form>
+                                @if ($latestQrToken && ! $latestQrToken->revoked_at)
+                                    <form method="POST" action="{{ route('suchak.qr-tokens.revoke', $latestQrToken) }}">
+                                        @csrf
+                                        <button type="submit" class="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-950/40">
+                                            Revoke QR
+                                        </button>
+                                    </form>
+                                @endif
                             </div>
                         </div>
                     @empty

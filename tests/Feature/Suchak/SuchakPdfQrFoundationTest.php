@@ -14,13 +14,22 @@ use App\Modules\Suchak\Services\SuchakPdfQrFoundationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use RuntimeException;
+use Smalot\PdfParser\Parser;
 use Tests\TestCase;
 
 class SuchakPdfQrFoundationTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Storage::fake('local');
+    }
 
     public function test_suchak_pdf_qr_foundation_tables_exist_with_day_8_columns(): void
     {
@@ -50,6 +59,9 @@ class SuchakPdfQrFoundationTest extends TestCase
             'expires_at',
             'scan_count',
             'last_scanned_at',
+            'revoked_at',
+            'revoked_reason',
+            'replaced_by_token_id',
             'created_at',
             'updated_at',
         ] as $column) {
@@ -83,15 +95,28 @@ class SuchakPdfQrFoundationTest extends TestCase
 
         $this->assertNotSame('', $rawToken);
         $this->assertSame('/r/'.$rawToken, $result['qr_url_path']);
+        $this->assertSame($result['pdf_file_path'], $export->file_path);
         $this->assertSame(SuchakBiodataExport::TYPE_BIODATA_PDF, $export->export_type);
-        $this->assertNull($export->file_path);
+        $this->assertNotNull($export->file_path);
         $this->assertSame($user->id, $export->generated_by_user_id);
         $this->assertSame($representation->id, $export->representation_id);
+        Storage::disk('local')->assertExists($export->file_path);
+
+        $pdfBinary = Storage::disk('local')->get($export->file_path);
+        $this->assertStringStartsWith('%PDF', $pdfBinary);
+        $pdfText = (new Parser)->parseContent($pdfBinary)->getText();
+        $this->assertStringContainsString('Suchak Branded Biodata', $pdfText);
+        $this->assertStringContainsString('Direct contact details', $pdfText);
+        $this->assertStringNotContainsString('Sensitive Candidate', $pdfText);
+        $this->assertStringNotContainsString('8888888888', $pdfText);
+        $this->assertStringNotContainsString('7777777777', $pdfText);
 
         $this->assertNotSame($rawToken, $qrToken->token_hash);
         $this->assertSame(hash('sha256', $rawToken), $qrToken->token_hash);
         $this->assertSame($export->id, $qrToken->export_id);
         $this->assertSame(0, $qrToken->scan_count);
+        $this->assertNull($qrToken->revoked_at);
+        $this->assertNull($qrToken->replaced_by_token_id);
         $this->assertTrue($qrToken->expires_at->greaterThan(now()->addDays(29)));
         $this->assertTrue($qrToken->expires_at->lessThan(now()->addDays(31)));
 
@@ -115,6 +140,46 @@ class SuchakPdfQrFoundationTest extends TestCase
             'target_type' => 'suchak_qr_token',
             'target_id' => $qrToken->id,
             'matrimony_profile_id' => $representation->matrimony_profile_id,
+        ]);
+    }
+
+    public function test_pdf_download_and_share_tracking_updates_export_without_profile_mutation(): void
+    {
+        [$user, $representation, $profile] = $this->activeRepresentationFixture();
+        $result = app(SuchakPdfQrFoundationService::class)->createGovernedBiodataPdfExport($representation, $user);
+        $originalEducation = $profile->highest_education;
+
+        $downloaded = app(SuchakPdfQrFoundationService::class)->markExportDownloaded(
+            $result['export'],
+            $user,
+            '127.0.0.2',
+            'Day-24 download test',
+        );
+
+        $this->assertNotNull($downloaded->downloaded_at);
+        $this->assertNull($downloaded->shared_at);
+
+        $shared = app(SuchakPdfQrFoundationService::class)->markExportShared(
+            $downloaded,
+            $user,
+            '127.0.0.3',
+            'Day-24 share test',
+        );
+
+        $this->assertNotNull($shared->downloaded_at);
+        $this->assertNotNull($shared->shared_at);
+        $this->assertSame($originalEducation, $profile->fresh()->highest_education);
+
+        $this->assertDatabaseHas('suchak_activity_logs', [
+            'action_type' => SuchakActivityLog::ACTION_PDF_DOWNLOADED,
+            'target_type' => 'suchak_biodata_export',
+            'target_id' => $result['export']->id,
+        ]);
+
+        $this->assertDatabaseHas('suchak_activity_logs', [
+            'action_type' => SuchakActivityLog::ACTION_PDF_SHARED,
+            'target_type' => 'suchak_biodata_export',
+            'target_id' => $result['export']->id,
         ]);
     }
 
@@ -230,6 +295,68 @@ class SuchakPdfQrFoundationTest extends TestCase
             'target_id' => $freshQrToken->id,
             'actor_type' => SuchakActivityLog::ACTOR_SYSTEM,
         ]);
+    }
+
+    public function test_revoked_qr_token_is_blocked_after_scan_tracking(): void
+    {
+        [$user, $representation] = $this->activeRepresentationFixture();
+
+        $result = app(SuchakPdfQrFoundationService::class)->createGovernedBiodataPdfExport($representation, $user);
+        $revokedQrToken = app(SuchakPdfQrFoundationService::class)->revokeQrToken(
+            $result['qr_token'],
+            $user,
+            'manual_test_revoke',
+        );
+
+        $this->assertNotNull($revokedQrToken->revoked_at);
+        $this->assertSame('manual_test_revoke', $revokedQrToken->revoked_reason);
+
+        try {
+            app(SuchakPdfQrFoundationService::class)->scanQrToken($result['raw_qr_token']);
+
+            $this->fail('Revoked QR token should be blocked.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertSame('QR token has been revoked.', $exception->getMessage());
+        }
+
+        $freshQrToken = $result['qr_token']->fresh();
+
+        $this->assertSame(1, $freshQrToken->scan_count);
+        $this->assertNotNull($freshQrToken->last_scanned_at);
+        $this->assertDatabaseHas('suchak_activity_logs', [
+            'action_type' => SuchakActivityLog::ACTION_QR_REVOKED,
+            'target_type' => 'suchak_qr_token',
+            'target_id' => $freshQrToken->id,
+        ]);
+    }
+
+    public function test_regenerating_export_revokes_old_qr_token_and_new_qr_still_scans(): void
+    {
+        [$user, $representation] = $this->activeRepresentationFixture();
+
+        $first = app(SuchakPdfQrFoundationService::class)->createGovernedBiodataPdfExport($representation, $user);
+        $second = app(SuchakPdfQrFoundationService::class)->createGovernedBiodataPdfExport($representation->fresh(), $user);
+
+        $oldQrToken = $first['qr_token']->fresh();
+        $newQrToken = $second['qr_token']->fresh();
+
+        $this->assertNotNull($oldQrToken->revoked_at);
+        $this->assertSame('regenerated', $oldQrToken->revoked_reason);
+        $this->assertSame($newQrToken->id, $oldQrToken->replaced_by_token_id);
+        $this->assertNull($newQrToken->revoked_at);
+
+        try {
+            app(SuchakPdfQrFoundationService::class)->scanQrToken($first['raw_qr_token']);
+
+            $this->fail('Regenerated old QR token should be blocked.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertSame('QR token has been revoked.', $exception->getMessage());
+        }
+
+        $scan = app(SuchakPdfQrFoundationService::class)->scanQrToken($second['raw_qr_token']);
+
+        $this->assertSame($newQrToken->id, $scan['qr_token']->id);
+        $this->assertTrue($scan['candidate_summary']['contact']['is_masked']);
     }
 
     public function test_day_8_records_cannot_be_deleted(): void

@@ -14,35 +14,67 @@ class SuchakActivityLog extends Model
     public const UPDATED_AT = null;
 
     public const ACTOR_ADMIN = 'admin';
+
     public const ACTOR_SUCHAK = 'suchak';
+
     public const ACTOR_USER = 'user';
+
     public const ACTOR_SYSTEM = 'system';
 
     public const ACTION_SUCHAK_ONBOARDING_REQUESTED = 'suchak_onboarding_requested';
+
     public const ACTION_SOURCE_LINK_CREATED = 'source_link_created';
+
     public const ACTION_REPRESENTATION_CREATED = 'representation_created';
+
     public const ACTION_REPRESENTATION_STATUS_CHANGED = 'representation_status_changed';
+
     public const ACTION_REPRESENTATION_CANDIDATE_DEACTIVATED = 'representation_candidate_deactivated';
+
     public const ACTION_CONSENT_REQUESTED = 'consent_requested';
+
     public const ACTION_CONSENT_VERIFIED = 'consent_verified';
+
     public const ACTION_CONSENT_REVOKED = 'consent_revoked';
+
     public const ACTION_PDF_GENERATED = 'pdf_generated';
+
     public const ACTION_PDF_DOWNLOADED = 'pdf_downloaded';
+
+    public const ACTION_PDF_SHARED = 'pdf_shared';
+
     public const ACTION_QR_GENERATED = 'qr_generated';
+
     public const ACTION_QR_SCANNED = 'qr_scanned';
+
+    public const ACTION_QR_REVOKED = 'qr_revoked';
+
     public const ACTION_PUBLIC_CONTACT_ROUTED = 'public_contact_routed';
+
     public const ACTION_USER_REQUEST_CREATED = 'user_request_created';
+
     public const ACTION_PIPELINE_STATUS_CHANGED = 'pipeline_status_changed';
+
     public const ACTION_COLLABORATION_REQUEST_CREATED = 'collaboration_request_created';
+
     public const ACTION_COLLABORATION_REQUEST_ACCEPTED = 'collaboration_request_accepted';
+
     public const ACTION_COLLABORATION_REQUEST_REJECTED = 'collaboration_request_rejected';
+
     public const ACTION_COLLABORATION_REQUEST_EXPIRED = 'collaboration_request_expired';
+
     public const ACTION_CRM_NOTE_ADDED = 'crm_note_added';
+
     public const ACTION_LEDGER_ENTRY_CREATED = 'ledger_entry_created';
+
     public const ACTION_PROFILE_UPDATE_SUGGESTION_CREATED = 'profile_update_suggestion_created';
+
     public const ACTION_PROFILE_UPDATE_SUGGESTION_STATUS_CHANGED = 'profile_update_suggestion_status_changed';
+
     public const ACTION_PROFILE_UPDATE_SUGGESTION_APPLIED = 'profile_update_suggestion_applied';
+
     public const ACTION_BILLING_LIMIT_CHANGED = 'billing_limit_changed';
+
     public const ACTION_ADMIN_AUDIT_LINKED = 'admin_audit_linked';
 
     protected $table = 'suchak_activity_logs';

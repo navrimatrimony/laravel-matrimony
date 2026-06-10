@@ -24,12 +24,17 @@ class SuchakQrToken extends Model
         'expires_at',
         'scan_count',
         'last_scanned_at',
+        'revoked_at',
+        'revoked_reason',
+        'replaced_by_token_id',
     ];
 
     protected $casts = [
         'expires_at' => 'datetime',
         'scan_count' => 'integer',
         'last_scanned_at' => 'datetime',
+        'revoked_at' => 'datetime',
+        'replaced_by_token_id' => 'integer',
     ];
 
     public function suchakAccount(): BelongsTo
@@ -52,9 +57,19 @@ class SuchakQrToken extends Model
         return $this->belongsTo(SuchakBiodataExport::class, 'export_id');
     }
 
+    public function replacedByToken(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'replaced_by_token_id');
+    }
+
     public function isExpired(?CarbonInterface $at = null): bool
     {
         return $this->expires_at !== null && $this->expires_at->lte($at ?? now());
+    }
+
+    public function isRevoked(): bool
+    {
+        return $this->revoked_at !== null;
     }
 
     public function incrementScan(?CarbonInterface $scannedAt = null): self

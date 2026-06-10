@@ -17,6 +17,7 @@ use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -28,6 +29,7 @@ class SuchakWebUiCompletionTest extends TestCase
     {
         parent::setUp();
 
+        Storage::fake('local');
         $this->seed(MinimalLocationSeeder::class);
         ProfileCanonicalResidenceService::forgetCachedMasters();
     }
@@ -52,16 +54,42 @@ class SuchakWebUiCompletionTest extends TestCase
             ->post(route('suchak.representations.exports.store', $representation));
 
         $exportResponse->assertRedirect(route('suchak.dashboard'))
+            ->assertSessionHas('export_id')
             ->assertSessionHas('qr_url_path');
 
         $qrPath = (string) $this->app['session']->get('qr_url_path');
         $rawToken = Str::after($qrPath, '/r/');
+        $exportId = (int) $this->app['session']->get('export_id');
 
         $this->assertSame('/r/'.$rawToken, $qrPath);
         $this->assertSame(64, strlen($rawToken));
         $this->assertSame(1, SuchakBiodataExport::query()->where('representation_id', $representation->id)->count());
         $this->assertSame(1, SuchakQrToken::query()->where('representation_id', $representation->id)->count());
         $this->assertDatabaseMissing('suchak_qr_tokens', ['token_hash' => $rawToken]);
+
+        $export = SuchakBiodataExport::query()->findOrFail($exportId);
+        Storage::disk('local')->assertExists($export->file_path);
+
+        $this->actingAs($suchakUser)
+            ->get(route('suchak.exports.download', $export))
+            ->assertOk()
+            ->assertDownload('suchak-biodata-export-'.$export->id.'.pdf');
+
+        $this->assertNotNull($export->fresh()->downloaded_at);
+
+        $this->actingAs($suchakUser)
+            ->post(route('suchak.exports.mark-shared', $export))
+            ->assertRedirect();
+
+        $this->assertNotNull($export->fresh()->shared_at);
+
+        $qrToken = SuchakQrToken::query()->where('export_id', $export->id)->firstOrFail();
+
+        $this->actingAs($suchakUser)
+            ->post(route('suchak.qr-tokens.revoke', $qrToken))
+            ->assertRedirect();
+
+        $this->assertNotNull($qrToken->fresh()->revoked_at);
 
         $suggestionResponse = $this->actingAs($suchakUser)
             ->post(route('suchak.representations.profile-update-suggestions.store', $representation), [
