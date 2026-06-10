@@ -6,6 +6,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakCollaborationRequest;
+use App\Models\SuchakCustomerContext;
 use App\Models\SuchakPaymentContext;
 use App\Models\SuchakPipeline;
 use App\Models\User;
@@ -61,9 +62,11 @@ class SuchakPaymentCollectorResolver
         ?string $ipAddress = null,
         ?string $userAgent = null,
     ): SuchakPaymentContext {
+        $customerContext = $this->optionalCustomerContext($attributes['customer_context_id'] ?? null, $account, $profile);
+
         if (($attributes['payment_context_id'] ?? null) !== null && $attributes['payment_context_id'] !== '') {
             $context = SuchakPaymentContext::query()->findOrFail((int) $attributes['payment_context_id']);
-            $this->assertContextMatches($context, $account, $profile, $pipeline, $collaboration);
+            $this->assertContextMatches($context, $account, $profile, $pipeline, $collaboration, $customerContext);
 
             return $context;
         }
@@ -78,10 +81,15 @@ class SuchakPaymentCollectorResolver
             SuchakPaymentContext::PAYMENT_COLLECTORS,
             'Suchak payment collector must be resolved before ledger payment entries.',
         );
+        if ($customerContext !== null && $customerContext->source_owner !== $sourceOwner) {
+            throw new InvalidArgumentException('Suchak payment source owner must match the customer context source owner.');
+        }
+
         $this->assertOwnerCollectorRule($sourceOwner, $collector, $collaboration);
 
         $existing = SuchakPaymentContext::query()
             ->where('suchak_account_id', $account->id)
+            ->where('customer_context_id', $customerContext?->id)
             ->where('matrimony_profile_id', $profile->id)
             ->where('pipeline_id', $pipeline?->id)
             ->where('collaboration_request_id', $collaboration?->id)
@@ -99,6 +107,7 @@ class SuchakPaymentCollectorResolver
 
         $context = SuchakPaymentContext::query()->create([
             'suchak_account_id' => $account->id,
+            'customer_context_id' => $customerContext?->id,
             'matrimony_profile_id' => $profile->id,
             'pipeline_id' => $pipeline?->id,
             'collaboration_request_id' => $collaboration?->id,
@@ -123,6 +132,7 @@ class SuchakPaymentCollectorResolver
                 'context' => 'payment_context_resolved',
                 'source_owner' => $context->source_owner,
                 'payment_collector' => $context->payment_collector,
+                'customer_context_id' => $context->customer_context_id,
                 'pipeline_id' => $context->pipeline_id,
                 'collaboration_request_id' => $context->collaboration_request_id,
                 'suchak_account_id' => $account->id,
@@ -150,6 +160,7 @@ class SuchakPaymentCollectorResolver
         MatrimonyProfile $profile,
         ?SuchakPipeline $pipeline,
         ?SuchakCollaborationRequest $collaboration,
+        ?SuchakCustomerContext $customerContext = null,
     ): void {
         if ((int) $context->suchak_account_id !== (int) $account->id) {
             throw new InvalidArgumentException('Suchak payment context must belong to the Suchak account.');
@@ -167,9 +178,38 @@ class SuchakPaymentCollectorResolver
             throw new InvalidArgumentException('Suchak payment context collaboration mismatch.');
         }
 
+        if ($customerContext !== null && (int) ($context->customer_context_id ?? 0) !== (int) $customerContext->id) {
+            throw new InvalidArgumentException('Suchak payment context customer context mismatch.');
+        }
+
         if ($context->context_status !== SuchakPaymentContext::STATUS_ACTIVE) {
             throw new InvalidArgumentException('Suchak payment context is not active.');
         }
+    }
+
+    private function optionalCustomerContext(mixed $customerContextId, SuchakAccount $account, MatrimonyProfile $profile): ?SuchakCustomerContext
+    {
+        if ($customerContextId === null || $customerContextId === '') {
+            return null;
+        }
+
+        $context = SuchakCustomerContext::query()->findOrFail((int) $customerContextId);
+        if ((int) $context->suchak_account_id !== (int) $account->id) {
+            throw new InvalidArgumentException('Suchak customer context must belong to the Suchak account.');
+        }
+
+        if ($context->candidate_matrimony_profile_id !== null && (int) $context->candidate_matrimony_profile_id !== (int) $profile->id) {
+            throw new InvalidArgumentException('Suchak customer context candidate profile mismatch.');
+        }
+
+        if (in_array($context->customer_lifecycle_status, [
+            SuchakCustomerContext::STATUS_CANCELLED,
+            SuchakCustomerContext::STATUS_CLOSED,
+        ], true)) {
+            throw new InvalidArgumentException('Suchak customer context is closed for payment collection.');
+        }
+
+        return $context;
     }
 
     private function assertOwnerCollectorRule(string $sourceOwner, string $collector, ?SuchakCollaborationRequest $collaboration): void

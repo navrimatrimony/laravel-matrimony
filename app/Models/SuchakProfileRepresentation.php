@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use RuntimeException;
 
 class SuchakProfileRepresentation extends Model
@@ -144,6 +145,11 @@ class SuchakProfileRepresentation extends Model
     public function profileUpdateSuggestions(): HasMany
     {
         return $this->hasMany(SuchakProfileUpdateSuggestion::class, 'representation_id');
+    }
+
+    public function customerContext(): HasOne
+    {
+        return $this->hasOne(SuchakCustomerContext::class, 'representation_id');
     }
 
     public function disputes(): HasMany

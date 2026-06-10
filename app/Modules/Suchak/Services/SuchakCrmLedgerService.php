@@ -162,6 +162,7 @@ class SuchakCrmLedgerService
                     'pipeline_id' => $entry->pipeline_id,
                     'collaboration_request_id' => $entry->collaboration_request_id,
                     'payment_context_id' => $entry->payment_context_id,
+                    'customer_context_id' => $paymentContext->customer_context_id,
                     'source_owner' => $paymentContext->source_owner,
                     'payment_collector' => $paymentContext->payment_collector,
                     'has_amount' => $entry->amount !== null,

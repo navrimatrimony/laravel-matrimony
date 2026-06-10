@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use RuntimeException;
 
 class SuchakBiodataIntakeLink extends Model
@@ -47,6 +48,11 @@ class SuchakBiodataIntakeLink extends Model
     public function createdByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    public function customerContext(): HasOne
+    {
+        return $this->hasOne(SuchakCustomerContext::class, 'source_link_id');
     }
 
     public function delete(): ?bool

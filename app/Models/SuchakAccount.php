@@ -121,6 +121,11 @@ class SuchakAccount extends Model
         return $this->hasMany(SuchakPaymentContext::class);
     }
 
+    public function customerContexts(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerContext::class);
+    }
+
     public function profileUpdateSuggestions(): HasMany
     {
         return $this->hasMany(SuchakProfileUpdateSuggestion::class);

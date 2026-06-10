@@ -47,6 +47,7 @@ class SuchakPaymentContext extends Model
 
     protected $fillable = [
         'suchak_account_id',
+        'customer_context_id',
         'matrimony_profile_id',
         'pipeline_id',
         'collaboration_request_id',
@@ -60,6 +61,11 @@ class SuchakPaymentContext extends Model
     public function suchakAccount(): BelongsTo
     {
         return $this->belongsTo(SuchakAccount::class);
+    }
+
+    public function customerContext(): BelongsTo
+    {
+        return $this->belongsTo(SuchakCustomerContext::class, 'customer_context_id');
     }
 
     public function matrimonyProfile(): BelongsTo

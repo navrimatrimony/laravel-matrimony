@@ -140,6 +140,11 @@ class SuchakConsent extends Model
         return $this->hasMany(SuchakConsentEvent::class, 'consent_id');
     }
 
+    public function customerContexts(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerContext::class, 'consent_id');
+    }
+
     public function isOpen(): bool
     {
         return in_array($this->consent_status, self::OPEN_STATUSES, true);
