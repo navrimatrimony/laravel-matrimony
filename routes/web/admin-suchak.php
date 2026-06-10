@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\Suchak\AccountVerificationController;
 use App\Http\Controllers\Admin\Suchak\DashboardController;
+use App\Http\Controllers\Admin\Suchak\SafetyController;
 use App\Http\Controllers\Admin\Suchak\SettingsController;
 use Illuminate\Support\Facades\Route;
 
@@ -17,6 +18,15 @@ Route::middleware(['auth', 'admin'])
     ->name('admin.suchak.')
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/safety', [SafetyController::class, 'index'])->name('safety.index');
+        Route::post('/safety/disputes', [SafetyController::class, 'storeDispute'])->name('safety.disputes.store');
+        Route::post('/safety/disputes/{dispute}/review', [SafetyController::class, 'reviewDispute'])->name('safety.disputes.review');
+        Route::post('/safety/disputes/{dispute}/close', [SafetyController::class, 'closeDispute'])->name('safety.disputes.close');
+        Route::post('/safety/accounts/{suchakAccount}/freeze', [SafetyController::class, 'freezeAccount'])->name('safety.accounts.freeze');
+        Route::post('/safety/accounts/{suchakAccount}/unfreeze', [SafetyController::class, 'unfreezeAccount'])->name('safety.accounts.unfreeze');
+        Route::post('/safety/accounts/{suchakAccount}/pause', [SafetyController::class, 'pauseAccount'])->name('safety.accounts.pause');
+        Route::post('/safety/accounts/{suchakAccount}/resume', [SafetyController::class, 'resumeAccount'])->name('safety.accounts.resume');
+        Route::post('/safety/representations/{representation}/revoke', [SafetyController::class, 'revokeRepresentation'])->name('safety.representations.revoke');
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
         Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
         Route::get('/accounts', [AccountVerificationController::class, 'index'])->name('accounts.index');

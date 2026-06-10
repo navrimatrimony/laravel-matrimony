@@ -114,6 +114,7 @@
                     </button>
                     <ul class="nav-group-items mt-0.5 ml-4 pl-3 border-l border-gray-700 space-y-0.5" x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
                         <li><a href="{{ route('admin.suchak.dashboard') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.suchak.dashboard') ? 'active' : '' }}">Dashboard</a></li>
+                        <li><a href="{{ route('admin.suchak.safety.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.suchak.safety.*') ? 'active' : '' }}">Safety</a></li>
                         <li><a href="{{ route('admin.suchak.accounts.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.suchak.accounts.*') ? 'active' : '' }}">Accounts</a></li>
                         <li><a href="{{ route('admin.suchak.settings.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.suchak.settings.*') ? 'active' : '' }}">Settings</a></li>
                     </ul>

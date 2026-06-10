@@ -8,6 +8,7 @@
                 <a href="{{ route('admin.suchak.accounts.index') }}" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-200">Back to Suchak accounts</a>
                 <h1 class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ $suchakAccount->suchak_name }}</h1>
                 <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ ucfirst($suchakAccount->business_type) }} account requested by {{ $suchakAccount->user?->email }}</p>
+                <a href="{{ route('admin.suchak.safety.index') }}" class="mt-3 inline-flex rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700">Open safety center</a>
             </div>
             <div class="grid grid-cols-2 gap-3 text-sm">
                 <div class="rounded-md bg-gray-50 px-4 py-3 dark:bg-gray-900">

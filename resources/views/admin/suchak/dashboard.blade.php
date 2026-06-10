@@ -19,6 +19,9 @@
                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">Operational status, risk signals, evidence activity, and source links for the Suchak system.</p>
             </div>
             <div class="flex flex-wrap gap-2">
+                <a href="{{ route('admin.suchak.safety.index') }}" class="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
+                    Safety center
+                </a>
                 <a href="{{ route('admin.suchak.accounts.index') }}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
                     Review accounts
                 </a>
