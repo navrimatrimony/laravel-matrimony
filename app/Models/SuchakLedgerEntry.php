@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use RuntimeException;
 
 class SuchakLedgerEntry extends Model
@@ -16,6 +17,7 @@ class SuchakLedgerEntry extends Model
     public const TYPE_PAYMENT_REMINDER = 'payment_reminder';
     public const TYPE_CONVERTED_MATCH = 'converted_match';
     public const TYPE_ADJUSTMENT = 'adjustment';
+    public const TYPE_CUSTOMER_PAYMENT_RECORDED = 'customer_payment_recorded';
 
     public const TYPES = [
         self::TYPE_REGISTRATION_FEE_EXPECTED,
@@ -23,6 +25,7 @@ class SuchakLedgerEntry extends Model
         self::TYPE_PAYMENT_REMINDER,
         self::TYPE_CONVERTED_MATCH,
         self::TYPE_ADJUSTMENT,
+        self::TYPE_CUSTOMER_PAYMENT_RECORDED,
     ];
 
     public const STATUS_EXPECTED = 'expected';
@@ -85,6 +88,11 @@ class SuchakLedgerEntry extends Model
     public function paymentContext(): BelongsTo
     {
         return $this->belongsTo(SuchakPaymentContext::class, 'payment_context_id');
+    }
+
+    public function customerPayments(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerPayment::class, 'ledger_entry_id');
     }
 
     public function delete(): ?bool

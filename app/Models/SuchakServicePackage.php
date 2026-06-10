@@ -124,6 +124,11 @@ class SuchakServicePackage extends Model
         return $this->hasMany(SuchakPaymentRequest::class, 'service_package_id');
     }
 
+    public function customerPayments(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerPayment::class, 'service_package_id');
+    }
+
     public function isPublished(): bool
     {
         return $this->package_status === self::STATUS_PUBLISHED;

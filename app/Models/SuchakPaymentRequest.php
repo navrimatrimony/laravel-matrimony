@@ -123,6 +123,12 @@ class SuchakPaymentRequest extends Model
             ->orderBy('id');
     }
 
+    public function customerPayments(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerPayment::class, 'payment_request_id')
+            ->orderByDesc('id');
+    }
+
     public function hasExpired(): bool
     {
         return $this->expires_at !== null && $this->expires_at->isPast();

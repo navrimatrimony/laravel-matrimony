@@ -12,6 +12,7 @@ use App\Http\Controllers\Suchak\PaymentRequestPublicController;
 use App\Http\Controllers\Suchak\PlanPaymentController;
 use App\Http\Controllers\Suchak\ProfileUpdateSuggestionController;
 use App\Http\Controllers\Suchak\QrScanController;
+use App\Http\Controllers\Suchak\ReceiptVerificationController;
 use App\Http\Middleware\EnforceCardOnboarding;
 use Illuminate\Support\Facades\Route;
 
@@ -43,6 +44,10 @@ Route::prefix('suchak')
             ->where('token', '[A-Za-z0-9]{64}')
             ->middleware('throttle:30,1')
             ->name('payment-requests.show');
+        Route::get('/receipts/verify/{code}', [ReceiptVerificationController::class, 'show'])
+            ->where('code', '[A-Za-z0-9]{32}')
+            ->middleware('throttle:30,1')
+            ->name('receipts.verify');
     });
 
 Route::middleware('auth')
