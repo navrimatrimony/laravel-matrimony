@@ -61,6 +61,26 @@ class SuchakAccount extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function cityLocation(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'city_id');
+    }
+
+    public function talukaLocation(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'taluka_id');
+    }
+
+    public function districtLocation(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'district_id');
+    }
+
+    public function stateLocation(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'state_id');
+    }
+
     public function verificationRecords(): HasMany
     {
         return $this->hasMany(SuchakVerificationRecord::class);

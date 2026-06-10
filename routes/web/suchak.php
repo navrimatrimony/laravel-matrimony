@@ -13,6 +13,7 @@ use App\Http\Controllers\Suchak\IntakeSourceController;
 use App\Http\Controllers\Suchak\PaymentRequestPublicController;
 use App\Http\Controllers\Suchak\PlanPaymentController;
 use App\Http\Controllers\Suchak\ProfileUpdateSuggestionController;
+use App\Http\Controllers\Suchak\PublicMarketplaceController;
 use App\Http\Controllers\Suchak\QrScanController;
 use App\Http\Controllers\Suchak\ReceiptVerificationController;
 use App\Http\Middleware\EnforceCardOnboarding;
@@ -39,6 +40,12 @@ Route::prefix('suchak')
         Route::post('/register', [AccountRequestController::class, 'storeRegistration'])
             ->middleware('throttle:5,1')
             ->name('register.store');
+        Route::get('/marketplace', [PublicMarketplaceController::class, 'index'])
+            ->middleware('throttle:60,1')
+            ->name('marketplace.index');
+        Route::get('/marketplace/{suchakAccount}', [PublicMarketplaceController::class, 'show'])
+            ->middleware('throttle:60,1')
+            ->name('marketplace.show');
         Route::post('/plans/payu/success', [PlanPaymentController::class, 'success'])->name('plans.payu.success');
         Route::post('/plans/payu/failure', [PlanPaymentController::class, 'failure'])->name('plans.payu.failure');
         Route::post('/plans/payu/webhook', [PlanPaymentController::class, 'webhook'])->name('plans.payu.webhook');
