@@ -232,6 +232,27 @@ class SuchakAgreementService
         });
     }
 
+    public function assertAgreementAllowsPaymentRequest(SuchakCustomerAgreement $agreement): void
+    {
+        $agreement->refresh()->loadMissing(['servicePackage.suchakAccount', 'servicePackage.customerContext']);
+
+        if (! $agreement->isTermsSatisfied()) {
+            throw new InvalidArgumentException('Suchak agreement terms must be accepted, bypassed, or not required before sending payment requests.');
+        }
+
+        $latestId = (int) SuchakCustomerAgreement::query()
+            ->where('service_package_id', $agreement->service_package_id)
+            ->orderByDesc('agreement_revision')
+            ->orderByDesc('id')
+            ->value('id');
+
+        if ((int) $agreement->id !== $latestId) {
+            throw new InvalidArgumentException('Only the latest Suchak agreement revision can create payment requests.');
+        }
+
+        $this->assertPackageSnapshotCurrent($agreement);
+    }
+
     private function createAgreementSnapshot(
         SuchakServicePackage $package,
         User $actor,

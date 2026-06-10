@@ -93,6 +93,11 @@ class SuchakPaymentContext extends Model
         return $this->hasMany(SuchakLedgerEntry::class, 'payment_context_id');
     }
 
+    public function paymentRequests(): HasMany
+    {
+        return $this->hasMany(SuchakPaymentRequest::class, 'payment_context_id');
+    }
+
     public function delete(): ?bool
     {
         throw new RuntimeException('Suchak payment contexts cannot be deleted.');

@@ -8,6 +8,7 @@ use App\Http\Controllers\Suchak\CrmLedgerController;
 use App\Http\Controllers\Suchak\CrossSearchController;
 use App\Http\Controllers\Suchak\DashboardController;
 use App\Http\Controllers\Suchak\IntakeSourceController;
+use App\Http\Controllers\Suchak\PaymentRequestPublicController;
 use App\Http\Controllers\Suchak\PlanPaymentController;
 use App\Http\Controllers\Suchak\ProfileUpdateSuggestionController;
 use App\Http\Controllers\Suchak\QrScanController;
@@ -38,6 +39,10 @@ Route::prefix('suchak')
         Route::post('/plans/payu/success', [PlanPaymentController::class, 'success'])->name('plans.payu.success');
         Route::post('/plans/payu/failure', [PlanPaymentController::class, 'failure'])->name('plans.payu.failure');
         Route::post('/plans/payu/webhook', [PlanPaymentController::class, 'webhook'])->name('plans.payu.webhook');
+        Route::get('/payment-requests/{token}', [PaymentRequestPublicController::class, 'show'])
+            ->where('token', '[A-Za-z0-9]{64}')
+            ->middleware('throttle:30,1')
+            ->name('payment-requests.show');
     });
 
 Route::middleware('auth')

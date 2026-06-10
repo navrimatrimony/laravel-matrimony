@@ -168,6 +168,11 @@ class SuchakCustomerContext extends Model
         return $this->hasMany(SuchakCustomerAgreement::class, 'customer_context_id');
     }
 
+    public function paymentRequests(): HasMany
+    {
+        return $this->hasMany(SuchakPaymentRequest::class, 'customer_context_id');
+    }
+
     public function delete(): ?bool
     {
         throw new RuntimeException('Suchak customer contexts cannot be deleted.');

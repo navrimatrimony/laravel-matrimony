@@ -4,6 +4,7 @@ namespace Tests\Feature\Suchak;
 
 use App\Models\SuchakAccount;
 use App\Models\SuchakCustomerAgreement;
+use App\Models\SuchakPaymentRequest;
 use App\Models\SuchakPlan;
 use App\Models\SuchakPlanFeature;
 use App\Models\SuchakPolicy;
@@ -91,6 +92,9 @@ class SuchakCentralServicesTest extends TestCase
             ->where('policy_key', SuchakPolicyService::KEY_SUCHAK_TERMS_POLICY_MODE)
             ->update(['policy_value' => SuchakCustomerAgreement::POLICY_RECOMMENDED]);
         SuchakPolicy::query()
+            ->where('policy_key', SuchakPolicyService::KEY_SUCHAK_PAYMENT_DETAIL_VISIBILITY_POLICY)
+            ->update(['policy_value' => SuchakPaymentRequest::VISIBILITY_COLLECTOR_DISCLOSURE_ONLY]);
+        SuchakPolicy::query()
             ->where('policy_key', SuchakPolicyService::KEY_SUCHAK_COMMISSION_RULES_JSON)
             ->update([
                 'policy_value' => json_encode([
@@ -111,6 +115,7 @@ class SuchakCentralServicesTest extends TestCase
         $this->assertSame('payu_test_mode', $service->paymentMode());
         $this->assertSame(SuchakServicePackage::APPROVAL_MODE_AUTO_PUBLISH, $service->packagePublishApprovalMode());
         $this->assertSame(SuchakCustomerAgreement::POLICY_RECOMMENDED, $service->termsPolicyMode());
+        $this->assertSame(SuchakPaymentRequest::VISIBILITY_COLLECTOR_DISCLOSURE_ONLY, $service->paymentDetailVisibilityPolicy());
         $this->assertSame([
             'mode' => 'percentage',
             'default_percent' => 12,

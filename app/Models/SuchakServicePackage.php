@@ -119,6 +119,11 @@ class SuchakServicePackage extends Model
             ->orderByDesc('id');
     }
 
+    public function paymentRequests(): HasMany
+    {
+        return $this->hasMany(SuchakPaymentRequest::class, 'service_package_id');
+    }
+
     public function isPublished(): bool
     {
         return $this->package_status === self::STATUS_PUBLISHED;

@@ -130,6 +130,11 @@ class SuchakCustomerAgreement extends Model
             ->orderBy('id');
     }
 
+    public function paymentRequests(): HasMany
+    {
+        return $this->hasMany(SuchakPaymentRequest::class, 'customer_agreement_id');
+    }
+
     public function isTermsSatisfied(): bool
     {
         return in_array($this->terms_status, [

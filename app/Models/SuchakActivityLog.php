@@ -117,6 +117,16 @@ class SuchakActivityLog extends Model
 
     public const ACTION_CUSTOMER_AGREEMENT_REVISED = 'customer_agreement_revised';
 
+    public const ACTION_PAYMENT_REQUEST_CREATED = 'payment_request_created';
+
+    public const ACTION_PAYMENT_REQUEST_SENT = 'payment_request_sent';
+
+    public const ACTION_PAYMENT_REQUEST_OPENED = 'payment_request_opened';
+
+    public const ACTION_PAYMENT_REQUEST_CANCELLED = 'payment_request_cancelled';
+
+    public const ACTION_PAYMENT_REQUEST_EXPIRED = 'payment_request_expired';
+
     protected $table = 'suchak_activity_logs';
 
     protected $fillable = [
