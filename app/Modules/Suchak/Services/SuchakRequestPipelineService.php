@@ -3,6 +3,7 @@
 namespace App\Modules\Suchak\Services;
 
 use App\Models\MatrimonyProfile;
+use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakPipeline;
 use App\Models\SuchakPipelineEvent;
@@ -38,6 +39,7 @@ class SuchakRequestPipelineService
         $representation->refresh()->loadMissing(['suchakAccount', 'matrimonyProfile']);
 
         $this->assertRequestCanBeCreated($requestingUser, $requestingProfile, $representation);
+        $this->limitService->assertLeadRequestAllowed($representation->suchakAccount);
 
         return DB::transaction(function () use ($requestingUser, $requestingProfile, $representation, $attributes, $ipAddress, $userAgent): array {
             /** @var SuchakProfileRepresentation $lockedRepresentation */
@@ -47,7 +49,14 @@ class SuchakRequestPipelineService
                 ->firstOrFail();
 
             $lockedRepresentation->loadMissing(['suchakAccount', 'matrimonyProfile']);
+            /** @var SuchakAccount $lockedSuchakAccount */
+            $lockedSuchakAccount = SuchakAccount::query()
+                ->whereKey($lockedRepresentation->suchak_account_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $lockedRepresentation->setRelation('suchakAccount', $lockedSuchakAccount);
             $this->assertRequestCanBeCreated($requestingUser, $requestingProfile, $lockedRepresentation);
+            $this->limitService->assertLeadRequestAllowed($lockedSuchakAccount);
             $this->assertNoDuplicateOpenRequest($requestingProfile, $lockedRepresentation);
 
             $request = SuchakProfileRequest::query()->create([

@@ -3,6 +3,7 @@
 namespace App\Modules\Suchak\Services;
 
 use App\Models\SuchakActivityLog;
+use App\Models\SuchakAccount;
 use App\Models\SuchakBiodataExport;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakQrToken;
@@ -42,6 +43,12 @@ class SuchakPdfQrFoundationService
                 ->firstOrFail();
 
             $lockedRepresentation->loadMissing(['suchakAccount', 'matrimonyProfile']);
+            /** @var SuchakAccount $lockedAccount */
+            $lockedAccount = SuchakAccount::query()
+                ->whereKey($lockedRepresentation->suchak_account_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $lockedRepresentation->setRelation('suchakAccount', $lockedAccount);
             $this->assertExportAllowed($lockedRepresentation, $actor);
 
             $export = SuchakBiodataExport::query()->create([
@@ -133,6 +140,8 @@ class SuchakPdfQrFoundationService
         if ($representation->representation_status !== SuchakProfileRepresentation::STATUS_ACTIVE || ! $representation->hasValidConsent()) {
             throw new InvalidArgumentException('PDF/QR export requires active representation with valid consent.');
         }
+
+        $this->limitService->assertPdfExportAllowed($representation->suchakAccount);
     }
 
     private function assertQrTokenStillAllowed(SuchakQrToken $qrToken): void

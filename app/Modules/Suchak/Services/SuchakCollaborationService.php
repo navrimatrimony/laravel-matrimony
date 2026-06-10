@@ -40,8 +40,14 @@ class SuchakCollaborationService
         $targetRepresentation->refresh()->loadMissing(['suchakAccount', 'matrimonyProfile.gender']);
 
         $this->assertCanCreate($requestingAccount, $actor, $requestingRepresentation, $targetRepresentation);
+        $this->limitService->assertCollaborationRequestAllowed($requestingAccount);
 
         return DB::transaction(function () use ($requestingAccount, $actor, $requestingRepresentation, $targetRepresentation, $attributes, $ipAddress, $userAgent): array {
+            /** @var SuchakAccount $lockedRequestingAccount */
+            $lockedRequestingAccount = SuchakAccount::query()
+                ->whereKey($requestingAccount->id)
+                ->lockForUpdate()
+                ->firstOrFail();
             /** @var SuchakProfileRepresentation $lockedRequestingRepresentation */
             $lockedRequestingRepresentation = SuchakProfileRepresentation::query()
                 ->whereKey($requestingRepresentation->id)
@@ -55,12 +61,13 @@ class SuchakCollaborationService
 
             $lockedRequestingRepresentation->loadMissing(['suchakAccount', 'matrimonyProfile.gender']);
             $lockedTargetRepresentation->loadMissing(['suchakAccount', 'matrimonyProfile.gender']);
-            $this->assertCanCreate($requestingAccount, $actor, $lockedRequestingRepresentation, $lockedTargetRepresentation);
+            $this->assertCanCreate($lockedRequestingAccount, $actor, $lockedRequestingRepresentation, $lockedTargetRepresentation);
+            $this->limitService->assertCollaborationRequestAllowed($lockedRequestingAccount);
             $this->assertNoDuplicateOpenRequest($lockedRequestingRepresentation, $lockedTargetRepresentation);
 
             $requestedAt = now();
             $collaboration = SuchakCollaborationRequest::query()->create([
-                'requesting_suchak_account_id' => $requestingAccount->id,
+                'requesting_suchak_account_id' => $lockedRequestingAccount->id,
                 'target_suchak_account_id' => $lockedTargetRepresentation->suchak_account_id,
                 'requesting_matrimony_profile_id' => $lockedRequestingRepresentation->matrimony_profile_id,
                 'target_matrimony_profile_id' => $lockedTargetRepresentation->matrimony_profile_id,

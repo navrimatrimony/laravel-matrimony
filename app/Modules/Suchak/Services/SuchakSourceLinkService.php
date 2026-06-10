@@ -18,6 +18,7 @@ class SuchakSourceLinkService
         private readonly IntakeCreationService $intakeCreationService,
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakAccessService $accessService,
+        private readonly SuchakLimitService $limitService,
     ) {
     }
 
@@ -36,14 +37,23 @@ class SuchakSourceLinkService
     ): SuchakBiodataIntakeLink {
         $account->refresh();
         $this->assertCanCreate($account);
+        $this->limitService->assertUploadAllowed($account);
 
         $prepared = $this->intakeCreationService->prepare($actor->id, $file, $rawText);
 
         $result = DB::transaction(function () use ($account, $actor, $prepared, $file, $ipAddress, $userAgent): array {
+            /** @var SuchakAccount $lockedAccount */
+            $lockedAccount = SuchakAccount::query()
+                ->whereKey($account->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $this->assertCanCreate($lockedAccount);
+            $this->limitService->assertUploadAllowed($lockedAccount);
+
             $intake = $this->intakeCreationService->persistPrepared($actor->id, $prepared);
 
             $link = SuchakBiodataIntakeLink::query()->create([
-                'suchak_account_id' => $account->id,
+                'suchak_account_id' => $lockedAccount->id,
                 'biodata_intake_id' => $intake->id,
                 'matrimony_profile_id' => null,
                 'source_status' => SuchakBiodataIntakeLink::STATUS_INTAKE_UPLOADED,
@@ -51,7 +61,7 @@ class SuchakSourceLinkService
             ]);
 
             $this->activityLogger->record([
-                'suchak_account_id' => $account->id,
+                'suchak_account_id' => $lockedAccount->id,
                 'actor_user_id' => $actor->id,
                 'actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
                 'action_type' => SuchakActivityLog::ACTION_SOURCE_LINK_CREATED,

@@ -17,6 +17,7 @@ class SuchakRepresentationService
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakAccessService $accessService,
+        private readonly SuchakLimitService $limitService,
     ) {
     }
 
@@ -41,10 +42,19 @@ class SuchakRepresentationService
         $this->assertCanCreate($account);
         $this->assertSourceLinkMatches($account, $actor, $sourceLink, $profile);
         $this->assertValidSourceLinkMode($representationMode);
+        $this->limitService->assertActiveProfileSlotAvailable($account);
 
         return DB::transaction(function () use ($account, $actor, $sourceLink, $profile, $representationMode, $ipAddress, $userAgent): SuchakProfileRepresentation {
+            /** @var SuchakAccount $lockedAccount */
+            $lockedAccount = SuchakAccount::query()
+                ->whereKey($account->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $this->assertCanCreate($lockedAccount);
+            $this->limitService->assertActiveProfileSlotAvailable($lockedAccount);
+
             $duplicate = SuchakProfileRepresentation::query()
-                ->where('suchak_account_id', $account->id)
+                ->where('suchak_account_id', $lockedAccount->id)
                 ->where('matrimony_profile_id', $profile->id)
                 ->lockForUpdate()
                 ->first();
@@ -54,7 +64,7 @@ class SuchakRepresentationService
             }
 
             $representation = SuchakProfileRepresentation::query()->create([
-                'suchak_account_id' => $account->id,
+                'suchak_account_id' => $lockedAccount->id,
                 'matrimony_profile_id' => $profile->id,
                 'biodata_intake_id' => $sourceLink->biodata_intake_id,
                 'representation_status' => SuchakProfileRepresentation::STATUS_PENDING,
@@ -65,7 +75,7 @@ class SuchakRepresentationService
             ]);
 
             $this->activityLogger->record([
-                'suchak_account_id' => $account->id,
+                'suchak_account_id' => $lockedAccount->id,
                 'actor_user_id' => $actor->id,
                 'actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
                 'action_type' => SuchakActivityLog::ACTION_REPRESENTATION_CREATED,
