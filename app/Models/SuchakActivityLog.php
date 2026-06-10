@@ -169,6 +169,10 @@ class SuchakActivityLog extends Model
 
     public const ACTION_PAYOUT_HOLD_OPENED = 'payout_hold_opened';
 
+    public const ACTION_PLATFORM_PAYOUT_QUALIFIED = 'platform_payout_qualified';
+
+    public const ACTION_PLATFORM_PAYOUT_DETAILS_UPDATED = 'platform_payout_details_updated';
+
     protected $table = 'suchak_activity_logs';
 
     protected $fillable = [
