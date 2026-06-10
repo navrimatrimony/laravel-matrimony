@@ -18,6 +18,10 @@ class SuchakLedgerEntry extends Model
     public const TYPE_CONVERTED_MATCH = 'converted_match';
     public const TYPE_ADJUSTMENT = 'adjustment';
     public const TYPE_CUSTOMER_PAYMENT_RECORDED = 'customer_payment_recorded';
+    public const TYPE_CUSTOMER_REFUND_PAID = 'customer_refund_paid';
+    public const TYPE_CUSTOMER_WAIVER_POSTED = 'customer_waiver_posted';
+    public const TYPE_CUSTOMER_CREDIT_NOTE_ISSUED = 'customer_credit_note_issued';
+    public const TYPE_CUSTOMER_PAYMENT_REVERSAL = 'customer_payment_reversal';
 
     public const TYPES = [
         self::TYPE_REGISTRATION_FEE_EXPECTED,
@@ -26,6 +30,10 @@ class SuchakLedgerEntry extends Model
         self::TYPE_CONVERTED_MATCH,
         self::TYPE_ADJUSTMENT,
         self::TYPE_CUSTOMER_PAYMENT_RECORDED,
+        self::TYPE_CUSTOMER_REFUND_PAID,
+        self::TYPE_CUSTOMER_WAIVER_POSTED,
+        self::TYPE_CUSTOMER_CREDIT_NOTE_ISSUED,
+        self::TYPE_CUSTOMER_PAYMENT_REVERSAL,
     ];
 
     public const STATUS_EXPECTED = 'expected';
@@ -33,6 +41,7 @@ class SuchakLedgerEntry extends Model
     public const STATUS_PAID = 'paid';
     public const STATUS_WAIVED = 'waived';
     public const STATUS_CANCELLED = 'cancelled';
+    public const STATUS_ADJUSTED = 'adjusted';
 
     public const STATUSES = [
         self::STATUS_EXPECTED,
@@ -40,6 +49,7 @@ class SuchakLedgerEntry extends Model
         self::STATUS_PAID,
         self::STATUS_WAIVED,
         self::STATUS_CANCELLED,
+        self::STATUS_ADJUSTED,
     ];
 
     protected $table = 'suchak_ledger_entries';
@@ -93,6 +103,11 @@ class SuchakLedgerEntry extends Model
     public function customerPayments(): HasMany
     {
         return $this->hasMany(SuchakCustomerPayment::class, 'ledger_entry_id');
+    }
+
+    public function customerPaymentCorrections(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerPaymentCorrection::class, 'ledger_entry_id');
     }
 
     public function delete(): ?bool

@@ -150,6 +150,18 @@ class SuchakCustomerPayment extends Model
             ->orderBy('id');
     }
 
+    public function corrections(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerPaymentCorrection::class, 'customer_payment_id')
+            ->orderByDesc('id');
+    }
+
+    public function overdueServiceActions(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerOverdueServiceAction::class, 'customer_payment_id')
+            ->orderByDesc('id');
+    }
+
     public function invoiceDocument(): ?SuchakCustomerPaymentDocument
     {
         return $this->documents

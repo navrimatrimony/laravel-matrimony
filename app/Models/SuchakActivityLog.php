@@ -131,6 +131,22 @@ class SuchakActivityLog extends Model
 
     public const ACTION_CUSTOMER_PAYMENT_DOCUMENT_ISSUED = 'customer_payment_document_issued';
 
+    public const ACTION_CUSTOMER_REFUND_REQUESTED = 'customer_refund_requested';
+
+    public const ACTION_CUSTOMER_REFUND_APPROVED = 'customer_refund_approved';
+
+    public const ACTION_CUSTOMER_REFUND_PAID = 'customer_refund_paid';
+
+    public const ACTION_CUSTOMER_WAIVER_POSTED = 'customer_waiver_posted';
+
+    public const ACTION_CUSTOMER_CREDIT_NOTE_ISSUED = 'customer_credit_note_issued';
+
+    public const ACTION_CUSTOMER_PAYMENT_REVERSAL_POSTED = 'customer_payment_reversal_posted';
+
+    public const ACTION_CUSTOMER_OVERDUE_ACTION_OPENED = 'customer_overdue_action_opened';
+
+    public const ACTION_CUSTOMER_OVERDUE_ACTION_RESOLVED = 'customer_overdue_action_resolved';
+
     protected $table = 'suchak_activity_logs';
 
     protected $fillable = [

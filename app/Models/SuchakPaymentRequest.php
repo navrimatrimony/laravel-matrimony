@@ -129,6 +129,18 @@ class SuchakPaymentRequest extends Model
             ->orderByDesc('id');
     }
 
+    public function customerPaymentCorrections(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerPaymentCorrection::class, 'payment_request_id')
+            ->orderByDesc('id');
+    }
+
+    public function overdueServiceActions(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerOverdueServiceAction::class, 'payment_request_id')
+            ->orderByDesc('id');
+    }
+
     public function hasExpired(): bool
     {
         return $this->expires_at !== null && $this->expires_at->isPast();
