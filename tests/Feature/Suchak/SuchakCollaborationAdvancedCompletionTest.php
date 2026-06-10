@@ -10,6 +10,7 @@ use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakCommissionAgreement;
 use App\Models\SuchakConsent;
 use App\Models\SuchakLedgerEntry;
+use App\Models\SuchakPaymentContext;
 use App\Models\SuchakPolicy;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
@@ -113,6 +114,7 @@ class SuchakCollaborationAdvancedCompletionTest extends TestCase
         $this->actingAs($targetAccount->user)
             ->post(route('suchak.collaborations.ledger-entries.store', $accepted), [
                 'entry_type' => SuchakLedgerEntry::TYPE_SUCCESS_FEE_EXPECTED,
+                'payment_collector' => SuchakPaymentContext::COLLECTOR_SUCHAK,
                 'amount' => '25000',
                 'currency' => 'INR',
                 'status' => SuchakLedgerEntry::STATUS_EXPECTED,
@@ -126,6 +128,8 @@ class SuchakCollaborationAdvancedCompletionTest extends TestCase
         $this->assertSame($targetAccount->id, $ledger->suchak_account_id);
         $this->assertSame($accepted->id, $ledger->collaboration_request_id);
         $this->assertSame($requestingRepresentation->matrimony_profile_id, $ledger->matrimony_profile_id);
+        $this->assertSame(SuchakPaymentContext::SOURCE_COLLABORATION, $ledger->paymentContext->source_owner);
+        $this->assertSame(SuchakPaymentContext::COLLECTOR_SUCHAK, $ledger->paymentContext->payment_collector);
         $this->assertSame('Sensitive Requesting Candidate', $requestingRepresentation->matrimonyProfile->fresh()->full_name);
 
         $this->actingAs($targetAccount->user)
@@ -172,6 +176,7 @@ class SuchakCollaborationAdvancedCompletionTest extends TestCase
         $this->actingAs($targetAccount->user)
             ->post(route('suchak.collaborations.ledger-entries.store', $collaboration), [
                 'entry_type' => SuchakLedgerEntry::TYPE_SUCCESS_FEE_EXPECTED,
+                'payment_collector' => SuchakPaymentContext::COLLECTOR_SUCHAK,
                 'amount' => '1000',
                 'currency' => 'INR',
                 'status' => SuchakLedgerEntry::STATUS_EXPECTED,

@@ -46,6 +46,7 @@ class SuchakLedgerEntry extends Model
         'matrimony_profile_id',
         'pipeline_id',
         'collaboration_request_id',
+        'payment_context_id',
         'entry_type',
         'amount',
         'currency',
@@ -79,6 +80,11 @@ class SuchakLedgerEntry extends Model
     public function collaborationRequest(): BelongsTo
     {
         return $this->belongsTo(SuchakCollaborationRequest::class, 'collaboration_request_id');
+    }
+
+    public function paymentContext(): BelongsTo
+    {
+        return $this->belongsTo(SuchakPaymentContext::class, 'payment_context_id');
     }
 
     public function delete(): ?bool

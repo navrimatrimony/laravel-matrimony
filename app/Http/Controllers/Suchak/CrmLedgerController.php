@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Suchak;
 
 use App\Http\Controllers\Controller;
 use App\Models\SuchakLedgerEntry;
+use App\Models\SuchakPaymentContext;
 use App\Models\SuchakProfileNote;
 use App\Models\SuchakProfileRepresentation;
 use App\Modules\Suchak\Services\SuchakCrmLedgerService;
@@ -64,12 +65,16 @@ class CrmLedgerController extends Controller
 
         $validated = $request->validate([
             'entry_type' => ['required', 'string', Rule::in(SuchakLedgerEntry::TYPES)],
+            'payment_context_id' => ['nullable', 'integer', 'exists:suchak_payment_contexts,id'],
+            'source_owner' => ['nullable', 'required_without:payment_context_id', 'string', Rule::in(SuchakPaymentContext::SOURCE_OWNERS)],
+            'payment_collector' => ['nullable', 'required_without:payment_context_id', 'string', Rule::in(SuchakPaymentContext::PAYMENT_COLLECTORS)],
             'amount' => ['nullable', 'numeric', 'min:0', 'max:999999999.99'],
             'currency' => ['required', 'string', 'size:3'],
             'status' => ['required', 'string', Rule::in(SuchakLedgerEntry::STATUSES)],
             'due_date' => ['nullable', 'date'],
             'paid_at' => ['nullable', 'date'],
             'note' => ['nullable', 'string', 'max:2000'],
+            'resolution_note' => ['nullable', 'string', 'max:1000'],
         ]);
 
         try {

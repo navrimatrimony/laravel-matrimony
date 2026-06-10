@@ -190,6 +190,12 @@
                                             <option value="{{ $entryStatus }}">{{ $label($entryStatus) }}</option>
                                         @endforeach
                                     </select>
+                                    <select name="payment_collector" required class="rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                        <option value="">Payment collector</option>
+                                        @foreach ($paymentCollectorOptions as $collector)
+                                            <option value="{{ $collector }}">{{ $label($collector) }}</option>
+                                        @endforeach
+                                    </select>
                                     <input type="number" name="amount" step="0.01" min="0" placeholder="Amount" class="rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
                                     <input type="text" name="currency" maxlength="3" value="INR" class="rounded-md border-gray-300 text-sm uppercase dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
                                     <input type="date" name="due_date" class="rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">

@@ -9,6 +9,7 @@ use App\Models\SuchakActivityLog;
 use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakConsent;
 use App\Models\SuchakLedgerEntry;
+use App\Models\SuchakPaymentContext;
 use App\Models\SuchakPipeline;
 use App\Models\SuchakProfileNote;
 use App\Models\SuchakProfileRepresentation;
@@ -40,6 +41,7 @@ class SuchakCrmLedgerFoundationTest extends TestCase
     {
         $this->assertTrue(Schema::hasTable('suchak_profile_notes'));
         $this->assertTrue(Schema::hasTable('suchak_ledger_entries'));
+        $this->assertTrue(Schema::hasTable('suchak_payment_contexts'));
 
         foreach ([
             'suchak_account_id',
@@ -60,6 +62,7 @@ class SuchakCrmLedgerFoundationTest extends TestCase
             'matrimony_profile_id',
             'pipeline_id',
             'collaboration_request_id',
+            'payment_context_id',
             'entry_type',
             'amount',
             'currency',
@@ -73,8 +76,25 @@ class SuchakCrmLedgerFoundationTest extends TestCase
             $this->assertTrue(Schema::hasColumn('suchak_ledger_entries', $column), $column);
         }
 
+        foreach ([
+            'suchak_account_id',
+            'matrimony_profile_id',
+            'pipeline_id',
+            'collaboration_request_id',
+            'source_owner',
+            'payment_collector',
+            'context_status',
+            'resolved_by_user_id',
+            'resolution_note',
+            'created_at',
+            'updated_at',
+        ] as $column) {
+            $this->assertTrue(Schema::hasColumn('suchak_payment_contexts', $column), $column);
+        }
+
         $this->assertFalse(Schema::hasColumn('suchak_profile_notes', 'deleted_at'));
         $this->assertFalse(Schema::hasColumn('suchak_ledger_entries', 'deleted_at'));
+        $this->assertFalse(Schema::hasColumn('suchak_payment_contexts', 'deleted_at'));
         $this->assertFalse(Schema::hasColumn('suchak_profile_notes', 'phone_number'));
         $this->assertFalse(Schema::hasColumn('suchak_ledger_entries', 'payment_id'));
     }
@@ -163,6 +183,8 @@ class SuchakCrmLedgerFoundationTest extends TestCase
             [
                 'pipeline_id' => $pipeline->id,
                 'collaboration_request_id' => $collaboration->id,
+                'source_owner' => SuchakPaymentContext::SOURCE_COLLABORATION,
+                'payment_collector' => SuchakPaymentContext::COLLECTOR_SUCHAK,
                 'entry_type' => SuchakLedgerEntry::TYPE_SUCCESS_FEE_EXPECTED,
                 'amount' => '2500',
                 'currency' => 'inr',
@@ -178,6 +200,8 @@ class SuchakCrmLedgerFoundationTest extends TestCase
         $this->assertSame($profile->id, $entry->matrimony_profile_id);
         $this->assertSame($pipeline->id, $entry->pipeline_id);
         $this->assertSame($collaboration->id, $entry->collaboration_request_id);
+        $this->assertSame(SuchakPaymentContext::SOURCE_COLLABORATION, $entry->paymentContext->source_owner);
+        $this->assertSame(SuchakPaymentContext::COLLECTOR_SUCHAK, $entry->paymentContext->payment_collector);
         $this->assertSame(SuchakLedgerEntry::TYPE_SUCCESS_FEE_EXPECTED, $entry->entry_type);
         $this->assertSame(SuchakLedgerEntry::STATUS_EXPECTED, $entry->status);
         $this->assertSame('2500.00', (string) $entry->amount);
@@ -193,6 +217,15 @@ class SuchakCrmLedgerFoundationTest extends TestCase
             'target_id' => $entry->id,
             'matrimony_profile_id' => $profile->id,
         ]);
+        $this->assertDatabaseHas('suchak_activity_logs', [
+            'suchak_account_id' => $account->id,
+            'actor_user_id' => $user->id,
+            'actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
+            'action_type' => SuchakActivityLog::ACTION_PAYMENT_CONTEXT_RESOLVED,
+            'target_type' => 'suchak_payment_context',
+            'target_id' => $entry->payment_context_id,
+            'matrimony_profile_id' => $profile->id,
+        ]);
 
         $metadata = SuchakActivityLog::query()
             ->where('action_type', SuchakActivityLog::ACTION_LEDGER_ENTRY_CREATED)
@@ -203,6 +236,99 @@ class SuchakCrmLedgerFoundationTest extends TestCase
 
         $this->assertStringNotContainsString('Success fee expected after confirmed match', $encodedMetadata);
         $this->assertStringNotContainsString('Ledger Candidate', $encodedMetadata);
+    }
+
+    public function test_day_33_source_owner_and_collector_guard_blocks_unresolved_and_platform_manual_payment(): void
+    {
+        [$user, $account] = $this->verifiedSuchakActor();
+        $profile = $this->activeProfile();
+        $service = app(SuchakCrmLedgerService::class);
+
+        try {
+            $service->createLedgerEntry($account, $user, $profile, [
+                'entry_type' => SuchakLedgerEntry::TYPE_REGISTRATION_FEE_EXPECTED,
+                'amount' => '1000',
+            ]);
+
+            $this->fail('Manual Suchak payment ledger should require resolved source owner.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertSame('Suchak payment source owner must be resolved before ledger payment entries.', $exception->getMessage());
+        }
+
+        try {
+            $service->createLedgerEntry($account, $user, $profile, [
+                'source_owner' => SuchakPaymentContext::SOURCE_PLATFORM,
+                'payment_collector' => SuchakPaymentContext::COLLECTOR_PLATFORM,
+                'entry_type' => SuchakLedgerEntry::TYPE_REGISTRATION_FEE_EXPECTED,
+                'amount' => '1000',
+            ]);
+
+            $this->fail('Platform-sourced customer should block direct Suchak payment ledger.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertSame(SuchakPaymentContext::PLATFORM_DIRECT_PAYMENT_BLOCK_MESSAGE, $exception->getMessage());
+        }
+
+        $this->assertSame(0, SuchakLedgerEntry::query()->count());
+        $this->assertSame(0, SuchakPaymentContext::query()->count());
+    }
+
+    public function test_day_33_collaboration_collector_rule_allows_only_suchak_collected_manual_ledger(): void
+    {
+        [$user, $account] = $this->verifiedSuchakActor();
+        $profile = $this->activeProfile();
+        $collaboration = $this->collaborationFor($account, $profile);
+        $service = app(SuchakCrmLedgerService::class);
+
+        try {
+            $service->createLedgerEntry($account, $user, $profile, [
+                'collaboration_request_id' => $collaboration->id,
+                'source_owner' => SuchakPaymentContext::SOURCE_COLLABORATION,
+                'payment_collector' => SuchakPaymentContext::COLLECTOR_PLATFORM,
+                'entry_type' => SuchakLedgerEntry::TYPE_SUCCESS_FEE_EXPECTED,
+                'amount' => '2000',
+            ]);
+
+            $this->fail('Platform-collected collaboration payment should not create direct Suchak ledger.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertSame(SuchakPaymentContext::DIRECT_PAYMENT_BLOCK_MESSAGE, $exception->getMessage());
+        }
+
+        $entry = $service->createLedgerEntry($account, $user, $profile, [
+            'collaboration_request_id' => $collaboration->id,
+            'source_owner' => SuchakPaymentContext::SOURCE_COLLABORATION,
+            'payment_collector' => SuchakPaymentContext::COLLECTOR_SUCHAK,
+            'entry_type' => SuchakLedgerEntry::TYPE_SUCCESS_FEE_EXPECTED,
+            'amount' => '2000',
+        ]);
+
+        $this->assertSame(SuchakPaymentContext::SOURCE_COLLABORATION, $entry->paymentContext->source_owner);
+        $this->assertSame(SuchakPaymentContext::COLLECTOR_SUCHAK, $entry->paymentContext->payment_collector);
+
+        $secondEntry = $service->createLedgerEntry($account, $user, $profile, [
+            'collaboration_request_id' => $collaboration->id,
+            'source_owner' => SuchakPaymentContext::SOURCE_COLLABORATION,
+            'payment_collector' => SuchakPaymentContext::COLLECTOR_SUCHAK,
+            'entry_type' => SuchakLedgerEntry::TYPE_PAYMENT_REMINDER,
+            'amount' => '2100',
+        ]);
+        $this->assertSame($entry->payment_context_id, $secondEntry->payment_context_id);
+
+        try {
+            $service->createLedgerEntry($account, $user, $profile, [
+                'collaboration_request_id' => $collaboration->id,
+                'source_owner' => SuchakPaymentContext::SOURCE_COLLABORATION,
+                'payment_collector' => SuchakPaymentContext::COLLECTOR_PLATFORM,
+                'entry_type' => SuchakLedgerEntry::TYPE_SUCCESS_FEE_EXPECTED,
+                'amount' => '2200',
+            ]);
+
+            $this->fail('A locked collaboration payment collector should not be changed by another ledger row.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertSame('Suchak payment collector is already locked for this customer context.', $exception->getMessage());
+        }
+
+        $this->assertSame(2, SuchakLedgerEntry::query()->count());
+        $this->assertSame(1, SuchakPaymentContext::query()->count());
     }
 
     public function test_crm_ledger_rejects_private_contact_text_and_invalid_values(): void
@@ -286,6 +412,8 @@ class SuchakCrmLedgerFoundationTest extends TestCase
             'note_text' => 'No delete note.',
         ]);
         $entry = $service->createLedgerEntry($account, $user, $profile, [
+            'source_owner' => SuchakPaymentContext::SOURCE_SUCHAK,
+            'payment_collector' => SuchakPaymentContext::COLLECTOR_SUCHAK,
             'entry_type' => SuchakLedgerEntry::TYPE_REGISTRATION_FEE_EXPECTED,
         ]);
 

@@ -9,6 +9,7 @@ use App\Models\SuchakBiodataIntakeLink;
 use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakConsent;
 use App\Models\SuchakLedgerEntry;
+use App\Models\SuchakPaymentContext;
 use App\Models\SuchakPlanPayment;
 use App\Models\SuchakProfileNote;
 use App\Models\SuchakProfileRepresentation;
@@ -200,6 +201,8 @@ class DashboardController extends Controller
             'noteTypeOptions' => SuchakProfileNote::TYPES,
             'ledgerTypeOptions' => SuchakLedgerEntry::TYPES,
             'ledgerStatusOptions' => SuchakLedgerEntry::STATUSES,
+            'sourceOwnerOptions' => SuchakPaymentContext::SOURCE_OWNERS,
+            'paymentCollectorOptions' => SuchakPaymentContext::PAYMENT_COLLECTORS,
             'businessRecordFilters' => $businessRecordFilters,
             'stats' => [
                 'representations_total' => $account->profileRepresentations()->count(),

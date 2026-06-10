@@ -8,6 +8,7 @@ use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakConsent;
 use App\Models\SuchakLedgerEntry;
+use App\Models\SuchakPaymentContext;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakConsentService;
@@ -270,6 +271,8 @@ class SuchakCandidateDeactivationRevocationHardeningTest extends TestCase
             'note_text' => 'Private evidence note without contact details.',
         ]);
         $service->createLedgerEntry($account, $actor, $profile, [
+            'source_owner' => SuchakPaymentContext::SOURCE_SUCHAK,
+            'payment_collector' => SuchakPaymentContext::COLLECTOR_SUCHAK,
             'entry_type' => SuchakLedgerEntry::TYPE_REGISTRATION_FEE_EXPECTED,
             'amount' => '500',
         ]);

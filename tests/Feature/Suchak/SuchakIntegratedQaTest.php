@@ -16,6 +16,7 @@ use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakConsent;
 use App\Models\SuchakDispute;
 use App\Models\SuchakLedgerEntry;
+use App\Models\SuchakPaymentContext;
 use App\Models\SuchakPipelineEvent;
 use App\Models\SuchakPlan;
 use App\Models\SuchakPlanFeature;
@@ -172,6 +173,8 @@ class SuchakIntegratedQaTest extends TestCase
             [
                 'pipeline_id' => $pipeline->id,
                 'collaboration_request_id' => $collaboration->id,
+                'source_owner' => SuchakPaymentContext::SOURCE_COLLABORATION,
+                'payment_collector' => SuchakPaymentContext::COLLECTOR_SUCHAK,
                 'entry_type' => SuchakLedgerEntry::TYPE_SUCCESS_FEE_EXPECTED,
                 'amount' => '2500',
                 'note' => 'Integrated QA ledger note without contact details.',

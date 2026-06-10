@@ -25,6 +25,13 @@
     $ledgerStatusLabels = collect($ledgerStatusOptions)
         ->mapWithKeys(fn (string $status) => [$status => ucwords(str_replace('_', ' ', $status))])
         ->all();
+    $sourceOwnerLabels = collect($sourceOwnerOptions)
+        ->reject(fn (string $owner) => $owner === \App\Models\SuchakPaymentContext::SOURCE_COLLABORATION)
+        ->mapWithKeys(fn (string $owner) => [$owner => ucwords(str_replace('_', ' ', $owner))])
+        ->all();
+    $paymentCollectorLabels = collect($paymentCollectorOptions)
+        ->mapWithKeys(fn (string $collector) => [$collector => ucwords(str_replace('_', ' ', $collector))])
+        ->all();
 @endphp
 
 @section('content')
@@ -384,6 +391,20 @@
                                         <select id="status_{{ $representation->id }}" name="status" required class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
                                             @foreach ($ledgerStatusLabels as $status => $label)
                                                 <option value="{{ $status }}" @selected(old('status', \App\Models\SuchakLedgerEntry::STATUS_EXPECTED) === $status)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                        <label class="sr-only" for="source_owner_{{ $representation->id }}">Source owner</label>
+                                        <select id="source_owner_{{ $representation->id }}" name="source_owner" required class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                            <option value="">Source owner</option>
+                                            @foreach ($sourceOwnerLabels as $owner => $label)
+                                                <option value="{{ $owner }}" @selected(old('source_owner') === $owner)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                        <label class="sr-only" for="payment_collector_{{ $representation->id }}">Payment collector</label>
+                                        <select id="payment_collector_{{ $representation->id }}" name="payment_collector" required class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                            <option value="">Payment collector</option>
+                                            @foreach ($paymentCollectorLabels as $collector => $label)
+                                                <option value="{{ $collector }}" @selected(old('payment_collector') === $collector)>{{ $label }}</option>
                                             @endforeach
                                         </select>
                                         <label class="sr-only" for="amount_{{ $representation->id }}">Amount</label>

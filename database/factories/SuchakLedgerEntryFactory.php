@@ -23,6 +23,7 @@ class SuchakLedgerEntryFactory extends Factory
             'matrimony_profile_id' => MatrimonyProfile::factory(),
             'pipeline_id' => null,
             'collaboration_request_id' => null,
+            'payment_context_id' => null,
             'entry_type' => SuchakLedgerEntry::TYPE_REGISTRATION_FEE_EXPECTED,
             'amount' => null,
             'currency' => 'INR',

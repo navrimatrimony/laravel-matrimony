@@ -73,6 +73,8 @@ class SuchakActivityLog extends Model
 
     public const ACTION_LEDGER_ENTRY_CREATED = 'ledger_entry_created';
 
+    public const ACTION_PAYMENT_CONTEXT_RESOLVED = 'payment_context_resolved';
+
     public const ACTION_DISPUTE_OPENED = 'dispute_opened';
 
     public const ACTION_DISPUTE_STATUS_CHANGED = 'dispute_status_changed';

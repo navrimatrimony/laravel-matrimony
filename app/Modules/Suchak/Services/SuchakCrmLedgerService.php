@@ -20,6 +20,7 @@ class SuchakCrmLedgerService
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakAccessService $accessService,
+        private readonly SuchakPaymentCollectorResolver $paymentCollectorResolver,
     ) {
     }
 
@@ -118,11 +119,23 @@ class SuchakCrmLedgerService
         $collaboration = $this->optionalCollaboration($attributes['collaboration_request_id'] ?? null, $account, $profile);
 
         return DB::transaction(function () use ($account, $actor, $profile, $attributes, $entryType, $status, $note, $pipeline, $collaboration, $ipAddress, $userAgent): SuchakLedgerEntry {
+            $paymentContext = $this->paymentCollectorResolver->resolveForManualLedger(
+                $account,
+                $actor,
+                $profile,
+                $attributes,
+                $pipeline,
+                $collaboration,
+                $ipAddress,
+                $userAgent,
+            );
+
             $entry = SuchakLedgerEntry::query()->create([
                 'suchak_account_id' => $account->id,
                 'matrimony_profile_id' => $profile->id,
                 'pipeline_id' => $pipeline?->id,
                 'collaboration_request_id' => $collaboration?->id,
+                'payment_context_id' => $paymentContext->id,
                 'entry_type' => $entryType,
                 'amount' => $this->nullableAmount($attributes['amount'] ?? null),
                 'currency' => $this->currency($attributes['currency'] ?? 'INR'),
@@ -148,13 +161,16 @@ class SuchakCrmLedgerService
                     'currency' => $entry->currency,
                     'pipeline_id' => $entry->pipeline_id,
                     'collaboration_request_id' => $entry->collaboration_request_id,
+                    'payment_context_id' => $entry->payment_context_id,
+                    'source_owner' => $paymentContext->source_owner,
+                    'payment_collector' => $paymentContext->payment_collector,
                     'has_amount' => $entry->amount !== null,
                     'has_due_date' => $entry->due_date !== null,
                     'has_paid_at' => $entry->paid_at !== null,
                 ],
             );
 
-            return $entry->fresh(['suchakAccount', 'matrimonyProfile', 'pipeline', 'collaborationRequest']);
+            return $entry->fresh(['suchakAccount', 'matrimonyProfile', 'pipeline', 'collaborationRequest', 'paymentContext']);
         });
     }
 

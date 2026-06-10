@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakCommissionAgreement;
 use App\Models\SuchakLedgerEntry;
+use App\Models\SuchakPaymentContext;
 use App\Models\SuchakProfileRepresentation;
 use App\Modules\Suchak\Services\SuchakCollaborationService;
 use App\Modules\Suchak\Services\SuchakCrmLedgerService;
@@ -57,6 +58,7 @@ class CollaborationController extends Controller
             'splitTypes' => SuchakCommissionAgreement::SPLIT_TYPES,
             'ledgerTypeOptions' => SuchakLedgerEntry::TYPES,
             'ledgerStatusOptions' => SuchakLedgerEntry::STATUSES,
+            'paymentCollectorOptions' => SuchakPaymentContext::PAYMENT_COLLECTORS,
             'collaborationSlaDays' => $limitService->collaborationSlaDays(),
             'stats' => [
                 'incoming_pending' => SuchakCollaborationRequest::query()
@@ -244,12 +246,14 @@ class CollaborationController extends Controller
 
         $validated = $request->validate([
             'entry_type' => ['required', 'string', Rule::in(SuchakLedgerEntry::TYPES)],
+            'payment_collector' => ['required', 'string', Rule::in(SuchakPaymentContext::PAYMENT_COLLECTORS)],
             'amount' => ['nullable', 'numeric', 'min:0', 'max:999999999.99'],
             'currency' => ['required', 'string', 'size:3'],
             'status' => ['required', 'string', Rule::in(SuchakLedgerEntry::STATUSES)],
             'due_date' => ['nullable', 'date'],
             'paid_at' => ['nullable', 'date'],
             'note' => ['nullable', 'string', 'max:2000'],
+            'resolution_note' => ['nullable', 'string', 'max:1000'],
         ]);
 
         try {
@@ -262,7 +266,10 @@ class CollaborationController extends Controller
                 $account,
                 $request->user(),
                 $profile,
-                array_merge($validated, ['collaboration_request_id' => $collaborationRequest->id]),
+                array_merge($validated, [
+                    'collaboration_request_id' => $collaborationRequest->id,
+                    'source_owner' => SuchakPaymentContext::SOURCE_COLLABORATION,
+                ]),
                 $request->ip(),
                 $request->userAgent(),
             );

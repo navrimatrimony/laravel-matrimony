@@ -5,6 +5,7 @@ namespace Tests\Feature\Suchak;
 use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\SuchakLedgerEntry;
+use App\Models\SuchakPaymentContext;
 use App\Models\SuchakProfileNote;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
@@ -48,6 +49,8 @@ class SuchakCrmLedgerOperationalUiTest extends TestCase
         $this->actingAs($suchakUser)
             ->post(route('suchak.representations.ledger-entries.store', $representation), [
                 'entry_type' => SuchakLedgerEntry::TYPE_REGISTRATION_FEE_EXPECTED,
+                'source_owner' => SuchakPaymentContext::SOURCE_SUCHAK,
+                'payment_collector' => SuchakPaymentContext::COLLECTOR_SUCHAK,
                 'amount' => '1500',
                 'currency' => 'INR',
                 'status' => SuchakLedgerEntry::STATUS_PAID,
@@ -66,6 +69,12 @@ class SuchakCrmLedgerOperationalUiTest extends TestCase
             'currency' => 'INR',
             'status' => SuchakLedgerEntry::STATUS_PAID,
             'note' => 'Registration fee received in cash.',
+        ]);
+        $this->assertDatabaseHas('suchak_payment_contexts', [
+            'suchak_account_id' => $account->id,
+            'matrimony_profile_id' => $profile->id,
+            'source_owner' => SuchakPaymentContext::SOURCE_SUCHAK,
+            'payment_collector' => SuchakPaymentContext::COLLECTOR_SUCHAK,
         ]);
         $this->assertSame($beforeUpdatedAt, $profile->fresh()->updated_at?->toDateTimeString());
 
@@ -98,6 +107,8 @@ class SuchakCrmLedgerOperationalUiTest extends TestCase
         $this->actingAs($suchakUser)
             ->post(route('suchak.representations.ledger-entries.store', $representation), [
                 'entry_type' => SuchakLedgerEntry::TYPE_PAYMENT_REMINDER,
+                'source_owner' => SuchakPaymentContext::SOURCE_SUCHAK,
+                'payment_collector' => SuchakPaymentContext::COLLECTOR_SUCHAK,
                 'currency' => 'INR',
                 'status' => SuchakLedgerEntry::STATUS_DUE,
                 'note' => 'Email reminder to private@example.com',
@@ -123,6 +134,8 @@ class SuchakCrmLedgerOperationalUiTest extends TestCase
         $this->actingAs($otherUser)
             ->post(route('suchak.representations.ledger-entries.store', $representation), [
                 'entry_type' => SuchakLedgerEntry::TYPE_ADJUSTMENT,
+                'source_owner' => SuchakPaymentContext::SOURCE_SUCHAK,
+                'payment_collector' => SuchakPaymentContext::COLLECTOR_SUCHAK,
                 'currency' => 'INR',
                 'status' => SuchakLedgerEntry::STATUS_EXPECTED,
             ])
