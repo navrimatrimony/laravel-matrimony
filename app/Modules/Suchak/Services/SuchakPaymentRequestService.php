@@ -7,6 +7,7 @@ use App\Models\SuchakActivityLog;
 use App\Models\SuchakCustomerAgreement;
 use App\Models\SuchakCustomerPortalLink;
 use App\Models\SuchakCustomerContext;
+use App\Models\SuchakFeatureSuspension;
 use App\Models\SuchakPaymentContext;
 use App\Models\SuchakPaymentRequest;
 use App\Models\SuchakPaymentRequestEvent;
@@ -26,6 +27,7 @@ class SuchakPaymentRequestService
         private readonly SuchakPolicyService $policyService,
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakCustomerPortalService $customerPortalService,
+        private readonly SuchakQualityControlService $qualityControlService,
     ) {
     }
 
@@ -52,6 +54,7 @@ class SuchakPaymentRequestService
             'Only the owning Suchak account can send payment requests.',
             'Only verified Suchak accounts can send payment requests.',
         );
+        $this->qualityControlService->assertFeatureAvailable($package->suchakAccount, SuchakFeatureSuspension::FEATURE_PAYMENT);
         $this->assertRequestScope($package, $agreement, $paymentContext);
         $this->agreementService->assertAgreementAllowsPaymentRequest($agreement);
         $this->paymentCollectorResolver->assertAllowsDirectSuchakCollection($paymentContext);

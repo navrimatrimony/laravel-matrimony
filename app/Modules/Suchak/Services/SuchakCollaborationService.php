@@ -7,6 +7,7 @@ use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakCommissionAgreement;
+use App\Models\SuchakFeatureSuspension;
 use App\Models\SuchakPaymentContext;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
@@ -23,6 +24,7 @@ class SuchakCollaborationService
         private readonly SuchakAccessService $accessService,
         private readonly SuchakLimitService $limitService,
         private readonly SuchakCandidateMaskingService $maskingService,
+        private readonly SuchakQualityControlService $qualityControlService,
     ) {
     }
 
@@ -127,6 +129,8 @@ class SuchakCollaborationService
         $targetRepresentation->refresh()->loadMissing(['suchakAccount', 'matrimonyProfile.gender']);
 
         $this->assertCanCreate($requestingAccount, $actor, $requestingRepresentation, $targetRepresentation);
+        $this->qualityControlService->assertFeatureAvailable($requestingAccount, SuchakFeatureSuspension::FEATURE_COLLABORATION);
+        $this->qualityControlService->assertFeatureAvailable($targetRepresentation->suchakAccount, SuchakFeatureSuspension::FEATURE_COLLABORATION);
         $this->limitService->assertCollaborationRequestAllowed($requestingAccount);
 
         return DB::transaction(function () use ($requestingAccount, $actor, $requestingRepresentation, $targetRepresentation, $attributes, $ipAddress, $userAgent): array {
@@ -149,6 +153,8 @@ class SuchakCollaborationService
             $lockedRequestingRepresentation->loadMissing(['suchakAccount', 'matrimonyProfile.gender']);
             $lockedTargetRepresentation->loadMissing(['suchakAccount', 'matrimonyProfile.gender']);
             $this->assertCanCreate($lockedRequestingAccount, $actor, $lockedRequestingRepresentation, $lockedTargetRepresentation);
+            $this->qualityControlService->assertFeatureAvailable($lockedRequestingAccount, SuchakFeatureSuspension::FEATURE_COLLABORATION);
+            $this->qualityControlService->assertFeatureAvailable($lockedTargetRepresentation->suchakAccount, SuchakFeatureSuspension::FEATURE_COLLABORATION);
             $this->limitService->assertCollaborationRequestAllowed($lockedRequestingAccount);
             $this->assertNoDuplicateOpenRequest($lockedRequestingRepresentation, $lockedTargetRepresentation);
             $commissionTerms = $this->normalizeCommissionTerms($attributes);
@@ -216,6 +222,7 @@ class SuchakCollaborationService
     ): SuchakCollaborationRequest {
         $targetAccount->refresh();
         $this->assertTargetActor($collaboration, $targetAccount, $actor);
+        $this->qualityControlService->assertFeatureAvailable($targetAccount, SuchakFeatureSuspension::FEATURE_COLLABORATION);
 
         return DB::transaction(function () use ($collaboration, $targetAccount, $actor, $ipAddress, $userAgent): SuchakCollaborationRequest {
             /** @var SuchakCollaborationRequest $locked */
@@ -225,6 +232,7 @@ class SuchakCollaborationService
                 ->firstOrFail();
             $locked->loadMissing('commissionAgreement');
             $this->assertTargetActor($locked, $targetAccount, $actor);
+            $this->qualityControlService->assertFeatureAvailable($targetAccount, SuchakFeatureSuspension::FEATURE_COLLABORATION);
             $this->assertPendingAndNotExpired($locked);
 
             SuchakCollaborationRequest::query()
@@ -311,6 +319,7 @@ class SuchakCollaborationService
     ): SuchakCommissionAgreement {
         $requestingAccount->refresh();
         $this->assertRequestingActor($collaboration, $requestingAccount, $actor);
+        $this->qualityControlService->assertFeatureAvailable($requestingAccount, SuchakFeatureSuspension::FEATURE_COLLABORATION);
         $terms = $this->normalizeCommissionTerms($attributes);
 
         return DB::transaction(function () use ($collaboration, $requestingAccount, $actor, $terms, $ipAddress, $userAgent): SuchakCommissionAgreement {
@@ -321,6 +330,7 @@ class SuchakCollaborationService
                 ->firstOrFail();
             $locked->loadMissing('commissionAgreement');
             $this->assertRequestingActor($locked, $requestingAccount, $actor);
+            $this->qualityControlService->assertFeatureAvailable($requestingAccount, SuchakFeatureSuspension::FEATURE_COLLABORATION);
             $this->assertPendingAndNotExpired($locked);
 
             $agreement = $locked->commissionAgreement ?? $this->createMissingAgreement($locked);

@@ -5,6 +5,7 @@ namespace App\Modules\Suchak\Services;
 use App\Models\AdminAuditLog;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakAccount;
+use App\Models\SuchakFeatureSuspension;
 use App\Models\SuchakPaymentContext;
 use App\Models\SuchakPlatformPayout;
 use App\Models\SuchakPlatformPayoutDetail;
@@ -24,6 +25,7 @@ class SuchakPlatformPayoutService
     public function __construct(
         private readonly SuchakAccessService $accessService,
         private readonly SuchakActivityLogger $activityLogger,
+        private readonly SuchakQualityControlService $qualityControlService,
     ) {
     }
 
@@ -40,6 +42,7 @@ class SuchakPlatformPayoutService
         $this->accessService->assertAdmin($admin, 'Only admins can qualify platform-to-Suchak payouts.');
         $paymentContext = $paymentContext->fresh(['suchakAccount', 'customerContext', 'matrimonyProfile']);
         $this->assertPlatformContext($paymentContext);
+        $this->qualityControlService->assertFeatureAvailable($paymentContext->suchakAccount, SuchakFeatureSuspension::FEATURE_PAYOUT);
 
         $eventType = $this->requiredAllowedValue(
             $attributes['platform_event_type'] ?? null,
@@ -85,6 +88,8 @@ class SuchakPlatformPayoutService
             $ipAddress,
             $userAgent,
         ): SuchakPlatformPayout {
+            $this->qualityControlService->assertFeatureAvailable($paymentContext->suchakAccount, SuchakFeatureSuspension::FEATURE_PAYOUT);
+
             $existing = SuchakPlatformPayout::query()
                 ->where('suchak_account_id', $paymentContext->suchak_account_id)
                 ->where('platform_event_type', $eventType)
@@ -312,6 +317,8 @@ class SuchakPlatformPayoutService
                 throw new InvalidArgumentException('Only qualified Suchak platform payouts can be approved.');
             }
 
+            $this->qualityControlService->assertFeatureAvailable($locked->suchakAccount, SuchakFeatureSuspension::FEATURE_PAYOUT);
+
             $this->assertLatestDetailVerified($locked);
             $holdReason = $this->activePayoutHoldReason($locked->suchak_account_id, $locked->customer_context_id, $locked->payment_context_id);
             if ($holdReason !== null) {
@@ -396,6 +403,8 @@ class SuchakPlatformPayoutService
             if ($locked->payout_status !== SuchakPlatformPayout::STATUS_APPROVED) {
                 throw new InvalidArgumentException('Only approved Suchak platform payouts can be marked paid.');
             }
+
+            $this->qualityControlService->assertFeatureAvailable($locked->suchakAccount, SuchakFeatureSuspension::FEATURE_PAYOUT);
 
             $this->assertUniqueReferenceNumber($referenceNumber, $locked->id);
             $fromStatus = $locked->payout_status;
@@ -606,8 +615,11 @@ class SuchakPlatformPayoutService
         ?string $userAgent = null,
     ): SuchakPlatformPayoutSettlement {
         $this->accessService->assertAdmin($admin, 'Only admins can generate Suchak payout settlement statements.');
+        $account = $account->fresh() ?? $account;
+        $this->qualityControlService->assertFeatureAvailable($account, SuchakFeatureSuspension::FEATURE_PAYOUT);
 
         return DB::transaction(function () use ($account, $admin, $statementMonth, $ipAddress, $userAgent): SuchakPlatformPayoutSettlement {
+            $this->qualityControlService->assertFeatureAvailable($account, SuchakFeatureSuspension::FEATURE_PAYOUT);
             $settlement = $this->rebuildMonthlySettlementStatement($account, $admin, $statementMonth);
             $adminAuditLog = AuditLogService::log(
                 $admin,

@@ -6,6 +6,7 @@ use App\Models\BiodataIntake;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakAccount;
 use App\Models\SuchakBiodataIntakeLink;
+use App\Models\SuchakFeatureSuspension;
 use App\Models\User;
 use App\Services\Intake\IntakeCreationService;
 use Illuminate\Http\UploadedFile;
@@ -19,6 +20,7 @@ class SuchakSourceLinkService
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakAccessService $accessService,
         private readonly SuchakLimitService $limitService,
+        private readonly SuchakQualityControlService $qualityControlService,
     ) {
     }
 
@@ -37,6 +39,7 @@ class SuchakSourceLinkService
     ): SuchakBiodataIntakeLink {
         $account->refresh();
         $this->assertCanCreate($account);
+        $this->qualityControlService->assertFeatureAvailable($account, SuchakFeatureSuspension::FEATURE_UPLOAD);
         $this->limitService->assertUploadAllowed($account);
 
         $prepared = $this->intakeCreationService->prepare($actor->id, $file, $rawText);
@@ -48,6 +51,7 @@ class SuchakSourceLinkService
                 ->lockForUpdate()
                 ->firstOrFail();
             $this->assertCanCreate($lockedAccount);
+            $this->qualityControlService->assertFeatureAvailable($lockedAccount, SuchakFeatureSuspension::FEATURE_UPLOAD);
             $this->limitService->assertUploadAllowed($lockedAccount);
 
             $intake = $this->intakeCreationService->persistPrepared($actor->id, $prepared);

@@ -8,6 +8,11 @@
         'high' => 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100',
         'medium' => 'bg-indigo-100 text-indigo-900 dark:bg-indigo-950 dark:text-indigo-100',
     ];
+    $qualityBandClasses = [
+        'strong' => 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100',
+        'review' => 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100',
+        'restricted' => 'bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-100',
+    ];
 @endphp
 
 <div class="space-y-6">
@@ -56,6 +61,10 @@
         <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Payout holds</div>
             <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ number_format($stats['active_payout_holds']) }}</div>
+        </div>
+        <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Feature suspensions</div>
+            <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ number_format($stats['active_feature_suspensions']) }}</div>
         </div>
         <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Frozen accounts</div>
@@ -128,6 +137,105 @@
                     </div>
                 </article>
             @endforeach
+        </div>
+    </section>
+
+    <section class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Quality Score + Granular Suspension</h2>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Admin-only quality score and capability controls for upload, PDF, payment, payout, referral, collaboration, and public request actions.</p>
+            </div>
+            <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                Generated {{ $qualityControlCenter['generated_at']->format('Y-m-d H:i') }}
+            </div>
+        </div>
+
+        <div class="mt-5 overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-900">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">Suchak</th>
+                        <th class="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">Quality</th>
+                        <th class="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">Risk signals</th>
+                        <th class="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">Suspend capability</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    @forelse ($qualityControlCenter['accounts'] as $qualityAccount)
+                        @php
+                            $account = $qualityAccount['account'];
+                            $activeSuspensions = $qualityAccount['active_suspensions'];
+                        @endphp
+                        <tr>
+                            <td class="px-4 py-3 align-top">
+                                <a href="{{ route('admin.suchak.accounts.show', $account) }}" class="font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-200">{{ $account->suchak_name }}</a>
+                                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">#{{ $account->id }} · {{ $account->user?->email ?: '-' }} · {{ $label($account->verification_status) }} / {{ $label($account->public_status) }}</div>
+                            </td>
+                            <td class="px-4 py-3 align-top">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xl font-bold text-gray-900 dark:text-gray-100">{{ $qualityAccount['score'] }}</span>
+                                    <span class="rounded-full px-2.5 py-1 text-xs font-semibold uppercase {{ $qualityBandClasses[$qualityAccount['band']] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-200' }}">{{ $qualityAccount['band'] }}</span>
+                                </div>
+                                <div class="mt-2 flex flex-wrap gap-1">
+                                    @forelse ($activeSuspensions as $suspension)
+                                        <span class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-900 dark:bg-red-950 dark:text-red-100">{{ $featureSuspensionFeatures[$suspension->feature_key] ?? $label($suspension->feature_key) }}</span>
+                                    @empty
+                                        <span class="text-xs text-gray-500 dark:text-gray-400">No active feature suspension.</span>
+                                    @endforelse
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 align-top">
+                                <ul class="space-y-1 text-xs text-gray-600 dark:text-gray-300">
+                                    @foreach ($qualityAccount['reasons'] as $reason)
+                                        <li>{{ $reason }}</li>
+                                    @endforeach
+                                </ul>
+                            </td>
+                            <td class="px-4 py-3 align-top">
+                                <form method="POST" action="{{ route('admin.suchak.safety.accounts.feature-suspensions.store', $account) }}" class="grid gap-2 lg:grid-cols-[180px_minmax(220px,1fr)_auto] lg:items-start">
+                                    @csrf
+                                    <select name="feature_key" required class="rounded-md border-gray-300 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                                        @foreach ($featureSuspensionFeatures as $featureKey => $featureLabel)
+                                            <option value="{{ $featureKey }}">{{ $featureLabel }}</option>
+                                        @endforeach
+                                    </select>
+                                    <textarea name="reason" rows="2" required minlength="10" maxlength="1000" placeholder="Suspension reason" class="rounded-md border-gray-300 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"></textarea>
+                                    <button type="submit" class="rounded-md bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700">Suspend</button>
+                                </form>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="4" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">No Suchak accounts found for quality scoring.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-6 rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
+            <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Active Capability Suspensions</h3>
+            </div>
+            <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                @forelse ($qualityControlCenter['active_suspensions'] as $suspension)
+                    <div class="grid gap-4 p-4 lg:grid-cols-[minmax(180px,1fr)_minmax(220px,2fr)_minmax(260px,2fr)] lg:items-start">
+                        <div>
+                            <a href="{{ route('admin.suchak.accounts.show', $suspension->suchakAccount) }}" class="font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-200">{{ $suspension->suchakAccount?->suchak_name ?: 'Unknown Suchak' }}</a>
+                            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $featureSuspensionFeatures[$suspension->feature_key] ?? $label($suspension->feature_key) }} · {{ $suspension->created_at?->format('Y-m-d H:i') }}</div>
+                        </div>
+                        <div class="text-sm text-gray-700 dark:text-gray-300">{{ $suspension->reason }}</div>
+                        <form method="POST" action="{{ route('admin.suchak.safety.feature-suspensions.release', $suspension) }}" class="grid gap-2 sm:grid-cols-[1fr_auto]">
+                            @csrf
+                            <textarea name="reason" rows="2" required minlength="10" maxlength="1000" placeholder="Release reason" class="rounded-md border-gray-300 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"></textarea>
+                            <button type="submit" class="rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700">Release</button>
+                        </form>
+                    </div>
+                @empty
+                    <div class="p-4 text-sm text-gray-500 dark:text-gray-400">No active capability suspension records.</div>
+                @endforelse
+            </div>
         </div>
     </section>
 

@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Admin\Suchak;
 use App\Http\Controllers\Controller;
 use App\Models\SuchakAccount;
 use App\Models\SuchakDispute;
+use App\Models\SuchakFeatureSuspension;
 use App\Models\SuchakPaymentFeatureFreeze;
 use App\Models\SuchakPayoutHold;
 use App\Models\SuchakProfileRepresentation;
 use App\Modules\Suchak\Services\SuchakAccountLifecycleService;
+use App\Modules\Suchak\Services\SuchakQualityControlService;
 use App\Modules\Suchak\Services\SuchakRiskComplianceCenterService;
 use App\Modules\Suchak\Services\SuchakSafetyService;
 use Illuminate\Http\RedirectResponse;
@@ -20,8 +22,11 @@ use InvalidArgumentException;
 
 class SafetyController extends Controller
 {
-    public function index(Request $request, SuchakRiskComplianceCenterService $riskComplianceCenterService): View
-    {
+    public function index(
+        Request $request,
+        SuchakRiskComplianceCenterService $riskComplianceCenterService,
+        SuchakQualityControlService $qualityControlService
+    ): View {
         $status = $request->query('status');
         $status = in_array($status, SuchakDispute::STATUSES, true) ? $status : null;
 
@@ -46,6 +51,8 @@ class SafetyController extends Controller
             'priorities' => SuchakDispute::PRIORITIES,
             'stats' => $this->stats(),
             'riskComplianceCenter' => $riskComplianceCenterService->summary(),
+            'qualityControlCenter' => $qualityControlService->adminSummary(),
+            'featureSuspensionFeatures' => $qualityControlService->featureLabels(),
             'accounts' => SuchakAccount::query()
                 ->with('user')
                 ->withCount(['disputes', 'profileRepresentations'])
@@ -267,6 +274,7 @@ class SafetyController extends Controller
             'direct_payment_complaints' => SuchakDispute::query()->where('dispute_type', SuchakDispute::TYPE_DIRECT_PAYMENT_REQUEST)->count(),
             'active_payment_freezes' => SuchakPaymentFeatureFreeze::query()->where('freeze_status', SuchakPaymentFeatureFreeze::STATUS_ACTIVE)->count(),
             'active_payout_holds' => SuchakPayoutHold::query()->where('hold_status', SuchakPayoutHold::STATUS_ACTIVE)->count(),
+            'active_feature_suspensions' => SuchakFeatureSuspension::query()->where('suspension_status', SuchakFeatureSuspension::STATUS_ACTIVE)->count(),
             'frozen_accounts' => SuchakAccount::query()->where('verification_status', SuchakAccount::VERIFICATION_SUSPENDED)->count(),
             'paused_public_accounts' => SuchakAccount::query()
                 ->where('verification_status', SuchakAccount::VERIFICATION_VERIFIED)
@@ -291,6 +299,46 @@ class SafetyController extends Controller
         return $request->validate([
             $key => ['required', 'string', 'min:10', 'max:500'],
         ]);
+    }
+
+    public function suspendFeature(
+        Request $request,
+        SuchakAccount $suchakAccount,
+        SuchakQualityControlService $qualityControlService
+    ): RedirectResponse {
+        $validated = $request->validate([
+            'feature_key' => ['required', 'string', Rule::in(SuchakFeatureSuspension::FEATURES)],
+            'reason' => ['required', 'string', 'min:10', 'max:1000'],
+        ]);
+
+        return $this->runSafetyAction(
+            fn () => $qualityControlService->suspendFeature(
+                $suchakAccount,
+                $request->user(),
+                $validated['feature_key'],
+                $validated['reason'],
+            ),
+            'Suchak feature suspended.'
+        );
+    }
+
+    public function releaseFeature(
+        Request $request,
+        SuchakFeatureSuspension $suspension,
+        SuchakQualityControlService $qualityControlService
+    ): RedirectResponse {
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:10', 'max:1000'],
+        ]);
+
+        return $this->runSafetyAction(
+            fn () => $qualityControlService->releaseFeature(
+                $suspension,
+                $request->user(),
+                $validated['reason'],
+            ),
+            'Suchak feature suspension released.'
+        );
     }
 
     private function runSafetyAction(callable $callback, string $successMessage): RedirectResponse

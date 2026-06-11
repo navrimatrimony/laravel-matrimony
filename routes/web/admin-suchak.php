@@ -29,6 +29,8 @@ Route::middleware(['auth', 'admin'])
         Route::post('/safety/accounts/{suchakAccount}/unfreeze', [SafetyController::class, 'unfreezeAccount'])->name('safety.accounts.unfreeze');
         Route::post('/safety/accounts/{suchakAccount}/pause', [SafetyController::class, 'pauseAccount'])->name('safety.accounts.pause');
         Route::post('/safety/accounts/{suchakAccount}/resume', [SafetyController::class, 'resumeAccount'])->name('safety.accounts.resume');
+        Route::post('/safety/accounts/{suchakAccount}/feature-suspensions', [SafetyController::class, 'suspendFeature'])->name('safety.accounts.feature-suspensions.store');
+        Route::post('/safety/feature-suspensions/{suspension}/release', [SafetyController::class, 'releaseFeature'])->name('safety.feature-suspensions.release');
         Route::post('/safety/representations/{representation}/revoke', [SafetyController::class, 'revokeRepresentation'])->name('safety.representations.revoke');
         Route::get('/plans', [PlanCatalogController::class, 'index'])->name('plans.index');
         Route::post('/plans', [PlanCatalogController::class, 'store'])->name('plans.store');

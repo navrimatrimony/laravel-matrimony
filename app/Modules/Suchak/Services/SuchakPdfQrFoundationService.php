@@ -5,6 +5,7 @@ namespace App\Modules\Suchak\Services;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakBiodataExport;
+use App\Models\SuchakFeatureSuspension;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakQrToken;
 use App\Models\User;
@@ -23,6 +24,7 @@ class SuchakPdfQrFoundationService
         private readonly SuchakAccessService $accessService,
         private readonly SuchakLimitService $limitService,
         private readonly SuchakQrCodeImageService $qrCodeImageService,
+        private readonly SuchakQualityControlService $qualityControlService,
     ) {}
 
     /**
@@ -312,6 +314,7 @@ class SuchakPdfQrFoundationService
             'Only the export Suchak actor can operate this PDF/QR export.',
             'Only verified Suchak accounts can operate PDF/QR exports.',
         );
+        $this->qualityControlService->assertFeatureAvailable($export->suchakAccount, SuchakFeatureSuspension::FEATURE_PDF);
     }
 
     private function assertQrTokenOwnerCanOperate(SuchakQrToken $qrToken, User $actor): void
@@ -322,6 +325,7 @@ class SuchakPdfQrFoundationService
             'Only the QR Suchak actor can operate this QR token.',
             'Only verified Suchak accounts can operate QR tokens.',
         );
+        $this->qualityControlService->assertFeatureAvailable($qrToken->suchakAccount, SuchakFeatureSuspension::FEATURE_PDF);
     }
 
     private function safeQrRevocationReason(string $reason): string
@@ -345,6 +349,7 @@ class SuchakPdfQrFoundationService
             throw new InvalidArgumentException('PDF/QR export requires active representation with valid consent.');
         }
 
+        $this->qualityControlService->assertFeatureAvailable($representation->suchakAccount, SuchakFeatureSuspension::FEATURE_PDF);
         $this->limitService->assertPdfExportAllowed($representation->suchakAccount);
     }
 
@@ -355,6 +360,14 @@ class SuchakPdfQrFoundationService
 
         if ($representation === null || ! $this->accessService->canOperate($representation->suchakAccount)) {
             $this->recordQrActivity($qrToken, SuchakActivityLog::ACTION_QR_SCANNED, 'qr_token_blocked_unverified_suchak');
+
+            throw new InvalidArgumentException('QR token is no longer available.');
+        }
+
+        try {
+            $this->qualityControlService->assertFeatureAvailable($representation->suchakAccount, SuchakFeatureSuspension::FEATURE_PDF);
+        } catch (InvalidArgumentException $exception) {
+            $this->recordQrActivity($qrToken, SuchakActivityLog::ACTION_QR_SCANNED, 'qr_token_blocked_feature_suspension');
 
             throw new InvalidArgumentException('QR token is no longer available.');
         }

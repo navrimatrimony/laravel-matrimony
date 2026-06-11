@@ -221,6 +221,11 @@ class SuchakAccount extends Model
         return $this->hasMany(SuchakPayoutHold::class);
     }
 
+    public function featureSuspensions(): HasMany
+    {
+        return $this->hasMany(SuchakFeatureSuspension::class);
+    }
+
     public function platformPayouts(): HasMany
     {
         return $this->hasMany(SuchakPlatformPayout::class);

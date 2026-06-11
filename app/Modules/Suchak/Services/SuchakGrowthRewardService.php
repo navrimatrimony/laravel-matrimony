@@ -5,6 +5,7 @@ namespace App\Modules\Suchak\Services;
 use App\Models\AdminAuditLog;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
+use App\Models\SuchakFeatureSuspension;
 use App\Models\SuchakGrowthAttribution;
 use App\Models\SuchakGrowthReward;
 use App\Models\SuchakGrowthRewardEvent;
@@ -25,6 +26,7 @@ class SuchakGrowthRewardService
         private readonly SuchakAccessService $accessService,
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakPlatformPayoutService $platformPayoutService,
+        private readonly SuchakQualityControlService $qualityControlService,
     ) {
     }
 
@@ -41,6 +43,7 @@ class SuchakGrowthRewardService
         $this->accessService->assertAdmin($admin, 'Only admins can record Suchak growth attribution.');
         $account = $account->fresh();
         $this->accessService->assertCanOperate($account, 'Only verified Suchak accounts can receive growth attribution.');
+        $this->qualityControlService->assertFeatureAvailable($account, SuchakFeatureSuspension::FEATURE_REFERRAL);
 
         $source = $this->requiredAllowedValue(
             $attributes['attribution_source'] ?? null,
@@ -297,6 +300,7 @@ class SuchakGrowthRewardService
         $this->assertPlatformPaymentContext($paymentContext);
         $this->assertAttributionQualifies($attribution, $paymentContext);
         $this->assertRuleQualifies($rule);
+        $this->qualityControlService->assertFeatureAvailable($paymentContext->suchakAccount, SuchakFeatureSuspension::FEATURE_REFERRAL);
 
         $qualificationNote = $this->requiredText(
             $attributes['qualification_note'] ?? null,

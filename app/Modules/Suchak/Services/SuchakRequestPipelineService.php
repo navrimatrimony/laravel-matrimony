@@ -7,6 +7,7 @@ use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakPipeline;
 use App\Models\SuchakPipelineEvent;
+use App\Models\SuchakFeatureSuspension;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakProfileRequest;
 use App\Models\User;
@@ -20,6 +21,7 @@ class SuchakRequestPipelineService
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakAccessService $accessService,
         private readonly SuchakLimitService $limitService,
+        private readonly SuchakQualityControlService $qualityControlService,
     ) {
     }
 
@@ -39,6 +41,7 @@ class SuchakRequestPipelineService
         $representation->refresh()->loadMissing(['suchakAccount', 'matrimonyProfile']);
 
         $this->assertRequestCanBeCreated($requestingUser, $requestingProfile, $representation);
+        $this->qualityControlService->assertFeatureAvailable($representation->suchakAccount, SuchakFeatureSuspension::FEATURE_PUBLIC_REQUEST);
         $this->limitService->assertLeadRequestAllowed($representation->suchakAccount);
 
         return DB::transaction(function () use ($requestingUser, $requestingProfile, $representation, $attributes, $ipAddress, $userAgent): array {
@@ -56,6 +59,7 @@ class SuchakRequestPipelineService
                 ->firstOrFail();
             $lockedRepresentation->setRelation('suchakAccount', $lockedSuchakAccount);
             $this->assertRequestCanBeCreated($requestingUser, $requestingProfile, $lockedRepresentation);
+            $this->qualityControlService->assertFeatureAvailable($lockedSuchakAccount, SuchakFeatureSuspension::FEATURE_PUBLIC_REQUEST);
             $this->limitService->assertLeadRequestAllowed($lockedSuchakAccount);
             $this->assertNoDuplicateOpenRequest($requestingProfile, $lockedRepresentation);
 
