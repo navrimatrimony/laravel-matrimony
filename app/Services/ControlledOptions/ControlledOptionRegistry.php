@@ -248,15 +248,6 @@ class ControlledOptionRegistry
             'active_column' => 'is_active',
             'multi_select' => false,
         ],
-        'entity.asset_type' => [
-            'source_type' => 'master_table',
-            'table' => 'master_asset_types',
-            'key_column' => 'key',
-            'id_column' => 'id',
-            'label_column' => 'label',
-            'active_column' => 'is_active',
-            'multi_select' => false,
-        ],
         'entity.ownership_type' => [
             'source_type' => 'master_table',
             'table' => 'master_ownership_types',

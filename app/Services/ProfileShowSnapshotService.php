@@ -547,35 +547,9 @@ class ProfileShowSnapshotService
     private function sectionProperty(MatrimonyProfile $profile, array $ctx): ?array
     {
         $rows = [];
-        $assets = DB::table('profile_property_assets as ppa')
-            ->leftJoin('master_asset_types as mat', 'mat.id', '=', 'ppa.asset_type_id')
-            ->leftJoin('master_ownership_types as mot', 'mot.id', '=', 'ppa.ownership_type_id')
-            ->where('ppa.profile_id', $profile->id)
-            ->orderBy('ppa.id')
-            ->get([
-                'ppa.*',
-                'mat.label as asset_type_label',
-                'mot.label as ownership_type_label',
-            ]);
-        $sectionNotes = null;
-        $assetIndex = 0;
-        foreach ($assets as $asset) {
-            if ($sectionNotes === null && $this->present($asset->notes ?? null)) {
-                $sectionNotes = (string) $asset->notes;
-            }
-            $bits = array_filter([
-                $asset->asset_type_label ?? $asset->asset_type ?? null,
-                $asset->location ?? null,
-                $asset->ownership_type_label ?? $asset->ownership_type ?? null,
-                isset($asset->estimated_value) && $asset->estimated_value !== null ? __('Est. value').': '.$asset->estimated_value : null,
-            ]);
-            if ($bits !== []) {
-                $assetIndex++;
-                $rows[] = $this->row(__('Property').' '.$assetIndex, implode(' · ', $bits), false, true);
-            }
-        }
-        if ($sectionNotes !== null) {
-            $rows[] = $this->row(__('Notes'), $sectionNotes, false, true);
+        $propertyDetails = trim((string) ($profile->getAttribute('property_details') ?? ''));
+        foreach ($this->propertyDetailLines($propertyDetails) as $index => $line) {
+            $rows[] = $this->row(__('Property').' '.($index + 1), $line, false, true);
         }
 
         if ($rows === []) {
@@ -583,6 +557,27 @@ class ProfileShowSnapshotService
         }
 
         return $this->wrap('property', __('profile.snapshot_section_property'), __('profile.snapshot_kicker_ordered'), 'emerald', 'building', $rows);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function propertyDetailLines(string $propertyDetails): array
+    {
+        $propertyDetails = trim($propertyDetails);
+        if ($propertyDetails === '') {
+            return [];
+        }
+
+        $lines = preg_split('/\R+/u', $propertyDetails) ?: [];
+        if (count(array_filter(array_map('trim', $lines))) <= 1) {
+            $lines = preg_split('/(?<=[\.,।])\s+|,\s*/u', $propertyDetails) ?: [$propertyDetails];
+        }
+
+        return array_values(array_filter(array_map(
+            static fn (string $line): string => trim($line, " \t\n\r\0\x0B,.;।"),
+            $lines
+        ), static fn (string $line): bool => $line !== ''));
     }
 
     private function sectionHoroscope(MatrimonyProfile $profile): ?array

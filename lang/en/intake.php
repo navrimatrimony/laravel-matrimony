@@ -254,6 +254,7 @@ return [
     'normalized_draft_relative_row' => 'Relative :n',
     'normalized_draft_review_row' => 'Review flag :n',
     'normalized_draft_property_asset_row' => 'Property Asset :n',
+    'normalized_draft_property_summary_label' => 'Property summary',
     'normalized_draft_property_notes_label' => 'Notes',
     'normalized_draft_not_mentioned' => 'Not mentioned',
     'normalized_draft_review_raw_prefix' => 'Raw:',

@@ -110,13 +110,7 @@ test('full profile wizard persists one representative field from every rendered 
             'name' => 'Test Maternal Uncle',
         ]],
         'other_relatives_text' => 'Other family details',
-        'property_assets' => [[
-            'asset_type_id' => (string) $id('master_asset_types'),
-            'location' => 'Test Property',
-            'ownership_type_id' => (string) $id('master_ownership_types'),
-            'additional_information' => 'Near market',
-        ]],
-        'property_summary' => ['summary_notes' => 'Property summary'],
+        'property_details' => "Test Property\nNear market",
         'horoscope' => [
             'rashi_id' => (string) $id('master_rashis'),
             'nakshatra_id' => (string) $id('master_nakshatras'),
@@ -164,7 +158,8 @@ test('full profile wizard persists one representative field from every rendered 
         ->and($profile->mother_extra_info)->toBe('Homemaker')
         ->and($profile->family_status)->toBe('middle_class')
         ->and($profile->family_values)->toBe('traditional')
-        ->and($profile->other_relatives_text)->toBe('Other family details');
+        ->and($profile->other_relatives_text)->toBe('Other family details')
+        ->and($profile->property_details)->toBe("Test Property\nNear market");
 
     $this->assertDatabaseHas('profile_addresses', [
         'profile_id' => $profile->id,
@@ -198,10 +193,9 @@ test('full profile wizard persists one representative field from every rendered 
         'relation_type' => 'maternal_uncle',
         'name' => 'Test Maternal Uncle',
     ]);
-    $this->assertDatabaseHas('profile_property_assets', [
-        'profile_id' => $profile->id,
-        'location' => 'Test Property',
-        'additional_information' => 'Near market',
+    $this->assertDatabaseHas('matrimony_profiles', [
+        'id' => $profile->id,
+        'property_details' => "Test Property\nNear market",
     ]);
     $this->assertDatabaseHas('profile_horoscope_data', [
         'profile_id' => $profile->id,

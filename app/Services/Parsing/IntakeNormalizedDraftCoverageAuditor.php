@@ -66,6 +66,10 @@ class IntakeNormalizedDraftCoverageAuditor
                 continue;
             }
 
+            if ($this->isOtherRelativesFactFullyMapped($fact, $draft)) {
+                continue;
+            }
+
             if ($this->isCompoundFactFullyMapped($fact, $visibleFacts)) {
                 continue;
             }
@@ -169,6 +173,15 @@ class IntakeNormalizedDraftCoverageAuditor
             $value = $this->stringify($address['address_line'] ?? $address['raw'] ?? null);
             if ($value !== '') {
                 $facts[] = ['fact_type' => 'address_line', 'value' => $value, 'target_section' => 'family-details', 'target_field' => 'parents_addresses.address_line'];
+            }
+        }
+
+        $propertySummary = $this->stringify(data_get($normalized, 'property_summary.summary_text'));
+        if ($propertySummary !== '') {
+            $facts[] = ['fact_type' => 'field_value', 'value' => $propertySummary, 'target_section' => 'property', 'target_field' => 'core.property_details'];
+            $strippedPropertySummary = $this->stripPropertyLabel($propertySummary);
+            if ($strippedPropertySummary !== '' && $strippedPropertySummary !== $propertySummary) {
+                $facts[] = ['fact_type' => 'field_value', 'value' => $strippedPropertySummary, 'target_section' => 'property', 'target_field' => 'core.property_details'];
             }
         }
 
@@ -373,6 +386,8 @@ class IntakeNormalizedDraftCoverageAuditor
     {
         $field = preg_replace('/\.\d+\./', '.', $field) ?? $field;
         $field = str_replace(['.native.', '.current.', '.other.'], '.address_line.', $field);
+        $field = str_replace('parents_addresses.address_line.address_line', 'parents_addresses.address_line', $field);
+        $field = str_replace('addresses.address_line.address_line', 'addresses.address_line', $field);
         $field = str_replace(['siblings.brother_wife', 'siblings.sister_husband'], 'siblings.spouse', $field);
         $field = str_replace(['contact_number_2', 'contact_number_3'], 'contact_number', $field);
         $field = str_replace(['father_contact_2', 'father_contact_3'], 'father_contact_1', $field);
@@ -382,6 +397,14 @@ class IntakeNormalizedDraftCoverageAuditor
         $field = str_replace('additional_info', 'notes', $field);
 
         return trim($field, '.');
+    }
+
+    private function stripPropertyLabel(string $value): string
+    {
+        $value = trim($value);
+        $value = preg_replace('/^\s*(?:प्रॉपर्टी|प्रोपर्टी|स्थावर\s*मिळकत|स्थायिक\s*मालमत्ता|मालमत्ता|स्थावर|शेती|जमीन|स्वता:ची\s+मालमत्ता|स्वताची\s+मालमत्ता|स्वतःची\s+मालमत्ता|स्वत[:ः]?ची\s+मालमत्ता)\s*(?::\s*-\s*|[:\-–—]\s*)/u', '', $value) ?? $value;
+
+        return trim((string) preg_replace('/^[\s:.\-|–—]+|[\s:.\-|–—]+$/u', '', $value));
     }
 
     private function canonicalScalar(string $value, string $factType): string
@@ -511,6 +534,37 @@ class IntakeNormalizedDraftCoverageAuditor
         }
 
         return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $fact
+     * @param  array<string, mixed>  $draft
+     */
+    private function isOtherRelativesFactFullyMapped(array $fact, array $draft): bool
+    {
+        if (($fact['fact_type'] ?? '') !== 'other_relatives_text'
+            || trim((string) ($fact['target_field'] ?? '')) !== 'core.other_relatives_text') {
+            return false;
+        }
+
+        $source = $this->canonicalOtherRelativesText((string) ($fact['value'] ?? ''));
+        $visible = $this->canonicalOtherRelativesText((string) data_get($draft, 'normalized.core.other_relatives_text', ''));
+        if ($source === '' || $visible === '') {
+            return false;
+        }
+
+        return str_contains($visible, $source);
+    }
+
+    private function canonicalOtherRelativesText(string $value): string
+    {
+        $value = OcrNormalize::normalizeDigits(trim($value));
+        $value = preg_replace('/^\s*(?:\d+|[०-९]+)[\).]\s*/u', '', $value) ?? $value;
+        $value = preg_replace('/^\s*(?:नातेवाईक|इतर\s+नातेवाईक|उत्तर\s+नातेवाईक|नातेसंबंध|नाते\s+संबंध|पाहुणे|इतर\s+पाहुणे|इतर\s+पाहूणे)\s*(?::\s*-\s*|[:\-–—]\s*)/u', '', $value) ?? $value;
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        $value = trim($value, " \t\n\r\0\x0B,;।");
+
+        return $value;
     }
 
     /**

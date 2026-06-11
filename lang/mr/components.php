@@ -215,6 +215,9 @@ return [
     ],
     'property' => [
         'property' => 'मालमत्ता',
+        'property_details' => 'मालमत्ता तपशील',
+        'property_details_placeholder' => "उदा.\nशेती बागायत ३ एकर\nसांगली येथे स्वतःचे घर\nट्रॅक्टर आणि खाजगी वाहन",
+        'property_details_help' => 'प्रत्येक मालमत्ता शक्यतो नवीन ओळीत लिहा. एकाच वाक्यात लिहिताना comma किंवा पूर्णविराम स्पष्ट ठेवा.',
         'property_assets' => 'मालमत्ता साधने',
         'asset_type' => 'साधन प्रकार',
         'ownership_type' => 'मालकी प्रकार',

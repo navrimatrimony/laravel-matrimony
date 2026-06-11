@@ -31,7 +31,6 @@ class MasterLookupSeeder extends Seeder
         $this->seedContactRelations();
         $this->seedRelatives();
         $this->seedAddressTypes();
-        $this->seedAssetTypes();
         $this->seedOwnershipTypes();
     }
 
@@ -364,18 +363,6 @@ class MasterLookupSeeder extends Seeder
             ['key' => 'permanent', 'label' => 'Permanent', 'label_mr' => 'कायमचे'],
             ['key' => 'native', 'label' => 'Native', 'label_mr' => 'मूळ'],
             ['key' => 'work', 'label' => 'Work', 'label_mr' => 'काम'],
-            ['key' => 'other', 'label' => 'Other', 'label_mr' => 'इतर'],
-        ]);
-    }
-
-    private function seedAssetTypes(): void
-    {
-        $this->seedKeyLabel('master_asset_types', [
-            ['key' => 'land', 'label' => 'Land', 'label_mr' => 'जमीन'],
-            ['key' => 'house', 'label' => 'House', 'label_mr' => 'घर'],
-            ['key' => 'vehicle', 'label' => 'Vehicle', 'label_mr' => 'वाहन'],
-            ['key' => 'gold', 'label' => 'Gold', 'label_mr' => 'सोने'],
-            ['key' => 'financial', 'label' => 'Financial', 'label_mr' => 'आर्थिक'],
             ['key' => 'other', 'label' => 'Other', 'label_mr' => 'इतर'],
         ]);
     }

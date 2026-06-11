@@ -24,12 +24,16 @@
     <body class="font-sans antialiased">
         @include('partials.sync-toast-shim')
         @php
-            $cardOnboardingStep = auth()->check()
-                ? \App\Models\MatrimonyProfile::query()->where('user_id', auth()->id())->value('card_onboarding_resume_step')
+            $layoutUser = auth()->user();
+            $layoutSuchakAccount = $layoutUser?->suchakAccount;
+            $showSuchakWorkspaceNav = (bool) ($layoutUser && $layoutSuchakAccount && ! request()->routeIs('admin.*'));
+            $cardOnboardingStep = $layoutUser
+                ? \App\Models\MatrimonyProfile::query()->where('user_id', $layoutUser->id)->value('card_onboarding_resume_step')
                 : null;
-            $hideMemberMainNav = request()->routeIs('matrimony.onboarding.*')
-                || $cardOnboardingStep !== null;
-            $showMobileStickyNav = auth()->check() && ! $hideMemberMainNav;
+            $hideMemberMainNav = (request()->routeIs('matrimony.onboarding.*')
+                || $cardOnboardingStep !== null)
+                && ! $showSuchakWorkspaceNav;
+            $showMobileStickyNav = auth()->check() && ! $hideMemberMainNav && ! $showSuchakWorkspaceNav;
             $mobileCleanMode = \App\Models\AdminSetting::getBool('mobile_clean_mode', true);
             $showMemberCommunicationFloatingTab = \App\Models\AdminSetting::getBool('member_communication_floating_tab_enabled', false);
             $showMemberHelpCentreFloatingTab = \App\Models\AdminSetting::getBool('member_help_centre_floating_tab_enabled', false);
@@ -42,13 +46,15 @@
                     || $memberChatMobileOpenMode === 'bottom_sheet');
         @endphp
         <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
-            @if ($hideMemberMainNav)
+            @if ($showSuchakWorkspaceNav)
+                @include('layouts.partials.suchak-navigation', ['suchakAccount' => $layoutSuchakAccount])
+            @elseif ($hideMemberMainNav)
                 @include('layouts.partials.onboarding-minimal-nav')
             @else
                 @include('layouts.navigation')
             @endif
 
-            @unless ($hideMemberMainNav || request()->routeIs('help-centre.*'))
+            @unless ($showSuchakWorkspaceNav || $hideMemberMainNav || request()->routeIs('help-centre.*'))
                 @include('partials.plan-usage-summary', ['variant' => 'compact'])
             @endunless
 
@@ -131,7 +137,7 @@
 </main>
 
 @auth
-    @if (! $hideMemberMainNav && ! request()->routeIs('help-centre.*'))
+    @if (! $showSuchakWorkspaceNav && ! $hideMemberMainNav && ! request()->routeIs('help-centre.*'))
         @include('partials.who-viewed-floating-bubble', [
             'suppressWhoViewedBubble' => request()->routeIs('who-viewed.index'),
             'mobileCleanMode' => $mobileCleanMode,
@@ -151,7 +157,7 @@
         @endif
     @endif
 @endauth
-@include('partials.mobile-sticky-quick-nav', ['hideMemberMainNav' => $hideMemberMainNav])
+@include('partials.mobile-sticky-quick-nav', ['hideMemberMainNav' => $hideMemberMainNav || $showSuchakWorkspaceNav])
 
 
 

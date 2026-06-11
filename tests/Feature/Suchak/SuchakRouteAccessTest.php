@@ -40,6 +40,98 @@ class SuchakRouteAccessTest extends TestCase
             ->assertSee('Suchak Dashboard', false);
     }
 
+    public function test_suchak_workspace_uses_suchak_navigation_instead_of_member_menu(): void
+    {
+        $user = User::factory()->create();
+        SuchakAccount::factory()->create([
+            'user_id' => $user->id,
+            'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('suchak.dashboard'))
+            ->assertOk()
+            ->assertSee('data-suchak-nav', false)
+            ->assertSee('data-suchak-subnav', false)
+            ->assertSee('Work', false)
+            ->assertSee('Network', false)
+            ->assertSee('Tools', false)
+            ->assertSee('Today', false)
+            ->assertSee('Customers', false)
+            ->assertSee('Money', false)
+            ->assertSee('Sharing', false)
+            ->assertSee('Records', false)
+            ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'profiles']), false)
+            ->assertSee('Biodata Entry', false)
+            ->assertSee('Offline Camps', false)
+            ->assertSee('Suchak privacy & public listing', false)
+            ->assertSee('Account & Security', false)
+            ->assertSee('Notification preferences', false)
+            ->assertSee('Notification inbox', false)
+            ->assertSee(route('user.settings.security'), false)
+            ->assertSee(route('user.settings.notifications'), false)
+            ->assertSee(route('notifications.index'), false)
+            ->assertDontSee('Candidate profile settings', false)
+            ->assertDontSee('id="connect-main-badge"', false)
+            ->assertDontSee('id="activity-main-badge"', false)
+            ->assertDontSee('id="mobile-sticky-quick-nav"', false);
+    }
+
+    public function test_suchak_intake_page_keeps_suchak_navigation_and_not_member_menu(): void
+    {
+        $user = User::factory()->create();
+        SuchakAccount::factory()->create([
+            'user_id' => $user->id,
+            'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+            'public_status' => SuchakAccount::PUBLIC_ACTIVE,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('suchak.intakes.create'))
+            ->assertOk()
+            ->assertSee('data-suchak-nav', false)
+            ->assertSee('data-suchak-subnav', false)
+            ->assertSee('Work', false)
+            ->assertSee('Biodata Entry', false)
+            ->assertSee('Masked Search', false)
+            ->assertDontSee('id="connect-main-badge"', false)
+            ->assertDontSee('id="activity-main-badge"', false)
+            ->assertDontSee('id="mobile-sticky-quick-nav"', false)
+            ->assertDontSee('nav.personal_menu_profile_section', false)
+            ->assertDontSee('My Profile', false);
+    }
+
+    public function test_suchak_account_settings_pages_keep_suchak_navigation(): void
+    {
+        $user = User::factory()->create();
+        SuchakAccount::factory()->create([
+            'user_id' => $user->id,
+            'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+            'public_status' => SuchakAccount::PUBLIC_ACTIVE,
+        ]);
+
+        foreach ([
+            route('user.settings.security') => 'Account & Security',
+            route('user.settings.notifications') => 'Notification preferences',
+            route('notifications.index') => 'Notification inbox',
+        ] as $url => $expectedText) {
+            $this->actingAs($user)
+                ->get($url)
+                ->assertOk()
+                ->assertSee('data-suchak-nav', false)
+                ->assertSee('data-suchak-subnav', false)
+                ->assertSee('Suchak privacy & public listing', false)
+                ->assertSee('Account & Security', false)
+                ->assertSee('Notification preferences', false)
+                ->assertSee('Notification inbox', false)
+                ->assertSee($expectedText, false)
+                ->assertDontSee('id="connect-main-badge"', false)
+                ->assertDontSee('id="activity-main-badge"', false)
+                ->assertDontSee('id="mobile-sticky-quick-nav"', false)
+                ->assertDontSee('nav.personal_menu_profile_section', false);
+        }
+    }
+
     public function test_admin_suchak_dashboard_still_resolves_under_admin_middleware(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);

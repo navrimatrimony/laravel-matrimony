@@ -1051,7 +1051,10 @@ class IntakeController extends Controller
         // Raw OCR मधून उरलेली माहिती (भाऊचा पत्ता/नोकरी, बहिणीचं नाव) siblings मध्ये भरा — additive only.
         $profileSiblings = $this->enrichSiblingsFromRawText($profileSiblings, $rawTextForPreviewEnhancements);
         $profile_property_summary = $snapshot['property_summary'] ?? null;
-        $profile_property_assets = collect($snapshot['property_assets'] ?? []);
+        $profile_property_details = trim((string) data_get($snapshot, 'core.property_details', ''));
+        if ($profile_property_details === '' && is_array($profile_property_summary)) {
+            $profile_property_details = trim((string) ($profile_property_summary['summary_text'] ?? $profile_property_summary['summary_notes'] ?? ''));
+        }
         $profile_horoscope_data = is_array($horoscopeRow) ? (object) $horoscopeRow : $horoscopeRow;
         // Education & career history from snapshot so intake preview form pre-fills parsed rows.
         $profileEducation = collect($snapshot['education_history'] ?? [])->map(
@@ -1227,8 +1230,8 @@ class IntakeController extends Controller
         $preferredDistrictIds = $prefRow['preferred_district_ids'] ?? [];
         $preferredReligionIds = $prefRow['preferred_religion_ids'] ?? [];
         $preferredCasteIds = $prefRow['preferred_caste_ids'] ?? [];
-        $assetTypes = \App\Models\MasterAssetType::where('is_active', true)->get();
-        $ownershipTypes = \App\Models\MasterOwnershipType::where('is_active', true)->get();
+        $assetTypes = collect();
+        $ownershipTypes = collect();
         $relationTypesParentsFamily = MasterRelative::optionsForGroup('paternal');
         $relationTypesMaternalFamily = MasterRelative::optionsForGroup('maternal');
         $familyTypes = \App\Models\MasterFamilyType::where('is_active', true)->get();
@@ -1425,7 +1428,7 @@ class IntakeController extends Controller
             'profileRelativesParentsFamily',
             'profileRelativesMaternalFamily',
             'profile_property_summary',
-            'profile_property_assets',
+            'profile_property_details',
             'profile_horoscope_data',
             'extendedAttrs',
             'preferenceCriteria',
@@ -3818,27 +3821,7 @@ class IntakeController extends Controller
             'property' => [
                 'label' => __($sectionLabels['property'] ?? 'wizard.property').' JSON',
                 'data' => [
-                    'property_summary' => $parsed['property_summary'] ?? [],
-                    'property_assets' => $this->orderRowList(
-                        is_array($parsed['property_assets'] ?? null) ? $parsed['property_assets'] : [],
-                        [
-                            'asset_type',
-                            'asset_type_label',
-                            'asset_type_key',
-                            'ownership_type',
-                            'ownership_type_label',
-                            'ownership_type_key',
-                            'location',
-                            'location_display',
-                            'country_id',
-                            'state_id',
-                            'district_id',
-                            'taluka_id',
-                            'city_id',
-                            'additional_information',
-                            'notes',
-                        ]
-                    ),
+                    'property_details' => data_get($parsed, 'core.property_details'),
                 ],
             ],
             'horoscope' => [

@@ -1156,24 +1156,25 @@ final class IntakePreviewNormalizedDraftPresenter
      */
     private function propertyRows(array $normalized, array $reviewMap, string $rawText): array
     {
-        $rows = [];
-        $assetRows = $this->previewPropertyAssets($normalized, $rawText);
-        $notes = $this->previewPropertySectionNotes($normalized, $assetRows);
+        $summary = is_array($normalized['property_summary'] ?? null)
+            ? $this->stringify($normalized['property_summary']['summary_text'] ?? $normalized['property_summary']['summary_notes'] ?? null)
+            : '';
+        $rawPropertyText = trim($this->extractPreviewPropertyText($rawText));
+        $text = $rawPropertyText !== '' ? $rawPropertyText : $summary;
+        $text = trim($text);
 
-        foreach ($assetRows as $index => $asset) {
-            $rows[] = $this->displayRow(__('intake.normalized_draft_property_asset_row', ['n' => $index + 1]), '', null, $reviewMap);
-            foreach ($this->propertyAssetDisplayParts($asset, true) as $part) {
-                $rows[] = $this->displayRow($part['label'], $part['value'], null, $reviewMap);
-            }
-        }
-
-        if ($assetRows === [] && $notes === $this->propertyNotMentionedValue()) {
+        if ($text === '') {
             return [];
         }
 
-        $rows[] = $this->displayRow(__('intake.normalized_draft_property_notes_label'), $notes, null, $reviewMap);
+        return [
+            $this->displayRow(__('components.property.property_details'), $text, 'core.property_details', $reviewMap),
+        ];
+    }
 
-        return $rows;
+    private function shouldShowPropertySummaryRow(string $summary): bool
+    {
+        return (bool) preg_match('/(?:ट्रॅक्टर|tractor|वाहन|vehicle|गाडी|car|bike|मशीन|machine|पोकॉल|पोकलेन|poclain|jcb)/ui', OcrNormalize::normalizeDigits($summary));
     }
 
     /**
@@ -2219,7 +2220,10 @@ final class IntakePreviewNormalizedDraftPresenter
                 ),
                 __('intake.normalized_draft_section_horoscope_religious'),
                 null,
-                $this->findSourceLineNumber($sourceLines, $text)
+                $this->findSourceLineNumber($sourceLines, $text),
+                $this->fieldLabel((string) $key),
+                $text,
+                __('intake.normalized_draft_section_horoscope_religious').' → '.$this->fieldLabel((string) $key)
             );
         }
 

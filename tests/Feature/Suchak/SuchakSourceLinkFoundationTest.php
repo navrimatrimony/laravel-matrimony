@@ -86,6 +86,16 @@ class SuchakSourceLinkFoundationTest extends TestCase
             'target_id' => $link->id,
         ]);
 
+        $this->actingAs($user)
+            ->get(route('suchak.dashboard', ['dashboard_tab' => 'profiles']))
+            ->assertOk()
+            ->assertSee('Customer Biodata Sources', false)
+            ->assertSee('Source #'.$link->id, false)
+            ->assertSee('Review intake', false)
+            ->assertSee(route('intake.status', $intake), false)
+            ->assertSee('Not linked yet', false)
+            ->assertDontSee('Candidate biodata text from verified Suchak.', false);
+
         Bus::assertDispatched(ParseIntakeJob::class);
     }
 

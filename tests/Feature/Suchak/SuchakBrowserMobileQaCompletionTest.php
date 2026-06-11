@@ -107,8 +107,26 @@ class SuchakBrowserMobileQaCompletionTest extends TestCase
         $dashboard = $this->actingAs($suchakUser)->withMobileHeaders()->get(route('suchak.dashboard'));
         $this->assertMobileReadyMarkup($dashboard, [
             'Suchak Dashboard',
+            'Dashboard',
+            'Work',
+            'Network',
+            'Tools',
+            'Today',
+            'Customers',
+            'Money',
+            'Sharing',
+            'Records',
             'Suchak Quick Links',
         ]);
+        $dashboard
+            ->assertSee('data-suchak-nav', false)
+            ->assertSee('data-suchak-subnav', false)
+            ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'profiles']), false)
+            ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'money']), false)
+            ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'sharing']), false)
+            ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'records']), false)
+            ->assertDontSee('role="tab"', false)
+            ->assertDontSee('x-data="{ tab:', false);
 
         $this->assertMobileReadyMarkup(
             $this->actingAs($suchakUser)->withMobileHeaders()->get(route('suchak.training-academy.index')),

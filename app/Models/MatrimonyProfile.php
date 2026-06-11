@@ -103,6 +103,7 @@ class MatrimonyProfile extends Model
         'blood_group_id',
         'family_type_id',
         'income_currency_id',
+        'property_details',
     ];
 
     /*
@@ -206,6 +207,7 @@ class MatrimonyProfile extends Model
 
         // Other Relatives engine (इतर नातेवाईक — आडनाव/गाव)
         'other_relatives_text',
+        'property_details',
 
         'mother_tongue_id',
         'diet_id',
@@ -250,6 +252,7 @@ class MatrimonyProfile extends Model
         'mother_contact_1' => MojibakeSafeUtf8String::class,
         'mother_contact_2' => MojibakeSafeUtf8String::class,
         'other_relatives_text' => MojibakeSafeUtf8String::class,
+        'property_details' => MojibakeSafeUtf8String::class,
         'physical_condition' => MojibakeSafeUtf8String::class,
         'weight_range' => MojibakeSafeUtf8String::class,
     ];

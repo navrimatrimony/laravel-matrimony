@@ -37,7 +37,6 @@ class MutationService
         'relatives' => 'profile_relatives',
         'alliance_networks' => 'profile_alliance_networks',
         'addresses' => 'profile_addresses',
-        'property_assets' => 'profile_property_assets',
         'horoscope' => 'profile_horoscope_data',
         'legal_cases' => 'profile_legal_cases',
         'extended_narrative' => 'profile_extended_attributes',
@@ -51,7 +50,6 @@ class MutationService
         'relatives',
         'alliance_networks',
         'addresses',
-        'property_assets',
         'horoscope',
         'legal_cases',
     ];
@@ -65,6 +63,7 @@ class MutationService
         'location', 'location_id', 'religion_id', 'caste_id', 'sub_caste_id', 'mother_tongue_id', 'height_cm', 'profile_photo',
         'complexion_id', 'physical_build_id', 'blood_group_id', 'diet_id', 'smoking_status_id', 'drinking_status_id', 'family_type_id', 'income_currency_id',
         'address_line', 'annual_income', 'family_income', 'income_private', 'family_income_private',
+        'property_details',
         'birth_place_text', 'work_location_text',
         'occupation_master_id', 'occupation_custom_id',
         'father_name', 'father_occupation', 'father_occupation_master_id', 'father_occupation_custom_id', 'father_extra_info', 'father_contact_1', 'father_contact_2',
@@ -623,6 +622,7 @@ class MutationService
                 // Full approval payload for audit (never strip). Working copy may lose keys we refuse to overwrite.
                 $auditSnapshot = json_decode(json_encode($snapshot), true);
                 $snapshot = json_decode(json_encode($auditSnapshot), true);
+                $snapshot = $this->stripDeprecatedSnapshotKeysForApply($snapshot);
 
                 $proposedCore = $snapshot['core'] ?? [];
                 $proposedExtended = $snapshot['extended'] ?? [];
@@ -1524,6 +1524,7 @@ class MutationService
     private function stripDeprecatedSnapshotKeysForApply(array $snapshot): array
     {
         unset($snapshot['education_history'], $snapshot['career_history']);
+        $snapshot = $this->mergePropertySnapshotIntoCoreText($snapshot);
         if (isset($snapshot['core']) && is_array($snapshot['core'])) {
             unset($snapshot['core']['specialization'], $snapshot['core']['college_id']);
         }
@@ -1591,11 +1592,6 @@ class MutationService
         }
         if ($entityType === 'profile_children') {
             $mapped = $this->resolveChildLivingWithToId($row);
-
-            return $mapped;
-        }
-        if ($entityType === 'profile_property_assets') {
-            $mapped = $this->resolvePropertyAssetLookupsToId($row);
 
             return $mapped;
         }
@@ -1834,37 +1830,6 @@ class MutationService
             $mapped['child_living_with_id'] = $res['matched'] ? $res['id'] : null;
         }
         unset($mapped['lives_with_parent']);
-
-        return $mapped;
-    }
-
-    private function resolvePropertyAssetLookupsToId(array $row): array
-    {
-        $mapped = $row;
-        $engine = app(\App\Services\ControlledOptions\ControlledOptionEngine::class);
-        $val = $mapped['asset_type_id'] ?? $mapped['asset_type'] ?? null;
-        if ($val !== null && ! is_numeric($val)) {
-            $res = $engine->resolveKey('entity.asset_type', (string) $val);
-            $mapped['asset_type_id'] = $res['matched'] ? $res['id'] : null;
-        } elseif (isset($mapped['asset_type_id']) && is_numeric($mapped['asset_type_id'])) {
-            $mapped['asset_type_id'] = $engine->resolveId('entity.asset_type', $mapped['asset_type_id']);
-        }
-        unset($mapped['asset_type']);
-        $val = $mapped['ownership_type_id'] ?? $mapped['ownership_type'] ?? null;
-        if ($val !== null && ! is_numeric($val)) {
-            $res = $engine->resolveKey('entity.ownership_type', (string) $val);
-            $mapped['ownership_type_id'] = $res['matched'] ? $res['id'] : null;
-        } elseif (isset($mapped['ownership_type_id']) && is_numeric($mapped['ownership_type_id'])) {
-            $mapped['ownership_type_id'] = $engine->resolveId('entity.ownership_type', $mapped['ownership_type_id']);
-        }
-        unset($mapped['ownership_type']);
-        $mapped['city_id'] = ! empty($mapped['city_id']) ? (int) $mapped['city_id'] : null;
-        $mapped['taluka_id'] = ! empty($mapped['taluka_id']) ? (int) $mapped['taluka_id'] : null;
-        $mapped['district_id'] = ! empty($mapped['district_id']) ? (int) $mapped['district_id'] : null;
-        $mapped['state_id'] = ! empty($mapped['state_id']) ? (int) $mapped['state_id'] : null;
-        $mapped['location'] = isset($mapped['location']) && trim((string) $mapped['location']) !== '' ? trim((string) $mapped['location']) : null;
-        $mapped['notes'] = isset($mapped['notes']) && trim((string) $mapped['notes']) !== '' ? trim((string) $mapped['notes']) : null;
-        $mapped['additional_information'] = isset($mapped['additional_information']) && trim((string) $mapped['additional_information']) !== '' ? trim((string) $mapped['additional_information']) : null;
 
         return $mapped;
     }
@@ -2154,21 +2119,6 @@ class MutationService
                     $leaf = isset($row['location_id']) ? (int) $row['location_id'] : (isset($row['city_id']) ? (int) $row['city_id'] : 0);
                     $line = trim((string) ($row['address_line'] ?? ''));
                     if ($typeId <= 0 && $leaf <= 0 && $line === '') {
-                        continue;
-                    }
-                }
-                if ($entityType === 'profile_property_assets') {
-                    $typeId = isset($row['asset_type_id']) ? (int) $row['asset_type_id'] : 0;
-                    $location = trim((string) ($row['location'] ?? ''));
-                    $ownId = isset($row['ownership_type_id']) ? (int) $row['ownership_type_id'] : 0;
-                    $estimated = $row['estimated_value'] ?? null;
-                    $notes = trim((string) ($row['notes'] ?? ''));
-                    $additionalInformation = trim((string) ($row['additional_information'] ?? ''));
-                    $hasGeo = (int) ($row['city_id'] ?? 0) > 0
-                        || (int) ($row['taluka_id'] ?? 0) > 0
-                        || (int) ($row['district_id'] ?? 0) > 0
-                        || (int) ($row['state_id'] ?? 0) > 0;
-                    if ($typeId <= 0 && $location === '' && $ownId <= 0 && $estimated === null && $notes === '' && $additionalInformation === '' && ! $hasGeo) {
                         continue;
                     }
                 }
@@ -3070,45 +3020,115 @@ class MutationService
      */
     private function collapsePropertySummaryIntoAssets(array $snapshot): array
     {
-        $assets = is_array($snapshot['property_assets'] ?? null) ? $snapshot['property_assets'] : [];
-        $summaryNotes = $this->propertySummaryNotesText($snapshot['property_summary'] ?? null);
-        if ($summaryNotes !== null) {
-            $assigned = false;
-            foreach ($assets as $idx => $asset) {
-                if (! is_array($asset)) {
-                    continue;
+        return $this->mergePropertySnapshotIntoCoreText($snapshot);
+    }
+
+    /**
+     * Property was simplified from structured asset rows to one profile text field.
+     * Legacy snapshot keys are still accepted so older intake previews/manual forms do not lose data.
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    private function mergePropertySnapshotIntoCoreText(array $snapshot): array
+    {
+        $lines = [];
+        if (isset($snapshot['core']) && is_array($snapshot['core'])) {
+            $lines = array_merge($lines, $this->propertyTextLines($snapshot['core']['property_details'] ?? null));
+        }
+        $lines = array_merge($lines, $this->propertyTextLines($snapshot['property_details'] ?? null));
+        $lines = array_merge($lines, $this->propertyTextLines($this->propertySummaryNotesText($snapshot['property_summary'] ?? null)));
+
+        if (is_array($snapshot['property_assets'] ?? null)) {
+            foreach ($snapshot['property_assets'] as $row) {
+                if (is_array($row)) {
+                    $lines = array_merge($lines, $this->propertyTextLines($this->propertyAssetRowText($row)));
                 }
-                if ($this->propertyAssetRowHasMeaningfulData($asset)) {
-                    $existingNotes = trim((string) ($asset['notes'] ?? ''));
-                    $assets[$idx]['notes'] = $existingNotes === '' || str_contains($existingNotes, $summaryNotes)
-                        ? ($existingNotes !== '' ? $existingNotes : $summaryNotes)
-                        : $existingNotes."\n\n".$summaryNotes;
-                    $assigned = true;
-                    break;
-                }
-            }
-            if (! $assigned) {
-                $assets[] = ['notes' => $summaryNotes];
             }
         }
 
-        $snapshot['property_assets'] = $assets;
-        unset($snapshot['property_summary']);
+        $propertyDetails = $this->mergePropertyLines($lines);
+        if ($propertyDetails !== '') {
+            if (! isset($snapshot['core']) || ! is_array($snapshot['core'])) {
+                $snapshot['core'] = [];
+            }
+            $snapshot['core']['property_details'] = $propertyDetails;
+        }
+
+        unset($snapshot['property_summary'], $snapshot['property_assets'], $snapshot['property_details']);
 
         return $snapshot;
     }
 
-    private function propertyAssetRowHasMeaningfulData(array $row): bool
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    private function propertyAssetRowText(array $row): ?string
     {
-        return ! empty($row['id'])
-            || ! empty($row['asset_type_id'])
-            || trim((string) ($row['location'] ?? '')) !== ''
-            || ! empty($row['ownership_type_id'])
-            || ($row['estimated_value'] ?? null) !== null
-            || ! empty($row['city_id'])
-            || ! empty($row['taluka_id'])
-            || ! empty($row['district_id'])
-            || ! empty($row['state_id']);
+        $parts = [];
+        foreach (['asset_type_label', 'asset_type', 'asset_type_key', 'location', 'ownership_type_label', 'ownership_type', 'ownership_type_key'] as $key) {
+            $value = trim((string) ($row[$key] ?? ''));
+            if ($value !== '') {
+                $parts[] = $value;
+            }
+        }
+        if (($row['estimated_value'] ?? null) !== null && (string) $row['estimated_value'] !== '') {
+            $parts[] = 'Estimated value: '.trim((string) $row['estimated_value']);
+        }
+        foreach (['notes', 'additional_information'] as $key) {
+            $value = trim((string) ($row[$key] ?? ''));
+            if ($value !== '') {
+                $parts[] = $value;
+            }
+        }
+
+        $parts = array_values(array_unique($parts));
+
+        return $parts === [] ? null : implode(' - ', $parts);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function propertyTextLines(mixed $value): array
+    {
+        if (is_array($value)) {
+            $lines = [];
+            foreach ($value as $item) {
+                $lines = array_merge($lines, $this->propertyTextLines($item));
+            }
+
+            return $lines;
+        }
+        if ($value === null) {
+            return [];
+        }
+
+        $text = trim((string) $value);
+        if ($text === '') {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            static fn (string $line): string => trim($line),
+            preg_split('/\R+/u', $text) ?: []
+        ), static fn (string $line): bool => $line !== ''));
+    }
+
+    /**
+     * @param  list<string>  $lines
+     */
+    private function mergePropertyLines(array $lines): string
+    {
+        $merged = [];
+        foreach ($lines as $line) {
+            $line = trim((string) $line);
+            if ($line !== '' && ! in_array($line, $merged, true)) {
+                $merged[] = $line;
+            }
+        }
+
+        return implode("\n", $merged);
     }
 
     private function propertySummaryNotesText(mixed $propertySummary): ?string

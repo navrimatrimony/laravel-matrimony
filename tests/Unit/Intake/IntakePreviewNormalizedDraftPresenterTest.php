@@ -324,7 +324,7 @@ TXT, true);
         $this->assertStringContainsString('वरकूटे-मलवडी; ता. माण; जि. सातारा', $allianceBlob);
     }
 
-    public function test_property_preview_uses_asset_rows_instead_of_boolean_yes_no_rows(): void
+    public function test_property_preview_uses_single_details_row_instead_of_boolean_yes_no_rows(): void
     {
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'HTML'
 <table>
@@ -333,11 +333,13 @@ TXT, true);
 HTML, true);
         $propertyBlob = $this->sectionBlob($out['sections']['property']);
 
-        $this->assertStringContainsString('Asset Type Flat', $propertyBlob);
-        $this->assertStringContainsString('Asset Type Land', $propertyBlob);
-        $this->assertStringContainsString('Ownership Type Sole', $propertyBlob);
+        $this->assertStringContainsString('Property details', $propertyBlob);
+        $this->assertStringContainsString('स्वतःचे घर', $propertyBlob);
+        $this->assertStringContainsString('फ्लॅट', $propertyBlob);
+        $this->assertStringContainsString('शेती 01 एकर', $propertyBlob);
         $this->assertStringContainsString('01 एकर', $propertyBlob);
-        $this->assertStringContainsString('Notes Not mentioned', $propertyBlob);
+        $this->assertStringNotContainsString('Asset Type', $propertyBlob);
+        $this->assertStringNotContainsString('Notes Not mentioned', $propertyBlob);
         $this->assertStringNotContainsString('होय', $propertyBlob);
         $this->assertStringNotContainsString('yes', $propertyBlob);
     }
@@ -620,14 +622,10 @@ TXT, true);
 
             $this->assertStringContainsString('लिंग पुरुष', $basicBlob);
             $this->assertStringNotContainsString('Gender male', $basicBlob);
-            $this->assertStringContainsString('मालमत्ता साधन 1', $propertyBlob);
-            $this->assertStringContainsString('साधन प्रकार घर', $propertyBlob);
-            $this->assertStringContainsString('मालमत्ता साधन 2', $propertyBlob);
-            $this->assertStringContainsString('साधन प्रकार फ्लॅट', $propertyBlob);
-            $this->assertStringContainsString('अतिरिक्त माहिती फ्लॅट', $propertyBlob);
-            $this->assertStringContainsString('साधन प्रकार जमीन', $propertyBlob);
-            $this->assertStringContainsString('अतिरिक्त माहिती शेती जमीन, 1 एकर', $propertyBlob);
-            $this->assertStringContainsString('नोंदी उल्लेख नाही', $propertyBlob);
+            $this->assertStringContainsString('मालमत्ता तपशील', $propertyBlob);
+            $this->assertStringContainsString('स्वतःचे घर', $propertyBlob);
+            $this->assertStringContainsString('१ फ्लॅट', $propertyBlob);
+            $this->assertStringContainsString('शेती १ एकर', $propertyBlob);
             $this->assertStringNotContainsString('Property Asset', $propertyBlob);
             $this->assertStringNotContainsString('Asset Type', $propertyBlob);
             $this->assertStringNotContainsString('Additional Information', $propertyBlob);
@@ -1134,19 +1132,11 @@ TXT, true);
 
         $property = $this->sectionBlob($out['sections']['property']);
 
-        $this->assertStringContainsString('Property Asset 1', $property);
-        $this->assertStringContainsString('Asset Type Flat', $property);
-        $this->assertStringContainsString('Location Not mentioned', $property);
-        $this->assertStringContainsString('Ownership Type Not mentioned', $property);
-        $this->assertStringContainsString('Additional Information 1 BHK Flat', $property);
-        $this->assertStringContainsString('Property Asset 2', $property);
-        $this->assertStringContainsString('Location मीरा रोड, ठाणे', $property);
-        $this->assertStringContainsString('Additional Information 2 Flats, 2 BHK', $property);
-        $this->assertStringContainsString('Property Asset 3', $property);
-        $this->assertStringContainsString('Additional Information 16 एकर', $property);
-        $this->assertStringContainsString('Notes Not mentioned', $property);
-        $this->assertStringNotContainsString('(1)', $property);
-        $this->assertStringNotContainsString('(2)', $property);
+        $this->assertStringContainsString('Property details', $property);
+        $this->assertStringContainsString('1BHK Flat', $property);
+        $this->assertStringContainsString('2 BHK Flat', $property);
+        $this->assertStringContainsString('मीरा रोड ठाणे', $property);
+        $this->assertStringContainsString('१६ एकर', $property);
     }
 
     public function test_property_preview_expands_house_plot_and_bagayat_land_from_single_line(): void
@@ -1157,15 +1147,10 @@ TXT, true);
 
         $property = $this->sectionBlob($out['sections']['property']);
 
-        $this->assertStringContainsString('Property Asset 1', $property);
-        $this->assertStringContainsString('Asset Type House', $property);
-        $this->assertStringContainsString('Ownership Type Sole', $property);
-        $this->assertStringContainsString('Property Asset 2', $property);
-        $this->assertStringContainsString('Asset Type Plot', $property);
-        $this->assertStringContainsString('Additional Information 5 गुंठे', $property);
-        $this->assertStringContainsString('Property Asset 3', $property);
-        $this->assertStringContainsString('Asset Type Land', $property);
-        $this->assertStringContainsString('Additional Information Farm land, Bagayat, 1 एकर', $property);
+        $this->assertStringContainsString('Property details', $property);
+        $this->assertStringContainsString('स्वतः चे घर', $property);
+        $this->assertStringContainsString('५ गुंठे प्लॉट', $property);
+        $this->assertStringContainsString('जमीन - १ एकर', $property);
     }
 
     public function test_property_preview_does_not_infer_property_from_house_number_in_address_only_text(): void
@@ -1177,7 +1162,7 @@ TXT, true);
 
         $property = $this->sectionBlob($out['sections']['property']);
 
-        $this->assertStringNotContainsString('Asset Type House', $property);
+        $this->assertStringNotContainsString('Property details', $property);
         $this->assertSame('', $property);
     }
 
@@ -1190,19 +1175,10 @@ TXT, true);
 
         $property = $this->sectionBlob($out['sections']['property']);
 
-        $this->assertStringContainsString('Property Asset 1', $property);
-        $this->assertStringContainsString('Asset Type House', $property);
-        $this->assertStringContainsString('Location कोल्हापूर', $property);
-        $this->assertStringContainsString('Ownership Type Sole', $property);
-        $this->assertStringContainsString('Property Asset 2', $property);
-        $this->assertStringContainsString('Asset Type Plot', $property);
-        $this->assertStringContainsString('Location कोल्हापूर', $property);
-        $this->assertStringContainsString('Additional Information 2 Plots', $property);
-        $this->assertStringContainsString('Property Asset 3', $property);
-        $this->assertStringContainsString('Asset Type Land', $property);
-        $this->assertStringContainsString('Location Not mentioned', $property);
-        $this->assertStringContainsString('Additional Information Farm land, 4 एकर', $property);
-        $this->assertStringContainsString('Additional Information कळंबा', $property);
+        $this->assertStringContainsString('Property details', $property);
+        $this->assertStringContainsString('कोल्हापूर येथे स्वतःचे घर', $property);
+        $this->assertStringContainsString('२ प्लॉट', $property);
+        $this->assertStringContainsString('चार एक्कर शेती बांबवडे/ कळंबा', $property);
         $this->assertStringNotContainsString('श्रीराम फोंड्री', $property);
     }
 
@@ -1214,9 +1190,9 @@ TXT, true);
 
         $property = $this->sectionBlob($out['sections']['property']);
 
-        $this->assertStringContainsString('Asset Type Land', $property);
-        $this->assertStringContainsString('Location बेळगाव', $property);
-        $this->assertStringContainsString('Additional Information Farm land, 01 एकर', $property);
+        $this->assertStringContainsString('Property details', $property);
+        $this->assertStringContainsString('01 एकर शेती', $property);
+        $this->assertStringContainsString('बेळगाव', $property);
     }
 
     public function test_property_preview_keeps_common_location_quantity_in_notes(): void
@@ -1228,16 +1204,9 @@ TXT, true);
 
         $property = $this->sectionBlob($out['sections']['property']);
 
-        $this->assertStringContainsString('Property Asset 1', $property);
-        $this->assertStringContainsString('Asset Type Flat', $property);
-        $this->assertStringContainsString('Location पुणे', $property);
-        $this->assertStringContainsString('Ownership Type Not mentioned', $property);
-        $this->assertStringContainsString('Additional Information 6 Flats, 2 BHK', $property);
-        $this->assertStringContainsString('Property Asset 2', $property);
-        $this->assertStringContainsString('Asset Type Commercial', $property);
-        $this->assertStringContainsString('Location कोल्हापूर', $property);
-        $this->assertStringContainsString('Additional Information Office', $property);
-        $this->assertStringContainsString('Notes Not mentioned', $property);
+        $this->assertStringContainsString('Property details', $property);
+        $this->assertStringContainsString('पुणे मध्ये 6 2BHK flats', $property);
+        $this->assertStringContainsString('कोल्हापूर मध्ये commercial office', $property);
     }
 
     public function test_intake_447_preview_shows_real_candidate_name_and_family_relatives_without_false_review_rows(): void
@@ -1313,6 +1282,22 @@ TXT, true);
         $this->assertStringNotContainsString('Parents address 2', $family);
         $this->assertStringNotContainsString('Parents address 3', $family);
         $this->assertStringNotContainsString('full_name_looks_like_address', $review);
+    }
+
+    public function test_property_summary_preview_keeps_full_source_text_when_asset_notes_are_reduced(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+बायोडाटा
+मुलाचे नाव : चि. अविनाश प्रकाश कदम
+मालमत्ता : शेती (बागायत ६. ३ एकर), ३ ट्रॅक्टर, १ खाजगी वाहन 2पोकॉलने मशीन
+संपर्क : ९८५०९५९९७३
+TXT, true);
+
+        $property = $this->sectionBlob($out['sections']['property']);
+
+        $this->assertStringContainsString('Property details', $property);
+        $this->assertStringContainsString('3 ट्रॅक्टर', $property);
+        $this->assertStringContainsString('खाजगी वाहन', $property);
     }
 
     /**

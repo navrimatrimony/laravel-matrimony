@@ -1304,6 +1304,9 @@
                 <div class="flex flex-col gap-2">
                     <span class="text-xs font-bold uppercase text-zinc-500">{{ __('homepage.footer_navigate') }}</span>
                     <a href="{{ route('matrimony.profiles.index') }}" class="text-white hover:underline">{{ __('homepage.footer_partner_search') }}</a>
+                    @if (Route::has('suchak.home'))
+                        <a href="{{ route('suchak.home') }}" class="text-white hover:underline">{{ __('homepage.footer_suchak') }}</a>
+                    @endif
                     @if (Route::has('plans.index'))
                         <a href="{{ route('plans.index') }}" class="text-white hover:underline">{{ __('homepage.footer_plans') }}</a>
                     @endif

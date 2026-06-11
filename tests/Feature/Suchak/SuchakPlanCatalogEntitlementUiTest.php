@@ -31,7 +31,17 @@ class SuchakPlanCatalogEntitlementUiTest extends TestCase
             ->assertOk()
             ->assertSee('Suchak Plan Catalog', false)
             ->assertSee('Free trial', false)
-            ->assertSee('Grace period', false);
+            ->assertSee('Grace period', false)
+            ->assertSee('Plan access and limits', false)
+            ->assertSee('Active customer profiles', false)
+            ->assertSee('Maximum customer profiles this Suchak can keep active at one time.', false)
+            ->assertSee('Payment record book', false)
+            ->assertSee('Available to Suchak?', false)
+            ->assertSee('Yes - include', false)
+            ->assertSee('No - do not include', false)
+            ->assertDontSee('Feature entitlements', false)
+            ->assertDontSee('>Integer<', false)
+            ->assertDontSee('>Boolean<', false);
 
         $createResponse = $this->actingAs($admin)->post(route('admin.suchak.plans.store'), [
             'name' => 'Suchak Growth',

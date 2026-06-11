@@ -503,22 +503,7 @@ class ProfileWizardController extends Controller
                 $data['relationTypesMaternalFamily'] = MasterRelative::optionsForGroup('maternal');
                 break;
             case 'property':
-                $allAssets = DB::table('profile_property_assets')->where('profile_id', $profile->id)->orderBy('id')->get();
-                // Exclude fully empty asset rows so we do not show duplicate empty blocks (engine still adds one empty row if none).
-                $data['profile_property_assets'] = $allAssets->filter(function ($r) {
-                    $hasType = ! empty($r->asset_type_id ?? null);
-                    $hasLoc = trim((string) ($r->location ?? '')) !== '';
-                    $hasOwn = ! empty($r->ownership_type_id ?? null);
-                    $hasNotes = trim((string) ($r->notes ?? '')) !== '';
-                    $hasAdditionalInformation = trim((string) ($r->additional_information ?? '')) !== '';
-
-                    return $hasType || $hasLoc || $hasOwn || $hasNotes || $hasAdditionalInformation;
-                })->values();
-                $data['assetTypes'] = \App\Models\MasterAssetType::where('is_active', true)->get();
-                $data['ownershipTypes'] = \App\Models\MasterOwnershipType::where('is_active', true)->get();
-                $data['profile_property_assets'] = $data['profile_property_assets'] ?? collect();
-                $data['assetTypes'] = $data['assetTypes'] ?? collect();
-                $data['ownershipTypes'] = $data['ownershipTypes'] ?? collect();
+                $data['profile_property_details'] = trim((string) ($profile->getAttribute('property_details') ?? ''));
                 $data['profile'] = $profile;
                 break;
             case 'horoscope':
@@ -1029,8 +1014,6 @@ class ProfileWizardController extends Controller
             'children' => [],
             'education_history' => [],
             'addresses' => [],
-            'property_summary' => [],
-            'property_assets' => [],
             'horoscope' => [],
             'preferences' => [],
             'extended_narrative' => [],
@@ -1729,39 +1712,27 @@ class ProfileWizardController extends Controller
 
     private function buildPropertySnapshot(Request $request, MatrimonyProfile $profile): array
     {
-        $propertyNotes = null;
-        if ($request->has('property_summary')) {
-            $request->validate([
-                'property_summary.agriculture_type' => ['nullable', 'string', 'max:50'],
-            ]);
-            $ps = $request->input('property_summary');
-            $propertyNotes = $this->propertySummaryPayloadToNotes(is_array($ps) ? $ps : []);
-        }
+        $request->validate([
+            'property_details' => ['nullable', 'string'],
+        ]);
 
-        $property_assets = [];
-        foreach ($request->input('property_assets', []) as $row) {
-            $property_assets[] = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'asset_type_id' => ! empty($row['asset_type_id']) ? (int) $row['asset_type_id'] : null,
-                'location' => trim((string) ($row['location'] ?? '')),
-                'ownership_type_id' => ! empty($row['ownership_type_id']) ? (int) $row['ownership_type_id'] : null,
-                'additional_information' => trim((string) ($row['additional_information'] ?? '')) ?: null,
-            ];
-        }
-        $property_assets = $this->attachPropertyNotesToAssets($property_assets, $propertyNotes);
-
+        $propertyDetails = $request->has('property_details')
+            ? trim((string) $request->input('property_details'))
+            : null;
         $core = [];
+        if ($request->has('property_details')) {
+            $core['property_details'] = $propertyDetails !== '' ? $propertyDetails : null;
+        }
         if ($request->has('location_id') || $request->has('address_line')) {
-            $core = [
+            $core = array_merge($core, [
                 'location_id' => $request->filled('location_id') ? (int) $request->input('location_id') : null,
                 'address_line' => $request->filled('address_line') ? trim($request->input('address_line')) : null,
-            ];
+            ]);
             $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
         }
 
         return [
             'core' => $core,
-            'property_assets' => $property_assets,
         ];
     }
 

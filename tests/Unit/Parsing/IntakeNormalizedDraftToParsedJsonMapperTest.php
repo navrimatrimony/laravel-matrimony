@@ -103,6 +103,7 @@ class IntakeNormalizedDraftToParsedJsonMapperTest extends TestCase
         $property = $parsed['property_summary'];
         $this->assertTrue(is_array($property));
         $this->assertStringContainsString('Flat', (string) ($property['summary_notes'] ?? ''));
+        $this->assertStringContainsString('Flat', (string) ($core['property_details'] ?? ''));
 
         $addressBlob = implode(' ', array_map(
             static fn ($row) => implode(' ', array_map('strval', is_array($row) ? $row : [])),
@@ -635,6 +636,8 @@ TXT);
         $this->assertTrue((bool) ($propertySummary['owns_agriculture'] ?? false));
         $this->assertStringContainsString('शॉप(भाडे)', (string) ($propertySummary['summary_notes'] ?? ''));
         $this->assertStringNotContainsString('( शेती/व्यावसायिक )', (string) ($propertySummary['summary_notes'] ?? ''));
+        $this->assertStringContainsString('शॉप(भाडे)', (string) ($core['property_details'] ?? ''));
+        $this->assertStringContainsString('रुम भाडे', (string) ($core['property_details'] ?? ''));
 
         $propertyBlob = json_encode($parsed['property_assets'] ?? [], JSON_UNESCAPED_UNICODE);
         $this->assertStringContainsString('शॉप(भाडे)', (string) $propertyBlob);

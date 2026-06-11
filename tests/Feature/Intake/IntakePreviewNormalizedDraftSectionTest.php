@@ -510,25 +510,16 @@ TXT, true);
 
         $property = $this->sectionBlob($out['sections']['property']);
 
-        $this->assertStringContainsString('Property Asset 1', $property);
-        $this->assertStringContainsString('Asset Type Flat', $property);
-        $this->assertStringContainsString('Additional Information 1 BHK Flat', $property);
-        $this->assertStringContainsString('Property Asset 2', $property);
-        $this->assertStringContainsString('Additional Information 2 Flats, 2 BHK', $property);
-        $this->assertStringContainsString('Property Asset 3', $property);
-        $this->assertStringContainsString('Location मु.पो. कळे, ता. पन्हाळा, जि. कोल्हापूर', $property);
-        $this->assertStringContainsString('Additional Information Farm land, Bagayat, 16 एकर', $property);
-        $this->assertStringContainsString('Property Asset 4', $property);
-        $this->assertStringContainsString('Asset Type House', $property);
-        $this->assertStringContainsString('Location पुणे', $property);
-        $this->assertStringContainsString('Ownership Type Sole', $property);
-        $this->assertStringContainsString('Property Asset 5', $property);
-        $this->assertStringContainsString('Location सांगली', $property);
-        $this->assertStringContainsString('Additional Information Not mentioned', $property);
+        $this->assertStringContainsString('Property details', $property);
+        $this->assertStringContainsString('1BHK Flat', $property);
+        $this->assertStringContainsString('2 BHK Flat', $property);
+        $this->assertStringContainsString('१६ एकर बागायत', $property);
+        $this->assertStringContainsString('मु.पो. कळे, ता. पन्हाळा, जि. कोल्हापूर', $property);
+        $this->assertStringContainsString('स्वतःचे घर पुणे', $property);
+        $this->assertStringContainsString('वडिलोपार्जित जमीन सांगली', $property);
         $this->assertStringNotContainsString('Owns house', $property);
         $this->assertStringNotContainsString('Total land acres', $property);
         $this->assertStringNotContainsString('Notes प्रोपर्टी :-', $property);
-        $this->assertStringContainsString('Notes Not mentioned', $property);
     }
 
     public function test_property_preview_keeps_mixed_house_plot_and_land_details_from_single_line(): void
@@ -539,12 +530,10 @@ TXT, true);
 
         $property = $this->sectionBlob($out['sections']['property']);
 
-        $this->assertStringContainsString('Asset Type House', $property);
-        $this->assertStringContainsString('Ownership Type Sole', $property);
-        $this->assertStringContainsString('Asset Type Plot', $property);
-        $this->assertStringContainsString('Additional Information 5 गुंठे', $property);
-        $this->assertStringContainsString('Asset Type Land', $property);
-        $this->assertStringContainsString('Additional Information Farm land, Bagayat, 1 एकर', $property);
+        $this->assertStringContainsString('Property details', $property);
+        $this->assertStringContainsString('स्वतः चे घर', $property);
+        $this->assertStringContainsString('५ गुंठे प्लॉट', $property);
+        $this->assertStringContainsString('जमीन - १ एकर', $property);
     }
 
     public function test_property_preview_does_not_create_false_house_from_address_only_text(): void
@@ -556,7 +545,7 @@ TXT, true);
 
         $property = $this->sectionBlob($out['sections']['property']);
 
-        $this->assertStringNotContainsString('Asset Type House', $property);
+        $this->assertStringNotContainsString('Property details', $property);
         $this->assertSame('', $property);
     }
 
@@ -569,13 +558,10 @@ TXT, true);
 
         $property = $this->sectionBlob($out['sections']['property']);
 
-        $this->assertStringContainsString('Asset Type House', $property);
-        $this->assertStringContainsString('Location कोल्हापूर', $property);
-        $this->assertStringContainsString('Asset Type Plot', $property);
-        $this->assertStringContainsString('Additional Information 2 Plots', $property);
-        $this->assertStringContainsString('Location Not mentioned', $property);
-        $this->assertStringContainsString('Additional Information Farm land, 4 एकर', $property);
-        $this->assertStringContainsString('Additional Information कळंबा', $property);
+        $this->assertStringContainsString('Property details', $property);
+        $this->assertStringContainsString('कोल्हापूर येथे स्वतःचे घर', $property);
+        $this->assertStringContainsString('२ प्लॉट', $property);
+        $this->assertStringContainsString('चार एक्कर शेती बांबवडे/ कळंबा', $property);
         $this->assertStringNotContainsString('श्रीराम फोंड्री', $property);
     }
 
@@ -587,9 +573,9 @@ TXT, true);
 
         $property = $this->sectionBlob($out['sections']['property']);
 
-        $this->assertStringContainsString('Asset Type Land', $property);
-        $this->assertStringContainsString('Location बेळगाव', $property);
-        $this->assertStringContainsString('Additional Information Farm land, 01 एकर', $property);
+        $this->assertStringContainsString('Property details', $property);
+        $this->assertStringContainsString('बेळगाव', $property);
+        $this->assertStringContainsString('01 एकर शेती', $property);
     }
 
     public function test_property_preview_inherits_self_house_descriptor_for_numbered_locations(): void
@@ -601,14 +587,10 @@ TXT, true);
 
         $property = $this->sectionBlob($out['sections']['property']);
 
-        $this->assertStringContainsString('Property Asset 1', $property);
-        $this->assertStringContainsString('Asset Type House', $property);
-        $this->assertStringContainsString('Ownership Type Sole', $property);
-        $this->assertStringContainsString('Location बाबा जरगनगर, कोल्हापूर', $property);
-        $this->assertStringContainsString('Additional Information Not mentioned', $property);
-        $this->assertStringContainsString('Property Asset 2', $property);
-        $this->assertStringContainsString('Location मंगळवार पेठ, कोल्हापूर', $property);
-        $this->assertStringContainsString('Notes Not mentioned', $property);
+        $this->assertStringContainsString('Property details', $property);
+        $this->assertStringContainsString('स्वतःचे घर', $property);
+        $this->assertStringContainsString('बाबा जरगनगर, कोल्हापूर', $property);
+        $this->assertStringContainsString('मंगळवार पेठ, कोल्हापूर', $property);
     }
 
     public function test_vishal_sample_routes_normalized_draft_to_wizard_sections(): void

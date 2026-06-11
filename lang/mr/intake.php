@@ -254,6 +254,7 @@ return [
     'normalized_draft_relative_row' => 'नातेवाईक :n',
     'normalized_draft_review_row' => 'तपासणी मुद्दा :n',
     'normalized_draft_property_asset_row' => 'मालमत्ता साधन :n',
+    'normalized_draft_property_summary_label' => 'मालमत्ता सारांश',
     'normalized_draft_property_notes_label' => 'नोंदी',
     'normalized_draft_not_mentioned' => 'उल्लेख नाही',
     'normalized_draft_review_raw_prefix' => 'मूळ मजकूर:',

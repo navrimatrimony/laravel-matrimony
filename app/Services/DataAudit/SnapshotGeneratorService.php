@@ -218,21 +218,6 @@ class SnapshotGeneratorService
             'is_primary_contact' => (bool) $r->is_primary_contact,
         ])->values()->all();
 
-        $assets = [];
-        if (Schema::hasTable('profile_property_assets')) {
-            $assets = DB::table('profile_property_assets')
-                ->where('profile_id', $profile->id)
-                ->orderBy('id')
-                ->get()
-                ->map(fn ($r) => [
-                    'id' => (int) ($r->id ?? 0),
-                    'asset_type_id' => $r->asset_type_id ?? null,
-                    'ownership_type_id' => $r->ownership_type_id ?? null,
-                    'location' => (string) ($r->location ?? ''),
-                    'notes' => (string) ($r->notes ?? ''),
-                ])->values()->all();
-        }
-
         $contacts = [];
         if (Schema::hasTable('profile_contacts')) {
             $contacts = DB::table('profile_contacts')
@@ -255,7 +240,7 @@ class SnapshotGeneratorService
             'education_history' => $educationRows,
             'career_history' => [],
             'relatives' => $relativeRows,
-            'property_assets' => $assets,
+            'property_details' => (string) ($profile->getAttribute('property_details') ?? ''),
             'contacts' => $contacts,
         ];
     }

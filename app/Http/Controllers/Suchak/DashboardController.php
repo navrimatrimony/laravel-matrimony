@@ -135,10 +135,10 @@ class DashboardController extends Controller
             ->get();
 
         $recentSourceLinks = SuchakBiodataIntakeLink::query()
-            ->with('biodataIntake')
+            ->with(['biodataIntake.profile', 'matrimonyProfile'])
             ->where('suchak_account_id', $account->id)
             ->latest()
-            ->limit(5)
+            ->limit(10)
             ->get();
 
         $recentExports = SuchakBiodataExport::query()

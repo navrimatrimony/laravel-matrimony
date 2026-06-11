@@ -28,6 +28,10 @@ class IntakeNormalizedDraftToParsedJsonMapper
 
         $core = $this->mapCore($draft);
         $contacts = $this->mapContacts($draft);
+        $propertyDetails = $this->mapPropertyDetails($draft);
+        if ($propertyDetails !== null) {
+            $core['property_details'] = $propertyDetails;
+        }
         if (($core['primary_contact_number'] ?? null) === null && $contacts !== []) {
             foreach ($contacts as $contact) {
                 if (! empty($contact['is_primary'])) {
@@ -316,6 +320,71 @@ class IntakeNormalizedDraftToParsedJsonMapper
         }
 
         return $summary;
+    }
+
+    /**
+     * @param  array<string, mixed>  $draft
+     */
+    public function mapPropertyDetails(array $draft): ?string
+    {
+        $lines = [];
+        $summary = $this->mapPropertySummary($draft);
+        if (is_array($summary)) {
+            $lines = array_merge($lines, $this->propertyTextLines($summary['summary_notes'] ?? $summary['summary_text'] ?? null));
+        } elseif (is_string($summary)) {
+            $lines = array_merge($lines, $this->propertyTextLines($summary));
+        }
+
+        foreach ($this->mapPropertyAssets($draft) as $asset) {
+            $parts = [];
+            foreach (['asset_type', 'location', 'ownership_type', 'notes', 'additional_information'] as $key) {
+                $value = trim((string) ($asset[$key] ?? ''));
+                if ($value !== '') {
+                    $parts[] = $value;
+                }
+            }
+            if ($parts !== []) {
+                $lines[] = implode(' - ', array_values(array_unique($parts)));
+            }
+        }
+
+        $merged = [];
+        foreach ($lines as $line) {
+            $line = trim((string) $line);
+            if ($line !== '' && ! in_array($line, $merged, true)) {
+                $merged[] = $line;
+            }
+        }
+
+        return $merged === [] ? null : implode("\n", $merged);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function propertyTextLines(mixed $value): array
+    {
+        if (is_array($value)) {
+            $lines = [];
+            foreach ($value as $item) {
+                $lines = array_merge($lines, $this->propertyTextLines($item));
+            }
+
+            return $lines;
+        }
+        if ($value === null) {
+            return [];
+        }
+
+        $text = trim((string) $value);
+        if ($text === '') {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            static fn (string $line): string => trim($line),
+            preg_split('/\R+/u', $text) ?: []
+        ), static fn (string $line): bool => $line !== ''));
     }
 
     /**

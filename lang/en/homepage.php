@@ -57,6 +57,7 @@ return [
     'footer_contact' => 'Contact',
     'footer_navigate' => 'Navigate',
     'footer_partner_search' => 'Partner search',
+    'footer_suchak' => 'For Suchaks',
     'footer_plans' => 'Plans',
     'trust_safety_comm' => 'Safety-minded communication',
     'trust_profiles' => 'Admin governed profiles',

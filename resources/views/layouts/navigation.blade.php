@@ -111,13 +111,6 @@
         @endif
     </a>
 
-    <a href="{{ $suchakAccountNav ? route('suchak.dashboard') : route('suchak.home') }}" class="{{ $navMainLink($navMainSection === 'suchak') }}">
-        <span class="whitespace-nowrap">{{ __('nav.suchak') }}</span>
-        @if ($navMainSection === 'suchak')
-            <span class="{{ $navMainCaret }}" aria-hidden="true"></span>
-        @endif
-    </a>
-
     <a href="{{ route('who-viewed.index') }}" class="{{ $navMainLink($navMainSection === 'activity') }}">
         <span class="whitespace-nowrap">{{ __('nav.activity') }}</span>
         @php($activityMainCount = (int) (($memberActivityCounts['interests_pending'] ?? 0) + ($memberActivityCounts['who_viewed_count'] ?? 0)))
@@ -202,22 +195,6 @@
                         <x-dropdown-link :href="route('intake.index')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('nav.my_biodata_uploads') }}
                         </x-dropdown-link>
-
-                        @if ($suchakAccountNav)
-                            <div class="border-t border-gray-200 dark:border-gray-600 my-1"></div>
-                            <div class="block px-4 py-2 text-xs text-gray-500 dark:text-gray-400 font-semibold">
-                                Suchak
-                            </div>
-                            <x-dropdown-link :href="route('suchak.dashboard')" class="hover:bg-gray-100 transition rounded-md">
-                                Suchak Dashboard
-                            </x-dropdown-link>
-                            <x-dropdown-link :href="route('suchak.intakes.create')" class="hover:bg-gray-100 transition rounded-md">
-                                Create Intake Source
-                            </x-dropdown-link>
-                            <x-dropdown-link :href="route('suchak.search.index')" class="hover:bg-gray-100 transition rounded-md">
-                                Masked Search
-                            </x-dropdown-link>
-                        @endif
 
                         <x-dropdown-link :href="route('blocks.index')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('nav.blocked') }}
@@ -359,49 +336,6 @@
         <x-responsive-nav-link :href="route('help-centre.index')">
             {{ __('nav.help_centre') }}
         </x-responsive-nav-link>
-    </div>
-</details>
-
-<details class="px-2">
-    <summary class="cursor-pointer px-3 py-2 text-white font-medium">
-        {{ __('nav.suchak') }}
-    </summary>
-    <div class="ml-3 space-y-1">
-        @auth
-            @if ($suchakAccountNav)
-                <x-responsive-nav-link :href="route('suchak.dashboard')" :active="request()->routeIs('suchak.dashboard')">
-                    Suchak Dashboard
-                </x-responsive-nav-link>
-
-                <x-responsive-nav-link :href="route('suchak.intakes.create')" :active="request()->routeIs('suchak.intakes.*')">
-                    Create Intake Source
-                </x-responsive-nav-link>
-
-                <x-responsive-nav-link :href="route('suchak.search.index')" :active="request()->routeIs('suchak.search.*')">
-                    Masked Search
-                </x-responsive-nav-link>
-            @else
-                <x-responsive-nav-link :href="route('suchak.home')" :active="request()->routeIs('suchak.home')">
-                    Suchak Centre
-                </x-responsive-nav-link>
-
-                <x-responsive-nav-link :href="route('suchak.register.info')" :active="request()->routeIs('suchak.register.*')">
-                    Suchak Registration
-                </x-responsive-nav-link>
-            @endif
-        @else
-            <x-responsive-nav-link :href="route('suchak.home')" :active="request()->routeIs('suchak.home')">
-                Suchak Centre
-            </x-responsive-nav-link>
-
-            <x-responsive-nav-link :href="route('suchak.register.info')" :active="request()->routeIs('suchak.register.*')">
-                Suchak Registration
-            </x-responsive-nav-link>
-
-            <x-responsive-nav-link :href="route('login')">
-                Suchak Login
-            </x-responsive-nav-link>
-        @endauth
     </div>
 </details>
 

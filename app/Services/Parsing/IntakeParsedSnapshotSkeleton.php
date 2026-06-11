@@ -235,6 +235,7 @@ class IntakeParsedSnapshotSkeleton
             'brother_count' => null,
             'sister_count' => null,
             'other_relatives_text' => null,
+            'property_details' => null,
             'highest_education' => null,
             'highest_education_other' => null,
             'specialization' => null,

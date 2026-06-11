@@ -1204,6 +1204,74 @@ TXT);
         $this->assertStringNotContainsString('परिचय पञ्जक', (string) ($core['full_name'] ?? ''));
     }
 
+    public function test_numbered_ocr_bullet_marathi_biodata_maps_valid_lines_without_silent_gaps(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+!! श्री गणेशाय नमः !! !! श्री सिद्धनाथ प्रसन्न !!
+बायोडाटा
+वैयक्तिक तपशील -
+1. ० नाव: कु. अविनाश प्रकाश कदम
+2. ० घरचा पत्ता : भूड, ता. खानापूर, जिल्हा सांगली.
+3. ० जन्म तारीख : 31 मे 1996
+4. ० जन्म स्थळ : खानापूर
+5. ० जन्म वेळ : शुक्रवार सकाळी 7 वाजता
+6. ० उंची: ५ फूट ११ इंच
+7. ० वर्ण : गोरा
+8. ० रक्तगट : ० पॉसिटीव्ह
+9. ० धर्म-जात : हिंदू - मराठा (९६ कुळी)
+10. ० नाडी : अंत्य
+11. ० जन्मरास : तूळ
+12. ० देवक : कळंब
+13. ० कुलदैवत : श्री सिध्दनाथ-म्हसवड
+14. ० शिक्षण: BA (Diesel Mechanic)
+15. ० व्यवसाय : पैलवान अर्थ मूव्हर्स
+16. ० मालमत्ता : शेती (बागायत ६. ३ एकर), ३ ट्रॅक्टर, १ खाजगी वाहन 2पोकॉलने मशीन
+## कौटुंबिक तपशील -
+1. ० वडिलांचे नाव: श्री. प्रकाश विठ्ठल कदम (शेती)
+2. ० आईचे नाव: सौ. सुनीता प्रकाश कदम (गृहिणी)
+3. ० भाऊ: पै. अक्षय प्रकाश कदम (अविवाहित)
+4. ० बहीण : सौ. प्रियंका विकास कांडेसर (विवाहित)
+5. ० मामा : (१) श्री धनाजी संतु पाटील.
+6. (2) श्री. संभाजी संतू पाटील.
+7. (3) श्री. नेताजी संतू पाटील.
+8. ० चुलते : श्री. सुरेश विठ्ठल कदम
+9. ० अपेक्षा: सुसंस्कृत, मनमिळावू, उंची ५ फूट ५ इंच आणि त्याहून अधिक
+10. ० संपर्क : ९८५०९५९९७३ ८४३७०५४४१४
+11. ० नातेवाईक - कोडेसर -लेंगरे,पाटील - बलवडी, नलवडे -वायफळे गायकवाड - बलवडी ,
+12. किर्दत - ढवळेश्वर शिंदे, वव्हान - दिवड
+TXT);
+
+        $normalized = $draft['normalized'];
+        $core = $normalized['core'];
+        $horoscope = $normalized['horoscope'] ?? [];
+        $relativeNames = implode(' ', array_map(static fn (array $row): string => (string) ($row['name'] ?? ''), $normalized['relatives']));
+
+        $this->assertSame('कु. अविनाश प्रकाश कदम', $core['full_name']);
+        $this->assertNull($core['gender']);
+        $this->assertSame(180.34, $core['height_cm']);
+        $this->assertSame('O+', $core['blood_group']);
+        $this->assertSame('पैलवान अर्थ मूव्हर्स', $core['occupation_title']);
+        $this->assertSame('हिंदू', $core['religion']);
+        $this->assertSame('मराठा', $core['caste']);
+        $this->assertSame('96 कुळी', OcrNormalize::normalizeDigits((string) $core['sub_caste']));
+        $this->assertSame('अंत्य', $horoscope['nadi'] ?? null);
+        $this->assertSame('तूळ', $horoscope['rashi'] ?? null);
+        $this->assertSame('कळंब', $horoscope['devak'] ?? null);
+        $this->assertSame('श्री सिध्दनाथ-म्हसवड', $horoscope['kuldaivat'] ?? null);
+        $this->assertStringContainsString('पै. अक्षय प्रकाश कदम', (string) ($normalized['siblings'][0]['name'] ?? ''));
+        $this->assertStringContainsString('प्रियंका विकास कांडेसर', (string) ($normalized['siblings'][1]['name'] ?? ''));
+        $this->assertStringContainsString('श्री धनाजी संतु पाटील', $relativeNames);
+        $this->assertStringContainsString('श्री. संभाजी संतू पाटील', $relativeNames);
+        $this->assertStringContainsString('श्री. नेताजी संतू पाटील', $relativeNames);
+        $this->assertStringContainsString('श्री. सुरेश विठ्ठल कदम', $relativeNames);
+        $this->assertStringContainsString('ट्रॅक्टर', (string) ($normalized['property_summary']['summary_text'] ?? ''));
+        $this->assertStringContainsString('खाजगी वाहन', (string) ($normalized['property_summary']['summary_text'] ?? ''));
+        $this->assertStringContainsString('उंची 5 फूट 5 इंच', OcrNormalize::normalizeDigits((string) ($normalized['preferences']['expectations'] ?? '')));
+        $this->assertStringContainsString('किर्दत - ढवळेश्वर शिंदे', (string) ($core['other_relatives_text'] ?? ''));
+        $this->assertStringNotContainsString('12. किर्दत', (string) ($core['other_relatives_text'] ?? ''));
+        $this->assertSame([], $draft['coverage_audit']['review_flags'] ?? []);
+    }
+
     private function akshadaText(): string
     {
         return <<<'TXT'

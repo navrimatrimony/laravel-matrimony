@@ -121,53 +121,62 @@ class PlanCatalogController extends Controller
     }
 
     /**
-     * @return array<string, array{label: string, type: string, default: string}>
+     * @return array<string, array{label: string, help: string, type: string, default: string}>
      */
     private function featureDefinitions(): array
     {
         return [
             SuchakPlanFeature::FEATURE_ACTIVE_PROFILE_LIMIT => [
-                'label' => 'Active profile limit',
+                'label' => 'Active customer profiles',
+                'help' => 'Maximum customer profiles this Suchak can keep active at one time.',
                 'type' => SuchakPlanFeature::TYPE_INTEGER,
                 'default' => '25',
             ],
             SuchakPlanFeature::FEATURE_MONTHLY_UPLOAD_LIMIT => [
-                'label' => 'Monthly upload limit',
+                'label' => 'Monthly biodata uploads',
+                'help' => 'How many new customer biodatas this Suchak can upload each month.',
                 'type' => SuchakPlanFeature::TYPE_INTEGER,
                 'default' => '50',
             ],
             SuchakPlanFeature::FEATURE_LEAD_REQUEST_LIMIT => [
-                'label' => 'Open lead request limit',
+                'label' => 'Open customer lead requests',
+                'help' => 'How many customer lead requests can stay open at the same time.',
                 'type' => SuchakPlanFeature::TYPE_INTEGER,
                 'default' => '20',
             ],
             SuchakPlanFeature::FEATURE_COLLABORATION_REQUEST_LIMIT => [
-                'label' => 'Open collaboration limit',
+                'label' => 'Open collaboration requests',
+                'help' => 'How many Suchak-to-Suchak collaboration requests can stay open.',
                 'type' => SuchakPlanFeature::TYPE_INTEGER,
                 'default' => '10',
             ],
             SuchakPlanFeature::FEATURE_PDF_DOWNLOAD_SHARE_LIMIT => [
-                'label' => 'Daily PDF/QR limit',
+                'label' => 'Daily biodata PDF / QR shares',
+                'help' => 'How many secure biodata PDFs or QR links this Suchak can share per day.',
                 'type' => SuchakPlanFeature::TYPE_INTEGER,
                 'default' => '20',
             ],
             SuchakPlanFeature::FEATURE_LEDGER_FEATURES => [
-                'label' => 'Ledger features',
+                'label' => 'Payment record book',
+                'help' => 'Allows the Suchak to record customer fees, reminders, and payment notes.',
                 'type' => SuchakPlanFeature::TYPE_BOOLEAN,
                 'default' => 'true',
             ],
             SuchakPlanFeature::FEATURE_CRM_FEATURES => [
-                'label' => 'CRM features',
+                'label' => 'Customer follow-up tools',
+                'help' => 'Allows the Suchak to add private customer notes and follow-up tasks.',
                 'type' => SuchakPlanFeature::TYPE_BOOLEAN,
                 'default' => 'true',
             ],
             SuchakPlanFeature::FEATURE_PRIORITY_SUPPORT => [
-                'label' => 'Priority support',
+                'label' => 'Priority admin support',
+                'help' => 'Marks this plan for faster admin support handling.',
                 'type' => SuchakPlanFeature::TYPE_BOOLEAN,
                 'default' => 'false',
             ],
             SuchakPlanFeature::FEATURE_BULK_UPLOAD_ACCESS => [
-                'label' => 'Bulk upload access',
+                'label' => 'Bulk biodata upload',
+                'help' => 'Allows this Suchak to use bulk biodata upload when that workflow is enabled.',
                 'type' => SuchakPlanFeature::TYPE_BOOLEAN,
                 'default' => 'false',
             ],

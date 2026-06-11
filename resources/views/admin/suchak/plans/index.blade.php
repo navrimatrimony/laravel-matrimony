@@ -1,13 +1,5 @@
 @extends('layouts.admin')
 
-@php
-    $valueTypes = [
-        \App\Models\SuchakPlanFeature::TYPE_INTEGER => 'Integer',
-        \App\Models\SuchakPlanFeature::TYPE_BOOLEAN => 'Boolean',
-        \App\Models\SuchakPlanFeature::TYPE_STRING => 'Text',
-    ];
-@endphp
-
 @section('content')
 <div class="space-y-6">
     <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -16,7 +8,7 @@
                 <a href="{{ route('admin.suchak.dashboard') }}" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-200">Back to Suchak dashboard</a>
                 <h1 class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">Suchak Plan Catalog</h1>
                 <p class="mt-2 max-w-3xl text-sm text-gray-600 dark:text-gray-300">
-                    Manage only Suchak plans, feature entitlements, visibility, and manual pricing. Member subscription plans remain separate.
+                    Create and manage only Suchak business plans. Member subscription plans remain separate.
                 </p>
             </div>
             <div class="flex flex-wrap gap-2">
@@ -90,7 +82,7 @@
                     <input id="new_plan_currency" name="currency" value="{{ old('currency', 'INR') }}" maxlength="3" class="mt-1 w-full rounded-md border-gray-300 text-sm uppercase dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="new_plan_billing_period_days">Billing period days</label>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="new_plan_billing_period_days">Plan duration (days)</label>
                     <input id="new_plan_billing_period_days" name="billing_period_days" value="{{ old('billing_period_days', 30) }}" type="number" min="1" max="3650" required class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                 </div>
                 <div class="lg:col-span-2">
@@ -98,7 +90,7 @@
                     <textarea id="new_plan_description" name="description" rows="3" maxlength="2000" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('description') }}</textarea>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="new_plan_sort">Sort order</label>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="new_plan_sort">Display order</label>
                     <input id="new_plan_sort" name="sort_order" value="{{ old('sort_order', 10) }}" type="number" min="0" max="65535" required class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                 </div>
                 <div class="space-y-3">
@@ -110,37 +102,47 @@
                     <input type="hidden" name="is_visible" value="0">
                     <label class="flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-100">
                         <input type="checkbox" name="is_visible" value="1" @checked(old('is_visible', '1')) class="rounded border-gray-300 text-indigo-600">
-                        Visible to Suchak
+                        Show this plan to Suchaks
                     </label>
                 </div>
             </div>
 
             <div>
-                <h3 class="text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Feature entitlements</h3>
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Plan access and limits</h3>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Set the numbers Suchaks will get. Use Yes or No for optional tools.</p>
                 <div class="mt-3 grid gap-3 lg:grid-cols-3">
                     @foreach ($featureDefinitions as $key => $definition)
+                        @php
+                            $featureValue = old("features.$key.feature_value", $definition['default']);
+                            $booleanFeatureValue = filter_var($featureValue, FILTER_VALIDATE_BOOLEAN) ? 'true' : 'false';
+                        @endphp
                         <div class="rounded-md border border-gray-200 p-4 dark:border-gray-700">
                             <input type="hidden" name="features[{{ $key }}][feature_key]" value="{{ $key }}">
+                            <input type="hidden" name="features[{{ $key }}][value_type]" value="{{ $definition['type'] }}">
                             <input type="hidden" name="features[{{ $key }}][is_enabled]" value="0">
                             <label class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
                                 <input type="checkbox" name="features[{{ $key }}][is_enabled]" value="1" @checked(old("features.$key.is_enabled", '1')) class="rounded border-gray-300 text-indigo-600">
                                 {{ $definition['label'] }}
                             </label>
-                            <div class="mt-3 grid gap-2 sm:grid-cols-2">
-                                <select name="features[{{ $key }}][value_type]" class="rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
-                                    @foreach ($valueTypes as $type => $label)
-                                        <option value="{{ $type }}" @selected(old("features.$key.value_type", $definition['type']) === $type)>{{ $label }}</option>
-                                    @endforeach
+                            <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{{ $definition['help'] }}</p>
+                            @if ($definition['type'] === \App\Models\SuchakPlanFeature::TYPE_BOOLEAN)
+                                <label class="mt-3 block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400" for="new_feature_{{ $key }}_value">Available to Suchak?</label>
+                                <select id="new_feature_{{ $key }}_value" name="features[{{ $key }}][feature_value]" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                                    <option value="true" @selected($booleanFeatureValue === 'true')>Yes - include</option>
+                                    <option value="false" @selected($booleanFeatureValue === 'false')>No - do not include</option>
                                 </select>
-                                <input name="features[{{ $key }}][feature_value]" value="{{ old("features.$key.feature_value", $definition['default']) }}" maxlength="255" class="rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
-                            </div>
+                            @else
+                                <label class="mt-3 block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400" for="new_feature_{{ $key }}_value">Number allowed</label>
+                                <input id="new_feature_{{ $key }}_value" name="features[{{ $key }}][feature_value]" value="{{ $featureValue }}" type="number" min="0" step="1" inputmode="numeric" maxlength="255" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                            @endif
                         </div>
                     @endforeach
                 </div>
             </div>
 
             <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="new_plan_reason">Admin reason</label>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="new_plan_reason">Why are you creating this plan?</label>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">This note is saved for admin audit history.</p>
                 <textarea id="new_plan_reason" name="reason" rows="2" required minlength="10" maxlength="500" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('reason') }}</textarea>
             </div>
 
@@ -201,7 +203,7 @@
                                 <input id="plan_{{ $plan->id }}_currency" name="currency" value="{{ old('currency', $plan->currency ?? 'INR') }}" maxlength="3" class="mt-1 w-full rounded-md border-gray-300 text-sm uppercase dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="plan_{{ $plan->id }}_billing_period_days">Billing period days</label>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="plan_{{ $plan->id }}_billing_period_days">Plan duration (days)</label>
                                 <input id="plan_{{ $plan->id }}_billing_period_days" name="billing_period_days" value="{{ old('billing_period_days', $plan->billing_period_days ?? 30) }}" type="number" min="1" max="3650" required class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                             </div>
                             <div class="lg:col-span-2">
@@ -209,7 +211,7 @@
                                 <textarea id="plan_{{ $plan->id }}_description" name="description" rows="3" maxlength="2000" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('description', $plan->description) }}</textarea>
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="plan_{{ $plan->id }}_sort">Sort order</label>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="plan_{{ $plan->id }}_sort">Display order</label>
                                 <input id="plan_{{ $plan->id }}_sort" name="sort_order" value="{{ old('sort_order', $plan->sort_order) }}" type="number" min="0" max="65535" required class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                             </div>
                             <div class="space-y-3">
@@ -221,40 +223,50 @@
                                 <input type="hidden" name="is_visible" value="0">
                                 <label class="flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-100">
                                     <input type="checkbox" name="is_visible" value="1" @checked(old('is_visible', $plan->is_visible)) class="rounded border-gray-300 text-indigo-600">
-                                    Visible to Suchak
+                                    Show this plan to Suchaks
                                 </label>
                             </div>
                         </div>
 
+                        <div>
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Plan access and limits</h3>
+                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Change the numbers Suchaks will get. Use Yes or No for optional tools.</p>
+                        </div>
                         <div class="grid gap-3 lg:grid-cols-3">
                             @foreach ($featureDefinitions as $key => $definition)
                                 @php
                                     $feature = $planFeatures->get($key);
                                     $featureEnabled = $feature?->is_enabled ?? false;
-                                    $featureType = $feature?->value_type ?? $definition['type'];
                                     $featureValue = $feature?->feature_value ?? $definition['default'];
+                                    $submittedFeatureValue = old("features.$key.feature_value", $featureValue);
+                                    $booleanFeatureValue = filter_var($submittedFeatureValue, FILTER_VALIDATE_BOOLEAN) ? 'true' : 'false';
                                 @endphp
                                 <div class="rounded-md border border-gray-200 p-4 dark:border-gray-700">
                                     <input type="hidden" name="features[{{ $key }}][feature_key]" value="{{ $key }}">
+                                    <input type="hidden" name="features[{{ $key }}][value_type]" value="{{ $definition['type'] }}">
                                     <input type="hidden" name="features[{{ $key }}][is_enabled]" value="0">
                                     <label class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
                                         <input type="checkbox" name="features[{{ $key }}][is_enabled]" value="1" @checked(old("features.$key.is_enabled", $featureEnabled)) class="rounded border-gray-300 text-indigo-600">
                                         {{ $definition['label'] }}
                                     </label>
-                                    <div class="mt-3 grid gap-2 sm:grid-cols-2">
-                                        <select name="features[{{ $key }}][value_type]" class="rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
-                                            @foreach ($valueTypes as $type => $label)
-                                                <option value="{{ $type }}" @selected(old("features.$key.value_type", $featureType) === $type)>{{ $label }}</option>
-                                            @endforeach
+                                    <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{{ $definition['help'] }}</p>
+                                    @if ($definition['type'] === \App\Models\SuchakPlanFeature::TYPE_BOOLEAN)
+                                        <label class="mt-3 block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400" for="feature_{{ $plan->id }}_{{ $key }}_value">Available to Suchak?</label>
+                                        <select id="feature_{{ $plan->id }}_{{ $key }}_value" name="features[{{ $key }}][feature_value]" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                                            <option value="true" @selected($booleanFeatureValue === 'true')>Yes - include</option>
+                                            <option value="false" @selected($booleanFeatureValue === 'false')>No - do not include</option>
                                         </select>
-                                        <input name="features[{{ $key }}][feature_value]" value="{{ old("features.$key.feature_value", $featureValue) }}" maxlength="255" class="rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
-                                    </div>
+                                    @else
+                                        <label class="mt-3 block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400" for="feature_{{ $plan->id }}_{{ $key }}_value">Number allowed</label>
+                                        <input id="feature_{{ $plan->id }}_{{ $key }}_value" name="features[{{ $key }}][feature_value]" value="{{ $submittedFeatureValue }}" type="number" min="0" step="1" inputmode="numeric" maxlength="255" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                                    @endif
                                 </div>
                             @endforeach
                         </div>
 
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="plan_{{ $plan->id }}_reason">Admin reason</label>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="plan_{{ $plan->id }}_reason">Why are you changing this plan?</label>
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">This note is saved for admin audit history.</p>
                             <textarea id="plan_{{ $plan->id }}_reason" name="reason" rows="2" required minlength="10" maxlength="500" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('reason') }}</textarea>
                         </div>
 

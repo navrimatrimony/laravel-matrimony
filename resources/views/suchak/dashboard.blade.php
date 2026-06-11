@@ -33,6 +33,14 @@
         ->mapWithKeys(fn (string $collector) => [$collector => ucwords(str_replace('_', ' ', $collector))])
         ->all();
     $formatAnalyticsMoney = fn ($amount, string $currency = 'INR') => $currency.' '.number_format((float) ($amount ?? 0), 2);
+    $dashboardSectionKeys = ['work', 'profiles', 'money', 'sharing', 'records'];
+    $dashboardHasBusinessFilters = $businessRecordFilters['business_q'] !== ''
+        || $businessRecordFilters['note_type'] !== null
+        || $businessRecordFilters['ledger_status'] !== null;
+    $requestedDashboardTab = (string) request('dashboard_tab', '');
+    $activeDashboardTab = in_array($requestedDashboardTab, $dashboardSectionKeys, true)
+        ? $requestedDashboardTab
+        : ($dashboardHasBusinessFilters ? 'profiles' : 'work');
 @endphp
 
 @section('content')
@@ -77,18 +85,6 @@
                 Verification: {{ ucfirst($suchakAccount->verification_status) }}
                 <span class="ml-2 font-normal">Public: {{ ucfirst($suchakAccount->public_status) }}</span>
             </div>
-            <a href="{{ route('suchak.collaborations.index') }}" class="inline-flex justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
-                Collaboration center
-            </a>
-            <a href="{{ route('suchak.training-academy.index') }}" class="inline-flex justify-center rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700">
-                Training academy
-            </a>
-            <a href="{{ route('suchak.offline-camps.index') }}" class="inline-flex justify-center rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700">
-                Offline camps
-            </a>
-            <a href="{{ route('suchak.export-retention.index') }}" class="inline-flex justify-center rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700">
-                Export retention
-            </a>
         </div>
     </div>
 
@@ -111,7 +107,9 @@
         </div>
     </div>
 
-    <section id="white-label-sharing-kit" class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <div class="space-y-6">
+
+    <section id="white-label-sharing-kit" class="{{ $activeDashboardTab !== 'sharing' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">White-label Sharing Kit</h2>
@@ -161,7 +159,7 @@
         </div>
     </section>
 
-    <section id="income-analytics" class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <section id="income-analytics" class="{{ $activeDashboardTab !== 'money' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Income Dashboard</h2>
@@ -306,7 +304,7 @@
         </div>
     </section>
 
-    <section id="daily-opportunities" class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <section id="daily-opportunities" class="{{ $activeDashboardTab !== 'work' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Daily Opportunities</h2>
@@ -350,7 +348,7 @@
         </div>
     </section>
 
-    <section id="workflow-reminders" class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <section id="workflow-reminders" class="{{ $activeDashboardTab !== 'work' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Workflow Reminders</h2>
@@ -425,7 +423,7 @@
         </div>
     </section>
 
-    <section class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <section class="{{ $activeDashboardTab !== 'work' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Suchak Quick Links</h2>
@@ -460,13 +458,79 @@
         </div>
     </section>
 
-    <div class="grid gap-6 lg:grid-cols-[2fr_1fr]">
-        <div class="space-y-6">
-            <section class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <div class="space-y-6">
+            <section class="{{ $activeDashboardTab !== 'profiles' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
+                    <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Customer Biodata Sources</h2>
+                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Intake केलेले biodata इथे दिसतात. Review पूर्ण झाल्यावर consent/representation flow नंतर ते represented profiles मध्ये येतात.</p>
+                        </div>
+                        <a href="{{ route('suchak.intakes.create') }}" class="inline-flex w-fit justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+                            Add biodata
+                        </a>
+                    </div>
+                </div>
+
+                <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                    @forelse ($recentSourceLinks as $link)
+                        @php
+                            $intake = $link->biodataIntake;
+                            $attachedProfile = $link->matrimonyProfile ?: $intake?->profile;
+                            $sourceStatus = ucwords(str_replace('_', ' ', (string) $link->source_status));
+                            $intakeStatus = $intake ? ucwords(str_replace('_', ' ', (string) $intake->intake_status)) : 'Missing intake';
+                            $parseStatus = $intake ? ucwords(str_replace('_', ' ', (string) $intake->parse_status)) : 'Unknown';
+                        @endphp
+                        <article class="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+                            <div class="min-w-0">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <p class="font-semibold text-gray-900 dark:text-gray-100">Source #{{ $link->id }}</p>
+                                    <span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700 dark:bg-gray-900 dark:text-gray-200">{{ $sourceStatus }}</span>
+                                    <span class="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/50 dark:text-blue-100">Parse: {{ $parseStatus }}</span>
+                                </div>
+                                <dl class="mt-3 grid gap-2 text-sm text-gray-600 dark:text-gray-300 md:grid-cols-3">
+                                    <div>
+                                        <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Intake</dt>
+                                        <dd>#{{ $link->biodata_intake_id }} · {{ $intakeStatus }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Created</dt>
+                                        <dd>{{ $link->created_at?->format('Y-m-d H:i') ?: '-' }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Profile link</dt>
+                                        <dd>{{ $attachedProfile ? 'Linked profile #'.$attachedProfile->id : 'Not linked yet' }}</dd>
+                                    </div>
+                                </dl>
+                                <p class="mt-3 text-sm text-gray-600 dark:text-gray-300">
+                                    Next: review parsed biodata, then complete existing approval and consent steps. Raw private biodata text is not shown on this dashboard card.
+                                </p>
+                            </div>
+                            <div class="flex flex-wrap gap-2 lg:justify-end">
+                                @if ($intake)
+                                    <a href="{{ route('intake.status', $intake) }}" class="inline-flex justify-center rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white">
+                                        Review intake
+                                    </a>
+                                @endif
+                                <a href="{{ route('suchak.intakes.create') }}" class="inline-flex justify-center rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">
+                                    Add another
+                                </a>
+                            </div>
+                        </article>
+                    @empty
+                        <div class="p-6 text-sm text-gray-600 dark:text-gray-300">
+                            No biodata sources yet. Start with Customer biodata entry.
+                        </div>
+                    @endforelse
+                </div>
+            </section>
+
+            <section class="{{ $activeDashboardTab !== 'profiles' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
                     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Represented Profiles</h2>
                     <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Only masked candidate information is shown on this work surface.</p>
                     <form method="GET" action="{{ route('suchak.dashboard') }}" class="mt-4 grid gap-3 md:grid-cols-[1fr_12rem_12rem_auto_auto]">
+                        <input type="hidden" name="dashboard_tab" value="profiles">
                         <label class="sr-only" for="business_q">Search CRM and ledger</label>
                         <input id="business_q" name="business_q" value="{{ $businessRecordFilters['business_q'] }}" maxlength="80" placeholder="Search CRM or ledger" class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
                         <label class="sr-only" for="note_type_filter">Note type</label>
@@ -788,7 +852,7 @@
                 </div>
             </section>
 
-            <section class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <section class="{{ $activeDashboardTab !== 'profiles' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
                     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Incoming Collaborations</h2>
                 </div>
@@ -815,10 +879,7 @@
                     @endforelse
                 </div>
             </section>
-        </div>
-
-        <aside class="space-y-6">
-            <section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <section class="{{ $activeDashboardTab !== 'money' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Billing & Limits</h2>
                 <div class="mt-3 rounded-md bg-gray-50 p-3 text-sm dark:bg-gray-900">
                     <div class="flex items-center justify-between gap-3">
@@ -952,7 +1013,7 @@
                 @endif
             </section>
 
-            <section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <section class="{{ $activeDashboardTab !== 'records' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Recent Source Links</h2>
                 <div class="mt-4 space-y-3">
                     @forelse ($recentSourceLinks as $link)
@@ -966,7 +1027,7 @@
                 </div>
             </section>
 
-            <section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <section class="{{ $activeDashboardTab !== 'sharing' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Recent PDF/QR Records</h2>
                 <div class="mt-4 space-y-3">
                     @forelse ($recentExports as $export)
@@ -1015,7 +1076,7 @@
                 </div>
             </section>
 
-            <section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <section class="{{ $activeDashboardTab !== 'records' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Recent Suggestions</h2>
                 <div class="mt-4 space-y-3">
                     @forelse ($recentSuggestions as $suggestion)
@@ -1029,7 +1090,7 @@
                 </div>
             </section>
 
-            <section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <section class="{{ $activeDashboardTab !== 'records' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Recent Activity</h2>
                 <div class="mt-4 space-y-3">
                     @forelse ($activityLogs as $activity)
@@ -1042,7 +1103,7 @@
                     @endforelse
                 </div>
             </section>
-        </aside>
+    </div>
     </div>
 </div>
 @endsection

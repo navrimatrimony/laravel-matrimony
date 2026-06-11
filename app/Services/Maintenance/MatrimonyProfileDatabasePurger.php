@@ -145,7 +145,6 @@ final class MatrimonyProfileDatabasePurger
             ['profile_education', 'profile_id'],
             ['profile_children', 'profile_id'],
             ['profile_addresses', 'profile_id'],
-            ['profile_property_assets', 'profile_id'],
             ['profile_horoscope_data', 'profile_id'],
             ['profile_legal_cases', 'profile_id'],
             ['profile_alliance_networks', 'profile_id'],

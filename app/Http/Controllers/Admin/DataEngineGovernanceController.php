@@ -340,7 +340,6 @@ class DataEngineGovernanceController extends Controller
             'siblings' => 'profile_siblings',
             'children' => 'profile_children',
             'relatives' => 'profile_relatives',
-            'property_assets' => 'profile_property_assets',
             'contacts' => 'profile_contacts',
         ];
 
@@ -438,7 +437,6 @@ class DataEngineGovernanceController extends Controller
             'profile_siblings',
             'profile_children',
             'profile_relatives',
-            'profile_property_assets',
             'profile_properties',
             'profile_contacts',
         ];
@@ -804,4 +802,3 @@ class DataEngineGovernanceController extends Controller
         return $candidates[0] ?? null;
     }
 }
-

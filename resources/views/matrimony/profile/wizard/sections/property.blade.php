@@ -1,32 +1,13 @@
-{{-- Property tab: only Property assets (repeatable) + Notes. Residence and Property summary (Own House/Flat/Agriculture etc.) removed. --}}
+{{-- Property tab: one governed multiline text field. --}}
 @php
     $namePrefix = $namePrefix ?? '';
-    $oldKey = $namePrefix !== '' ? str_replace(']', '', str_replace('[', '.', $namePrefix)) . '.property_summary' : 'property_summary';
-    $propertySummary = old($oldKey, $profile_property_summary ?? null);
-    $oldKeyAssets = $namePrefix !== '' ? str_replace(']', '', str_replace('[', '.', $namePrefix)) . '.property_assets' : 'property_assets';
-    $propertyAssets = old($oldKeyAssets, $profile_property_assets ?? collect());
-    if (is_object($propertySummary)) { $propertySummary = (array) $propertySummary; }
-    if (is_object($propertyAssets)) { $propertyAssets = $propertyAssets->all(); }
-    $propertyNotes = '';
-    foreach (($propertyAssets ?? []) as $row) {
-        $notes = trim((string) ((is_object($row) ? ($row->notes ?? '') : ($row['notes'] ?? ''))));
-        if ($notes !== '') {
-            $propertyNotes = $notes;
-            break;
-        }
-    }
-    if ($propertyNotes === '') {
-        $propertyNotes = trim((string) (($propertySummary['summary_notes'] ?? '') ?: ''));
-    }
+    $oldKey = $namePrefix !== '' ? str_replace(']', '', str_replace('[', '.', $namePrefix)) . '.core.property_details' : 'property_details';
+    $propertyDetails = old($oldKey, $profile_property_details ?? ($profile->property_details ?? ''));
 @endphp
 
 <div class="space-y-6">
     <x-profile.property-engine
-        :notes="$propertyNotes"
-        :assets="$propertyAssets ?? []"
-        :assetTypes="$assetTypes ?? []"
-        :ownershipTypes="$ownershipTypes ?? []"
+        :details="$propertyDetails"
         :namePrefix="$namePrefix"
     />
 </div>
-<script>document.addEventListener('DOMContentLoaded', function() { if (window.LocationTypeahead && window.LocationTypeahead.init) window.LocationTypeahead.init(); });</script>

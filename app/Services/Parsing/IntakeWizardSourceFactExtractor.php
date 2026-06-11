@@ -8,15 +8,15 @@ class IntakeWizardSourceFactExtractor
 {
     private const OCR_DECORATIVE_LABELS = [
         'मुलाचे नाव', 'मुलीचे नाव', 'नाव', 'जन्मतारीख', 'जन्म तारीख', 'जन्मवेळ', 'जन्म वेळ',
-        'जन्मस्थळ', 'जन्म स्थळ', 'धर्म', 'जात', 'उपजात', 'उप जात', 'उंची', 'रंग', 'रक्तगट',
+        'जन्मस्थळ', 'जन्म स्थळ', 'धर्म-जात', 'धर्म', 'जात', 'उपजात', 'उप जात', 'उंची', 'रंग', 'रक्तगट',
         'रक्त गट', 'शिक्षण', 'शिक्षण / नोकरी', 'व्यवसाय', 'नोकरी', 'कंपनी', 'वार्षिक उत्पन्न',
         'उत्पन्न', 'वडील', 'वडिलांचे नाव', 'आई', 'आईचे नाव', 'मूळ गाव', 'मुळगाव', 'मूळगाव',
         'निवास', 'सध्याचा पत्ता', 'पत्ता', 'घरचा पत्ता', 'आजोळचा पत्ता', 'अपेक्षा', 'देवक',
-        'नाडी', 'राशी', 'रास', 'नक्षत्र', 'गण', 'गोत्र', 'कुलदैवत', 'कुल दैवत', 'प्रॉपर्टी',
-        'प्रॉपर्टी तपशील', 'स्थावर मालमत्ता', 'भ्रमणध्वनी', 'मोबाईल', 'मोबाइल', 'मो. नं',
+        'नाडी', 'जन्मरास', 'राशी', 'रास', 'नक्षत्र', 'गण', 'गोत्र', 'कुलदैवत', 'कुल दैवत', 'प्रॉपर्टी',
+        'प्रॉपर्टी तपशील', 'स्थावर मालमत्ता', 'मालमत्ता', 'भ्रमणध्वनी', 'मोबाईल', 'मोबाइल', 'मो. नं',
         'मो. नं.', 'मो नं', 'मो नं.', 'भाऊ', 'मुलाचा भाऊ', 'मुलाचे भाऊ', 'बहीण', 'बहिण', 'मुलाची बहीण',
         'मुलाची बहिण', 'दाजी', 'जावई', 'मामा', 'मुलाचे मामा', 'मावशी',
-        'माऊशी', 'आत्या', 'मुलाची आत्या', 'मुलाची आत्त्या', 'चुलते', 'मुलाचे चुलते', 'नातेसंबंध', 'नाते संबंध', 'इतर नातेवाईक', 'पाहुणे',
+        'माऊशी', 'आत्या', 'मुलाची आत्या', 'मुलाची आत्त्या', 'चुलते', 'मुलाचे चुलते', 'नातेसंबंध', 'नाते संबंध', 'नातेवाईक', 'इतर नातेवाईक', 'उत्तर नातेवाईक', 'पाहुणे',
         'इतर पाहुणे', 'नावरस', 'नावरस नाव',
     ];
 
@@ -199,6 +199,18 @@ class IntakeWizardSourceFactExtractor
     private function splitLabelAndValue(string $line): array
     {
         $line = $this->normalizeDecorativeLabelSeparators($line);
+
+        static $knownLabelPattern = null;
+        if ($knownLabelPattern === null) {
+            $labels = array_map(static fn (string $label): string => preg_quote($label, '/'), self::OCR_DECORATIVE_LABELS);
+            usort($labels, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+            $knownLabelPattern = implode('|', $labels);
+        }
+
+        if (preg_match('/^\s*('.$knownLabelPattern.')\s*(?::\s*-\s*|[:\-–—]\s*|\.\s*)(.+)$/u', $line, $m)) {
+            return [trim((string) $m[1]), trim((string) $m[2])];
+        }
+
         if (preg_match('/^\s*[-–—]?\s*([^:.\-–—]+?)\s*(?::\s*-\s*|[:\-–—]\s*|\.\s*)(.+)$/u', $line, $m)) {
             return [trim((string) $m[1]), trim((string) $m[2])];
         }
@@ -258,6 +270,10 @@ class IntakeWizardSourceFactExtractor
      */
     private function basicFieldFact(string $label, string $value, int $lineNo, string $sourceText, string $sourceLabel, array $phones, bool $activeParentContext = false): array
     {
+        if ($label === 'धर्म-जात') {
+            return $this->religionCasteFacts($value, $lineNo, $sourceText, $sourceLabel);
+        }
+
         $map = [
             'नाव' => ['person_name', 'basic-info', 'core.full_name'],
             'मुलाचे नाव' => ['person_name', 'basic-info', 'core.full_name'],
@@ -298,6 +314,7 @@ class IntakeWizardSourceFactExtractor
             'अपेक्षा' => ['preference_text', 'about-preferences', 'preferences.expectations'],
             'देवक' => ['horoscope_value', 'horoscope', 'horoscope.devak'],
             'नाडी' => ['horoscope_value', 'horoscope', 'horoscope.nadi'],
+            'जन्मरास' => ['horoscope_value', 'horoscope', 'horoscope.rashi'],
             'राशी' => ['horoscope_value', 'horoscope', 'horoscope.rashi'],
             'रास' => ['horoscope_value', 'horoscope', 'horoscope.rashi'],
             'नक्षत्र' => ['horoscope_value', 'horoscope', 'horoscope.nakshatra'],
@@ -305,9 +322,10 @@ class IntakeWizardSourceFactExtractor
             'गोत्र' => ['horoscope_value', 'horoscope', 'horoscope.gotra'],
             'कुलदैवत' => ['horoscope_value', 'horoscope', 'horoscope.kuldaivat'],
             'कुल दैवत' => ['horoscope_value', 'horoscope', 'horoscope.kuldaivat'],
-            'प्रॉपर्टी' => ['field_value', 'property', 'property.summary'],
-            'प्रॉपर्टी तपशील' => ['field_value', 'property', 'property.summary'],
-            'स्थावर मालमत्ता' => ['field_value', 'property', 'property.summary'],
+            'प्रॉपर्टी' => ['field_value', 'property', 'core.property_details'],
+            'प्रॉपर्टी तपशील' => ['field_value', 'property', 'core.property_details'],
+            'स्थावर मालमत्ता' => ['field_value', 'property', 'core.property_details'],
+            'मालमत्ता' => ['field_value', 'property', 'core.property_details'],
             'भ्रमणध्वनी' => ['phone_number', 'basic-info', 'core.primary_contact_number'],
             'मोबाईल' => ['phone_number', 'basic-info', 'core.primary_contact_number'],
             'मोबाइल' => ['phone_number', 'basic-info', 'core.primary_contact_number'],
@@ -406,6 +424,21 @@ class IntakeWizardSourceFactExtractor
     }
 
     /**
+     * @return list<array<string, mixed>>
+     */
+    private function religionCasteFacts(string $value, int $lineNo, string $sourceText, string $sourceLabel): array
+    {
+        $facts = $this->splitCompoundCasteFacts($value, $lineNo, $sourceText, $sourceLabel);
+        if ($facts !== []) {
+            return $facts;
+        }
+
+        return $value !== ''
+            ? [$this->fact('field_value', $value, $lineNo, $sourceText, $sourceLabel, 'basic-info', 'core.caste')]
+            : [];
+    }
+
+    /**
      * @return array{0:string,1:string,2:string,3:string}
      */
     private function parsePersonLikeValue(string $value): array
@@ -447,7 +480,7 @@ class IntakeWizardSourceFactExtractor
             $work = preg_replace('/\([^()]*\)/u', '', $work) ?? $work;
         }
 
-        $name = trim((string) preg_replace('/^\s*(?:\d+|[०-९]+)[\).]\s*/u', '', $work));
+        $name = trim((string) preg_replace('/^\s*(?:(?:\d+|[०-९]+)[\).]|\(\s*(?:\d+|[०-९]+)\s*\))\s*/u', '', $work));
         $name = trim((string) preg_replace('/^\s*(?:एक|दोन|तीन|चार|पाच|सहा|सात|आठ|नऊ|दहा|1|2|3|4|5|6|7|8|9|10)\s*/u', '', $name));
         $name = trim((string) preg_replace('/^\s*(?:श्री\.?|सौ\.?|कु\.?|चि\.?|कै\.?|डॉ\.?)\s*/u', '', $name));
         $name = trim((string) preg_replace('/\b(?:Whats\s*App|Whatsapp)\b/ui', '', $name));

@@ -227,6 +227,9 @@ return [
     ],
     'property' => [
         'property' => 'Property',
+        'property_details' => 'Property details',
+        'property_details_placeholder' => "Example:\nFarm land 3 acres\nOwn house in Sangli\nTractor and private vehicle",
+        'property_details_help' => 'Write each property on a new line. If it is written in one sentence, keep commas or full stops clear.',
         'property_assets' => 'Property assets',
         'asset_type' => 'Asset Type',
         'ownership_type' => 'Ownership Type',

@@ -142,7 +142,7 @@ class OcrNormalize
             return null;
         }
 
-        $hasPos = (bool) preg_match('/पॉझिटिव्ह|पॉजिटिव्ह|POSITIVE|\+ve|\bPos(?:itive|)\b|[+＋]/ui', $v);
+        $hasPos = (bool) preg_match('/पॉझिटिव्ह|पॉजिटिव्ह|पॉसिटीव्ह|POSITIVE|\+ve|\bPos(?:itive|)\b|[+＋]/ui', $v);
         $hasNeg = (bool) preg_match('/निगेटिव्ह|नॅगेटिव्ह|NEGATIVE|\-ve|\bNEG\b|[\-−](?!\d)/ui', $v);
 
         if ($hasPos && $hasNeg) {
@@ -160,6 +160,8 @@ class OcrNormalize
         } elseif (preg_match('/बी/ui', $v)) {
             $letter = 'B';
         } elseif (preg_match('/ओ|ऑ/u', $v)) {
+            $letter = 'O';
+        } elseif (preg_match('/(?:^|[\s\'"])[0०](?=\s|$|[+\-＋−])/u', $v)) {
             $letter = 'O';
         } elseif (preg_match('/ए/u', $v)) {
             if (! preg_match('/एबी|ऐबी/u', $v)) {

@@ -223,22 +223,9 @@ class ProfileCompletionService
 
                 return $count > 0 ? 'completed' : 'incomplete';
             case 'property':
-                $assets = DB::table('profile_property_assets')
-                    ->where('profile_id', $profile->id)
-                    ->where(function ($q) {
-                        $q->whereNotNull('asset_type_id')
-                            ->orWhereNotNull('ownership_type_id')
-                            ->orWhereNotNull('estimated_value')
-                            ->orWhere(function ($q2) {
-                                $q2->whereNotNull('location')->where('location', '!=', '');
-                            })
-                            ->orWhere(function ($q2) {
-                                $q2->whereNotNull('notes')->where('notes', '!=', '');
-                            });
-                    })
-                    ->exists();
-
-                return $assets ? 'completed' : 'incomplete';
+                return trim((string) ($profile->getAttribute('property_details') ?? '')) !== ''
+                    ? 'completed'
+                    : 'incomplete';
             case 'horoscope':
                 $h = DB::table('profile_horoscope_data')->where('profile_id', $profile->id)->first();
                 $hasRashi = $h && ($h->rashi_id ?? null) !== null;

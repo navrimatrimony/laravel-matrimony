@@ -57,6 +57,7 @@ return [
     'footer_contact' => 'संपर्क',
     'footer_navigate' => 'नेव्हिगेट',
     'footer_partner_search' => 'जोडीदार शोध',
+    'footer_suchak' => 'सूचकांसाठी',
     'footer_plans' => 'योजना',
     'trust_safety_comm' => 'सुरक्षित संवाद',
     'trust_profiles' => 'प्रोफाइल नियंत्रण',

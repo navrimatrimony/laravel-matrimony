@@ -16,7 +16,7 @@ class ManualSnapshotBuilderService
 {
     /**
      * Build full SSOT snapshot (core + contacts + children
-     * + addresses + property_summary + property_assets + horoscope + preferences + extended_narrative).
+     * + addresses + property text + horoscope + preferences + extended_narrative).
      */
     public function buildFullManualSnapshot(Request $request, MatrimonyProfile $profile): array
     {
@@ -93,6 +93,7 @@ class ManualSnapshotBuilderService
         $core['family_status'] = $request->input('family_status') ?: null;
         $core['family_values'] = $request->input('family_values') ?: null;
         $core['other_relatives_text'] = trim((string) $request->input('other_relatives_text', '')) ?: null;
+        $core['property_details'] = $this->propertyDetailsTextFromRequest($request);
         $core['country_id'] = ($v = $this->rawCoreInput($request, 'country_id')) !== null && $v !== '' ? $v : null;
         $core['state_id'] = ($v = $this->rawCoreInput($request, 'state_id')) !== null && $v !== '' ? $v : null;
         $core['district_id'] = ($v = $this->rawCoreInput($request, 'district_id')) !== null && $v !== '' ? $v : null;
@@ -163,30 +164,6 @@ class ManualSnapshotBuilderService
         if ($addresses === []) {
             $addresses = $this->mapLegacyAddressRows($request->input('addresses'));
         }
-
-        $property_summary = [];
-        $propertyNotes = null;
-        if ($request->has('property_summary')) {
-            $ps = $request->input('property_summary');
-            $propertyNotes = $this->propertySummaryPayloadToNotes(is_array($ps) ? $ps : []);
-        }
-
-        $property_assets = [];
-        foreach ($request->input('property_assets', []) as $row) {
-            $property_assets[] = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'asset_type_id' => ! empty($row['asset_type_id']) ? (int) $row['asset_type_id'] : null,
-                'location' => trim((string) ($row['location'] ?? '')),
-                'estimated_value' => isset($row['estimated_value']) && $row['estimated_value'] !== '' ? (float) $row['estimated_value'] : null,
-                'ownership_type_id' => ! empty($row['ownership_type_id']) ? (int) $row['ownership_type_id'] : null,
-                'additional_information' => trim((string) ($row['additional_information'] ?? '')) ?: null,
-                'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
-                'taluka_id' => ! empty($row['taluka_id']) ? (int) $row['taluka_id'] : null,
-                'district_id' => ! empty($row['district_id']) ? (int) $row['district_id'] : null,
-                'state_id' => ! empty($row['state_id']) ? (int) $row['state_id'] : null,
-            ];
-        }
-        $property_assets = $this->attachPropertyNotesToAssets($property_assets, $propertyNotes);
 
         $horoscope = [];
         if ($request->has('horoscope')) {
@@ -321,8 +298,6 @@ class ManualSnapshotBuilderService
             'education_history' => $education_history,
             'career_history' => [],
             'addresses' => $addresses,
-            'property_summary' => $property_summary,
-            'property_assets' => $property_assets,
             'horoscope' => $horoscope,
             'preferences' => $preferences,
             'extended_narrative' => $extended_narrative,
@@ -345,6 +320,88 @@ class ManualSnapshotBuilderService
         }
 
         return null;
+    }
+
+    private function propertyDetailsTextFromRequest(Request $request): ?string
+    {
+        $lines = [];
+        foreach (['snapshot.core.property_details', 'core.property_details', 'property_details'] as $path) {
+            if (! $request->exists($path)) {
+                continue;
+            }
+            $lines = array_merge($lines, $this->propertyTextLines($request->input($path)));
+        }
+
+        if ($request->has('property_summary')) {
+            $ps = $request->input('property_summary');
+            $lines = array_merge($lines, $this->propertyTextLines($this->propertySummaryPayloadToNotes(is_array($ps) ? $ps : [])));
+        }
+
+        foreach ($request->input('property_assets', []) as $row) {
+            if (is_array($row)) {
+                $lines = array_merge($lines, $this->propertyTextLines($this->propertyAssetPayloadToText($row)));
+            }
+        }
+
+        $merged = [];
+        foreach ($lines as $line) {
+            $line = trim((string) $line);
+            if ($line !== '' && ! in_array($line, $merged, true)) {
+                $merged[] = $line;
+            }
+        }
+
+        return $merged === [] ? null : implode("\n", $merged);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function propertyTextLines(mixed $value): array
+    {
+        if (is_array($value)) {
+            $lines = [];
+            foreach ($value as $item) {
+                $lines = array_merge($lines, $this->propertyTextLines($item));
+            }
+
+            return $lines;
+        }
+        if ($value === null) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            static fn (string $line): string => trim($line),
+            preg_split('/\R+/u', trim((string) $value)) ?: []
+        ), static fn (string $line): bool => $line !== ''));
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    private function propertyAssetPayloadToText(array $row): ?string
+    {
+        $parts = [];
+        foreach (['asset_type_label', 'asset_type', 'asset_type_key', 'location', 'ownership_type_label', 'ownership_type', 'ownership_type_key'] as $key) {
+            $value = trim((string) ($row[$key] ?? ''));
+            if ($value !== '') {
+                $parts[] = $value;
+            }
+        }
+        if (($row['estimated_value'] ?? null) !== null && (string) $row['estimated_value'] !== '') {
+            $parts[] = 'Estimated value: '.trim((string) $row['estimated_value']);
+        }
+        foreach (['notes', 'additional_information'] as $key) {
+            $value = trim((string) ($row[$key] ?? ''));
+            if ($value !== '') {
+                $parts[] = $value;
+            }
+        }
+
+        $parts = array_values(array_unique($parts));
+
+        return $parts === [] ? null : implode(' - ', $parts);
     }
 
     /**
