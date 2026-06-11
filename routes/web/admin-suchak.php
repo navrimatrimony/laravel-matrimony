@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\Suchak\AccountVerificationController;
+use App\Http\Controllers\Admin\Suchak\AcademyController;
 use App\Http\Controllers\Admin\Suchak\DashboardController;
 use App\Http\Controllers\Admin\Suchak\PlanCatalogController;
 use App\Http\Controllers\Admin\Suchak\PayoutController;
@@ -48,6 +49,11 @@ Route::middleware(['auth', 'admin'])
         Route::post('/retention/campaign-rules/{campaignRule}/qualify', [RetentionController::class, 'qualifyCampaignBonus'])->name('retention.campaign-rules.qualify');
         Route::post('/retention/accounts/{suchakAccount}/reports', [RetentionController::class, 'generateReport'])->name('retention.accounts.reports.generate');
         Route::post('/retention/accounts/{suchakAccount}/offers', [RetentionController::class, 'createOffer'])->name('retention.accounts.offers.store');
+        Route::get('/academy', [AcademyController::class, 'index'])->name('academy.index');
+        Route::post('/academy/modules', [AcademyController::class, 'storeModule'])->name('academy.modules.store');
+        Route::post('/academy/modules/{trainingModule}/completions', [AcademyController::class, 'completeModule'])->name('academy.modules.completions.store');
+        Route::post('/academy/accounts/{suchakAccount}/certificates', [AcademyController::class, 'issueCertificate'])->name('academy.accounts.certificates.issue');
+        Route::post('/academy/message-templates', [AcademyController::class, 'storeTemplate'])->name('academy.message-templates.store');
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
         Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
         Route::get('/accounts', [AccountVerificationController::class, 'index'])->name('accounts.index');

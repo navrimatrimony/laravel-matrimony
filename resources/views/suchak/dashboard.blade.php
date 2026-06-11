@@ -80,6 +80,9 @@
             <a href="{{ route('suchak.collaborations.index') }}" class="inline-flex justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
                 Collaboration center
             </a>
+            <a href="{{ route('suchak.training-academy.index') }}" class="inline-flex justify-center rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700">
+                Training academy
+            </a>
         </div>
     </div>
 

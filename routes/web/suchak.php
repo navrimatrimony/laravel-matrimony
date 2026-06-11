@@ -16,6 +16,7 @@ use App\Http\Controllers\Suchak\ProfileUpdateSuggestionController;
 use App\Http\Controllers\Suchak\PublicMarketplaceController;
 use App\Http\Controllers\Suchak\QrScanController;
 use App\Http\Controllers\Suchak\ReceiptVerificationController;
+use App\Http\Controllers\Suchak\TrainingAcademyController;
 use App\Http\Middleware\EnforceCardOnboarding;
 use Illuminate\Support\Facades\Route;
 
@@ -154,6 +155,11 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
             ->name('representations.ledger-entries.store');
         Route::get('/collaborations', [CollaborationController::class, 'index'])
             ->name('collaborations.index');
+        Route::get('/training-academy', [TrainingAcademyController::class, 'index'])
+            ->name('training-academy.index');
+        Route::post('/training-academy/message-templates/{messageTemplate}/use', [TrainingAcademyController::class, 'useTemplate'])
+            ->middleware('throttle:20,1')
+            ->name('training-academy.message-templates.use');
         Route::post('/collaborations', [CollaborationController::class, 'store'])
             ->middleware('throttle:15,1')
             ->name('collaborations.store');
