@@ -18541,3 +18541,36 @@ Completion gate:
 
 END OF PHASE-6 ADVANCED SUCHAK GROWTH AMENDMENT - DAY-32
 ############################################################
+
+############################################################
+MEMBER BIODATA EXPORT ENGINE ADDENDUM
+############################################################
+
+Goal:
+
+Allow a logged-in member to export only their own saved matrimony profile as a read-only biodata document.
+
+Rules:
+
+* export is own-profile only
+* export must derive from canonical saved profile data
+* export must not mutate matrimony profile data
+* export must not create a parallel biodata JSON blob storage path
+* export must not silently overwrite or normalize profile fields
+* export must use current plan/feature gates before download consumption
+* profile contacts shown in the export are allowed only for the owning member's own profile export
+* photo/no-photo and portrait/landscape are presentation templates only
+* premium templates are controlled by a separate plan feature flag
+* PDF rendering is the primary supported export
+* JPG rendering is allowed only when the server has a verified PDF-to-image renderer available; otherwise it must fail visibly without consuming quota
+
+Plan feature keys:
+
+* biodata_export_limit = numeric export quota
+* biodata_premium_templates = boolean premium template access
+
+Implementation boundary:
+
+* Suchak biodata export records are not reused for regular member profile export
+* runtime should reuse profile snapshot/read services where possible
+* no governed profile update()/save() path may be introduced by this export engine

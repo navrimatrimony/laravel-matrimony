@@ -117,10 +117,15 @@
 <div class="max-w-6xl mx-auto py-8 px-4 sm:px-6" x-data="{ adminEditMode: @js(auth()->check() && auth()->user()->is_admin === true && request()->has('admin_edit')), openRequestModal: false, showContactUpgradeModal: false }">
     <h1 class="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100 mb-4 lg:mb-5 lg:text-xl xl:text-2xl">Matrimony Profile</h1>
     @if (($isOwnProfile ?? false) && auth()->check() && auth()->user()->is_admin !== true)
-        <div class="mb-6">
+        <div class="mb-6 flex flex-wrap gap-3">
             <a href="{{ route('matrimony.profile.edit') }}"
                class="inline-flex items-center px-5 py-2.5 rounded-md bg-red-600 text-white hover:bg-red-700 transition font-medium text-sm">
                 {{ __('Edit Profile') }}
+            </a>
+            <a href="{{ route('matrimony.profile.biodata.index') }}"
+               class="inline-flex items-center gap-2 rounded-md border border-red-200 bg-white px-5 py-2.5 text-sm font-semibold text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-50 dark:border-red-900/60 dark:bg-gray-900 dark:text-red-200 dark:hover:bg-red-950/30">
+                <span>{{ __('profile.biodata_export_button') }}</span>
+                <span class="text-xs font-medium text-red-500 dark:text-red-300">{{ __('profile.biodata_export_button_sub') }}</span>
             </a>
         </div>
     @endif

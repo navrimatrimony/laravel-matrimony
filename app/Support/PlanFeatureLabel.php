@@ -55,6 +55,7 @@ final class PlanFeatureLabel
             PlanFeatureKeys::INTEREST_VIEW_LIMIT,
             'photo_blur_limit',
             PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT,
+            PlanFeatureKeys::BIODATA_EXPORT_LIMIT,
         ], true);
     }
 
@@ -91,6 +92,8 @@ final class PlanFeatureLabel
             PlanFeatureKeys::PHOTO_FULL_ACCESS => __('subscriptions.pricing_feature_photo_full'),
             PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT => __('subscriptions.pricing_feature_who_viewed_preview'),
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => __('subscriptions.pricing_feature_mediator'),
+            PlanFeatureKeys::BIODATA_EXPORT_LIMIT => __('subscriptions.pricing_feature_biodata_export'),
+            PlanFeatureKeys::BIODATA_PREMIUM_TEMPLATES => __('subscriptions.pricing_feature_biodata_premium_templates'),
             PlanFeatureKeys::PROFILE_BOOST_PER_WEEK => __('subscriptions.pricing_feature_boost'),
             PlanFeatureKeys::PRIORITY_LISTING => __('subscriptions.pricing_feature_priority'),
             PlanFeatureKeys::ADVANCED_PROFILE_SEARCH => __('subscriptions.pricing_feature_advanced_search'),
@@ -136,6 +139,10 @@ final class PlanFeatureLabel
             }
 
             return trans_choice('subscriptions.who_viewed_catalog_see_n_profiles', (int) $v, ['count' => (int) $v]);
+        }
+
+        if ($key === PlanFeatureKeys::BIODATA_EXPORT_LIMIT) {
+            return trans_choice('subscriptions.pricing_feature_biodata_export_value', (int) $v, ['count' => (int) $v]);
         }
 
         return $v;
@@ -209,6 +216,7 @@ final class PlanFeatureLabel
             PlanFeatureKeys::PRIORITY_LISTING,
             PlanFeatureKeys::ADVANCED_PROFILE_SEARCH,
             PlanFeatureKeys::PROFILE_WHATSAPP_DIRECT,
+            PlanFeatureKeys::BIODATA_PREMIUM_TEMPLATES,
         ], true);
     }
 

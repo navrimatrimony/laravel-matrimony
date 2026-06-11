@@ -195,6 +195,7 @@ class FeatureUsageService
             self::FEATURE_WHO_VIEWED_ME_ACCESS => $this->stateForWhoViewedMeAccess($user),
             PlanFeatureKeys::INTEREST_SEND_LIMIT => $this->stateForInterestSendLimit($user),
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => $this->stateForMediatorRequestsMonthly($user),
+            PlanFeatureKeys::BIODATA_EXPORT_LIMIT => $this->stateForBiodataExportLimit($user),
             default => $this->stateForGenericEntitlementPlanFeature($user, $normalized),
         };
 
@@ -495,6 +496,18 @@ class FeatureUsageService
         );
 
         return $this->buildQuotaState($limit, $used, $this->resetAtForUsagePeriod(UserFeatureUsage::PERIOD_DAILY));
+    }
+
+    private function stateForBiodataExportLimit(User $user): array
+    {
+        $limit = app(SubscriptionService::class)->getFeatureLimit($user, PlanFeatureKeys::BIODATA_EXPORT_LIMIT);
+        $used = app(UserFeatureUsageService::class)->getUsage(
+            (int) $user->id,
+            UserFeatureUsageKeys::BIODATA_EXPORT_LIMIT,
+            UserFeatureUsage::PERIOD_MONTHLY,
+        );
+
+        return $this->buildQuotaState($limit, $used, $this->resetAtForUsagePeriod(UserFeatureUsage::PERIOD_MONTHLY));
     }
 
     /**
@@ -912,6 +925,7 @@ class FeatureUsageService
                     self::FEATURE_DAILY_PROFILE_VIEW_LIMIT => $this->consumeDailyProfileViewLimit($userId),
                     PlanFeatureKeys::INTEREST_SEND_LIMIT => $this->consumeInterestSendLimit($userId),
                     PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => $this->consumeMediatorMonthly($userId),
+                    PlanFeatureKeys::BIODATA_EXPORT_LIMIT => $this->consumeBiodataExportLimit($userId),
                     default => $this->consumeGenericEntitlementPlanFeature($userId, $normalized),
                 };
 
@@ -934,6 +948,7 @@ class FeatureUsageService
                 self::FEATURE_DAILY_PROFILE_VIEW_LIMIT => $this->consumeDailyProfileViewLimit($userId),
                 PlanFeatureKeys::INTEREST_SEND_LIMIT => $this->consumeInterestSendLimit($userId),
                 PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => $this->consumeMediatorMonthly($userId),
+                PlanFeatureKeys::BIODATA_EXPORT_LIMIT => $this->consumeBiodataExportLimit($userId),
                 default => $this->consumeGenericEntitlementPlanFeature($userId, $normalized),
             };
 
@@ -1008,6 +1023,26 @@ class FeatureUsageService
         app(UserFeatureUsageService::class)->incrementUsage(
             $userId,
             UserFeatureUsageKeys::MEDIATOR_REQUEST,
+            1,
+            UserFeatureUsage::PERIOD_MONTHLY,
+        );
+    }
+
+    private function consumeBiodataExportLimit(int $userId): void
+    {
+        $user = User::query()->find($userId);
+        if (! $user) {
+            return;
+        }
+
+        $limit = app(SubscriptionService::class)->getFeatureLimit($user, PlanFeatureKeys::BIODATA_EXPORT_LIMIT);
+        if ($this->isUnlimitedLimit($limit) || $limit === 0) {
+            return;
+        }
+
+        app(UserFeatureUsageService::class)->incrementUsage(
+            $userId,
+            UserFeatureUsageKeys::BIODATA_EXPORT_LIMIT,
             1,
             UserFeatureUsage::PERIOD_MONTHLY,
         );

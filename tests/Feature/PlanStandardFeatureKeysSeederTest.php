@@ -27,6 +27,8 @@ class PlanStandardFeatureKeysSeederTest extends TestCase
         $this->assertSame('3', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::INTEREST_SEND_LIMIT)->value('value'));
         $this->assertSame('2', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH)->value('value'));
         $this->assertSame('5', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT)->value('value'));
+        $this->assertSame('1', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::BIODATA_EXPORT_LIMIT)->value('value'));
+        $this->assertSame('0', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::BIODATA_PREMIUM_TEMPLATES)->value('value'));
     }
 
     public function test_gold_tier_has_priority_listing_and_unlimited_who_viewed_preview(): void
@@ -37,5 +39,7 @@ class PlanStandardFeatureKeysSeederTest extends TestCase
         $gold = Plan::query()->where('slug', 'gold_male')->firstOrFail();
         $this->assertSame('1', PlanFeature::query()->where('plan_id', $gold->id)->where('key', PlanFeatureKeys::PRIORITY_LISTING)->value('value'));
         $this->assertSame('-1', PlanFeature::query()->where('plan_id', $gold->id)->where('key', PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT)->value('value'));
+        $this->assertSame('-1', PlanFeature::query()->where('plan_id', $gold->id)->where('key', PlanFeatureKeys::BIODATA_EXPORT_LIMIT)->value('value'));
+        $this->assertSame('1', PlanFeature::query()->where('plan_id', $gold->id)->where('key', PlanFeatureKeys::BIODATA_PREMIUM_TEMPLATES)->value('value'));
     }
 }

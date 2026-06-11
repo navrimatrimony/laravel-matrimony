@@ -97,6 +97,8 @@ class SubscriptionPlansSeeder extends Seeder
             PlanFeatureKeys::PROFILE_BOOST_PER_WEEK => '0',
             PlanFeatureKeys::PRIORITY_LISTING => '0',
             PlanFeatureKeys::REFERRAL_BONUS_DAYS => '0',
+            PlanFeatureKeys::BIODATA_EXPORT_LIMIT => '1',
+            PlanFeatureKeys::BIODATA_PREMIUM_TEMPLATES => '0',
             SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT => '50',
             SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES => '0',
         ]);
@@ -112,6 +114,8 @@ class SubscriptionPlansSeeder extends Seeder
             FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS => '1',
             PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT => '0',
             PlanFeatureKeys::INTEREST_VIEW_LIMIT => '12',
+            PlanFeatureKeys::BIODATA_EXPORT_LIMIT => '5',
+            PlanFeatureKeys::BIODATA_PREMIUM_TEMPLATES => '0',
         ]);
 
         $silver = array_merge($free, [
@@ -128,6 +132,8 @@ class SubscriptionPlansSeeder extends Seeder
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => '5',
             PlanFeatureKeys::ADVANCED_PROFILE_SEARCH => '1',
             PlanFeatureKeys::PROFILE_WHATSAPP_DIRECT => '0',
+            PlanFeatureKeys::BIODATA_EXPORT_LIMIT => '20',
+            PlanFeatureKeys::BIODATA_PREMIUM_TEMPLATES => '1',
         ]);
 
         $gold = array_merge($silver, [
@@ -145,6 +151,8 @@ class SubscriptionPlansSeeder extends Seeder
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => '15',
             PlanFeatureKeys::ADVANCED_PROFILE_SEARCH => '1',
             PlanFeatureKeys::PROFILE_WHATSAPP_DIRECT => '1',
+            PlanFeatureKeys::BIODATA_EXPORT_LIMIT => '-1',
+            PlanFeatureKeys::BIODATA_PREMIUM_TEMPLATES => '1',
         ]);
 
         return [

@@ -5,6 +5,7 @@ use App\Http\Controllers\BlockController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ContactInboxController;
 use App\Http\Controllers\ContactRequestController;
+use App\Http\Controllers\BiodataExportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GunamilanController;
 use App\Http\Controllers\HelpCentreController;
@@ -201,6 +202,21 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
 
     Route::post('/matrimony/profile/upload-photo', [MatrimonyProfileController::class, 'storePhoto'])
         ->name('matrimony.profile.store-photo');
+
+    Route::get('/matrimony/profile/biodata', [BiodataExportController::class, 'index'])
+        ->name('matrimony.profile.biodata.index');
+    Route::get('/matrimony/profile/biodata/{template}/preview', [BiodataExportController::class, 'preview'])
+        ->where('template', '[A-Za-z0-9_-]+')
+        ->name('matrimony.profile.biodata.preview');
+    Route::get('/matrimony/profile/biodata/{template}/pdf', [BiodataExportController::class, 'pdf'])
+        ->where('template', '[A-Za-z0-9_-]+')
+        ->name('matrimony.profile.biodata.pdf');
+    Route::get('/matrimony/profile/biodata/{template}/print', [BiodataExportController::class, 'print'])
+        ->where('template', '[A-Za-z0-9_-]+')
+        ->name('matrimony.profile.biodata.print');
+    Route::get('/matrimony/profile/biodata/{template}/jpg', [BiodataExportController::class, 'jpg'])
+        ->where('template', '[A-Za-z0-9_-]+')
+        ->name('matrimony.profile.biodata.jpg');
 
     // User profile photo manager (gallery) — same-page actions.
     Route::post('/matrimony/profile/photos/{photo}/make-primary', [MatrimonyProfileController::class, 'makePrimary'])

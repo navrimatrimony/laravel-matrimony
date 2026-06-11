@@ -18,4 +18,7 @@ final class UserFeatureUsageKeys
 
     /** Daily counter: new profile rows recorded for {@see \App\Services\ProfilePhotoAccessService} (no-upload tier). */
     public const PHOTO_VIEW = 'photo_view';
+
+    /** Monthly bucket; same string as {@see PlanFeatureKeys::BIODATA_EXPORT_LIMIT}. */
+    public const BIODATA_EXPORT_LIMIT = PlanFeatureKeys::BIODATA_EXPORT_LIMIT;
 }

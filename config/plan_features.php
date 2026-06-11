@@ -77,6 +77,14 @@ return [
         'type' => 'days',
         'label' => 'Referral Bonus Days',
     ],
+    'biodata_export_limit' => [
+        'type' => 'limit',
+        'label' => 'Biodata PDF/JPG Export Limit',
+    ],
+    'biodata_premium_templates' => [
+        'type' => 'boolean',
+        'label' => 'Premium Biodata Templates',
+    ],
     'chat_can_read' => [
         'type' => 'boolean',
         'label' => 'Chat Read Access',

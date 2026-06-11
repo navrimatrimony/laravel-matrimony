@@ -61,6 +61,10 @@ final class PlanFeatureKeys
 
     public const REFERRAL_BONUS_DAYS = 'referral_bonus_days';
 
+    public const BIODATA_EXPORT_LIMIT = 'biodata_export_limit';
+
+    public const BIODATA_PREMIUM_TEMPLATES = 'biodata_premium_templates';
+
     /**
      * @return list<string>
      */
@@ -83,6 +87,8 @@ final class PlanFeatureKeys
             self::PRIORITY_LISTING,
             self::MEDIATOR_REQUESTS_PER_MONTH,
             self::REFERRAL_BONUS_DAYS,
+            self::BIODATA_EXPORT_LIMIT,
+            self::BIODATA_PREMIUM_TEMPLATES,
         ];
     }
 }
