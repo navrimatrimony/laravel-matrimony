@@ -73,6 +73,31 @@ class MutationService
         'is_suspended',
     ];
 
+    /** Legacy text keys retained for parsing/display only after master-ID normalization. Never write them to matrimony_profiles. */
+    private const DEPRECATED_CORE_TEXT_KEYS = [
+        'religion',
+        'caste',
+        'sub_caste',
+        'marital_status',
+        'complexion',
+        'physical_build',
+        'blood_group',
+        'family_type',
+        'mother_tongue',
+        'diet',
+        'smoking_status',
+        'drinking_status',
+    ];
+
+    /** Non-column core keys that are routed by setProfileAttribute(). */
+    private const ROUTED_CORE_KEYS = [
+        'location',
+        'location_id',
+        'address_line',
+        'work_city_id',
+        'work_state_id',
+    ];
+
     /** Lifecycle states that block manual edit (PART-5). */
     private const BLOCK_MANUAL_EDIT_STATES = [
         'intake_uploaded',
@@ -167,6 +192,7 @@ class MutationService
                 if ($mode === 'manual') {
                     $proposedCore = $this->stripPhotoModerationFromManualCore($proposedCore);
                 }
+                $proposedCore = $this->stripDeprecatedCoreTextKeys($proposedCore);
                 $proposedExtended = $this->proposedExtendedForManualSnapshotConflictDetection($snapshot);
                 $conflictRecords = [];
                 $conflictFieldNames = [];
@@ -769,6 +795,7 @@ class MutationService
 
                 // ——— Canonical controlled core (text → *_id): MUST run before conflict + field-lock so evaluation matches apply ———
                 $proposedCore = $this->normalizeIntakeCoreForApply($proposedCore);
+                $proposedCore = $this->stripDeprecatedCoreTextKeys($proposedCore);
                 app(\App\Services\OccupationService::class)->mergeLegacyCareerCoreForApply($proposedCore, (int) ($profile->user_id ?? 0) ?: null);
 
                 // ——— Step 3: Field-level conflict detection (ConflictDetectionService owns escalation) ———
@@ -1526,10 +1553,27 @@ class MutationService
         unset($snapshot['education_history'], $snapshot['career_history']);
         $snapshot = $this->mergePropertySnapshotIntoCoreText($snapshot);
         if (isset($snapshot['core']) && is_array($snapshot['core'])) {
-            unset($snapshot['core']['specialization'], $snapshot['core']['college_id']);
+            foreach (['specialization', 'college_id'] as $key) {
+                unset($snapshot['core'][$key]);
+            }
         }
 
         return $snapshot;
+    }
+
+    /**
+     * Keep parsed display text for normalizers/audit, but never let legacy text fields reach profile writes.
+     *
+     * @param  array<string, mixed>  $core
+     * @return array<string, mixed>
+     */
+    private function stripDeprecatedCoreTextKeys(array $core): array
+    {
+        foreach (self::DEPRECATED_CORE_TEXT_KEYS as $key) {
+            unset($core[$key]);
+        }
+
+        return $core;
     }
 
     /**
@@ -2267,8 +2311,25 @@ class MutationService
         }
         $keys = $query->pluck('field_key')->values()->all();
         $merged = array_values(array_unique(array_merge($keys ?: [], self::FALLBACK_CORE_KEYS)));
+        $merged = array_values(array_filter(
+            $merged,
+            fn (string $fieldKey): bool => $this->isWritableCoreFieldKey($fieldKey)
+        ));
 
         return $merged !== [] ? $merged : self::FALLBACK_CORE_KEYS;
+    }
+
+    private function isWritableCoreFieldKey(string $fieldKey): bool
+    {
+        if (in_array($fieldKey, self::DEPRECATED_CORE_TEXT_KEYS, true)) {
+            return false;
+        }
+
+        if (in_array($fieldKey, self::ROUTED_CORE_KEYS, true)) {
+            return true;
+        }
+
+        return Schema::hasColumn((new MatrimonyProfile)->getTable(), $fieldKey);
     }
 
     /**

@@ -10,6 +10,7 @@ use App\Services\MutationService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use Database\Seeders\MasterLookupSeeder;
 use Database\Seeders\MinimalLocationSeeder;
+use Database\Seeders\ReligionCasteSubCasteSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -25,6 +26,7 @@ class IntakeMergePreservesFilledFieldsTest extends TestCase
 
         $this->seed(MinimalLocationSeeder::class);
         $this->seed(MasterLookupSeeder::class);
+        $this->seed(ReligionCasteSubCasteSeeder::class);
         ProfileCanonicalResidenceService::forgetCachedMasters();
     }
 
@@ -83,6 +85,56 @@ class IntakeMergePreservesFilledFieldsTest extends TestCase
         $intake->refresh();
         $this->assertTrue((bool) $intake->intake_locked);
         $this->assertSame('applied', $intake->intake_status);
+    }
+
+    public function test_intake_apply_ignores_legacy_religion_caste_text_keys_after_master_id_resolution(): void
+    {
+        $user = User::factory()->create();
+        $profile = MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'full_name' => 'Community Candidate',
+        ]);
+        $this->attachResidence($profile);
+
+        $religionId = (int) DB::table('master_religions')->where('key', 'hindu')->value('id');
+        $casteId = (int) DB::table('master_castes')->where('key', 'maratha')->value('id');
+        $subCasteId = (int) DB::table('master_sub_castes')->where('key', '96_kuli')->value('id');
+
+        $snapshot = [
+            'snapshot_schema_version' => 1,
+            'core' => [
+                'full_name' => 'Community Candidate',
+                'religion' => 'Hindu',
+                'caste' => 'Maratha',
+                'sub_caste' => '96 Kuli',
+                'religion_id' => $religionId,
+                'caste_id' => $casteId,
+                'sub_caste_id' => $subCasteId,
+            ],
+            'contacts' => [],
+            'children' => [],
+        ];
+
+        $intake = BiodataIntake::create([
+            'raw_ocr_text' => 'test',
+            'uploaded_by' => $user->id,
+            'matrimony_profile_id' => $profile->id,
+            'parse_status' => 'parsed',
+            'intake_status' => 'approved',
+            'approved_by_user' => true,
+            'approved_at' => now(),
+            'approval_snapshot_json' => $snapshot,
+            'snapshot_schema_version' => 1,
+            'intake_locked' => false,
+        ]);
+
+        $result = app(MutationService::class)->applyApprovedIntake($intake->id);
+
+        $this->assertTrue($result['mutation_success'] ?? false, 'mutation should succeed');
+        $profile->refresh();
+        $this->assertSame($religionId, (int) $profile->religion_id);
+        $this->assertSame($casteId, (int) $profile->caste_id);
+        $this->assertSame($subCasteId, (int) $profile->sub_caste_id);
     }
 
     private function attachResidence(MatrimonyProfile $profile): void
