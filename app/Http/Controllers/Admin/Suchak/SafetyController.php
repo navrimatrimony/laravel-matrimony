@@ -9,6 +9,7 @@ use App\Models\SuchakPaymentFeatureFreeze;
 use App\Models\SuchakPayoutHold;
 use App\Models\SuchakProfileRepresentation;
 use App\Modules\Suchak\Services\SuchakAccountLifecycleService;
+use App\Modules\Suchak\Services\SuchakRiskComplianceCenterService;
 use App\Modules\Suchak\Services\SuchakSafetyService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,7 +20,7 @@ use InvalidArgumentException;
 
 class SafetyController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request, SuchakRiskComplianceCenterService $riskComplianceCenterService): View
     {
         $status = $request->query('status');
         $status = in_array($status, SuchakDispute::STATUSES, true) ? $status : null;
@@ -44,6 +45,7 @@ class SafetyController extends Controller
             'closingStatuses' => SuchakDispute::CLOSING_STATUSES,
             'priorities' => SuchakDispute::PRIORITIES,
             'stats' => $this->stats(),
+            'riskComplianceCenter' => $riskComplianceCenterService->summary(),
             'accounts' => SuchakAccount::query()
                 ->with('user')
                 ->withCount(['disputes', 'profileRepresentations'])

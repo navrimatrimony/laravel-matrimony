@@ -3,6 +3,11 @@
 @section('content')
 @php
     $label = fn (string $value) => ucfirst(str_replace('_', ' ', $value));
+    $riskSeverityClasses = [
+        'urgent' => 'bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-100',
+        'high' => 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100',
+        'medium' => 'bg-indigo-100 text-indigo-900 dark:bg-indigo-950 dark:text-indigo-100',
+    ];
 @endphp
 
 <div class="space-y-6">
@@ -65,6 +70,66 @@
             <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ number_format($stats['revokable_representations']) }}</div>
         </div>
     </div>
+
+    <section class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Risk + Compliance Center</h2>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Admin-only payment, trust, QR/PDF, and growth-risk signals linked to source evidence records.</p>
+            </div>
+            <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                Generated {{ $riskComplianceCenter['generated_at']->format('Y-m-d H:i') }}
+            </div>
+        </div>
+
+        <div class="mt-5 grid gap-4 xl:grid-cols-2">
+            @foreach ($riskComplianceCenter['panels'] as $panel)
+                <article class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">{{ $panel['title'] }}</h3>
+                                <span class="rounded-full px-2.5 py-1 text-xs font-semibold uppercase {{ $riskSeverityClasses[$panel['severity']] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200' }}">{{ $panel['severity'] }}</span>
+                            </div>
+                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $panel['description'] }}</p>
+                        </div>
+                        <div class="text-left sm:text-right">
+                            <div class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ number_format($panel['count']) }}</div>
+                            <a href="{{ $panel['queue_url'] }}" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-200">Open evidence queue</a>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 divide-y divide-gray-200 rounded-md border border-gray-200 bg-white dark:divide-gray-700 dark:border-gray-700 dark:bg-gray-800">
+                        @forelse ($panel['records'] as $record)
+                            <div class="p-3 text-sm">
+                                <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                                    <div>
+                                        <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $record['source_label'] }}</div>
+                                        <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                            {{ $record['suchak_name'] }} · {{ $record['status'] }} · {{ $record['occurred_at']?->format('Y-m-d H:i') ?: '-' }}
+                                        </div>
+                                        <p class="mt-2 text-gray-700 dark:text-gray-300">{{ $record['summary'] }}</p>
+                                        @if (! empty($record['badges']))
+                                            <div class="mt-2 flex flex-wrap gap-1">
+                                                @foreach ($record['badges'] as $badge)
+                                                    <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700 dark:bg-gray-900 dark:text-gray-200">{{ $badge['label'] }}: {{ $badge['value'] }}</span>
+                                                @endforeach
+                                            </div>
+                                        @endif
+                                    </div>
+                                    @if ($record['account_url'])
+                                        <a href="{{ $record['account_url'] }}" class="shrink-0 text-xs font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-200">Open source account</a>
+                                    @endif
+                                </div>
+                            </div>
+                        @empty
+                            <div class="p-4 text-sm text-gray-500 dark:text-gray-400">No current evidence records for this signal.</div>
+                        @endforelse
+                    </div>
+                </article>
+            @endforeach
+        </div>
+    </section>
 
     <section class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Open Dispute / Abuse Case</h2>
