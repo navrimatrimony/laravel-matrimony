@@ -18574,3 +18574,29 @@ Implementation boundary:
 * Suchak biodata export records are not reused for regular member profile export
 * runtime should reuse profile snapshot/read services where possible
 * no governed profile update()/save() path may be introduced by this export engine
+
+############################################################
+MEMBER GUNAMILAN REPORT EXPORT ADDENDUM
+############################################################
+
+Goal:
+
+Allow a logged-in member to view and export an A4 read-only Gunamilan report for another visible profile using the existing Gunamilan calculation engine.
+
+Rules:
+
+* report export must reuse the same visibility, block, lifecycle, and own-profile denial rules as the Gunamilan web page
+* report export must derive only from saved horoscope/profile data
+* report export must not mutate matrimony profile data
+* report export must not store Gunamilan result snapshots as JSON blobs or parallel structured tables
+* report copy must be advisory, not a guarantee of marriage success or compatibility
+* high-risk koota results such as Nadi or Bhakoot mismatch must be shown as review points, not hidden
+* missing horoscope data must remain visible in both web and export surfaces
+* PDF is the primary supported report export
+* JPG rendering is allowed only when the server has a verified PDF-to-image renderer available; otherwise it must fail visibly
+
+Implementation boundary:
+
+* GunamilanService remains the single calculation source
+* export/report services may add presentation explanations only
+* no governed profile update()/save() path may be introduced by this report engine

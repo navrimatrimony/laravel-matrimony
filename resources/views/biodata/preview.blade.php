@@ -3,6 +3,7 @@
 @section('content')
 @php
     $allowed = (bool) ($exportState['allowed'] ?? false);
+    $templateView = (string) ($template['view'] ?? 'biodata.templates.a4');
 @endphp
 
 <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6">
@@ -22,7 +23,7 @@
     </div>
 
     <div class="overflow-auto rounded-lg border border-gray-200 bg-gray-100 p-4 shadow-inner dark:border-gray-700 dark:bg-gray-950">
-        @include('biodata.templates.a4', ['payload' => $payload, 'template' => $template, 'pdfMode' => false])
+        @include($templateView, ['payload' => $payload, 'template' => $template, 'pdfMode' => false])
     </div>
 </div>
 @endsection

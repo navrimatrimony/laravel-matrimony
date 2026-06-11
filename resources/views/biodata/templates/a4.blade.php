@@ -4,9 +4,14 @@
     $withPhoto = (bool) ($template['with_photo'] ?? false);
     $photoUri = $withPhoto ? (string) ($payload['photo']['data_uri'] ?? '') : '';
     $isLandscape = $orientation === 'landscape';
+    $ganeshPath = public_path('images/report-assets/ganesh-color.png');
+    $ganeshUri = is_file($ganeshPath) ? 'data:image/png;base64,'.base64_encode(file_get_contents($ganeshPath)) : '';
+    $reportFontCss = \App\Support\ReportFontAssets::fontFaceCss();
+    $reportFontStack = \App\Support\ReportFontAssets::cssFontStack();
 @endphp
 
 <style>
+{!! $reportFontCss !!}
 @page {
     size: A4 {{ $orientation }};
     margin: 0;
@@ -18,13 +23,13 @@
     margin: 0 auto;
     background: #fffdf8;
     color: #1f2937;
-    font-family: "DejaVu Sans", "Noto Sans Devanagari", sans-serif;
-    line-height: 1.32;
+    font-family: {!! $reportFontStack !!};
+    line-height: 1.14;
     padding: {{ $isLandscape ? '13mm' : '14mm' }};
 }
 .biodata-export-frame {
     min-height: {{ $isLandscape ? '184mm' : '269mm' }};
-    padding: {{ $isLandscape ? '8mm' : '9mm' }};
+    padding: {{ $isLandscape ? '14mm 8mm 8mm' : '16mm 9mm 9mm' }};
     position: relative;
 }
 .biodata-export-frame.border-classic {
@@ -44,12 +49,38 @@
 }
 .biodata-export-header {
     border-bottom: 1px solid #f1c9a0;
-    margin-bottom: 7mm;
-    padding-bottom: 5mm;
+    margin-bottom: 4mm;
+    padding-bottom: 3mm;
+}
+.biodata-export-border-ganesh {
+    position: absolute;
+    top: {{ $isLandscape ? '-10mm' : '-11mm' }};
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 38mm;
+    padding: 0 5mm 1.2mm;
+    background: #fffdf8;
+    text-align: center;
+    z-index: 2;
+}
+.biodata-export-ganesh {
+    width: {{ $isLandscape ? '13mm' : '15mm' }};
+    height: {{ $isLandscape ? '17mm' : '20mm' }};
+    object-fit: contain;
+    display: block;
+    margin: 0 auto;
+}
+.biodata-export-prayer {
+    margin-top: 0.4mm;
+    color: #991b1b;
+    font-size: 11.5px;
+    font-weight: 800;
+    white-space: nowrap;
+    text-align: center;
 }
 .biodata-export-topline {
     color: #991b1b;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0;
     text-transform: uppercase;
@@ -68,21 +99,21 @@
     padding-right: 8mm;
 }
 .biodata-export-name {
-    margin: 2mm 0 0;
+    margin: 1.5mm 0 0;
     color: #111827;
-    font-size: {{ $isLandscape ? '25px' : '24px' }};
+    font-size: {{ $isLandscape ? '30px' : '29px' }};
     font-weight: 800;
     letter-spacing: 0;
 }
 .biodata-export-headline {
-    margin-top: 2mm;
+    margin-top: 1.4mm;
     color: #4b5563;
-    font-size: 12px;
+    font-size: 16px;
 }
 .biodata-export-meta {
-    margin-top: 3mm;
+    margin-top: 2mm;
     color: #6b7280;
-    font-size: 9px;
+    font-size: 11px;
 }
 .biodata-export-photo-block {
     width: 36mm;
@@ -100,13 +131,13 @@
 .biodata-export-section {
     break-inside: avoid;
     page-break-inside: avoid;
-    margin: 0 0 5mm;
+    margin: 0 0 2.8mm;
 }
 .biodata-export-section-title {
-    margin: 0 0 2mm;
+    margin: 0 0 1.2mm;
     border-bottom: 1px solid #e5e7eb;
     color: #991b1b;
-    font-size: 12px;
+    font-size: 16px;
     font-weight: 800;
     padding-bottom: 1mm;
 }
@@ -114,16 +145,16 @@
     display: table;
     width: 100%;
     border-bottom: 1px dotted #ead7c0;
-    padding: 1.2mm 0;
+    padding: 0.65mm 0;
 }
 .biodata-export-label,
 .biodata-export-value {
     display: table-cell;
     vertical-align: top;
-    font-size: 10.5px;
+    font-size: 15px;
 }
 .biodata-export-label {
-    width: 37%;
+    width: 36%;
     color: #6b7280;
     font-weight: 700;
     padding-right: 2mm;
@@ -132,21 +163,35 @@
     color: #111827;
 }
 .biodata-export-group {
-    margin-top: 2mm;
+    margin-top: 1.3mm;
 }
 .biodata-export-group-title {
     color: #374151;
-    font-size: 10.5px;
+    font-size: 14.5px;
     font-weight: 800;
     margin-bottom: 1mm;
 }
 .biodata-export-list {
     margin: 0;
-    padding-left: 4mm;
+    padding-left: 3.5mm;
 }
 .biodata-export-list li {
-    margin-bottom: 1mm;
-    font-size: 10.2px;
+    margin-bottom: 0.55mm;
+    font-size: 14px;
+}
+.biodata-export-blessing {
+    margin-top: 2.5mm;
+    color: #991b1b;
+    font-size: 15px;
+    font-weight: 800;
+    text-align: center;
+}
+.biodata-export-brand-footer {
+    margin-top: 1.4mm;
+    color: #7f1d1d;
+    font-size: 12px;
+    font-weight: 800;
+    text-align: center;
 }
 .biodata-export-empty {
     color: #6b7280;
@@ -161,15 +206,21 @@
 
 <div class="biodata-export-sheet">
     <div class="biodata-export-frame border-{{ $border }}">
+        @if ($ganeshUri !== '')
+            <div class="biodata-export-border-ganesh">
+                <img class="biodata-export-ganesh" src="{{ $ganeshUri }}" alt="Ganesh">
+                <div class="biodata-export-prayer">{{ __('profile.biodata_export_prayer') }}</div>
+            </div>
+        @endif
         <header class="biodata-export-header">
             <div class="biodata-export-title-row">
                 <div class="biodata-export-title-block">
-                    <div class="biodata-export-topline">Biodata</div>
+                    <div class="biodata-export-topline">{{ __('profile.biodata_export_topline') }}</div>
                     <h1 class="biodata-export-name">{{ $payload['title'] }}</h1>
                     @if (! empty($payload['headline']))
                         <div class="biodata-export-headline">{{ $payload['headline'] }}</div>
                     @endif
-                    <div class="biodata-export-meta">Generated from saved profile on {{ $payload['generated_at'] }}</div>
+                    <div class="biodata-export-meta">{{ __('profile.biodata_export_generated_on', ['date' => $payload['generated_at']]) }}</div>
                 </div>
                 @if ($photoUri !== '')
                     <div class="biodata-export-photo-block">
@@ -189,7 +240,7 @@
                             <div class="biodata-export-label">{{ $row['label'] ?? '' }}</div>
                             <div class="biodata-export-value">
                                 @if (! empty($row['locked']) && trim((string) ($row['value'] ?? '')) === '')
-                                    <span class="biodata-export-empty">Not disclosed</span>
+                                    <span class="biodata-export-empty">{{ __('profile.biodata_export_not_disclosed') }}</span>
                                 @else
                                     {{ $row['value'] ?? '' }}
                                 @endif
@@ -212,7 +263,7 @@
 
                     @foreach (($section['marriage_blocks'] ?? []) as $block)
                         <div class="biodata-export-group">
-                            <div class="biodata-export-group-title">Marriage details</div>
+                            <div class="biodata-export-group-title">{{ __('profile.biodata_export_marriage_details') }}</div>
                             <ul class="biodata-export-list">
                                 @foreach ($block as $line)
                                     <li>{{ $line }}</li>
@@ -222,8 +273,10 @@
                     @endforeach
                 </section>
             @empty
-                <p class="biodata-export-empty">No profile details are available yet.</p>
+                <p class="biodata-export-empty">{{ __('profile.biodata_export_empty') }}</p>
             @endforelse
         </main>
+        <div class="biodata-export-blessing">{{ __('profile.biodata_export_blessing') }}</div>
     </div>
+    <div class="biodata-export-brand-footer">{{ __('profile.biodata_export_brand_footer') }}</div>
 </div>

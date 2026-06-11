@@ -243,6 +243,12 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
     // 🔒 SSOT: MatrimonyProfile route MUST use matrimony_profile_id
     Route::get('/profile/{matrimony_profile_id}/gunamilan', [GunamilanController::class, 'show'])
         ->name('matrimony.profile.gunamilan');
+    Route::get('/profile/{matrimony_profile_id}/gunamilan/print', [GunamilanController::class, 'print'])
+        ->name('matrimony.profile.gunamilan.print');
+    Route::get('/profile/{matrimony_profile_id}/gunamilan/pdf', [GunamilanController::class, 'pdf'])
+        ->name('matrimony.profile.gunamilan.pdf');
+    Route::get('/profile/{matrimony_profile_id}/gunamilan/jpg', [GunamilanController::class, 'jpg'])
+        ->name('matrimony.profile.gunamilan.jpg');
 
     Route::get('/profile/{matrimony_profile_id}', [MatrimonyProfileController::class, 'show'])
         ->name('matrimony.profile.show');

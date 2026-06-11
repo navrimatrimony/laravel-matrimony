@@ -5,12 +5,15 @@ namespace Tests\Feature\BiodataExport;
 use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
 use App\Models\Plan;
+use App\Models\ProfileHoroscopeData;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\UserFeatureUsage;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use App\Services\PlanQuotaCheckoutSnapshot;
 use App\Support\UserFeatureUsageKeys;
+use Database\Seeders\MasterLookupSeeder;
+use Database\Seeders\MasterMotherTongueDietLifestyleSeeder;
 use Database\Seeders\MinimalLocationSeeder;
 use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -31,8 +34,32 @@ class BiodataExportRouteTest extends TestCase
             ->assertOk()
             ->assertSee('Download Biodata')
             ->assertSee('Classic Portrait')
+            ->assertSee('Parichay Patra')
+            ->assertSee('Full Photo Side Biodata')
             ->assertSee('PDF')
             ->assertSee('JPG');
+
+        $this->actingAs($user)
+            ->get(route('matrimony.profile.biodata.preview', 'classic_portrait_no_photo'))
+            ->assertOk()
+            ->assertSee('ReportDevanagari', false)
+            ->assertSee('data:image/png;base64', false);
+
+        $this->actingAs($user)
+            ->get(route('matrimony.profile.biodata.preview', 'parichay_patra_photo'))
+            ->assertOk()
+            ->assertSee('Parichay Patra')
+            ->assertSee('parichay-frame', false)
+            ->assertSee('parichay-top-medallion', false)
+            ->assertSee('parichay-brand-footer', false);
+
+        $this->actingAs($user)
+            ->get(route('matrimony.profile.biodata.preview', 'photo_side_biodata'))
+            ->assertOk()
+            ->assertSee('Full Photo Side Biodata')
+            ->assertSee('photo-side-frame', false)
+            ->assertSee('photo-side-photo-cell', false)
+            ->assertSee('photo-side-info-cell', false);
     }
 
     public function test_pdf_download_consumes_monthly_biodata_quota_without_mutating_profile(): void
@@ -44,6 +71,48 @@ class BiodataExportRouteTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('matrimony.profile.biodata.pdf', 'classic_portrait_no_photo'))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+
+        $this->assertDatabaseHas('user_feature_usages', [
+            'user_id' => $user->id,
+            'feature_key' => UserFeatureUsageKeys::BIODATA_EXPORT_LIMIT,
+            'period' => UserFeatureUsage::PERIOD_MONTHLY,
+            'used_count' => 1,
+        ]);
+        $this->assertSame($updatedAtBefore, (string) $profile->fresh()->updated_at);
+    }
+
+    public function test_parichay_patra_is_free_and_exports_as_pdf(): void
+    {
+        $user = $this->userWithProfileAndSubscription('basic_male');
+        $profile = $user->matrimonyProfile;
+        $profile->update(['updated_at' => now()->subDay()]);
+        $updatedAtBefore = (string) $profile->fresh()->updated_at;
+
+        $this->actingAs($user)
+            ->get(route('matrimony.profile.biodata.pdf', 'parichay_patra_photo'))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+
+        $this->assertDatabaseHas('user_feature_usages', [
+            'user_id' => $user->id,
+            'feature_key' => UserFeatureUsageKeys::BIODATA_EXPORT_LIMIT,
+            'period' => UserFeatureUsage::PERIOD_MONTHLY,
+            'used_count' => 1,
+        ]);
+        $this->assertSame($updatedAtBefore, (string) $profile->fresh()->updated_at);
+    }
+
+    public function test_photo_side_biodata_is_free_and_exports_as_pdf(): void
+    {
+        $user = $this->userWithProfileAndSubscription('basic_male');
+        $profile = $user->matrimonyProfile;
+        $profile->update(['updated_at' => now()->subDay()]);
+        $updatedAtBefore = (string) $profile->fresh()->updated_at;
+
+        $this->actingAs($user)
+            ->get(route('matrimony.profile.biodata.pdf', 'photo_side_biodata'))
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf');
 
@@ -71,6 +140,83 @@ class BiodataExportRouteTest extends TestCase
             ->get(route('matrimony.profile.biodata.preview', 'double_portrait_photo'))
             ->assertOk()
             ->assertSee('Double Border Portrait');
+    }
+
+    public function test_marathi_biodata_preview_localizes_options_and_hides_non_print_fields(): void
+    {
+        $user = $this->userWithProfileAndSubscription('basic_male');
+        $this->seed(MasterLookupSeeder::class);
+        $this->seed(MasterMotherTongueDietLifestyleSeeder::class);
+
+        $profile = $user->matrimonyProfile;
+        $profile->forceFill([
+            'marital_status_id' => DB::table('master_marital_statuses')->where('key', 'divorced')->value('id'),
+            'complexion_id' => DB::table('master_complexions')->where('key', 'very_fair')->value('id'),
+            'physical_build_id' => DB::table('master_physical_builds')->where('key', 'slim')->value('id'),
+            'blood_group_id' => DB::table('master_blood_groups')->where('key', 'B-')->value('id'),
+            'family_type_id' => DB::table('master_family_types')->where('key', 'nuclear')->value('id'),
+            'mother_tongue_id' => DB::table('master_mother_tongues')->where('key', 'marathi')->value('id'),
+        ])->save();
+
+        DB::table('profile_children')->insert([
+            'profile_id' => $profile->id,
+            'child_name' => '',
+            'gender' => 'male',
+            'age' => 10,
+            'child_living_with_id' => DB::table('master_child_living_with')->where('key', 'with_parent')->value('id'),
+            'sort_order' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        ProfileHoroscopeData::query()->create([
+            'profile_id' => $profile->id,
+            'rashi_id' => DB::table('master_rashis')->where('key', 'mithuna')->value('id'),
+            'nakshatra_id' => DB::table('master_nakshatras')->where('key', 'punarvasu')->value('id'),
+            'gan_id' => DB::table('master_gans')->where('key', 'deva')->value('id'),
+            'nadi_id' => DB::table('master_nadis')->where('key', 'adi')->value('id'),
+            'yoni_id' => DB::table('master_yonis')->where('key', 'cat')->value('id'),
+            'birth_weekday' => 'Saturday',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('matrimony.profile.biodata.preview', ['parichay_patra_photo', 'locale' => 'mr']))
+            ->assertOk()
+            ->assertSee('parichay-top-medallion', false)
+            ->assertSee('parichay-brand-footer', false)
+            ->assertSee('|| परिचय पत्र ||')
+            ->assertSee('श्री गणेशाय नमः')
+            ->assertSee('| शुभं भवतु |')
+            ->assertSee('हा बायोडाटा https://navrimilenavryala.com मधून तयार केला आहे.')
+            ->assertSee('बायोडाटा')
+            ->assertSee('वैवाहिक स्थिती')
+            ->assertSee('घटस्फोटित')
+            ->assertSee('वर्ण')
+            ->assertSee('अतिशय गोरी')
+            ->assertSee('रक्तगट')
+            ->assertSee('बी निगेटिव्ह')
+            ->assertSee('मूल')
+            ->assertSee('10 वर्ष')
+            ->assertSee('मुलगा')
+            ->assertSee('माझ्याबरोबर')
+            ->assertSee('राशी')
+            ->assertSee('मिथुन')
+            ->assertSee('नक्षत्र')
+            ->assertSee('पुनर्वसू')
+            ->assertSee('गण')
+            ->assertSee('देव')
+            ->assertSee('नाडी')
+            ->assertSee('आदि')
+            ->assertSee('योनी')
+            ->assertSee('मांजर')
+            ->assertSee('जन्मवार')
+            ->assertSee('शनिवार')
+            ->assertDontSee('Gender')
+            ->assertDontSee('Mother tongue')
+            ->assertDontSee('Physical Build')
+            ->assertDontSee('Family Type')
+            ->assertDontSee('Child 1')
+            ->assertDontSee('Male');
     }
 
     public function test_exhausted_biodata_quota_blocks_download_without_usage_increment(): void

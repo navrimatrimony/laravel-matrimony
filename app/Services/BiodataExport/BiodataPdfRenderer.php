@@ -2,6 +2,7 @@
 
 namespace App\Services\BiodataExport;
 
+use App\Support\ReportFontAssets;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 final class BiodataPdfRenderer
@@ -21,7 +22,8 @@ final class BiodataPdfRenderer
             ->setOptions([
                 'isHtml5ParserEnabled' => true,
                 'isRemoteEnabled' => false,
-                'defaultFont' => 'DejaVu Sans',
+                'chroot' => ReportFontAssets::chrootDirectories(),
+                'defaultFont' => 'ReportDevanagari',
             ])
             ->output();
     }
