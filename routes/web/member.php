@@ -6,6 +6,7 @@ use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ContactInboxController;
 use App\Http\Controllers\ContactRequestController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GunamilanController;
 use App\Http\Controllers\HelpCentreController;
 use App\Http\Controllers\IntakeController;
 use App\Http\Controllers\InterestController;
@@ -224,6 +225,9 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
         ->name('matrimony.profiles.index');
 
     // 🔒 SSOT: MatrimonyProfile route MUST use matrimony_profile_id
+    Route::get('/profile/{matrimony_profile_id}/gunamilan', [GunamilanController::class, 'show'])
+        ->name('matrimony.profile.gunamilan');
+
     Route::get('/profile/{matrimony_profile_id}', [MatrimonyProfileController::class, 'show'])
         ->name('matrimony.profile.show');
 
