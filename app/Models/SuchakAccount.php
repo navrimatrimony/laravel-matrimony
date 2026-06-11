@@ -251,6 +251,26 @@ class SuchakAccount extends Model
         return $this->hasMany(SuchakGrowthReward::class);
     }
 
+    public function campaignQualifications(): HasMany
+    {
+        return $this->hasMany(SuchakCampaignQualification::class);
+    }
+
+    public function loyaltyTierSnapshots(): HasMany
+    {
+        return $this->hasMany(SuchakLoyaltyTierSnapshot::class);
+    }
+
+    public function monthlyValueReports(): HasMany
+    {
+        return $this->hasMany(SuchakMonthlyValueReport::class);
+    }
+
+    public function retentionOffers(): HasMany
+    {
+        return $this->hasMany(SuchakRetentionOffer::class);
+    }
+
     public function leadAllocationPreferences(): HasMany
     {
         return $this->hasMany(SuchakLeadAllocationPreference::class);

@@ -30,6 +30,7 @@ class SuchakPolicyService
     public const KEY_SUCHAK_VISIT_CONFIRMATION_POLICY_MODE = 'suchak_visit_confirmation_policy_mode';
     public const KEY_SUCHAK_LEAD_ALLOCATION_POLICY_MODE = 'suchak_lead_allocation_policy_mode';
     public const KEY_SUCHAK_LEAD_ALLOCATION_SLA_HOURS = 'suchak_lead_allocation_sla_hours';
+    public const KEY_SUCHAK_LOYALTY_TIER_POLICY_JSON = 'suchak_loyalty_tier_policy_json';
 
     public const DEFAULT_CONSENT_VALIDITY_MONTHS = 12;
     public const DEFAULT_REQUEST_ACTION_SLA_HOURS = 48;
@@ -48,6 +49,11 @@ class SuchakPolicyService
     public const DEFAULT_SUCHAK_VISIT_CONFIRMATION_POLICY_MODE = SuchakVisitConfirmation::POLICY_USER_AND_ADMIN;
     public const DEFAULT_SUCHAK_LEAD_ALLOCATION_POLICY_MODE = SuchakPlatformLead::POLICY_AREA_COMMUNITY_ROTATION;
     public const DEFAULT_SUCHAK_LEAD_ALLOCATION_SLA_HOURS = 48;
+    public const DEFAULT_SUCHAK_LOYALTY_TIER_POLICY = [
+        ['tier_key' => 'starter', 'tier_label' => 'Starter', 'minimum_score' => 0],
+        ['tier_key' => 'growth', 'tier_label' => 'Growth', 'minimum_score' => 40],
+        ['tier_key' => 'partner', 'tier_label' => 'Partner', 'minimum_score' => 70],
+    ];
     public const DEFAULT_SUCHAK_COMMISSION_RULES = [
         'mode' => 'to_be_discussed',
         'default_percent' => 0,
@@ -269,6 +275,22 @@ class SuchakPolicyService
             self::KEY_SUCHAK_LEAD_ALLOCATION_SLA_HOURS,
             self::DEFAULT_SUCHAK_LEAD_ALLOCATION_SLA_HOURS,
         );
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function loyaltyTierPolicy(): array
+    {
+        $tiers = $this->array(
+            self::KEY_SUCHAK_LOYALTY_TIER_POLICY_JSON,
+            self::DEFAULT_SUCHAK_LOYALTY_TIER_POLICY,
+        );
+
+        return array_values(array_filter($tiers, function (mixed $tier): bool {
+            return is_array($tier)
+                && isset($tier['tier_key'], $tier['tier_label'], $tier['minimum_score']);
+        }));
     }
 
     /**
