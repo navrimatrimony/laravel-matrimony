@@ -55,6 +55,11 @@ class SuchakBiodataIntakeLink extends Model
         return $this->hasOne(SuchakCustomerContext::class, 'source_link_id');
     }
 
+    public function offlineCampIntakeLink(): HasOne
+    {
+        return $this->hasOne(SuchakOfflineCampIntakeLink::class, 'source_link_id');
+    }
+
     public function delete(): ?bool
     {
         throw new RuntimeException('Suchak biodata intake source links cannot be deleted.');

@@ -9,7 +9,9 @@ use App\Http\Controllers\Suchak\CrossSearchController;
 use App\Http\Controllers\Suchak\CustomerPortalController;
 use App\Http\Controllers\Suchak\DashboardController;
 use App\Http\Controllers\Suchak\DirectPaymentComplaintController;
+use App\Http\Controllers\Suchak\ExportRetentionController;
 use App\Http\Controllers\Suchak\IntakeSourceController;
+use App\Http\Controllers\Suchak\OfflineCampController;
 use App\Http\Controllers\Suchak\PaymentRequestPublicController;
 use App\Http\Controllers\Suchak\PlanPaymentController;
 use App\Http\Controllers\Suchak\ProfileUpdateSuggestionController;
@@ -160,6 +162,31 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
         Route::post('/training-academy/message-templates/{messageTemplate}/use', [TrainingAcademyController::class, 'useTemplate'])
             ->middleware('throttle:20,1')
             ->name('training-academy.message-templates.use');
+        Route::get('/export-retention', [ExportRetentionController::class, 'index'])
+            ->name('export-retention.index');
+        Route::post('/export-retention/exports', [ExportRetentionController::class, 'store'])
+            ->middleware('throttle:10,1')
+            ->name('export-retention.exports.store');
+        Route::get('/export-retention/exports/{businessExport}/download', [ExportRetentionController::class, 'download'])
+            ->middleware('throttle:30,1')
+            ->name('export-retention.exports.download');
+        Route::get('/offline-camps', [OfflineCampController::class, 'index'])
+            ->name('offline-camps.index');
+        Route::post('/offline-camps', [OfflineCampController::class, 'store'])
+            ->middleware('throttle:10,1')
+            ->name('offline-camps.store');
+        Route::post('/offline-camps/{offlineCamp}/intakes', [OfflineCampController::class, 'uploadIntake'])
+            ->middleware('throttle:20,1')
+            ->name('offline-camps.intakes.store');
+        Route::post('/offline-camps/{offlineCamp}/source-links', [OfflineCampController::class, 'linkSourceLinks'])
+            ->middleware('throttle:20,1')
+            ->name('offline-camps.source-links.store');
+        Route::post('/offline-camps/intake-links/{campIntakeLink}/package-assignments', [OfflineCampController::class, 'assignPackage'])
+            ->middleware('throttle:20,1')
+            ->name('offline-camps.intake-links.package-assignments.store');
+        Route::post('/offline-camps/{offlineCamp}/conversion-reports', [OfflineCampController::class, 'generateReport'])
+            ->middleware('throttle:10,1')
+            ->name('offline-camps.conversion-reports.generate');
         Route::post('/collaborations', [CollaborationController::class, 'store'])
             ->middleware('throttle:15,1')
             ->name('collaborations.store');

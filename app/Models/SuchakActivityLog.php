@@ -211,6 +211,12 @@ class SuchakActivityLog extends Model
 
     public const ACTION_PLATFORM_LEAD_STATUS_CHANGED = 'platform_lead_status_changed';
 
+    public const ACTION_BUSINESS_EXPORT_CREATED = 'business_export_created';
+
+    public const ACTION_BUSINESS_EXPORT_DOWNLOADED = 'business_export_downloaded';
+
+    public const ACTION_RETENTION_ARCHIVE_RUN_CREATED = 'retention_archive_run_created';
+
     protected $table = 'suchak_activity_logs';
 
     protected $fillable = [

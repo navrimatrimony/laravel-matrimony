@@ -69,3 +69,12 @@ Schedule::command('governance:queue-health')
     ->name('governance-queue-health')
     ->withoutOverlapping(25)
     ->onOneServer();
+
+/*
+| Suchak scheduled operations (Phase 6 Day-59 consolidation).
+*/
+Schedule::command('suchak:scheduled-jobs')
+    ->dailyAt('04:00')
+    ->name('suchak-scheduled-jobs')
+    ->withoutOverlapping(120)
+    ->onOneServer();

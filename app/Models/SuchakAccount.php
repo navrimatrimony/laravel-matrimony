@@ -286,6 +286,41 @@ class SuchakAccount extends Model
         return $this->hasMany(SuchakMessageTemplateUsage::class);
     }
 
+    public function offlineCamps(): HasMany
+    {
+        return $this->hasMany(SuchakOfflineCamp::class);
+    }
+
+    public function offlineCampIntakeLinks(): HasMany
+    {
+        return $this->hasMany(SuchakOfflineCampIntakeLink::class);
+    }
+
+    public function offlineCampPackageAssignments(): HasMany
+    {
+        return $this->hasMany(SuchakOfflineCampPackageAssignment::class);
+    }
+
+    public function offlineCampConversionReports(): HasMany
+    {
+        return $this->hasMany(SuchakOfflineCampConversionReport::class);
+    }
+
+    public function businessExports(): HasMany
+    {
+        return $this->hasMany(SuchakBusinessExport::class);
+    }
+
+    public function retentionArchiveRuns(): HasMany
+    {
+        return $this->hasMany(SuchakRetentionArchiveRun::class);
+    }
+
+    public function scheduledJobRuns(): HasMany
+    {
+        return $this->hasMany(SuchakScheduledJobRun::class, 'account_scope_id');
+    }
+
     public function leadAllocationPreferences(): HasMany
     {
         return $this->hasMany(SuchakLeadAllocationPreference::class);

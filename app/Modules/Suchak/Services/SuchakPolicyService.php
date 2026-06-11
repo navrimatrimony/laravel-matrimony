@@ -31,6 +31,7 @@ class SuchakPolicyService
     public const KEY_SUCHAK_LEAD_ALLOCATION_POLICY_MODE = 'suchak_lead_allocation_policy_mode';
     public const KEY_SUCHAK_LEAD_ALLOCATION_SLA_HOURS = 'suchak_lead_allocation_sla_hours';
     public const KEY_SUCHAK_LOYALTY_TIER_POLICY_JSON = 'suchak_loyalty_tier_policy_json';
+    public const KEY_SUCHAK_EXPORT_RETENTION_POLICY_JSON = 'suchak_export_retention_policy_json';
 
     public const DEFAULT_CONSENT_VALIDITY_MONTHS = 12;
     public const DEFAULT_REQUEST_ACTION_SLA_HOURS = 48;
@@ -53,6 +54,13 @@ class SuchakPolicyService
         ['tier_key' => 'starter', 'tier_label' => 'Starter', 'minimum_score' => 0],
         ['tier_key' => 'growth', 'tier_label' => 'Growth', 'minimum_score' => 40],
         ['tier_key' => 'partner', 'tier_label' => 'Partner', 'minimum_score' => 70],
+    ];
+    public const DEFAULT_SUCHAK_EXPORT_RETENTION_POLICY = [
+        'private_contact_export_requires_admin_approval' => true,
+        'business_export_audit_required' => true,
+        'archive_job_deletes_source_records' => false,
+        'financial_record_retention_days' => 2555,
+        'dispute_record_retention_days' => 3650,
     ];
     public const DEFAULT_SUCHAK_COMMISSION_RULES = [
         'mode' => 'to_be_discussed',
@@ -291,6 +299,17 @@ class SuchakPolicyService
             return is_array($tier)
                 && isset($tier['tier_key'], $tier['tier_label'], $tier['minimum_score']);
         }));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function exportRetentionPolicy(): array
+    {
+        return $this->array(
+            self::KEY_SUCHAK_EXPORT_RETENTION_POLICY_JSON,
+            self::DEFAULT_SUCHAK_EXPORT_RETENTION_POLICY,
+        );
     }
 
     /**
