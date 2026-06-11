@@ -102,6 +102,56 @@
         </div>
     </div>
 
+    <section id="white-label-sharing-kit" class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">White-label Sharing Kit</h2>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Platform-verified Suchak assets with masked candidate details, QR verification, and powered-by footer.</p>
+            </div>
+            <span class="inline-flex w-fit rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-100">
+                {{ count($sharingKit['assets']) }} generated
+            </span>
+        </div>
+
+        @unless ($sharingKit['is_publicly_routable'])
+            <div class="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+                Public profile assets need verified Suchak status with public listing active.
+            </div>
+        @endunless
+
+        <div class="mt-5 grid gap-4 lg:grid-cols-2">
+            @forelse ($sharingKit['assets'] as $asset)
+                <article class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{{ $asset['label'] }}</p>
+                            <h3 class="mt-1 text-base font-semibold text-gray-900 dark:text-gray-100">{{ $asset['title'] }}</h3>
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $asset['source_type'] }} #{{ $asset['source_id'] }}</p>
+                        </div>
+                        @if (! empty($asset['qr_data_uri']))
+                            <img src="{{ $asset['qr_data_uri'] }}" alt="{{ $asset['label'] }} QR" class="h-28 w-28 rounded-md border border-gray-200 bg-white p-2 dark:border-gray-700">
+                        @endif
+                    </div>
+                    <dl class="mt-4 grid gap-2 text-sm text-gray-700 dark:text-gray-300 sm:grid-cols-2">
+                        @foreach ($asset['lines'] as $line)
+                            <div class="rounded-md bg-white px-3 py-2 dark:bg-gray-800">{{ $line }}</div>
+                        @endforeach
+                    </dl>
+                    <label class="mt-4 block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400" for="share_text_{{ $asset['type'] }}_{{ $asset['source_id'] }}">Share copy</label>
+                    <textarea id="share_text_{{ $asset['type'] }}_{{ $asset['source_id'] }}" rows="5" readonly class="mt-1 w-full rounded-md border-gray-300 bg-white text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200">{{ $asset['share_text'] }}</textarea>
+                    <div class="mt-3 flex flex-col gap-2 text-xs text-gray-500 dark:text-gray-400 sm:flex-row sm:items-center sm:justify-between">
+                        <span>{{ $asset['powered_by_footer'] }}</span>
+                        <a href="{{ $asset['qr_url'] }}" target="_blank" rel="noopener" class="font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-200">Open linked record</a>
+                    </div>
+                </article>
+            @empty
+                <div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                    No white-label assets are available yet. Publish the Suchak profile and issue a verified receipt to generate share-kit assets.
+                </div>
+            @endforelse
+        </div>
+    </section>
+
     <section id="income-analytics" class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>

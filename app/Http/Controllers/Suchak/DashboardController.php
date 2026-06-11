@@ -23,6 +23,7 @@ use App\Modules\Suchak\Services\SuchakIncomeAnalyticsService;
 use App\Modules\Suchak\Services\SuchakPaymentStatusService;
 use App\Modules\Suchak\Services\SuchakPolicyService;
 use App\Modules\Suchak\Services\SuchakProfileUpdateSuggestionService;
+use App\Modules\Suchak\Services\SuchakWhiteLabelSharingKitService;
 use App\Modules\Suchak\Services\SuchakWorkflowAutomationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -41,6 +42,7 @@ class DashboardController extends Controller
         SuchakPaymentStatusService $paymentStatusService,
         SuchakPolicyService $policyService,
         SuchakProfileUpdateSuggestionService $suggestionService,
+        SuchakWhiteLabelSharingKitService $sharingKitService,
         SuchakWorkflowAutomationService $workflowAutomationService,
     ): View
     {
@@ -191,6 +193,7 @@ class DashboardController extends Controller
             'activityLogs' => $activityLogs,
             'dailyOpportunities' => $dailyOpportunityService->dailyWorklist($account),
             'incomeAnalytics' => $incomeAnalyticsService->summary($account),
+            'sharingKit' => $sharingKitService->assetsFor($account),
             'workflowReminders' => $workflowAutomationService->recentReminders($account),
             'workflowTimeline' => $workflowAutomationService->recentTimeline($account),
             'workflowTemplates' => $workflowAutomationService->whatsappTemplateCatalog(),
