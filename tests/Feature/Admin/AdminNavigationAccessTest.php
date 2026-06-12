@@ -178,6 +178,13 @@ class AdminNavigationAccessTest extends TestCase
         $response->assertSee('Command Center', false);
         $response->assertSee('Monitoring', false);
         $response->assertSee('2 tools', false);
+
+        $academyResponse = $this->actingAs($superAdmin)->get(route('admin.suchak.academy.index'));
+
+        $academyResponse->assertOk();
+        $academyResponse->assertSee('data-admin-section-sidebar', false);
+        $academyResponse->assertSee('aria-label="Admin module tabs"', false);
+        $academyResponse->assertSee('Suchak Training Academy', false);
     }
 
     public function test_catalog_builds_sidebar_sections_and_command_items_for_allowed_tools(): void

@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @php
     $label = fn (string $value) => ucwords(str_replace('_', ' ', $value));
