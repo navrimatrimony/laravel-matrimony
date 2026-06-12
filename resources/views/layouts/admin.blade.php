@@ -37,26 +37,78 @@
         .admin-sidebar .nav-group-btn:hover { background: rgb(55 65 81); }
         .admin-sidebar .nav-link:not(.disabled):hover:not(.active) { background: rgb(55 65 81); }
         .admin-sidebar .nav-chevron { transition: transform 0.2s ease; }
+        [x-cloak] { display: none !important; }
     </style>
 </head>
 <body class="font-sans antialiased bg-gray-100 overflow-x-hidden">
     @include('partials.sync-toast-shim')
-    <div class="min-h-screen flex">
-        <aside class="admin-sidebar w-64 flex-shrink-0 bg-gray-800 text-gray-300 fixed inset-y-0 left-0 z-30 flex flex-col min-h-screen h-screen" style="width: 16rem;">
+    <div
+        class="min-h-screen flex"
+        x-data="adminShell()"
+        @keydown.escape.window="adminSidebarOpen = false; closeAdminCommandPalette()"
+        @keydown.ctrl.k.window.prevent="openAdminCommandPalette()"
+        @keydown.meta.k.window.prevent="openAdminCommandPalette()"
+    >
+        <div
+            x-cloak
+            x-show="adminSidebarOpen"
+            x-transition.opacity
+            class="fixed inset-0 z-30 bg-gray-950/50 lg:hidden"
+            aria-hidden="true"
+            @click="adminSidebarOpen = false"
+        ></div>
+        <aside
+            id="admin-sidebar"
+            class="admin-sidebar w-64 flex-shrink-0 bg-gray-800 text-gray-300 fixed inset-y-0 left-0 z-40 flex flex-col min-h-screen h-screen transform transition-transform duration-200 ease-out"
+            :class="adminSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+            style="width: 16rem;"
+        >
             <div class="p-4 border-b border-gray-700 flex-shrink-0">
                 @php
                     $adminPanelLogo = $siteIdentityLayout->assetUrl('admin_panel_logo');
                 @endphp
-                <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-2 text-lg font-semibold text-white">
-                    @if ($adminPanelLogo)
-                        <img src="{{ $adminPanelLogo }}" alt="" class="h-8 w-auto max-w-[9rem] object-contain">
-                    @else
-                        <span>Admin Panel</span>
-                    @endif
-                </a>
-                <p class="text-xs text-gray-400 mt-1">{{ __('admin.moderation_settings') }}</p>
+                <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-2 text-lg font-semibold text-white">
+                            @if ($adminPanelLogo)
+                                <img src="{{ $adminPanelLogo }}" alt="" class="h-8 w-auto max-w-[9rem] object-contain">
+                            @else
+                                <span>Admin Panel</span>
+                            @endif
+                        </a>
+                        <p class="text-xs text-gray-400 mt-1">{{ __('admin.moderation_settings') }}</p>
+                    </div>
+                    <button
+                        type="button"
+                        class="inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-300 hover:bg-gray-700 hover:text-white lg:hidden"
+                        aria-label="Close admin navigation"
+                        @click="adminSidebarOpen = false"
+                    >
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
             </div>
-            <nav class="p-4 flex-1 overflow-y-auto overscroll-contain space-y-2" x-data="{}" x-init="$nextTick(() => { const el = $el.querySelector('.nav-link.active'); if (el) el.scrollIntoView({ block: 'nearest', behavior: 'auto' }); })">
+            <nav class="p-3 flex-1 overflow-y-auto overscroll-contain space-y-2" aria-label="Admin sections" data-admin-section-sidebar>
+                @foreach (($adminNavSections ?? []) as $section)
+                    <a
+                        href="{{ $section['href'] }}"
+                        class="nav-link group block rounded-lg px-3 py-2.5 text-sm transition {{ $section['active'] ? 'active' : 'text-gray-300 hover:bg-gray-700 hover:text-white' }}"
+                        @click="adminSidebarOpen = false"
+                    >
+                        <span class="flex items-center gap-3">
+                            <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-700/70 text-gray-300 group-hover:bg-gray-600 group-hover:text-white {{ $section['active'] ? 'bg-indigo-500 text-white' : '' }}">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6.75A2.75 2.75 0 016.75 4h10.5A2.75 2.75 0 0120 6.75v10.5A2.75 2.75 0 0117.25 20H6.75A2.75 2.75 0 014 17.25V6.75z" /><path stroke-linecap="round" stroke-linejoin="round" d="M8 8h8M8 12h8M8 16h5" /></svg>
+                            </span>
+                            <span class="min-w-0 flex-1">
+                                <span class="block truncate font-medium">{{ $section['label'] }}</span>
+                                <span class="mt-0.5 block truncate text-xs {{ $section['active'] ? 'text-indigo-100' : 'text-gray-400' }}">{{ $section['tool_count'] }} tools</span>
+                            </span>
+                        </span>
+                    </a>
+                @endforeach
+            </nav>
+            <script type="application/json" data-admin-command-items>@json($adminNavCommandItems ?? [])</script>
+            <nav class="hidden p-4 flex-1 overflow-y-auto overscroll-contain space-y-2" aria-hidden="true" data-admin-legacy-sidebar x-data="{}" x-init="$nextTick(() => { const el = $el.querySelector('.nav-link.active'); if (el) el.scrollIntoView({ block: 'nearest', behavior: 'auto' }); })">
                 @php
                     $moderationOpen = request()->routeIs('admin.abuse-reports.*') || request()->routeIs('admin.conflict-records.*') || request()->routeIs('admin.biodata-intakes.*') || request()->routeIs('admin.ocr-patterns.*') || request()->routeIs('admin.intake.*') || request()->routeIs('admin.photo-moderation.*') || request()->routeIs('admin.moderation-learning.*');
                     $governanceOpen = request()->routeIs('admin.governance-dashboard');
@@ -69,9 +121,26 @@
                     $monetizationOpen = request()->routeIs('admin.coupons.*') || request()->routeIs('admin.wallets.*') || request()->routeIs('admin.boosts.*') || request()->routeIs('admin.referrals.*');
                     $dataEngineOpen = request()->routeIs('admin.data-engine.*') || request()->routeIs('admin.governance.profiles.*');
                     $suchakOpen = request()->routeIs('admin.suchak.*');
+                    $adminNavAccess = $adminNavAccess ?? [];
+                    $canSeeAdminSection = static fn (string $section): bool => (bool) ($adminNavAccess[$section] ?? false);
+                    $canSeeCommandCenter = $canSeeAdminSection('command_center');
+                    $canSeeMembers = $canSeeAdminSection('members');
+                    $canSeeIntakeOcr = $canSeeAdminSection('intake_ocr');
+                    $canSeeTrustSafety = $canSeeAdminSection('trust_safety');
+                    $canSeeMatchingDiscovery = $canSeeAdminSection('matching_discovery');
+                    $canSeeShowcaseEngine = $canSeeAdminSection('showcase_engine');
+                    $canSeeSuchakNetwork = $canSeeAdminSection('suchak_network');
+                    $canSeeCommerce = $canSeeAdminSection('commerce');
+                    $canSeeDataGovernance = $canSeeAdminSection('data_governance');
+                    $canSeeMasterData = $canSeeAdminSection('master_data');
+                    $canSeeSiteExperience = $canSeeAdminSection('site_experience');
+                    $canSeeSystemAccess = $canSeeAdminSection('system_access');
+                    $canSeeModerationGroup = $canSeeTrustSafety || $canSeeIntakeOcr || $canSeeMasterData;
+                    $canSeeSettingsGroup = $canSeeSiteExperience || $canSeeTrustSafety || $canSeeIntakeOcr || $canSeeCommerce || $canSeeMatchingDiscovery || $canSeeDataGovernance || $canSeeSystemAccess;
                 @endphp
 
                 {{-- 1) Dashboard — default expanded --}}
+                @if ($canSeeCommandCenter)
                 <div class="nav-group" x-data="{ open: true }">
                     <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
                         <svg class="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>
@@ -80,7 +149,10 @@
                     </button>
                     <ul class="nav-group-items mt-0.5 ml-4 pl-3 border-l border-gray-700 space-y-0.5" x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
                         <li><a href="{{ route('admin.dashboard') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg> Overview</a></li>
-                        <li><a href="{{ route('admin.duplicate-phones.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.duplicate-phones.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg> {{ __('admin.duplicate_phones.title') }}</a></li>
+                        @if ($canSeeMembers)
+                            <li><a href="{{ route('admin.duplicate-phones.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.duplicate-phones.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg> {{ __('admin.duplicate_phones.title') }}</a></li>
+                        @endif
+                        @if ($canSeeDataGovernance)
                         <li>
                             <div class="nav-group" x-data="{ open: {{ $dataEngineOpen ? 'true' : 'false' }} }">
                                 <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
@@ -103,9 +175,12 @@
                                 </ul>
                             </div>
                         </li>
+                        @endif
                     </ul>
                 </div>
+                @endif
 
+                @if ($canSeeSuchakNetwork)
                 <div class="nav-group" x-data="{ open: {{ $suchakOpen ? 'true' : 'false' }} }">
                     <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
                         <svg class="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
@@ -120,10 +195,14 @@
                         <li><a href="{{ route('admin.suchak.settings.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.suchak.settings.*') ? 'active' : '' }}">Settings</a></li>
                     </ul>
                 </div>
+                @endif
 
-                @include('admin.layouts.sidebar')
+                @if ($canSeeCommerce)
+                    @include('admin.layouts.sidebar')
+                @endif
 
                 {{-- 2) Profiles — default expanded --}}
+                @if ($canSeeMembers)
                 <div class="nav-group" x-data="{ open: true }">
                     <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
                         <svg class="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" /></svg>
@@ -136,16 +215,20 @@
                         <li><span class="nav-link disabled flex items-center gap-3 px-3 py-2 rounded-lg text-sm" title="Coming soon"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>Deleted</span></li>
                     </ul>
                 </div>
+                @endif
 
                 {{-- Showcase engine — horizontal tabs + all showcase tools (see layouts.admin-showcase) --}}
+                @if ($canSeeShowcaseEngine)
                 <div>
                     <a href="{{ route('admin.showcase.index') }}" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold {{ $showcaseOpen ? 'active' : 'text-gray-300 hover:bg-gray-700' }}">
                         <svg class="w-5 h-5 shrink-0 text-violet-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
                         <span>Showcase</span>
                     </a>
                 </div>
+                @endif
 
                 {{-- 3) Interactions — collapsed by default --}}
+                @if ($canSeeMembers)
                 <div class="nav-group" x-data="{ open: false }">
                     <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
                         <svg class="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" /></svg>
@@ -159,8 +242,10 @@
                         <li><span class="nav-link disabled flex items-center gap-3 px-3 py-2 rounded-lg text-sm" title="Coming soon"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>Profile views</span></li>
                     </ul>
                 </div>
+                @endif
 
                 {{-- 4) Moderation — expanded when active --}}
+                @if ($canSeeModerationGroup)
                 <div class="nav-group" x-data="{ open: {{ $moderationOpen ? 'true' : 'false' }} }">
                     <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
                         <svg class="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285zm0 0A11.959 11.959 0 013.598 6" /></svg>
@@ -168,21 +253,33 @@
                         <svg class="w-4 h-4 ml-auto nav-chevron shrink-0" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                     </button>
                     <ul class="nav-group-items mt-0.5 ml-4 pl-3 border-l border-gray-700 space-y-0.5" x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+                        @if ($canSeeTrustSafety)
                         <li><a href="{{ route('admin.abuse-reports.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.abuse-reports.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>Abuse reports</a></li>
                         <li><a href="{{ route('admin.conflict-records.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.conflict-records.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>Conflict records</a></li>
+                        @endif
+                        @if ($canSeeIntakeOcr)
                         <li><a href="{{ route('admin.ocr-simulation.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.ocr-simulation.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h11.25c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" /></svg>OCR Simulation (Day-14)</a></li>
                         <li><a href="{{ route('admin.intake.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.intake.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.845 2.01 9 2.973 9 4.108V15.75m0 0h3.75m-3.75 0h-3m3.75 0H9m3.75 0H12m0 0h.008v.008H12V15.75z" /></svg>Intake suggestions queue</a></li>
+                        @endif
+                        @if ($canSeeMasterData)
                         <li><a href="{{ route('admin.locations.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.locations.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>Locations (canonical)</a></li>
                         <li><a href="{{ route('admin.open-place-suggestions.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.open-place-suggestions.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>Open place suggestions</a></li>
+                        @endif
+                        @if ($canSeeIntakeOcr)
                         <li><a href="{{ route('admin.biodata-intakes.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.biodata-intakes.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>Create Profile</a></li>
                         <li><a href="{{ route('admin.ocr-patterns.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.ocr-patterns.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h11.25c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" /></svg>OCR Patterns (Day-30)</a></li>
+                        @endif
+                        @if ($canSeeTrustSafety)
                         <li><a href="{{ route('admin.photo-moderation.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.photo-moderation.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>Photo moderation</a></li>
                         <li><a href="{{ route('admin.moderation-learning.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.moderation-learning.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625z" /></svg>Moderation learning</a></li>
                         <li><span class="nav-link disabled flex items-center gap-3 px-3 py-2 rounded-lg text-sm" title="Coming soon"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>Audit logs</span></li>
+                        @endif
                     </ul>
                 </div>
+                @endif
 
                 {{-- Governance (Phase-5 Day-24) --}}
+                @if ($canSeeDataGovernance)
                 <div class="nav-group" x-data="{ open: {{ $governanceOpen ? 'true' : 'false' }} }">
                     <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
                         <svg class="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>
@@ -193,8 +290,10 @@
                         <li><a href="{{ route('admin.governance-dashboard') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.governance-dashboard') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75z" /></svg>Governance Dashboard</a></li>
                     </ul>
                 </div>
+                @endif
 
                 {{-- Master Data (Phase-5 SSOT) --}}
+                @if ($canSeeMasterData)
                 <div class="nav-group" x-data="{ open: {{ $masterDataOpen ? 'true' : 'false' }} }">
                     <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
                         <svg class="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" /></svg>
@@ -209,8 +308,10 @@
                         <li><a href="{{ route('admin.master.occupation.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.master.occupation.index', 'admin.master.occupation-categories.*', 'admin.master.occupations.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V6a3 3 0 013-3h0a3 3 0 013 3v.75m-9 0h12A2.25 2.25 0 0120.25 9v9A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V9A2.25 2.25 0 016 6.75z" /></svg>Occupation</a></li>
                     </ul>
                 </div>
+                @endif
 
                 {{-- Matching engine (DB-driven discovery) --}}
+                @if ($canSeeMatchingDiscovery)
                 <div class="nav-group" x-data="{ open: {{ $matchingEngineOpen ? 'true' : 'false' }} }">
                     <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
                         <svg class="w-5 h-5 shrink-0 text-rose-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" /></svg>
@@ -228,8 +329,10 @@
                         <li><a href="{{ route('admin.matching-engine.audit') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.matching-engine.audit*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>{{ __('matching_engine.nav_audit') }}</a></li>
                     </ul>
                 </div>
+                @endif
 
                 {{-- 5) Settings — expanded when active --}}
+                @if ($canSeeSettingsGroup)
                 <div class="nav-group" x-data="{ open: {{ $settingsOpen ? 'true' : 'false' }} }">
                     <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
                         <svg class="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
@@ -237,25 +340,40 @@
                         <svg class="w-4 h-4 ml-auto nav-chevron shrink-0" :class="open && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                     </button>
                     <ul class="nav-group-items mt-0.5 ml-4 pl-3 border-l border-gray-700 space-y-0.5" x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+                        @if ($canSeeSiteExperience)
                         <li><a href="{{ route('admin.app-settings.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.app-settings.*') && ! $notificationPlatformTabActive ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>App settings</a></li>
                         <li><a href="{{ route('admin.app-settings.index', ['tab' => 'notifications']) }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ $notificationPlatformTabActive ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>{{ __('admin_notifications.nav_platform') }}</a></li>
                         <li><a href="{{ route('admin.notifications.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ $notificationInboxDebugActive ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM10.5 7.5v6m3-3h-6" /></svg>{{ __('admin_notifications.nav_inbox_debug') }}</a></li>
                         <li><a href="{{ route('admin.teaser-settings.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.teaser-settings.*') || request()->routeIs('admin.who-viewed-teaser-settings.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>{{ __('admin.teaser_settings_nav') }}</a></li>
                         <li><span class="nav-link disabled flex items-center gap-3 px-3 py-2 rounded-lg text-sm" title="Coming soon"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>Search &amp; visibility</span></li>
+                        @endif
+                        @if ($canSeeTrustSafety)
                         <li><a href="{{ route('admin.photo-approval-settings.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.photo-approval-settings.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>Photo approval</a></li>
                         <li><a href="{{ route('admin.moderation-engine-settings.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.moderation-engine-settings.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.375c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125H16.5v-6z" /></svg>Moderation engine (NudeNet sync prep)</a></li>
+                        @endif
+                        @if ($canSeeIntakeOcr)
                         <li><a href="{{ route('admin.intake-settings.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.intake-settings.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.5h16.5M4.5 8.25h15M6 12h12m-9 3.75h6m-7.5 3.75h9" /></svg>Intake engine</a></li>
+                        @endif
+                        @if ($canSeeTrustSafety)
                         <li><a href="{{ route('admin.communication-policy.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.communication-policy.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" /></svg>Communication policy (Day-32)</a></li>
                         <li><a href="{{ route('admin.whatsapp-response.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.whatsapp-response.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8.625 9.75h6.75M8.625 13.5h4.5m-7.875 6 1.5-3H18A2.25 2.25 0 0020.25 14.25v-7.5A2.25 2.25 0 0018 4.5H6A2.25 2.25 0 003.75 6.75v7.5A2.25 2.25 0 006 16.5h.75L5.25 19.5z" /></svg>WhatsApp Response</a></li>
+                        @endif
+                        @if ($canSeeSiteExperience)
                         <li><a href="{{ route('admin.mobile-verification-settings.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.mobile-verification-settings.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>Registration &amp; mobile verification</a></li>
+                        @endif
+                        @if ($canSeeCommerce)
                         <li><a href="{{ route('admin.plans.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.plans.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 15h19.5M10.5 3.75v16.5m3-16.5v16.5" /></svg>Subscription plans</a></li>
                         <li><a href="{{ route('admin.commerce.analytics.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.commerce.analytics.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75z" /></svg>{{ __('admin_commerce.nav_analytics') }}</a></li>
                         <li><a href="{{ route('admin.revenue.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.revenue.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m0-12.75h.375m0 12.75H18a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0018 4.5h-2.25m-13.5 0V18A2.25 2.25 0 006 20.25h2.25M9 4.5v15m6-15v15" /></svg>{{ __('admin_commerce.nav_revenue') }}</a></li>
                         <li><a href="{{ route('admin.commerce.overrides.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.commerce.overrides.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21c-2.676 0-5.216-.584-7.499-1.632z" /></svg>{{ __('admin_commerce.nav_overrides') }}</a></li>
+                        @endif
+                        @if ($canSeeMatchingDiscovery)
                         <li><a href="{{ route('admin.match-boost.edit') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.match-boost.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" /></svg>{{ __('match_boost.nav') }}</a></li>
+                        @endif
                         @if ($isSuperAdmin)
                             <li><a href="{{ route('admin.admin-capabilities.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.admin-capabilities.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.964 0a9 9 0 11-11.964 0m11.964 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" /></svg>Admin Capabilities</a></li>
                         @endif
+                        @if ($canSeeDataGovernance)
                         @if ($canManageVerificationTags)
                             <li><a href="{{ route('admin.verification-tags.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.verification-tags.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 3h6m-6-6h6m3 10.5a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0018 4.5H6A2.25 2.25 0 003.75 6.75v10.5A2.25 2.25 0 006 19.5h12z" /></svg>Verification Tags</a></li>
                         @endif
@@ -265,13 +383,22 @@
                         <li><a href="{{ route('admin.profile-field-config.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.profile-field-config.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h11.25c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" /></svg>Profile Field Configuration</a></li>
                         <li><a href="{{ route('admin.field-registry.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.field-registry.index') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" /></svg>Field Registry (CORE)</a></li>
                         <li><a href="{{ route('admin.field-registry.extended.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.field-registry.extended.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15m0 0l7.5 7.5m-7.5-7.5l7.5-7.5" /></svg>EXTENDED Fields</a></li>
+                        @endif
+                        @if ($canSeeSiteExperience)
                         <li><a href="{{ route('admin.homepage-settings.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.homepage-settings.*') || request()->routeIs('admin.homepage-images.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7.5A2.25 2.25 0 015.25 5.25h13.5A2.25 2.25 0 0121 7.5v9A2.25 2.25 0 0118.75 18.75H5.25A2.25 2.25 0 013 16.5v-9z" /><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 9.75h9M7.5 12h5.25M7.5 14.25h7.5" /></svg>Homepage settings</a></li>
+                        @endif
+                        @if ($canSeeTrustSafety)
                         <li><a href="{{ route('admin.help-centre.tickets.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.help-centre.tickets.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12c0 5.385 4.365 9.75 9.75 9.75 1.832 0 3.545-.505 5.01-1.384l4.74 1.184-1.184-4.74A9.713 9.713 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12z" /></svg>Help centre tickets</a></li>
+                        @endif
+                        @if ($canSeeSiteExperience)
                         <li><a href="{{ route('admin.translations.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.translations.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 21l5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 016-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 01-3.827-5.802" /></svg>Translations (EN / MR)</a></li>
+                        @endif
                     </ul>
                 </div>
+                @endif
 
                 {{-- 6) System — collapsed by default --}}
+                @if ($canSeeSystemAccess)
                 <div class="nav-group" x-data="{ open: false }">
                     <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
                         <svg class="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
@@ -283,6 +410,7 @@
                         <li><span class="nav-link disabled flex items-center gap-3 px-3 py-2 rounded-lg text-sm" title="Coming soon"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.876-.32-1.739-.439-2.628-.439a6 6 0 00-2.628.439 6 6 0 01-7.029 5.912 3 3 0 013 3m9 0v.75M12 15.75v.75M12 15.75H12m.75 0h-.75M12 15.75h.75m-.75 0h-.75" /></svg>Roles</span></li>
                     </ul>
                 </div>
+                @endif
             </nav>
             <div class="p-4 border-t border-gray-700 flex-shrink-0">
                 <a href="{{ url('/') }}" class="block text-sm text-gray-400 hover:text-white">← Back to site</a>
@@ -292,8 +420,78 @@
                 </form>
             </div>
         </aside>
-        <main class="flex-1 min-h-screen min-w-0 text-gray-900" style="margin-left: 16rem;">
-            <div class="{{ $adminContentWrapperClass ?? (($showcaseOpen ?? false) ? 'max-w-[1680px] w-full mx-auto sm:px-6 lg:px-8' : 'max-w-7xl mx-auto sm:px-6 lg:px-8') }} py-6">
+        <div
+            x-cloak
+            x-show="adminCommandOpen"
+            x-transition.opacity
+            class="fixed inset-0 z-50 flex items-start justify-center bg-gray-950/50 px-4 pt-16 sm:pt-24"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Admin command palette"
+            data-admin-command-palette
+            @click.self="closeAdminCommandPalette()"
+        >
+            <div class="w-full max-w-xl overflow-hidden rounded-lg bg-white shadow-2xl ring-1 ring-gray-200" @keydown.escape.stop="closeAdminCommandPalette()">
+                <div class="flex items-center gap-3 border-b border-gray-200 px-4 py-3">
+                    <svg class="h-5 w-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" /></svg>
+                    <input
+                        x-ref="adminCommandInput"
+                        x-model="adminCommandQuery"
+                        type="search"
+                        class="w-full border-0 bg-transparent p-0 text-sm text-gray-950 placeholder:text-gray-400 focus:ring-0"
+                        placeholder="Search admin tools"
+                        autocomplete="off"
+                    >
+                    <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Close admin command palette" @click="closeAdminCommandPalette()">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                <div class="max-h-80 overflow-y-auto p-2">
+                    <template x-for="item in filteredAdminCommands()" :key="item.href">
+                        <a :href="item.href" class="block rounded-md px-3 py-2 text-sm text-gray-800 hover:bg-indigo-50 hover:text-indigo-800" @click="closeAdminCommandPalette()">
+                            <span class="block font-medium" x-text="item.label"></span>
+                            <span class="block truncate text-xs text-gray-500" x-text="item.href"></span>
+                        </a>
+                    </template>
+                    <div x-show="filteredAdminCommands().length === 0" class="px-3 py-8 text-center text-sm text-gray-500">
+                        No matching admin tools.
+                    </div>
+                </div>
+            </div>
+        </div>
+        <main class="flex-1 min-h-screen min-w-0 text-gray-900 lg:ml-64">
+            <div class="sticky top-0 z-20 border-b border-gray-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur lg:hidden" data-admin-mobile-topbar>
+                <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50"
+                            aria-label="Open admin navigation"
+                            aria-controls="admin-sidebar"
+                            :aria-expanded="adminSidebarOpen.toString()"
+                            data-admin-sidebar-toggle
+                            @click="adminSidebarOpen = true"
+                        >
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h16" /></svg>
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50"
+                            aria-label="Search admin tools"
+                            title="Search admin tools"
+                            data-admin-command-toggle
+                            @click="openAdminCommandPalette()"
+                        >
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" /></svg>
+                        </button>
+                    </div>
+                    <div class="min-w-0 text-right">
+                        <p class="truncate text-xs font-semibold uppercase tracking-wide text-gray-500">{{ $adminNavModule['section_label'] ?? 'Admin Panel' }}</p>
+                        <p class="truncate text-sm font-semibold text-gray-950">{{ $adminNavModule['active_tab_label'] ?? __('admin.moderation_settings') }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="{{ $adminContentWrapperClass ?? (($showcaseOpen ?? false) ? 'max-w-[1680px] w-full mx-auto px-4 sm:px-6 lg:px-8' : 'w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8') }} py-6">
                 @if (session('success'))
                     <div class="mb-4 px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800">{{ session('success') }}</div>
                 @endif
@@ -318,6 +516,7 @@
                         (current count: {{ (int) $modAlertUnsafeCount }}). Review the photo moderation queue.
                     </div>
                 @endif
+                @include('admin.layouts.module-tabs', ['module' => $adminNavModule ?? null])
                 @yield('content')
             </div>
         </main>

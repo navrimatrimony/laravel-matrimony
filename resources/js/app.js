@@ -6,13 +6,19 @@ import './intake-photo-candidate-crop';
 import Alpine from 'alpinejs';
 import { plansPricingCatalog } from './plans-catalog';
 import { planQuotaPolicyCard } from './plan-quota-policy-card';
+import { adminCapabilityEditor } from './admin-capabilities';
+import { adminShell } from './admin-shell';
 import './admin-plan-term-rows';
 import { initLaravelValidationUi } from './laravel-validation-ui';
 
 window.Alpine = Alpine;
+window.adminCapabilityEditor = adminCapabilityEditor;
+window.adminShell = adminShell;
 window.planQuotaPolicyCard = planQuotaPolicyCard;
 window.plansPricingCatalog = plansPricingCatalog;
 
+Alpine.data('adminCapabilityEditor', adminCapabilityEditor);
+Alpine.data('adminShell', adminShell);
 Alpine.data('plansPricingCatalog', plansPricingCatalog);
 
 Alpine.start();

@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Route;
 | Phase-6 Suchak account verification and admin review surface.
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'admin'])
+Route::middleware(['auth', 'admin', 'admin.section'])
     ->prefix('admin/suchak')
     ->name('admin.suchak.')
     ->group(function () {

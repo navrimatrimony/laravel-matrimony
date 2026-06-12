@@ -9,6 +9,8 @@ use App\Observers\MatrimonyProfileObserver;
 use App\Observers\SystemRuleObserver;
 use App\Services\WhatsApp\MetaWhatsAppMessageProvider;
 use App\Services\WhatsApp\NullWhatsAppMessageProvider;
+use App\Support\Admin\AdminNavigationAccess;
+use App\Support\Admin\AdminNavigationCatalog;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -161,7 +163,21 @@ class AppServiceProvider extends ServiceProvider
             }
             $canManageVerificationTags = $isAdminUser && ($isSuperAdmin || ($adminCapabilities && $adminCapabilities->can_manage_verification_tags));
             $canManageSeriousIntents = $isAdminUser && ($isSuperAdmin || ($adminCapabilities && $adminCapabilities->can_manage_serious_intents));
-            $view->with(compact('adminUser', 'isAdminUser', 'isSuperAdmin', 'canManageVerificationTags', 'canManageSeriousIntents'));
+            $adminNavAccess = AdminNavigationAccess::accessFor($adminUser, $adminCapabilities);
+            $adminNavAbilities = [
+                'can_manage_verification_tags' => $canManageVerificationTags,
+                'can_manage_serious_intents' => $canManageSeriousIntents,
+                'is_super_admin' => $isSuperAdmin,
+            ];
+            $adminNavModule = AdminNavigationCatalog::forRequest(request(), $adminNavAccess, $adminNavAbilities);
+            $adminNavSections = AdminNavigationCatalog::navigationSections(
+                $adminNavAccess,
+                $adminNavAbilities,
+                (string) (request()->route()?->getName() ?? ''),
+                request()->query()
+            );
+            $adminNavCommandItems = AdminNavigationCatalog::commandItems($adminNavAccess, $adminNavAbilities);
+            $view->with(compact('adminUser', 'isAdminUser', 'isSuperAdmin', 'canManageVerificationTags', 'canManageSeriousIntents', 'adminNavAccess', 'adminNavModule', 'adminNavSections', 'adminNavCommandItems'));
         });
 
     }

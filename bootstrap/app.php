@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->statefulApi();
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
+            'admin.section' => \App\Http\Middleware\EnsureAdminSectionAccess::class,
             'suchak.account' => \App\Http\Middleware\EnsureSuchakAccount::class,
             'subscription.feature' => \App\Http\Middleware\EnsureSubscriptionFeature::class,
         ]);

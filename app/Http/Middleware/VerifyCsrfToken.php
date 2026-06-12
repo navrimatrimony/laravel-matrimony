@@ -15,7 +15,6 @@ class VerifyCsrfToken extends ValidateCsrfToken
      * @var array<int, string>
      */
     protected $except = [
-        'admin/plans/*/features',
         'payment/success',
         'payment/failure',
         'payments/payu/success',

@@ -72,7 +72,7 @@ use Illuminate\Support\Facades\Route;
 | Web — admin surface (auth + admin middleware)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('admin.')->group(function () {
     Route::redirect('/', '/admin/dashboard', 302);
     Route::get('/dashboard', function () {
         $totalProfiles = \App\Models\MatrimonyProfile::count();
@@ -492,6 +492,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/plans', [PlanController::class, 'store'])->name('plans.store');
     Route::get('/plans/{plan}/edit', [PlanController::class, 'edit'])->name('plans.edit');
     Route::put('/plans/{plan}', [PlanController::class, 'update'])->name('plans.update');
+    Route::put('/plans/{plan}/features', [PlanFeatureController::class, 'update'])->name('plans.features.update');
     Route::patch('/plans/{plan}/toggle', [PlanController::class, 'toggle'])->name('plans.toggle');
     Route::delete('/plans/{plan}', [PlanController::class, 'destroy'])->name('plans.destroy');
 
@@ -659,12 +660,3 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/conflict-records/{record}/reject', [AdminConflictRecordController::class, 'conflictRecordReject'])->name('conflict-records.reject');
     Route::post('/conflict-records/{record}/override', [AdminConflictRecordController::class, 'conflictRecordOverride'])->name('conflict-records.override');
 });
-
-/*
-|--------------------------------------------------------------------------
-| DEV ONLY — Plan feature API (testing): no auth / admin middleware
-| Restore: move PUT /admin/plans/{plan}/features back inside the group above.
-|--------------------------------------------------------------------------
-*/
-Route::put('/admin/plans/{plan}/features', [PlanFeatureController::class, 'update'])
-    ->name('admin.plans.features.update');
