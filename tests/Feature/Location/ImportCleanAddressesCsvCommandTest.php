@@ -103,6 +103,26 @@ test('clean csv import suffixes slug only for real duplicate under same parent a
     expect($districtSlugs)->toBe(['pune', 'pune-2']);
 });
 
+test('clean csv import can use coordinate override instead of source csv lat lng', function () {
+    $csv = writeAddressImportCsv([
+        ['1', '27', 'Maharashtra', '531', 'Sangli', '4299', 'Khanapur', '568523', 'Bhood', 'भूड', '', '415309', '18.934600', '76.904600', 'rural'],
+    ]);
+    $override = writeAddressImportCoordinateOverrideCsv([
+        ['568523', '17.3363900', '74.6841700', 'manual_verified', 'wikipedia:Bhood'],
+    ]);
+
+    $this->artisan('addresses:import-clean-csv', [
+        'path' => $csv,
+        '--fresh' => true,
+        '--coordinate-override' => $override,
+    ])->assertExitCode(0);
+
+    $bhood = Location::query()->where('lgd_code', '568523')->firstOrFail();
+
+    expect(round((float) $bhood->lat, 5))->toBe(17.33639);
+    expect(round((float) $bhood->lng, 5))->toBe(74.68417);
+});
+
 test('fresh import validates before deleting existing addresses', function () {
     Location::query()->create([
         'id' => 90,
@@ -168,6 +188,29 @@ function writeAddressImportCsv(array $rows): string
         'Tag',
     ]);
 
+    foreach ($rows as $row) {
+        fputcsv($handle, $row);
+    }
+
+    fclose($handle);
+
+    return $path;
+}
+
+function writeAddressImportCoordinateOverrideCsv(array $rows): string
+{
+    $dir = storage_path('framework/testing');
+    if (! is_dir($dir)) {
+        mkdir($dir, 0777, true);
+    }
+
+    $path = $dir.'/addresses-import-coordinate-override-'.str_replace('.', '-', uniqid('', true)).'.csv';
+    $handle = fopen($path, 'wb');
+    if ($handle === false) {
+        throw new RuntimeException('Unable to write coordinate override CSV.');
+    }
+
+    fputcsv($handle, ['lgd_code', 'lat', 'lng', 'source', 'source_id']);
     foreach ($rows as $row) {
         fputcsv($handle, $row);
     }

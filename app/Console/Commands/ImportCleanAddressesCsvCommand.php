@@ -15,7 +15,8 @@ class ImportCleanAddressesCsvCommand extends Command
     protected $signature = 'addresses:import-clean-csv
         {path : Full path to the clean address CSV}
         {--fresh : Delete existing addresses before inserting}
-        {--dry-run : Validate and summarize without writing}';
+        {--dry-run : Validate and summarize without writing}
+        {--coordinate-override= : Optional CSV with lgd_code,lat,lng overrides for village coordinates}';
 
     protected $description = 'Import clean India hierarchy CSV into addresses with strict hierarchy/tag separation';
 
@@ -53,6 +54,7 @@ class ImportCleanAddressesCsvCommand extends Command
         $path = (string) $this->argument('path');
         $fresh = (bool) $this->option('fresh');
         $dryRun = (bool) $this->option('dry-run');
+        $coordinateOverridePath = trim((string) $this->option('coordinate-override'));
 
         if (! $this->schemaReady()) {
             return self::FAILURE;
@@ -64,6 +66,16 @@ class ImportCleanAddressesCsvCommand extends Command
             return self::FAILURE;
         }
 
+        try {
+            $coordinateOverrides = $coordinateOverridePath !== ''
+                ? $this->loadCoordinateOverrides($coordinateOverridePath)
+                : null;
+        } catch (Throwable $e) {
+            $this->error('Coordinate override validation failed: '.$e->getMessage());
+
+            return self::FAILURE;
+        }
+
         $plan = $this->validateCsv($path);
         $this->printValidationSummary($plan);
 
@@ -71,6 +83,10 @@ class ImportCleanAddressesCsvCommand extends Command
             $this->error('Import aborted: CSV validation failed.');
             $this->printInvalidRows($plan['invalid_rows']);
 
+            return self::FAILURE;
+        }
+
+        if ($coordinateOverrides !== null && ! $this->validateCoordinateOverrideCoverage($path, $coordinateOverrides)) {
             return self::FAILURE;
         }
 
@@ -91,7 +107,7 @@ class ImportCleanAddressesCsvCommand extends Command
         }
 
         try {
-            $summary = $this->importCsv($path, $plan, $fresh);
+            $summary = $this->importCsv($path, $plan, $fresh, $coordinateOverrides ?? []);
         } catch (Throwable $e) {
             report($e);
             $this->error('Import failed and was rolled back: '.$e->getMessage());
@@ -330,7 +346,7 @@ class ImportCleanAddressesCsvCommand extends Command
      * @param  array<string, mixed>  $plan
      * @return array<string, int>
      */
-    private function importCsv(string $path, array $plan, bool $fresh): array
+    private function importCsv(string $path, array $plan, bool $fresh, array $coordinateOverrides = []): array
     {
         $states = $this->assignIds($plan['states'], self::COUNTRY_ID + 1);
         $nextId = self::COUNTRY_ID + 1 + count($states);
@@ -351,7 +367,7 @@ class ImportCleanAddressesCsvCommand extends Command
             'skipped' => (int) $plan['skipped'],
         ];
 
-        DB::transaction(function () use ($path, $fresh, $states, $districts, $talukas, $columns, $now, &$summary, &$nextId, &$slugUsage): void {
+        DB::transaction(function () use ($path, $fresh, $states, $districts, $talukas, $columns, $now, &$summary, &$nextId, &$slugUsage, $coordinateOverrides): void {
             if ($fresh) {
                 if (DB::table(Location::geoTable())->count() === 0) {
                     $this->clearStaleExternalAddressReferences();
@@ -438,7 +454,7 @@ class ImportCleanAddressesCsvCommand extends Command
             }
             $this->insertAddressRows($rows);
 
-            $this->insertVillages($path, $talukas, $columns, $now, $nextId, $summary, $slugUsage);
+            $this->insertVillages($path, $talukas, $columns, $now, $nextId, $summary, $slugUsage, $coordinateOverrides);
         });
 
         $this->resetAutoIncrement($nextId);
@@ -466,7 +482,7 @@ class ImportCleanAddressesCsvCommand extends Command
      * @param  array<string, true>  $columns
      * @param  array<string, int>  $summary
      */
-    private function insertVillages(string $path, array $talukas, array $columns, string $now, int &$nextId, array &$summary, array &$slugUsage): void
+    private function insertVillages(string $path, array $talukas, array $columns, string $now, int &$nextId, array &$summary, array &$slugUsage, array $coordinateOverrides = []): void
     {
         $handle = $this->openCsv($path);
         $header = $this->readHeader($handle);
@@ -485,6 +501,7 @@ class ImportCleanAddressesCsvCommand extends Command
             $lgdCode = $this->cell($row, 'lgd_code');
             $villageName = $this->cell($row, 'Village Name (In English)');
             $localName = $this->cell($row, 'name_mr') ?: $this->cell($row, 'Village Name (In Local)');
+            $coordinateOverride = $coordinateOverrides[$lgdCode] ?? null;
 
             $chunk[] = $this->addressRow([
                 'id' => $nextId++,
@@ -497,8 +514,8 @@ class ImportCleanAddressesCsvCommand extends Command
                 'tag' => $this->cell($row, 'Tag'),
                 'level' => 4,
                 'pincode' => $this->cell($row, 'Pincode') ?: null,
-                'lat' => $this->decimalOrNull($this->cell($row, 'Latitude')),
-                'lng' => $this->decimalOrNull($this->cell($row, 'Longitude')),
+                'lat' => $coordinateOverride['lat'] ?? $this->decimalOrNull($this->cell($row, 'Latitude')),
+                'lng' => $coordinateOverride['lng'] ?? $this->decimalOrNull($this->cell($row, 'Longitude')),
                 'lgd_code' => $lgdCode,
                 'is_active' => true,
                 'created_at' => $now,
@@ -518,6 +535,134 @@ class ImportCleanAddressesCsvCommand extends Command
         }
 
         fclose($handle);
+    }
+
+    /**
+     * @return array<string, array{lat: string, lng: string}>
+     */
+    private function loadCoordinateOverrides(string $path): array
+    {
+        if (! is_file($path)) {
+            throw new \RuntimeException('Coordinate override file not found: '.$path);
+        }
+
+        $handle = $this->openCsv($path);
+        $header = $this->readCoordinateHeader($handle);
+        $overrides = [];
+        $invalidRows = [];
+        $invalidCount = 0;
+        $rowNumber = 1;
+
+        while (($raw = fgetcsv($handle)) !== false) {
+            $rowNumber++;
+            if ($this->isBlankCsvRow($raw)) {
+                continue;
+            }
+
+            $row = $this->rowFromCsv($header, $raw);
+            $lgdCode = $this->cell($row, 'lgd_code');
+            $lat = $this->cell($row, 'lat');
+            $lng = $this->cell($row, 'lng');
+
+            if ($lgdCode === '') {
+                [$invalidRows, $invalidCount] = $this->addInvalid($invalidRows, $invalidCount, $rowNumber, 'lgd_code', $lgdCode, 'required field is blank');
+
+                continue;
+            }
+
+            if (isset($overrides[$lgdCode])) {
+                [$invalidRows, $invalidCount] = $this->addInvalid($invalidRows, $invalidCount, $rowNumber, 'lgd_code', $lgdCode, 'duplicate coordinate override lgd_code');
+
+                continue;
+            }
+
+            foreach (['lat' => [$lat, -90, 90], 'lng' => [$lng, -180, 180]] as $field => [$value, $min, $max]) {
+                if ($value === '' || ! is_numeric($value) || (float) $value < $min || (float) $value > $max) {
+                    [$invalidRows, $invalidCount] = $this->addInvalid($invalidRows, $invalidCount, $rowNumber, $field, (string) $value, 'invalid coordinate');
+                }
+            }
+
+            if (is_numeric($lat) && is_numeric($lng) && ! $this->withinIndiaBounds((float) $lat, (float) $lng)) {
+                [$invalidRows, $invalidCount] = $this->addInvalid($invalidRows, $invalidCount, $rowNumber, 'lat/lng', "{$lat},{$lng}", 'coordinate is outside India bounds');
+            }
+
+            if ($invalidCount > 0 && count($invalidRows) >= 100) {
+                continue;
+            }
+
+            if ($lat !== '' && $lng !== '' && is_numeric($lat) && is_numeric($lng) && $this->withinIndiaBounds((float) $lat, (float) $lng)) {
+                $overrides[$lgdCode] = [
+                    'lat' => $this->decimalString($lat),
+                    'lng' => $this->decimalString($lng),
+                ];
+            }
+        }
+
+        fclose($handle);
+
+        if ($invalidCount > 0) {
+            $this->printInvalidRows($invalidRows);
+            throw new \RuntimeException("{$invalidCount} invalid coordinate override rows found.");
+        }
+
+        if ($overrides === []) {
+            throw new \RuntimeException('Coordinate override CSV contains no usable rows.');
+        }
+
+        $this->line('Coordinate overrides loaded: '.count($overrides));
+
+        return $overrides;
+    }
+
+    /**
+     * @param  array<string, array{lat: string, lng: string}>  $coordinateOverrides
+     */
+    private function validateCoordinateOverrideCoverage(string $path, array $coordinateOverrides): bool
+    {
+        $handle = $this->openCsv($path);
+        $header = $this->readHeader($handle);
+        $missingRows = [];
+        $missingCount = 0;
+        $covered = 0;
+        $rowNumber = 1;
+
+        while (($raw = fgetcsv($handle)) !== false) {
+            $rowNumber++;
+            if ($this->isBlankCsvRow($raw)) {
+                continue;
+            }
+
+            $row = $this->rowFromCsv($header, $raw);
+            $lgdCode = $this->cell($row, 'lgd_code');
+            if (! isset($coordinateOverrides[$lgdCode])) {
+                $missingCount++;
+                if (count($missingRows) < 100) {
+                    $missingRows[] = [
+                        'row' => $rowNumber,
+                        'field' => 'lgd_code',
+                        'value' => $lgdCode,
+                        'reason' => 'missing coordinate override',
+                    ];
+                }
+
+                continue;
+            }
+
+            $covered++;
+        }
+
+        fclose($handle);
+
+        if ($missingCount > 0) {
+            $this->error("Import aborted: coordinate override is missing {$missingCount} village rows.");
+            $this->printInvalidRows($missingRows);
+
+            return false;
+        }
+
+        $this->line('Coordinate override coverage: '.$covered.' villages.');
+
+        return true;
     }
 
     /**
@@ -680,6 +825,32 @@ class ImportCleanAddressesCsvCommand extends Command
     }
 
     /**
+     * @param  resource  $handle
+     * @return list<string>
+     */
+    private function readCoordinateHeader($handle): array
+    {
+        $header = fgetcsv($handle);
+        if (! is_array($header)) {
+            throw new \RuntimeException('Coordinate override CSV is empty.');
+        }
+
+        $header = array_map(static function (mixed $value): string {
+            $value = trim((string) $value);
+
+            return preg_replace('/^\xEF\xBB\xBF/', '', $value) ?? $value;
+        }, $header);
+
+        foreach (['lgd_code', 'lat', 'lng'] as $required) {
+            if (! in_array($required, $header, true)) {
+                throw new \RuntimeException("Coordinate override CSV is missing required header [{$required}].");
+            }
+        }
+
+        return $header;
+    }
+
+    /**
      * @param  list<string>  $header
      * @return array<string, int>
      */
@@ -767,6 +938,16 @@ class ImportCleanAddressesCsvCommand extends Command
     private function decimalOrNull(string $value): ?string
     {
         return $value !== '' ? $value : null;
+    }
+
+    private function decimalString(string $value): string
+    {
+        return number_format((float) $value, 7, '.', '');
+    }
+
+    private function withinIndiaBounds(float $lat, float $lng): bool
+    {
+        return $lat >= 5.5 && $lat <= 38.8 && $lng >= 67.0 && $lng <= 98.8;
     }
 
     /**
