@@ -49,14 +49,14 @@ class LocationService
         $lineage = array_reverse($this->getAncestors($location)); // root -> ... -> parent
 
         foreach ($lineage as $node) {
-            $t = strtolower((string) ($node->type ?? ''));
+            $t = strtolower((string) ($node->hierarchy ?? ''));
             if ($t === 'state') {
                 $state = $node;
             } elseif ($t === 'district') {
                 $district = $node;
             } elseif ($t === 'taluka') {
                 $taluka = $node;
-            } elseif ($t === 'city') {
+            } elseif ($t === 'village' && strtolower(trim((string) ($node->category ?? ''))) === 'city') {
                 $city = $node;
             }
         }
@@ -84,7 +84,7 @@ class LocationService
             $immediate = Location::query()->whereKey($pid)->first();
             if ($immediate !== null) {
                 $this->ensureAncestorsLoaded($immediate);
-                $pt = strtolower((string) ($immediate->type ?? ''));
+                $pt = strtolower((string) ($immediate->hierarchy ?? ''));
                 if (($h['taluka'] ?? null) === null && $pt === 'taluka') {
                     $h['taluka'] = $immediate;
                 }
@@ -117,19 +117,19 @@ class LocationService
     }
 
     /**
-     * Walk {@see Location::parent} chain (including self) for the first row with {@code type}.
+     * Walk {@see Location::parent} chain (including self) for the first row with {@code hierarchy}.
      */
-    public function getAncestorByType(Location $location, string $type): ?Location
+    public function getAncestorByType(Location $location, string $hierarchy): ?Location
     {
-        $want = strtolower(trim($type));
+        $want = strtolower(trim($hierarchy));
         if ($want === '') {
             return null;
         }
-        if (strtolower((string) ($location->type ?? '')) === $want) {
+        if (strtolower((string) ($location->hierarchy ?? '')) === $want) {
             return $location;
         }
         foreach ($this->getAncestors($location) as $a) {
-            if (strtolower((string) ($a->type ?? '')) === $want) {
+            if (strtolower((string) ($a->hierarchy ?? '')) === $want) {
                 return $a;
             }
         }
@@ -163,7 +163,7 @@ class LocationService
      * results are filtered so **every** token appears somewhere in the leaf + ancestor names (Marathi + English),
      * then ranked so the intended village/town surfaces near the top.
      *
-     * @return array<int, array{id:int,name:string,type:string,display_label:string}>
+     * @return array<int, array{id:int,name:string,hierarchy:string,display_label:string}>
      */
     public function search(string $query): array
     {
@@ -227,14 +227,14 @@ class LocationService
                 [$normalized, $normalized.'%', '%'.$normalized.'%']
             )
             ->orderByRaw(
-                "CASE type
-                    WHEN 'city' THEN 0
-                    WHEN 'district' THEN 1
-                    WHEN 'suburb' THEN 2
-                    WHEN 'taluka' THEN 3
-                    WHEN 'village' THEN 4
-                    WHEN 'state' THEN 5
-                    WHEN 'country' THEN 6
+                "CASE
+                    WHEN hierarchy = 'village' AND tag = 'city' THEN 0
+                    WHEN hierarchy = 'district' THEN 1
+                    WHEN hierarchy = 'taluka' THEN 2
+                    WHEN hierarchy = 'village' AND tag = 'suburban' THEN 3
+                    WHEN hierarchy = 'village' THEN 4
+                    WHEN hierarchy = 'state' THEN 5
+                    WHEN hierarchy = 'country' THEN 6
                     ELSE 7
                 END"
             )
@@ -248,7 +248,7 @@ class LocationService
             return [
                 'id' => (int) $location->id,
                 'name' => (string) $location->name,
-                'type' => (string) $location->type,
+                'hierarchy' => (string) $location->hierarchy,
                 'display_label' => $this->getDisplayLabel($location),
             ];
         })->values()->all();
@@ -256,7 +256,7 @@ class LocationService
 
     /**
      * @param  list<string>  $tokens  Lowercase tokens, length ≥ 2, de-duplicated.
-     * @return array<int, array{id:int,name:string,type:string,display_label:string}>
+     * @return array<int, array{id:int,name:string,hierarchy:string,display_label:string}>
      */
     private function searchMultiToken(array $tokens): array
     {
@@ -320,7 +320,7 @@ class LocationService
             return [
                 'id' => (int) $location->id,
                 'name' => (string) $location->name,
-                'type' => (string) $location->type,
+                'hierarchy' => (string) $location->hierarchy,
                 'display_label' => $this->getDisplayLabel($location),
             ];
         })->all();
@@ -393,10 +393,8 @@ class LocationService
         $startsName = str_starts_with($nameLower, $t0) ? 0 : 1;
         $wordBoundary = preg_match('/(^|[\s,\-])'.preg_quote($t0, '/').'($|[\s,\-])/u', $this->locationSearchHaystack($loc)) ? 0 : 1;
 
-        $typeOrder = match ((string) ($loc->type ?? '')) {
-            'village' => 0,
-            'suburb' => 1,
-            'city' => 2,
+        $typeOrder = match ((string) ($loc->hierarchy ?? '')) {
+            'village' => strtolower(trim((string) ($loc->category ?? ''))) === 'city' ? 0 : 2,
             'taluka' => 3,
             'district' => 4,
             'state' => 5,
@@ -425,9 +423,9 @@ class LocationService
     }
 
     /**
-     * @return array<int, array{id:int,name:string,type:string,display_label:string,distance_km:float}>
+     * @return array<int, array{id:int,name:string,hierarchy:string,display_label:string,distance_km:float}>
      */
-    public function getNearbyLocations(int $locationId, int $radiusKm = 10, ?string $type = null): array
+    public function getNearbyLocations(int $locationId, int $radiusKm = 10, ?string $hierarchy = null): array
     {
         $radiusKm = max(1, $radiusKm);
 
@@ -489,8 +487,8 @@ class LocationService
             ->whereIn('id', array_keys($distanceByLocation))
             ->where('is_active', true);
 
-        if ($type !== null && $type !== '') {
-            $locationsQuery->where('type', $type);
+        if ($hierarchy !== null && $hierarchy !== '') {
+            $locationsQuery->where('hierarchy', $hierarchy);
         }
 
         $locations = $locationsQuery->get();
@@ -504,7 +502,7 @@ class LocationService
                 return [
                     'id' => (int) $location->id,
                     'name' => (string) $location->name,
-                    'type' => (string) $location->type,
+                    'hierarchy' => (string) $location->hierarchy,
                     'display_label' => $this->getDisplayLabel($location),
                     'distance_km' => $distance !== null ? round((float) $distance, 2) : 0.0,
                 ];
@@ -517,9 +515,9 @@ class LocationService
     /**
      * @return array<int, array{profile_id:int,name:string,location_id:int,location_label:string,distance_km:float}>
      */
-    public function getNearbyProfiles(int $locationId, int $radiusKm = 10, ?string $type = null): array
+    public function getNearbyProfiles(int $locationId, int $radiusKm = 10, ?string $hierarchy = null): array
     {
-        $nearbyLocations = $this->getNearbyLocations($locationId, $radiusKm, $type);
+        $nearbyLocations = $this->getNearbyLocations($locationId, $radiusKm, $hierarchy);
         if ($nearbyLocations === []) {
             return [];
         }

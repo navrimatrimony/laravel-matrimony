@@ -21,14 +21,14 @@ class NearbyProfileController extends Controller
         $validated = $request->validate([
             'location_id' => ['required', 'integer', 'exists:'.Location::geoTable().',id'],
             'radius' => ['nullable', 'integer', 'min:1', 'max:200'],
-            'type' => ['nullable', 'string', Rule::in(['city', 'suburb', 'village'])],
+            'hierarchy' => ['nullable', 'string', Rule::in(['country', 'state', 'district', 'taluka', 'village'])],
         ]);
 
         $locationId = (int) $validated['location_id'];
         $radiusKm = (int) ($validated['radius'] ?? 10);
-        $type = isset($validated['type']) ? (string) $validated['type'] : null;
+        $hierarchy = isset($validated['hierarchy']) ? (string) $validated['hierarchy'] : null;
 
-        $rows = $locationService->getNearbyProfiles($locationId, $radiusKm, $type);
+        $rows = $locationService->getNearbyProfiles($locationId, $radiusKm, $hierarchy);
 
         return response()->json($rows);
     }

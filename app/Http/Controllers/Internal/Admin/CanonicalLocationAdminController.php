@@ -26,7 +26,7 @@ class CanonicalLocationAdminController extends Controller
     {
         $validated = $request->validate([
             'q' => ['nullable', 'string', 'max:120'],
-            'type' => ['nullable', 'string', 'max:32'],
+            'hierarchy' => ['nullable', 'string', 'max:32'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
@@ -49,8 +49,8 @@ class CanonicalLocationAdminController extends Controller
                     ->orWhere($geo.'.slug', 'like', $term);
             });
         }
-        if (! empty($validated['type'])) {
-            $query->where($geo.'.type', $validated['type']);
+        if (! empty($validated['hierarchy'])) {
+            $query->where($geo.'.hierarchy', $validated['hierarchy']);
         }
 
         $perPage = (int) ($validated['per_page'] ?? 40);
@@ -80,7 +80,7 @@ class CanonicalLocationAdminController extends Controller
     {
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'min:1', 'max:255'],
-            'type' => ['sometimes', 'string', Rule::in([
+            'hierarchy' => ['sometimes', 'string', Rule::in([
                 'country', 'state', 'district', 'taluka', 'village',
             ])],
             'category' => ['nullable', 'string', Rule::in([
@@ -107,9 +107,9 @@ class CanonicalLocationAdminController extends Controller
         }
 
         $newName = $data['name'] ?? $location->name;
-        $typeForUniqueness = (string) ($data['type'] ?? $location->type);
+        $hierarchyForUniqueness = (string) ($data['hierarchy'] ?? $location->hierarchy);
 
-        if ($this->integrity->duplicateSiblingExists($parentId, (string) $newName, (int) $location->id, $typeForUniqueness)) {
+        if ($this->integrity->duplicateSiblingExists($parentId, (string) $newName, (int) $location->id, $hierarchyForUniqueness)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Another location with the same name already exists under this parent.',

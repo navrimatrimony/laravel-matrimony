@@ -179,7 +179,7 @@ class ShowcaseProfileDefaultsService
     /**
      * Phase-4: Defaults for showcase profile autofill. Only fill if null; do not override.
      * Uses: realistic name, gender, age 23–35, Never Married (single), Graduate,
-     * caste, height_cm 150–180, location hierarchy (valid country/state/district/city).
+     * caste, height_cm 150–180, location hierarchy (valid country/state/district/taluka/village).
      */
     public static function defaultsForShowcase(int $index = 0, ?string $genderOverride = null): array
     {
@@ -842,7 +842,7 @@ class ShowcaseProfileDefaultsService
     /**
      * Location rule-set for showcase profiles:
      * - pick only districts that have at least one real (non-showcase) profile
-     * - set residence in the district "town" using cities table (not villages)
+     * - set residence using village hierarchy rows classified by tag
      *
      * Returns hierarchy keys for MatrimonyProfile core columns:
      * country_id/state_id/district_id/taluka_id/city_id + work_state_id/work_city_id (aligned)
@@ -866,9 +866,9 @@ class ShowcaseProfileDefaultsService
      * @param  array<string, mixed>|null  $bulkPolicy  normalized bulk policy when bulk create supplies overrides
      */
     /**
-     * Cities under a district (geo SSOT) for showcase picks.
+     * Village leaves under a district (geo SSOT) for showcase city-slot picks.
      *
-     * @param  list<string>  $strictTags  e.g. metro, capital — from admin eligibility
+     * @param  list<string>  $strictTags  e.g. city, suburban — from admin eligibility
      * @return Collection<int, object{city_id: int, city_name: string, taluka_id: int}>
      */
     private static function showcaseCityCandidatesUnderDistrict(int $districtId, array $strictTags, string $tagMode): Collection
@@ -880,8 +880,8 @@ class ShowcaseProfileDefaultsService
 
         $q = DB::table($addr.' as city')
             ->join($addr.' as taluka', 'city.parent_id', '=', 'taluka.id')
-            ->where('city.type', 'city')
-            ->where('taluka.type', 'taluka')
+            ->where('city.hierarchy', 'village')
+            ->where('taluka.hierarchy', 'taluka')
             ->where('taluka.parent_id', $districtId)
             ->whereNotNull('city.name')
             ->select('city.id as city_id', 'city.name as city_name', 'city.parent_id as taluka_id');
@@ -889,9 +889,7 @@ class ShowcaseProfileDefaultsService
         if ($tagMode === 'strict' && $strictTags !== []) {
             $q->whereIn('city.tag', $strictTags);
         } elseif ($tagMode === 'not_none') {
-            $q->where(function ($w) {
-                $w->whereNull('city.tag')->orWhere('city.tag', '<>', 'none');
-            });
+            $q->whereIn('city.tag', ['city', 'suburban', 'rural']);
         }
 
         return $q->get();
@@ -950,6 +948,7 @@ class ShowcaseProfileDefaultsService
         $svc = app(LocationService::class);
 
         $q = Location::query()
+            ->where('hierarchy', 'village')
             ->whereIn('tag', $strictTags)
             ->whereNotNull('name')
             ->where('name', '!=', '');
@@ -980,10 +979,10 @@ class ShowcaseProfileDefaultsService
         $district = $svc->getAncestorByType($leaf, 'district');
         $taluka = $svc->getAncestorByType($leaf, 'taluka');
 
-        if ($district === null && (string) $leaf->type === 'district') {
+        if ($district === null && (string) $leaf->hierarchy === 'district') {
             $district = $leaf;
         }
-        if ($taluka === null && (string) $leaf->type === 'taluka') {
+        if ($taluka === null && (string) $leaf->hierarchy === 'taluka') {
             $taluka = $leaf;
         }
 
@@ -1024,11 +1023,11 @@ class ShowcaseProfileDefaultsService
             ->join($addr.' as dist', 'taluka.parent_id', '=', 'dist.id')
             ->join($addr.' as st', 'dist.parent_id', '=', 'st.id')
             ->join($addr.' as co', 'st.parent_id', '=', 'co.id')
-            ->where('city.type', 'city')
-            ->where('taluka.type', 'taluka')
-            ->where('dist.type', 'district')
-            ->where('st.type', 'state')
-            ->where('co.type', 'country')
+            ->where('city.hierarchy', 'village')
+            ->where('taluka.hierarchy', 'taluka')
+            ->where('dist.hierarchy', 'district')
+            ->where('st.hierarchy', 'state')
+            ->where('co.hierarchy', 'country')
             ->whereNotNull('city.name')
             ->select(
                 'city.id as city_id',
@@ -1045,12 +1044,12 @@ class ShowcaseProfileDefaultsService
 
     private static function pickShowcaseHierarchyFromDistrictPool(array $eligibleDistrictIds, ?array $bulkPolicy): ?array
     {
-        $types = ShowcaseAddressEligibility::typesForContext($bulkPolicy);
+        $hierarchies = ShowcaseAddressEligibility::hierarchiesForContext($bulkPolicy);
         $cityTags = ShowcaseAddressEligibility::citySqlTagsFromAdminTags(
             ShowcaseAddressEligibility::tagsForContext($bulkPolicy)
         );
 
-        if (! ShowcaseAddressEligibility::allowsDistrictPool($types) || ! ShowcaseAddressEligibility::allowsCityPicks($types)) {
+        if (! ShowcaseAddressEligibility::allowsDistrictPool($hierarchies) || ! ShowcaseAddressEligibility::allowsCityPicks($hierarchies)) {
             return null;
         }
 

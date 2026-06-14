@@ -2,35 +2,40 @@
   {
     "slug": "wakad-pune",
     "name": "Wakad",
-    "type": "suburb",
+    "hierarchy": "village",
+    "tag": "suburban",
     "parent_slug": "haveli-pune",
     "level": 4
   },
   {
     "slug": "baner-pune",
     "name": "Baner",
-    "type": "suburb",
+    "hierarchy": "village",
+    "tag": "suburban",
     "parent_slug": "haveli-pune",
     "level": 4
   },
   {
     "slug": "hinjewadi-pune",
     "name": "Hinjewadi",
-    "type": "suburb",
+    "hierarchy": "village",
+    "tag": "suburban",
     "parent_slug": "mulshi-pune",
     "level": 4
   },
   {
     "slug": "kothrud-pune",
     "name": "Kothrud",
-    "type": "suburb",
+    "hierarchy": "village",
+    "tag": "suburban",
     "parent_slug": "haveli-pune",
     "level": 4
   },
   {
     "slug": "wagholi-pune",
     "name": "Wagholi",
-    "type": "suburb",
+    "hierarchy": "village",
+    "tag": "suburban",
     "parent_slug": "haveli-pune",
     "level": 4
   }

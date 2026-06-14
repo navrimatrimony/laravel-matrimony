@@ -10,12 +10,12 @@ use App\Models\Village;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Match leaf rows in {@code addresses} (village / suburban / city) with village + taluka + district (MR/EN).
+ * Match leaf rows in {@code addresses} (hierarchy=village, tag city/suburban/rural) with village + taluka + district (MR/EN).
  */
 final class AddressHierarchySearch
 {
     /** @var list<string> */
-    private const LEAF_TYPES = ['village', 'suburb', 'city'];
+    private const LEAF_TYPES = ['village'];
 
     /** @var array<string, list<City>> */
     private static array $findCitiesCache = [];
@@ -79,7 +79,7 @@ final class AddressHierarchySearch
 
     public function cityFromVillageLocation(Location $location): ?City
     {
-        if ($location->type !== 'village') {
+        if ($location->hierarchy !== 'village') {
             return null;
         }
 
@@ -118,17 +118,8 @@ final class AddressHierarchySearch
 
     private function leafAsCity(Location $leaf): ?City
     {
-        if (! in_array((string) $leaf->type, self::LEAF_TYPES, true)) {
+        if (! in_array((string) $leaf->hierarchy, self::LEAF_TYPES, true)) {
             return null;
-        }
-
-        if ($leaf->type === 'city' || $leaf->type === 'suburb') {
-            $city = City::query()
-                ->withoutGlobalScope('geo_city')
-                ->with(['taluka.district.state.country', 'parentCity', 'displayMeta'])
-                ->find((int) $leaf->id);
-
-            return $city ?? $this->hydrateCityFromLocation($leaf);
         }
 
         $village = $leaf instanceof Village
@@ -160,7 +151,7 @@ final class AddressHierarchySearch
             $parent = $leaf->relationLoaded('parent')
                 ? $leaf->getRelation('parent')
                 : Location::query()->find((int) $leaf->parent_id);
-            if ($parent !== null && $parent->type === 'taluka') {
+            if ($parent !== null && $parent->hierarchy === 'taluka') {
                 $city->setRelation('taluka', Taluka::query()->find((int) $parent->id));
             }
         }
@@ -188,13 +179,13 @@ final class AddressHierarchySearch
                     ->orWhereIn('parent_id', function ($sub) use ($districtIds) {
                         $sub->select('id')
                             ->from(Location::geoTable())
-                            ->where('type', 'taluka')
+                            ->where('hierarchy', 'taluka')
                             ->whereIn('parent_id', $districtIds);
                     });
             });
         } elseif ($taluka !== '') {
             $query->whereHas('parent', function (Builder $parentQuery) use ($taluka): void {
-                $parentQuery->where('type', 'taluka');
+                $parentQuery->where('hierarchy', 'taluka');
                 $this->applyGeoNameMatch($parentQuery, $taluka);
             });
         } elseif ($district !== '') {
@@ -205,7 +196,7 @@ final class AddressHierarchySearch
                 $query->whereIn('parent_id', $parentIds);
             } else {
                 $query->whereHas('parent', function (Builder $parentQuery) use ($district): void {
-                    $parentQuery->where('type', 'district');
+                    $parentQuery->where('hierarchy', 'district');
                     $this->applyGeoNameMatch($parentQuery, $district);
                 });
             }
@@ -267,13 +258,6 @@ final class AddressHierarchySearch
             ? $village->getRelation('parent')
             : Location::query()->find((int) ($village->parent_id ?? 0));
 
-        if ($parent instanceof Location && in_array($parent->type, ['city', 'suburban'], true)) {
-            return City::query()
-                ->withoutGlobalScope('geo_city')
-                ->with(['taluka.district.state.country', 'parentCity', 'displayMeta'])
-                ->find((int) $parent->id);
-        }
-
         $nameEnKey = mb_strtolower(trim((string) ($village->name_en ?: $village->name)), 'UTF-8');
         if ($nameEnKey === '' || ! $village->parent_id) {
             return null;
@@ -282,7 +266,8 @@ final class AddressHierarchySearch
         return City::query()
             ->withoutGlobalScope('geo_city')
             ->with(['taluka.district.state.country', 'parentCity', 'displayMeta'])
-            ->whereIn('type', ['city', 'suburban'])
+            ->where('hierarchy', 'village')
+            ->whereIn('tag', ['city', 'suburban'])
             ->where('parent_id', (int) $village->parent_id)
             ->whereRaw('LOWER(TRIM(COALESCE(name_en, name, ""))) = ?', [$nameEnKey])
             ->first();

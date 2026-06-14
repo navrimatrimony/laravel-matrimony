@@ -29,7 +29,9 @@ class LocationSuggestionApprovalService
 
             if (LocationAlias::where('normalized_alias', $normalized)
                 ->whereHas('location', function ($q) use ($suggestion) {
-                    $q->where('parent_id', (int) $suggestion->taluka_id)->where('type', 'city');
+                    $q->where('parent_id', (int) $suggestion->taluka_id)
+                        ->where('hierarchy', 'village')
+                        ->where('tag', 'city');
                 })
                 ->exists()) {
                 throw new \RuntimeException('Location already exists in canonical data.');

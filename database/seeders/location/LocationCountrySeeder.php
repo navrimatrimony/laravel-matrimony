@@ -19,11 +19,10 @@ class LocationCountrySeeder extends Seeder
 
         $attributes = [
             'name' => $name,
-            'type' => 'country',
+            'name_en' => $name,
+            'hierarchy' => 'country',
             'parent_id' => null,
             'level' => 0,
-            'state_code' => null,
-            'district_code' => null,
             'is_active' => true,
         ];
 

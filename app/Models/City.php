@@ -5,10 +5,9 @@ namespace App\Models;
 use App\Services\Location\LocationHierarchyValidator;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Support\Str;
 
 /**
- * City rows in {@code addresses} ({@code type = city}).
+ * City-classified leaf rows in {@code addresses} ({@code hierarchy = village}, {@code tag = city}).
  * Legacy attribute {@code taluka_id} maps to {@code parent_id}.
  *
  * @deprecated Prefer {@see Location}.
@@ -31,16 +30,17 @@ class City extends Location
             if (isset($city->attributes['parent_city_id'])) {
                 unset($city->attributes['parent_city_id']);
             }
-            $city->type = 'city';
+            $city->hierarchy = 'village';
+            $city->tag = 'city';
             if (($city->slug ?? '') === '' && filled($city->name)) {
-                $city->slug = Str::slug((string) $city->name).'-c'.substr(md5((string) ($city->parent_id ?? '0')), 0, 6);
+                $city->slug = static::uniqueSlugForHierarchy($city->parent_id ? (int) $city->parent_id : null, 'village', (string) $city->name, $city->id ? (int) $city->id : null);
             }
             app(LocationHierarchyValidator::class)->validate($city);
         });
 
         parent::booted();
 
-        static::addGlobalScope('geo_city', fn ($q) => $q->where('type', 'city'));
+        static::addGlobalScope('geo_city', fn ($q) => $q->where('hierarchy', 'village')->where('tag', 'city'));
     }
 
     public function getTalukaIdAttribute(): ?int

@@ -61,8 +61,9 @@ test('profile search can filter and order profiles within nearby radius', functi
     $source = Location::query()->create([
         'name' => 'Wakad Nearby Search Source',
         'slug' => 'wakad-nearby-search-source-'.uniqid(),
-        'type' => 'suburb',
-        'parent_id' => $pune->id,
+        'hierarchy' => 'village',
+        'tag' => 'suburban',
+        'parent_id' => $pune->parent_id,
         'is_active' => true,
     ]);
 

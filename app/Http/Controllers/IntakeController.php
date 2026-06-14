@@ -2678,7 +2678,7 @@ class IntakeController extends Controller
                 ->whereRaw('normalized_alias = ?', [$cityToken])
                 ->with('location')
                 ->first();
-            if ($aliasRow && $aliasRow->location && $aliasRow->location->type === 'city') {
+            if ($aliasRow && $aliasRow->location && $aliasRow->location->hierarchy === 'village' && $aliasRow->location->tag === 'city') {
                 $city = \App\Models\City::query()
                     ->with('taluka.district.state')
                     ->find($aliasRow->location_id);

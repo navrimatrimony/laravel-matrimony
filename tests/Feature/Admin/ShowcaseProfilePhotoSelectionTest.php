@@ -437,24 +437,31 @@ class ShowcaseProfilePhotoSelectionTest extends TestCase
         $state = Location::query()->create([
             'name' => 'Bulk Test State',
             'slug' => 'bulk-test-state-'.$city->id,
-            'type' => 'state',
+            'hierarchy' => 'state',
             'parent_id' => null,
             'is_active' => true,
         ]);
         $district = Location::query()->create([
             'name' => 'Bulk Test District',
             'slug' => 'bulk-test-dist-'.$city->id,
-            'type' => 'district',
+            'hierarchy' => 'district',
             'parent_id' => $state->id,
+            'is_active' => true,
+        ]);
+        $taluka = Location::query()->create([
+            'name' => 'Bulk Test Taluka',
+            'slug' => 'bulk-test-taluka-'.$city->id,
+            'hierarchy' => 'taluka',
+            'parent_id' => $district->id,
             'is_active' => true,
         ]);
         Location::query()->create([
             'id' => $city->id,
             'name' => $city->name,
             'slug' => 'bulk-test-city-'.$city->id,
-            'type' => 'city',
-            'parent_id' => $district->id,
-            'tag' => 'metro',
+            'hierarchy' => 'village',
+            'parent_id' => $taluka->id,
+            'tag' => 'city',
             'is_active' => true,
         ]);
     }
@@ -526,7 +533,7 @@ class ShowcaseProfilePhotoSelectionTest extends TestCase
     {
         $country = Country::query()->create([
             'name' => 'India',
-            'iso_alpha2' => 'IN',
+
             'is_active' => true,
         ]);
         $state = State::query()->create([
@@ -547,7 +554,7 @@ class ShowcaseProfilePhotoSelectionTest extends TestCase
         $city = City::query()->create([
             'name' => 'Pune',
             'taluka_id' => $taluka->id,
-            'category' => 'metro',
+            'category' => 'city',
             'is_active' => true,
         ]);
 

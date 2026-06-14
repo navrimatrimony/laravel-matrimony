@@ -27,7 +27,7 @@ class LocationAliasAdminController extends Controller
             ], 422);
         }
 
-        if ($location->type === 'city') {
+        if ($location->hierarchy === 'village' && $location->tag === 'city') {
             $city = City::find($location->id);
             if ($city && City::where('parent_id', (int) $city->parent_id)->whereRaw('LOWER(TRIM(name)) = ?', [$normalized])->exists()) {
                 return response()->json([

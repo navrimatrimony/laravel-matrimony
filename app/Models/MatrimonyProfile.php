@@ -490,15 +490,15 @@ class MatrimonyProfile extends Model
         $svc = app(LocationService::class);
         $h = $svc->getFullHierarchy($leaf);
         $district = $h['district'] ?? null;
-        if ($district === null && $leaf->type === 'district') {
+        if ($district === null && $leaf->hierarchy === 'district') {
             $district = $leaf;
         }
         $state = $h['state'] ?? null;
-        if ($state === null && $leaf->type === 'state') {
+        if ($state === null && $leaf->hierarchy === 'state') {
             $state = $leaf;
         }
         $country = $svc->getAncestorByType($leaf, 'country');
-        if ($country === null && $leaf->type === 'country') {
+        if ($country === null && $leaf->hierarchy === 'country') {
             $country = $leaf;
         }
 

@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Read-only: duplicate districts under {@code addresses} (type=district) by (parent_id,name) / slug.
+ * Read-only: duplicate districts under {@code addresses} (hierarchy=district) by (parent_id,name) / slug.
  */
 class AuditDistrictDuplicatesCommand extends Command
 {
@@ -25,7 +25,7 @@ class AuditDistrictDuplicatesCommand extends Command
         }
 
         $dupNames = DB::table($geo)
-            ->where('type', 'district')
+            ->where('hierarchy', 'district')
             ->select('parent_id', 'name', DB::raw('COUNT(*) as c'))
             ->groupBy('parent_id', 'name')
             ->having('c', '>', 1)
@@ -41,7 +41,7 @@ class AuditDistrictDuplicatesCommand extends Command
         $dupSlugs = collect();
         if (Schema::hasColumn($geo, 'slug')) {
             $dupSlugs = DB::table($geo)
-                ->where('type', 'district')
+                ->where('hierarchy', 'district')
                 ->select('parent_id', 'slug', DB::raw('COUNT(*) as c'))
                 ->groupBy('parent_id', 'slug')
                 ->having('c', '>', 1)

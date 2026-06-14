@@ -18,7 +18,7 @@ class IndianStatesMasterSeederTest extends TestCase
         $this->seed(CountriesMasterSeeder::class);
         $this->seed(IndianStatesMasterSeeder::class);
 
-        $india = Country::query()->where('iso_alpha2', 'IN')->firstOrFail();
+        $india = Country::query()->where('slug', 'india')->firstOrFail();
         $count = State::query()->where('parent_id', $india->id)->count();
         $this->assertGreaterThanOrEqual(28, $count);
 

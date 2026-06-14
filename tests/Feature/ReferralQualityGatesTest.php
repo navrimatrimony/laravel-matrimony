@@ -147,8 +147,9 @@ class ReferralQualityGatesTest extends TestCase
         return (int) Location::query()->create([
             'name' => 'Quality Gate Test Suburb',
             'slug' => 'quality-gate-suburb-'.uniqid(),
-            'type' => 'suburb',
-            'parent_id' => $puneCity->id,
+            'hierarchy' => 'village',
+            'tag' => 'suburban',
+            'parent_id' => $puneCity->parent_id,
             'state_code' => 'MH',
             'district_code' => 'PN',
             'is_active' => true,

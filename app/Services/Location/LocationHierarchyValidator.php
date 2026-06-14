@@ -6,7 +6,7 @@ use App\Models\Location;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Enforces SSOT rules for {@see Location} parent/type consistency and safe updates.
+ * Enforces SSOT rules for {@see Location} parent/hierarchy consistency and safe updates.
  */
 class LocationHierarchyValidator
 {
@@ -19,10 +19,10 @@ class LocationHierarchyValidator
      */
     public function validate(Location $location): void
     {
-        $type = (string) $location->type;
+        $hierarchy = (string) $location->hierarchy;
         $parentId = $location->parent_id !== null ? (int) $location->parent_id : null;
 
-        if ($type === 'country') {
+        if ($hierarchy === 'country') {
             if ($parentId !== null) {
                 throw ValidationException::withMessages([
                     'parent_id' => ['A country location must not have a parent.'],
@@ -32,7 +32,7 @@ class LocationHierarchyValidator
             return;
         }
 
-        if ($type === 'state') {
+        if ($hierarchy === 'state') {
             if ($parentId === null) {
                 return;
             }
@@ -43,7 +43,7 @@ class LocationHierarchyValidator
 
         if ($parentId === null) {
             throw ValidationException::withMessages([
-                'parent_id' => ['Parent is required for this location type.'],
+                'parent_id' => ['Parent is required for this location hierarchy.'],
             ]);
         }
 
@@ -54,14 +54,15 @@ class LocationHierarchyValidator
             ]);
         }
 
-        $parentType = (string) $parent->type;
+        $parentHierarchy = (string) $parent->hierarchy;
 
-        match ($type) {
-            'district' => $this->expectParentTypes($parentType, ['state'], 'district'),
-            'taluka' => $this->expectParentTypes($parentType, ['district'], 'taluka'),
-            'city' => $this->expectParentTypes($parentType, ['taluka', 'district'], 'city'),
-            'suburb', 'village' => $this->expectParentTypes($parentType, ['city', 'taluka'], $type),
-            default => null,
+        match ($hierarchy) {
+            'district' => $this->expectParentTypes($parentHierarchy, ['state'], 'district'),
+            'taluka' => $this->expectParentTypes($parentHierarchy, ['district'], 'taluka'),
+            'village' => $this->expectParentTypes($parentHierarchy, ['taluka'], 'village'),
+            default => throw ValidationException::withMessages([
+                'hierarchy' => ['Invalid address hierarchy.'],
+            ]),
         };
 
         if ($location->exists) {
@@ -71,15 +72,15 @@ class LocationHierarchyValidator
                 ]);
             }
 
-            if ($location->isDirty('type') && $location->children()->exists()) {
+            if ($location->isDirty('hierarchy') && $location->children()->exists()) {
                 throw ValidationException::withMessages([
-                    'type' => ['Cannot change type while child locations exist.'],
+                    'hierarchy' => ['Cannot change hierarchy while child locations exist.'],
                 ]);
             }
         }
     }
 
-    private function assertParentType(int $parentId, array $allowedTypes, Location $location): void
+    private function assertParentType(int $parentId, array $allowedHierarchies, Location $location): void
     {
         $parent = Location::query()->find($parentId);
         if ($parent === null) {
@@ -87,19 +88,19 @@ class LocationHierarchyValidator
                 'parent_id' => ['Parent location does not exist.'],
             ]);
         }
-        $this->expectParentTypes((string) $parent->type, $allowedTypes, (string) $location->type);
+        $this->expectParentTypes((string) $parent->hierarchy, $allowedHierarchies, (string) $location->hierarchy);
     }
 
     /**
-     * @param  list<string>  $allowedParentTypes
+     * @param  list<string>  $allowedParentHierarchies
      */
-    private function expectParentTypes(string $parentType, array $allowedParentTypes, string $childTypeLabel): void
+    private function expectParentTypes(string $parentHierarchy, array $allowedParentHierarchies, string $childHierarchyLabel): void
     {
-        if (! in_array($parentType, $allowedParentTypes, true)) {
+        if (! in_array($parentHierarchy, $allowedParentHierarchies, true)) {
             throw ValidationException::withMessages([
                 'parent_id' => [
-                    'Invalid parent for '.ucfirst($childTypeLabel).': expected parent type '
-                    .implode(' or ', $allowedParentTypes).', got '.ucfirst($parentType).'.',
+                    'Invalid parent for '.ucfirst($childHierarchyLabel).': expected parent hierarchy '
+                    .implode(' or ', $allowedParentHierarchies).', got '.ucfirst($parentHierarchy).'.',
                 ],
             ]);
         }

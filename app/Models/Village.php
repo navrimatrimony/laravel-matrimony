@@ -4,10 +4,9 @@ namespace App\Models;
 
 use App\Services\Location\LocationHierarchyValidator;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Str;
 
 /**
- * Village rows in {@code addresses} ({@code type = village}).
+ * Village rows in {@code addresses} ({@code hierarchy = village}).
  * Legacy {@code taluka_id} maps to {@code parent_id}.
  *
  * @deprecated Prefer {@see Location}.
@@ -37,16 +36,16 @@ class Village extends Location
                 $village->parent_id = $village->attributes['taluka_id'];
                 unset($village->attributes['taluka_id']);
             }
-            $village->type = 'village';
+            $village->hierarchy = 'village';
             if (($village->slug ?? '') === '' && filled($village->name)) {
-                $village->slug = Str::slug((string) $village->name).'-v'.substr(md5((string) ($village->parent_id ?? '0')), 0, 6);
+                $village->slug = static::uniqueSlugForHierarchy($village->parent_id ? (int) $village->parent_id : null, 'village', (string) $village->name, $village->id ? (int) $village->id : null);
             }
             app(LocationHierarchyValidator::class)->validate($village);
         });
 
         parent::booted();
 
-        static::addGlobalScope('geo_village', fn ($q) => $q->where('type', 'village'));
+        static::addGlobalScope('geo_village', fn ($q) => $q->where('hierarchy', 'village'));
     }
 
     public function taluka(): BelongsTo

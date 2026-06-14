@@ -16,7 +16,7 @@ class StateMarathiSyncTest extends TestCase
     {
         $india = Country::query()->create([
             'name' => 'India',
-            'iso_alpha2' => 'IN',
+
             'name_mr' => 'भारत',
         ]);
         $state = State::query()->create([

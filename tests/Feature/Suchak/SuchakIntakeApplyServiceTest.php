@@ -309,10 +309,52 @@ class SuchakIntakeApplyServiceTest extends TestCase
 
     private function seedLocation(string $name): int
     {
+        $countryId = (int) DB::table('addresses')->insertGetId([
+            'name' => 'India',
+            'slug' => 'india-suchak-test',
+            'hierarchy' => 'country',
+            'level' => 0,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $stateId = (int) DB::table('addresses')->insertGetId([
+            'name' => 'Maharashtra',
+            'slug' => 'maharashtra-suchak-test',
+            'hierarchy' => 'state',
+            'parent_id' => $countryId,
+            'level' => 1,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $districtId = (int) DB::table('addresses')->insertGetId([
+            'name' => $name.' District',
+            'slug' => strtolower($name).'-district-test',
+            'hierarchy' => 'district',
+            'parent_id' => $stateId,
+            'level' => 2,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $talukaId = (int) DB::table('addresses')->insertGetId([
+            'name' => $name.' Taluka',
+            'slug' => strtolower($name).'-taluka-test',
+            'hierarchy' => 'taluka',
+            'parent_id' => $districtId,
+            'level' => 3,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         return (int) DB::table('addresses')->insertGetId([
             'name' => $name,
             'slug' => strtolower($name).'-test',
-            'type' => 'city',
+            'hierarchy' => 'village',
+            'tag' => 'city',
+            'parent_id' => $talukaId,
             'level' => 4,
             'is_active' => true,
             'created_at' => now(),

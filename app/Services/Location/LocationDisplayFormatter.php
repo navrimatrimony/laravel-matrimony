@@ -31,7 +31,7 @@ final class LocationDisplayFormatter
         $meta = $this->metaForCity($city);
 
         $country = $city->taluka?->district?->state?->country;
-        $hideIndiaDefault = $country instanceof Country && strtoupper((string) $country->iso_alpha2) === 'IN';
+        $hideIndiaDefault = $country instanceof Country && (string) $country->slug === 'india';
 
         $segments = $this->buildSegments($city, $meta);
 

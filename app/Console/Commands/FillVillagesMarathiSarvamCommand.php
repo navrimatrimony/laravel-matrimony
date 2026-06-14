@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Schema;
 class FillVillagesMarathiSarvamCommand extends Command
 {
     protected $signature = 'villages:fill-marathi-sarvam
-                            {--only-addresses : Only villages referenced by profile_addresses.location_id (addresses.type=village) (default)}
+                            {--only-addresses : Only villages referenced by profile_addresses.location_id (addresses.hierarchy=village) (default)}
                             {--all : Fill every village row matching filters (not only address-linked)}
                             {--force : Overwrite existing non-empty name_mr}
                             {--dry-run : Show planned updates without saving}
@@ -19,7 +19,7 @@ class FillVillagesMarathiSarvamCommand extends Command
                             {--sleep=400 : Milliseconds to pause between batches}
                             {--mirror-cities : After saving, mirror villages.name_mr onto matching cities.name_mr}';
 
-    protected $description = 'Fill village rows (addresses.type=village) name_mr via Sarvam';
+    protected $description = 'Fill village rows (addresses.hierarchy=village) name_mr via Sarvam';
 
     public function handle(SarvamMarathiVillageNameService $sarvam): int
     {
@@ -46,7 +46,7 @@ class FillVillagesMarathiSarvamCommand extends Command
                 $sub->select('pa.'.$leafCol)
                     ->from('profile_addresses as pa')
                     ->join($geo.' as a', 'a.id', '=', 'pa.'.$leafCol)
-                    ->where('a.type', 'village')
+                    ->where('a.hierarchy', 'village')
                     ->whereNotNull('pa.'.$leafCol)
                     ->distinct();
             });

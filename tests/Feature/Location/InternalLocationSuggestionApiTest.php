@@ -20,7 +20,7 @@ test('internal location suggest requires authentication', function () {
         $this->markTestSkipped('location_suggestions table not migrated');
     }
 
-    $country = Country::query()->where('iso_alpha2', 'IN')->first();
+    $country = Country::query()->where('slug', 'india')->first();
     $state = State::query()->where('name', 'Maharashtra')->first();
     $district = District::query()->where('name', 'Pune')->first();
     $taluka = Taluka::query()->where('name', 'Haveli')->first();
@@ -42,7 +42,7 @@ test('authenticated user can submit hierarchy location suggestion', function () 
         $this->markTestSkipped('location_suggestions table not migrated');
     }
 
-    $country = Country::query()->where('iso_alpha2', 'IN')->first();
+    $country = Country::query()->where('slug', 'india')->first();
     $state = State::query()->where('name', 'Maharashtra')->first();
     $district = District::query()->where('name', 'Pune')->first();
     $taluka = Taluka::query()->where('name', 'Haveli')->first();

@@ -20,9 +20,9 @@ class LocationSuggestionController extends Controller
     {
         $validated = $request->validate([
             'suggested_name' => ['required', 'string', 'max:100'],
-            'state_id' => ['required', 'integer', Rule::exists('addresses', 'id')->where(fn ($q) => $q->where('type', 'state'))],
-            'district_id' => ['required', 'integer', Rule::exists('addresses', 'id')->where(fn ($q) => $q->where('type', 'district'))],
-            'taluka_id' => ['required', 'integer', Rule::exists('addresses', 'id')->where(fn ($q) => $q->where('type', 'taluka'))],
+            'state_id' => ['required', 'integer', Rule::exists('addresses', 'id')->where(fn ($q) => $q->where('hierarchy', 'state'))],
+            'district_id' => ['required', 'integer', Rule::exists('addresses', 'id')->where(fn ($q) => $q->where('hierarchy', 'district'))],
+            'taluka_id' => ['required', 'integer', Rule::exists('addresses', 'id')->where(fn ($q) => $q->where('hierarchy', 'taluka'))],
             'suggestion_type' => ['required', Rule::in(['city', 'village'])],
             'suggested_pincode' => ['nullable', 'string', 'max:10'],
         ]);
@@ -60,7 +60,9 @@ class LocationSuggestionController extends Controller
 
             if (LocationAlias::where('normalized_alias', $normalized)
                 ->whereHas('location', function ($q) use ($validated) {
-                    $q->where('parent_id', (int) $validated['taluka_id'])->where('type', 'city');
+                    $q->where('parent_id', (int) $validated['taluka_id'])
+                        ->where('hierarchy', 'village')
+                        ->where('tag', 'city');
                 })
                 ->exists()) {
                 return response()->json([

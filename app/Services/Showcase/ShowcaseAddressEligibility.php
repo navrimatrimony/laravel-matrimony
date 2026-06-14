@@ -6,22 +6,22 @@ use App\Models\AdminSetting;
 use App\Support\Location\AddressSchemaEnumOptions;
 
 /**
- * Which {@code addresses} rows may anchor showcase profiles (admin-configured {@code type} + {@code tag}).
+ * Which {@code addresses} rows may anchor showcase profiles (admin-configured {@code hierarchy} + {@code tag}).
  *
- * Hard rule: {@code type = city} and {@code tag = none} is never eligible for showcase, regardless of admin selection.
+ * Hard rule: showcase "city" picks are village hierarchy rows classified by {@code tag}; {@code hierarchy = city} is invalid.
  */
 final class ShowcaseAddressEligibility
 {
-    public const SETTING_TYPES_KEY = 'showcase_eligible_address_types';
+    public const SETTING_HIERARCHIES_KEY = 'showcase_eligible_address_hierarchies';
 
     public const SETTING_TAGS_KEY = 'showcase_eligible_address_tags';
 
     /**
      * @return list<string>
      */
-    public static function defaultTypes(): array
+    public static function defaultHierarchies(): array
     {
-        return ['district', 'city'];
+        return ['district', 'village'];
     }
 
     /**
@@ -29,7 +29,7 @@ final class ShowcaseAddressEligibility
      */
     public static function defaultTags(): array
     {
-        return ['metro', 'capital'];
+        return ['city', 'suburban'];
     }
 
     /**
@@ -37,11 +37,11 @@ final class ShowcaseAddressEligibility
      *
      * @return list<string>
      */
-    public static function globalTypes(): array
+    public static function globalHierarchies(): array
     {
-        return self::normalizeTypesList(
-            json_decode((string) AdminSetting::getValue(self::SETTING_TYPES_KEY, ''), true)
-        ) ?? self::defaultTypes();
+        return self::normalizeHierarchiesList(
+            json_decode((string) AdminSetting::getValue(self::SETTING_HIERARCHIES_KEY, ''), true)
+        ) ?? self::defaultHierarchies();
     }
 
     /**
@@ -55,27 +55,27 @@ final class ShowcaseAddressEligibility
     }
 
     /**
-     * Bulk policy overrides {@code eligible_address_tags}; bulk types are unused (always empty in stored policy).
+     * Bulk policy overrides {@code eligible_address_tags}; bulk hierarchies are unused (always empty in stored policy).
      *
      * @param  array<string, mixed>|null  $bulkPolicy  normalized {@see ShowcaseBulkCreateSettings::policy}
      * @return list<string>
      */
-    public static function typesForContext(?array $bulkPolicy): array
+    public static function hierarchiesForContext(?array $bulkPolicy): array
     {
         if ($bulkPolicy !== null) {
-            $raw = $bulkPolicy['eligible_address_types'] ?? null;
+            $raw = $bulkPolicy['eligible_address_hierarchies'] ?? null;
             if (is_array($raw) && $raw !== []) {
-                $t = self::normalizeTypesList($raw);
+                $t = self::normalizeHierarchiesList($raw);
                 if ($t !== []) {
                     return $t;
                 }
             }
 
-            // Admin bulk policy is tag-only: internal pool logic always allows district + city picks.
-            return self::defaultTypes();
+            // Admin bulk policy is tag-only: internal pool logic always allows district + village leaf picks.
+            return self::defaultHierarchies();
         }
 
-        return self::globalTypes();
+        return self::globalHierarchies();
     }
 
     /**
@@ -98,7 +98,7 @@ final class ShowcaseAddressEligibility
     }
 
     /**
-     * Tags to use in SQL {@code WHERE city.tag IN (...)} — never {@code none}; defaults when empty.
+     * Tags to use in SQL {@code WHERE city.tag IN (...)}; defaults when empty.
      *
      * @param  list<string>  $adminTags
      * @return list<string>
@@ -106,14 +106,10 @@ final class ShowcaseAddressEligibility
     public static function citySqlTagsFromAdminTags(array $adminTags): array
     {
         $adminTags = array_values(array_unique(array_map('strtolower', $adminTags)));
-        $allowedNonNone = array_values(array_filter(
-            AddressSchemaEnumOptions::addressTags(),
-            static fn (string $t) => $t !== 'none'
-        ));
-        $flip = array_flip($allowedNonNone);
+        $flip = array_flip(AddressSchemaEnumOptions::addressTags());
         $out = [];
         foreach ($adminTags as $t) {
-            if ($t !== '' && $t !== 'none' && isset($flip[$t])) {
+            if ($t !== '' && isset($flip[$t])) {
                 $out[] = $t;
             }
         }
@@ -126,30 +122,30 @@ final class ShowcaseAddressEligibility
     }
 
     /**
-     * @param  list<string>  $types
+     * @param  list<string>  $hierarchies
      */
-    public static function allowsDistrictPool(array $types): bool
+    public static function allowsDistrictPool(array $hierarchies): bool
     {
-        return in_array('district', $types, true);
+        return in_array('district', $hierarchies, true);
     }
 
     /**
-     * @param  list<string>  $types
+     * @param  list<string>  $hierarchies
      */
-    public static function allowsCityPicks(array $types): bool
+    public static function allowsCityPicks(array $hierarchies): bool
     {
-        return in_array('city', $types, true);
+        return in_array('village', $hierarchies, true);
     }
 
     /**
      * @return list<string>|null
      */
-    public static function normalizeTypesList(mixed $raw): ?array
+    public static function normalizeHierarchiesList(mixed $raw): ?array
     {
         if (! is_array($raw) || $raw === []) {
             return null;
         }
-        $allowed = array_flip(AddressSchemaEnumOptions::addressTypes());
+        $allowed = array_flip(AddressSchemaEnumOptions::addressHierarchies());
         $out = [];
         foreach ($raw as $v) {
             $k = strtolower(trim((string) $v));

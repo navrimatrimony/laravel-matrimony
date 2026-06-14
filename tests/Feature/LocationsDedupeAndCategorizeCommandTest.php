@@ -18,7 +18,7 @@ test('locations categorization command sets category from rules', function () {
     $india = Location::query()->create([
         'name' => 'India',
         'slug' => 'india-cat-cmd-test',
-        'type' => 'country',
+        'hierarchy' => 'country',
         'parent_id' => null,
         'level' => 0,
         'is_active' => true,
@@ -26,7 +26,7 @@ test('locations categorization command sets category from rules', function () {
     $mh = Location::query()->create([
         'name' => 'Maharashtra',
         'slug' => 'mh-cat-cmd-test',
-        'type' => 'state',
+        'hierarchy' => 'state',
         'parent_id' => $india->id,
         'level' => 1,
         'is_active' => true,
@@ -34,7 +34,7 @@ test('locations categorization command sets category from rules', function () {
     $puneDist = Location::query()->create([
         'name' => 'Pune',
         'slug' => 'pune-dist-cat-cmd',
-        'type' => 'district',
+        'hierarchy' => 'district',
         'parent_id' => $mh->id,
         'level' => 2,
         'is_active' => true,
@@ -42,7 +42,7 @@ test('locations categorization command sets category from rules', function () {
     $otherDist = Location::query()->create([
         'name' => 'Satara',
         'slug' => 'satara-dist-cat-cmd',
-        'type' => 'district',
+        'hierarchy' => 'district',
         'parent_id' => $mh->id,
         'level' => 2,
         'is_active' => true,
@@ -50,16 +50,16 @@ test('locations categorization command sets category from rules', function () {
     $taluka = Location::query()->create([
         'name' => 'Tasgaon',
         'slug' => 'tasgaon-tal-cat-cmd',
-        'type' => 'taluka',
+        'hierarchy' => 'taluka',
         'parent_id' => $otherDist->id,
         'level' => 3,
         'is_active' => true,
     ]);
-    $legacyCity = Location::query()->create([
+    $village = Location::query()->create([
         'name' => 'Pune',
         'slug' => 'pune-city-legacy-cat-cmd',
-        'type' => 'city',
-        'parent_id' => $otherDist->id,
+        'hierarchy' => 'village',
+        'parent_id' => $taluka->id,
         'level' => 4,
         'is_active' => true,
     ]);
@@ -70,9 +70,10 @@ test('locations categorization command sets category from rules', function () {
 
     expect($india->fresh()->category)->toBeNull();
     expect($mh->fresh()->category)->toBeNull();
-    expect($puneDist->fresh()->category)->toBe('metro');
+    expect($puneDist->fresh()->category)->toBe('city');
     expect($otherDist->fresh()->category)->toBe('city');
-    expect($taluka->fresh()->category)->toBe('town');
-    expect(Location::query()->find($legacyCity->id))->toBeNull();
-    expect($puneDist->fresh()->type)->toBe('district');
+    expect($taluka->fresh()->category)->toBe('city');
+    expect(Location::query()->find($village->id)?->category)->toBe('city');
+    expect(Location::query()->find($village->id)?->hierarchy)->toBe('village');
+    expect($puneDist->fresh()->hierarchy)->toBe('district');
 });

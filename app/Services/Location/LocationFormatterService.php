@@ -45,7 +45,7 @@ final class LocationFormatterService
 
         $this->locationService->ensureAncestorsLoaded($location);
 
-        if (($location->type ?? '') === 'country') {
+        if (($location->hierarchy ?? '') === 'country') {
             return $location->localizedName();
         }
 
@@ -77,12 +77,10 @@ final class LocationFormatterService
             return $raw;
         }
 
-        return match ((string) ($location->type)) {
+        return match ((string) ($location->hierarchy)) {
             'village' => 'rural',
-            'suburb' => 'suburban',
-            'taluka' => 'taluka',
-            'city' => 'city',
-            'district' => 'town',
+            'taluka' => 'city',
+            'district' => 'city',
             'state' => 'none',
             default => '',
         };
@@ -94,13 +92,13 @@ final class LocationFormatterService
      */
     private function enrichHierarchy(Location $leaf, array $h): array
     {
-        if ($leaf->type === 'district' && ($h['district'] ?? null) === null) {
+        if ($leaf->hierarchy === 'district' && ($h['district'] ?? null) === null) {
             $h['district'] = $leaf;
         }
-        if ($leaf->type === 'taluka' && ($h['taluka'] ?? null) === null) {
+        if ($leaf->hierarchy === 'taluka' && ($h['taluka'] ?? null) === null) {
             $h['taluka'] = $leaf;
         }
-        if ($leaf->type === 'city' && ($h['city'] ?? null) === null) {
+        if ($leaf->hierarchy === 'village' && ($leaf->category ?? '') === 'city' && ($h['city'] ?? null) === null) {
             $h['city'] = $leaf;
         }
 
@@ -161,7 +159,7 @@ final class LocationFormatterService
      */
     private function resolveMetroCityName(Location $leaf, array $h): string
     {
-        if (in_array((string) ($leaf->type ?? ''), ['city', 'district'], true)) {
+        if (($leaf->hierarchy ?? '') === 'district' || (($leaf->hierarchy ?? '') === 'village' && ($leaf->category ?? '') === 'city')) {
             return $leaf->localizedName();
         }
 
@@ -211,7 +209,7 @@ final class LocationFormatterService
         $current = $leaf->parent;
         $guard = 0;
         while ($current !== null && $guard++ < 24) {
-            if ((string) ($current->type ?? '') === 'city') {
+            if ((string) ($current->hierarchy ?? '') === 'village' && ($current->category ?? '') === 'city') {
                 return $current;
             }
             if (! $current->relationLoaded('parent')) {

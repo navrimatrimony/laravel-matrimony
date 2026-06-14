@@ -14,15 +14,15 @@ class ShowcaseBulkCreateGeoByTagTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_bulk_policy_empty_types_uses_default_types_for_context(): void
+    public function test_bulk_policy_empty_hierarchies_uses_default_hierarchies_for_context(): void
     {
         $policy = ShowcaseBulkCreateSettings::normalize([
-            'eligible_address_types' => [],
-            'eligible_address_tags' => ['metro'],
+            'eligible_address_hierarchies' => [],
+            'eligible_address_tags' => ['city'],
         ]);
 
-        $this->assertSame([], $policy['eligible_address_types']);
-        $this->assertSame(['district', 'city'], ShowcaseAddressEligibility::typesForContext($policy));
+        $this->assertSame([], $policy['eligible_address_hierarchies']);
+        $this->assertSame(['district', 'village'], ShowcaseAddressEligibility::hierarchiesForContext($policy));
     }
 
     public function test_pick_showcase_hierarchy_from_address_tags_without_member_district_pool(): void
@@ -30,7 +30,7 @@ class ShowcaseBulkCreateGeoByTagTest extends TestCase
         $this->seed(MinimalLocationSeeder::class);
 
         $policy = ShowcaseBulkCreateSettings::normalize([
-            'eligible_address_tags' => ['metro'],
+            'eligible_address_tags' => ['city'],
         ]);
 
         $m = new ReflectionMethod(ShowcaseProfileDefaultsService::class, 'pickShowcaseHierarchyFromAddressTags');

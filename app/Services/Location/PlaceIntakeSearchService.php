@@ -97,7 +97,7 @@ final class PlaceIntakeSearchService
 
     /**
      * One intake suggestion when biodata hierarchy (गाव+ता.+जि., town-taluka, suburban+city, metro) resolves uniquely.
-     * Uses {@code addresses.type} + {@code tag} with {@see LocationFormatterService} display lines.
+     * Uses {@code addresses.hierarchy} + {@code tag} with {@see LocationFormatterService} display lines.
      *
      * @return array<string, mixed>|null
      */
@@ -213,11 +213,7 @@ final class PlaceIntakeSearchService
 
         $query = Location::query()
             ->with(['parent.parent'])
-            ->where('type', 'taluka')
-            ->where(function (Builder $w): void {
-                $w->where('tag', 'town')
-                    ->orWhereRaw('LOWER(COALESCE(tag, "")) = ?', ['town']);
-            })
+            ->where('hierarchy', 'taluka')
             ->where(function (Builder $w) use ($townName): void {
                 $this->applyGeoNameMatch($w, $townName);
             });
@@ -227,7 +223,7 @@ final class PlaceIntakeSearchService
             $query->whereIn('parent_id', $districtIds);
         } else {
             $query->whereHas('parent', function (Builder $dq) use ($district): void {
-                $dq->where('type', 'district');
+                $dq->where('hierarchy', 'district');
                 $this->applyGeoNameMatch($dq, $district);
             });
         }
@@ -274,19 +270,19 @@ final class PlaceIntakeSearchService
 
     private function locationFitsPattern(Location $loc, string $pattern): bool
     {
-        $type = (string) ($loc->type ?? '');
+        $hierarchy = (string) ($loc->hierarchy ?? '');
         $tag = strtolower(trim((string) ($loc->category ?? '')));
 
         return match ($pattern) {
-            'rural' => $type === 'village' && ($tag === '' || in_array($tag, ['rural', 'village'], true)),
-            'town_taluka' => $type === 'taluka' && in_array($tag, ['town', 'taluka'], true),
-            'suburban' => $type === 'suburb' && ($tag === '' || $tag === 'suburban'),
+            'rural' => $hierarchy === 'village' && ($tag === '' || $tag === 'rural'),
+            'town_taluka' => $hierarchy === 'taluka',
+            'suburban' => $hierarchy === 'village' && $tag === 'suburban',
             'metro' => (
-                in_array($type, ['city', 'district'], true)
-                && ($tag === '' || in_array($tag, ['metro', 'city', 'capital'], true))
+                in_array($hierarchy, ['village', 'district', 'taluka'], true)
+                && $tag === 'city'
             ) || (
-                $type === 'taluka'
-                && ($tag === '' || in_array($tag, ['town', 'taluka'], true))
+                in_array($hierarchy, ['district', 'taluka'], true)
+                && $tag === ''
             ),
             default => true,
         };
@@ -555,11 +551,6 @@ final class PlaceIntakeSearchService
 
         $query = Taluka::query()->with(['district.state']);
 
-        $query->where(function (Builder $w): void {
-            $w->where('tag', 'town')
-                ->orWhereRaw('LOWER(COALESCE(tag, "")) = ?', ['town']);
-        });
-
         $query->where(function (Builder $w) use ($townName): void {
             $this->applyGeoNameMatch($w, $townName);
         });
@@ -615,12 +606,8 @@ final class PlaceIntakeSearchService
 
         return Location::query()
             ->with(['parent.parent'])
-            ->where('type', 'suburb')
-            ->where(function (Builder $w): void {
-                $w->where('tag', 'suburban')
-                    ->orWhereNull('tag')
-                    ->orWhere('tag', '');
-            })
+            ->where('hierarchy', 'village')
+            ->where('tag', 'suburban')
             ->whereIn('parent_id', $cityIds)
             ->where(function (Builder $w) use ($suburb): void {
                 $this->applyGeoNameMatch($w, $suburb);
@@ -643,11 +630,11 @@ final class PlaceIntakeSearchService
 
         return Location::query()
             ->with(['parent'])
-            ->whereIn('type', ['city', 'district', 'taluka'])
+            ->whereIn('hierarchy', ['village', 'district', 'taluka'])
             ->where(function (Builder $w) use ($name): void {
                 $this->applyGeoNameMatch($w, $name);
             })
-            ->orderByRaw("CASE WHEN type = 'taluka' THEN 0 WHEN type = 'city' THEN 1 WHEN type = 'district' THEN 2 ELSE 3 END")
+            ->orderByRaw("CASE WHEN hierarchy = 'village' AND tag = 'city' THEN 0 WHEN hierarchy = 'taluka' THEN 1 WHEN hierarchy = 'district' THEN 2 ELSE 3 END")
             ->orderBy('name')
             ->limit(12)
             ->get()
@@ -716,13 +703,13 @@ final class PlaceIntakeSearchService
             $districtName = $this->normalizeKey((string) (($h['district'] ?? null)?->localizedName() ?? ''));
             $talukaName = $this->normalizeKey((string) (($h['taluka'] ?? null)?->localizedName() ?? ''));
 
-            if ($loc->type === 'taluka') {
+            if ($loc->hierarchy === 'taluka') {
                 $score += 50;
             }
-            if ($loc->type === 'village' && $villageKey !== '' && $villageKey !== $talukaKey) {
+            if ($loc->hierarchy === 'village' && $villageKey !== '' && $villageKey !== $talukaKey) {
                 $score += 60;
             }
-            if ($loc->type === 'taluka' && $simpleFirst !== '' && $simpleSecond !== '') {
+            if ($loc->hierarchy === 'taluka' && $simpleFirst !== '' && $simpleSecond !== '') {
                 if ($locName === $simpleFirst || str_contains($locName, $simpleFirst)) {
                     $score += 120;
                 }
@@ -730,13 +717,13 @@ final class PlaceIntakeSearchService
                     $score += 80;
                 }
             }
-            if ($loc->type === 'taluka' && $talukaKey !== '' && $villageKey === $talukaKey) {
+            if ($loc->hierarchy === 'taluka' && $talukaKey !== '' && $villageKey === $talukaKey) {
                 $score += 150;
             }
             if (count($simpleParts) === 1 && $simpleFirst !== '' && $locName === $simpleFirst) {
-                $score += match ($loc->type) {
+                $score += match ($loc->hierarchy) {
                     'taluka' => 240,
-                    'city' => 220,
+                    'village' => strtolower(trim((string) ($loc->category ?? ''))) === 'city' ? 220 : 0,
                     'district' => 180,
                     default => 0,
                 };
@@ -747,11 +734,11 @@ final class PlaceIntakeSearchService
             if ($talukaKey !== '' && ($talukaName === $talukaKey || str_contains($talukaName, $talukaKey))) {
                 $score += 30;
             }
-            if ($loc->type === 'village' && $villageKey !== '' && $this->compactNamesMatch($locName, $villageKey)) {
+            if ($loc->hierarchy === 'village' && $villageKey !== '' && $this->compactNamesMatch($locName, $villageKey)) {
                 $score += 160;
             } else {
                 $villageTokens = $this->villageNameTokens((string) ($hints['village'] ?? ''));
-                if ($loc->type === 'village' && count($villageTokens) >= 2) {
+                if ($loc->hierarchy === 'village' && count($villageTokens) >= 2) {
                     $matchedTokens = 0;
                     foreach ($villageTokens as $token) {
                         if ($token !== '' && (str_contains($locName, $token) || $this->compactNamesMatch($locName, $token))) {
@@ -795,7 +782,7 @@ final class PlaceIntakeSearchService
                 'id' => (int) $loc->id,
                 'name' => $loc->localizedName(),
                 'city_name' => $loc->localizedName(),
-                'taluka_id' => $taluka ? (int) $taluka->id : ($loc->type === 'taluka' ? (int) $loc->id : 0),
+                'taluka_id' => $taluka ? (int) $taluka->id : ($loc->hierarchy === 'taluka' ? (int) $loc->id : 0),
                 'taluka_name' => $taluka?->localizedName() ?? '',
                 'district_id' => $district ? (int) $district->id : 0,
                 'district_name' => $district?->localizedName() ?? '',
@@ -829,7 +816,7 @@ final class PlaceIntakeSearchService
     }
 
     /**
-     * Parent ids for suburban search (city / district / state rows).
+     * Parent ids for suburban search. City/suburban are tag classifications; hierarchy stays taluka/district/state.
      *
      * @return list<int>
      */
@@ -841,7 +828,22 @@ final class PlaceIntakeSearchService
         }
 
         $ids = Location::query()
-            ->whereIn('type', ['city', 'district'])
+            ->where('hierarchy', 'village')
+            ->where('tag', 'city')
+            ->where(function (Builder $w) use ($cityName): void {
+                $this->applyGeoNameMatch($w, $cityName);
+            })
+            ->limit(15)
+            ->pluck('parent_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->all();
+
+        if ($ids !== []) {
+            return self::$cityParentIdCache[$cacheKey] = $ids;
+        }
+
+        $talukaIds = Taluka::query()
             ->where(function (Builder $w) use ($cityName): void {
                 $this->applyGeoNameMatch($w, $cityName);
             })
@@ -850,8 +852,26 @@ final class PlaceIntakeSearchService
             ->map(fn ($id) => (int) $id)
             ->all();
 
-        if ($ids !== []) {
-            return self::$cityParentIdCache[$cacheKey] = $ids;
+        if ($talukaIds !== []) {
+            return self::$cityParentIdCache[$cacheKey] = $talukaIds;
+        }
+
+        $districtIds = District::query()
+            ->where(function (Builder $w) use ($cityName): void {
+                $this->applyGeoNameMatch($w, $cityName);
+            })
+            ->limit(15)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if ($districtIds !== []) {
+            return self::$cityParentIdCache[$cacheKey] = Taluka::query()
+                ->whereIn('parent_id', $districtIds)
+                ->limit(50)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
         }
 
         $stateIds = State::query()
@@ -867,7 +887,7 @@ final class PlaceIntakeSearchService
         }
 
         return self::$cityParentIdCache[$cacheKey] = Location::query()
-            ->where('type', 'district')
+            ->where('hierarchy', 'district')
             ->whereIn('parent_id', $stateIds)
             ->limit(20)
             ->pluck('id')

@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Schema;
 class LocationDuplicateDetectionService
 {
     /**
-     * @return list<array{id:int,name:string,type:string,parent_id:int|null,reason:string,score:float}>
+     * @return list<array{id:int,name:string,hierarchy:string,parent_id:int|null,reason:string,score:float}>
      */
     public function findSimilar(Location $location, int $limit = 15): array
     {
@@ -60,7 +60,7 @@ class LocationDuplicateDetectionService
             $scored[] = [
                 'id' => (int) $cand->id,
                 'name' => (string) $cand->name,
-                'type' => (string) $cand->type,
+                'hierarchy' => (string) $cand->hierarchy,
                 'parent_id' => $cand->parent_id !== null ? (int) $cand->parent_id : null,
                 'reason' => $reason,
                 'score' => round(min(1.0, $score), 4),

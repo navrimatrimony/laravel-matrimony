@@ -5,10 +5,9 @@ namespace App\Models;
 use App\Services\Location\LocationHierarchyValidator;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 /**
- * State rows in {@code addresses} ({@code type = state}).
+ * State rows in {@code addresses} ({@code hierarchy = state}).
  *
  * @deprecated Prefer {@see Location}.
  */
@@ -23,20 +22,20 @@ class State extends Location
     protected static function booted(): void
     {
         static::saving(function (State $state): void {
-            $state->type = 'state';
+            $state->hierarchy = 'state';
             if (isset($state->attributes['country_id'])) {
                 $state->parent_id = $state->attributes['country_id'];
                 unset($state->attributes['country_id']);
             }
             if (($state->slug ?? '') === '' && filled($state->name)) {
-                $state->slug = Str::slug((string) $state->name).'-'.substr(md5((string) ($state->parent_id ?? '0').'-'.$state->name), 0, 8);
+                $state->slug = static::uniqueSlugForHierarchy($state->parent_id ? (int) $state->parent_id : null, 'state', (string) $state->name, $state->id ? (int) $state->id : null);
             }
             app(LocationHierarchyValidator::class)->validate($state);
         });
 
         parent::booted();
 
-        static::addGlobalScope('geo_state', fn ($q) => $q->where('type', 'state'));
+        static::addGlobalScope('geo_state', fn ($q) => $q->where('hierarchy', 'state'));
     }
 
     /**

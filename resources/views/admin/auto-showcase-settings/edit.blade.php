@@ -9,8 +9,8 @@
     $allowSelected = $errors->any()
         ? (is_array(old('auto_showcase_religion_allowlist')) ? array_map('intval', old('auto_showcase_religion_allowlist')) : [])
         : $religionAllowlistSelectedIds;
-    $globalTypeSel = old('showcase_eligible_address_types', $globalEligibleAddressTypes ?? []);
-    $globalTypeSel = is_array($globalTypeSel) ? $globalTypeSel : [];
+    $globalHierarchySel = old('showcase_eligible_address_hierarchies', $globalEligibleAddressHierarchies ?? []);
+    $globalHierarchySel = is_array($globalHierarchySel) ? $globalHierarchySel : [];
     $globalTagSel = old('showcase_eligible_address_tags', $globalEligibleAddressTags ?? []);
     $globalTagSel = is_array($globalTagSel) ? $globalTagSel : [];
 @endphp
@@ -631,18 +631,18 @@
                 </div>
 
                 <fieldset class="space-y-3 rounded-xl border border-gray-200 bg-white p-5">
-                    <legend class="text-sm font-bold text-gray-900">Eligible <code class="rounded bg-gray-100 px-1 font-mono text-xs text-gray-800">addresses</code> (type / tag) — engine</legend>
+                    <legend class="text-sm font-bold text-gray-900">Eligible <code class="rounded bg-gray-100 px-1 font-mono text-xs text-gray-800">addresses</code> (hierarchy / tag) — engine</legend>
                     <p class="text-xs leading-relaxed text-gray-600">
-                        खाली सर्व पर्याय <strong class="text-gray-900">database schema</strong> (MySQL ENUM / table values) वरून येतात. Default: <strong>district</strong> + <strong>city</strong>; tags <strong>metro</strong> + <strong>capital</strong>.
-                        <strong class="text-gray-900">City + tag <code class="rounded bg-gray-100 px-1 font-mono text-xs">none</code> कधीही showcase साठी वापरले जात नाही.</strong>
+                        खाली सर्व पर्याय <strong class="text-gray-900">database schema</strong> (MySQL ENUM / table values) वरून येतात. Default hierarchy: <strong>district</strong> + <strong>village</strong>; tags <strong>city</strong> + <strong>suburban</strong>.
+                        <strong class="text-gray-900">Classification फक्त <code class="rounded bg-gray-100 px-1 font-mono text-xs">tag</code> मधून येते; <code class="rounded bg-gray-100 px-1 font-mono text-xs">hierarchy</code> मध्ये city/suburban/rural कधीही नाही.</strong>
                     </p>
                     <div class="grid gap-6 sm:grid-cols-2">
                         <div>
-                            <span class="{{ $lbl }}">Address <code class="font-mono text-[11px]">type</code> (multi)</span>
+                            <span class="{{ $lbl }}">Address <code class="font-mono text-[11px]">hierarchy</code> (multi)</span>
                             <div class="mt-2 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3">
-                                @foreach ($addressTypeOptions as $t)
+                                @foreach ($addressHierarchyOptions as $t)
                                     <label class="flex cursor-pointer items-center gap-2 text-sm text-gray-800">
-                                        <input type="checkbox" name="showcase_eligible_address_types[]" value="{{ $t }}" class="size-4 rounded border-gray-400 text-indigo-600 focus:ring-indigo-500" @checked(in_array($t, $globalTypeSel, true))>
+                                        <input type="checkbox" name="showcase_eligible_address_hierarchies[]" value="{{ $t }}" class="size-4 rounded border-gray-400 text-indigo-600 focus:ring-indigo-500" @checked(in_array($t, $globalHierarchySel, true))>
                                         <span>{{ $t }}</span>
                                     </label>
                                 @endforeach
@@ -650,7 +650,7 @@
                         </div>
                         <div>
                             <span class="{{ $lbl }}">Address <code class="font-mono text-[11px]">tag</code> (multi)</span>
-                            <p class="mt-0.5 text-[11px] leading-relaxed text-gray-500">City rows: निवडलेले tags. <code class="font-mono">none</code> निवडले तरी city+none SQL मध्ये बाहेर.</p>
+                            <p class="mt-0.5 text-[11px] leading-relaxed text-gray-500">Village hierarchy rows: निवडलेले classification tags.</p>
                             <div class="mt-2 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3">
                                 @foreach ($addressTagOptions as $tg)
                                     <label class="flex cursor-pointer items-center gap-2 text-sm text-gray-800">

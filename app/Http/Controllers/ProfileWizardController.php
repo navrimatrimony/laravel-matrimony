@@ -771,9 +771,9 @@ class ProfileWizardController extends Controller
                 $preferredDistrictIds = array_values(array_unique(array_map('intval', $preferredDistrictIds)));
                 $preferredTalukaIds = array_values(array_unique(array_map('intval', $preferredTalukaIds)));
 
-                // SSOT: countries are rows in `addresses` (type=country), not the legacy `countries` table.
+                // SSOT: countries are rows in `addresses` (hierarchy=country), not the legacy `countries` table.
                 $data['allCountries'] = Location::query()
-                    ->where('type', 'country')
+                    ->where('hierarchy', 'country')
                     ->where(function ($q) {
                         $q->whereNull('is_active')->orWhere('is_active', true);
                     })

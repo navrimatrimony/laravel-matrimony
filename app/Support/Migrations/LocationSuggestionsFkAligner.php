@@ -60,10 +60,10 @@ final class LocationSuggestionsFkAligner
     {
         $connection->statement(
             'DELETE ls FROM location_suggestions ls
-             LEFT JOIN addresses ac ON ac.id = ls.country_id AND ac.type = \'country\'
-             LEFT JOIN addresses ast ON ast.id = ls.state_id AND ast.type = \'state\'
-             LEFT JOIN addresses ad ON ad.id = ls.district_id AND ad.type = \'district\'
-             LEFT JOIN addresses at ON at.id = ls.taluka_id AND at.type = \'taluka\'
+             LEFT JOIN addresses ac ON ac.id = ls.country_id AND ac.hierarchy = \'country\'
+             LEFT JOIN addresses ast ON ast.id = ls.state_id AND ast.hierarchy = \'state\'
+             LEFT JOIN addresses ad ON ad.id = ls.district_id AND ad.hierarchy = \'district\'
+             LEFT JOIN addresses at ON at.id = ls.taluka_id AND at.hierarchy = \'taluka\'
              WHERE ac.id IS NULL OR ast.id IS NULL OR ad.id IS NULL OR at.id IS NULL'
         );
     }

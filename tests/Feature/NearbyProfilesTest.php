@@ -24,14 +24,15 @@ function setupNearbyProfilesFixture(): array
     $banerCity = City::query()->create([
         'taluka_id' => $haveli->id,
         'name' => 'Baner City',
-        'category' => 'metro',
+        'category' => 'city',
     ]);
 
     $source = Location::query()->create([
         'name' => 'Wakad Source',
         'slug' => 'wakad-source-test-'.uniqid(),
-        'type' => 'suburb',
-        'parent_id' => $puneCity->id,
+        'hierarchy' => 'village',
+        'tag' => 'suburban',
+        'parent_id' => $haveli->id,
         'state_code' => 'MH',
         'district_code' => 'PN',
         'is_active' => true,
@@ -132,6 +133,6 @@ test('radius filter works', function () {
 test('type filter runs without error', function () {
     $fx = setupNearbyProfilesFixture();
 
-    $this->getJson('/api/profiles/nearby?location_id='.$fx['source_location_id'].'&radius=25&type=city')
+    $this->getJson('/api/profiles/nearby?location_id='.$fx['source_location_id'].'&radius=25&type=village')
         ->assertOk();
 });

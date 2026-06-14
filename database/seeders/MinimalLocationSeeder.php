@@ -12,7 +12,7 @@ use Illuminate\Database\Seeder;
 
 /**
  * Minimal demo hierarchy for tests/early bootstrap. Idempotent composite keys:
- * Country `iso_alpha2`, State `parent_id` (country row) + `name`, District `parent_id` (state) + `name`,
+ * Country `slug`, State `parent_id` (country row) + `name`, District `parent_id` (state) + `name`,
  * Taluka `parent_id` (district) + `name`, City `parent_id` (taluka) + `name` — all rows live in `addresses`.
  */
 class MinimalLocationSeeder extends Seeder
@@ -21,9 +21,10 @@ class MinimalLocationSeeder extends Seeder
     {
         $mr = LocationMarathiLabels::englishToMarathi();
         $india = Country::updateOrCreate(
-            ['iso_alpha2' => 'IN'],
+            ['slug' => 'india'],
             [
                 'name' => 'India',
+                'name_en' => 'India',
                 'name_mr' => $mr['India'] ?? 'भारत',
             ]
         );
@@ -63,11 +64,11 @@ class MinimalLocationSeeder extends Seeder
 
         City::firstOrCreate(
             ['parent_id' => $haveli->id, 'name' => 'Pune City'],
-            ['category' => 'metro']
+            ['category' => 'city']
         );
         City::firstOrCreate(
             ['parent_id' => $daskroi->id, 'name' => 'Ahmedabad City'],
-            ['category' => 'metro']
+            ['category' => 'city']
         );
 
         LocationMarathiLabels::syncIndianStateNameMr();

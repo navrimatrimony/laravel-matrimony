@@ -38,44 +38,14 @@ function locationSelectionBasePayload(): array
 
 function createMinimalLocationHierarchy(): array
 {
-    $legacyCity = City::query()->where('name', 'Pune City')->firstOrFail();
-
-    $state = Location::query()->create([
-        'name' => 'Maharashtra',
-        'slug' => 'mh-locsel-'.$legacyCity->id,
-        'type' => 'state',
-        'parent_id' => null,
-        'state_code' => 'MH',
-        'district_code' => null,
-        'is_active' => true,
-    ]);
-
-    $district = Location::query()->create([
-        'name' => 'Pune',
-        'slug' => 'pune-dist-locsel-'.$legacyCity->id,
-        'type' => 'district',
-        'parent_id' => $state->id,
-        'state_code' => 'MH',
-        'district_code' => 'PN',
-        'is_active' => true,
-    ]);
-
-    $city = Location::query()->create([
-        'id' => $legacyCity->id,
-        'name' => 'Pune',
-        'slug' => 'pune-city-locsel-'.$legacyCity->id,
-        'type' => 'city',
-        'parent_id' => $district->id,
-        'state_code' => 'MH',
-        'district_code' => 'PN',
-        'is_active' => true,
-    ]);
+    $city = City::query()->where('name', 'Pune City')->firstOrFail();
 
     $suburb = Location::query()->create([
         'name' => 'Wakad',
-        'slug' => 'wakad-test-'.$legacyCity->id,
-        'type' => 'suburb',
-        'parent_id' => $city->id,
+        'slug' => 'wakad-test-'.$city->id,
+        'hierarchy' => 'village',
+        'tag' => 'suburban',
+        'parent_id' => $city->parent_id,
         'state_code' => 'MH',
         'district_code' => 'PN',
         'is_active' => true,

@@ -280,11 +280,11 @@ class SuchakRegistrationService
         $locationService = app(LocationService::class);
         $locationService->ensureAncestorsLoaded($leaf);
 
-        $type = strtolower((string) ($leaf->type ?? ''));
+        $type = strtolower((string) ($leaf->hierarchy ?? ''));
         $id = static fn (?Location $location): ?int => $location ? (int) $location->id : null;
 
         return [
-            'city_id' => in_array($type, ['city', 'suburb', 'village'], true) ? (int) $leaf->id : null,
+            'city_id' => $type === 'village' ? (int) $leaf->id : null,
             'taluka_id' => $id($locationService->getAncestorByType($leaf, 'taluka')),
             'district_id' => $id($locationService->getAncestorByType($leaf, 'district')),
             'state_id' => $id($locationService->getAncestorByType($leaf, 'state')),

@@ -5,10 +5,9 @@ namespace App\Models;
 use App\Services\Location\LocationHierarchyValidator;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 /**
- * District rows in {@code addresses} ({@code type = district}).
+ * District rows in {@code addresses} ({@code hierarchy = district}).
  *
  * @deprecated Prefer {@see Location}.
  */
@@ -23,7 +22,7 @@ class District extends Location
     protected static function booted(): void
     {
         static::saving(function (District $district): void {
-            $district->type = 'district';
+            $district->hierarchy = 'district';
             if (isset($district->attributes['state_id'])) {
                 $district->parent_id = $district->attributes['state_id'];
                 unset($district->attributes['state_id']);
@@ -39,7 +38,7 @@ class District extends Location
 
         parent::booted();
 
-        static::addGlobalScope('geo_district', fn ($q) => $q->where('type', 'district'));
+        static::addGlobalScope('geo_district', fn ($q) => $q->where('hierarchy', 'district'));
     }
 
     /**
@@ -47,23 +46,7 @@ class District extends Location
      */
     public static function uniqueSlugForState(int $stateId, string $englishName, ?int $exceptDistrictId = null): string
     {
-        $base = Str::slug($englishName);
-        if ($base === '') {
-            $base = 'district';
-        }
-        $slug = $base;
-        $n = 2;
-        while (static::withoutGlobalScopes()
-            ->where('type', 'district')
-            ->where('parent_id', $stateId)
-            ->where('slug', $slug)
-            ->when($exceptDistrictId !== null, fn ($q) => $q->where('id', '!=', $exceptDistrictId))
-            ->exists()) {
-            $slug = $base.'-'.$n;
-            $n++;
-        }
-
-        return $slug;
+        return static::uniqueSlugForHierarchy($stateId, 'district', $englishName, $exceptDistrictId);
     }
 
     public function getStateIdAttribute(): ?int

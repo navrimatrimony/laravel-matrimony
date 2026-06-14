@@ -9,10 +9,14 @@ use App\Models\Taluka;
 use App\Models\Village;
 use App\Services\Location\AddressHierarchySearch;
 use App\Services\LocationSearchService;
+use Database\Seeders\MinimalLocationSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class AddressHierarchySearchTest extends TestCase
 {
+    use RefreshDatabase;
+
     /** @var list<int> */
     private array $createdIds = [];
 
@@ -26,6 +30,8 @@ class AddressHierarchySearchTest extends TestCase
 
     public function test_hierarchy_search_finds_varkute_malavdi(): void
     {
+        $this->seed(MinimalLocationSeeder::class);
+
         if (Country::query()->count() === 0) {
             $this->markTestSkipped('No location data in database');
         }
@@ -42,6 +48,9 @@ class AddressHierarchySearchTest extends TestCase
 
     public function test_address_hierarchy_search_service_direct(): void
     {
+        $this->seed(MinimalLocationSeeder::class);
+        $this->seedVarkuteMalavdi();
+
         $components = [
             'village' => 'वरकुटे मलवडी',
             'taluka' => 'माण',

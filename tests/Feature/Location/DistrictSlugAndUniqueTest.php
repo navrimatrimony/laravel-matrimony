@@ -17,7 +17,7 @@ class DistrictSlugAndUniqueTest extends TestCase
     {
         $india = Country::query()->create([
             'name' => 'India',
-            'iso_alpha2' => 'IN',
+
             'name_mr' => 'भारत',
         ]);
         $mh = State::query()->create([
@@ -39,7 +39,7 @@ class DistrictSlugAndUniqueTest extends TestCase
     {
         $india = Country::query()->create([
             'name' => 'India',
-            'iso_alpha2' => 'IN',
+
             'name_mr' => 'भारत',
         ]);
         $mh = State::query()->create([
@@ -67,7 +67,7 @@ class DistrictSlugAndUniqueTest extends TestCase
     {
         $india = Country::query()->create([
             'name' => 'India',
-            'iso_alpha2' => 'IN',
+
             'name_mr' => 'भारत',
         ]);
         $mh = State::query()->create([
@@ -95,7 +95,7 @@ class DistrictSlugAndUniqueTest extends TestCase
     {
         $india = Country::query()->create([
             'name' => 'India',
-            'iso_alpha2' => 'IN',
+
             'name_mr' => 'भारत',
         ]);
         $mh = State::query()->create([

@@ -24,9 +24,10 @@ class LocationStressTestSeeder extends Seeder
         DB::transaction(function () {
             $mr = LocationMarathiLabels::englishToMarathi();
             $india = Country::updateOrCreate(
-                ['iso_alpha2' => 'IN'],
+                ['slug' => 'india'],
                 [
                     'name' => 'India',
+                    'name_en' => 'India',
                     'name_mr' => $mr['India'] ?? 'भारत',
                 ]
             );

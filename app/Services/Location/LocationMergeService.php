@@ -38,9 +38,9 @@ class LocationMergeService
             }
 
             foreach (Location::query()->where('parent_id', $sourceLocationId)->lockForUpdate()->cursor() as $child) {
-                if ($this->integrity->duplicateSiblingExists($targetLocationId, (string) $child->name, null, (string) $child->type)) {
+                if ($this->integrity->duplicateSiblingExists($targetLocationId, (string) $child->name, null, (string) $child->hierarchy)) {
                     throw new \RuntimeException(
-                        'Merge blocked: target already has a child named "'.$child->name.'" with the same type. Rename one side first.'
+                        'Merge blocked: target already has a child named "'.$child->name.'" with the same hierarchy. Rename one side first.'
                     );
                 }
                 $child->parent_id = $targetLocationId;

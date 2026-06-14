@@ -2,7 +2,7 @@
   {
     "slug": "maharashtra",
     "name": "Maharashtra",
-    "type": "state",
+    "hierarchy": "state",
     "parent_slug": "india",
     "level": 1,
     "state_code": "MH"

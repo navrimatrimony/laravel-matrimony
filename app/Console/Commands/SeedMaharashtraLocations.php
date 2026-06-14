@@ -36,10 +36,10 @@ class SeedMaharashtraLocations extends Command
 
         $this->line('');
         $this->info('Maharashtra location seeding complete.');
-        $this->line('States: '.$this->countByType('state'));
-        $this->line('Districts: '.$this->countByType('district'));
-        $this->line('Talukas: '.$this->countByType('taluka'));
-        $this->line('Locations (city+suburb+village): '.$this->countLocationsLeaf());
+        $this->line('States: '.$this->countByHierarchy('state'));
+        $this->line('Districts: '.$this->countByHierarchy('district'));
+        $this->line('Talukas: '.$this->countByHierarchy('taluka'));
+        $this->line('Locations (village leaves): '.$this->countLocationsLeaf());
         $this->line('Rows with pincode set: '.Location::query()->whereNotNull('pincode')->count());
 
         return self::SUCCESS;
@@ -109,13 +109,13 @@ class SeedMaharashtraLocations extends Command
         return true;
     }
 
-    private function countByType(string $type): int
+    private function countByHierarchy(string $hierarchy): int
     {
-        return Location::query()->where('type', $type)->count();
+        return Location::query()->where('hierarchy', $hierarchy)->count();
     }
 
     private function countLocationsLeaf(): int
     {
-        return Location::query()->whereIn('type', ['city', 'suburb', 'village'])->count();
+        return Location::query()->where('hierarchy', 'village')->count();
     }
 }

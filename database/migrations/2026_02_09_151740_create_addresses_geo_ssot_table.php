@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Single geographic hierarchy + pincode SSOT (country → … → village/suburb).
+ * Single geographic hierarchy + pincode SSOT (country → state → district → taluka → village).
  * Legacy separate tables (countries, states, cities, …) are removed; all IDs live here.
  */
 return new class extends Migration
@@ -18,37 +18,33 @@ return new class extends Migration
 
         Schema::create('addresses', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('parent_id')->nullable()->constrained('addresses')->nullOnDelete();
             $table->string('name');
+            $table->string('slug');
             $table->string('name_mr')->nullable();
             $table->string('name_en')->nullable();
-            $table->string('iso_alpha2', 2)->nullable()->index();
-            $table->string('slug')->unique();
-            $table->enum('type', [
+            $table->enum('hierarchy', [
                 'country',
                 'state',
                 'district',
                 'taluka',
-                'city',
-                'suburb',
                 'village',
             ]);
-            $table->string('tag', 32)->nullable()->comment('metro/city/town/village/suburban — UI category');
-            $table->foreignId('parent_id')->nullable()->constrained('addresses')->nullOnDelete();
             $table->unsignedTinyInteger('level');
-            $table->string('state_code', 32)->nullable();
-            $table->string('district_code', 32)->nullable();
             $table->string('pincode', 16)->nullable();
-            $table->decimal('latitude', 10, 7)->nullable();
-            $table->decimal('longitude', 10, 7)->nullable();
-            $table->string('lgd_code', 32)->nullable();
+            $table->decimal('lat', 10, 7)->nullable();
+            $table->decimal('lng', 10, 7)->nullable();
             $table->boolean('is_active')->default(true);
-            $table->unsignedBigInteger('population')->nullable()->comment('city-level census/heuristic; optional');
+            $table->enum('tag', ['city', 'suburban', 'rural'])->nullable()->default(null)->comment('city/suburban/rural classification');
+            $table->string('lgd_code', 32)->nullable();
             $table->timestamps();
 
             $table->index('name');
             $table->index('parent_id');
-            $table->index('type');
+            $table->index('slug');
+            $table->index('hierarchy');
             $table->index('tag');
+            $table->unique(['parent_id', 'hierarchy', 'slug'], 'addresses_parent_hierarchy_slug_unique');
         });
     }
 

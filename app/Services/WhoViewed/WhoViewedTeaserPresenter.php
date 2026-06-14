@@ -192,7 +192,7 @@ final class WhoViewedTeaserPresenter
         $leaf->loadMissing('parent');
         $this->locationService->ensureAncestorsLoaded($leaf);
         $h = $this->locationService->getFullHierarchy($leaf);
-        $type = strtolower((string) ($leaf->type ?? ''));
+        $type = strtolower((string) ($leaf->hierarchy ?? ''));
         $cat = strtolower(trim((string) ($leaf->category ?? '')));
 
         $isMetroOrCapital = static function (?Location $loc): bool {
@@ -208,13 +208,13 @@ final class WhoViewedTeaserPresenter
             return null;
         }
 
-        if (in_array($type, ['suburb', 'village'], true) || $cat === 'suburban') {
+        if ($type === 'village' || $cat === 'suburban') {
             $walk = $leaf->parent;
             $guard = 0;
             while ($walk !== null && $guard < 8) {
                 $walk->loadMissing('parent');
-                $wt = strtolower((string) ($walk->type ?? ''));
-                if (in_array($wt, ['city', 'taluka', 'district'], true)) {
+                $wt = strtolower((string) ($walk->hierarchy ?? ''));
+                if (in_array($wt, ['taluka', 'district'], true)) {
                     return $this->formatHeadlinePlaceByType($walk);
                 }
                 $walk = $walk->parent;
@@ -231,7 +231,7 @@ final class WhoViewedTeaserPresenter
             return $this->formatHeadlinePlaceByType($h['taluka']);
         }
 
-        if ($type === 'city') {
+        if ($type === 'village' && $cat === 'city') {
             return $leaf->localizedName();
         }
 
@@ -261,7 +261,7 @@ final class WhoViewedTeaserPresenter
             return $label;
         }
 
-        $type = strtolower((string) ($location->type ?? ''));
+        $type = strtolower((string) ($location->hierarchy ?? ''));
         if ($type !== 'taluka') {
             return $label;
         }

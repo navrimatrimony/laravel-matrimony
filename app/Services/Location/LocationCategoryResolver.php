@@ -3,26 +3,20 @@
 namespace App\Services\Location;
 
 /**
- * Human-facing settlement category (metro/city/town/village/suburban), separate from strict {@code type} hierarchy.
+ * Human-facing settlement category, separate from strict {@code hierarchy}.
  */
 final class LocationCategoryResolver
 {
     /**
-     * @return 'metro'|'city'|'town'|'village'|'suburban'|null
+     * @return 'city'|'suburban'|'rural'|null
      */
-    public function resolve(string $name, string $type): ?string
+    public function resolve(string $name, string $hierarchy): ?string
     {
         $nameKey = mb_strtolower(trim($name), 'UTF-8');
-        if (in_array($nameKey, ['pune', 'mumbai'], true)) {
-            return 'metro';
-        }
-
-        return match ($type) {
+        return match ($hierarchy) {
             'district' => 'city',
-            'taluka' => 'town',
-            'village' => 'village',
-            'suburb' => 'suburban',
-            'city' => 'city',
+            'taluka' => 'suburban',
+            'village' => in_array($nameKey, ['pune', 'mumbai'], true) ? 'city' : 'rural',
             default => null,
         };
     }

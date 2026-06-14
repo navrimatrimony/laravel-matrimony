@@ -169,8 +169,8 @@ class IntakeLocationSuggestionLayerService
         $state = $h['state'] ?? null;
         $countryId = $state?->parent_id;
 
-        $talukaId = $taluka ? (int) $taluka->id : ($loc->type === 'taluka' ? (int) $loc->id : null);
-        $districtId = $district ? (int) $district->id : ($loc->type === 'district' ? (int) $loc->id : null);
+        $talukaId = $taluka ? (int) $taluka->id : ($loc->hierarchy === 'taluka' ? (int) $loc->id : null);
+        $districtId = $district ? (int) $district->id : ($loc->hierarchy === 'district' ? (int) $loc->id : null);
         $stateId = $state ? (int) $state->id : null;
 
         $snapshot = $this->snapshotForEdit($intake);

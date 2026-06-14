@@ -45,7 +45,7 @@ class PayuTestSuccessSimulateRouteTest extends TestCase
             'gender_id' => $maleGenderId,
             'lifecycle_state' => 'draft',
         ]);
-        $locationId = DB::table('addresses')->where('type', 'city')->value('id');
+        $locationId = DB::table('addresses')->where('hierarchy', 'village')->where('tag', 'city')->value('id');
         $this->assertNotNull($locationId);
         ProfileCanonicalResidenceService::upsertSelfCurrent((int) $profile->id, (int) $locationId, null, true, false);
         $profile->update(['lifecycle_state' => 'active']);

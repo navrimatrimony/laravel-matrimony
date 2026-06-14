@@ -192,7 +192,7 @@ final class LocationNormalizationService
 
     /**
      * Prefer an exact standalone canonical row for single-token places such as "Pune":
-     * taluka > city > district. This avoids district-only matches when a more specific
+     * taluka > city-tagged village > district. This avoids district-only matches when a more specific
      * same-name leaf exists in the hierarchy.
      *
      * @return array{matched: bool, city_id: int|null, district_id: int|null, state_id: int|null, taluka_id: int|null, country_id: int|null, confidence: float, raw_input: string, ambiguity: bool, possible_matches: array<int, array<string, mixed>>, location_id: int|null}|null
@@ -210,7 +210,7 @@ final class LocationNormalizationService
 
         $normalized = mb_strtolower($trimmed, 'UTF-8');
         $query = Location::query()
-            ->whereIn('type', ['taluka', 'city', 'district'])
+            ->whereIn('hierarchy', ['taluka', 'village', 'district'])
             ->where(function ($q) use ($trimmed, $normalized): void {
                 $q->whereRaw('LOWER(TRIM(COALESCE(name, ""))) = ?', [$normalized])
                     ->orWhereRaw('LOWER(TRIM(COALESCE(name_en, ""))) = ?', [$normalized]);
@@ -218,7 +218,7 @@ final class LocationNormalizationService
                     $q->orWhereRaw('TRIM(COALESCE(name_mr, "")) = ?', [$trimmed]);
                 }
             })
-            ->orderByRaw("CASE WHEN type = 'taluka' THEN 0 WHEN type = 'city' THEN 1 WHEN type = 'district' THEN 2 ELSE 3 END")
+            ->orderByRaw("CASE WHEN hierarchy = 'taluka' THEN 0 WHEN hierarchy = 'village' AND tag = 'city' THEN 1 WHEN hierarchy = 'district' THEN 2 ELSE 3 END")
             ->orderBy('id');
 
         $loc = $query->first();
@@ -279,35 +279,6 @@ final class LocationNormalizationService
     {
         $locationId = (int) $loc->id;
 
-        if ($loc->type === 'city') {
-            $city = City::query()->with(['taluka.district.state.country'])->find($loc->id);
-            if ($city === null) {
-                return $this->result(false, null, null, null, null, null, self::CONFIDENCE_NO_MATCH, $rawInput, false, [], null);
-            }
-
-            $taluka = $city->taluka;
-            $district = $taluka?->district;
-            $state = $district?->state;
-            $districtId = $taluka?->parent_id !== null ? (int) $taluka->parent_id : null;
-            $stateId = $district?->parent_id !== null ? (int) $district->parent_id : null;
-            $talukaId = $city->parent_id !== null ? (int) $city->parent_id : null;
-            $countryId = $state?->parent_id !== null ? (int) $state->parent_id : null;
-
-            return $this->result(
-                true,
-                (int) $city->id,
-                $districtId,
-                $stateId,
-                $talukaId,
-                $countryId,
-                self::CONFIDENCE_ALIAS_MATCH,
-                $rawInput,
-                false,
-                [],
-                $locationId,
-            );
-        }
-
         $h = $this->locationService->getFullHierarchy($loc);
         $state = $h['state'];
         $district = $h['district'];
@@ -316,7 +287,7 @@ final class LocationNormalizationService
         $districtId = $district?->id !== null ? (int) $district->id : null;
         $stateId = $state?->id !== null ? (int) $state->id : null;
         $talukaId = $taluka?->id !== null ? (int) $taluka->id : null;
-        if ($talukaId === null && $loc->type === 'taluka') {
+        if ($talukaId === null && $loc->hierarchy === 'taluka') {
             $talukaId = $locationId;
         }
         $countryId = null;
@@ -326,7 +297,7 @@ final class LocationNormalizationService
 
         return $this->result(
             true,
-            $loc->type !== 'district' && $loc->type !== 'state' && $loc->type !== 'country' ? $locationId : null,
+            $loc->hierarchy !== 'district' && $loc->hierarchy !== 'state' && $loc->hierarchy !== 'country' ? $locationId : null,
             $districtId,
             $stateId,
             $talukaId,

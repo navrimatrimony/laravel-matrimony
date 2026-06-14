@@ -12,19 +12,20 @@ beforeEach(function () {
 });
 
 test('city tag formats as city and state in English', function () {
-    $state = Location::query()->where('type', 'state')->where('name', 'Maharashtra')->first();
-    $district = Location::query()->where('type', 'district')->where('name', 'Pune')->first();
-    expect($state)->not->toBeNull()->and($district)->not->toBeNull();
+    $state = Location::query()->where('hierarchy', 'state')->where('name', 'Maharashtra')->first();
+    $district = Location::query()->where('hierarchy', 'district')->where('name', 'Pune')->first();
+    $taluka = Location::query()->where('hierarchy', 'taluka')->where('name', 'Haveli')->first();
+    expect($state)->not->toBeNull()->and($district)->not->toBeNull()->and($taluka)->not->toBeNull();
 
     $city = Location::query()->create([
         'name' => 'Pune',
         'slug' => 'fmt-pune-'.uniqid(),
-        'type' => 'city',
-        'parent_id' => $district->id,
+        'hierarchy' => 'village',
+        'parent_id' => $taluka->id,
         'state_code' => 'MH',
         'district_code' => 'PN',
         'is_active' => true,
-        'category' => 'city',
+        'tag' => 'city',
     ]);
 
     $line = app(LocationFormatterService::class)->formatLocation((int) $city->id);
@@ -32,14 +33,14 @@ test('city tag formats as city and state in English', function () {
 });
 
 test('rural tag includes taluka district and optional pincode', function () {
-    $state = Location::query()->where('type', 'state')->where('name', 'Maharashtra')->firstOrFail();
-    $district = Location::query()->where('type', 'district')->where('name', 'Pune')->firstOrFail();
-    $taluka = Location::query()->where('type', 'taluka')->where('name', 'Haveli')->firstOrFail();
+    $state = Location::query()->where('hierarchy', 'state')->where('name', 'Maharashtra')->firstOrFail();
+    $district = Location::query()->where('hierarchy', 'district')->where('name', 'Pune')->firstOrFail();
+    $taluka = Location::query()->where('hierarchy', 'taluka')->where('name', 'Haveli')->firstOrFail();
 
     $village = Location::query()->create([
         'name' => 'Testwadi',
         'slug' => 'fmt-wadi-'.uniqid(),
-        'type' => 'village',
+        'hierarchy' => 'village',
         'parent_id' => $taluka->id,
         'state_code' => 'MH',
         'district_code' => 'PN',
@@ -56,23 +57,23 @@ test('rural tag includes taluka district and optional pincode', function () {
 });
 
 test('rural label keeps taluka when village and taluka share the same name', function () {
-    $district = Location::query()->where('type', 'district')->where('name', 'Pune')->firstOrFail();
+    $district = Location::query()->where('hierarchy', 'district')->where('name', 'Pune')->firstOrFail();
 
     $taluka = Location::query()->create([
         'name' => 'Tasgaon',
         'slug' => 'fmt-dup-taluka-'.uniqid(),
-        'type' => 'taluka',
+        'hierarchy' => 'taluka',
         'parent_id' => $district->id,
         'state_code' => 'MH',
         'district_code' => 'PN',
         'is_active' => true,
-        'category' => 'taluka',
+        'category' => 'city',
     ]);
 
     $village = Location::query()->create([
         'name' => 'Tasgaon',
         'slug' => 'fmt-dup-village-'.uniqid(),
-        'type' => 'village',
+        'hierarchy' => 'village',
         'parent_id' => $taluka->id,
         'state_code' => 'MH',
         'district_code' => 'PN',
@@ -87,11 +88,11 @@ test('rural label keeps taluka when village and taluka share the same name', fun
 });
 
 test('suburban tag uses suburb and city with pincode when present', function () {
-    $taluka = Location::query()->where('type', 'taluka')->where('name', 'Haveli')->firstOrFail();
-    $city = Location::query()->create([
+    $taluka = Location::query()->where('hierarchy', 'taluka')->where('name', 'Haveli')->firstOrFail();
+    Location::query()->create([
         'name' => 'Pune Central',
         'slug' => 'fmt-pune-central-'.uniqid(),
-        'type' => 'city',
+        'hierarchy' => 'village',
         'parent_id' => $taluka->id,
         'state_code' => 'MH',
         'district_code' => 'PN',
@@ -103,16 +104,18 @@ test('suburban tag uses suburb and city with pincode when present', function () 
     $suburb = Location::query()->create([
         'name' => 'Baner',
         'slug' => 'fmt-baner-'.uniqid(),
-        'type' => 'suburb',
-        'parent_id' => $city->id,
+        'hierarchy' => 'village',
+        'parent_id' => $taluka->id,
         'state_code' => 'MH',
         'district_code' => 'PN',
         'is_active' => true,
         'tag' => 'suburban',
+        'pincode' => '411045',
     ]);
 
     $line = app(LocationFormatterService::class)->formatLocation((int) $suburb->id);
     expect($line)->toContain('Baner')
-        ->and($line)->toContain('Pune Central')
-        ->and($line)->toContain('411001');
+        ->and($line)->toContain('Haveli')
+        ->and($line)->toContain('Pune')
+        ->and($line)->toContain('411045');
 });

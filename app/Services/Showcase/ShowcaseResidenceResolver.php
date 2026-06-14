@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 
 /**
  * Picks a residence city_id for auto-showcase using admin-ordered fallbacks
- * (search city → district seat name match → tagged eligible cities by admin tag order).
+ * (search city → district seat name match → tagged eligible village leaves by admin tag order).
  */
 class ShowcaseResidenceResolver
 {
@@ -42,7 +42,7 @@ class ShowcaseResidenceResolver
     }
 
     /**
-     * @param  list<string>  $cityTags  metro|capital only
+     * @param  list<string>  $cityTags  city|suburban|rural
      */
     private function fromSearchCity(Request $request, array $cityTags): ?int
     {
@@ -52,10 +52,10 @@ class ShowcaseResidenceResolver
 
         $cityId = (int) $request->input('city_id');
         $geo = Location::geoTable();
-        $ok = City::query()
+        $ok = Location::query()
             ->from($geo.' as city')
             ->where('city.id', $cityId)
-            ->where('city.type', 'city')
+            ->where('city.hierarchy', 'village')
             ->whereIn('city.tag', $cityTags)
             ->exists();
         if (! $ok) {
@@ -64,12 +64,13 @@ class ShowcaseResidenceResolver
 
         if ($request->filled('district_id')) {
             $districtId = (int) $request->district_id;
-            $inDistrict = City::query()
+            $inDistrict = Location::query()
                 ->from($geo.' as city')
                 ->join($geo.' as taluka', function ($join): void {
-                    $join->on('taluka.id', '=', 'city.parent_id')->where('taluka.type', '=', 'taluka');
+                    $join->on('taluka.id', '=', 'city.parent_id')->where('taluka.hierarchy', '=', 'taluka');
                 })
                 ->where('city.id', $cityId)
+                ->where('city.hierarchy', 'village')
                 ->where('taluka.parent_id', $districtId)
                 ->exists();
             if (! $inDistrict) {
@@ -115,13 +116,13 @@ class ShowcaseResidenceResolver
         $name = trim((string) $district->name);
         if ($name !== '') {
             $geo = Location::geoTable();
-            $match = City::query()
+            $match = Location::query()
                 ->from($geo.' as city')
                 ->join($geo.' as taluka', function ($join): void {
-                    $join->on('taluka.id', '=', 'city.parent_id')->where('taluka.type', '=', 'taluka');
+                    $join->on('taluka.id', '=', 'city.parent_id')->where('taluka.hierarchy', '=', 'taluka');
                 })
                 ->where('taluka.parent_id', $districtId)
-                ->where('city.type', 'city')
+                ->where('city.hierarchy', 'village')
                 ->whereIn('city.tag', $cityTags)
                 ->whereRaw('LOWER(TRIM(city.name)) = ?', [mb_strtolower($name)])
                 ->orderByDesc('city.id')
@@ -135,7 +136,7 @@ class ShowcaseResidenceResolver
     }
 
     /**
-     * Prefer capital, then metro, then highest id among eligible cities in the district.
+     * Prefer city, then suburban, then rural among eligible village leaves in the district.
      *
      * @param  list<string>  $cityTags
      */
@@ -147,15 +148,15 @@ class ShowcaseResidenceResolver
         }
 
         $geo = Location::geoTable();
-        $tagOrder = "CASE city.tag WHEN 'capital' THEN 2 WHEN 'metro' THEN 1 ELSE 0 END";
+        $tagOrder = "CASE city.tag WHEN 'city' THEN 3 WHEN 'suburban' THEN 2 WHEN 'rural' THEN 1 ELSE 0 END";
 
-        $id = City::query()
+        $id = Location::query()
             ->from($geo.' as city')
             ->join($geo.' as taluka', function ($join): void {
-                $join->on('taluka.id', '=', 'city.parent_id')->where('taluka.type', '=', 'taluka');
+                $join->on('taluka.id', '=', 'city.parent_id')->where('taluka.hierarchy', '=', 'taluka');
             })
             ->where('taluka.parent_id', $districtId)
-            ->where('city.type', 'city')
+            ->where('city.hierarchy', 'village')
             ->whereIn('city.tag', $cityTags)
             ->orderByRaw($tagOrder.' DESC')
             ->orderByDesc('city.id')

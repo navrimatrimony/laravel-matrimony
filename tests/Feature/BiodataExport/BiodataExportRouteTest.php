@@ -271,7 +271,7 @@ class BiodataExportRouteTest extends TestCase
             'mother_name' => 'Test Mother',
             'property_details' => "Farm land\nHouse",
         ]);
-        $locationId = DB::table('addresses')->where('type', 'city')->value('id');
+        $locationId = DB::table('addresses')->where('hierarchy', 'village')->where('tag', 'city')->value('id');
         $this->assertNotNull($locationId);
         app(ProfileCanonicalResidenceService::class)->upsertSelfCurrent((int) $profile->id, (int) $locationId, null, true, false);
         $profile->update(['lifecycle_state' => 'active']);

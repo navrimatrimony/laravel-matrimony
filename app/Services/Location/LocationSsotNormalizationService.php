@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
- * SSOT cleanup: strip redundant " City" suffix from names, standardize slugs + levels, dedupe by (parent_id, name, type).
+ * SSOT cleanup: strip redundant " City" suffix from names, standardize slugs + levels, dedupe by (parent_id, name, hierarchy).
  */
 class LocationSsotNormalizationService
 {
@@ -30,18 +30,22 @@ class LocationSsotNormalizationService
                 $clean = $name;
             }
 
-            $baseSlug = self::standardSlug($clean, (string) $loc->type);
-            $slug = $this->integrity->uniqueSlugGlobally($baseSlug, (int) $loc->id);
+            $slug = Location::uniqueSlugForHierarchy(
+                $loc->parent_id !== null ? (int) $loc->parent_id : null,
+                (string) $loc->hierarchy,
+                $clean,
+                (int) $loc->id
+            );
 
             $loc->name = $clean;
             $loc->slug = $slug;
-            $loc->level = Location::defaultLevelForType((string) $loc->type);
+            $loc->level = Location::defaultLevelForHierarchy((string) $loc->hierarchy);
             $loc->saveQuietly();
         });
     }
 
     /**
-     * Merge duplicates into the lowest id per (parent_id, LOWER(TRIM(name)), type).
+     * Merge duplicates into the lowest id per (parent_id, LOWER(TRIM(name)), hierarchy).
      */
     public function deduplicateParents(): void
     {
@@ -53,7 +57,7 @@ class LocationSsotNormalizationService
 
         foreach (Location::query()->orderBy('id')->cursor() as $loc) {
             $parentKey = $loc->parent_id === null ? '_root_' : (string) $loc->parent_id;
-            $key = $parentKey.'|'.mb_strtolower(trim((string) $loc->name), 'UTF-8').'|'.(string) $loc->type;
+            $key = $parentKey.'|'.mb_strtolower(trim((string) $loc->name), 'UTF-8').'|'.(string) $loc->hierarchy;
 
             if (! isset($keepers[$key])) {
                 $keepers[$key] = (int) $loc->id;
@@ -73,21 +77,21 @@ class LocationSsotNormalizationService
             return;
         }
 
-        $indexName = $geo.'_parent_name_type_unique';
+        $indexName = $geo.'_parent_name_hierarchy_unique';
 
         if (Schema::hasIndex($geo, $indexName)) {
             return;
         }
 
         Schema::table($geo, function ($table) use ($indexName): void {
-            $table->unique(['parent_id', 'name', 'type'], $indexName);
+            $table->unique(['parent_id', 'name', 'hierarchy'], $indexName);
         });
     }
 
-    public static function standardSlug(string $name, string $type): string
+    public static function standardSlug(string $name): string
     {
         $base = Str::slug(trim($name));
 
-        return ($base !== '' ? $base : 'loc').'-'.$type;
+        return $base !== '' ? $base : 'loc';
     }
 }

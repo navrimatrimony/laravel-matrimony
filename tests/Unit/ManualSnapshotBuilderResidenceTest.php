@@ -62,7 +62,7 @@ class ManualSnapshotBuilderResidenceTest extends TestCase
         $this->seed(MinimalLocationSeeder::class);
 
         $profile = MatrimonyProfile::factory()->create(['lifecycle_state' => 'draft']);
-        $locationId = DB::table('addresses')->where('type', 'city')->value('id');
+        $locationId = DB::table('addresses')->where('hierarchy', 'village')->where('tag', 'city')->value('id');
         $currentTypeId = DB::table('master_address_types')->where('key', 'current')->value('id');
         $request = Request::create('/', 'POST', [
             'full_name' => 'Ashwini',
@@ -104,7 +104,7 @@ class ManualSnapshotBuilderResidenceTest extends TestCase
         $this->seed(MinimalLocationSeeder::class);
 
         $profile = MatrimonyProfile::factory()->create(['lifecycle_state' => 'draft']);
-        $birthCityId = DB::table('addresses')->where('type', 'city')->value('id');
+        $birthCityId = DB::table('addresses')->where('hierarchy', 'village')->where('tag', 'city')->value('id');
         $request = Request::create('/', 'POST', [
             'full_name' => 'Ashwini',
             'gender_id' => $profile->gender_id,

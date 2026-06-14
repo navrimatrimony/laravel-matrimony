@@ -5,10 +5,9 @@ namespace App\Models;
 use App\Services\Location\LocationHierarchyValidator;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 /**
- * Taluka rows in {@code addresses} ({@code type = taluka}).
+ * Taluka rows in {@code addresses} ({@code hierarchy = taluka}).
  *
  * @deprecated Prefer {@see Location}.
  */
@@ -23,20 +22,20 @@ class Taluka extends Location
     protected static function booted(): void
     {
         static::saving(function (Taluka $taluka): void {
-            $taluka->type = 'taluka';
+            $taluka->hierarchy = 'taluka';
             if (isset($taluka->attributes['district_id'])) {
                 $taluka->parent_id = $taluka->attributes['district_id'];
                 unset($taluka->attributes['district_id']);
             }
             if (($taluka->slug ?? '') === '' && filled($taluka->name)) {
-                $taluka->slug = Str::slug((string) $taluka->name).'-t'.substr(md5((string) ($taluka->parent_id ?? '0')), 0, 6);
+                $taluka->slug = static::uniqueSlugForHierarchy($taluka->parent_id ? (int) $taluka->parent_id : null, 'taluka', (string) $taluka->name, $taluka->id ? (int) $taluka->id : null);
             }
             app(LocationHierarchyValidator::class)->validate($taluka);
         });
 
         parent::booted();
 
-        static::addGlobalScope('geo_taluka', fn ($q) => $q->where('type', 'taluka'));
+        static::addGlobalScope('geo_taluka', fn ($q) => $q->where('hierarchy', 'taluka'));
     }
 
     public function getDistrictIdAttribute(): ?int

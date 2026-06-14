@@ -9,13 +9,13 @@ use Illuminate\Support\Facades\File;
 
 /**
  * Inserts/updates all Indian states & union territories (English {@code name} + Marathi {@code name_mr}).
- * Requires {@see CountriesMasterSeeder} (India with {@code iso_alpha2} = IN). Idempotent via {@code updateOrCreate}.
+ * Requires {@see CountriesMasterSeeder} (India country slug). Idempotent via {@code updateOrCreate}.
  */
 class IndianStatesMasterSeeder extends Seeder
 {
     public function run(): void
     {
-        $india = Country::query()->where('iso_alpha2', 'IN')->first();
+        $india = Country::query()->where('slug', 'india')->first();
         if ($india === null) {
             $this->command?->error('India country missing. Run CountriesMasterSeeder first.');
 

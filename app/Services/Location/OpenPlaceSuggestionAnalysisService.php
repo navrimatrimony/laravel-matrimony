@@ -144,7 +144,7 @@ class OpenPlaceSuggestionAnalysisService
         if ($bestLocation !== null) {
             $loc = Location::query()->find((int) $bestLocation['id']);
             if ($loc !== null) {
-                $suggestedType = $suggestedType ?? (string) $loc->type;
+                $suggestedType = $suggestedType ?? (string) $loc->hierarchy;
                 $suggestedParentId = $suggestedParentId ?? $loc->parent_id;
                 if ($payload['recommended_location_id'] === null && ($bestLocation['score'] ?? 0) >= 0.8) {
                     $payload['recommended_location_id'] = (int) $loc->id;

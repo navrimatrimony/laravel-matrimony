@@ -21,7 +21,7 @@ class LocationDisplayFormatterTest extends TestCase
     {
         $india = Country::query()->create([
             'name' => 'India',
-            'iso_alpha2' => 'IN',
+
             'name_mr' => 'भारत',
         ]);
         $mh = State::query()->create([
@@ -51,7 +51,7 @@ class LocationDisplayFormatterTest extends TestCase
         $puneCity = City::query()->create([
             'taluka_id' => $mulshiTaluka->id,
             'name' => 'Pune',
-            'category' => 'metro',
+            'category' => 'city',
         ]);
 
         $fmt = app(LocationDisplayFormatter::class);
@@ -70,7 +70,7 @@ class LocationDisplayFormatterTest extends TestCase
         $mulshiCity = City::query()->create([
             'taluka_id' => $mulshiTaluka->id,
             'name' => 'Mulshi',
-            'category' => 'none',
+            'category' => 'rural',
         ]);
 
         $fmt = app(LocationDisplayFormatter::class);
@@ -89,7 +89,7 @@ class LocationDisplayFormatterTest extends TestCase
         $shivapur = City::query()->create([
             'taluka_id' => $mulshiTaluka->id,
             'name' => 'Shivapur',
-            'category' => 'none',
+            'category' => 'rural',
         ]);
 
         $fmt = app(LocationDisplayFormatter::class);
@@ -113,14 +113,14 @@ class LocationDisplayFormatterTest extends TestCase
         $puneMetro = City::query()->create([
             'taluka_id' => $mulshiTaluka->id,
             'name' => 'Pune',
-            'category' => 'metro',
+            'category' => 'city',
         ]);
 
         $wakad = City::query()->create([
             'taluka_id' => $mulshiTaluka->id,
             'parent_city_id' => $puneMetro->id,
             'name' => 'Wakad',
-            'category' => 'none',
+            'category' => 'suburban',
         ]);
 
         $fmt = app(LocationDisplayFormatter::class);
@@ -143,7 +143,7 @@ class LocationDisplayFormatterTest extends TestCase
         $hqLike = City::query()->create([
             'taluka_id' => $mulshiTaluka->id,
             'name' => 'Navi Mumbai',
-            'category' => 'metro',
+            'category' => 'city',
         ]);
 
         LocationDisplayMeta::query()->create([
@@ -172,7 +172,7 @@ class LocationDisplayFormatterTest extends TestCase
         $shivapur = City::query()->create([
             'taluka_id' => $mulshiTaluka->id,
             'name' => 'ShivapurHide',
-            'category' => 'none',
+            'category' => 'rural',
         ]);
 
         LocationDisplayMeta::query()->create([
@@ -199,7 +199,7 @@ class LocationDisplayFormatterTest extends TestCase
         $city = City::query()->create([
             'taluka_id' => $mulshiTaluka->id,
             'name' => 'ShowIndia',
-            'category' => 'capital',
+            'category' => 'city',
         ]);
 
         LocationDisplayMeta::query()->create([

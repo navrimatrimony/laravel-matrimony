@@ -12,39 +12,9 @@ beforeEach(function () {
 });
 
 test('location search returns marathi display labels when locale is mr', function () {
-    $legacyCityId = \App\Models\City::query()->where('name', 'Pune City')->value('id');
-    expect($legacyCityId)->not->toBeNull();
-
-    $state = Location::query()->create([
-        'name' => 'Maharashtra',
-        'slug' => 'mh-mr-test-'.$legacyCityId,
-        'type' => 'state',
-        'parent_id' => null,
-        'state_code' => 'MH',
-        'district_code' => null,
-        'is_active' => true,
-    ]);
-
-    $district = Location::query()->create([
-        'name' => 'Pune',
-        'slug' => 'pune-dist-mr-'.$legacyCityId,
-        'type' => 'district',
-        'parent_id' => $state->id,
-        'state_code' => 'MH',
-        'district_code' => 'PN',
-        'is_active' => true,
-    ]);
-
-    $city = Location::query()->create([
-        'id' => (int) $legacyCityId,
-        'name' => 'Pune',
-        'slug' => 'pune-city-mr-'.$legacyCityId,
-        'type' => 'city',
-        'parent_id' => $district->id,
-        'state_code' => 'MH',
-        'district_code' => 'PN',
-        'is_active' => true,
-    ]);
+    $city = \App\Models\City::query()->where('name', 'Pune City')->firstOrFail();
+    $district = Location::query()->where('hierarchy', 'district')->where('name', 'Pune')->firstOrFail();
+    $state = Location::query()->where('hierarchy', 'state')->where('name', 'Maharashtra')->firstOrFail();
 
     $state->update(['name_mr' => 'महाराष्ट्र']);
     $district->update(['name_mr' => 'पुणे']);
@@ -59,36 +29,10 @@ test('location search returns marathi display labels when locale is mr', functio
 });
 
 test('location search matches marathi name_mr text', function () {
-    $legacyCityId = \App\Models\City::query()->where('name', 'Pune City')->value('id');
-    $state = Location::query()->create([
-        'name' => 'Maharashtra',
-        'slug' => 'mh-mr-search-'.$legacyCityId,
-        'type' => 'state',
-        'parent_id' => null,
-        'state_code' => 'MH',
-        'district_code' => null,
-        'is_active' => true,
-    ]);
-    $district = Location::query()->create([
-        'name' => 'Pune',
-        'slug' => 'pune-dist-search-'.$legacyCityId,
-        'type' => 'district',
-        'parent_id' => $state->id,
-        'state_code' => 'MH',
-        'district_code' => 'PN',
-        'is_active' => true,
-    ]);
-    $city = Location::query()->create([
-        'id' => (int) $legacyCityId,
-        'name' => 'Pune',
-        'slug' => 'pune-city-search-'.$legacyCityId,
-        'type' => 'city',
-        'parent_id' => $district->id,
-        'state_code' => 'MH',
-        'district_code' => 'PN',
-        'is_active' => true,
-        'name_mr' => 'पुणे',
-    ]);
+    $city = \App\Models\City::query()->where('name', 'Pune City')->firstOrFail();
+    $district = Location::query()->where('hierarchy', 'district')->where('name', 'Pune')->firstOrFail();
+    $state = Location::query()->where('hierarchy', 'state')->where('name', 'Maharashtra')->firstOrFail();
+    $city->update(['name_mr' => 'पुणे']);
     $state->update(['name_mr' => 'महाराष्ट्र']);
     $district->update(['name_mr' => 'पुणे']);
 
@@ -107,28 +51,28 @@ test('location search matches addresses.pincode when column exists', function ()
     $state = Location::query()->create([
         'name' => 'PincodeSearchState',
         'slug' => 'pincode-search-state-'.uniqid(),
-        'type' => 'state',
+        'hierarchy' => 'state',
         'parent_id' => null,
         'is_active' => true,
     ]);
     $district = Location::query()->create([
         'name' => 'PincodeSearchDist',
         'slug' => 'pincode-search-dist-'.uniqid(),
-        'type' => 'district',
+        'hierarchy' => 'district',
         'parent_id' => $state->id,
         'is_active' => true,
     ]);
     $taluka = Location::query()->create([
         'name' => 'PincodeSearchTal',
         'slug' => 'pincode-search-tal-'.uniqid(),
-        'type' => 'taluka',
+        'hierarchy' => 'taluka',
         'parent_id' => $district->id,
         'is_active' => true,
     ]);
     $village = Location::query()->create([
         'name' => 'Pincode Village X',
         'slug' => 'pincode-village-'.uniqid(),
-        'type' => 'village',
+        'hierarchy' => 'village',
         'parent_id' => $taluka->id,
         'pincode' => '415309',
         'is_active' => true,
@@ -145,7 +89,7 @@ test('location multi-word search matches village plus ancestor district token', 
     $state = Location::query()->create([
         'name' => 'Maharashtra',
         'slug' => 'mh-mt-'.$suffix,
-        'type' => 'state',
+        'hierarchy' => 'state',
         'parent_id' => null,
         'state_code' => 'MH',
         'district_code' => null,
@@ -154,7 +98,7 @@ test('location multi-word search matches village plus ancestor district token', 
     $district = Location::query()->create([
         'name' => 'Sangli',
         'slug' => 'sangli-mt-'.$suffix,
-        'type' => 'district',
+        'hierarchy' => 'district',
         'parent_id' => $state->id,
         'state_code' => 'MH',
         'district_code' => 'SG',
@@ -163,14 +107,14 @@ test('location multi-word search matches village plus ancestor district token', 
     $taluka = Location::query()->create([
         'name' => 'Miraj MT '.$suffix,
         'slug' => 'miraj-mt-'.$suffix,
-        'type' => 'taluka',
+        'hierarchy' => 'taluka',
         'parent_id' => $district->id,
         'is_active' => true,
     ]);
     $village = Location::query()->create([
         'name' => 'Islampur',
         'slug' => 'islampur-mt-'.$suffix,
-        'type' => 'village',
+        'hierarchy' => 'village',
         'parent_id' => $taluka->id,
         'is_active' => true,
     ]);

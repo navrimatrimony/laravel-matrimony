@@ -8,9 +8,9 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\File;
 
 /**
- * Canonical world countries from a packaged snapshot (ISO 3166-1 alpha-2 `cca2` + English `name.common`).
+ * Canonical world countries from a packaged snapshot (English `name.common`).
  * Data source snapshot: restcountries.com (fields name, cca2), vendored as JSON in the repo.
- * Idempotent: upserts by {@code iso_alpha2} so existing FK ids stay stable when rows already exist.
+ * Idempotent: upserts by clean country slug so existing FK ids stay stable when rows already exist.
  */
 class CountriesMasterSeeder extends Seeder
 {
@@ -56,9 +56,10 @@ class CountriesMasterSeeder extends Seeder
             $nameMr = $mrByIso[$code] ?? ($mrByEnglish[$nameEn] ?? null);
 
             Country::updateOrCreate(
-                ['iso_alpha2' => $code],
+                ['slug' => Country::cleanSlugBase($nameEn)],
                 [
                     'name' => $nameEn,
+                    'name_en' => $nameEn,
                     'name_mr' => $nameMr,
                 ]
             );

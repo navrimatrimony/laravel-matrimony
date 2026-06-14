@@ -32,7 +32,7 @@ class CityToLocationResolverService
 
         $candidates = Location::query()
             ->with('parent')
-            ->whereIn('type', ['city', 'suburb', 'village'])
+            ->where('hierarchy', 'village')
             ->whereRaw('LOWER(TRIM(name)) = ?', [$needle])
             ->get();
 
@@ -74,7 +74,7 @@ class CityToLocationResolverService
             if ($current === null) {
                 break;
             }
-            $type = (string) $current->type;
+            $type = (string) $current->hierarchy;
             if ($type === 'state' && ! isset($out['state'])) {
                 $out['state'] = (string) $current->name;
             }

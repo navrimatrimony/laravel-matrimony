@@ -2,20 +2,19 @@
 
 use App\Services\Location\LocationCategoryResolver;
 
-test('pune and mumbai names resolve to metro regardless of type', function () {
+test('pune and mumbai village names resolve to city tag', function () {
     $r = new LocationCategoryResolver;
-    expect($r->resolve('Pune', 'district'))->toBe('metro');
-    expect($r->resolve('Mumbai', 'district'))->toBe('metro');
-    expect($r->resolve('Pune', 'taluka'))->toBe('metro');
+    expect($r->resolve('Pune', 'village'))->toBe('city');
+    expect($r->resolve('Mumbai', 'village'))->toBe('city');
 });
 
-test('district taluka village suburb city map to categories', function () {
+test('hierarchy types map only to allowed category tags', function () {
     $r = new LocationCategoryResolver;
     expect($r->resolve('Satara', 'district'))->toBe('city');
-    expect($r->resolve('Tasgaon', 'taluka'))->toBe('town');
-    expect($r->resolve('X', 'village'))->toBe('village');
-    expect($r->resolve('Y', 'suburb'))->toBe('suburban');
-    expect($r->resolve('Z', 'city'))->toBe('city');
+    expect($r->resolve('Tasgaon', 'taluka'))->toBe('city');
+    expect($r->resolve('X', 'village'))->toBe('rural');
+    expect($r->resolve('Y', 'suburb'))->toBeNull();
+    expect($r->resolve('Z', 'city'))->toBeNull();
 });
 
 test('country and state are uncategorized', function () {

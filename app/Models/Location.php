@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\Location\LocationFormatterService;
 use App\Services\Location\LocationHierarchyValidator;
+use InvalidArgumentException;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
- * Canonical geographic hierarchy (country → … → city/suburb/village).
+ * Canonical geographic hierarchy (country → state → district → taluka → village).
  *
  * **Only** the {@code addresses} table stores hierarchy rows (single source of truth). Do not query
  * non-existent parallel tables such as {@code countries}, {@code states}, etc.; typed subclasses
@@ -31,31 +32,55 @@ class Location extends Model
         return (new static)->getTable();
     }
 
-    public static function defaultLevelForType(string $type): int
+    public static function defaultLevelForHierarchy(string $hierarchy): int
     {
-        return match ($type) {
+        return match ($hierarchy) {
             'country' => 0,
             'state' => 1,
             'district' => 2,
             'taluka' => 3,
-            'city' => 4,
-            'suburb', 'village' => 5,
-            default => 4,
+            'village' => 4,
+            default => throw new InvalidArgumentException("Unsupported address hierarchy [{$hierarchy}]."),
         };
+    }
+
+    public static function cleanSlugBase(string $name, string $fallback = 'address'): string
+    {
+        $base = \Illuminate\Support\Str::slug($name);
+
+        return $base !== '' ? $base : $fallback;
+    }
+
+    public static function uniqueSlugForHierarchy(?int $parentId, string $hierarchy, string $name, ?int $exceptLocationId = null): string
+    {
+        $base = self::cleanSlugBase($name);
+        $slug = $base;
+        $suffix = 2;
+
+        while (self::query()
+            ->withoutGlobalScopes()
+            ->where('hierarchy', $hierarchy)
+            ->when($parentId === null, fn ($q) => $q->whereNull('parent_id'), fn ($q) => $q->where('parent_id', $parentId))
+            ->where('slug', $slug)
+            ->when($exceptLocationId !== null, fn ($q) => $q->where('id', '!=', $exceptLocationId))
+            ->exists()) {
+            $slug = $base.'-'.$suffix;
+            $suffix++;
+        }
+
+        return $slug;
     }
 
     protected $fillable = [
         'name',
         'name_mr',
         'name_en',
-        'iso_alpha2',
         'slug',
-        'type',
+        'hierarchy',
+        'tag',
         'category',
         'parent_id',
         'level',
-        'state_code',
-        'district_code',
         'is_active',
         'pincode',
         'lat',
@@ -71,7 +96,7 @@ class Location extends Model
     ];
 
     /**
-     * UI / rules use "category" (metro, town, suburban…); DB column is {@code tag}.
+     * UI / rules use "category" (city/suburban/rural); DB column is {@code tag}.
      */
     protected function category(): Attribute
     {
@@ -84,8 +109,8 @@ class Location extends Model
     protected static function booted(): void
     {
         static::saving(function (Location $location): void {
-            $location->level = self::defaultLevelForType((string) $location->type);
-            // Only validate base Location rows here; subclasses normalize type/parent in their own saving hooks first.
+            $location->level = self::defaultLevelForHierarchy((string) $location->hierarchy);
+            // Only validate base Location rows here; subclasses normalize hierarchy/parent in their own saving hooks first.
             if ($location::class !== self::class) {
                 return;
             }

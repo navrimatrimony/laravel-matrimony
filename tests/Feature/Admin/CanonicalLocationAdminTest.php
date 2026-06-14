@@ -20,30 +20,39 @@ class CanonicalLocationAdminTest extends TestCase
         $state = Location::query()->create([
             'name' => 'Admin Test State '.Str::random(4),
             'slug' => 'adm-st-'.Str::random(6),
-            'type' => 'state',
+            'hierarchy' => 'state',
             'parent_id' => null,
             'is_active' => true,
         ]);
         $district = Location::query()->create([
             'name' => 'Admin Test Dist '.Str::random(4),
             'slug' => 'adm-di-'.Str::random(6),
-            'type' => 'district',
+            'hierarchy' => 'district',
             'parent_id' => $state->id,
+            'is_active' => true,
+        ]);
+        $taluka = Location::query()->create([
+            'name' => 'Admin Test Tal '.Str::random(4),
+            'slug' => 'adm-ta-'.Str::random(6),
+            'hierarchy' => 'taluka',
+            'parent_id' => $district->id,
             'is_active' => true,
         ]);
 
         $a = Location::query()->create([
             'name' => 'Dup Test A',
             'slug' => $slugA,
-            'type' => 'city',
-            'parent_id' => $district->id,
+            'hierarchy' => 'village',
+            'tag' => 'city',
+            'parent_id' => $taluka->id,
             'is_active' => true,
         ]);
         $b = Location::query()->create([
             'name' => 'Dup Test B',
             'slug' => $slugB,
-            'type' => 'city',
-            'parent_id' => $district->id,
+            'hierarchy' => 'village',
+            'tag' => 'city',
+            'parent_id' => $taluka->id,
             'is_active' => true,
         ]);
 
@@ -90,8 +99,9 @@ class CanonicalLocationAdminTest extends TestCase
             Location::query()->create([
                 'name' => 'Dup Test A Variant',
                 'slug' => 'loc-v-'.Str::random(6),
-                'type' => 'city',
-                'parent_id' => $district->id,
+                'hierarchy' => 'village',
+                'tag' => 'city',
+                'parent_id' => $a->parent_id,
                 'is_active' => true,
             ]);
         }

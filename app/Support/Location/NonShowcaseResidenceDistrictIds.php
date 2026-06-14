@@ -9,8 +9,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * District {@code addresses.id} values (type=district) implied by real members' residence.
- * SSOT: self + type {@code current} in {@code profile_addresses.location_id} (leaf {@code addresses.id}); legacy {@code matrimony_profiles.district_id} when present.
+ * District {@code addresses.id} values (hierarchy=district) implied by real members' residence.
+ * SSOT: self + address type {@code current} in {@code profile_addresses.location_id} (leaf {@code addresses.id}); legacy {@code matrimony_profiles.district_id} when present.
  *
  * @internal Used by showcase autofill / admin bulk policy — keep in sync with residence rules.
  */
@@ -81,7 +81,7 @@ final class NonShowcaseResidenceDistrictIds
 
             $rows = DB::table($geoTable)
                 ->whereIn('id', $missing)
-                ->select('id', 'parent_id', 'type')
+                ->select('id', 'parent_id', 'hierarchy')
                 ->get();
 
             $pending = [];
@@ -98,7 +98,7 @@ final class NonShowcaseResidenceDistrictIds
                 $nodeById[$id] = (object) [
                     'id' => $id,
                     'parent_id' => $parentId && $parentId > 0 ? $parentId : null,
-                    'type' => strtolower((string) ($row->type ?? '')),
+                    'hierarchy' => strtolower((string) ($row->hierarchy ?? '')),
                 ];
                 if ($parentId && $parentId > 0 && ! array_key_exists($parentId, $nodeById)) {
                     $pending[] = $parentId;
@@ -116,7 +116,7 @@ final class NonShowcaseResidenceDistrictIds
                 if (! is_object($node)) {
                     break;
                 }
-                if (($node->type ?? '') === 'district') {
+                if (($node->hierarchy ?? '') === 'district') {
                     $districtIds[] = (int) $node->id;
                     break;
                 }

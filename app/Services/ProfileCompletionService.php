@@ -105,7 +105,7 @@ class ProfileCompletionService
         return DB::table('profile_addresses as pa')
             ->join($geo.' as a', 'a.id', '=', 'pa.'.$leafCol)
             ->where('pa.profile_id', $profile->id)
-            ->where('a.type', 'village')
+            ->where('a.hierarchy', 'village')
             ->whereNotNull('pa.'.$leafCol)
             ->exists();
     }

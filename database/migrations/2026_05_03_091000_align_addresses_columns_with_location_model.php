@@ -19,8 +19,8 @@ return new class extends Migration
         }
 
         Schema::table('addresses', function (Blueprint $table): void {
-            if (! Schema::hasColumn('addresses', 'iso_alpha2')) {
-                $table->string('iso_alpha2', 2)->nullable()->index();
+            if (! Schema::hasColumn('addresses', 'hierarchy') && ! Schema::hasColumn('addresses', 'type')) {
+                $table->enum('hierarchy', ['country', 'state', 'district', 'taluka', 'village'])->after('name_en');
             }
             if (! Schema::hasColumn('addresses', 'tag')) {
                 $table->string('tag', 32)->nullable();
@@ -31,26 +31,17 @@ return new class extends Migration
             if (! Schema::hasColumn('addresses', 'name_en')) {
                 $table->string('name_en')->nullable();
             }
-            if (! Schema::hasColumn('addresses', 'state_code')) {
-                $table->string('state_code', 32)->nullable();
-            }
-            if (! Schema::hasColumn('addresses', 'district_code')) {
-                $table->string('district_code', 32)->nullable();
-            }
             if (! Schema::hasColumn('addresses', 'pincode')) {
                 $table->string('pincode', 16)->nullable();
             }
-            if (! Schema::hasColumn('addresses', 'latitude')) {
-                $table->decimal('latitude', 10, 7)->nullable();
+            if (! Schema::hasColumn('addresses', 'lat')) {
+                $table->decimal('lat', 10, 7)->nullable();
             }
-            if (! Schema::hasColumn('addresses', 'longitude')) {
-                $table->decimal('longitude', 10, 7)->nullable();
+            if (! Schema::hasColumn('addresses', 'lng')) {
+                $table->decimal('lng', 10, 7)->nullable();
             }
             if (! Schema::hasColumn('addresses', 'lgd_code')) {
                 $table->string('lgd_code', 32)->nullable();
-            }
-            if (! Schema::hasColumn('addresses', 'population')) {
-                $table->unsignedBigInteger('population')->nullable();
             }
         });
 

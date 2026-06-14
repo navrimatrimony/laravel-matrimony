@@ -26,7 +26,7 @@ class LocationExportJsonCommand extends Command
             $payload[] = [
                 'id' => (int) $loc->id,
                 'name' => (string) $loc->name,
-                'type' => (string) $loc->type,
+                'hierarchy' => (string) $loc->hierarchy,
                 'parent' => $loc->parent ? (string) $loc->parent->name : '',
                 'pincodes' => $loc->pincodes->pluck('pincode')->values()->all(),
             ];

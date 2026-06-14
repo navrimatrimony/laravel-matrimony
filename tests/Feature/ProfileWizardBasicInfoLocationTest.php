@@ -14,44 +14,13 @@ beforeEach(function () {
 });
 
 /**
- * Valid SSOT chain: state → district → city (ids aligned with legacy City row when needed).
+ * Valid SSOT chain: state → district → taluka → village (city slot uses a city-tagged village leaf).
  *
  * @return array{pune: Location, location_id: int}
  */
 function wizardTestCreatePuneLocation(): array
 {
-    $legacyCity = City::query()->where('name', 'Pune City')->firstOrFail();
-
-    $state = Location::query()->create([
-        'name' => 'Maharashtra',
-        'slug' => 'mh-wiz-'.$legacyCity->id,
-        'type' => 'state',
-        'parent_id' => null,
-        'state_code' => 'MH',
-        'district_code' => null,
-        'is_active' => true,
-    ]);
-
-    $district = Location::query()->create([
-        'name' => 'Pune',
-        'slug' => 'pune-dist-wiz-'.$legacyCity->id,
-        'type' => 'district',
-        'parent_id' => $state->id,
-        'state_code' => 'MH',
-        'district_code' => 'PN',
-        'is_active' => true,
-    ]);
-
-    $pune = Location::query()->create([
-        'id' => $legacyCity->id,
-        'name' => 'Pune',
-        'slug' => 'pune-city-wiz-'.$legacyCity->id,
-        'type' => 'city',
-        'parent_id' => $district->id,
-        'state_code' => 'MH',
-        'district_code' => 'PN',
-        'is_active' => true,
-    ]);
+    $pune = City::query()->where('name', 'Pune City')->firstOrFail();
 
     return ['pune' => $pune, 'location_id' => (int) $pune->id];
 }

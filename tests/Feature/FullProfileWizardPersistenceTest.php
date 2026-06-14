@@ -28,7 +28,7 @@ test('full profile wizard persists one representative field from every rendered 
 
     $user = User::factory()->create();
     $profile = MatrimonyProfile::factory()->for($user)->create(['lifecycle_state' => 'draft']);
-    $locationId = (int) DB::table('addresses')->where('type', 'city')->value('id');
+    $locationId = (int) DB::table('addresses')->where('hierarchy', 'village')->where('tag', 'city')->value('id');
     $genderId = $id('master_genders', 'female');
     $maritalStatusId = $id('master_marital_statuses', 'never_married');
     $religionId = $id('master_religions');

@@ -16,11 +16,11 @@ class CountriesMasterSeederTest extends TestCase
         $this->seed(CountriesMasterSeeder::class);
 
         $this->assertGreaterThanOrEqual(240, Country::query()->count());
-        $in = Country::query()->where('iso_alpha2', 'IN')->first();
+        $in = Country::query()->where('slug', 'india')->first();
         $this->assertNotNull($in);
         $this->assertSame('India', $in->name);
         $this->assertSame('भारत', $in->name_mr);
-        $us = Country::query()->where('iso_alpha2', 'US')->first();
+        $us = Country::query()->where('slug', 'united-states')->first();
         $this->assertNotNull($us);
         $this->assertSame('United States', $us->name);
         $this->assertSame('अमेरिका', $us->name_mr);

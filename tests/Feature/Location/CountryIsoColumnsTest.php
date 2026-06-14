@@ -2,28 +2,32 @@
 
 namespace Tests\Feature\Location;
 
-use App\Models\Country;
 use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
-class CountryIsoColumnsTest extends TestCase
+class CountryHierarchyColumnsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_addresses_geo_table_has_iso_and_marathi_columns(): void
+    public function test_addresses_geo_table_uses_hierarchy_and_drops_legacy_type_and_iso_columns(): void
     {
         $this->assertTrue(Schema::hasColumn('addresses', 'name_mr'));
-        $this->assertTrue(Schema::hasColumn('addresses', 'iso_alpha2'));
+        $this->assertTrue(Schema::hasColumn('addresses', 'name_en'));
+        $this->assertTrue(Schema::hasColumn('addresses', 'hierarchy'));
+        $this->assertFalse(Schema::hasColumn('addresses', 'type'));
+        $this->assertFalse(Schema::hasColumn('addresses', 'iso_alpha2'));
     }
 
-    public function test_minimal_location_seeder_sets_india_iso_and_marathi(): void
+    public function test_minimal_location_seeder_sets_india_hierarchy_and_marathi(): void
     {
         $this->seed(MinimalLocationSeeder::class);
-        $in = Country::query()->where('name', 'India')->first();
+        $in = DB::table('addresses')->where('slug', 'india')->first();
         $this->assertNotNull($in);
-        $this->assertSame('IN', $in->iso_alpha2);
+        $this->assertSame('country', $in->hierarchy);
+        $this->assertNull($in->tag);
         $this->assertSame('भारत', $in->name_mr);
     }
 }

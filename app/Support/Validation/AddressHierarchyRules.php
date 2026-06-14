@@ -13,31 +13,33 @@ final class AddressHierarchyRules
 {
     public static function existsCountryId(): \Illuminate\Validation\Rules\Exists
     {
-        return Rule::exists('addresses', 'id')->where('type', 'country');
+        return Rule::exists('addresses', 'id')->where('hierarchy', 'country');
     }
 
     public static function existsStateId(): \Illuminate\Validation\Rules\Exists
     {
-        return Rule::exists('addresses', 'id')->where('type', 'state');
+        return Rule::exists('addresses', 'id')->where('hierarchy', 'state');
     }
 
     public static function existsDistrictId(): \Illuminate\Validation\Rules\Exists
     {
-        return Rule::exists('addresses', 'id')->where('type', 'district');
+        return Rule::exists('addresses', 'id')->where('hierarchy', 'district');
     }
 
     public static function existsTalukaId(): \Illuminate\Validation\Rules\Exists
     {
-        return Rule::exists('addresses', 'id')->where('type', 'taluka');
+        return Rule::exists('addresses', 'id')->where('hierarchy', 'taluka');
     }
 
     public static function existsCityId(): \Illuminate\Validation\Rules\Exists
     {
-        return Rule::exists('addresses', 'id')->where('type', 'city');
+        return Rule::exists('addresses', 'id')
+            ->where('hierarchy', 'village')
+            ->where('tag', 'city');
     }
 
     /**
-     * Canonical place leaf id from geo SSOT. Used where UI stores any leaf type
+     * Canonical place leaf id from geo SSOT. Used where UI stores any leaf hierarchy
      * (city/town/village) under legacy-named fields like {@code work_city_id}.
      */
     public static function existsLocationLeafId(): \Illuminate\Validation\Rules\Exists

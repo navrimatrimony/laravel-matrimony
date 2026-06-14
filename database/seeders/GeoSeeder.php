@@ -35,9 +35,9 @@ class GeoSeeder extends Seeder
             return;
         }
 
-        $india = Country::query()->where('iso_alpha2', 'IN')->first();
+        $india = Country::query()->where('slug', 'india')->first();
         if ($india === null) {
-            $this->command?->error('India (iso_alpha2=IN) missing. Run CountriesMasterSeeder first.');
+            $this->command?->error('India country missing. Run CountriesMasterSeeder first.');
 
             return;
         }

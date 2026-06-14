@@ -29,9 +29,9 @@ class LocationHierarchyIntegrityService
     }
 
     /**
-     * Another row under the same parent with same normalized name (case-insensitive) and same type when provided.
+     * Another row under the same parent with same normalized name (case-insensitive) and same hierarchy when provided.
      */
-    public function duplicateSiblingExists(?int $parentId, string $name, ?int $exceptLocationId = null, ?string $type = null): bool
+    public function duplicateSiblingExists(?int $parentId, string $name, ?int $exceptLocationId = null, ?string $hierarchy = null): bool
     {
         $key = mb_strtolower(trim($name), 'UTF-8');
         if ($key === '') {
@@ -44,8 +44,8 @@ class LocationHierarchyIntegrityService
         } else {
             $q->where('parent_id', $parentId);
         }
-        if ($type !== null && $type !== '') {
-            $q->where('type', $type);
+        if ($hierarchy !== null && $hierarchy !== '') {
+            $q->where('hierarchy', $hierarchy);
         }
         if ($exceptLocationId !== null) {
             $q->where('id', '!=', $exceptLocationId);

@@ -61,7 +61,7 @@ class LocationOpenPlaceApprovalService
 
             if (LocationAlias::query()
                 ->where('is_active', true)
-                ->whereHas('location', fn ($q) => $q->where('parent_id', (int) $taluka->id)->where('type', 'city'))
+                ->whereHas('location', fn ($q) => $q->where('parent_id', (int) $taluka->id)->where('hierarchy', 'village')->where('tag', 'city'))
                 ->where('normalized_alias', $suggestion->normalized_input)
                 ->exists()) {
                 throw new \RuntimeException('This alias already exists for a city in this taluka.');

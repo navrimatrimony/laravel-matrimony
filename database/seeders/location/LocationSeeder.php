@@ -13,14 +13,21 @@ class LocationSeeder extends Seeder
     /**
      * @var array<int, string>
      */
-    private array $allowedTypes = [
+    private array $allowedHierarchies = [
         'country',
         'state',
         'district',
         'taluka',
-        'city',
-        'suburb',
         'village',
+    ];
+
+    /**
+     * @var array<int, string>
+     */
+    private array $allowedTags = [
+        'city',
+        'suburban',
+        'rural',
     ];
 
     /**
@@ -31,8 +38,6 @@ class LocationSeeder extends Seeder
         'state' => 1,
         'district' => 2,
         'taluka' => 3,
-        'city' => 4,
-        'suburb' => 4,
         'village' => 4,
     ];
 
@@ -43,16 +48,16 @@ class LocationSeeder extends Seeder
         $this->seedFile('states.json', 'state');
         $this->seedFile('districts_maharashtra.json', 'district');
         $this->seedFile('talukas_maharashtra.json', 'taluka');
-        $this->seedFile('cities_maharashtra.json', 'city');
-        $this->seedFile('suburbs_maharashtra.json', 'suburb');
-        $this->seedFile('villages_maharashtra.json', 'village');
+        $this->seedFile('cities_maharashtra.json', 'village', 'city');
+        $this->seedFile('suburbs_maharashtra.json', 'village', 'suburban');
+        $this->seedFile('villages_maharashtra.json', 'village', 'rural');
 
         if (Schema::hasColumn((new Location)->getTable(), 'name_mr')) {
             LocationMarathiLabels::syncLocationsTableNameMr();
         }
     }
 
-    private function seedFile(string $filename, string $expectedType): void
+    private function seedFile(string $filename, string $expectedHierarchy, ?string $expectedTag = null): void
     {
         $rows = $this->readRows($filename);
         $this->assertNoDuplicateEntries($rows, $filename);
@@ -60,18 +65,25 @@ class LocationSeeder extends Seeder
         foreach ($rows as $row) {
             $slug = $this->requiredString($row, 'slug', $filename);
             $name = $this->requiredString($row, 'name', $filename);
-            $type = $this->requiredString($row, 'type', $filename);
+            $hierarchy = $this->requiredString($row, 'hierarchy', $filename);
             $parentSlug = $this->requiredString($row, 'parent_slug', $filename);
             $level = isset($row['level']) ? (int) $row['level'] : null;
+            $tag = isset($row['tag']) ? strtolower(trim((string) $row['tag'])) : null;
 
-            if ($type !== $expectedType) {
-                throw new RuntimeException("Type mismatch in {$filename} for slug '{$slug}': expected '{$expectedType}', got '{$type}'.");
+            if ($hierarchy !== $expectedHierarchy) {
+                throw new RuntimeException("Hierarchy mismatch in {$filename} for slug '{$slug}': expected '{$expectedHierarchy}', got '{$hierarchy}'.");
             }
-            if (! in_array($type, $this->allowedTypes, true)) {
-                throw new RuntimeException("Invalid type '{$type}' in {$filename} for slug '{$slug}'.");
+            if (! in_array($hierarchy, $this->allowedHierarchies, true)) {
+                throw new RuntimeException("Invalid hierarchy '{$hierarchy}' in {$filename} for slug '{$slug}'.");
+            }
+            if ($expectedTag !== null && $tag !== $expectedTag) {
+                throw new RuntimeException("Tag mismatch in {$filename} for slug '{$slug}': expected '{$expectedTag}', got ".var_export($tag, true).'.');
+            }
+            if ($tag !== null && ! in_array($tag, $this->allowedTags, true)) {
+                throw new RuntimeException("Invalid tag '{$tag}' in {$filename} for slug '{$slug}'.");
             }
 
-            $expectedLevel = $this->levelMap[$type] ?? null;
+            $expectedLevel = $this->levelMap[$hierarchy] ?? null;
             if ($expectedLevel === null || $level !== $expectedLevel) {
                 throw new RuntimeException("Invalid level in {$filename} for slug '{$slug}'. Expected {$expectedLevel}, got ".var_export($level, true).'.');
             }
@@ -85,11 +97,10 @@ class LocationSeeder extends Seeder
                 ['slug' => $slug],
                 [
                     'name' => $name,
-                    'type' => $type,
+                    'hierarchy' => $hierarchy,
+                    'category' => $tag,
                     'parent_id' => (int) $parent->id,
                     'level' => $level,
-                    'state_code' => $row['state_code'] ?? null,
-                    'district_code' => $row['district_code'] ?? null,
                     'is_active' => (bool) ($row['is_active'] ?? true),
                 ]
             );

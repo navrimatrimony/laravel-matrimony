@@ -41,7 +41,7 @@ class SuchakCandidateMaskingService
                 'is_policy_limited' => false,
             ],
             'location' => [
-                'city' => $this->locationNameOfType($profile->location, 'city'),
+                'city' => $this->locationNameForCitySlot($profile->location),
                 'district' => $this->locationNameOfType($profile->location, 'district'),
                 'is_broad' => true,
                 'exact_address' => null,
@@ -126,11 +126,24 @@ class SuchakCandidateMaskingService
         return $lower.'-'.$upper.' cm';
     }
 
+    private function locationNameForCitySlot(?Location $location): ?string
+    {
+        $current = $location;
+        while ($current !== null) {
+            if ($current->hierarchy === 'village' && in_array((string) $current->tag, ['city', 'suburban', 'rural'], true)) {
+                return $current->localizedName();
+            }
+            $current = $current->parent;
+        }
+
+        return null;
+    }
+
     private function locationNameOfType(?Location $location, string $type): ?string
     {
         $current = $location;
         while ($current !== null) {
-            if ($current->type === $type) {
+            if ($current->hierarchy === $type) {
                 return $current->localizedName();
             }
             $current = $current->parent;

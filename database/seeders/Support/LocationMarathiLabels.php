@@ -56,7 +56,7 @@ final class LocationMarathiLabels
     public static function syncIndianStateNameMr(): void
     {
         $map = self::indiaStateEnglishToMarathi();
-        foreach (State::query()->whereHas('country', fn ($q) => $q->where('iso_alpha2', 'IN'))->cursor() as $state) {
+        foreach (State::query()->whereHas('country', fn ($q) => $q->where('slug', 'india'))->cursor() as $state) {
             $name = trim((string) $state->name);
             if ($name === '') {
                 continue;
@@ -128,7 +128,7 @@ final class LocationMarathiLabels
     public static function syncIndianDistrictNameMr(): void
     {
         $map = self::indiaDistrictEnglishToMarathi();
-        foreach (District::query()->whereHas('state', fn ($q) => $q->whereHas('country', fn ($c) => $c->where('iso_alpha2', 'IN')))->cursor() as $district) {
+        foreach (District::query()->whereHas('state', fn ($q) => $q->whereHas('country', fn ($c) => $c->where('slug', 'india')))->cursor() as $district) {
             $name = trim((string) $district->name);
             if ($name === '') {
                 continue;
@@ -204,7 +204,7 @@ final class LocationMarathiLabels
         $sep = self::TALUKA_COMPOSITE_SEP;
         foreach (Taluka::query()->with(['district.state.country'])->cursor() as $taluka) {
             $country = $taluka->district?->state?->country;
-            if ($country === null || (string) $country->iso_alpha2 !== 'IN') {
+            if ($country === null || (string) $country->slug !== 'india') {
                 continue;
             }
             $dName = trim((string) ($taluka->district?->name ?? ''));
@@ -274,7 +274,7 @@ final class LocationMarathiLabels
     }
 
     /**
-     * Copies {@code villages.name_mr} onto {@code cities.name_mr} where the city row mirrors the village (same taluka + English name).
+     * Copies village Marathi names onto city-tagged village leaves that mirror a village (same taluka + English name).
      */
     public static function syncIndianCityNameMrFromVillageMirror(): void
     {
@@ -285,7 +285,7 @@ final class LocationMarathiLabels
         if ($driver === 'mysql') {
             DB::statement(
                 "UPDATE addresses c
-                 INNER JOIN addresses v ON v.type = 'village' AND c.type = 'city'
+                 INNER JOIN addresses v ON v.hierarchy = 'village' AND c.hierarchy = 'village' AND c.tag = 'city'
                     AND c.parent_id = v.parent_id
                     AND LOWER(TRIM(c.name)) = LOWER(TRIM(COALESCE(NULLIF(TRIM(v.name_en), ''), v.name)))
                  SET c.name_mr = v.name_mr
@@ -376,10 +376,10 @@ final class LocationMarathiLabels
                 }
 
                 $mr = null;
-                if ((string) $loc->type === 'taluka') {
+                if ((string) $loc->hierarchy === 'taluka') {
                     $loc->loadMissing('parent');
                     $parent = $loc->parent;
-                    $dName = $parent !== null && (string) $parent->type === 'district'
+                    $dName = $parent !== null && (string) $parent->hierarchy === 'district'
                         ? trim((string) $parent->name)
                         : '';
                     if ($dName !== '') {

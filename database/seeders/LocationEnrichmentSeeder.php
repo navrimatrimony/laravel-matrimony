@@ -16,13 +16,14 @@ class LocationEnrichmentSeeder extends Seeder
     {
         $mr = LocationMarathiLabels::englishToMarathi();
         Country::updateOrCreate(
-            ['iso_alpha2' => 'IN'],
+            ['slug' => 'india'],
             [
                 'name' => 'India',
+                'name_en' => 'India',
                 'name_mr' => $mr['India'] ?? 'भारत',
             ]
         );
-        $india = Country::query()->where('iso_alpha2', 'IN')->first();
+        $india = Country::query()->where('slug', 'india')->first();
         $maharashtra = State::where('name', 'Maharashtra')->first();
         $gujarat = State::where('name', 'Gujarat')->first();
         if ($maharashtra) {

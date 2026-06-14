@@ -74,7 +74,7 @@ class AutoShowcaseSettingsController extends Controller
         $smokingStatuses = MasterSmokingStatus::query()->where('is_active', true)->orderBy('sort_order')->orderBy('id')->get();
         $drinkingStatuses = MasterDrinkingStatus::query()->where('is_active', true)->orderBy('sort_order')->orderBy('id')->get();
 
-        $addressTypeOptions = AddressSchemaEnumOptions::addressTypes();
+        $addressHierarchyOptions = AddressSchemaEnumOptions::addressHierarchies();
         $addressTagOptions = AddressSchemaEnumOptions::addressTags();
 
         return view('admin.auto-showcase-settings.edit', [
@@ -98,7 +98,7 @@ class AutoShowcaseSettingsController extends Controller
             'religions' => $religions,
             'religionAllowlistSelectedIds' => AutoShowcaseSettings::religionAllowlistIds(),
             'partnerPrefMode' => ShowcaseSettings::partnerPrefMode(),
-            'globalEligibleAddressTypes' => ShowcaseAddressEligibility::globalTypes(),
+            'globalEligibleAddressHierarchies' => ShowcaseAddressEligibility::globalHierarchies(),
             'globalEligibleAddressTags' => ShowcaseAddressEligibility::globalTags(),
             'bulkPolicy' => $bulkPolicy,
             'bulkDistricts' => $bulkDistricts,
@@ -115,7 +115,7 @@ class AutoShowcaseSettingsController extends Controller
             'bulkDrinkingStatuses' => $drinkingStatuses,
             'bulkNeverFillOptions' => ShowcaseBulkCreateSettings::NEVER_FILL_KEY_OPTIONS,
             'bulkRandomFillOptions' => ShowcaseBulkCreateSettings::RANDOM_FILL_KEY_OPTIONS,
-            'addressTypeOptions' => $addressTypeOptions,
+            'addressHierarchyOptions' => $addressHierarchyOptions,
             'addressTagOptions' => $addressTagOptions,
             'photoPoolPolicy' => ShowcasePhotoPoolSettings::policy(),
         ]);
@@ -123,9 +123,9 @@ class AutoShowcaseSettingsController extends Controller
 
     public function update(Request $request)
     {
-        $addressTypeOptions = AddressSchemaEnumOptions::addressTypes();
+        $addressHierarchyOptions = AddressSchemaEnumOptions::addressHierarchies();
         $addressTagOptions = AddressSchemaEnumOptions::addressTags();
-        $typeIn = Rule::in($addressTypeOptions);
+        $hierarchyIn = Rule::in($addressHierarchyOptions);
         $tagIn = Rule::in($addressTagOptions);
 
         $request->validate([
@@ -143,8 +143,8 @@ class AutoShowcaseSettingsController extends Controller
             'auto_showcase_religion_allowlist' => 'nullable|array',
             'auto_showcase_religion_allowlist.*' => 'integer|exists:master_religions,id',
             'showcase_partner_pref_mode' => 'required|in:match_searcher,rules_autofill,mixed',
-            'showcase_eligible_address_types' => 'nullable|array',
-            'showcase_eligible_address_types.*' => ['string', 'max:32', $typeIn],
+            'showcase_eligible_address_hierarchies' => 'nullable|array',
+            'showcase_eligible_address_hierarchies.*' => ['string', 'max:32', $hierarchyIn],
             'showcase_eligible_address_tags' => 'nullable|array',
             'showcase_eligible_address_tags.*' => ['string', 'max:32', $tagIn],
             'bulk_eligible_address_tags' => 'nullable|array',
@@ -210,13 +210,13 @@ class AutoShowcaseSettingsController extends Controller
         AdminSetting::query()->where('key', 'auto_showcase_religion_blocklist')->delete();
         AdminSetting::setValue('showcase_partner_pref_mode', (string) $request->input('showcase_partner_pref_mode'));
 
-        $globalTypes = ShowcaseAddressEligibility::normalizeTypesList($request->input('showcase_eligible_address_types', []))
-            ?? ShowcaseAddressEligibility::defaultTypes();
+        $globalHierarchies = ShowcaseAddressEligibility::normalizeHierarchiesList($request->input('showcase_eligible_address_hierarchies', []))
+            ?? ShowcaseAddressEligibility::defaultHierarchies();
         $globalTags = ShowcaseAddressEligibility::normalizeTagsList($request->input('showcase_eligible_address_tags', []))
             ?? ShowcaseAddressEligibility::defaultTags();
         AdminSetting::setValue(
-            ShowcaseAddressEligibility::SETTING_TYPES_KEY,
-            json_encode($globalTypes, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            ShowcaseAddressEligibility::SETTING_HIERARCHIES_KEY,
+            json_encode($globalHierarchies, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
         );
         AdminSetting::setValue(
             ShowcaseAddressEligibility::SETTING_TAGS_KEY,
@@ -291,7 +291,7 @@ class AutoShowcaseSettingsController extends Controller
             'fixed_physical_build_ids' => $request->input('bulk_fixed_physical_build_ids', []),
             'fixed_smoking_status_id' => $request->input('bulk_fixed_smoking_status_id'),
             'fixed_drinking_status_id' => $request->input('bulk_fixed_drinking_status_id'),
-            'eligible_address_types' => [],
+            'eligible_address_hierarchies' => [],
             'eligible_address_tags' => $request->input('bulk_eligible_address_tags', []),
         ];
     }

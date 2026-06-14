@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\City;
 use App\Models\District;
+use App\Models\Location;
 use App\Models\LocationAlias;
 use App\Models\State;
 use App\Models\Village;
@@ -159,7 +160,7 @@ class LocationSearchService
             ->get();
         foreach ($aliasPrefix as $alias) {
             $loc = $alias->location;
-            if ($loc === null || $loc->type !== 'city') {
+            if (! $this->isCityTaggedVillage($loc)) {
                 continue;
             }
             $city = City::query()->with($this->cityWithRelations())->find($loc->id);
@@ -187,7 +188,7 @@ class LocationSearchService
             ->get();
         foreach ($aliasPartial as $alias) {
             $loc = $alias->location;
-            if ($loc === null || $loc->type !== 'city') {
+            if (! $this->isCityTaggedVillage($loc)) {
                 continue;
             }
             $city = City::query()->with($this->cityWithRelations())->find($loc->id);
@@ -230,6 +231,13 @@ class LocationSearchService
             'results' => $results,
             'context_detected' => $context,
         ];
+    }
+
+    private function isCityTaggedVillage(?Location $location): bool
+    {
+        return $location !== null
+            && (string) $location->hierarchy === 'village'
+            && (string) $location->tag === 'city';
     }
 
     /**
@@ -649,7 +657,7 @@ class LocationSearchService
 
         $cityRankWith = ['taluka.district.state'];
 
-        $leafColumns = ['id', 'name', 'parent_id', 'type'];
+        $leafColumns = ['id', 'name', 'parent_id', 'hierarchy'];
         if (Schema::hasColumn('addresses', 'parent_city_id')) {
             $leafColumns[] = 'parent_city_id';
         }
@@ -675,7 +683,7 @@ class LocationSearchService
                 'state_name_key' => $stateNameKey,
                 'taluka_id' => (int) ($city->parent_id ?? 0),
                 'city_name_key' => $cityNameKey,
-                'is_village' => ($city->type ?? '') === 'village',
+                'is_village' => ($city->hierarchy ?? '') === 'village',
             ];
             if ((int) ($city->parent_id ?? 0) > 0) {
                 $talukaIds[] = (int) $city->parent_id;

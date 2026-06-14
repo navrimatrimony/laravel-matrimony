@@ -13,14 +13,14 @@ use Illuminate\Database\Seeder;
 /**
  * Phase-4 Location Master Data.
  * Populates location hierarchy so profile create dropdowns are not empty.
- * Requires {@see CountriesMasterSeeder} first (India + United States + full world list by ISO).
+ * Requires {@see CountriesMasterSeeder} first (India + United States + full world list by slug).
  */
 class LocationSeeder extends Seeder
 {
     public function run(): void
     {
-        $india = Country::query()->where('iso_alpha2', 'IN')->firstOrFail();
-        $usa = Country::query()->where('iso_alpha2', 'US')->firstOrFail();
+        $india = Country::query()->where('slug', 'india')->firstOrFail();
+        $usa = Country::query()->where('slug', 'united-states')->firstOrFail();
 
         $maharashtra = State::firstOrCreate(
             ['parent_id' => $india->id, 'name' => 'Maharashtra']

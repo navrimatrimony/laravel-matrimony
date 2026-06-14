@@ -387,9 +387,9 @@ class ProfilePreferenceMatchService
             $geo = Location::geoTable();
             $prefCountries = DB::table($geo.' as d')
                 ->join($geo.' as s', function ($join): void {
-                    $join->on('s.id', '=', 'd.parent_id')->where('s.type', '=', 'state');
+                    $join->on('s.id', '=', 'd.parent_id')->where('s.hierarchy', '=', 'state');
                 })
-                ->where('d.type', 'district')
+                ->where('d.hierarchy', 'district')
                 ->whereIn('d.id', $dIds)
                 ->pluck('s.parent_id')
                 ->unique()
@@ -412,16 +412,16 @@ class ProfilePreferenceMatchService
         $parts = [];
         $geo = Location::geoTable();
         if ($pref['country_ids'] !== []) {
-            $parts[] = DB::table($geo)->where('type', 'country')->whereIn('id', $pref['country_ids'])->pluck('name')->filter()->implode(', ');
+            $parts[] = DB::table($geo)->where('hierarchy', 'country')->whereIn('id', $pref['country_ids'])->pluck('name')->filter()->implode(', ');
         }
         if ($pref['state_ids'] !== []) {
-            $parts[] = DB::table($geo)->where('type', 'state')->whereIn('id', $pref['state_ids'])->pluck('name')->filter()->implode(', ');
+            $parts[] = DB::table($geo)->where('hierarchy', 'state')->whereIn('id', $pref['state_ids'])->pluck('name')->filter()->implode(', ');
         }
         if ($pref['district_ids'] !== []) {
-            $parts[] = DB::table($geo)->where('type', 'district')->whereIn('id', $pref['district_ids'])->pluck('name')->filter()->implode(', ');
+            $parts[] = DB::table($geo)->where('hierarchy', 'district')->whereIn('id', $pref['district_ids'])->pluck('name')->filter()->implode(', ');
         }
         if ($pref['taluka_ids'] !== []) {
-            $parts[] = DB::table($geo)->where('type', 'taluka')->whereIn('id', $pref['taluka_ids'])->pluck('name')->filter()->implode(', ');
+            $parts[] = DB::table($geo)->where('hierarchy', 'taluka')->whereIn('id', $pref['taluka_ids'])->pluck('name')->filter()->implode(', ');
         }
 
         return trim(implode(' · ', array_filter($parts)));

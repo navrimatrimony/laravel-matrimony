@@ -6,32 +6,32 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Lists allowed {@code addresses.type} and {@code addresses.tag} values from the live schema (MySQL ENUM/SET)
+ * Lists allowed {@code addresses.hierarchy} and {@code addresses.tag} values from the live schema (MySQL ENUM/SET)
  * when available, otherwise merges known baselines with DISTINCT values in the table (e.g. SQLite tests).
  */
 final class AddressSchemaEnumOptions
 {
     /** @var list<string> */
-    private const FALLBACK_TYPES = ['country', 'state', 'district', 'taluka', 'city', 'suburb', 'village'];
+    private const FALLBACK_HIERARCHIES = ['country', 'state', 'district', 'taluka', 'village'];
 
     /** @var list<string> */
-    private const FALLBACK_TAGS = ['metro', 'capital', 'none'];
+    private const FALLBACK_TAGS = ['city', 'suburban', 'rural'];
 
     /**
      * @return list<string>
      */
-    public static function addressTypes(): array
+    public static function addressHierarchies(): array
     {
         if (! Schema::hasTable('addresses')) {
-            return self::FALLBACK_TYPES;
+            return self::FALLBACK_HIERARCHIES;
         }
 
-        $fromSchema = self::mysqlEnumOrSetMembers('addresses', 'type');
+        $fromSchema = self::mysqlEnumOrSetMembers('addresses', 'hierarchy');
         if ($fromSchema !== []) {
             return $fromSchema;
         }
 
-        return self::mergeDistinctColumn('type', self::FALLBACK_TYPES);
+        return self::mergeDistinctColumn('hierarchy', self::FALLBACK_HIERARCHIES);
     }
 
     /**

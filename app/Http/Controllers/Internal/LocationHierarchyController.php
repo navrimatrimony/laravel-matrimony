@@ -14,7 +14,7 @@ use Illuminate\Http\Request;
 class LocationHierarchyController extends Controller
 {
     /**
-     * States (addresses.type = state).
+     * States (addresses.hierarchy = state).
      * Optional {@code parent_ids[]} lists country row ids (parents of states); when omitted, returns all states.
      */
     public function states(Request $request): JsonResponse
@@ -47,7 +47,7 @@ class LocationHierarchyController extends Controller
     }
 
     /**
-     * Districts under one or more state rows. Parent id(s) must be {@code addresses} rows with type=state.
+     * Districts under one or more state rows. Parent id(s) must be {@code addresses} rows with hierarchy=state.
      */
     public function districts(Request $request): JsonResponse
     {
@@ -113,7 +113,7 @@ class LocationHierarchyController extends Controller
     }
 
     /**
-     * Cities under one taluka row (parent must be type=taluka).
+     * Cities under one taluka row (parent must be hierarchy=taluka).
      */
     public function cities(Request $request): JsonResponse
     {
