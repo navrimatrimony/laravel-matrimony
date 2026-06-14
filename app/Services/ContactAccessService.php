@@ -448,6 +448,68 @@ class ContactAccessService
     }
 
     /**
+     * Reveal a routed public representative contact for this profile while billing the viewer's contact-view quota.
+     * This intentionally does not read the candidate's profile contact payload.
+     *
+     * @return array{phone: string, email: ?string}
+     *
+     * @throws InvalidArgumentException
+     */
+    public function consumeRoutedContactReveal(User $viewer, MatrimonyProfile $targetProfile, string $phone, ?string $email = null): array
+    {
+        return DB::transaction(function () use ($viewer, $targetProfile, $phone, $email): array {
+            $uid = (int) $viewer->id;
+            $phone = trim($phone);
+            $email = trim((string) ($email ?? '')) ?: null;
+
+            if ($phone === '' && $email === null) {
+                throw new InvalidArgumentException(__('profile.suchak_contact_no_number'));
+            }
+
+            if ($this->featureUsage->shouldBypassUsageLimits($viewer)) {
+                return ['phone' => $phone, 'email' => $email];
+            }
+
+            if (! $this->planGrantsContactRevealFromSubscription($viewer)) {
+                throw new InvalidArgumentException(__('contact_access.upgrade_required'));
+            }
+
+            $periodStart = $this->currentRevealPeriodStart();
+            $alreadyRevealed = $this->hasRevealedThisMonth($uid, (int) $targetProfile->id, $periodStart);
+
+            if (! $alreadyRevealed && ! $this->featureUsage->canUse($uid, FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT)) {
+                throw new InvalidArgumentException(__('contact_access.reveal_blocked_credits'));
+            }
+
+            $limit = $this->featureUsage->getPlanFeatureLimit($viewer, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
+            $consumeCredit = false;
+
+            if (! $alreadyRevealed) {
+                $log = UserContactRevealLog::query()->firstOrCreate(
+                    [
+                        'viewer_user_id' => $uid,
+                        'viewed_profile_id' => $targetProfile->id,
+                        'period_start' => $periodStart,
+                    ],
+                    []
+                );
+                $consumeCredit = $log->wasRecentlyCreated && $limit !== -1;
+            }
+
+            if ($consumeCredit && ! $this->featureUsage->consume($uid, FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT)) {
+                throw new InvalidArgumentException(__('contact_access.reveal_blocked_credits'));
+            }
+
+            return ['phone' => $phone, 'email' => $email];
+        });
+    }
+
+    public function hasContactRevealForCurrentPeriod(User $viewer, MatrimonyProfile $targetProfile): bool
+    {
+        return $this->hasRevealedThisMonth((int) $viewer->id, (int) $targetProfile->id, $this->currentRevealPeriodStart());
+    }
+
+    /**
      * Assert viewer may use mediator quota (does not increment usage).
      *
      * @throws InvalidArgumentException
@@ -551,6 +613,14 @@ class ContactAccessService
             ->where('viewed_profile_id', $viewedProfileId)
             ->whereDate('period_start', $periodStart)
             ->exists();
+    }
+
+    private function currentRevealPeriodStart(): string
+    {
+        return $this->usage->resolvePeriodStart(
+            \App\Models\UserFeatureUsage::PERIOD_MONTHLY,
+            Carbon::now()
+        )->toDateString();
     }
 
     /**

@@ -36,7 +36,7 @@ class MrLocalizationFillTest extends TestCase
         if (! Schema::hasTable('addresses')) {
             $this->markTestSkipped('addresses table not present');
         }
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $this->actingAs($admin)->get(route('admin.data-engine.mr-fill.index', [
             'table' => 'definitely_not_a_table_zz',
             'base' => 'name',
@@ -49,7 +49,7 @@ class MrLocalizationFillTest extends TestCase
         if (! Schema::hasTable('addresses')) {
             $this->markTestSkipped('addresses table not present');
         }
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $this->actingAs($admin)->get(route('admin.data-engine.mr-fill.index', [
             'table' => 'addresses',
             'base' => 'name',
@@ -63,7 +63,7 @@ class MrLocalizationFillTest extends TestCase
             $this->markTestSkipped('addresses.parent_id not present');
         }
 
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $parentId = DB::table('addresses')->insertGetId([
             'name' => 'Parent place',
             'name_mr' => null,
@@ -74,8 +74,6 @@ class MrLocalizationFillTest extends TestCase
             'tag' => 'rural',
             'parent_id' => null,
             'level' => 3,
-            'state_code' => null,
-            'district_code' => null,
             'pincode' => null,
             'lat' => null,
             'lng' => null,
@@ -95,8 +93,6 @@ class MrLocalizationFillTest extends TestCase
             'tag' => 'rural',
             'parent_id' => $parentId,
             'level' => 4,
-            'state_code' => null,
-            'district_code' => null,
             'pincode' => null,
             'lat' => null,
             'lng' => null,
@@ -115,8 +111,6 @@ class MrLocalizationFillTest extends TestCase
             'tag' => 'rural',
             'parent_id' => $parentId,
             'level' => 4,
-            'state_code' => null,
-            'district_code' => null,
             'pincode' => null,
             'lat' => null,
             'lng' => null,

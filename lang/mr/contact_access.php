@@ -11,6 +11,8 @@ return [
     'reveal_blocked_matchmaking' => 'आधी WhatsApp प्रतिसाद पूर्ण करा: विनंती पाठवा आणि त्यांनी interested प्रतिसाद देईपर्यंत थांबा. त्यानंतर contact credit वापरून नंबर पाहता येईल.',
     'mediator_not_available' => 'या प्रोफाइलसाठी WhatsApp प्रतिसाद उपलब्ध नाही.',
     'whatsapp_response_unavailable' => 'WhatsApp प्रतिसाद सुविधा सध्या बंद आहे.',
+    'no_contact_credits_left_ui' => 'Contact credits उरलेले नाहीत',
+    'upgrade_plan_button' => 'Plan upgrade करा',
     'no_mediator_credits' => 'तुमच्याकडे WhatsApp प्रतिसाद विनंत्या उरलेल्या नाहीत.',
     'mediator_side_note' => 'समोरच्या व्यक्तीकडून प्रतिसाद मिळवण्यासाठी WhatsApp प्रतिसाद मागवा. आम्ही तुमची basic profile माहिती त्यांच्यापर्यंत पोहोचवू आणि प्रतिसाद तुम्हाला कळवू.',
     'mediator_response_received_note' => ':name यांचा WhatsApp प्रतिसाद खाली जतन झाला आहे. अतिरिक्त माहिती आणि पुढील कृती इथेच पाहू शकता.',

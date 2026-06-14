@@ -1238,10 +1238,44 @@
                 {{-- Valid Suchak options can be shown without automatically hiding direct contact. --}}
                 @if (($suchakContactOptionsAvailable ?? false) && ! empty($suchakContactRepresentations ?? null) && $suchakContactRepresentations->isNotEmpty())
                     <div class="space-y-4">
+                        @php
+                            $introSuchakAccount = $suchakContactRepresentations->first()?->suchakAccount;
+                            $introSuchakDisplayName = trim((string) (
+                                $introSuchakAccount?->office_name_mr
+                                    ?: $introSuchakAccount?->office_name
+                                    ?: $introSuchakAccount?->suchak_name_mr
+                                    ?: $introSuchakAccount?->suchak_name
+                                    ?: ''
+                            ));
+                            if ($introSuchakDisplayName === '') {
+                                $introSuchakDisplayName = __('Suchak');
+                            }
+                            $introSuchakPhotoPath = trim((string) ($introSuchakAccount?->profile_photo_path ?? ''));
+                            $introSuchakPhotoUrl = $introSuchakPhotoPath !== ''
+                                ? \Illuminate\Support\Facades\Storage::disk('public')->url($introSuchakPhotoPath)
+                                : null;
+                            $introSuchakInitialSource = preg_replace('/\s+/', ' ', $introSuchakDisplayName) ?: $introSuchakDisplayName;
+                            $introSuchakInitial = function_exists('mb_substr')
+                                ? mb_substr($introSuchakInitialSource, 0, 1, 'UTF-8')
+                                : substr($introSuchakInitialSource, 0, 1);
+                            $introSuchakInitial = $introSuchakInitial !== '' ? $introSuchakInitial : 'S';
+                        @endphp
                         <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-left dark:border-emerald-800 dark:bg-emerald-950/25">
-                            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">{{ __('profile.suchak_contact_kicker') }}</p>
-                            <h4 class="mt-1 text-base font-semibold text-stone-900 dark:text-stone-50">{{ __('profile.suchak_contact_title') }}</h4>
-                            <p class="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{{ __('profile.suchak_contact_body') }}</p>
+                            <div class="flex flex-col gap-4 sm:flex-row sm:items-start">
+                                <div class="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-emerald-100 bg-white text-xl font-semibold text-emerald-800 shadow-sm dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-100">
+                                    @if ($introSuchakPhotoUrl)
+                                        <img src="{{ $introSuchakPhotoUrl }}" alt="{{ $introSuchakDisplayName }}" class="h-full w-full object-cover">
+                                    @else
+                                        <span>{{ $introSuchakInitial }}</span>
+                                    @endif
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">{{ __('profile.suchak_contact_kicker') }}</p>
+                                    <h4 class="mt-1 text-base font-semibold text-stone-900 dark:text-stone-50">{{ $introSuchakDisplayName }}</h4>
+                                    <p class="mt-0.5 text-xs text-stone-500 dark:text-stone-400">{{ __('profile.suchak_contact_subtitle') }}</p>
+                                    <p class="mt-3 text-sm leading-relaxed text-stone-700 dark:text-stone-300">{{ __('profile.suchak_contact_body', ['name' => $introSuchakDisplayName]) }}</p>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="space-y-3">
@@ -1249,23 +1283,100 @@
                                 @php
                                     $existingSuchakRequest = ($openSuchakRequestsByRepresentationId ?? collect())->get($suchakRepresentation->id);
                                     $suchakAccount = $suchakRepresentation->suchakAccount;
+                                    $suchakDisplayName = trim((string) (
+                                        $suchakAccount?->office_name_mr
+                                            ?: $suchakAccount?->office_name
+                                            ?: $suchakAccount?->suchak_name_mr
+                                            ?: $suchakAccount?->suchak_name
+                                            ?: ''
+                                    ));
+                                    if ($suchakDisplayName === '') {
+                                        $suchakDisplayName = __('Suchak');
+                                    }
+                                    $activeSuchakNumber = $suchakAccount?->contactNumbers
+                                        ?->first(fn ($number) => (bool) ($number->is_active ?? false) && trim((string) ($number->phone_number ?? '')) !== '');
+                                    $suchakRawPhone = trim((string) ($activeSuchakNumber?->phone_number ?? ''));
+                                    if ($suchakRawPhone === '') {
+                                        $suchakRawPhone = trim((string) ($suchakAccount?->whatsapp_number ?? ''));
+                                    }
+                                    if ($suchakRawPhone === '') {
+                                        $suchakRawPhone = trim((string) ($suchakAccount?->mobile_number ?? ''));
+                                    }
+                                    $suchakDigits = preg_replace('/\D/', '', $suchakRawPhone);
+                                    $suchakMasked = strlen($suchakDigits) >= 4
+                                        ? substr($suchakDigits, 0, 4).'XXXXXX'
+                                        : 'XXXXXX';
+                                    $suchakNumberRevealed = (bool) ($suchakContactAlreadyRevealed ?? false);
+                                    $suchakCanReveal = $suchakRawPhone !== '' && (($canUseContact ?? false) || $suchakNumberRevealed);
+                                    $suchakCanMessage = (bool) ($canMessageSuchak ?? $chatSendGateAllowed ?? false);
+                                    $showSuchakContactCard = (bool) ($suchakContactRoutingRequired ?? false);
                                 @endphp
                                 <div class="rounded-xl border border-stone-200 bg-white px-4 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/70">
-                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                        <div class="min-w-0">
-                                            <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $suchakAccount?->suchak_name ?? __('Suchak') }}</p>
-                                            @if (! empty($suchakAccount?->office_name))
-                                                <p class="mt-0.5 text-xs text-stone-500 dark:text-stone-400">{{ $suchakAccount->office_name }}</p>
-                                            @endif
-                                        </div>
-                                        @if ($existingSuchakRequest)
+                                    @if ($existingSuchakRequest)
+                                        <div class="mb-3 flex justify-end">
                                             <span class="inline-flex items-center justify-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900 dark:bg-amber-900/35 dark:text-amber-100">
                                                 {{ __('profile.suchak_contact_pending_badge') }}
                                             </span>
-                                        @endif
-                                    </div>
+                                        </div>
+                                    @endif
 
-                                    @if ($existingSuchakRequest)
+                                    @if ($showSuchakContactCard)
+                                        <div class="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white px-4 py-5 text-center dark:border-emerald-900/60 dark:from-emerald-950/30 dark:to-gray-900/30">
+                                            @if ($suchakRawPhone !== '')
+                                                <p class="text-2xl font-bold tracking-wider text-stone-950 dark:text-stone-50">
+                                                    {{ $suchakNumberRevealed ? $suchakRawPhone : $suchakMasked }}
+                                                    @if (! $suchakNumberRevealed)
+                                                        <span class="text-stone-400" aria-hidden="true">🔒</span>
+                                                    @endif
+                                                </p>
+                                                <p class="mx-auto mt-2 max-w-2xl text-sm leading-relaxed text-stone-700 dark:text-stone-300">
+                                                    {{ __('profile.suchak_contact_number_owner', ['name' => $suchakDisplayName]) }}
+                                                </p>
+
+                                                @if (! $suchakNumberRevealed)
+                                                    @if ($suchakCanReveal)
+                                                        <form method="POST" action="{{ route('matrimony.profile.contact-reveal', $profile) }}" class="mt-4">
+                                                            @csrf
+                                                            <input type="hidden" name="representation_id" value="{{ $suchakRepresentation->id }}">
+                                                            <button type="submit" class="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 sm:w-auto">
+                                                                {{ __('profile.suchak_contact_view_button') }}
+                                                            </button>
+                                                        </form>
+                                                    @else
+                                                        <p class="mt-3 text-sm font-medium text-amber-800 dark:text-amber-200">{{ __('contact_access.no_contact_credits_left_ui') }}</p>
+                                                        <a href="{{ route('plans.index') }}" class="mt-3 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700">
+                                                            {{ __('contact_access.upgrade_plan_button') }}
+                                                        </a>
+                                                    @endif
+                                                @else
+                                                    <p class="mt-2 text-sm font-medium text-emerald-700 dark:text-emerald-300">{{ __('profile.suchak_contact_number_revealed') }}</p>
+                                                @endif
+                                            @else
+                                                <p class="text-sm text-stone-600 dark:text-stone-300">{{ __('profile.suchak_contact_no_number') }}</p>
+                                            @endif
+                                        </div>
+
+                                        @if ($existingSuchakRequest)
+                                            <p class="mt-3 text-sm text-stone-600 dark:text-stone-300">{{ __('profile.suchak_contact_pending_help') }}</p>
+                                        @elseif ($suchakCanMessage)
+                                            <form method="POST" action="{{ route('matrimony.profile.suchak-requests.store', [$profile, $suchakRepresentation]) }}" class="mt-4 space-y-3">
+                                                @csrf
+                                                <input type="hidden" name="request_reason" value="profile_show_contact">
+                                                <div>
+                                                    <label class="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">{{ __('profile.suchak_contact_message_label') }}</label>
+                                                    <textarea name="message" rows="2" maxlength="2000" class="w-full rounded-md border border-stone-300 shadow-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100" placeholder="{{ __('profile.suchak_contact_message_placeholder') }}">{{ old('message') }}</textarea>
+                                                </div>
+                                                <button type="submit" class="inline-flex w-full items-center justify-center rounded-xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 sm:w-auto">
+                                                    {{ __('profile.suchak_contact_message_button') }}
+                                                </button>
+                                            </form>
+                                        @else
+                                            <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+                                                {{ __('profile.suchak_contact_message_quota_empty') }}
+                                                <a href="{{ route('plans.index') }}" class="font-semibold underline">{{ __('contact_access.upgrade_plan_button') }}</a>
+                                            </div>
+                                        @endif
+                                    @elseif ($existingSuchakRequest)
                                         <p class="mt-3 text-sm text-stone-600 dark:text-stone-300">{{ __('profile.suchak_contact_pending_help') }}</p>
                                     @else
                                         <form method="POST" action="{{ route('matrimony.profile.suchak-requests.store', [$profile, $suchakRepresentation]) }}" class="mt-3 space-y-3">
@@ -1428,7 +1539,7 @@
                 @endif
                 @endif
                 </div>{{-- #profile-contact-reveal-root --}}
-                @if (! ($isOwnProfile ?? false) && (($contactAccess['show_mediator_cta'] ?? false) || ($latestMediatorRequestIncoming ?? null)))
+                @if (! ($isOwnProfile ?? false) && ! ($suchakContactRoutingRequired ?? false) && (($contactAccess['show_mediator_cta'] ?? false) || ($latestMediatorRequestIncoming ?? null)))
                     <div class="mt-3">
                         @include('matrimony.profile.partials.contact-mediator-cta', [
                             'latestMediatorRequest' => $latestMediatorRequest ?? null,

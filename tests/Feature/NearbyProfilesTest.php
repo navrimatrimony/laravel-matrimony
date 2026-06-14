@@ -33,8 +33,6 @@ function setupNearbyProfilesFixture(): array
         'hierarchy' => 'village',
         'tag' => 'suburban',
         'parent_id' => $haveli->id,
-        'state_code' => 'MH',
-        'district_code' => 'PN',
         'is_active' => true,
     ]);
 

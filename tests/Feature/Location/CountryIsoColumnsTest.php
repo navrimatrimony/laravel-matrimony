@@ -4,6 +4,7 @@ namespace Tests\Feature\Location;
 
 use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -29,5 +30,15 @@ class CountryHierarchyColumnsTest extends TestCase
         $this->assertSame('country', $in->hierarchy);
         $this->assertNull($in->tag);
         $this->assertSame('भारत', $in->name_mr);
+    }
+
+    public function test_location_typeahead_component_uses_hierarchy_country_without_iso_column(): void
+    {
+        $this->seed(MinimalLocationSeeder::class);
+
+        $html = Blade::render('<x-profile.location-typeahead context="residence" />');
+
+        $this->assertStringContainsString('data-default-country-id=', $html);
+        $this->assertStringNotContainsString('iso_alpha2', $html);
     }
 }

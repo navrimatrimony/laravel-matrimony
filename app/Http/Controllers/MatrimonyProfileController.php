@@ -1332,9 +1332,16 @@ class MatrimonyProfileController extends Controller
         $suchakContactRepresentations = collect();
         $openSuchakRequestsByRepresentationId = collect();
         $hasManualSuchakCreatedContactRepresentation = false;
+        $suchakContactAlreadyRevealed = false;
+        $canMessageSuchak = false;
         if (auth()->check() && ! $isOwnProfile && $user->matrimonyProfile) {
             $suchakContactRepresentations = SuchakProfileRepresentation::query()
-                ->with('suchakAccount')
+                ->with([
+                    'suchakAccount.contactNumbers' => fn ($query) => $query
+                        ->where('is_active', true)
+                        ->orderByDesc('is_whatsapp')
+                        ->orderBy('id'),
+                ])
                 ->publiclyRoutable()
                 ->where('matrimony_profile_id', $profile->id)
                 ->orderBy('id')
@@ -1352,7 +1359,7 @@ class MatrimonyProfileController extends Controller
                     ->keyBy('representation_id');
 
                 $hasManualSuchakCreatedContactRepresentation = $suchakContactRepresentations
-                    ->contains(fn (SuchakProfileRepresentation $representation): bool => $representation->representation_mode === SuchakProfileRepresentation::MODE_MANUAL_FORM_BY_SUCHAK);
+                    ->contains(fn (SuchakProfileRepresentation $representation): bool => in_array($representation->representation_mode, SuchakProfileRepresentation::SUCHAK_CREATED_MODES, true));
             }
 
             $contactRequestService = app(\App\Services\ContactRequestService::class);
@@ -1458,6 +1465,11 @@ class MatrimonyProfileController extends Controller
         }
         $contactUsageSnapshot = $featureUsage->getContactViewUsageSnapshot($user);
         $canUseContact = ! $isOwnProfile && ($gateStates['contact_view_limit']['allowed'] ?? false);
+        $canMessageSuchak = ! $isOwnProfile && ($gateStates['chat_send_limit']['allowed'] ?? false);
+        $suchakContactAlreadyRevealed = ! $isOwnProfile
+            && $user
+            && $suchakContactRepresentations->isNotEmpty()
+            && $this->contactAccessService->hasContactRevealForCurrentPeriod($user, $profile);
 
         $whoViewedEligibleDistinctCount = $isOwnProfile
             ? ViewTrackingService::countEligibleDistinctViewersForTeaser((int) $profile->id)
@@ -1610,6 +1622,8 @@ class MatrimonyProfileController extends Controller
                 'suchakContactRoutingMode' => $contactRoutingMode,
                 'suchakContactRepresentations' => $suchakContactRepresentations,
                 'openSuchakRequestsByRepresentationId' => $openSuchakRequestsByRepresentationId,
+                'suchakContactAlreadyRevealed' => $suchakContactAlreadyRevealed,
+                'canMessageSuchak' => $canMessageSuchak,
                 'interestAllowsContact' => $interestAllowsContact,
                 'photoLocked' => $photoLocked,
                 'photoLockMode' => $showPhotoTo ?? 'all',

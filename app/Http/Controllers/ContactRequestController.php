@@ -112,7 +112,7 @@ class ContactRequestController extends Controller
             ->where('matrimony_profile_id', $profile->id);
 
         if ((clone $publiclyRoutableSuchakQuery)
-            ->where('representation_mode', SuchakProfileRepresentation::MODE_MANUAL_FORM_BY_SUCHAK)
+            ->whereIn('representation_mode', SuchakProfileRepresentation::SUCHAK_CREATED_MODES)
             ->exists()) {
             return true;
         }

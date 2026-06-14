@@ -150,8 +150,6 @@ class ReferralQualityGatesTest extends TestCase
             'hierarchy' => 'village',
             'tag' => 'suburban',
             'parent_id' => $puneCity->parent_id,
-            'state_code' => 'MH',
-            'district_code' => 'PN',
             'is_active' => true,
         ])->id;
     }

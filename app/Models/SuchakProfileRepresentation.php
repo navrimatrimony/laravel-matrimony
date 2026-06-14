@@ -50,6 +50,11 @@ class SuchakProfileRepresentation extends Model
         self::MODE_MANUAL_FORM_BY_SUCHAK,
     ];
 
+    public const SUCHAK_CREATED_MODES = [
+        self::MODE_UPLOADED_BY_SUCHAK,
+        self::MODE_MANUAL_FORM_BY_SUCHAK,
+    ];
+
     public const CONSENT_NOT_REQUESTED = 'not_requested';
     public const CONSENT_REQUESTED = 'requested';
     public const CONSENT_ACCEPTED = 'accepted';

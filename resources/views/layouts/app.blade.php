@@ -55,7 +55,10 @@
             @endif
 
             @unless ($showSuchakWorkspaceNav || $hideMemberMainNav || request()->routeIs('help-centre.*'))
-                @include('partials.plan-usage-summary', ['variant' => 'compact'])
+                @include('partials.plan-usage-summary', [
+                    'variant' => 'compact',
+                    'hiddenUsageKeys' => ($suchakContactRoutingRequired ?? false) ? ['mediator_requests'] : [],
+                ])
             @endunless
 
             <!-- Page Heading -->

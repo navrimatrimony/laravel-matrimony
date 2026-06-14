@@ -91,8 +91,6 @@ test('location multi-word search matches village plus ancestor district token', 
         'slug' => 'mh-mt-'.$suffix,
         'hierarchy' => 'state',
         'parent_id' => null,
-        'state_code' => 'MH',
-        'district_code' => null,
         'is_active' => true,
     ]);
     $district = Location::query()->create([
@@ -100,8 +98,6 @@ test('location multi-word search matches village plus ancestor district token', 
         'slug' => 'sangli-mt-'.$suffix,
         'hierarchy' => 'district',
         'parent_id' => $state->id,
-        'state_code' => 'MH',
-        'district_code' => 'SG',
         'is_active' => true,
     ]);
     $taluka = Location::query()->create([

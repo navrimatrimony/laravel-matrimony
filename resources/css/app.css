@@ -8,6 +8,14 @@
 }
 
 /*
+ * Profile avatars are stored as portrait photos. Round thumbnails should favor
+ * the top of the portrait so faces are not cut off by center-cropping.
+ */
+img.rounded-full.object-cover {
+    object-position: center top;
+}
+
+/*
  * Onboarding CTAs: @tailwindcss/forms resets submit buttons — paint + shadow here so all steps match.
  */
 button.onboarding-primary-btn,

@@ -5,9 +5,9 @@ namespace App\Observers;
 use App\Models\Location;
 use App\Models\MatrimonyPhotoBatchAllocation;
 use App\Models\MatrimonyProfile;
+use App\Models\User;
 use App\Services\Location\LocationUsageStatsService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
-use App\Models\User;
 use App\Services\ProfileCompletionEngine;
 use App\Services\ProfileVisibilitySettingsDefaultsService;
 use App\Services\ReferralService;
@@ -23,6 +23,9 @@ class MatrimonyProfileObserver
     public function saving(MatrimonyProfile $profile): void
     {
         if ($this->allowsNullResidenceLocation($profile)) {
+            return;
+        }
+        if ($this->allowsPhotoOnlySaveWithoutResidence($profile)) {
             return;
         }
         if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
@@ -47,6 +50,26 @@ class MatrimonyProfileObserver
     private function allowsNullResidenceLocation(MatrimonyProfile $profile): bool
     {
         return ($profile->lifecycle_state ?? 'draft') === 'draft';
+    }
+
+    private function allowsPhotoOnlySaveWithoutResidence(MatrimonyProfile $profile): bool
+    {
+        if (! MatrimonyProfile::$bypassGovernanceEnforcement) {
+            return false;
+        }
+
+        $dirtyColumns = array_keys($profile->getDirty());
+        $dirtyColumns = array_values(array_diff($dirtyColumns, ['updated_at']));
+
+        $photoOnlyColumns = [
+            'profile_photo',
+            'photo_approved',
+            'photo_rejected_at',
+            'photo_rejection_reason',
+            'photo_moderation_snapshot',
+        ];
+
+        return array_diff($dirtyColumns, $photoOnlyColumns) === [];
     }
 
     public function created(MatrimonyProfile $profile): void

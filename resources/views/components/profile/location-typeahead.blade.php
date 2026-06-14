@@ -53,7 +53,13 @@
     $resolveUrlResolved = $resolveUrl ?? $defaultResolveUrl;
     $showGps = ($gpsAssist ?? true) && $resolveUrlResolved !== '';
     $showStaticLocationIcon = ! $showGps && (bool) ($showLocationIcon ?? false);
-    $defaultIndiaCountryId = \App\Models\Country::query()->where('iso_alpha2', 'IN')->value('id');
+    $defaultIndiaCountryId = \App\Models\Country::query()
+        ->where(function ($query) {
+            $query->where('slug', 'india')
+                ->orWhereRaw('LOWER(TRIM(name)) = ?', ['india'])
+                ->orWhereRaw('LOWER(TRIM(name_en)) = ?', ['india']);
+        })
+        ->value('id');
     $defaultMaharashtraStateId = $defaultIndiaCountryId
         ? \App\Models\State::query()
             ->where('parent_id', $defaultIndiaCountryId)

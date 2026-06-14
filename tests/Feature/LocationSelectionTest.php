@@ -46,8 +46,6 @@ function createMinimalLocationHierarchy(): array
         'hierarchy' => 'village',
         'tag' => 'suburban',
         'parent_id' => $city->parent_id,
-        'state_code' => 'MH',
-        'district_code' => 'PN',
         'is_active' => true,
     ]);
 
@@ -163,4 +161,3 @@ test('empty location id and location input fails validation', function () {
     expect($profile->location_id)->toBeNull();
     expect(LocationOpenPlaceSuggestion::query()->count())->toBe(0);
 });
-

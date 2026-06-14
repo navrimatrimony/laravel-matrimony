@@ -217,8 +217,8 @@ body.upload-landscape .upload-gallery-col {
                 <div id="stepChoose" style="display: block;">
                     <label for="profile_photo_input" style="display: block; cursor: {{ $photoLimitReached ? 'not-allowed' : 'pointer' }};">
                         <div style="width: 160px; height: 160px; margin: 0 auto 16px auto; border-radius: 50%; border: 3px solid {{ $photoLimitReached ? '#d1d5db' : $borderColor }}; overflow: hidden; position: relative; transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.1); {{ $photoLimitReached ? 'filter: grayscale(0.4); opacity: 0.75;' : '' }}" id="uploadPlaceholder">
-                            <img src="{{ $placeholderImage }}" alt="{{ __('photo.upload_photo') }}" style="width: 100%; height: 100%; object-fit: cover;" id="placeholderImg">
-                            <img src="" alt="{{ __('photo.preview') }}" style="width: 100%; height: 100%; object-fit: cover; display: none; position: absolute; top: 0; left: 0;" id="previewImg">
+                            <img src="{{ $placeholderImage }}" alt="{{ __('photo.upload_photo') }}" style="width: 100%; height: 100%; object-fit: cover; object-position: center top;" id="placeholderImg">
+                            <img src="" alt="{{ __('photo.preview') }}" style="width: 100%; height: 100%; object-fit: cover; object-position: center top; display: none; position: absolute; top: 0; left: 0;" id="previewImg">
                             <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.5); padding: 8px 0; display: flex; align-items: center; justify-content: center;" id="cameraOverlay">
                                 <svg style="width: 20px; height: 20px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
@@ -242,7 +242,7 @@ body.upload-landscape .upload-gallery-col {
                 <div id="stepPreview" style="display: none;">
                     <p style="font-size: 14px; font-weight: 600; color: #374151; margin: 0 0 12px 0;">{{ __('photo.preview') }}</p>
                     <div style="width: 200px; height: 200px; margin: 0 auto 8px auto; border-radius: 50%; border: 3px solid #10b981; overflow: hidden; background: #f3f4f6;">
-                        <img id="smallPreviewImg" src="" alt="{{ __('photo.preview') }}" style="width: 100%; height: 100%; object-fit: cover;">
+                        <img id="smallPreviewImg" src="" alt="{{ __('photo.preview') }}" style="width: 100%; height: 100%; object-fit: cover; object-position: center top;">
                     </div>
                     <p style="font-size: 13px; color: #6b7280; margin: 0 0 8px 0;">{!! __('photo.adjust_crop_help_html') !!}</p>
                     <div id="cropperWrap" style="width: 320px; height: 320px; margin: 0 auto 16px auto; background: #1f2937; border-radius: 12px; overflow: hidden;">
@@ -328,7 +328,7 @@ body.upload-landscape .upload-gallery-col {
                     <div style="margin-top: 14px; padding: 12px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 16px;">
                         <p style="margin: 0 0 10px 0; font-size: 12px; color: #6b7280; font-weight: 700;">Primary photo (syncing to gallery…)</p>
                         <div style="max-width: 220px; margin: 0 auto; border-radius: 14px; overflow: hidden; aspect-ratio: 1/1; background: #f3f4f6;">
-                            <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($profile->profile_photo) }}" alt="" style="width: 100%; height: 100%; object-fit: cover;">
+                            <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($profile->profile_photo) }}" alt="" style="width: 100%; height: 100%; object-fit: cover; object-position: center top;">
                         </div>
                     </div>
                 @else
@@ -351,7 +351,7 @@ body.upload-landscape .upload-gallery-col {
                     <div style="margin-top: 16px; padding: 14px 14px; background: linear-gradient(135deg, rgba(5,150,105,0.12) 0%, rgba(79,70,229,0.08) 100%); border: 1px solid rgba(5,150,105,0.20); border-radius: 16px;">
                         <div style="display:flex; gap: 14px; align-items:center; flex-wrap: wrap;">
                             <div style="width: 92px; height: 92px; border-radius: 14px; overflow:hidden; background:#f3f4f6; flex: none; border: 1px solid rgba(5,150,105,0.22);">
-                                <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($primaryPhoto->file_path) }}" alt="Primary Photo profile photo" style="width:100%; height:100%; object-fit:cover;">
+                                <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($primaryPhoto->file_path) }}" alt="Primary Photo profile photo" style="width:100%; height:100%; object-fit:cover; object-position:center top;">
                             </div>
                             <div style="flex:1; min-width: 200px;">
                                 <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -392,7 +392,7 @@ body.upload-landscape .upload-gallery-col {
                                 <img
                                     src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($photo->file_path) }}"
                                     alt="Profile photo"
-                                    style="width: 100%; height: 100%; object-fit: cover;"
+                                    style="width: 100%; height: 100%; object-fit: cover; object-position: center top;"
                                 >
 
                                 @if ($photo->is_primary)

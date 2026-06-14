@@ -31,16 +31,16 @@ class ProfileContactActionController extends Controller
         if ($user->matrimonyProfile->id === $matrimony_profile->id) {
             abort(403);
         }
-        if ($this->isSuchakOnlyProfile($matrimony_profile)) {
-            abort(403, 'Suchak-managed profiles must use the Suchak request pipeline.');
-        }
-
         /** @var int Same authenticated user id as {@see MatrimonyProfileController::show} (GET). */
         $userId = (int) $user->id;
 
         $wantsJson = $request->wantsJson()
             || $request->ajax()
             || $request->header('X-Contact-Reveal') === '1';
+
+        if ($this->isSuchakOnlyProfile($matrimony_profile)) {
+            return $this->revealSuchakContact($request, $user, $matrimony_profile, $wantsJson);
+        }
 
         $visibilitySettings = DB::table('profile_visibility_settings')
             ->where('profile_id', $matrimony_profile->id)
@@ -154,7 +154,7 @@ class ProfileContactActionController extends Controller
             ->where('matrimony_profile_id', $profile->id);
 
         if ((clone $publiclyRoutableSuchakQuery)
-            ->where('representation_mode', SuchakProfileRepresentation::MODE_MANUAL_FORM_BY_SUCHAK)
+            ->whereIn('representation_mode', SuchakProfileRepresentation::SUCHAK_CREATED_MODES)
             ->exists()) {
             return true;
         }
@@ -169,5 +169,88 @@ class ProfileContactActionController extends Controller
 
         return ProfileVisibilitySetting::normalizeContactRoutingMode(is_string($mode) ? $mode : null)
             === ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY;
+    }
+
+    private function revealSuchakContact(
+        Request $request,
+        User $user,
+        MatrimonyProfile $profile,
+        bool $wantsJson,
+    ): RedirectResponse|JsonResponse {
+        $representation = $this->routableSuchakRepresentationFor(
+            $profile,
+            (int) $request->input('representation_id', 0) ?: null,
+        );
+
+        if (! $representation) {
+            abort(404);
+        }
+
+        try {
+            $result = $this->contactAccess->consumeRoutedContactReveal(
+                $user,
+                $profile,
+                $this->suchakPhoneFor($representation),
+            );
+        } catch (\InvalidArgumentException $e) {
+            if ($wantsJson) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
+            return redirect()
+                ->route('matrimony.profile.show', $profile)
+                ->with('error', $e->getMessage());
+        }
+
+        if ($wantsJson) {
+            return response()->json([
+                'ok' => true,
+                'message' => __('contact_access.reveal_success'),
+                'phone' => $result['phone'] ?? '',
+                'email' => null,
+                'suchak_name' => $representation->suchakAccount?->suchak_name,
+                'contact_usage' => $this->contactUsagePayloadForJson($user, app(FeatureUsageService::class)),
+            ]);
+        }
+
+        return redirect()->route('matrimony.profile.show', $profile);
+    }
+
+    private function routableSuchakRepresentationFor(MatrimonyProfile $profile, ?int $representationId): ?SuchakProfileRepresentation
+    {
+        $query = SuchakProfileRepresentation::query()
+            ->with([
+                'suchakAccount.contactNumbers' => fn ($query) => $query
+                    ->where('is_active', true)
+                    ->orderByDesc('is_whatsapp')
+                    ->orderBy('id'),
+            ])
+            ->publiclyRoutable()
+            ->where('matrimony_profile_id', $profile->id)
+            ->orderBy('id');
+
+        if ($representationId !== null) {
+            $query->whereKey($representationId);
+        }
+
+        return $query->first();
+    }
+
+    private function suchakPhoneFor(SuchakProfileRepresentation $representation): string
+    {
+        $account = $representation->suchakAccount;
+        $contactNumber = $account?->contactNumbers
+            ?->first(fn ($number): bool => (bool) ($number->is_active ?? false) && trim((string) ($number->phone_number ?? '')) !== '');
+
+        if ($contactNumber) {
+            return trim((string) $contactNumber->phone_number);
+        }
+
+        $whatsapp = trim((string) ($account?->whatsapp_number ?? ''));
+        if ($whatsapp !== '') {
+            return $whatsapp;
+        }
+
+        return trim((string) ($account?->mobile_number ?? ''));
     }
 }

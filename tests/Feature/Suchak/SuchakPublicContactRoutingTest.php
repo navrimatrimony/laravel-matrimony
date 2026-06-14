@@ -12,9 +12,14 @@ use App\Models\SuchakConsent;
 use App\Models\SuchakPipelineEvent;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakProfileRequest;
+use App\Models\UserFeatureUsage;
 use App\Models\User;
+use App\Services\FeatureUsageService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
+use App\Services\UserFeatureUsageService;
 use Database\Seeders\MinimalLocationSeeder;
+use Database\Seeders\PlanStandardFeatureKeysSeeder;
+use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -41,7 +46,7 @@ class SuchakPublicContactRoutingTest extends TestCase
 
         $response->assertOk();
         $this->assertTrue(Schema::hasColumn('profile_visibility_settings', 'contact_routing_mode'));
-        $response->assertSee(__('profile.suchak_contact_title'), false);
+        $response->assertSee(__('profile.suchak_contact_kicker'), false);
         $response->assertSee(route('matrimony.profile.suchak-requests.store', [$targetProfile, $representation]), false);
         $response->assertSee('9876543210', false);
         $this->assertDatabaseHas('profile_visibility_settings', [
@@ -60,11 +65,62 @@ class SuchakPublicContactRoutingTest extends TestCase
         $response = $this->actingAs($viewer)->get(route('matrimony.profile.show', $targetProfile));
 
         $response->assertOk();
-        $response->assertSee(__('profile.suchak_contact_title'), false);
+        $response->assertSee(__('profile.suchak_contact_kicker'), false);
         $response->assertSee(route('matrimony.profile.suchak-requests.store', [$targetProfile, $representation]), false);
-        $response->assertDontSee(route('matrimony.profile.contact-reveal', $targetProfile), false);
+        $response->assertSee(route('matrimony.profile.contact-reveal', $targetProfile), false);
+        $response->assertSee(__('profile.suchak_contact_view_button'), false);
+        $response->assertSee(__('profile.suchak_contact_number_owner', ['name' => 'Suchak Office']), false);
+        $response->assertSee(__('profile.suchak_contact_subtitle'), false);
+        $response->assertSee(__('profile.suchak_contact_message_label'), false);
+        $response->assertSee(__('profile.suchak_contact_message_button'), false);
+        $response->assertSee('suchak/profile-photos/verified.jpg', false);
+        $response->assertDontSee('Uses 1 mobile number view credit from your plan.', false);
+        $response->assertDontSee('Uses 1 message credit from your plan.', false);
+        $response->assertSee('9090XXXXXX', false);
+        $response->assertDontSee(__('contact_access.mediator_heading'), false);
+        $response->assertDontSee('9090909090', false);
         $response->assertDontSee(route('contact-requests.store', $targetProfile), false);
         $response->assertDontSee('9876543210', false);
+        $this->assertSame($viewer->id, $viewerProfile->user_id);
+    }
+
+    public function test_uploaded_by_suchak_created_profile_routes_contact_through_suchak_even_with_default_mode(): void
+    {
+        [$viewer, $viewerProfile, $representation, $targetProfile] = $this->validRoutingFixture([
+            'representation' => [
+                'representation_mode' => SuchakProfileRepresentation::MODE_UPLOADED_BY_SUCHAK,
+            ],
+        ]);
+
+        $response = $this->actingAs($viewer)->get(route('matrimony.profile.show', $targetProfile));
+
+        $response->assertOk();
+        $response->assertSee(__('profile.suchak_contact_kicker'), false);
+        $response->assertSee(route('matrimony.profile.suchak-requests.store', [$targetProfile, $representation]), false);
+        $response->assertSee(route('matrimony.profile.contact-reveal', $targetProfile), false);
+        $response->assertSee('9090XXXXXX', false);
+        $response->assertDontSee(__('contact_access.mediator_heading'), false);
+        $response->assertDontSee(route('contact-requests.store', $targetProfile), false);
+        $response->assertDontSee('9876543210', false);
+
+        $this
+            ->actingAs($viewer)
+            ->post(route('contact-requests.store', $targetProfile), [
+                'reason' => 'talk_to_family',
+                'requested_scopes' => ['phone'],
+            ])
+            ->assertForbidden();
+
+        $this
+            ->actingAs($viewer)
+            ->withHeaders(['X-Contact-Reveal' => '1', 'Accept' => 'application/json'])
+            ->post(route('matrimony.profile.contact-reveal', $targetProfile), [
+                'representation_id' => $representation->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('phone', '9090909090')
+            ->assertJsonMissingExact(['phone' => '9876543210']);
+
         $this->assertSame($viewer->id, $viewerProfile->user_id);
     }
 
@@ -79,9 +135,9 @@ class SuchakPublicContactRoutingTest extends TestCase
         $response = $this->actingAs($viewer)->get(route('matrimony.profile.show', $targetProfile));
 
         $response->assertOk();
-        $response->assertSee(__('profile.suchak_contact_title'), false);
+        $response->assertSee(__('profile.suchak_contact_kicker'), false);
         $response->assertSee(route('matrimony.profile.suchak-requests.store', [$targetProfile, $representation]), false);
-        $response->assertDontSee(route('matrimony.profile.contact-reveal', $targetProfile), false);
+        $response->assertSee(route('matrimony.profile.contact-reveal', $targetProfile), false);
         $response->assertDontSee(route('contact-requests.store', $targetProfile), false);
         $response->assertDontSee('9876543210', false);
 
@@ -95,8 +151,13 @@ class SuchakPublicContactRoutingTest extends TestCase
 
         $this
             ->actingAs($viewer)
-            ->post(route('matrimony.profile.contact-reveal', $targetProfile))
-            ->assertForbidden();
+            ->withHeaders(['X-Contact-Reveal' => '1', 'Accept' => 'application/json'])
+            ->post(route('matrimony.profile.contact-reveal', $targetProfile), [
+                'representation_id' => $representation->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('phone', '9090909090')
+            ->assertJsonMissingExact(['phone' => '9876543210']);
 
         $this->assertSame($viewer->id, $viewerProfile->user_id);
     }
@@ -240,12 +301,13 @@ class SuchakPublicContactRoutingTest extends TestCase
         $this->assertNotSame(403, $mediatorResponse->getStatusCode());
     }
 
-    public function test_existing_contact_paths_are_blocked_only_for_suchak_only_profile(): void
+    public function test_suchak_only_blocks_candidate_contact_paths_but_allows_suchak_reveal(): void
     {
         $fixture = $this->validRoutingFixture([
             'contact_routing_mode' => ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY,
         ]);
         $viewer = $fixture[0];
+        $representation = $fixture[2];
         $targetProfile = $fixture[3];
 
         $this
@@ -258,13 +320,79 @@ class SuchakPublicContactRoutingTest extends TestCase
 
         $this
             ->actingAs($viewer)
-            ->post(route('matrimony.profile.contact-reveal', $targetProfile))
-            ->assertForbidden();
+            ->withHeaders(['X-Contact-Reveal' => '1', 'Accept' => 'application/json'])
+            ->post(route('matrimony.profile.contact-reveal', $targetProfile), [
+                'representation_id' => $representation->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('phone', '9090909090')
+            ->assertJsonMissingExact(['phone' => '9876543210']);
 
         $this
             ->actingAs($viewer)
             ->post(route('matrimony.profile.mediator-request', $targetProfile))
             ->assertForbidden();
+    }
+
+    public function test_suchak_reveal_requires_mobile_number_view_quota_for_non_admin_viewer(): void
+    {
+        $this->seed(SubscriptionPlansSeeder::class);
+        $this->seed(PlanStandardFeatureKeysSeeder::class);
+
+        [$viewer, , $representation, $targetProfile] = $this->validRoutingFixture([
+            'viewer' => [
+                'is_admin' => false,
+                'admin_role' => null,
+            ],
+            'contact_routing_mode' => ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY,
+        ]);
+
+        $this
+            ->actingAs($viewer)
+            ->withHeaders(['X-Contact-Reveal' => '1', 'Accept' => 'application/json'])
+            ->post(route('matrimony.profile.contact-reveal', $targetProfile), [
+                'representation_id' => $representation->id,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', __('contact_access.upgrade_required'));
+    }
+
+    public function test_suchak_message_requires_message_quota(): void
+    {
+        $this->seed(SubscriptionPlansSeeder::class);
+        $this->seed(PlanStandardFeatureKeysSeeder::class);
+
+        [$viewer, , $representation, $targetProfile] = $this->validRoutingFixture([
+            'viewer' => [
+                'is_admin' => false,
+                'admin_role' => null,
+            ],
+            'contact_routing_mode' => ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY,
+        ]);
+
+        $state = app(FeatureUsageService::class)->getFeatureState($viewer, FeatureUsageService::FEATURE_CHAT_SEND_LIMIT);
+        $limit = (int) ($state['limit'] ?? 0);
+        if ($limit > 0) {
+            app(UserFeatureUsageService::class)->incrementUsage(
+                (int) $viewer->id,
+                FeatureUsageService::FEATURE_CHAT_SEND_LIMIT,
+                $limit,
+                UserFeatureUsage::PERIOD_DAILY,
+            );
+        }
+
+        $this
+            ->actingAs($viewer)
+            ->post(route('matrimony.profile.suchak-requests.store', [$targetProfile, $representation]), [
+                'message' => 'Please contact this Suchak.',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('error', __('profile.suchak_contact_message_quota_empty'));
+
+        $this->assertDatabaseMissing('suchak_profile_requests', [
+            'requesting_user_id' => $viewer->id,
+            'target_matrimony_profile_id' => $targetProfile->id,
+        ]);
     }
 
     /**
@@ -273,7 +401,7 @@ class SuchakPublicContactRoutingTest extends TestCase
      */
     private function validRoutingFixture(array $overrides = []): array
     {
-        $viewer = User::factory()->create(['is_admin' => true]);
+        $viewer = User::factory()->create(array_merge(['is_admin' => true], $overrides['viewer'] ?? []));
         $viewerProfile = $this->createProfileWithOptionalActiveResidence(array_merge([
             'user_id' => $viewer->id,
             'lifecycle_state' => 'active',
@@ -285,6 +413,9 @@ class SuchakPublicContactRoutingTest extends TestCase
             'user_id' => $suchakUser->id,
             'suchak_name' => 'Verified Suchak',
             'office_name' => 'Suchak Office',
+            'profile_photo_path' => 'suchak/profile-photos/verified.jpg',
+            'mobile_number' => '9090909090',
+            'whatsapp_number' => null,
             'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
             'public_status' => SuchakAccount::PUBLIC_ACTIVE,
             'verified_at' => now(),
@@ -306,6 +437,7 @@ class SuchakPublicContactRoutingTest extends TestCase
             'suchak_account_id' => $account->id,
             'matrimony_profile_id' => $targetProfile->id,
             'representation_status' => SuchakProfileRepresentation::STATUS_ACTIVE,
+            'representation_mode' => SuchakProfileRepresentation::MODE_MATCHED_EXISTING_PROFILE,
             'consent_status' => SuchakProfileRepresentation::CONSENT_ACCEPTED,
             'first_verified_consent_at' => now(),
             'consent_verified_at' => now(),
