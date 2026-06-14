@@ -29,6 +29,7 @@ class SuchakVerificationRecord extends Model
         'admin_status',
         'admin_user_id',
         'remarks',
+        'remarks_mr',
         'verified_at',
         'rejected_at',
     ];

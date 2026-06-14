@@ -23,6 +23,8 @@ class SuchakActivityLog extends Model
 
     public const ACTION_SUCHAK_ONBOARDING_REQUESTED = 'suchak_onboarding_requested';
 
+    public const ACTION_SUCHAK_AUTO_APPROVED = 'suchak_auto_approved';
+
     public const ACTION_SOURCE_LINK_CREATED = 'source_link_created';
 
     public const ACTION_REPRESENTATION_CREATED = 'representation_created';

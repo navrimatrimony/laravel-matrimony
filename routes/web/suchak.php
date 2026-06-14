@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Suchak\AccountRequestController;
+use App\Http\Controllers\Suchak\AccountSettingsController;
 use App\Http\Controllers\Suchak\BiodataExportController;
 use App\Http\Controllers\Suchak\CollaborationController;
 use App\Http\Controllers\Suchak\ConsentController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\Suchak\DashboardController;
 use App\Http\Controllers\Suchak\DirectPaymentComplaintController;
 use App\Http\Controllers\Suchak\ExportRetentionController;
 use App\Http\Controllers\Suchak\IntakeSourceController;
+use App\Http\Controllers\Suchak\ManualProfileController;
 use App\Http\Controllers\Suchak\OfflineCampController;
 use App\Http\Controllers\Suchak\PaymentRequestPublicController;
 use App\Http\Controllers\Suchak\PlanPaymentController;
@@ -40,6 +42,9 @@ Route::prefix('suchak')
     ->name('suchak.')
     ->group(function () {
         Route::get('/register', [AccountRequestController::class, 'registrationInfo'])->name('register.info');
+        Route::post('/register/resolve-current-location', [AccountRequestController::class, 'resolveRegistrationLocation'])
+            ->middleware('throttle:location-gps')
+            ->name('register.resolve-current-location');
         Route::post('/register', [AccountRequestController::class, 'storeRegistration'])
             ->middleware('throttle:5,1')
             ->name('register.store');
@@ -88,6 +93,9 @@ Route::middleware('auth')
         Route::post('/register/otp/resend', [AccountRequestController::class, 'resendRegistrationOtp'])
             ->middleware('throttle:5,1')
             ->name('register.otp.resend');
+        Route::post('/register/documents', [AccountRequestController::class, 'storeRegistrationDocuments'])
+            ->middleware('throttle:10,1')
+            ->name('register.documents.store');
         Route::get('/register/status', [AccountRequestController::class, 'status'])->name('register.status');
     });
 
@@ -104,6 +112,17 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
     ->name('suchak.')
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+        Route::post('/profile-photo', [DashboardController::class, 'storeProfilePhoto'])
+            ->middleware('throttle:10,1')
+            ->name('profile-photo.store');
+        Route::get('/account-settings', [AccountSettingsController::class, 'edit'])
+            ->name('account-settings.edit');
+        Route::post('/account-settings/contact-numbers', [AccountSettingsController::class, 'storeContactNumber'])
+            ->middleware('throttle:10,1')
+            ->name('account-settings.contact-numbers.store');
+        Route::delete('/account-settings/contact-numbers/{contactNumber}', [AccountSettingsController::class, 'destroyContactNumber'])
+            ->middleware('throttle:10,1')
+            ->name('account-settings.contact-numbers.destroy');
         Route::post('/plans/{suchakPlan}/payu/start', [PlanPaymentController::class, 'start'])
             ->middleware('throttle:10,1')
             ->name('plans.payu.start');
@@ -112,7 +131,11 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
             ->name('plans.payu.test-success');
         Route::get('/intakes/create', [IntakeSourceController::class, 'create'])->name('intakes.create');
         Route::post('/intakes', [IntakeSourceController::class, 'store'])->name('intakes.store');
+        Route::get('/manual-profiles/create', [ManualProfileController::class, 'create'])->name('manual-profiles.create');
+        Route::post('/manual-profiles', [ManualProfileController::class, 'store'])->name('manual-profiles.store');
         Route::get('/search', [CrossSearchController::class, 'index'])->name('search.index');
+        Route::get('/representations/{representation}/profile-form', [ManualProfileController::class, 'editProfile'])
+            ->name('representations.profile-form');
         Route::post('/representations/{representation}/exports', [BiodataExportController::class, 'store'])
             ->middleware('throttle:10,1')
             ->name('representations.exports.store');

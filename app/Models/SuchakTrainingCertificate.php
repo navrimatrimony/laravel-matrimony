@@ -34,6 +34,7 @@ class SuchakTrainingCertificate extends Model
         'public_badge_status',
         'required_module_ids_json',
         'certificate_note',
+        'certificate_note_mr',
         'issued_by_admin_user_id',
         'issued_admin_audit_log_id',
         'issued_at',
@@ -41,6 +42,7 @@ class SuchakTrainingCertificate extends Model
         'revoked_admin_audit_log_id',
         'revoked_at',
         'revocation_note',
+        'revocation_note_mr',
     ];
 
     protected $casts = [

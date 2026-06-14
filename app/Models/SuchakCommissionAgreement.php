@@ -45,6 +45,7 @@ class SuchakCommissionAgreement extends Model
         'fixed_amount',
         'currency',
         'agreement_text_snapshot',
+        'agreement_text_snapshot_mr',
         'accepted_by_groom_suchak_at',
         'accepted_by_bride_suchak_at',
         'agreement_status',

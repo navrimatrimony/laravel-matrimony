@@ -15,7 +15,7 @@ class PhotoModerationEngineTest extends TestCase
 
     public function test_index_lists_profile_photos_for_moderation(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $profile = MatrimonyProfile::factory()->create([
             'profile_photo' => 'primary.webp',
             'photo_approved' => false,
@@ -49,7 +49,7 @@ class PhotoModerationEngineTest extends TestCase
 
     public function test_index_shows_nudenet_detection_text_in_table(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $profile = MatrimonyProfile::factory()->create([
             'profile_photo' => 'primary.webp',
             'photo_approved' => false,
@@ -83,7 +83,7 @@ class PhotoModerationEngineTest extends TestCase
 
     public function test_preview_route_returns_404_without_file(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $profile = MatrimonyProfile::factory()->create([
             'profile_photo' => 'primary.webp',
             'photo_approved' => false,
@@ -113,7 +113,7 @@ class PhotoModerationEngineTest extends TestCase
 
     public function test_cannot_approve_photo_when_scan_marked_unsafe(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $profile = MatrimonyProfile::factory()->create();
         $gp = ProfilePhoto::query()->create([
             'profile_id' => $profile->id,
@@ -139,7 +139,7 @@ class PhotoModerationEngineTest extends TestCase
 
     public function test_panel_fragment_returns_audit_html(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $profile = MatrimonyProfile::factory()->create([
             'profile_photo' => 'primary.webp',
             'photo_approved' => false,
@@ -163,7 +163,7 @@ class PhotoModerationEngineTest extends TestCase
 
     public function test_bulk_moderation_requires_reason_min_10_characters(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $profile = MatrimonyProfile::factory()->create();
         $gp = ProfilePhoto::query()->create([
             'profile_id' => $profile->id,

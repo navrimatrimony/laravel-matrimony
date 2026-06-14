@@ -303,6 +303,7 @@ class SuchakCustomerLifecycleService
             SuchakProfileRepresentation::MODE_MATCHED_EXISTING_PROFILE => SuchakCustomerContext::SOURCE_TYPE_EXISTING_PROFILE_MATCH,
             SuchakProfileRepresentation::MODE_CANDIDATE_INVITED_SUCHAK => SuchakCustomerContext::SOURCE_TYPE_CANDIDATE_INVITED,
             SuchakProfileRepresentation::MODE_ADMIN_ASSIGNED => SuchakCustomerContext::SOURCE_TYPE_ADMIN_ASSIGNED,
+            SuchakProfileRepresentation::MODE_MANUAL_FORM_BY_SUCHAK => SuchakCustomerContext::SOURCE_TYPE_MANUAL,
             default => SuchakCustomerContext::SOURCE_TYPE_INTAKE_UPLOAD,
         };
     }

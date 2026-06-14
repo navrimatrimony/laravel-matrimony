@@ -58,6 +58,11 @@ class City extends Location
         return $this->belongsTo(Taluka::class, 'parent_id');
     }
 
+    public function parentCity(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_city_id');
+    }
+
     public function displayMeta(): HasOne
     {
         return $this->hasOne(LocationDisplayMeta::class, 'location_id');

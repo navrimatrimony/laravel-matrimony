@@ -40,7 +40,7 @@ class SuchakBrowserMobileQaCompletionTest extends TestCase
 
     public function test_day_61_persona_matrix_renders_or_gates_primary_surfaces_cleanly(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $regularUser = User::factory()->create();
         $verifiedUser = User::factory()->create();
         $pendingUser = User::factory()->create();
@@ -69,7 +69,7 @@ class SuchakBrowserMobileQaCompletionTest extends TestCase
         );
         $this->assertMobileReadyMarkup(
             $this->actingAs($verifiedUser)->withMobileHeaders()->get(route('suchak.dashboard')),
-            ['Suchak Dashboard', 'Account status', 'Approved. You can start Suchak work.'],
+            ['Suchak Dashboard', 'Account status', 'Work unlocked. Admin/KYC review is still pending.'],
         );
 
         $this->actingAs($regularUser)
@@ -79,16 +79,16 @@ class SuchakBrowserMobileQaCompletionTest extends TestCase
 
         $this->assertMobileReadyMarkup(
             $this->actingAs($pendingUser)->withMobileHeaders()->get(route('suchak.dashboard')),
-            ['Suchak Dashboard', 'Account status', 'Pending. Admin approval is required before customer entry.'],
+            ['Suchak Dashboard', 'Account status', 'Work enabled. Admin review is still pending.'],
         );
-        $this->actingAs($pendingUser)
-            ->withMobileHeaders()
-            ->get(route('suchak.search.index'))
-            ->assertForbidden();
+        $this->assertMobileReadyMarkup(
+            $this->actingAs($pendingUser)->withMobileHeaders()->get(route('suchak.search.index')),
+            ['Suchak masked search'],
+        );
 
         $this->assertMobileReadyMarkup(
             $this->actingAs($suspendedUser)->withMobileHeaders()->get(route('suchak.dashboard')),
-            ['Suchak Dashboard', 'Account status', 'Pending. Admin approval is required before customer entry.'],
+            ['Suchak Dashboard', 'Account status', 'Suchak work is paused until admin reactivates this account.'],
         );
         $this->actingAs($suspendedUser)
             ->withMobileHeaders()
@@ -111,6 +111,7 @@ class SuchakBrowserMobileQaCompletionTest extends TestCase
             'Work',
             'Network',
             'Tools',
+            'Profile setup',
             'Today',
             'Customers',
             'Money',
@@ -121,6 +122,7 @@ class SuchakBrowserMobileQaCompletionTest extends TestCase
         $dashboard
             ->assertSee('data-suchak-nav', false)
             ->assertSee('data-suchak-subnav', false)
+            ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'profile']), false)
             ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'profiles']), false)
             ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'money']), false)
             ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'sharing']), false)

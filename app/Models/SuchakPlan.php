@@ -14,8 +14,10 @@ class SuchakPlan extends Model
 
     protected $fillable = [
         'name',
+        'name_mr',
         'slug',
         'description',
+        'description_mr',
         'price_amount',
         'currency',
         'billing_period_days',

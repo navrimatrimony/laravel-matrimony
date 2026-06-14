@@ -4,8 +4,14 @@ namespace App\Http\Controllers\Suchak;
 
 use App\Http\Controllers\Controller;
 use App\Models\SuchakAccount;
+use App\Models\SuchakVerificationRecord;
+use App\Modules\Suchak\Services\SuchakPolicyService;
 use App\Modules\Suchak\Services\SuchakRegistrationService;
+use App\Services\Location\CurrentLocationResolverService;
+use App\Support\Suchak\SuchakOnboardingPresenter;
 use App\Support\MobileNumber;
+use App\Support\Validation\AddressHierarchyRules;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,10 +23,17 @@ use Illuminate\View\View;
 
 class AccountRequestController extends Controller
 {
-    public function home(Request $request): View
+    private const PUBLIC_LOCATION_RESOLVE_CACHE_USER_ID = 0;
+
+    public function home(Request $request, SuchakPolicyService $policyService): View
     {
         return view('suchak.home', [
             'suchakAccount' => $request->user()?->suchakAccount,
+            'businessTypes' => $this->businessTypes(),
+            'showHeroRegistrationForm' => $policyService->heroRegistrationFormEnabled(),
+            'suchakHeroImagePath' => $policyService->heroImagePath(),
+            'suchakHomepageCopy' => $policyService->homepageCopy(),
+            'suchakHomepageStyle' => $policyService->homepageStyle(),
         ]);
     }
 
@@ -33,11 +46,7 @@ class AccountRequestController extends Controller
 
         return view('suchak.register', [
             'authenticatedUser' => $request->user(),
-            'businessTypes' => [
-                SuchakAccount::BUSINESS_TYPE_INDIVIDUAL => 'Individual Suchak',
-                SuchakAccount::BUSINESS_TYPE_BUREAU => 'Marriage bureau',
-                SuchakAccount::BUSINESS_TYPE_ORGANIZATION => 'Organization',
-            ],
+            'businessTypes' => $this->businessTypes(),
         ]);
     }
 
@@ -50,7 +59,7 @@ class AccountRequestController extends Controller
         if ($request->user()) {
             return redirect()
                 ->route('suchak.register.info')
-                ->with('error', 'Existing regular member accounts cannot be converted to Suchak. Please log out and create a separate Suchak account.');
+                ->with('error', __('suchak.register.separate_account_body'));
         }
 
         $validated = $request->validate([
@@ -69,38 +78,35 @@ class AccountRequestController extends Controller
                 SuchakAccount::BUSINESS_TYPE_BUREAU,
                 SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
             ])],
-            'mobile_number' => ['required', 'string', 'max:32'],
-            'whatsapp_number' => ['nullable', 'string', 'max:32'],
+            'whatsapp_number' => ['required', 'string', 'max:32'],
             'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')],
             'address_line' => ['required', 'string', 'max:1000'],
-            'identity_document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
-            'office_document' => [
-                Rule::requiredIf(fn (): bool => in_array((string) $request->input('business_type'), [
-                    SuchakAccount::BUSINESS_TYPE_BUREAU,
-                    SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
-                ], true)),
-                'nullable',
-                'file',
-                'mimes:pdf,jpg,jpeg,png',
-                'max:5120',
-            ],
+            'location_id' => ['nullable', 'integer', AddressHierarchyRules::existsLocationLeafId()],
+            'location_input' => ['nullable', 'string', 'max:255'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
-        $mobile = MobileNumber::normalize((string) $validated['mobile_number']);
-        if ($mobile === null) {
+        if (empty($validated['location_id']) && filled($validated['location_input'] ?? null)) {
             return back()
                 ->withInput()
-                ->withErrors(['mobile_number' => __('otp.enter_valid_10_digit_mobile')]);
+                ->withErrors(['location_id' => __('suchak.register.select_office_location')]);
+        }
+
+        $whatsapp = MobileNumber::normalize((string) $validated['whatsapp_number']);
+        if ($whatsapp === null) {
+            return back()
+                ->withInput()
+                ->withErrors(['whatsapp_number' => __('otp.enter_valid_10_digit_mobile')]);
         }
 
         Validator::make(
-            ['mobile_number' => $mobile],
-            ['mobile_number' => ['required', Rule::unique('users', 'mobile')]],
-            ['mobile_number.unique' => __('auth.mobile_duplicate_register')]
+            ['whatsapp_number' => $whatsapp],
+            ['whatsapp_number' => ['required', Rule::unique('users', 'mobile')]],
+            ['whatsapp_number.unique' => __('auth.mobile_duplicate_register')]
         )->validate();
 
-        $validated['mobile_number'] = $mobile;
+        $validated['whatsapp_number'] = $whatsapp;
+        $validated['mobile_number'] = $whatsapp;
         $validated['email'] = empty($validated['email']) ? null : Str::lower((string) $validated['email']);
 
         $result = $registrationService->register(
@@ -118,7 +124,31 @@ class AccountRequestController extends Controller
             ->with('status', $this->otpDeliveryMessage($result['delivery']));
     }
 
-    public function verify(Request $request): View|RedirectResponse
+    public function resolveRegistrationLocation(
+        Request $request,
+        CurrentLocationResolverService $currentLocationResolverService,
+    ): JsonResponse
+    {
+        $validated = $request->validate([
+            'lat' => ['required', 'numeric', 'between:-90,90'],
+            'lon' => ['required', 'numeric', 'between:-180,180'],
+        ]);
+
+        $result = $currentLocationResolverService->resolve(
+            self::PUBLIC_LOCATION_RESOLVE_CACHE_USER_ID,
+            (float) $validated['lat'],
+            (float) $validated['lon'],
+        );
+
+        $status = ($result['success'] ?? false) ? 200 : 422;
+        if (($result['status'] ?? '') === 'busy') {
+            $status = 429;
+        }
+
+        return response()->json($result, $status);
+    }
+
+    public function verify(Request $request, SuchakOnboardingPresenter $onboardingPresenter): View|RedirectResponse
     {
         $user = $request->user();
         $account = $user?->suchakAccount;
@@ -130,12 +160,17 @@ class AccountRequestController extends Controller
         if ($user->mobile_verified_at) {
             return redirect()
                 ->route('suchak.register.status')
-                ->with('status', 'Mobile number already verified. Your Suchak request is waiting for admin review.');
+                ->with('status', __('suchak.register.mobile_already_verified'));
         }
+
+        $account->load([
+            'verificationRecords' => fn ($query) => $query->latest('id'),
+        ]);
 
         return view('suchak.register-verify', [
             'suchakAccount' => $account,
             'otpDisplay' => $request->session()->pull('suchak_registration_otp_display'),
+            'onboarding' => $onboardingPresenter->forAccount($account, $account->verificationRecords),
         ]);
     }
 
@@ -159,7 +194,10 @@ class AccountRequestController extends Controller
             ->with('status', $this->otpDeliveryMessage($result['delivery']));
     }
 
-    public function verifyRegistrationOtp(Request $request, SuchakRegistrationService $registrationService): RedirectResponse
+    public function verifyRegistrationOtp(
+        Request $request,
+        SuchakRegistrationService $registrationService,
+    ): RedirectResponse
     {
         $validated = $request->validate([
             'otp' => ['required', 'string', 'regex:/^[0-9]{6}$/'],
@@ -174,10 +212,38 @@ class AccountRequestController extends Controller
 
         return redirect()
             ->route('suchak.register.status')
-            ->with('success', 'Mobile OTP verified. Your Suchak account is now waiting for admin approval.');
+            ->with('success', __('suchak.register.otp_verified_waiting_approval'));
     }
 
-    public function status(Request $request): View|RedirectResponse
+    public function storeRegistrationDocuments(
+        Request $request,
+        SuchakRegistrationService $registrationService,
+    ): RedirectResponse {
+        $user = $request->user();
+        $account = $user?->suchakAccount;
+
+        if (! $user || ! $account) {
+            return redirect()->route('suchak.home');
+        }
+
+        $validated = $request->validate([
+            'verification_type' => ['required', 'string', Rule::in($this->allowedVerificationTypes())],
+            'document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+        ]);
+
+        $registrationService->uploadVerificationDocument(
+            $account,
+            $validated['document'],
+            (string) $validated['verification_type'],
+            (int) $user->id,
+            $request->ip(),
+            $request->userAgent(),
+        );
+
+        return back()->with('success', __('suchak.status.document_upload_success'));
+    }
+
+    public function status(Request $request, SuchakOnboardingPresenter $onboardingPresenter): View|RedirectResponse
     {
         $account = $request->user()?->suchakAccount;
 
@@ -192,6 +258,7 @@ class AccountRequestController extends Controller
         return view('suchak.register-status', [
             'suchakAccount' => $account,
             'verificationRecords' => $account->verificationRecords,
+            'onboarding' => $onboardingPresenter->forAccount($account, $account->verificationRecords),
         ]);
     }
 
@@ -209,7 +276,31 @@ class AccountRequestController extends Controller
     {
         return redirect()
             ->route('suchak.register.info')
-            ->with('info', 'Suchak registration is separate from regular user accounts.');
+            ->with('info', __('suchak.register.separate_account_note'));
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function businessTypes(): array
+    {
+        return [
+            SuchakAccount::BUSINESS_TYPE_INDIVIDUAL => __('suchak.business_types.individual'),
+            SuchakAccount::BUSINESS_TYPE_BUREAU => __('suchak.business_types.bureau'),
+            SuchakAccount::BUSINESS_TYPE_ORGANIZATION => __('suchak.business_types.organization'),
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function allowedVerificationTypes(): array
+    {
+        return [
+            SuchakVerificationRecord::TYPE_IDENTITY,
+            SuchakVerificationRecord::TYPE_OFFICE,
+            SuchakVerificationRecord::TYPE_BUSINESS,
+        ];
     }
 
     private function flashOtpIfVisible(Request $request, ?string $otp): void
@@ -222,10 +313,10 @@ class AccountRequestController extends Controller
     private function otpDeliveryMessage(string $delivery): string
     {
         return match ($delivery) {
-            'dev_show' => 'OTP generated. Enter the test OTP shown on this page.',
-            'whatsapp' => 'OTP sent on WhatsApp. Enter it to continue.',
-            'disabled' => 'OTP delivery is disabled in admin settings. Please contact admin to verify this Suchak request.',
-            default => 'OTP generated. Enter it to continue.',
+            'dev_show' => __('suchak.register.otp_delivery_dev_show'),
+            'whatsapp' => __('suchak.register.otp_delivery_whatsapp'),
+            'disabled' => __('suchak.register.otp_delivery_disabled'),
+            default => __('suchak.register.otp_delivery_default'),
         };
     }
 }

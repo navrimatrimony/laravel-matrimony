@@ -6,6 +6,8 @@ use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Models\MasterRelative;
+use App\Models\SuchakBiodataIntakeLink;
+use App\Modules\Suchak\Services\SuchakIntakeApplyService;
 use App\Services\EducationService;
 use App\Services\Intake\IntakeCreationService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
@@ -33,6 +35,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use InvalidArgumentException;
 
 /*
 |--------------------------------------------------------------------------
@@ -344,6 +347,10 @@ class IntakeController extends Controller
             }
 
             $needsReview = $prefillConf < $highConfThreshold;
+            if ($fieldKey === 'marital_status' && ! empty($coreDataForSuggestion['marital_status_id'])) {
+                $needsReview = false;
+                $prefillConf = max($prefillConf, $highConfThreshold);
+            }
             $canAutoApply = in_array($fieldKey, $autoApplyFields, true);
             $mode = ($prefillConf >= $confThreshold && ! $requiredMissing && $canAutoApply) ? 'auto_prefill' : 'manual_apply';
 
@@ -499,43 +506,7 @@ class IntakeController extends Controller
         // Preview-only: normalize birth_time text (e.g. "रात्री 09 वा.45 मि.") → "HH:MM" so basic_info time picker pre-fills.
         $btRaw = is_scalar($coreData['birth_time'] ?? null) ? trim((string) $coreData['birth_time']) : '';
         if ($btRaw !== '') {
-            // Already normalized?
-            if (! preg_match('/^\d{1,2}:\d{2}(\s*(AM|PM))?$/iu', $btRaw)) {
-                $period = null; // 'AM' | 'PM' | null
-                if (mb_stripos($btRaw, 'सकाळी') !== false) {
-                    $period = 'AM';
-                } elseif (mb_stripos($btRaw, 'दुपारी') !== false) {
-                    $period = 'PM';
-                } elseif (mb_stripos($btRaw, 'सायंकाळी') !== false || mb_stripos($btRaw, 'सायंकाळ') !== false) {
-                    $period = 'PM';
-                } elseif (mb_stripos($btRaw, 'रात्री') !== false || mb_stripos($btRaw, 'रात्रीचे') !== false) {
-                    $period = 'PM';
-                }
-
-                // Extract hour + minute allowing Marathi digits + junk between.
-                if (preg_match('/([०-९0-9]{1,2})[^\d०-९]+([०-९0-9]{1,2})/u', $btRaw, $mBt)) {
-                    $toLatin = function (string $v): int {
-                        $map = ['०' => '0', '१' => '1', '२' => '2', '३' => '3', '४' => '4', '५' => '5', '६' => '6', '७' => '7', '८' => '8', '९' => '9'];
-                        $out = '';
-                        foreach (preg_split('//u', $v, -1, PREG_SPLIT_NO_EMPTY) as $ch) {
-                            $out .= $map[$ch] ?? $ch;
-                        }
-
-                        return (int) $out;
-                    };
-                    $h = $toLatin($mBt[1]);
-                    $min = $toLatin($mBt[2]);
-                    if ($h >= 0 && $h <= 23 && $min >= 0 && $min <= 59) {
-                        // Convert to 24h based on period hint.
-                        if ($period === 'PM' && $h < 12) {
-                            $h += 12;
-                        } elseif ($period === 'AM' && $h === 12) {
-                            $h = 0;
-                        }
-                        $coreData['birth_time'] = sprintf('%02d:%02d', $h, $min);
-                    }
-                }
-            }
+            $coreData['birth_time'] = $this->normalizePreviewBirthTimeForForm($btRaw);
         }
 
         // Preview-only: default mother_tongue_id = Marathi when biodata looks predominantly Marathi and mother_tongue_id is empty.
@@ -1727,7 +1698,23 @@ class IntakeController extends Controller
             $snapshot = null;
         }
 
-        $result = app(IntakeApprovalService::class)->approve($intake, (int) auth()->id(), $snapshot);
+        $sourceLink = SuchakBiodataIntakeLink::query()
+            ->where('biodata_intake_id', $intake->id)
+            ->first();
+
+        try {
+            $result = $sourceLink
+                ? app(SuchakIntakeApplyService::class)->approveAndApply(
+                    $intake,
+                    $request->user(),
+                    $snapshot,
+                    $request->ip(),
+                    $request->userAgent(),
+                )
+                : app(IntakeApprovalService::class)->approve($intake, (int) auth()->id(), $snapshot);
+        } catch (InvalidArgumentException $exception) {
+            return redirect()->back()->with('error', $exception->getMessage());
+        }
         if (($result['mutation_success'] ?? false) === true && ($result['already_applied'] ?? false) !== true) {
             app(IntakePhotoCandidateApplyService::class)
                 ->applyAfterSuccessfulIntakeMutation($intake->refresh(), $result['profile_id'] ?? null);
@@ -1736,6 +1723,61 @@ class IntakeController extends Controller
         return redirect()->route('intake.status', $intake->id)
             ->with('success', __('intake.approved_successfully'))
             ->with('mutation_result', $result);
+    }
+
+    private function normalizePreviewBirthTimeForForm(string $btRaw): string
+    {
+        $btRaw = trim($btRaw);
+        if ($btRaw === '' || preg_match('/^\d{1,2}:\d{2}(\s*(AM|PM))?$/iu', $btRaw)) {
+            return $btRaw;
+        }
+
+        $period = null;
+        if (preg_match('/A\.?\s*M\.?/i', $btRaw)) {
+            $period = 'AM';
+        } elseif (preg_match('/P\.?\s*M\.?/i', $btRaw)) {
+            $period = 'PM';
+        }
+
+        if ($period === null) {
+            if (mb_stripos($btRaw, 'सकाळी') !== false) {
+                $period = 'AM';
+            } elseif (mb_stripos($btRaw, 'दुपारी') !== false) {
+                $period = 'PM';
+            } elseif (mb_stripos($btRaw, 'सायंकाळी') !== false || mb_stripos($btRaw, 'सायंकाळ') !== false) {
+                $period = 'PM';
+            } elseif (mb_stripos($btRaw, 'रात्री') !== false || mb_stripos($btRaw, 'रात्रीचे') !== false) {
+                $period = 'PM';
+            }
+        }
+
+        if (! preg_match('/([०-९0-9]{1,2})[^\d०-९]+([०-९0-9]{1,2})/u', $btRaw, $mBt)) {
+            return $btRaw;
+        }
+
+        $toLatin = static function (string $v): int {
+            $map = ['०' => '0', '१' => '1', '२' => '2', '३' => '3', '४' => '4', '५' => '5', '६' => '6', '७' => '7', '८' => '8', '९' => '9'];
+            $out = '';
+            foreach (preg_split('//u', $v, -1, PREG_SPLIT_NO_EMPTY) as $ch) {
+                $out .= $map[$ch] ?? $ch;
+            }
+
+            return (int) $out;
+        };
+
+        $h = $toLatin($mBt[1]);
+        $min = $toLatin($mBt[2]);
+        if ($h < 0 || $h > 23 || $min < 0 || $min > 59) {
+            return $btRaw;
+        }
+
+        if ($period === 'PM' && $h < 12) {
+            $h += 12;
+        } elseif ($period === 'AM' && $h === 12) {
+            $h = 0;
+        }
+
+        return sprintf('%02d:%02d', $h, $min);
     }
 
     /**

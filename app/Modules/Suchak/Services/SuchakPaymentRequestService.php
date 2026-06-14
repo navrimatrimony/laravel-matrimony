@@ -77,10 +77,13 @@ class SuchakPaymentRequestService
                     'Suchak payment request title is required.',
                     160,
                 ),
+                'request_title_mr' => $this->limitedText($attributes['request_title_mr'] ?? null, 160),
                 'request_note' => $this->limitedText($attributes['request_note'] ?? null, 1000),
+                'request_note_mr' => $this->limitedText($attributes['request_note_mr'] ?? null, 1000),
                 'amount_due' => $this->amountDue($attributes['amount_due'] ?? $agreement->price_amount),
                 'currency' => $this->currency($attributes['currency'] ?? $agreement->currency),
                 'collector_disclosure' => $this->collectorDisclosure($paymentContext),
+                'collector_disclosure_mr' => $this->collectorDisclosureMr($paymentContext),
                 'expires_at' => $this->futureExpiry($attributes['expires_at'] ?? now()->addDays(7)),
             ]);
 
@@ -415,6 +418,15 @@ class SuchakPaymentRequestService
         }
 
         return 'Payment collector: Suchak. This request is collected by the disclosed Suchak account, not by a public marketplace listing.';
+    }
+
+    private function collectorDisclosureMr(SuchakPaymentContext $paymentContext): string
+    {
+        if ($paymentContext->source_owner === SuchakPaymentContext::SOURCE_COLLABORATION) {
+            return 'Payment collector: Suchak. ही request collaboration-owned customer context साठी आहे आणि disclosed Suchak account कडून collect केली जाते.';
+        }
+
+        return 'Payment collector: Suchak. ही request disclosed Suchak account कडून collect केली जाते; public marketplace listing कडून नाही.';
     }
 
     private function amountDue(mixed $value): ?string

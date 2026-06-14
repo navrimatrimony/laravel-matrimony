@@ -36,3 +36,6 @@ laravel-matrimony-master 31Dec25.md
 /nudnet-api/.venv/
 /nudnet-api/__pycache__/
 nudnet-api/venv/
+
+.codex_tmp/
+tmp_*.php

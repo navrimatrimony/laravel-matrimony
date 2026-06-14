@@ -367,8 +367,8 @@ class IntakeNormalizedDraftCoverageAuditor
     private function factIdentity(array $fact, bool $includeSection): string
     {
         $factType = trim((string) ($fact['fact_type'] ?? ''));
-        $canonicalValue = $this->canonicalScalar((string) ($fact['value'] ?? ''), $factType);
         $targetField = $this->canonicalTargetField((string) ($fact['target_field'] ?? ''));
+        $canonicalValue = $this->canonicalScalar((string) ($fact['value'] ?? ''), $factType, $targetField);
         if ($factType === '' || $canonicalValue === '' || $targetField === '') {
             return '';
         }
@@ -407,9 +407,16 @@ class IntakeNormalizedDraftCoverageAuditor
         return trim((string) preg_replace('/^[\s:.\-|–—]+|[\s:.\-|–—]+$/u', '', $value));
     }
 
-    private function canonicalScalar(string $value, string $factType): string
+    private function canonicalScalar(string $value, string $factType, string $targetField = ''): string
     {
         $value = OcrNormalize::normalizeDigits(trim($value));
+        if ($targetField === 'core.date_of_birth') {
+            $date = OcrNormalize::normalizeDate($value);
+            if ($date !== null && $date !== '') {
+                return $date;
+            }
+        }
+
         if ($factType === 'phone_number') {
             preg_match_all('/[6-9]\d{9}/', $value, $matches);
 

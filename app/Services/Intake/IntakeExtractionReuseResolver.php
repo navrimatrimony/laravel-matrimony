@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Paid AI vision extraction reuse: TEXT only (per-intake parse-input cache, fingerprint cache, peer raw_ocr_text).
+ * Paid AI vision extraction reuse: TEXT only (per-intake parse-input cache, fingerprint cache, peer paid transcripts).
  * Does not mutate raw_ocr_text. ParseIntakeJob always runs the parser on the resolved string for the current
  * intake and stores that run's parsed_json — never copies another intake's parsed_json or approval_snapshot_json.
  * Reused transcript is written to this intake's parse-input cache key before parse where applicable.
@@ -270,11 +270,11 @@ class IntakeExtractionReuseResolver
         }
 
         $limit = max(5, (int) config('intake.paid_extraction_reuse.historical_peer_query_limit', 40));
-        foreach ($this->loadHistoricalRawOcrPeers($intake, $sigCurrent, $limit) as $row) {
+        foreach ($this->loadHistoricalPaidTranscriptPeers($intake, $sigCurrent, $limit) as $row) {
             $addCandidate(
                 $row['text'],
-                'historical_intake_raw_ocr',
-                'upload_time_ocr_stored_on_peer_intake_row',
+                'historical_paid_transcript',
+                'paid_transcript_stored_on_peer_intake_row',
                 $row['intake_id'],
                 $row['identity_evidence_score'],
                 null,
@@ -343,7 +343,7 @@ class IntakeExtractionReuseResolver
     /**
      * @return list<array{text: string, intake_id: int, identity_evidence_score: float}>
      */
-    public function loadHistoricalRawOcrPeers(BiodataIntake $current, array $sigCurrent, int $limit): array
+    public function loadHistoricalPaidTranscriptPeers(BiodataIntake $current, array $sigCurrent, int $limit): array
     {
         if (($sigCurrent['phone'] ?? '') === '') {
             return [];
@@ -351,24 +351,26 @@ class IntakeExtractionReuseResolver
 
         $rows = BiodataIntake::query()
             ->where('id', '!=', (int) $current->id)
-            ->whereNotNull('raw_ocr_text')
-            ->where('raw_ocr_text', '!=', '')
+            ->where('parse_status', 'parsed')
+            ->where('ai_calls_used', '>', 0)
+            ->whereNotNull('last_parse_input_text')
+            ->where('last_parse_input_text', '!=', '')
             ->orderByDesc('updated_at')
             ->limit($limit)
-            ->get(['id', 'raw_ocr_text']);
+            ->get(['id', 'last_parse_input_text']);
 
         $out = [];
         foreach ($rows as $row) {
-            $raw = trim((string) $row->raw_ocr_text);
-            if ($raw === '' || mb_strlen($raw, 'UTF-8') < 60) {
+            $transcript = trim((string) $row->last_parse_input_text);
+            if ($transcript === '' || mb_strlen($transcript, 'UTF-8') < 60) {
                 continue;
             }
-            $peerSig = $this->fingerprint->extractSignals($raw);
+            $peerSig = $this->fingerprint->extractSignals($transcript);
             $ev = $this->fingerprint->identityReuseEvidenceScore($sigCurrent, $peerSig);
             if ($ev === null) {
                 continue;
             }
-            $norm = trim(OcrNormalize::normalizeRawTextForParsing($raw));
+            $norm = trim(OcrNormalize::normalizeRawTextForParsing($transcript));
             if ($norm === '') {
                 continue;
             }
@@ -417,7 +419,7 @@ class IntakeExtractionReuseResolver
         return match ($sourceKey) {
             'identity_fingerprint_cache' => 40,
             'intake_parse_input_cache' => 30,
-            'historical_intake_raw_ocr' => 10,
+            'historical_paid_transcript' => 20,
             default => 0,
         };
     }

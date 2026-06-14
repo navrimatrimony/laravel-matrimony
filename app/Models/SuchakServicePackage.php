@@ -41,7 +41,9 @@ class SuchakServicePackage extends Model
         'customer_context_id',
         'source_template_id',
         'package_name',
+        'package_name_mr',
         'package_description',
+        'package_description_mr',
         'price_amount',
         'currency',
         'package_status',
@@ -54,6 +56,7 @@ class SuchakServicePackage extends Model
         'rejected_by_admin_user_id',
         'rejected_at',
         'rejection_reason',
+        'rejection_reason_mr',
         'published_at',
         'archived_at',
     ];

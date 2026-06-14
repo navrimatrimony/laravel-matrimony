@@ -15,4 +15,9 @@ class OcrHtmlTableFlattenerTest extends TestCase
         $this->assertSame('जन्म तारीख :- ०८ ऑगस्ट १९९७', $flat);
         $this->assertSame('1997-08-08', OcrNormalize::normalizeDate('०८ ऑगस्ट १९९७'));
     }
+
+    public function test_dual_day_biodata_birth_date_uses_second_calendar_day(): void
+    {
+        $this->assertSame('1994-10-25', OcrNormalize::normalizeDate('२४-२५/१० / १९९४'));
+    }
 }

@@ -51,6 +51,7 @@ class SuchakRetentionArchiveRule extends Model
     protected $fillable = [
         'rule_key',
         'rule_name',
+        'rule_name_mr',
         'record_type',
         'retention_days',
         'archive_after_days',

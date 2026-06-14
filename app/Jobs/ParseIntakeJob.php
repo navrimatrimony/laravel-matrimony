@@ -65,6 +65,10 @@ class ParseIntakeJob implements ShouldQueue
      */
     public function handle(): void
     {
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(max(300, (int) ini_get('max_execution_time')));
+        }
+
         $intake = BiodataIntake::find($this->intakeId);
 
         Log::info('ParseIntakeJob::handle() started', [
@@ -212,6 +216,22 @@ class ParseIntakeJob implements ShouldQueue
                 ];
                 Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
             }
+        } elseif ($useAiVisionExtraction
+            && ! $manualPreparedExists
+            && trim((string) ($intake->file_path ?? '')) === ''
+            && trim((string) ($intake->raw_ocr_text ?? '')) !== '') {
+            $resolved = $ocr->buildParseInputFromDbRawOcr($intake);
+            $raw = $resolved['text'];
+            $parseInputDebug = [
+                'parse_input_source' => 'raw_text_only_intake',
+                'ok' => true,
+                'text_quality_ok' => true,
+                'ai_extraction_skipped' => true,
+                'reason' => 'raw_text_only_intake_has_no_file',
+                'provider' => null,
+                'provider_source' => 'not_applicable',
+            ];
+            Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
         } elseif ($useAiVisionExtraction) {
             $ai = app(AiVisionExtractionService::class);
             $parseInputOnly = $reuseResolver->consumeParseInputOnlyFlag((int) $intake->id);
@@ -379,7 +399,7 @@ class ParseIntakeJob implements ShouldQueue
             $longLivedParseInputCache = $calledPaidExtract
                 || $reusedFrom === 'identity_fingerprint_cache'
                 || $reusedFrom === 'intake_parse_input_cache'
-                || $reusedFrom === 'historical_intake_raw_ocr';
+                || $reusedFrom === 'historical_paid_transcript';
             $reuseResolver->putCachedParseInputText((int) $intake->id, $raw, $longLivedParseInputCache);
 
             if (empty($qualityGate['ok'])) {
@@ -459,7 +479,7 @@ class ParseIntakeJob implements ShouldQueue
         $parsed = null;
         $attempts = 0;
         $lastException = null;
-        $aiCalls = 0; // Reserved for future detailed AI tracking
+        $aiCalls = ($useAiVisionExtraction && isset($calledPaidExtract) && $calledPaidExtract) ? 1 : 0;
         $start = microtime(true);
 
         while ($attempts === 0 || ($attempts < $retryLimit && $parsed === null && $lastException !== null)) {

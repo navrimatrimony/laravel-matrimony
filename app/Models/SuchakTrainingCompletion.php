@@ -27,6 +27,7 @@ class SuchakTrainingCompletion extends Model
         'completion_status',
         'score_percent',
         'completion_note',
+        'completion_note_mr',
         'completed_by_admin_user_id',
         'admin_audit_log_id',
         'completed_at',

@@ -300,9 +300,15 @@ class IntakeNormalizedDraftToParsedJsonMapper
         }
 
         $landAcres = null;
-        if (preg_match('/([0-9०-९]+(?:\.[0-9]+)?)\s*(?:एकर|acre|acres)/ui', $text, $m)) {
-            $digits = OcrNormalize::normalizeDigits($m[1]);
-            $landAcres = is_numeric($digits) ? (float) $digits : null;
+        if (preg_match_all('/([0-9०-९]+(?:\.[0-9०-९]+)?)\s*(?:एकर|acre|acres)/ui', $text, $matches)) {
+            $total = 0.0;
+            foreach ($matches[1] as $rawAcres) {
+                $digits = OcrNormalize::normalizeDigits((string) $rawAcres);
+                if (is_numeric($digits)) {
+                    $total += (float) $digits;
+                }
+            }
+            $landAcres = $total > 0.0 ? $total : null;
         }
 
         $summary = [

@@ -68,7 +68,7 @@ class PlanMultiDurationStoreTest extends TestCase
      */
     public function test_two_plans_quarterly_and_half_yearly_terms_independent_controls(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
 
         $silverTerms = $this->termRowsList([
             PlanTerm::BILLING_MONTHLY => ['price' => '100', 'is_visible' => '1'],
@@ -149,7 +149,7 @@ class PlanMultiDurationStoreTest extends TestCase
 
     public function test_store_creates_one_plan_with_two_billing_terms(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
 
         $payload = [
             'name' => 'Gold Pack',

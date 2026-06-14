@@ -19,6 +19,8 @@ return [
     'dob_format_hint' => 'Type day, month, and year; slashes are added for you. Or tap the calendar icon.',
     'step2_title' => 'About the candidate',
     'step2_sub' => 'This helps us show the right matches.',
+    'intake_autofill_hint' => 'Already have a biodata image or PDF? Upload it and review the autofilled profile details.',
+    'intake_autofill_cta' => 'Upload biodata',
     'step3_title' => 'Community, height & location',
     'step3_sub' => 'Religion, caste, height, and your area (city) help with compatible matches. You can add a detailed address later in Edit profile.',
     'step4_title' => 'Education & work',

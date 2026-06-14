@@ -35,20 +35,40 @@ class SuchakCentralServicesTest extends TestCase
 
         $this->assertTrue($service->canOperate($verified));
         $this->assertTrue($service->canPubliclyRoute($verified));
-        $this->assertFalse($service->canOperate($pending));
+        $this->assertTrue($service->canOperate($pending));
+        $this->assertFalse($service->canPubliclyRoute($pending));
         $this->assertFalse($service->canOperate($suspended));
         $this->assertFalse($service->canOperate($archived));
+
+        $service->assertOwnerCanOperate(
+            $pending,
+            $pending->user,
+            'Owner mismatch.',
+            'Suchak is not allowed to work yet.',
+        );
+
+        SuchakPolicy::query()->updateOrCreate(
+            ['policy_key' => SuchakPolicyService::KEY_SUCHAK_ALLOW_WORK_BEFORE_ADMIN_APPROVAL],
+            [
+                'policy_value' => 'false',
+                'value_type' => SuchakPolicy::TYPE_BOOLEAN,
+                'description' => 'Block pending review Suchak work in this test.',
+                'is_active' => true,
+            ],
+        );
+
+        $this->assertFalse($service->canOperate($pending));
 
         try {
             $service->assertOwnerCanOperate(
                 $pending,
                 $pending->user,
                 'Owner mismatch.',
-                'Suchak is not verified.',
+                'Suchak is not allowed to work yet.',
             );
-            $this->fail('Pending Suchak must be blocked by central access service.');
+            $this->fail('Pending Suchak must be blocked when the admin work-before-approval policy is disabled.');
         } catch (InvalidArgumentException $exception) {
-            $this->assertSame('Suchak is not verified.', $exception->getMessage());
+            $this->assertSame('Suchak is not allowed to work yet.', $exception->getMessage());
         }
 
         try {

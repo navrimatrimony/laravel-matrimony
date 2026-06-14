@@ -5,10 +5,12 @@
     'value' => '',
     'placeholder' => 'Type village or city',
     'label' => null,
-    /** When true and user is logged in, show “current location” assist (never writes profile by itself). */
+    /** When true and a resolve URL is available, show “current location” assist (never writes profile by itself). */
     'gpsAssist' => true,
     /** Optional override for POST resolve URL (defaults to web route). */
     'resolveUrl' => null,
+    /** When true, a successful GPS resolve immediately fills the field. */
+    'gpsAutoApply' => false,
     'noBorder' => false,      // when true, wrapper has no border (e.g. basic info birth place)
     'compactRow' => false,    // when true, no vertical padding (for single-line row layout)
     /** When true: no outer padding, no border, no rounded corners (relation grid cells). */
@@ -22,8 +24,13 @@
     'detailedLabel' => 'Detailed address',
     'detailedPlaceholder' => 'Flat / house / society / road / landmark',
     'detailedValue' => '',
+    'detailedMaxlength' => 255,
+    'detailedRequired' => false,
     // Keep existing field naming by default; override per usage when needed.
     'detailedName' => 'address_line',
+    // Optional non-interactive location icon when GPS assist is intentionally unavailable.
+    'showLocationIcon' => false,
+    'locationIconLabel' => 'Location',
     // Optional: when set, onSelect will set form input with this name to display label (e.g. preferences[preferred_city])
     'displaySyncName' => null,
     /** Canonical residence / pick leaf {@code addresses.id} (SSOT on profile). */
@@ -42,8 +49,10 @@
     $wrapperClass = 'location-typeahead-wrapper';
     $isFullMode = ($mode ?? 'simple') === 'full';
     $resolvedDetailedName = $namePrefix !== '' ? ($namePrefix . '[' . $detailedName . ']') : $detailedName;
-    $resolveUrlResolved = $resolveUrl ?? (auth()->check() ? route('matrimony.internal.location.resolve-current') : '');
-    $showGps = ($gpsAssist ?? true) && auth()->check() && $resolveUrlResolved !== '';
+    $defaultResolveUrl = auth()->check() ? route('matrimony.internal.location.resolve-current') : '';
+    $resolveUrlResolved = $resolveUrl ?? $defaultResolveUrl;
+    $showGps = ($gpsAssist ?? true) && $resolveUrlResolved !== '';
+    $showStaticLocationIcon = ! $showGps && (bool) ($showLocationIcon ?? false);
     $defaultIndiaCountryId = \App\Models\Country::query()->where('iso_alpha2', 'IN')->value('id');
     $defaultMaharashtraStateId = $defaultIndiaCountryId
         ? \App\Models\State::query()
@@ -88,7 +97,7 @@
     }
 @endphp
 {{-- API paths must use url() so subdirectory installs (e.g. /project/public) resolve /api/* correctly. Search hits addresses.name, slug, name_mr (+ aliases when present). --}}
-<div class="{{ $wrapperClass }} space-y-0 {{ $roundedClass }} {{ $paddingClass }} {{ $borderClass }}" data-location-context="{{ $context }}" data-name-prefix="{{ $namePrefix }}" data-search-url="{{ url('/api/location/search') }}" data-suggest-url="{{ url('/api/location/suggestions') }}" data-url-internal-states="{{ url('/api/internal/location/states') }}" data-url-internal-districts="{{ url('/api/internal/location/districts') }}" data-url-internal-talukas="{{ url('/api/internal/location/talukas') }}" data-url-internal-suggest="{{ url('/api/internal/location/suggest') }}" @if(filled($defaultIndiaCountryId)) data-default-country-id="{{ $defaultIndiaCountryId }}" @endif @if(filled($defaultMaharashtraStateId)) data-default-state-id="{{ $defaultMaharashtraStateId }}" @endif @if($showGps) data-resolve-url="{{ $resolveUrlResolved }}" data-gps="1" @endif @if(!empty($displaySyncName)) data-display-sync-name="{{ $displaySyncName }}" @endif>
+<div class="{{ $wrapperClass }} space-y-0 {{ $roundedClass }} {{ $paddingClass }} {{ $borderClass }}" data-location-context="{{ $context }}" data-name-prefix="{{ $namePrefix }}" data-search-url="{{ url('/api/location/search') }}" data-suggest-url="{{ url('/api/location/suggestions') }}" data-url-internal-states="{{ url('/api/internal/location/states') }}" data-url-internal-districts="{{ url('/api/internal/location/districts') }}" data-url-internal-talukas="{{ url('/api/internal/location/talukas') }}" data-url-internal-suggest="{{ url('/api/internal/location/suggest') }}" @if(filled($defaultIndiaCountryId)) data-default-country-id="{{ $defaultIndiaCountryId }}" @endif @if(filled($defaultMaharashtraStateId)) data-default-state-id="{{ $defaultMaharashtraStateId }}" @endif @if($showGps) data-resolve-url="{{ $resolveUrlResolved }}" data-gps="1" @if($gpsAutoApply) data-gps-auto-apply="1" @endif @endif @if(!empty($displaySyncName)) data-display-sync-name="{{ $displaySyncName }}" @endif>
     @if ($context === 'residence')
         @php
             $resolvedLocationId = filled($dataLocationId) ? $dataLocationId : $dataCityId;
@@ -140,8 +149,9 @@
                     type="text"
                     name="{{ $resolvedDetailedName }}"
                     value="{{ $detailedValue }}"
-                    maxlength="255"
+                    maxlength="{{ (int) $detailedMaxlength }}"
                     placeholder="{{ $detailedPlaceholder }}"
+                    @if($detailedRequired) required @endif
                     class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
                 >
             </div>
@@ -166,6 +176,12 @@
                                 <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
                             </svg>
                         </button>
+                    @elseif ($showStaticLocationIcon)
+                        <span class="box-border inline-flex h-11 w-11 shrink-0 items-center justify-center rounded border border-gray-300 bg-gray-50 text-blue-600 dark:border-gray-600 dark:bg-gray-700 dark:text-blue-400" title="{{ $locationIconLabel }}" aria-label="{{ $locationIconLabel }}" role="img">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5" aria-hidden="true">
+                                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                            </svg>
+                        </span>
                     @endif
                 </div>
                 @if ($showGps)
@@ -193,6 +209,12 @@
                         <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
                     </svg>
                 </button>
+            @elseif ($showStaticLocationIcon)
+                <span class="box-border inline-flex h-11 w-11 shrink-0 items-center justify-center rounded border border-gray-300 bg-gray-50 text-blue-600 dark:border-gray-600 dark:bg-gray-700 dark:text-blue-400" title="{{ $locationIconLabel }}" aria-label="{{ $locationIconLabel }}" role="img">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5" aria-hidden="true">
+                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                    </svg>
+                </span>
             @endif
         </div>
         @if ($showGps)

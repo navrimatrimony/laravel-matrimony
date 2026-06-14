@@ -7,6 +7,7 @@ use App\Models\HiddenProfile;
 use App\Models\Location;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
+use App\Models\SuchakProfileRepresentation;
 use App\Services\Location\LocationService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use Illuminate\Database\Eloquent\Builder;
@@ -28,10 +29,32 @@ class MatrimonyProfileSearchQueryService
         })->where('is_suspended', false);
 
         $query->whereMemberAccountsOnly();
+        self::applySuchakManualProfileSearchReadiness($query);
 
         if ($excludeViewerProfileId) {
             $query->whereKeyNot((int) $excludeViewerProfileId);
         }
+    }
+
+    /**
+     * Manual profiles created by a Suchak should enter member search only after
+     * the same manual representation is ready to route contact through Suchak.
+     *
+     * @param  Builder<MatrimonyProfile>  $query
+     */
+    private static function applySuchakManualProfileSearchReadiness(Builder $query): void
+    {
+        $query->where(function (Builder $query): void {
+            $query
+                ->whereDoesntHave('suchakProfileRepresentations', function (Builder $representationQuery): void {
+                    $representationQuery->where('representation_mode', SuchakProfileRepresentation::MODE_MANUAL_FORM_BY_SUCHAK);
+                })
+                ->orWhereHas('suchakProfileRepresentations', function (Builder $representationQuery): void {
+                    $representationQuery
+                        ->where('representation_mode', SuchakProfileRepresentation::MODE_MANUAL_FORM_BY_SUCHAK)
+                        ->publiclyRoutable();
+                });
+        });
     }
 
     /**

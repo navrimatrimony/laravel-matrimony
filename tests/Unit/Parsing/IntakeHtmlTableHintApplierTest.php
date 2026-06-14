@@ -68,6 +68,26 @@ HTML;
         $this->assertSame('9876543210', (string) ($core['primary_contact_number'] ?? ''));
     }
 
+    public function test_bride_name_table_label_sets_gender_and_dual_day_birth_date(): void
+    {
+        $html = <<<'HTML'
+<table>
+<tr><td>मुलीचे नाव</td><td>कु. प्रियांका उत्तम फडतरे</td></tr>
+<tr><td>जन्म तारीख</td><td>२४-२५/१० / १९९४</td></tr>
+<tr><td>जन्म वेळ वार</td><td>३.४५ A.M रात्री सोमवार उजडता मंगळवर</td></tr>
+</table>
+HTML;
+
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($html);
+        $core = $draft['normalized']['core'] ?? [];
+        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map($draft);
+
+        $this->assertSame('female', $core['gender'] ?? null);
+        $this->assertSame('1994-10-25', $core['date_of_birth'] ?? null);
+        $this->assertSame('female', $parsed['core']['gender'] ?? null);
+        $this->assertSame('1994-10-25', $parsed['core']['date_of_birth'] ?? null);
+    }
+
     public function test_two_cell_html_table_leading_separators_do_not_leak_into_normalized_core(): void
     {
         $html = <<<'HTML'

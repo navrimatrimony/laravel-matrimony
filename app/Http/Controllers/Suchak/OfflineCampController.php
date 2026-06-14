@@ -54,12 +54,15 @@ class OfflineCampController extends Controller
         $validated = $request->validate([
             'camp_key' => ['nullable', 'string', 'max:96'],
             'camp_name' => ['required', 'string', 'min:8', 'max:160'],
+            'camp_name_mr' => ['nullable', 'string', 'max:160'],
             'camp_type' => ['required', 'string', Rule::in(SuchakOfflineCamp::TYPES)],
             'source_tag' => ['required', 'string', 'max:96'],
             'location_label' => ['nullable', 'string', 'max:160'],
+            'location_label_mr' => ['nullable', 'string', 'max:160'],
             'camp_date' => ['nullable', 'date_format:Y-m-d'],
             'expected_intake_count' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'privacy_note' => ['required', 'string', 'min:10', 'max:1000'],
+            'privacy_note_mr' => ['nullable', 'string', 'max:1000'],
         ]);
 
         try {

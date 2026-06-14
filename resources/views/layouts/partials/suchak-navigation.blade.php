@@ -3,7 +3,7 @@
     $suchakName = $suchakAccount?->suchak_name ?: $suchakUser?->name;
     $statusLabel = \Illuminate\Support\Str::headline((string) ($suchakAccount?->verification_status ?? 'pending'));
     $hasMatrimonyProfile = (bool) $suchakUser?->matrimonyProfile;
-    $dashboardTabKeys = ['work', 'profiles', 'money', 'sharing', 'records'];
+    $dashboardTabKeys = ['profile', 'work', 'profiles', 'money', 'sharing', 'records'];
     $dashboardHasBusinessFilters = request('business_q', '') !== ''
         || request('note_type') !== null
         || request('ledger_status') !== null;
@@ -17,13 +17,13 @@
     );
 
     $suchakMainSection = 'dashboard';
-    if (request()->routeIs('suchak.intakes.*', 'suchak.search.*')) {
+    if (request()->routeIs('suchak.intakes.*', 'suchak.manual-profiles.*', 'suchak.search.*')) {
         $suchakMainSection = 'work';
     } elseif (request()->routeIs('suchak.collaborations.*', 'suchak.offline-camps.*')) {
         $suchakMainSection = 'network';
     } elseif (request()->routeIs('suchak.export-retention.*', 'suchak.training-academy.*')) {
         $suchakMainSection = 'tools';
-    } elseif (request()->routeIs('suchak.register.*', 'user.settings.*', 'notifications.*')) {
+    } elseif (request()->routeIs('suchak.register.*', 'suchak.account-settings.*', 'user.settings.*', 'notifications.*')) {
         $suchakMainSection = 'account';
     }
 
@@ -35,6 +35,7 @@
     ];
     $subItemsBySection = [
         'dashboard' => [
+            ['label' => 'Profile setup', 'href' => $dashboardTabUrl('profile'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'profile'],
             ['label' => 'Today', 'href' => $dashboardTabUrl('work'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'work'],
             ['label' => 'Customers', 'href' => $dashboardTabUrl('profiles'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'profiles'],
             ['label' => 'Money', 'href' => $dashboardTabUrl('money'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'money'],
@@ -42,7 +43,8 @@
             ['label' => 'Records', 'href' => $dashboardTabUrl('records'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'records'],
         ],
         'work' => [
-            ['label' => 'Biodata Entry', 'href' => route('suchak.intakes.create'), 'active' => request()->routeIs('suchak.intakes.*')],
+            ['label' => 'Upload / Paste', 'href' => route('suchak.intakes.create'), 'active' => request()->routeIs('suchak.intakes.*')],
+            ['label' => 'Manual Form', 'href' => route('suchak.manual-profiles.create'), 'active' => request()->routeIs('suchak.manual-profiles.*')],
             ['label' => 'Masked Search', 'href' => route('suchak.search.index'), 'active' => request()->routeIs('suchak.search.*')],
         ],
         'network' => [
@@ -55,6 +57,7 @@
         ],
         'account' => [
             ['label' => 'Suchak privacy & public listing', 'href' => route('suchak.register.status'), 'active' => request()->routeIs('suchak.register.*')],
+            ['label' => 'Contact numbers', 'href' => route('suchak.account-settings.edit'), 'active' => request()->routeIs('suchak.account-settings.*')],
             ['label' => 'Account & Security', 'href' => route('user.settings.security'), 'active' => request()->routeIs('user.settings.security')],
             ['label' => 'Notification preferences', 'href' => route('user.settings.notifications'), 'active' => request()->routeIs('user.settings.notifications')],
             ['label' => 'Notification inbox', 'href' => route('notifications.index'), 'active' => request()->routeIs('notifications.index', 'notifications.show')],
@@ -122,6 +125,11 @@
                             @if (Route::has('suchak.register.status'))
                                 <x-dropdown-link :href="route('suchak.register.status')">
                                     Suchak privacy & public listing
+                                </x-dropdown-link>
+                            @endif
+                            @if (Route::has('suchak.account-settings.edit'))
+                                <x-dropdown-link :href="route('suchak.account-settings.edit')">
+                                    Contact numbers
                                 </x-dropdown-link>
                             @endif
 
@@ -224,6 +232,11 @@
                 @if (Route::has('suchak.register.status'))
                     <a href="{{ route('suchak.register.status') }}" class="{{ $mobileSubLinkClass(request()->routeIs('suchak.register.*')) }}">
                         Suchak privacy & public listing
+                    </a>
+                @endif
+                @if (Route::has('suchak.account-settings.edit'))
+                    <a href="{{ route('suchak.account-settings.edit') }}" class="{{ $mobileSubLinkClass(request()->routeIs('suchak.account-settings.*')) }}">
+                        Contact numbers
                     </a>
                 @endif
 

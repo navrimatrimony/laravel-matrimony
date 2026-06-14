@@ -185,8 +185,12 @@
     @if ($photos->isEmpty())
         <p class="text-gray-500 dark:text-gray-400 text-sm">No photos match this filter.</p>
     @else
-        <div class="w-full border border-gray-200 dark:border-gray-600 rounded-lg overflow-x-auto">
-            <table class="w-full min-w-[1100px] text-sm border-separate border-spacing-0">
+        <div class="space-y-2">
+            <div class="w-full overflow-x-auto rounded-md border border-gray-200 bg-gray-50 dark:border-gray-600 dark:bg-gray-900/50" data-pm-table-scroll-top>
+                <div class="h-3 min-w-[1900px]"></div>
+            </div>
+            <div class="w-full border border-gray-200 dark:border-gray-600 rounded-lg overflow-x-auto" data-pm-table-scroll-main>
+                <table class="w-full min-w-[1900px] text-sm border-separate border-spacing-0">
                 <thead class="bg-gray-50 dark:bg-gray-700/50 text-left text-gray-600 dark:text-gray-300">
                     <tr>
                         <th class="px-2 py-2.5 align-middle w-10">
@@ -259,7 +263,7 @@
                             </td>
                             <td class="px-2 py-2 align-middle text-xs">
                                 @if ($statRow && $statRow->is_flagged)
-                                    <span class="inline-flex items-center rounded-md border border-rose-500 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:border-rose-400 dark:text-rose-300" title="risk_score {{ number_format((float) $statRow->risk_score, 4) }}">FLAGGED</span>
+                                    <span class="inline-flex items-center rounded-md border border-rose-500 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:border-rose-400 dark:text-rose-300" title="risk_score {{ number_format((float) $statRow->risk_score, 4) }}">FLAGGED USER</span>
                                 @elseif ($statRow)
                                     <span class="text-gray-600 dark:text-gray-400">score {{ number_format((float) $statRow->risk_score, 2) }}</span>
                                 @else
@@ -356,7 +360,8 @@
                         </tr>
                     @endforeach
                 </tbody>
-            </table>
+                </table>
+            </div>
         </div>
 
         <div class="mt-4">{{ $photos->links() }}</div>
@@ -463,6 +468,26 @@
         }
     });
     sync();
+
+    const tableScrollTop = document.querySelector('[data-pm-table-scroll-top]');
+    const tableScrollMain = document.querySelector('[data-pm-table-scroll-main]');
+    if (tableScrollTop && tableScrollMain) {
+        let syncingTableScroll = false;
+        const mirrorScroll = function (from, to) {
+            if (syncingTableScroll) return;
+            syncingTableScroll = true;
+            to.scrollLeft = from.scrollLeft;
+            window.requestAnimationFrame(function () {
+                syncingTableScroll = false;
+            });
+        };
+        tableScrollTop.addEventListener('scroll', function () {
+            mirrorScroll(tableScrollTop, tableScrollMain);
+        }, { passive: true });
+        tableScrollMain.addEventListener('scroll', function () {
+            mirrorScroll(tableScrollMain, tableScrollTop);
+        }, { passive: true });
+    }
 
     const modal = document.getElementById('pm-modal');
     const modalBody = document.getElementById('pm-modal-body');

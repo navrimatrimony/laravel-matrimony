@@ -9,89 +9,71 @@
             $siteIdentity = app(\App\Services\SiteIdentityService::class);
             $siteName = $siteIdentity->get('site_name', 'नवरी मिळे नवऱ्याला');
             $siteTagline = $siteIdentity->get('site_tagline', 'Navri Mile Navryala | Marathi Matrimony');
-            $heroImage = file_exists(public_path('images/homepage/hero_1779797852.jpg'))
-                ? 'images/homepage/hero_1779797852.jpg'
-                : 'images/matrimonial-hero.jpg';
+            $fallbackHeroImage = file_exists(public_path('images/homepage/hero_1779797852.jpg'))
+                ? asset('images/homepage/hero_1779797852.jpg')
+                : asset('images/matrimonial-hero.jpg');
+            $customHeroImagePath = trim((string) ($suchakHeroImagePath ?? ''));
+            $heroImage = $customHeroImagePath !== ''
+                ? \Illuminate\Support\Facades\Storage::disk('public')->url($customHeroImagePath)
+                : $fallbackHeroImage;
             $isMarathiLocale = str_starts_with((string) app()->getLocale(), 'mr');
             $fontClass = $isMarathiLocale ? 'font-devanagari' : '';
+            $homepageCopyDefaults = \App\Modules\Suchak\Services\SuchakPolicyService::DEFAULT_SUCHAK_HOMEPAGE_COPY;
+            $homepageStyleDefaults = \App\Modules\Suchak\Services\SuchakPolicyService::DEFAULT_SUCHAK_HOMEPAGE_STYLE;
+            $homepageCopy = array_replace_recursive(
+                $homepageCopyDefaults,
+                is_array($suchakHomepageCopy ?? null) ? $suchakHomepageCopy : [],
+            );
+            $homepageStyle = array_replace(
+                $homepageStyleDefaults,
+                is_array($suchakHomepageStyle ?? null) ? $suchakHomepageStyle : [],
+            );
+            $localeKey = $isMarathiLocale ? 'mr' : 'en';
+            $copy = array_replace(
+                $homepageCopyDefaults[$localeKey],
+                is_array($homepageCopy[$localeKey] ?? null) ? $homepageCopy[$localeKey] : [],
+            );
             $primaryUrl = $suchakAccount
                 ? route('suchak.dashboard')
                 : route('suchak.register.info');
             $primaryLabel = $suchakAccount
-                ? ($isMarathiLocale ? 'Dashboard उघडा' : 'Open dashboard')
-                : ($isMarathiLocale ? 'सूचक म्हणून नोंदणी करा' : 'Register as Suchak');
+                ? (string) ($copy['dashboard_cta'] ?? $homepageCopyDefaults[$localeKey]['dashboard_cta'])
+                : (string) ($copy['primary_cta'] ?? $homepageCopyDefaults[$localeKey]['primary_cta']);
 
-            $copy = $isMarathiLocale ? [
-                'eyebrow' => 'Verified Suchak platform',
-                'title' => 'सूचक म्हणून तुमचा विवाह-जुळवणी व्यवसाय वाढवा',
-                'subtitle' => 'ग्राहकांचे biodata, follow-up, packages आणि payment records एका सुरक्षित platform वर व्यवस्थित manage करा.',
-                'secondary' => 'कसे काम करते?',
-                'trust' => 'Private contact details आणि direct payment details public दाखवले जात नाहीत. Suchak workflow admin-governed verification आणि platform rules नुसार चालतो.',
-                'benefits_title' => 'मुख्य फायदे',
-                'benefits_intro' => 'जास्त माहिती नको; Suchak ला रोजच्या कामात उपयोगी पडणारी साधने स्पष्ट दिसली पाहिजेत.',
-                'business_title' => 'Business growth साठी व्यवस्थित setup',
-                'business_body' => 'Existing customer work अधिक organized करा, service packages नीट ठेवा आणि platform rules नुसार नवीन opportunities handle करा.',
-                'process_title' => 'सरळ process',
-                'tools_title' => 'Approved Suchak साठी tools',
-                'final_title' => 'तुमचा Suchak business digital पद्धतीने manage करायला सुरुवात करा',
-                'final_body' => 'Verified Suchak workflow मध्ये सामील व्हा आणि customer management, biodata sharing आणि follow-up अधिक व्यवस्थित करा.',
-                'status' => 'Already applied? Status तपासा',
-            ] : [
-                'eyebrow' => 'Verified Suchak platform',
-                'title' => 'Grow your matchmaking business as a Suchak',
-                'subtitle' => 'Manage customer biodata, follow-ups, packages, and payment records on a secure platform.',
-                'secondary' => 'How it works',
-                'trust' => 'Private contact details and direct payment details are not shown publicly. Suchak workflows run under admin-governed verification and platform rules.',
-                'benefits_title' => 'Core benefits',
-                'benefits_intro' => 'No clutter. The page should show what helps a Suchak run daily work better.',
-                'business_title' => 'A structured setup for business growth',
-                'business_body' => 'Organize existing customer work, manage service packages, and handle new opportunities under platform rules.',
-                'process_title' => 'Simple process',
-                'tools_title' => 'Tools for approved Suchaks',
-                'final_title' => 'Start managing your Suchak business digitally',
-                'final_body' => 'Join the verified Suchak workflow and make customer management, biodata sharing, and follow-up more organized.',
-                'status' => 'Already applied? Check status',
-            ];
+            $benefits = collect($homepageCopy['benefits'] ?? $homepageCopyDefaults['benefits'])
+                ->map(fn (array $benefit): array => [
+                    'title' => (string) ($benefit['title_'.$localeKey] ?? ''),
+                    'body' => (string) ($benefit['body_'.$localeKey] ?? ''),
+                ])
+                ->filter(fn (array $benefit): bool => $benefit['title'] !== '' || $benefit['body'] !== '')
+                ->values()
+                ->all();
+            $process = collect($homepageCopy['process_steps'] ?? $homepageCopyDefaults['process_steps'])
+                ->map(fn (array $step): string => (string) ($step['label_'.$localeKey] ?? ''))
+                ->filter()
+                ->values()
+                ->all();
+            $tools = collect($homepageCopy['tools'] ?? $homepageCopyDefaults['tools'])
+                ->map(fn (array $tool): string => (string) ($tool['label_'.$localeKey] ?? ''))
+                ->filter()
+                ->values()
+                ->all();
+            $hexToRgb = function (string $hex): array {
+                $hex = ltrim($hex, '#');
 
-            $benefits = $isMarathiLocale ? [
-                ['title' => 'ग्राहक व्यवस्थापन सोपे', 'body' => 'Biodata, notes, follow-up आणि status एकाच ठिकाणी ठेवा.'],
-                ['title' => 'Secure biodata sharing', 'body' => 'PDF/QR sharing करताना private contact details public leak होऊ नयेत.'],
-                ['title' => 'Packages आणि payment records', 'body' => 'Suchak services, customer payments आणि ledger evidence व्यवस्थित नोंदवा.'],
-                ['title' => 'Platform presence', 'body' => 'Verified Suchak म्हणून professional presence तयार करा.'],
-            ] : [
-                ['title' => 'Simpler customer management', 'body' => 'Keep biodata, notes, follow-ups, and status in one place.'],
-                ['title' => 'Secure biodata sharing', 'body' => 'Use PDF/QR sharing without publicly leaking private contact details.'],
-                ['title' => 'Packages and payment records', 'body' => 'Record service packages, customer payments, and ledger evidence clearly.'],
-                ['title' => 'Platform presence', 'body' => 'Build a professional presence as a verified Suchak.'],
-            ];
-
-            $process = $isMarathiLocale ? [
-                'नोंदणी करा',
-                'Mobile/KYC verify करा',
-                'Admin approval',
-                'Customer work सुरू करा',
-            ] : [
-                'Register',
-                'Verify mobile/KYC',
-                'Admin approval',
-                'Start customer work',
-            ];
-
-            $tools = $isMarathiLocale ? [
-                'Dashboard',
-                'Customer Biodata Entry',
-                'Secure PDF/QR Sharing',
-                'Follow-up / CRM',
-                'Payment Records',
-                'Masked Search',
-            ] : [
-                'Dashboard',
-                'Customer Biodata Entry',
-                'Secure PDF/QR Sharing',
-                'Follow-up / CRM',
-                'Payment Records',
-                'Masked Search',
-            ];
+                return [
+                    hexdec(substr($hex, 0, 2)),
+                    hexdec(substr($hex, 2, 2)),
+                    hexdec(substr($hex, 4, 2)),
+                ];
+            };
+            $overlayRgb = implode(', ', $hexToRgb((string) $homepageStyle['overlay_color']));
+            $desktopOverlayOpacity = number_format(max(20, min(100, (int) $homepageStyle['desktop_overlay_opacity'])) / 100, 2, '.', '');
+            $mobileOverlayOpacity = number_format(max(20, min(100, (int) $homepageStyle['mobile_overlay_opacity'])) / 100, 2, '.', '');
+            $formCardOpacity = number_format(max(60, min(100, (int) $homepageStyle['form_card_opacity'])) / 100, 2, '.', '');
+            $formShadow = ($homepageStyle['form_shadow_enabled'] ?? true)
+                ? '0 24px 48px rgba(127, 29, 29, .18)'
+                : 'none';
         @endphp
 
         <title>{{ $copy['title'] }} - {{ $siteName }}</title>
@@ -100,16 +82,30 @@
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700,800&display=swap" rel="stylesheet">
         <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
+        @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/profile/location-typeahead.js'])
 
         <style>
             :root {
-                --suchak-red: #b91c1c;
-                --suchak-red-dark: #7f1d1d;
-                --suchak-ink: #211817;
+                --suchak-red: {{ $homepageStyle['primary_color'] }};
+                --suchak-red-dark: {{ $homepageStyle['primary_dark_color'] }};
+                --suchak-ink: {{ $homepageStyle['ink_color'] }};
+                --suchak-page-bg: {{ $homepageStyle['page_background_color'] }};
+                --suchak-hero-bg: {{ $homepageStyle['hero_background_color'] }};
+                --suchak-overlay-rgb: {{ $overlayRgb }};
+                --suchak-desktop-overlay-opacity: {{ $desktopOverlayOpacity }};
+                --suchak-mobile-overlay-opacity: {{ $mobileOverlayOpacity }};
+                --suchak-hero-position-desktop: {{ $homepageStyle['image_position_desktop'] }};
+                --suchak-hero-position-mobile: {{ $homepageStyle['image_position_mobile'] }};
+                --suchak-hero-height-desktop: {{ (int) $homepageStyle['hero_min_height_desktop'] }}vh;
+                --suchak-hero-height-mobile: {{ (int) $homepageStyle['hero_min_height_mobile'] }}vh;
+                --suchak-hero-blur: {{ (int) $homepageStyle['hero_blur_px'] }}px;
+                --suchak-bottom-fade-display: {{ ($homepageStyle['bottom_fade_enabled'] ?? true) ? 'block' : 'none' }};
+                --suchak-bottom-fade-height: {{ (int) $homepageStyle['bottom_fade_height_rem'] }}rem;
+                --suchak-form-card-opacity: {{ $formCardOpacity }};
+                --suchak-form-shadow: {{ $formShadow }};
             }
             .font-devanagari { font-family: 'Noto Sans Devanagari', 'Instrument Sans', sans-serif; }
-            .suchak-page { background: #fff7f3; color: var(--suchak-ink); }
+            .suchak-page { background: var(--suchak-page-bg); color: var(--suchak-ink); }
             .suchak-language {
                 position: fixed;
                 right: 1rem;
@@ -133,31 +129,35 @@
             .suchak-primary:hover { background: var(--suchak-red-dark); }
             .suchak-hero {
                 position: relative;
-                min-height: 86vh;
+                min-height: var(--suchak-hero-height-desktop);
                 overflow: hidden;
-                background: #2d1412;
+                background: var(--suchak-hero-bg);
             }
             .suchak-hero::before {
                 content: "";
                 position: absolute;
-                inset: 0;
+                inset: -12px;
                 background-image:
-                    linear-gradient(90deg, rgba(255, 248, 244, .98) 0%, rgba(255, 248, 244, .90) 33%, rgba(255, 248, 244, .45) 57%, rgba(45, 20, 18, .14) 100%),
+                    linear-gradient(90deg, rgba(var(--suchak-overlay-rgb), var(--suchak-desktop-overlay-opacity)) 0%, rgba(var(--suchak-overlay-rgb), calc(var(--suchak-desktop-overlay-opacity) * .94)) 33%, rgba(var(--suchak-overlay-rgb), calc(var(--suchak-desktop-overlay-opacity) * .48)) 57%, rgba(45, 20, 18, .14) 100%),
                     var(--suchak-hero-image);
-                background-position: center;
+                background-position: var(--suchak-hero-position-desktop);
                 background-size: cover;
+                filter: blur(var(--suchak-hero-blur));
             }
             .suchak-hero::after {
                 content: "";
+                display: var(--suchak-bottom-fade-display);
                 position: absolute;
                 inset: auto 0 0 0;
-                height: 7rem;
-                background: linear-gradient(180deg, rgba(255,255,255,0), #fff7f3);
+                height: var(--suchak-bottom-fade-height);
+                background: linear-gradient(180deg, rgba(255,255,255,0), var(--suchak-page-bg));
             }
             .suchak-hero-inner {
                 position: relative;
                 z-index: 10;
-                display: flex;
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) minmax(22rem, 30rem);
+                gap: 2rem;
                 align-items: center;
                 min-height: 84vh;
                 max-width: 80rem;
@@ -165,6 +165,25 @@
                 padding: 5rem 1rem;
             }
             .suchak-copy { max-width: 48rem; }
+            .suchak-hero-form {
+                border: 1px solid rgba(254, 202, 202, .85);
+                border-radius: .5rem;
+                background: rgba(255, 255, 255, var(--suchak-form-card-opacity));
+                box-shadow: var(--suchak-form-shadow);
+                padding: 1.25rem;
+            }
+            .suchak-hero-form-title {
+                color: #111827;
+                font-size: 1.1rem;
+                font-weight: 800;
+                line-height: 1.3;
+            }
+            .suchak-hero-form-body {
+                color: #4b5563;
+                font-size: .82rem;
+                line-height: 1.6;
+                margin-top: .35rem;
+            }
             .suchak-eyebrow {
                 display: inline-flex;
                 border: 1px solid #fecaca;
@@ -233,10 +252,11 @@
                     transform-origin: top left;
                 }
                 .suchak-hero {
-                    min-height: 84vh;
+                    min-height: var(--suchak-hero-height-mobile);
                 }
                 .suchak-hero-inner {
-                    min-height: 84vh;
+                    grid-template-columns: 1fr;
+                    min-height: var(--suchak-hero-height-mobile);
                     padding: 4.25rem 1rem 3rem;
                 }
                 .suchak-copy {
@@ -244,9 +264,9 @@
                 }
                 .suchak-hero::before {
                     background-image:
-                        linear-gradient(180deg, rgba(255, 248, 244, .96) 0%, rgba(255, 248, 244, .86) 48%, rgba(255, 248, 244, .22) 100%),
+                        linear-gradient(180deg, rgba(var(--suchak-overlay-rgb), var(--suchak-mobile-overlay-opacity)) 0%, rgba(var(--suchak-overlay-rgb), calc(var(--suchak-mobile-overlay-opacity) * .92)) 48%, rgba(var(--suchak-overlay-rgb), calc(var(--suchak-mobile-overlay-opacity) * .24)) 100%),
                         var(--suchak-hero-image);
-                    background-position: 62% center;
+                    background-position: var(--suchak-hero-position-mobile);
                 }
                 .suchak-title {
                     max-width: 100%;
@@ -267,6 +287,17 @@
                     max-width: 100%;
                     line-height: 1.75;
                 }
+                .suchak-hero-form {
+                    padding: 1rem;
+                }
+            }
+            @media (min-width: 768px) and (max-width: 1023px) {
+                .suchak-hero-inner {
+                    grid-template-columns: 1fr;
+                }
+                .suchak-hero-form {
+                    max-width: 42rem;
+                }
             }
         </style>
     </head>
@@ -276,8 +307,8 @@
         </div>
 
         <main>
-            <section class="suchak-hero" style="--suchak-hero-image: url('{{ asset($heroImage) }}');">
-                <img src="{{ asset($heroImage) }}" alt="" class="hidden" onerror="this.closest('.suchak-hero').classList.add('bg-red-50');">
+            <section class="suchak-hero" style="--suchak-hero-image: url('{{ $heroImage }}');">
+                <img src="{{ $heroImage }}" alt="" class="hidden" onerror="this.closest('.suchak-hero').classList.add('bg-red-50');">
                 <div class="suchak-hero-inner">
                     <div class="suchak-copy">
                         <p class="suchak-eyebrow">
@@ -291,18 +322,60 @@
                         </p>
 
                         <div class="suchak-actions">
-                            <a href="{{ $primaryUrl }}" class="suchak-primary">
-                                {{ $primaryLabel }}
-                            </a>
-                            <a href="#how-it-works" class="suchak-secondary">
-                                {{ $copy['secondary'] }}
-                            </a>
+                            @if (! ($showHeroRegistrationForm ?? true) || $suchakAccount || auth()->check())
+                                <a href="{{ $primaryUrl }}" class="suchak-primary">
+                                    {{ $primaryLabel }}
+                                </a>
+                            @endif
+                            @if (($showHeroRegistrationForm ?? true) && ! $suchakAccount && ! auth()->check())
+                                <a href="#how-it-works" class="suchak-secondary">
+                                    {{ $copy['secondary_cta'] }}
+                                </a>
+                            @elseif (! ($showHeroRegistrationForm ?? true))
+                                {{-- Admin disabled the hero form; keep the hero action to a single CTA. --}}
+                            @else
+                                <a href="#how-it-works" class="suchak-secondary">
+                                    {{ $copy['secondary_cta'] }}
+                                </a>
+                            @endif
                         </div>
 
                         <p class="{{ $fontClass }} suchak-trust">
                             {{ $copy['trust'] }}
                         </p>
                     </div>
+
+                    @if (($showHeroRegistrationForm ?? true) && ! $suchakAccount && ! auth()->check())
+                        <aside class="suchak-hero-form">
+                            <h2 class="{{ $fontClass }} suchak-hero-form-title">{{ $copy['hero_form_title'] }}</h2>
+                            <p class="{{ $fontClass }} suchak-hero-form-body">{{ $copy['hero_form_body'] }}</p>
+
+                            @if ($errors->any())
+                                <div class="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800">
+                                    <ul class="list-disc space-y-1 pl-4">
+                                        @foreach ($errors->all() as $error)
+                                            <li>{{ $error }}</li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
+
+                            <form method="POST" action="{{ route('suchak.register.store') }}" data-suchak-registration-form class="mt-4 space-y-4">
+                                @csrf
+                                @include('suchak.partials.registration-fields', [
+                                    'businessTypes' => $businessTypes,
+                                    'fieldIdPrefix' => 'hero_suchak_',
+                                    'gridClass' => 'grid gap-3',
+                                    'fieldClass' => 'mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-red-500 focus:ring-red-500',
+                                    'labelClass' => 'block text-xs font-bold text-gray-700',
+                                    'helpClass' => 'mt-1 text-[11px] leading-4 text-gray-500',
+                                ])
+                                <button type="submit" class="suchak-primary w-full">
+                                    {{ __('suchak.register.submit') }}
+                                </button>
+                            </form>
+                        </aside>
+                    @endif
                 </div>
             </section>
 
@@ -317,6 +390,11 @@
             <section class="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8">
                 <div>
                     <p class="text-sm font-bold uppercase tracking-wide text-red-700">{{ $copy['benefits_title'] }}</p>
+                    @if (! empty($copy['benefits_intro']))
+                        <p class="{{ $fontClass }} mt-2 text-sm leading-6 text-zinc-600">
+                            {{ $copy['benefits_intro'] }}
+                        </p>
+                    @endif
                     <h2 class="{{ $fontClass }} mt-3 text-3xl font-extrabold text-zinc-950">
                         {{ $copy['business_title'] }}
                     </h2>
@@ -371,7 +449,7 @@
                             <h2 class="{{ $fontClass }} mt-3 text-2xl font-extrabold">{{ $copy['final_body'] }}</h2>
                             @auth
                                 <a href="{{ route('suchak.register.status') }}" class="mt-5 inline-flex rounded-md border border-white/30 px-4 py-2 text-sm font-bold text-white hover:bg-white/10">
-                                    {{ $copy['status'] }}
+                                    {{ $copy['status_cta'] }}
                                 </a>
                             @endauth
                         </div>

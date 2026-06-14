@@ -19,13 +19,17 @@
             </div>
             <button
                 type="button"
-                class="hidden h-9 w-9 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 hover:text-gray-950 lg:inline-flex"
+                class="hidden min-w-[18rem] shrink-0 items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-3 py-2 text-left text-sm text-gray-600 shadow-sm hover:bg-gray-50 hover:text-gray-950 lg:inline-flex"
                 aria-label="Search admin tools"
                 title="Search admin tools"
                 data-admin-command-toggle
                 @click="openAdminCommandPalette()"
             >
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" /></svg>
+                <span class="inline-flex min-w-0 items-center gap-2">
+                    <svg class="h-4 w-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" /></svg>
+                    <span class="truncate">Search admin tools</span>
+                </span>
+                <kbd class="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">Ctrl K</kbd>
             </button>
         </div>
         <nav class="-mb-px mt-4 flex max-w-full gap-1 overflow-x-auto" aria-label="Admin module tabs">

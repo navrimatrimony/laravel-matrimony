@@ -327,6 +327,54 @@
             });
         }
 
+        function syncReligionFromVisible() {
+            if (!religionInput || !religionHidden) return;
+            const q = religionInput.value.trim();
+            if (!q) {
+                religionHidden.value = '';
+                onReligionChange();
+                return;
+            }
+            const hit = findExactOption(religionOptions, q);
+            if (hit) {
+                religionHidden.value = String(hit.id);
+                religionInput.value = hit.label;
+                onReligionChange();
+            }
+        }
+
+        function syncCasteFromVisible() {
+            if (!casteInput || !casteHidden) return;
+            const q = casteInput.value.trim();
+            if (!q) {
+                casteHidden.value = '';
+                if (subHidden) subHidden.value = '';
+                if (subInput) {
+                    subInput.value = '';
+                    subInput.disabled = true;
+                }
+                return;
+            }
+            const hit = findExactOption(castesCache, q);
+            if (hit) {
+                casteHidden.value = String(hit.id);
+                casteInput.value = hit.label;
+                if (subInput) subInput.disabled = false;
+            }
+        }
+
+        function syncAllFromVisible() {
+            syncReligionFromVisible();
+            syncCasteFromVisible();
+        }
+
+        const form = root.closest('form');
+        if (form) {
+            form.addEventListener('submit', function () {
+                syncAllFromVisible();
+            }, true);
+        }
+
         // Initial values: religion label
         if (religionOptions.length && religionHidden && religionHidden.value) {
             const r = religionOptions.find(function (o) {

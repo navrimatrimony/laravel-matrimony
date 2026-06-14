@@ -55,6 +55,7 @@ class SuchakConsentEvent extends Model
         'consent_id',
         'event_type',
         'event_note',
+        'event_note_mr',
         'actor_type',
         'actor_id',
         'created_at',

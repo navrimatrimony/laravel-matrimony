@@ -37,6 +37,7 @@ class SuchakRetentionArchiveRun extends Model
         'admin_audit_log_id',
         'metrics_json',
         'run_note',
+        'run_note_mr',
         'started_at',
         'completed_at',
     ];

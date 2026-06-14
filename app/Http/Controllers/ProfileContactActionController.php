@@ -149,12 +149,17 @@ class ProfileContactActionController extends Controller
 
     private function isSuchakOnlyProfile(MatrimonyProfile $profile): bool
     {
-        $hasPubliclyRoutableSuchak = SuchakProfileRepresentation::query()
+        $publiclyRoutableSuchakQuery = SuchakProfileRepresentation::query()
             ->publiclyRoutable()
-            ->where('matrimony_profile_id', $profile->id)
-            ->exists();
+            ->where('matrimony_profile_id', $profile->id);
 
-        if (! $hasPubliclyRoutableSuchak || ! Schema::hasColumn('profile_visibility_settings', 'contact_routing_mode')) {
+        if ((clone $publiclyRoutableSuchakQuery)
+            ->where('representation_mode', SuchakProfileRepresentation::MODE_MANUAL_FORM_BY_SUCHAK)
+            ->exists()) {
+            return true;
+        }
+
+        if (! (clone $publiclyRoutableSuchakQuery)->exists() || ! Schema::hasColumn('profile_visibility_settings', 'contact_routing_mode')) {
             return false;
         }
 

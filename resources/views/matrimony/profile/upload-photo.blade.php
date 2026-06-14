@@ -2,10 +2,7 @@
 
 @section('content')
 @php
-    $photoAdminQuery = [];
-    if (auth()->check() && auth()->user()->isAnyAdmin() && $profile->isShowcaseProfile()) {
-        $photoAdminQuery['profile_id'] = $profile->id;
-    }
+    $photoTargetQuery = isset($photoTargetQuery) && is_array($photoTargetQuery) ? $photoTargetQuery : [];
 @endphp
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 <style>
@@ -187,7 +184,7 @@ body.upload-landscape .upload-gallery-col {
 
             <form method="POST" action="{{ route('matrimony.profile.store-photo') }}" enctype="multipart/form-data" id="photoUploadForm">
                 @csrf
-                @if (count($photoAdminQuery))
+                @if (count($photoTargetQuery))
                     <input type="hidden" name="profile_id" value="{{ $profile->id }}">
                 @endif
                 @if (! empty($fromOnboarding))
@@ -431,9 +428,9 @@ body.upload-landscape .upload-gallery-col {
                                         <div style="font-size: 12px; font-weight: 950; color: #059669;">Primary</div>
                                     </div>
                                 @else
-                                    <form method="POST" action="{{ route('matrimony.profile.photos.make-primary', array_merge(['photo' => $photo->id], $photoAdminQuery)) }}" style="margin-top: 10px;">
+                                    <form method="POST" action="{{ route('matrimony.profile.photos.make-primary', array_merge(['photo' => $photo->id], $photoTargetQuery)) }}" style="margin-top: 10px;">
                                         @csrf
-                                        @if (count($photoAdminQuery))
+                                        @if (count($photoTargetQuery))
                                             <input type="hidden" name="profile_id" value="{{ $profile->id }}">
                                         @endif
                                         <label for="primary_select_{{ $photo->id }}" style="display:flex; align-items:center; justify-content:center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: transparent; border: none; box-shadow: none; outline: none; cursor: pointer;">
@@ -449,10 +446,10 @@ body.upload-landscape .upload-gallery-col {
                                     </form>
                                 @endif
 
-                                <form method="POST" action="{{ route('matrimony.profile.photos.destroy', array_merge(['photo' => $photo->id], $photoAdminQuery)) }}" style="margin-top: 8px;">
+                                <form method="POST" action="{{ route('matrimony.profile.photos.destroy', array_merge(['photo' => $photo->id], $photoTargetQuery)) }}" style="margin-top: 8px;">
                                     @csrf
                                     @method('DELETE')
-                                    @if (count($photoAdminQuery))
+                                    @if (count($photoTargetQuery))
                                         <input type="hidden" name="profile_id" value="{{ $profile->id }}">
                                     @endif
                                     <button type="submit" style="width: 100%; padding: 9px 10px; background: #ef4444; color: #fff; border: none; border-radius: 12px; font-weight: 950; font-size: 12px; cursor: pointer;"
@@ -468,9 +465,9 @@ body.upload-landscape .upload-gallery-col {
 
             @if (! $galleryPhotos->isEmpty())
                 <div style="margin-top: 18px;">
-                    <form id="reorderForm" method="POST" action="{{ route('matrimony.profile.photos.reorder', $photoAdminQuery) }}">
+                    <form id="reorderForm" method="POST" action="{{ route('matrimony.profile.photos.reorder', $photoTargetQuery) }}">
                         @csrf
-                        @if (count($photoAdminQuery))
+                        @if (count($photoTargetQuery))
                             <input type="hidden" name="profile_id" value="{{ $profile->id }}">
                         @endif
                         <div id="photoIdsInputs">

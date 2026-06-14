@@ -35,7 +35,7 @@ class UserModerationStatsAndAlertsTest extends TestCase
 
     public function test_moderation_index_shows_flagged_badge_when_user_flagged(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $user = User::factory()->create();
         $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
 
@@ -67,7 +67,7 @@ class UserModerationStatsAndAlertsTest extends TestCase
 
     public function test_flagged_users_filter_shows_only_flagged_owner_photos(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
 
         $uFlag = User::factory()->create();
         $pFlag = MatrimonyProfile::factory()->create(['user_id' => $uFlag->id]);
@@ -111,7 +111,7 @@ class UserModerationStatsAndAlertsTest extends TestCase
 
     public function test_admin_suspend_uploads_sets_flag_on_user(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $member = User::factory()->create(['photo_uploads_suspended' => false]);
 
         $this->actingAs($admin)

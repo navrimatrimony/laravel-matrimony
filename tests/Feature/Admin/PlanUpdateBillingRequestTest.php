@@ -57,7 +57,7 @@ class PlanUpdateBillingRequestTest extends TestCase
 
     public function test_update_plan_without_top_level_price_field_merges_from_catalog_tab_term_row(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $plan = Plan::query()->create([
             'name' => 'Test Plan',
             'slug' => 'test-plan-all',
@@ -108,7 +108,7 @@ class PlanUpdateBillingRequestTest extends TestCase
 
     public function test_update_plan_persists_multiple_term_rows_without_top_level_price(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $plan = Plan::query()->create([
             'name' => 'Multi Plan',
             'slug' => 'multi-plan-all',
@@ -161,7 +161,7 @@ class PlanUpdateBillingRequestTest extends TestCase
 
     public function test_update_plan_normalizes_quota_limit_with_leading_zeros(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $plan = Plan::query()->create([
             'name' => 'Quota Lead Zero Plan',
             'slug' => 'quota-lead-zero-plan',

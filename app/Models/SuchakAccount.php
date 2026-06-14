@@ -30,12 +30,16 @@ class SuchakAccount extends Model
     protected $fillable = [
         'user_id',
         'suchak_name',
+        'suchak_name_mr',
         'office_name',
+        'office_name_mr',
         'business_type',
         'mobile_number',
         'whatsapp_number',
         'email',
         'address_line',
+        'address_line_mr',
+        'profile_photo_path',
         'city_id',
         'taluka_id',
         'district_id',
@@ -324,6 +328,11 @@ class SuchakAccount extends Model
     public function leadAllocationPreferences(): HasMany
     {
         return $this->hasMany(SuchakLeadAllocationPreference::class);
+    }
+
+    public function contactNumbers(): HasMany
+    {
+        return $this->hasMany(SuchakContactNumber::class);
     }
 
     public function platformLeadAllocations(): HasMany

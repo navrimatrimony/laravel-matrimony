@@ -1,11 +1,32 @@
 @extends('layouts.app')
 
 @php
-    $statusTone = match ($suchakAccount->verification_status) {
-        \App\Models\SuchakAccount::VERIFICATION_VERIFIED => 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100',
-        \App\Models\SuchakAccount::VERIFICATION_SUSPENDED,
-        \App\Models\SuchakAccount::VERIFICATION_REJECTED => 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100',
+    $suchakText = \App\Support\Suchak\SuchakLocalizedText::class;
+    $adminReviewPending = (bool) ($onboarding['admin_review_pending'] ?? false);
+    $suchakCanOperate = (bool) ($canOperate ?? false);
+    $statusTone = match (true) {
+        in_array($suchakAccount->verification_status, [
+            \App\Models\SuchakAccount::VERIFICATION_SUSPENDED,
+            \App\Models\SuchakAccount::VERIFICATION_REJECTED,
+            \App\Models\SuchakAccount::VERIFICATION_ARCHIVED,
+        ], true) => 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100',
+        $adminReviewPending => 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100',
+        $suchakAccount->verification_status === \App\Models\SuchakAccount::VERIFICATION_VERIFIED => 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100',
         default => 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100',
+    };
+    $verificationLabel = $adminReviewPending && $suchakAccount->verification_status === \App\Models\SuchakAccount::VERIFICATION_VERIFIED
+        ? __('suchak.status.work_allowed_review_pending_badge')
+        : $suchakText::label($suchakAccount->verification_status);
+    $accountStatusText = match (true) {
+        in_array($suchakAccount->verification_status, [
+            \App\Models\SuchakAccount::VERIFICATION_SUSPENDED,
+            \App\Models\SuchakAccount::VERIFICATION_REJECTED,
+            \App\Models\SuchakAccount::VERIFICATION_ARCHIVED,
+        ], true) => 'Suchak work is paused until admin reactivates this account.',
+        $suchakCanOperate && $suchakAccount->verification_status === \App\Models\SuchakAccount::VERIFICATION_PENDING => 'Work enabled. Admin review is still pending.',
+        $adminReviewPending => 'Work unlocked. Admin/KYC review is still pending.',
+        $suchakAccount->isVerified() => 'Approved. You can start Suchak work.',
+        default => 'Pending. Admin approval is required before customer entry.',
     };
     $fieldLabels = collect($allowedSuggestionFields)
         ->mapWithKeys(fn (string $field) => [$field => ucwords(str_replace('_', ' ', $field))])
@@ -26,14 +47,15 @@
         ->mapWithKeys(fn (string $status) => [$status => ucwords(str_replace('_', ' ', $status))])
         ->all();
     $sourceOwnerLabels = collect($sourceOwnerOptions)
-        ->reject(fn (string $owner) => $owner === \App\Models\SuchakPaymentContext::SOURCE_COLLABORATION)
+        ->filter(fn (string $owner) => $owner === \App\Models\SuchakPaymentContext::SOURCE_SUCHAK)
         ->mapWithKeys(fn (string $owner) => [$owner => ucwords(str_replace('_', ' ', $owner))])
         ->all();
     $paymentCollectorLabels = collect($paymentCollectorOptions)
+        ->filter(fn (string $collector) => $collector === \App\Models\SuchakPaymentContext::COLLECTOR_SUCHAK)
         ->mapWithKeys(fn (string $collector) => [$collector => ucwords(str_replace('_', ' ', $collector))])
         ->all();
     $formatAnalyticsMoney = fn ($amount, string $currency = 'INR') => $currency.' '.number_format((float) ($amount ?? 0), 2);
-    $dashboardSectionKeys = ['work', 'profiles', 'money', 'sharing', 'records'];
+    $dashboardSectionKeys = ['profile', 'work', 'profiles', 'money', 'sharing', 'records'];
     $dashboardHasBusinessFilters = $businessRecordFilters['business_q'] !== ''
         || $businessRecordFilters['note_type'] !== null
         || $businessRecordFilters['ledger_status'] !== null;
@@ -41,6 +63,29 @@
     $activeDashboardTab = in_array($requestedDashboardTab, $dashboardSectionKeys, true)
         ? $requestedDashboardTab
         : ($dashboardHasBusinessFilters ? 'profiles' : 'work');
+    $onboardingSteps = collect($onboarding['steps'] ?? []);
+    $kycRows = collect($onboarding['document_rows'] ?? []);
+    $identityKycRow = $kycRows->firstWhere('type', \App\Models\SuchakVerificationRecord::TYPE_IDENTITY);
+    $officeKycRow = $kycRows->firstWhere('type', \App\Models\SuchakVerificationRecord::TYPE_OFFICE);
+    $businessKycRow = $kycRows->firstWhere('type', \App\Models\SuchakVerificationRecord::TYPE_BUSINESS);
+    $isOrganizationSuchak = $suchakAccount->business_type === \App\Models\SuchakAccount::BUSINESS_TYPE_ORGANIZATION;
+    $kycBadgeTone = static function (?array $row): string {
+        return match ($row['status'] ?? null) {
+            \App\Models\SuchakVerificationRecord::STATUS_APPROVED => 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100',
+            \App\Models\SuchakVerificationRecord::STATUS_REJECTED => 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100',
+            default => 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100',
+        };
+    };
+    $currentOnboardingKey = (string) ($onboarding['current_step_key'] ?? 'documents');
+    $currentOnboardingStep = $onboarding['current_step'] ?? $onboardingSteps->first();
+    $cardPhotoUrl = $suchakAccount->profile_photo_path
+        ? \Illuminate\Support\Facades\Storage::disk('public')->url($suchakAccount->profile_photo_path)
+        : null;
+    $cardName = $suchakAccount->suchak_name_mr ?: $suchakAccount->suchak_name;
+    $cardOffice = $suchakAccount->office_name_mr ?: ($suchakAccount->office_name ?: $suchakText::label($suchakAccount->business_type));
+    $cardAddress = $suchakAccount->address_line_mr ?: $suchakAccount->address_line;
+    $cardShareText = trim($cardName."\n".$cardOffice."\nWhatsApp: ".($suchakAccount->whatsapp_number ?: $suchakAccount->mobile_number)."\n".($cardAddress ?: '')."\n\nलग्न जुळवण्यासाठी विश्वासार्ह सूचक सेवा. अधिक माहितीसाठी संपर्क करा.");
+    $cardWhatsappUrl = 'https://wa.me/?text='.rawurlencode($cardShareText);
 @endphp
 
 @section('content')
@@ -72,6 +117,46 @@
         </section>
     @endif
 
+    @if (session('status') && ! session('success') && ! session('info') && ! session('error'))
+        <section class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+            {{ session('status') }}
+        </section>
+    @endif
+
+    <section class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-wide text-red-700 dark:text-red-300">Suchak onboarding</p>
+                <h1 class="mt-2 text-2xl font-bold text-gray-950 dark:text-gray-100">{{ $currentOnboardingStep['label'] ?? 'Suchak work' }}</h1>
+                <p class="mt-2 max-w-3xl text-sm leading-6 text-gray-600 dark:text-gray-300">{{ $currentOnboardingStep['body'] ?? 'Use dashboard tools to continue Suchak work.' }}</p>
+            </div>
+            <a href="{{ route('suchak.register.status') }}" class="inline-flex w-fit rounded-md border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-200 dark:hover:bg-red-950/40">
+                View full status
+            </a>
+        </div>
+
+        @include('suchak.partials.onboarding-tracker', [
+            'steps' => $onboardingSteps,
+            'currentStepKey' => $currentOnboardingKey,
+        ])
+
+        <div class="mt-7 space-y-3">
+            @foreach ($onboardingSteps as $step)
+                <article class="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-bold text-gray-950 dark:text-gray-100">{{ $step['label'] }}</h3>
+                            <p class="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">{{ $step['body'] }}</p>
+                        </div>
+                        <span class="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-600 shadow-sm dark:bg-gray-950 dark:text-gray-300">
+                            {{ __('suchak.status.step_states.'.$step['state']) }}
+                        </span>
+                    </div>
+                </article>
+            @endforeach
+        </div>
+    </section>
+
     <div class="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
             <p class="text-sm font-semibold text-gray-500 dark:text-gray-400">{{ $suchakAccount->office_name ?: $suchakAccount->suchak_name }}</p>
@@ -82,8 +167,8 @@
         </div>
         <div class="flex flex-col gap-2 md:items-end">
             <div class="rounded-md border px-4 py-3 text-sm font-semibold {{ $statusTone }}">
-                Verification: {{ ucfirst($suchakAccount->verification_status) }}
-                <span class="ml-2 font-normal">Public: {{ ucfirst($suchakAccount->public_status) }}</span>
+                Verification: {{ $verificationLabel }}
+                <span class="ml-2 font-normal">Public: {{ $suchakText::label($suchakAccount->public_status) }}</span>
             </div>
         </div>
     </div>
@@ -109,11 +194,109 @@
 
     <div class="space-y-6">
 
+    <section class="{{ $activeDashboardTab !== 'profile' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-wide text-red-700 dark:text-red-300">Profile setup</p>
+                <h2 class="mt-1 text-xl font-bold text-gray-950 dark:text-gray-100">Complete your Suchak profile first</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-6 text-gray-600 dark:text-gray-300">
+                    Add your photo, visiting card or office proof, and organization document when applicable. You can start customer entry while admin verification continues.
+                </p>
+            </div>
+            <a href="{{ route('suchak.manual-profiles.create') }}" class="inline-flex w-fit items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-red-700">
+                Add customer entry
+            </a>
+        </div>
+
+        <div class="mt-6 grid gap-5 lg:grid-cols-[1fr_1.15fr]">
+            <article class="rounded-lg border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-900">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-start">
+                    <div class="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white text-2xl font-bold text-gray-500 ring-1 ring-gray-200 dark:bg-gray-950 dark:text-gray-300 dark:ring-gray-700">
+                        @if ($cardPhotoUrl)
+                            <img src="{{ $cardPhotoUrl }}" alt="{{ $cardName }}" class="h-full w-full object-cover">
+                        @else
+                            {{ mb_substr($cardName, 0, 1) }}
+                        @endif
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Suchak share card</p>
+                        <h3 class="mt-1 text-lg font-bold text-gray-950 dark:text-gray-100">{{ $cardName }}</h3>
+                        <p class="mt-1 text-sm font-semibold text-gray-700 dark:text-gray-200">{{ $cardOffice }}</p>
+                        <dl class="mt-4 grid gap-2 text-sm text-gray-600 dark:text-gray-300">
+                            <div><dt class="font-semibold text-gray-950 dark:text-gray-100">WhatsApp</dt><dd>{{ $suchakAccount->whatsapp_number ?: $suchakAccount->mobile_number }}</dd></div>
+                            @if ($cardAddress)
+                                <div><dt class="font-semibold text-gray-950 dark:text-gray-100">Address</dt><dd>{{ $cardAddress }}</dd></div>
+                            @endif
+                        </dl>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            <a href="{{ $cardWhatsappUrl }}" target="_blank" rel="noopener" class="inline-flex rounded-md border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-100 dark:hover:bg-emerald-950/40">
+                                Share on WhatsApp
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <form method="POST" action="{{ route('suchak.profile-photo.store') }}" enctype="multipart/form-data" class="mt-5 rounded-md border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-950">
+                    @csrf
+                    <label for="suchak_profile_photo" class="block text-sm font-semibold text-gray-800 dark:text-gray-200">Your photo</label>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">This photo is only for your Suchak card and does not create a candidate profile.</p>
+                    <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <input id="suchak_profile_photo" name="profile_photo" type="file" accept=".jpg,.jpeg,.png,.webp" required class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-gray-700 dark:border-gray-600 dark:bg-gray-950 dark:text-gray-100 dark:file:bg-gray-800 dark:file:text-gray-100">
+                        <button type="submit" class="rounded-md bg-gray-950 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-950 dark:hover:bg-white">
+                            Save photo
+                        </button>
+                    </div>
+                </form>
+            </article>
+
+            <div class="grid gap-4">
+                @foreach ([
+                    ['row' => $identityKycRow, 'type' => \App\Models\SuchakVerificationRecord::TYPE_IDENTITY, 'title' => 'Identity proof', 'body' => 'Upload Aadhaar, passport, or other readable identity proof for KYC.'],
+                    ['row' => $officeKycRow, 'type' => \App\Models\SuchakVerificationRecord::TYPE_OFFICE, 'title' => 'Visiting card / office proof', 'body' => 'Upload your visiting card, office proof, or bureau letterhead.'],
+                    ['row' => $businessKycRow, 'type' => \App\Models\SuchakVerificationRecord::TYPE_BUSINESS, 'title' => 'Organization logo / document', 'body' => 'For organization Suchak, upload logo image or organization document for admin verification.', 'visible' => $isOrganizationSuchak],
+                ] as $setupUpload)
+                    @php
+                        $setupVisible = $setupUpload['visible'] ?? true;
+                        $setupRow = $setupUpload['row'] ?? null;
+                    @endphp
+                    @continue(! $setupVisible)
+                    <article class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                                <h3 class="text-sm font-bold text-gray-950 dark:text-gray-100">{{ $setupUpload['title'] }}</h3>
+                                <p class="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">{{ $setupUpload['body'] }}</p>
+                            </div>
+                            <span class="inline-flex w-fit shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold {{ $kycBadgeTone($setupRow) }}">
+                                {{ $setupRow['status_label'] ?? __('suchak.labels.common.pending') }}
+                            </span>
+                        </div>
+                        <form method="POST" action="{{ route('suchak.register.documents.store') }}" enctype="multipart/form-data" class="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+                            @csrf
+                            <input type="hidden" name="verification_type" value="{{ $setupUpload['type'] }}">
+                            <input name="document" type="file" required accept=".pdf,.jpg,.jpeg,.png" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-gray-700 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:file:bg-gray-800 dark:file:text-gray-100">
+                            <button type="submit" class="rounded-md bg-gray-950 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-950 dark:hover:bg-white">
+                                {{ ($setupRow['uploaded'] ?? false) ? 'Replace' : 'Upload' }}
+                            </button>
+                        </form>
+                    </article>
+                @endforeach
+
+                <article class="rounded-lg border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-900 dark:bg-indigo-950/30">
+                    <h3 class="text-sm font-bold text-indigo-950 dark:text-indigo-100">Start customer work</h3>
+                    <p class="mt-1 text-sm leading-6 text-indigo-900/80 dark:text-indigo-100/80">Add a customer through biodata intake or the manual form. Both routes keep Suchak source tracking separate from your own account.</p>
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        <a href="{{ route('suchak.intakes.create') }}" class="inline-flex rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Upload / paste biodata</a>
+                        <a href="{{ route('suchak.manual-profiles.create') }}" class="inline-flex rounded-md border border-indigo-300 bg-white px-4 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-100 dark:border-indigo-700 dark:bg-indigo-950 dark:text-indigo-100 dark:hover:bg-indigo-900">Manual profile form</a>
+                    </div>
+                </article>
+            </div>
+        </div>
+    </section>
+
     <section id="white-label-sharing-kit" class="{{ $activeDashboardTab !== 'sharing' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">White-label Sharing Kit</h2>
-                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Platform-verified Suchak assets with masked candidate details, QR verification, and powered-by footer.</p>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Share assets with masked candidate details, QR verification, and powered-by footer.</p>
             </div>
             <span class="inline-flex w-fit rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-100">
                 {{ count($sharingKit['assets']) }} generated
@@ -153,7 +336,7 @@
                 </article>
             @empty
                 <div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
-                    No white-label assets are available yet. Publish the Suchak profile and issue a verified receipt to generate share-kit assets.
+                    No white-label assets are available yet. Publish the Suchak profile and issue a receipt to generate share-kit assets.
                 </div>
             @endforelse
         </div>
@@ -391,8 +574,8 @@
                 <div class="mt-3 space-y-3">
                     @forelse ($workflowTimeline as $event)
                         <article class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
-                            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $event->event_title }}</p>
-                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $event->event_summary }}</p>
+                            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::column($event, 'event_title') }}</p>
+                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $suchakText::column($event, 'event_summary') }}</p>
                             <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
                                 {{ $event->occurred_at->format('Y-m-d H:i') }} · {{ $event->event_type }}
                             </p>
@@ -431,104 +614,45 @@
             </div>
             <div class="flex flex-wrap gap-3">
                 <a href="{{ route('suchak.home') }}" class="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">Suchak Centre</a>
-                <a href="{{ route('suchak.intakes.create') }}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Customer biodata entry</a>
+                <a href="{{ route('suchak.intakes.create') }}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Upload / paste biodata</a>
+                <a href="{{ route('suchak.manual-profiles.create') }}" class="rounded-md border border-indigo-300 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 dark:border-indigo-700 dark:text-indigo-200 dark:hover:bg-indigo-950/40">Manual profile form</a>
                 <a href="{{ route('suchak.search.index') }}" class="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">Masked search</a>
             </div>
         </div>
 
-        <div class="mt-5 grid gap-3 md:grid-cols-4">
+        <div class="mt-5 grid gap-3 md:grid-cols-5">
             <div class="rounded-md bg-gray-50 p-4 text-sm dark:bg-gray-900">
                 <p class="font-semibold text-gray-900 dark:text-gray-100">1. Account status</p>
                 <p class="mt-2 text-gray-600 dark:text-gray-300">
-                    {{ $suchakAccount->isVerified() ? 'Approved. You can start Suchak work.' : 'Pending. Admin approval is required before customer entry.' }}
+                    {{ $accountStatusText }}
                 </p>
             </div>
             <a href="{{ route('suchak.intakes.create') }}" class="rounded-md bg-gray-50 p-4 text-sm hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-950">
-                <p class="font-semibold text-gray-900 dark:text-gray-100">2. Customer entry</p>
+                <p class="font-semibold text-gray-900 dark:text-gray-100">2. Upload / paste</p>
                 <p class="mt-2 text-gray-600 dark:text-gray-300">Create intake source: customer चा biodata paste किंवा upload करा.</p>
             </a>
+            <a href="{{ route('suchak.manual-profiles.create') }}" class="rounded-md bg-gray-50 p-4 text-sm hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-950">
+                <p class="font-semibold text-gray-900 dark:text-gray-100">3. Manual form</p>
+                <p class="mt-2 text-gray-600 dark:text-gray-300">Existing centralized profile form वापरून biodata भरा.</p>
+            </a>
             <a href="{{ route('suchak.search.index') }}" class="rounded-md bg-gray-50 p-4 text-sm hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-950">
-                <p class="font-semibold text-gray-900 dark:text-gray-100">3. Search</p>
+                <p class="font-semibold text-gray-900 dark:text-gray-100">4. Search</p>
                 <p class="mt-2 text-gray-600 dark:text-gray-300">Masked profiles शोधा, contact leak नाही.</p>
             </a>
             <a href="{{ route('suchak.home') }}" class="rounded-md bg-gray-50 p-4 text-sm hover:bg-gray-100 dark:bg-gray-900 dark:hover:bg-gray-950">
-                <p class="font-semibold text-gray-900 dark:text-gray-100">4. Help links</p>
+                <p class="font-semibold text-gray-900 dark:text-gray-100">5. Help links</p>
                 <p class="mt-2 text-gray-600 dark:text-gray-300">Registration, OTP, admin approval links.</p>
             </a>
         </div>
     </section>
 
     <div class="space-y-6">
-            <section class="{{ $activeDashboardTab !== 'profiles' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
-                    <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div>
-                            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Customer Biodata Sources</h2>
-                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Intake केलेले biodata इथे दिसतात. Review पूर्ण झाल्यावर consent/representation flow नंतर ते represented profiles मध्ये येतात.</p>
-                        </div>
-                        <a href="{{ route('suchak.intakes.create') }}" class="inline-flex w-fit justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
-                            Add biodata
-                        </a>
-                    </div>
-                </div>
-
-                <div class="divide-y divide-gray-200 dark:divide-gray-700">
-                    @forelse ($recentSourceLinks as $link)
-                        @php
-                            $intake = $link->biodataIntake;
-                            $attachedProfile = $link->matrimonyProfile ?: $intake?->profile;
-                            $sourceStatus = ucwords(str_replace('_', ' ', (string) $link->source_status));
-                            $intakeStatus = $intake ? ucwords(str_replace('_', ' ', (string) $intake->intake_status)) : 'Missing intake';
-                            $parseStatus = $intake ? ucwords(str_replace('_', ' ', (string) $intake->parse_status)) : 'Unknown';
-                        @endphp
-                        <article class="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
-                            <div class="min-w-0">
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <p class="font-semibold text-gray-900 dark:text-gray-100">Source #{{ $link->id }}</p>
-                                    <span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700 dark:bg-gray-900 dark:text-gray-200">{{ $sourceStatus }}</span>
-                                    <span class="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/50 dark:text-blue-100">Parse: {{ $parseStatus }}</span>
-                                </div>
-                                <dl class="mt-3 grid gap-2 text-sm text-gray-600 dark:text-gray-300 md:grid-cols-3">
-                                    <div>
-                                        <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Intake</dt>
-                                        <dd>#{{ $link->biodata_intake_id }} · {{ $intakeStatus }}</dd>
-                                    </div>
-                                    <div>
-                                        <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Created</dt>
-                                        <dd>{{ $link->created_at?->format('Y-m-d H:i') ?: '-' }}</dd>
-                                    </div>
-                                    <div>
-                                        <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Profile link</dt>
-                                        <dd>{{ $attachedProfile ? 'Linked profile #'.$attachedProfile->id : 'Not linked yet' }}</dd>
-                                    </div>
-                                </dl>
-                                <p class="mt-3 text-sm text-gray-600 dark:text-gray-300">
-                                    Next: review parsed biodata, then complete existing approval and consent steps. Raw private biodata text is not shown on this dashboard card.
-                                </p>
-                            </div>
-                            <div class="flex flex-wrap gap-2 lg:justify-end">
-                                @if ($intake)
-                                    <a href="{{ route('intake.status', $intake) }}" class="inline-flex justify-center rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white">
-                                        Review intake
-                                    </a>
-                                @endif
-                                <a href="{{ route('suchak.intakes.create') }}" class="inline-flex justify-center rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">
-                                    Add another
-                                </a>
-                            </div>
-                        </article>
-                    @empty
-                        <div class="p-6 text-sm text-gray-600 dark:text-gray-300">
-                            No biodata sources yet. Start with Customer biodata entry.
-                        </div>
-                    @endforelse
-                </div>
-            </section>
+            @include('suchak.partials.customer-list-table', ['activeDashboardTab' => $activeDashboardTab])
 
             <section class="{{ $activeDashboardTab !== 'profiles' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
-                    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Represented Profiles</h2>
-                    <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Only masked candidate information is shown on this work surface.</p>
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Customer management</h2>
+                    <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Consent, CRM notes, ledger, and exports for each represented profile.</p>
                     <form method="GET" action="{{ route('suchak.dashboard') }}" class="mt-4 grid gap-3 md:grid-cols-[1fr_12rem_12rem_auto_auto]">
                         <input type="hidden" name="dashboard_tab" value="profiles">
                         <label class="sr-only" for="business_q">Search CRM and ledger</label>
@@ -562,16 +686,41 @@
                             $consentTimeline = $card['consent_timeline'];
                             $crmNotes = $card['crm_notes'];
                             $ledgerEntries = $card['ledger_entries'];
+                            $ownedProfile = $representation->matrimonyProfile;
+                            $heightCm = is_numeric($ownedProfile?->height_cm) ? (int) round((float) $ownedProfile->height_cm) : null;
+                            $heightDisplay = $heightCm !== null
+                                ? ((int) floor($heightCm / 30.48)).' ft '.((int) round(($heightCm / 2.54) % 12)).' in'.' / '.$heightCm.' cm'
+                                : 'Not available';
+                            $residenceDisplay = $ownedProfile?->residenceLocationDisplayLine()
+                                ?: collect([$summary['location']['city'] ?? null, $summary['location']['district'] ?? null])->filter()->implode(', ');
                         @endphp
                         <article class="p-5">
                             <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                                 <div class="min-w-0">
-                                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ $summary['candidate_reference'] ?? 'masked-candidate' }}</p>
+                                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Matrimony ID #{{ $ownedProfile?->id ?? $representation->matrimony_profile_id ?? 'pending' }}</p>
+                                    <h3 class="mt-1 text-base font-semibold text-gray-900 dark:text-gray-100">{{ $ownedProfile?->full_name ?: 'Name pending' }}</h3>
                                     <div class="mt-2 flex flex-wrap gap-2 text-xs">
                                         <span class="rounded-full bg-gray-100 px-2 py-1 font-medium text-gray-700 dark:bg-gray-900 dark:text-gray-200">{{ ucfirst($representation->representation_status) }}</span>
                                         <span class="rounded-full bg-gray-100 px-2 py-1 font-medium text-gray-700 dark:bg-gray-900 dark:text-gray-200">Consent: {{ ucfirst($representation->consent_status) }}</span>
+                                        <span class="rounded-full bg-gray-100 px-2 py-1 font-medium text-gray-700 dark:bg-gray-900 dark:text-gray-200">{{ ucwords(str_replace('_', ' ', $representation->representation_mode)) }}</span>
                                     </div>
                                     <dl class="mt-4 grid gap-3 text-sm text-gray-700 dark:text-gray-300 md:grid-cols-2">
+                                        <div>
+                                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Name</dt>
+                                            <dd>{{ $ownedProfile?->full_name ?: 'Not available' }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Gender</dt>
+                                            <dd>{{ $ownedProfile?->gender?->label ?? $summary['basic']['gender'] ?? 'Not available' }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Height</dt>
+                                            <dd>{{ $heightDisplay }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Village / residence</dt>
+                                            <dd>{{ $residenceDisplay ?: 'Not available' }}</dd>
+                                        </div>
                                         <div>
                                             <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Age</dt>
                                             <dd>{{ $summary['basic']['age_range'] ?? 'Not available' }}</dd>
@@ -616,6 +765,15 @@
                                     @endif
                                 </div>
                                 <div class="flex min-w-[16rem] flex-col gap-3">
+                                    @if ($ownedProfile)
+                                        <a href="{{ route('suchak.representations.profile-form', $representation) }}" class="w-full rounded-md bg-gray-900 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white">
+                                            Manage profile form
+                                        </a>
+                                        <a href="{{ route('matrimony.profile.show', $ownedProfile) }}" class="w-full rounded-md border border-gray-300 px-4 py-2 text-center text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">
+                                            View public profile
+                                        </a>
+                                    @endif
+
                                     @if ($card['can_request_consent'] || $card['can_renew_consent'])
                                         <form method="POST" action="{{ $card['can_renew_consent'] ? route('suchak.representations.consents.renew', $representation) : route('suchak.representations.consents.request', $representation) }}" class="space-y-2 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900">
                                             @csrf
@@ -785,14 +943,14 @@
                                         <select id="source_owner_{{ $representation->id }}" name="source_owner" required class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
                                             <option value="">Source owner</option>
                                             @foreach ($sourceOwnerLabels as $owner => $label)
-                                                <option value="{{ $owner }}" @selected(old('source_owner') === $owner)>{{ $label }}</option>
+                                                <option value="{{ $owner }}" @selected(old('source_owner', \App\Models\SuchakPaymentContext::SOURCE_SUCHAK) === $owner)>{{ $label }}</option>
                                             @endforeach
                                         </select>
                                         <label class="sr-only" for="payment_collector_{{ $representation->id }}">Payment collector</label>
                                         <select id="payment_collector_{{ $representation->id }}" name="payment_collector" required class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
                                             <option value="">Payment collector</option>
                                             @foreach ($paymentCollectorLabels as $collector => $label)
-                                                <option value="{{ $collector }}" @selected(old('payment_collector') === $collector)>{{ $label }}</option>
+                                                <option value="{{ $collector }}" @selected(old('payment_collector', \App\Models\SuchakPaymentContext::COLLECTOR_SUCHAK) === $collector)>{{ $label }}</option>
                                             @endforeach
                                         </select>
                                         <label class="sr-only" for="amount_{{ $representation->id }}">Amount</label>
@@ -846,7 +1004,11 @@
                         </article>
                     @empty
                         <div class="p-6 text-sm text-gray-600 dark:text-gray-300">
-                            No represented profiles yet. Create an intake source, then complete the existing review and consent flow.
+                            No represented profiles yet. Upload/paste biodata or fill the existing profile form manually.
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <a href="{{ route('suchak.intakes.create') }}" class="inline-flex rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Upload / paste biodata</a>
+                                <a href="{{ route('suchak.manual-profiles.create') }}" class="inline-flex rounded-md border border-indigo-300 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 dark:border-indigo-700 dark:text-indigo-200 dark:hover:bg-indigo-950/40">Manual profile form</a>
+                            </div>
                         </div>
                     @endforelse
                 </div>
@@ -884,20 +1046,20 @@
                 <div class="mt-3 rounded-md bg-gray-50 p-3 text-sm dark:bg-gray-900">
                     <div class="flex items-center justify-between gap-3">
                         <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Subscription status</span>
-                        <span class="font-semibold text-gray-900 dark:text-gray-100">{{ ucwords(str_replace('_', ' ', $paymentStatus['status'] ?? 'none')) }}</span>
+                        <span class="font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::label($paymentStatus['status'] ?? 'none') }}</span>
                     </div>
                     <div class="mt-2 grid gap-2 text-xs text-gray-600 dark:text-gray-300">
                         <div>Free trial policy: {{ number_format($billingPolicySummary['free_trial_days']) }} days</div>
                         <div>Grace policy: {{ number_format($billingPolicySummary['grace_period_days']) }} days</div>
-                        <div>Payment mode: {{ ucwords(str_replace('_', ' ', $billingPolicySummary['payment_mode'])) }}</div>
+                        <div>Payment mode: {{ $suchakText::label($billingPolicySummary['payment_mode']) }}</div>
                     </div>
                 </div>
 
                 @if ($activeSubscription?->suchakPlan)
                     <div class="mt-4">
-                        <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $activeSubscription->suchakPlan->name }}</p>
+                        <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::column($activeSubscription->suchakPlan, 'name') }}</p>
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            {{ $activeSubscription->suchakPlan->hasConfiguredPrice() ? $activeSubscription->suchakPlan->currency.' '.$activeSubscription->suchakPlan->price_amount : 'Manual assignment / price not configured' }}
+                            {{ $activeSubscription->suchakPlan->hasConfiguredPrice() ? $activeSubscription->suchakPlan->currency.' '.$activeSubscription->suchakPlan->price_amount : $suchakText::label('manual_assignment_price_not_configured') }}
                         </p>
                         <dl class="mt-3 grid gap-2 text-xs text-gray-600 dark:text-gray-300">
                             <div class="flex justify-between gap-3">
@@ -919,7 +1081,7 @@
                         @forelse ($featureLimits as $feature => $value)
                             @php
                                 $usage = $billingUsageSummary[$feature] ?? null;
-                                $limitDisplay = is_bool($value) ? ($value ? 'Enabled' : 'Disabled') : (string) $value;
+                                $limitDisplay = is_bool($value) ? ($value ? $suchakText::label('enabled') : $suchakText::label('disabled')) : (string) $value;
                                 $usageDisplay = null;
 
                                 if ($usage && $usage['used'] !== null) {
@@ -934,7 +1096,7 @@
                             @endphp
                             <div class="rounded-md border border-gray-200 px-3 py-2 dark:border-gray-700">
                                 <div class="flex justify-between gap-3">
-                                <dt>{{ ucwords(str_replace('_', ' ', $feature)) }}</dt>
+                                <dt>{{ $suchakText::label($feature) }}</dt>
                                     <dd class="font-semibold text-gray-900 dark:text-gray-100">{{ $usageDisplay ?: $limitDisplay }}</dd>
                                 </div>
                                 <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -955,9 +1117,12 @@
                         <div class="mt-3 space-y-2">
                             @foreach ($catalogPlans as $plan)
                                 <div class="rounded-md bg-gray-50 px-3 py-2 text-sm dark:bg-gray-900">
-                                    <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $plan->name }}</div>
+                                    <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::column($plan, 'name') }}</div>
+                                    @if ($suchakText::column($plan, 'description') !== '')
+                                        <div class="mt-1 text-xs text-gray-600 dark:text-gray-300">{{ $suchakText::column($plan, 'description') }}</div>
+                                    @endif
                                     <div class="text-xs text-gray-500 dark:text-gray-400">
-                                        {{ $plan->hasConfiguredPrice() ? $plan->currency.' '.$plan->price_amount : 'Manual assignment' }}
+                                        {{ $plan->hasConfiguredPrice() ? $plan->currency.' '.$plan->price_amount : $suchakText::label('manual_assignment') }}
                                         · {{ number_format($plan->billing_period_days ?? 30) }} days
                                     </div>
                                     @if (($billingPolicySummary['payment_mode'] ?? '') === 'payu_test_mode' && $plan->hasConfiguredPrice() && strtoupper((string) $plan->currency) === 'INR')
@@ -977,8 +1142,8 @@
                                                     $typedValue = $feature->typedValue();
                                                 @endphp
                                                 <div class="flex justify-between gap-2">
-                                                    <span>{{ ucwords(str_replace('_', ' ', $feature->feature_key)) }}</span>
-                                                    <span class="font-semibold">{{ is_bool($typedValue) ? ($typedValue ? 'Yes' : 'No') : $typedValue }}</span>
+                                                    <span>{{ $suchakText::label($feature->feature_key) }}</span>
+                                                    <span class="font-semibold">{{ is_bool($typedValue) ? ($typedValue ? $suchakText::label('yes') : $suchakText::label('no')) : $typedValue }}</span>
                                                 </div>
                                             @endforeach
                                         </div>
@@ -997,8 +1162,8 @@
                                 <div class="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-gray-900 dark:text-gray-300">
                                     <div class="flex items-start justify-between gap-3">
                                         <div>
-                                            <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $payment->plan_name }}</div>
-                                            <div>{{ $payment->currency }} {{ $payment->amount }} · {{ ucfirst($payment->payment_status) }}</div>
+                                            <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::column($payment, 'plan_name') }}</div>
+                                            <div>{{ $payment->currency }} {{ $payment->amount }} · {{ $suchakText::label($payment->payment_status) }}</div>
                                             <div>Txn {{ $payment->txnid }}</div>
                                         </div>
                                         <div class="text-right">
@@ -1018,7 +1183,7 @@
                 <div class="mt-4 space-y-3">
                     @forelse ($recentSourceLinks as $link)
                         <div class="text-sm">
-                            <div class="font-medium text-gray-900 dark:text-gray-100">{{ ucfirst($link->source_status) }}</div>
+                            <div class="font-medium text-gray-900 dark:text-gray-100">{{ $suchakText::label($link->source_status) }}</div>
                             <div class="text-xs text-gray-500 dark:text-gray-400">Intake #{{ $link->biodata_intake_id }} · {{ $link->created_at?->format('Y-m-d H:i') }}</div>
                         </div>
                     @empty
@@ -1082,7 +1247,7 @@
                     @forelse ($recentSuggestions as $suggestion)
                         <div class="text-sm">
                             <div class="font-medium text-gray-900 dark:text-gray-100">{{ ucwords(str_replace('_', ' ', $suggestion->field_key)) }}</div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400">{{ ucfirst($suggestion->suggestion_status) }} · {{ $suggestion->created_at?->format('Y-m-d H:i') }}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">{{ $suchakText::label($suggestion->suggestion_status) }} · {{ $suggestion->created_at?->format('Y-m-d H:i') }}</div>
                         </div>
                     @empty
                         <p class="text-sm text-gray-600 dark:text-gray-300">No profile update suggestions yet.</p>

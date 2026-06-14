@@ -102,6 +102,7 @@ class SuchakProductionReadinessGateTest extends TestCase
         return [
             'admin.suchak.dashboard',
             'admin.suchak.accounts.index',
+            'admin.suchak.accounts.verification-records.document',
             'admin.suchak.plans.index',
             'admin.suchak.safety.index',
             'admin.suchak.retention.index',
@@ -109,6 +110,9 @@ class SuchakProductionReadinessGateTest extends TestCase
             'admin.suchak.payouts.index',
             'suchak.home',
             'suchak.dashboard',
+            'suchak.account-settings.edit',
+            'suchak.manual-profiles.create',
+            'suchak.manual-profiles.store',
             'suchak.search.index',
             'suchak.collaborations.index',
             'suchak.training-academy.index',
@@ -137,6 +141,7 @@ class SuchakProductionReadinessGateTest extends TestCase
     {
         return [
             'suchak_accounts' => ['verification_status', 'public_status'],
+            'suchak_contact_numbers' => ['suchak_account_id', 'phone_number', 'label', 'is_whatsapp', 'is_active'],
             'suchak_customer_contexts' => ['source_owner', 'customer_lifecycle_status'],
             'suchak_payment_contexts' => ['source_owner', 'payment_collector', 'context_status'],
             'suchak_customer_agreements' => ['terms_status', 'agreement_snapshot_hash'],

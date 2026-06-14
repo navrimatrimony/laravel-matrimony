@@ -101,6 +101,23 @@ class MatrimonyProfileController extends Controller
             }
         }
 
+        if ($user->suchakAccount) {
+            $targetId = (int) ($request->input('profile_id') ?? $request->query('profile_id') ?? 0);
+            if ($targetId <= 0) {
+                $targetId = (int) (session('suchak_edit_profile_id') ?? 0);
+            }
+            if ($targetId > 0) {
+                $target = MatrimonyProfile::withTrashed()->find($targetId);
+                if ($target && $this->isAllowedSuchakPhotoTarget($user, $target)) {
+                    session(['suchak_edit_profile_id' => (int) $target->id]);
+
+                    return $target;
+                }
+
+                abort(403, 'This profile is not available in the current Suchak manual profile session.');
+            }
+        }
+
         return $user->matrimonyProfile;
     }
 
@@ -123,6 +140,63 @@ class MatrimonyProfileController extends Controller
     }
 
     /**
+     * Preserve ?profile_id= for the current verified Suchak manual-profile photo session.
+     *
+     * @return array<string, string>
+     */
+    private function suchakPhotoProfileQuery(MatrimonyProfile $profile): array
+    {
+        $user = auth()->user();
+        if (! $this->isAllowedSuchakPhotoTarget($user, $profile)) {
+            return [];
+        }
+
+        return ['profile_id' => (string) $profile->id];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function photoTargetQuery(MatrimonyProfile $profile): array
+    {
+        return array_merge(
+            $this->adminShowcaseProfileQuery($profile),
+            $this->suchakPhotoProfileQuery($profile),
+        );
+    }
+
+    private function isAllowedSuchakPhotoTarget($user, MatrimonyProfile $profile): bool
+    {
+        if (! $user || ! $user->suchakAccount) {
+            return false;
+        }
+
+        $account = $user->suchakAccount;
+        if ($account->verification_status !== \App\Models\SuchakAccount::VERIFICATION_VERIFIED) {
+            return false;
+        }
+
+        if ((int) session('suchak_registration_account_id', 0) !== (int) $account->id) {
+            return false;
+        }
+
+        if ((int) session('suchak_registration_profile_id', 0) !== (int) $profile->id) {
+            return false;
+        }
+
+        $query = SuchakProfileRepresentation::query()
+            ->where('suchak_account_id', $account->id)
+            ->where('matrimony_profile_id', $profile->id);
+
+        $sessionRepresentationId = (int) session('suchak_registration_representation_id', 0);
+        if ($sessionRepresentationId > 0) {
+            $query->whereKey($sessionRepresentationId);
+        }
+
+        return $query->exists();
+    }
+
+    /**
      * @return array<string, string>
      */
     private function uploadPhotoRedirectQuery(Request $request, MatrimonyProfile $profile): array
@@ -132,7 +206,7 @@ class MatrimonyProfileController extends Controller
             $q['from'] = 'onboarding';
         }
 
-        return array_merge($q, $this->adminShowcaseProfileQuery($profile));
+        return array_merge($q, $this->photoTargetQuery($profile));
     }
 
     /**
@@ -423,6 +497,7 @@ class MatrimonyProfileController extends Controller
             'onboardingPhotoRequired' => $onboardingPhotoRequired,
             'primaryPhotoProcessing' => $primaryPhotoProcessing,
             'primaryOnlyOnCoreColumn' => $primaryOnlyOnCoreColumn,
+            'photoTargetQuery' => $this->photoTargetQuery($profile),
         ]);
     }
 
@@ -451,7 +526,11 @@ class MatrimonyProfileController extends Controller
                 ['error' => __('profile_actions.create_profile_first')]
             );
         }
-        if (! $profile->isShowcaseProfile() && (int) $profile->user_id !== (int) $user->id) {
+        if (
+            ! $profile->isShowcaseProfile()
+            && (int) $profile->user_id !== (int) $user->id
+            && ! $this->isAllowedSuchakPhotoTarget($user, $profile)
+        ) {
             abort(403, __('common.unauthorized_photo_update'));
         }
 
@@ -766,7 +845,7 @@ class MatrimonyProfileController extends Controller
                 $request,
                 route('matrimony.profile.wizard.section', array_merge(
                     ['section' => 'full', 'all' => 1],
-                    $this->adminShowcaseProfileQuery($profile)
+                    $this->photoTargetQuery($profile)
                 )),
                 ['warning' => 'Photo uploaded but some conflicts were detected.']
             );
@@ -1252,6 +1331,7 @@ class MatrimonyProfileController extends Controller
         $canSendContactRequest = false;
         $suchakContactRepresentations = collect();
         $openSuchakRequestsByRepresentationId = collect();
+        $hasManualSuchakCreatedContactRepresentation = false;
         if (auth()->check() && ! $isOwnProfile && $user->matrimonyProfile) {
             $suchakContactRepresentations = SuchakProfileRepresentation::query()
                 ->with('suchakAccount')
@@ -1270,6 +1350,9 @@ class MatrimonyProfileController extends Controller
                     ->latest('id')
                     ->get()
                     ->keyBy('representation_id');
+
+                $hasManualSuchakCreatedContactRepresentation = $suchakContactRepresentations
+                    ->contains(fn (SuchakProfileRepresentation $representation): bool => $representation->representation_mode === SuchakProfileRepresentation::MODE_MANUAL_FORM_BY_SUCHAK);
             }
 
             $contactRequestService = app(\App\Services\ContactRequestService::class);
@@ -1293,7 +1376,10 @@ class MatrimonyProfileController extends Controller
 
         $suchakContactOptionsAvailable = $suchakContactRepresentations->isNotEmpty();
         $suchakContactRoutingRequired = $suchakContactOptionsAvailable
-            && $contactRoutingMode === ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY;
+            && (
+                $contactRoutingMode === ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY
+                || $hasManualSuchakCreatedContactRepresentation
+            );
 
         if ($suchakContactRoutingRequired) {
             $contactRequestDisabled = true;

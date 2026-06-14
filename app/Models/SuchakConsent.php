@@ -85,6 +85,7 @@ class SuchakConsent extends Model
         'consent_status',
         'consent_type',
         'consent_text_snapshot',
+        'consent_text_snapshot_mr',
         'consent_template_version',
         'consent_given_by_name',
         'relationship_to_candidate',
@@ -103,6 +104,7 @@ class SuchakConsent extends Model
         'valid_from',
         'valid_until',
         'revocation_reason',
+        'revocation_reason_mr',
         'ip_address',
         'user_agent',
     ];

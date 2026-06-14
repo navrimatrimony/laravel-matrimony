@@ -348,6 +348,7 @@ class SuchakBillingCatalogService
         if ($name === '') {
             throw new InvalidArgumentException('Suchak plan name is required.');
         }
+        $nameMr = trim((string) ($attributes['name_mr'] ?? ''));
 
         $slug = Str::slug(trim((string) ($attributes['slug'] ?? $name)));
         if ($slug === '') {
@@ -355,6 +356,7 @@ class SuchakBillingCatalogService
         }
 
         $description = trim((string) ($attributes['description'] ?? ''));
+        $descriptionMr = trim((string) ($attributes['description_mr'] ?? ''));
         $priceAmount = $attributes['price_amount'] ?? null;
         $priceAmount = $priceAmount === '' || $priceAmount === null
             ? null
@@ -368,8 +370,10 @@ class SuchakBillingCatalogService
 
         return [
             'name' => $name,
+            'name_mr' => $nameMr !== '' ? Str::limit($nameMr, 120, '') : null,
             'slug' => $slug,
             'description' => $description !== '' ? $description : null,
+            'description_mr' => $descriptionMr !== '' ? Str::limit($descriptionMr, 2000, '') : null,
             'price_amount' => $priceAmount,
             'currency' => $currency,
             'billing_period_days' => max(1, min(3650, (int) ($attributes['billing_period_days'] ?? 30))),

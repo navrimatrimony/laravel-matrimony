@@ -87,8 +87,11 @@ class SuchakDispute extends Model
         'priority',
         'risk_source',
         'summary',
+        'summary_mr',
         'evidence_summary',
+        'evidence_summary_mr',
         'resolution_note',
+        'resolution_note_mr',
         'opened_at',
         'resolved_at',
     ];

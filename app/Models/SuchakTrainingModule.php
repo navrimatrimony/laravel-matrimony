@@ -39,12 +39,15 @@ class SuchakTrainingModule extends Model
     protected $fillable = [
         'module_key',
         'module_title',
+        'module_title_mr',
         'module_category',
         'module_status',
         'is_required_for_certificate',
         'sort_order',
         'summary',
+        'summary_mr',
         'content_outline',
+        'content_outline_mr',
         'created_by_admin_user_id',
         'admin_audit_log_id',
     ];

@@ -6,8 +6,10 @@ use App\Models\City;
 use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\SuchakConsent;
+use App\Models\SuchakPolicy;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
+use App\Modules\Suchak\Services\SuchakPolicyService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -120,7 +122,7 @@ class SuchakCrossSearchTest extends TestCase
         $response->assertDontSee('Hidden Account Education', false);
     }
 
-    public function test_unverified_suchak_account_cannot_use_cross_search(): void
+    public function test_pending_suchak_account_can_use_cross_search_when_work_access_is_enabled(): void
     {
         $user = User::factory()->create();
         SuchakAccount::factory()->create([
@@ -128,6 +130,22 @@ class SuchakCrossSearchTest extends TestCase
             'verification_status' => SuchakAccount::VERIFICATION_PENDING,
             'public_status' => SuchakAccount::PUBLIC_HIDDEN,
         ]);
+
+        $this
+            ->actingAs($user)
+            ->get(route('suchak.search.index'))
+            ->assertOk()
+            ->assertSee('Suchak masked search', false);
+
+        SuchakPolicy::query()->updateOrCreate(
+            ['policy_key' => SuchakPolicyService::KEY_SUCHAK_ALLOW_WORK_BEFORE_ADMIN_APPROVAL],
+            [
+                'policy_value' => 'false',
+                'value_type' => SuchakPolicy::TYPE_BOOLEAN,
+                'description' => 'Block pending review Suchak work in this test.',
+                'is_active' => true,
+            ],
+        );
 
         $this
             ->actingAs($user)

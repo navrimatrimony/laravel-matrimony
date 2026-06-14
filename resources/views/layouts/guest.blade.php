@@ -49,32 +49,5 @@
                 </div>
             </div>
         </div>
-        <script>
-            document.addEventListener('DOMContentLoaded', function () {
-                document.querySelectorAll('[data-password-field]').forEach(function (wrap) {
-                    var input = wrap.querySelector('input');
-                    var btn = wrap.querySelector('[data-password-toggle]');
-                    if (!input || !btn) return;
-                    var showIcon = btn.querySelector('[data-icon="show"]');
-                    var hideIcon = btn.querySelector('[data-icon="hide"]');
-                    var labelShow = wrap.getAttribute('data-label-show') || 'Show password';
-                    var labelHide = wrap.getAttribute('data-label-hide') || 'Hide password';
-
-                    function syncUi() {
-                        var visible = input.type === 'text';
-                        btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
-                        btn.setAttribute('aria-label', visible ? labelHide : labelShow);
-                        if (showIcon) showIcon.classList.toggle('hidden', visible);
-                        if (hideIcon) hideIcon.classList.toggle('hidden', !visible);
-                    }
-
-                    btn.addEventListener('click', function () {
-                        input.type = input.type === 'password' ? 'text' : 'password';
-                        syncUi();
-                    });
-                    syncUi();
-                });
-            });
-        </script>
     </body>
 </html>

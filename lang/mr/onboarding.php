@@ -19,6 +19,8 @@ return [
     'dob_format_hint' => 'दिवस, महिना, वर्ष टाइप करा; `/` आपोआप येतील. किंवा कॅलेंडर चिन्हावर टॅप करा.',
     'step2_title' => 'उमेदवाराबद्दल',
     'step2_sub' => 'योग्य जुळण्या दाखवण्यास मदत होते.',
+    'intake_autofill_hint' => 'तुमच्याकडे biodata image किंवा PDF असेल तर upload करून profile तपशील autofill करा.',
+    'intake_autofill_cta' => 'Biodata upload करा',
     'step3_title' => 'समाज, उंची व ठिकाण',
     'step3_sub' => 'धर्म, जात, उंची आणि क्षेत्र (शहर) सुसंगत जुळण्यांसाठी. सविस्तर पत्ता नंतर Edit profile मध्ये भरू शकता.',
     'step4_title' => 'शिक्षण व काम',

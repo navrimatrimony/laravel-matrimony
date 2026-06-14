@@ -71,24 +71,30 @@ class SuchakOfflineCampService
 
         $campKey = $this->slugKey($attributes['camp_key'] ?? $attributes['camp_name'] ?? null, 'Suchak offline camp key is required.');
         $campName = $this->requiredText($attributes['camp_name'] ?? null, 'Suchak offline camp name is required.', 160);
+        $campNameMr = $this->nullableText($attributes['camp_name_mr'] ?? null, 160);
         $campType = $this->allowed($attributes['camp_type'] ?? SuchakOfflineCamp::TYPE_BIODATA_DRIVE, SuchakOfflineCamp::TYPES, 'Suchak offline camp type is invalid.');
         $sourceTag = $this->slugKey($attributes['source_tag'] ?? $campKey, 'Suchak offline camp source tag is required.');
         $locationLabel = $this->nullableText($attributes['location_label'] ?? null, 160);
+        $locationLabelMr = $this->nullableText($attributes['location_label_mr'] ?? null, 160);
         $privacyNote = $this->requiredText($attributes['privacy_note'] ?? null, 'Suchak offline camp privacy note is required.', 1000);
-        $this->assertSafeOperationalText($campName.' '.$sourceTag.' '.($locationLabel ?? '').' '.$privacyNote);
+        $privacyNoteMr = $this->nullableText($attributes['privacy_note_mr'] ?? null, 1000);
+        $this->assertSafeOperationalText($campName.' '.($campNameMr ?? '').' '.$sourceTag.' '.($locationLabel ?? '').' '.($locationLabelMr ?? '').' '.$privacyNote.' '.($privacyNoteMr ?? ''));
 
-        return DB::transaction(function () use ($account, $actor, $attributes, $campKey, $campName, $campType, $sourceTag, $locationLabel, $privacyNote): SuchakOfflineCamp {
+        return DB::transaction(function () use ($account, $actor, $attributes, $campKey, $campName, $campNameMr, $campType, $sourceTag, $locationLabel, $locationLabelMr, $privacyNote, $privacyNoteMr): SuchakOfflineCamp {
             $camp = SuchakOfflineCamp::query()->create([
                 'suchak_account_id' => $account->id,
                 'camp_key' => $campKey,
                 'camp_name' => $campName,
+                'camp_name_mr' => $campNameMr,
                 'camp_type' => $campType,
                 'camp_status' => SuchakOfflineCamp::STATUS_PLANNED,
                 'source_tag' => $sourceTag,
                 'location_label' => $locationLabel,
+                'location_label_mr' => $locationLabelMr,
                 'camp_date' => $this->nullableDate($attributes['camp_date'] ?? null),
                 'expected_intake_count' => $this->nullableCount($attributes['expected_intake_count'] ?? 0),
                 'privacy_note' => $privacyNote,
+                'privacy_note_mr' => $privacyNoteMr,
                 'created_by_user_id' => $actor->id,
             ]);
 

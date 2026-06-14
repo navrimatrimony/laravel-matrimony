@@ -123,22 +123,28 @@ class SuchakTrainingAcademyService
 
         $moduleKey = $this->slugKey($attributes['module_key'] ?? null, 'Suchak training module key is required.');
         $title = $this->requiredText($attributes['module_title'] ?? null, 'Suchak training module title is required.', 160);
+        $titleMr = $this->nullableText($attributes['module_title_mr'] ?? null, 160);
         $category = $this->allowed($attributes['module_category'] ?? null, SuchakTrainingModule::CATEGORIES, 'Suchak training module category is invalid.');
         $summary = $this->requiredText($attributes['summary'] ?? null, 'Suchak training module summary is required.', 1000);
+        $summaryMr = $this->nullableText($attributes['summary_mr'] ?? null, 1000);
         $outline = $this->requiredText($attributes['content_outline'] ?? null, 'Suchak training module outline is required.', 4000);
+        $outlineMr = $this->nullableText($attributes['content_outline_mr'] ?? null, 4000);
 
         $this->assertPolicySafeText($title.' '.$summary.' '.$outline);
 
-        return DB::transaction(function () use ($admin, $attributes, $moduleKey, $title, $category, $summary, $outline): SuchakTrainingModule {
+        return DB::transaction(function () use ($admin, $attributes, $moduleKey, $title, $titleMr, $category, $summary, $summaryMr, $outline, $outlineMr): SuchakTrainingModule {
             $module = SuchakTrainingModule::query()->create([
                 'module_key' => $moduleKey,
                 'module_title' => $title,
+                'module_title_mr' => $titleMr,
                 'module_category' => $category,
                 'module_status' => SuchakTrainingModule::STATUS_ACTIVE,
                 'is_required_for_certificate' => (bool) ($attributes['is_required_for_certificate'] ?? true),
                 'sort_order' => $this->sortOrder($attributes['sort_order'] ?? 0),
                 'summary' => $summary,
+                'summary_mr' => $summaryMr,
                 'content_outline' => $outline,
+                'content_outline_mr' => $outlineMr,
                 'created_by_admin_user_id' => $admin->id,
             ]);
 
@@ -302,23 +308,29 @@ class SuchakTrainingAcademyService
 
         $templateKey = $this->slugKey($attributes['template_key'] ?? null, 'Suchak message template key is required.');
         $title = $this->requiredText($attributes['template_title'] ?? null, 'Suchak message template title is required.', 160);
+        $titleMr = $this->nullableText($attributes['template_title_mr'] ?? null, 160);
         $category = $this->allowed($attributes['template_category'] ?? null, SuchakMessageTemplate::CATEGORIES, 'Suchak message template category is invalid.');
         $channel = $this->allowed($attributes['template_channel'] ?? SuchakMessageTemplate::CHANNEL_WHATSAPP_COPY, SuchakMessageTemplate::CHANNELS, 'Suchak message template channel is invalid.');
         $body = $this->requiredText($attributes['body_text'] ?? null, 'Suchak message template body is required.', 4000);
+        $bodyMr = $this->nullableText($attributes['body_text_mr'] ?? null, 4000);
         $guidance = $this->nullableText($attributes['usage_guidance'] ?? null, 1000);
+        $guidanceMr = $this->nullableText($attributes['usage_guidance_mr'] ?? null, 1000);
 
         $this->assertPolicySafeText($title.' '.$body.' '.($guidance ?? ''));
 
-        return DB::transaction(function () use ($admin, $templateKey, $title, $category, $channel, $body, $guidance): SuchakMessageTemplate {
+        return DB::transaction(function () use ($admin, $templateKey, $title, $titleMr, $category, $channel, $body, $bodyMr, $guidance, $guidanceMr): SuchakMessageTemplate {
             $template = SuchakMessageTemplate::query()->create([
                 'template_key' => $templateKey,
                 'template_title' => $title,
+                'template_title_mr' => $titleMr,
                 'template_category' => $category,
                 'template_channel' => $channel,
                 'template_status' => SuchakMessageTemplate::STATUS_ACTIVE,
                 'policy_status' => SuchakMessageTemplate::POLICY_SAFE,
                 'body_text' => $body,
+                'body_text_mr' => $bodyMr,
                 'usage_guidance' => $guidance,
+                'usage_guidance_mr' => $guidanceMr,
                 'created_by_admin_user_id' => $admin->id,
             ]);
 

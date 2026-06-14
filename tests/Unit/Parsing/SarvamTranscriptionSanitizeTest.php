@@ -30,4 +30,18 @@ class SarvamTranscriptionSanitizeTest extends TestCase
         $this->assertStringNotContainsString('विवाह सूचक', $clean);
         $this->assertStringContainsString('मुलीचे नांव', $clean);
     }
+
+    public function test_drops_sarvam_photo_prose_without_biodata_labels(): void
+    {
+        $raw = "*एका लांब, काळ्या केसांच्या तरुणीचे हे पूर्ण-लांबीचे छायाचित्र आहे. तिने साडी परिधान केली असून ती कॅमेऱ्याकडे हसत पाहते. पार्श्वभूमी अस्पष्ट (ब्लर) आहे.*\n"
+            ."मुलीचे नाव - कु.प्रियांका उत्तम फडतरे\n"
+            ."जन्म तारीख - २४-२५/१० / १९९४\n";
+
+        $clean = AiVisionExtractionService::sanitizeTransientParseInputText($raw);
+
+        $this->assertStringNotContainsString('छायाचित्र', $clean);
+        $this->assertStringNotContainsString('पार्श्वभूमी', $clean);
+        $this->assertStringContainsString('कु.प्रियांका', $clean);
+        $this->assertStringContainsString('जन्म तारीख', $clean);
+    }
 }

@@ -33,6 +33,7 @@ class SuchakCampaignQualification extends Model
         'bonus_amount',
         'bonus_currency',
         'qualification_note',
+        'qualification_note_mr',
         'qualified_by_admin_user_id',
         'admin_audit_log_id',
         'qualified_at',

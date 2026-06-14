@@ -39,6 +39,7 @@ class SuchakProfileRepresentation extends Model
     public const MODE_CANDIDATE_INVITED_SUCHAK = 'candidate_invited_suchak';
     public const MODE_ADMIN_ASSIGNED = 'admin_assigned';
     public const MODE_PRIMARY_SUCHAK = 'primary_suchak';
+    public const MODE_MANUAL_FORM_BY_SUCHAK = 'manual_form_by_suchak';
 
     public const MODES = [
         self::MODE_UPLOADED_BY_SUCHAK,
@@ -46,6 +47,7 @@ class SuchakProfileRepresentation extends Model
         self::MODE_CANDIDATE_INVITED_SUCHAK,
         self::MODE_ADMIN_ASSIGNED,
         self::MODE_PRIMARY_SUCHAK,
+        self::MODE_MANUAL_FORM_BY_SUCHAK,
     ];
 
     public const CONSENT_NOT_REQUESTED = 'not_requested';

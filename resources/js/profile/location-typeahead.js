@@ -727,6 +727,12 @@
 
                                 var primaryItem = itemFromResolvePayload(data);
                                 var alts = Array.isArray(data.alternatives) ? data.alternatives : [];
+                                if (wrapper.dataset.gpsAutoApply === '1') {
+                                    applyCanonicalSelectionToWrapper(wrapper, primaryItem, data.display_label || labelFromItem(primaryItem));
+                                    showGpsHtml('<div class="text-emerald-700 dark:text-emerald-300 text-sm">Location applied.</div>');
+                                    return;
+                                }
+
                                 var altHtml = '';
                                 alts.forEach(function (alt, i) {
                                     altHtml +=

@@ -26,7 +26,9 @@ class SuchakPackageTemplate extends Model
 
     protected $fillable = [
         'template_name',
+        'template_name_mr',
         'template_description',
+        'template_description_mr',
         'base_price_amount',
         'currency',
         'template_status',

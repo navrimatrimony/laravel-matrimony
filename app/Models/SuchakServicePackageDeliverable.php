@@ -19,7 +19,9 @@ class SuchakServicePackageDeliverable extends Model
         'template_deliverable_id',
         'deliverable_key',
         'deliverable_name',
+        'deliverable_name_mr',
         'deliverable_description',
+        'deliverable_description_mr',
         'sort_order',
         'is_required',
     ];

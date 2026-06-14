@@ -142,7 +142,7 @@ class OcrNormalize
             return null;
         }
 
-        $hasPos = (bool) preg_match('/पॉझिटिव्ह|पॉजिटिव्ह|पॉसिटीव्ह|POSITIVE|\+ve|\bPos(?:itive|)\b|[+＋]/ui', $v);
+        $hasPos = (bool) preg_match('/पॉझिटिव्ह|पॉजिटिव्ह|पॉसिटीव्ह|POSITIVE|POSSITIVE|\+ve|\bPos(?:itive|)\b|[+＋]/ui', $v);
         $hasNeg = (bool) preg_match('/निगेटिव्ह|नॅगेटिव्ह|NEGATIVE|\-ve|\bNEG\b|[\-−](?!\d)/ui', $v);
 
         if ($hasPos && $hasNeg) {
@@ -243,6 +243,16 @@ class OcrNormalize
         $value = trim($value);
         $value = self::normalizeDigits($value);
         $value = self::normalizeMarathiMonthWordsToEnglish($value);
+
+        // Bride/groom biodata sometimes prints a midnight-spanning day range: "24-25/10/1994".
+        if (preg_match('/\b(\d{1,2})\s*[-–—]\s*(\d{1,2})\s*[\/.]\s*(\d{1,2})\s*[\/.]\s*(\d{4})\b/u', $value, $m)) {
+            $day = (int) $m[2];
+            $month = (int) $m[3];
+            $year = (int) $m[4];
+            if (checkdate($month, $day, $year)) {
+                return sprintf('%04d-%02d-%02d', $year, $month, $day);
+            }
+        }
 
         // Same merged OCR row: "24/10/1998 जन्म वेळ :- रात्री …" — parse only the first dd/mm/yyyy (or d-m-y) token.
         if (preg_match('/(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4})/u', $value, $m) && strlen($m[1]) < strlen($value)) {

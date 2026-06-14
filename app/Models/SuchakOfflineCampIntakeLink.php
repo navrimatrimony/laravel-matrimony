@@ -33,6 +33,7 @@ class SuchakOfflineCampIntakeLink extends Model
         'privacy_safe_duplicate_hash',
         'duplicate_match_reference_hash',
         'link_note',
+        'link_note_mr',
         'linked_by_user_id',
         'linked_at',
     ];

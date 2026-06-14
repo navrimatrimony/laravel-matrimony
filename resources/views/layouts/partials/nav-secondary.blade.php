@@ -60,29 +60,29 @@
                     @php($suchakSecondaryAccount = auth()->check() ? auth()->user()->suchakAccount : null)
                     <a href="{{ route('suchak.home') }}"
                        class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('suchak.home') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
-                        Suchak Centre
+                        {{ __('suchak.nav.centre') }}
                     </a>
                     @if ($suchakSecondaryAccount)
                         <a href="{{ route('suchak.dashboard') }}"
                            class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('suchak.dashboard') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
-                            Suchak Dashboard
+                            {{ __('suchak.nav.dashboard') }}
                         </a>
                         <a href="{{ route('suchak.intakes.create') }}"
                            class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('suchak.intakes.*') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
-                            Create Intake Source
+                            {{ __('suchak.nav.create_intake_source') }}
                         </a>
                         <a href="{{ route('suchak.search.index') }}"
                            class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('suchak.search.*') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
-                            Masked Search
+                            {{ __('suchak.nav.masked_search') }}
                         </a>
                     @else
                         <a href="{{ route('suchak.register.info') }}"
                            class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('suchak.register.*') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
-                            Suchak Registration
+                            {{ __('suchak.nav.registration') }}
                         </a>
                         <a href="{{ route('login') }}"
                            class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400">
-                            Suchak Login
+                            {{ __('suchak.nav.login') }}
                         </a>
                     @endif
                 @elseif ($section === 'discover')

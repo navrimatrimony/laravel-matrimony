@@ -17,6 +17,7 @@ use App\Models\SuchakProfileUpdateSuggestion;
 use App\Modules\Suchak\Services\SuchakAccessService;
 use App\Modules\Suchak\Services\SuchakBillingCatalogService;
 use App\Modules\Suchak\Services\SuchakCandidateMaskingService;
+use App\Modules\Suchak\Services\SuchakCustomerListService;
 use App\Modules\Suchak\Services\SuchakDailyOpportunityService;
 use App\Modules\Suchak\Services\SuchakEntitlementService;
 use App\Modules\Suchak\Services\SuchakIncomeAnalyticsService;
@@ -25,6 +26,8 @@ use App\Modules\Suchak\Services\SuchakPolicyService;
 use App\Modules\Suchak\Services\SuchakProfileUpdateSuggestionService;
 use App\Modules\Suchak\Services\SuchakWhiteLabelSharingKitService;
 use App\Modules\Suchak\Services\SuchakWorkflowAutomationService;
+use App\Support\Suchak\SuchakOnboardingPresenter;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
@@ -36,6 +39,7 @@ class DashboardController extends Controller
         SuchakAccessService $accessService,
         SuchakBillingCatalogService $billingCatalog,
         SuchakCandidateMaskingService $maskingService,
+        SuchakCustomerListService $customerListService,
         SuchakDailyOpportunityService $dailyOpportunityService,
         SuchakEntitlementService $entitlementService,
         SuchakIncomeAnalyticsService $incomeAnalyticsService,
@@ -44,13 +48,15 @@ class DashboardController extends Controller
         SuchakProfileUpdateSuggestionService $suggestionService,
         SuchakWhiteLabelSharingKitService $sharingKitService,
         SuchakWorkflowAutomationService $workflowAutomationService,
+        SuchakOnboardingPresenter $onboardingPresenter,
     ): View
     {
         $account = $request->user()
             ->suchakAccount()
-            ->with('user')
+            ->with(['user', 'verificationRecords' => fn ($query) => $query->latest('id')])
             ->firstOrFail();
         $businessRecordFilters = $this->businessRecordFilters($request);
+        $accountCanOperate = $accessService->canOperate($account);
 
         $representations = $account->profileRepresentations()
             ->with([
@@ -63,10 +69,9 @@ class DashboardController extends Controller
                 'consents.events.actorUser',
             ])
             ->latest()
-            ->limit(8)
             ->get();
 
-        $representationCards = $representations->map(function (SuchakProfileRepresentation $representation) use ($account, $accessService, $maskingService, $businessRecordFilters): array {
+        $representationCards = $representations->map(function (SuchakProfileRepresentation $representation) use ($account, $accountCanOperate, $maskingService, $businessRecordFilters): array {
             $summary = $representation->matrimonyProfile
                 ? $maskingService->maskedSummary($representation->matrimonyProfile, $representation)
                 : [];
@@ -83,7 +88,10 @@ class DashboardController extends Controller
 
             $hasActionableConsent = $representation->representation_status === SuchakProfileRepresentation::STATUS_ACTIVE
                 && $representation->hasValidConsent();
-            $canOperate = $accessService->canOperate($account);
+            $profileIsActive = $representation->matrimonyProfile !== null
+                && ($representation->matrimonyProfile->lifecycle_state ?? null) === 'active'
+                && ! (bool) ($representation->matrimonyProfile->is_suspended ?? false);
+            $canOperate = $accountCanOperate;
             $consents = $representation->consents->sortByDesc('created_at')->values();
             $pendingConsent = $consents
                 ->first(fn (SuchakConsent $consent): bool => in_array($consent->consent_status, SuchakConsent::PENDING_ACTION_STATUSES, true));
@@ -119,7 +127,7 @@ class DashboardController extends Controller
                     && $representation->representation_status === SuchakProfileRepresentation::STATUS_ACTIVE
                     && $representation->hasValidConsent(),
                 'can_revoke_consent' => $canOperate && $acceptedConsent !== null && $representation->hasValidConsent(),
-                'can_suggest_updates' => $canOperate && $hasActionableConsent,
+                'can_suggest_updates' => $canOperate && $hasActionableConsent && $profileIsActive,
             ];
         });
 
@@ -160,7 +168,7 @@ class DashboardController extends Controller
             ->limit(8)
             ->get();
 
-        $activeSubscription = $accessService->canOperate($account)
+        $activeSubscription = $accountCanOperate
             ? $paymentStatusService->activeSubscriptionFor($account)
             : null;
 
@@ -168,7 +176,7 @@ class DashboardController extends Controller
             ? $entitlementService->currentFeatureLimits($account)
             : [];
 
-        $catalogPlans = $accessService->canOperate($account)
+        $catalogPlans = $accountCanOperate
             ? $billingCatalog->visibleCatalogForSuchak($account, $request->user())
             : collect();
 
@@ -185,7 +193,9 @@ class DashboardController extends Controller
 
         return view('suchak.dashboard', [
             'suchakAccount' => $account,
+            'canOperate' => $accountCanOperate,
             'representationCards' => $representationCards,
+            'customerListRows' => $customerListService->rowsForAccount($account),
             'pendingCollaborations' => $pendingCollaborations,
             'recentSourceLinks' => $recentSourceLinks,
             'recentExports' => $recentExports,
@@ -218,6 +228,7 @@ class DashboardController extends Controller
             'sourceOwnerOptions' => SuchakPaymentContext::SOURCE_OWNERS,
             'paymentCollectorOptions' => SuchakPaymentContext::PAYMENT_COLLECTORS,
             'businessRecordFilters' => $businessRecordFilters,
+            'onboarding' => $onboardingPresenter->forAccount($account, $account->verificationRecords),
             'stats' => [
                 'representations_total' => $account->profileRepresentations()->count(),
                 'representations_active' => $account->profileRepresentations()->withValidConsent()->count(),
@@ -226,6 +237,29 @@ class DashboardController extends Controller
                 'pending_collaborations' => $pendingCollaborations->count(),
             ],
         ]);
+    }
+
+    public function storeProfilePhoto(Request $request): RedirectResponse
+    {
+        $account = $request->user()
+            ->suchakAccount()
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'profile_photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+        ]);
+
+        $path = $validated['profile_photo']->store('suchak/profile-photos/'.$account->id, 'public');
+
+        if (! is_string($path) || $path === '') {
+            return back()->with('error', 'Unable to upload Suchak profile photo.');
+        }
+
+        $account->forceFill([
+            'profile_photo_path' => $path,
+        ])->save();
+
+        return back()->with('success', 'Suchak card photo updated.');
     }
 
     /**

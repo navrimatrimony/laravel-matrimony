@@ -1210,7 +1210,7 @@ class IntakeNormalizedBiodataDraftBuilder
             $normalizedLine = OcrNormalize::normalizeDigits($line);
             if (($dobValue = $this->extractLabeledValue($line, ['जन्म तारीख', 'जन्मतारीख', 'जन्म दि', 'जन्म दिनांक'])) !== null) {
                 [$dateOfBirth, $birthTime] = $this->splitDateOfBirthAndTime($dobValue);
-                $core['date_of_birth'] = $dateOfBirth;
+                $core['date_of_birth'] = $this->normalizeDateValue($dateOfBirth);
                 if ($core['birth_time'] === null && $birthTime !== null) {
                     $core['birth_time'] = $birthTime;
                 }
@@ -1266,7 +1266,7 @@ class IntakeNormalizedBiodataDraftBuilder
             if (preg_match('/(?:मद्यपान|drinking)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/ui', $line, $m)) {
                 $core['drinking'] = trim($m[1]);
             }
-            if (preg_match('/(?:वैवाहिक|marital)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/ui', $line, $m)) {
+            if (preg_match('/(?:वैवाहिक\s*स्थिती|वैवाहिक|marital)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/ui', $line, $m)) {
                 $core['marital_status'] = trim($m[1]);
             }
             if (preg_match('/(?:कुटुंब\s+प्रकार|family\s+type)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/ui', $line, $m)) {
@@ -1309,7 +1309,7 @@ class IntakeNormalizedBiodataDraftBuilder
             $normalized = OcrNormalize::normalizeDigits($trimmed);
             if (($core['date_of_birth'] ?? null) === null
                 && preg_match('/^([0-9]{1,2}\s*\/\s*[0-9]{1,2}\s*\/\s*[0-9]{2,4})(?:\s+जन्म\s*वेळ\s*(?::\s*-\s*|[:\-]\s*)(.+))?$/u', $normalized, $m)) {
-                $core['date_of_birth'] = trim($m[1]);
+                $core['date_of_birth'] = $this->normalizeDateValue(trim($m[1]));
                 if (($core['birth_time'] ?? null) === null && ! empty($m[2])) {
                     $core['birth_time'] = trim($m[2]);
                 }
@@ -1335,15 +1335,22 @@ class IntakeNormalizedBiodataDraftBuilder
         $raw = trim((string) preg_replace('/^\s*[8८]\s*/u', '', $value));
         $normalized = OcrNormalize::normalizeDigits($raw);
         if (preg_match('/^(.+?)\s+जन्म\s*वेळ\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $raw, $m)) {
-            return [trim($m[1]), trim($m[2]) !== '' ? trim($m[2]) : null];
+            return [$this->normalizeDateValue(trim($m[1])), trim($m[2]) !== '' ? trim($m[2]) : null];
         }
 
         if (preg_match('/^([0-9]{1,2}\s*\/\s*[0-9]{1,2}\s*\/\s*[0-9]{2,4})\s+(.+)$/u', $normalized, $m)
             && preg_match('/\d{1,2}(?:[.:]\d{1,2})?\s*(?:A\.?M\.?|P\.?M\.?|am|pm)?|सकाळी|दुपारी|सायंकाळी|रात्री/ui', $m[2])) {
-            return [trim($m[1]), trim($m[2])];
+            return [$this->normalizeDateValue(trim($m[1])), trim($m[2])];
         }
 
-        return [trim((string) preg_replace('/[\s,.।]+$/u', '', $raw)), null];
+        return [$this->normalizeDateValue(trim((string) preg_replace('/[\s,.।]+$/u', '', $raw))), null];
+    }
+
+    private function normalizeDateValue(string $value): string
+    {
+        $normalized = OcrNormalize::normalizeDate($value);
+
+        return $normalized !== null && $normalized !== '' ? $normalized : $value;
     }
 
     /**
@@ -1356,7 +1363,7 @@ class IntakeNormalizedBiodataDraftBuilder
             $label = mb_strtolower(trim($line));
             $next = trim((string) ($lines[$index + 1] ?? ''));
             if (($core['date_of_birth'] ?? null) === null && $label === 'dob' && $next !== '') {
-                $core['date_of_birth'] = $next;
+                $core['date_of_birth'] = $this->normalizeDateValue($next);
             }
             if (($core['height_cm'] ?? null) === null && $label === 'height' && $next !== '') {
                 $core['height_cm'] = $this->parseHeightCm($next);
@@ -1690,6 +1697,9 @@ class IntakeNormalizedBiodataDraftBuilder
         if ($address === '' && preg_match('/^(.+?)\s*\(([^()]*(?:'.$addressHintPattern.')[^()]*)\)\s+(.+)$/u', $nameAddress, $m)) {
             $nameAddress = trim($m[1]);
             $address = trim($m[2].'; '.$m[3]);
+        } elseif ($address === '' && preg_match('/^(.+?)\s+(रा\.?\s*.+)$/u', $nameAddress, $m)) {
+            $nameAddress = trim($m[1]);
+            $address = trim($m[2]);
         } elseif ($address === '' && preg_match('/^(.+?),\s*(.+)$/u', $nameAddress, $m)) {
             $nameAddress = trim($m[1]);
             $address = trim($m[2]);
@@ -3647,7 +3657,7 @@ class IntakeNormalizedBiodataDraftBuilder
         $value = preg_replace('/^[\s.।:(){}\[\]\-–—]+|[\s.।:(){}\[\]\-–—]+$/u', '', $value) ?? $value;
         $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
 
-        return (bool) preg_match('/^(?:एक|१|1)(?:\s*\(?\s*अविवाहित\s*\)?)?$/u', $value);
+        return (bool) preg_match('/^(?:एक|१|1)(?:\s*\(?\s*(?:अविवाहित|अविवाहीत|विवाहित|विवाहीत)\s*\)?)?$/u', $value);
     }
 
     private function isNumericCountValue(string $value): bool
@@ -3664,7 +3674,7 @@ class IntakeNormalizedBiodataDraftBuilder
 
     private function startsContactLine(string $line): bool
     {
-        return (bool) preg_match('/^(?:मोबाईल|मोबाइल|संपर्क|भ्रमणध्वनी|Mobile|Phone)(?:[\s:：\-\.]|$)/ui', $line);
+        return (bool) preg_match('/^\s*[-–—]?\s*(?:मोबाईल|मोबाइल|मोबा\.?\s*नं\.?|मो\.?\s*नं\.?|संपर्क|भ्रमणध्वनी|Mobile|Phone)(?:[\s:：\-\.]|$)/ui', $line);
     }
 
     private function isParentContactLine(string $line): bool

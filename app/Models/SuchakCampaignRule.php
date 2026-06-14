@@ -59,6 +59,7 @@ class SuchakCampaignRule extends Model
     protected $fillable = [
         'campaign_key',
         'campaign_name',
+        'campaign_name_mr',
         'campaign_goal',
         'qualification_metric',
         'threshold_value',

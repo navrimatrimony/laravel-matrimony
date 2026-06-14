@@ -94,6 +94,13 @@ final class IntakeHtmlTableHintApplier
             $this->setCoreField($core, 'full_name', $this->cleanPersonName(trim($hints['full_name'])), true);
         }
 
+        if (isset($hints['candidate_gender'])) {
+            $gender = strtolower(trim((string) $hints['candidate_gender']));
+            if (in_array($gender, ['female', 'male'], true)) {
+                $this->setCoreField($core, 'gender', $gender, false);
+            }
+        }
+
         if (isset($hints['date_of_birth'])) {
             $raw = trim($hints['date_of_birth']);
             $dob = OcrNormalize::normalizeDate($raw);
@@ -921,11 +928,15 @@ final class IntakeHtmlTableHintApplier
         }
 
         $landAcres = null;
-        if (preg_match('/([0-9०-९]+(?:\.[0-9]+)?)\s*(?:एकर|acre|acres)/ui', $text, $m)) {
-            $digits = OcrNormalize::normalizeDigits($m[1]);
-            if (is_numeric($digits)) {
-                $landAcres = (float) $digits;
+        if (preg_match_all('/([0-9०-९]+(?:\.[0-9०-९]+)?)\s*(?:एकर|acre|acres)/ui', $text, $matches)) {
+            $total = 0.0;
+            foreach ($matches[1] as $rawAcres) {
+                $digits = OcrNormalize::normalizeDigits((string) $rawAcres);
+                if (is_numeric($digits)) {
+                    $total += (float) $digits;
+                }
             }
+            $landAcres = $total > 0.0 ? $total : null;
         }
 
         $ownsHouse = (bool) preg_match('/(?:स्वत[:ः]?च(?:े|्या)|मालकीच(?:े|्या))\s*(?:घर)?/u', $text);

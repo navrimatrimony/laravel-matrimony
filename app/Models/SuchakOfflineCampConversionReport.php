@@ -28,6 +28,7 @@ class SuchakOfflineCampConversionReport extends Model
         'package_assignment_count',
         'active_service_count',
         'report_note',
+        'report_note_mr',
         'metrics_json',
         'generated_by_user_id',
         'generated_at',

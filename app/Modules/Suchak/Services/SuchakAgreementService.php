@@ -269,8 +269,11 @@ class SuchakAgreementService
             'Suchak agreement title is required.',
             160,
         );
+        $titleMr = $this->limitedText($attributes['agreement_title_mr'] ?? null, 160);
         $body = $this->limitedText($attributes['agreement_body'] ?? null, 5000);
+        $bodyMr = $this->limitedText($attributes['agreement_body_mr'] ?? null, 5000);
         $invoiceNote = $this->invoiceNote($termsStatus, $policyMode, $revision, $attributes['invoice_note'] ?? null);
+        $invoiceNoteMr = $this->limitedText($attributes['invoice_note_mr'] ?? null, 1000);
         $snapshotHash = $this->agreementSnapshotHash($package, $policyMode, $title, $body);
 
         $agreement = SuchakCustomerAgreement::query()->create([
@@ -283,12 +286,17 @@ class SuchakAgreementService
             'terms_policy_mode' => $policyMode,
             'agreement_snapshot_hash' => $snapshotHash,
             'package_name' => $package->package_name,
+            'package_name_mr' => $package->package_name_mr,
             'package_description' => $package->package_description,
+            'package_description_mr' => $package->package_description_mr,
             'price_amount' => $package->price_amount,
             'currency' => $package->currency,
             'agreement_title' => $title,
+            'agreement_title_mr' => $titleMr,
             'agreement_body' => $body,
+            'agreement_body_mr' => $bodyMr,
             'invoice_note' => $invoiceNote,
+            'invoice_note_mr' => $invoiceNoteMr,
             'created_by_user_id' => $actor->id,
         ]);
 
@@ -299,7 +307,9 @@ class SuchakAgreementService
                 'service_package_stage_id' => $stage->id,
                 'stage_key' => $stage->stage_key,
                 'stage_name' => $stage->stage_name,
+                'stage_name_mr' => $stage->stage_name_mr,
                 'stage_description' => $stage->stage_description,
+                'stage_description_mr' => $stage->stage_description_mr,
                 'sort_order' => $stage->sort_order,
                 'is_required' => $stage->is_required,
                 'expected_days' => $stage->expected_days,
@@ -315,7 +325,9 @@ class SuchakAgreementService
                 'service_package_deliverable_id' => $deliverable->id,
                 'deliverable_key' => $deliverable->deliverable_key,
                 'deliverable_name' => $deliverable->deliverable_name,
+                'deliverable_name_mr' => $deliverable->deliverable_name_mr,
                 'deliverable_description' => $deliverable->deliverable_description,
+                'deliverable_description_mr' => $deliverable->deliverable_description_mr,
                 'sort_order' => $deliverable->sort_order,
                 'is_required' => $deliverable->is_required,
             ]);

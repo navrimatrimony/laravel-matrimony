@@ -93,6 +93,12 @@ class AiVisionExtractionService
         if (preg_match('/फोटो.*दिसत\s*आहे/u', $t) || preg_match('/चित्र.*दिसत\s*आहे/u', $t)) {
             return true;
         }
+        $plain = trim($t, " \t\n\r\0\x0B*`_");
+        if (mb_strlen($plain) >= 35
+            && preg_match('/(?:छायाचित्र|फोटो|चित्र|साडी|ब्लाउज|कॅमेऱ्याकडे|पार्श्वभूमी|ब्लर|केसांच्या|हसत|उभी|बसलेली|परिधान)/u', $plain)
+            && ! preg_match('/(?:मुलीचे|मुलाचे|वधूचे|जन्म|उंची|ऊंची|जात|शिक्षण|नोकरी|वडिल|आई|पत्ता|फोन|मोबाईल|मोबाइल|रास|राशी|नक्षत्र|रक्तगट|रक्त\s*गट|कुळ|कुल|गण|नाडी|देवक|गोत्र)/u', $plain)) {
+            return true;
+        }
         // Decorative deity line without biodata labels (long prose ending in "आहे").
         if (mb_strlen($t) >= 35 && preg_match('/(?:भगवान|गणेश|देवी|देवत)/u', $t)
             && preg_match('/आहे[.\s]*$/u', $t)

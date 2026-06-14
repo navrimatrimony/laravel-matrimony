@@ -47,12 +47,14 @@ class SuchakFeatureSuspension extends Model
         'feature_key',
         'suspension_status',
         'reason',
+        'reason_mr',
         'created_by_admin_user_id',
         'created_admin_audit_log_id',
         'released_by_admin_user_id',
         'released_admin_audit_log_id',
         'released_at',
         'release_reason',
+        'release_reason_mr',
     ];
 
     protected $casts = [

@@ -2,6 +2,7 @@
 
 @section('content')
 @php
+    $suchakText = \App\Support\Suchak\SuchakLocalizedText::class;
     $package = $paymentRequest?->servicePackage;
     $agreement = $paymentRequest?->customerAgreement;
     $payments = $paymentRequest?->customerPayments ?? collect();
@@ -14,7 +15,7 @@
     <div class="mb-6">
         <p class="text-sm font-semibold text-gray-500 dark:text-gray-400">Suchak Customer Portal</p>
         <h1 class="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {{ $package?->package_name ?? $paymentRequest?->request_title ?? 'Customer service context' }}
+            {{ $suchakText::column($package, 'package_name') ?: $suchakText::column($paymentRequest, 'request_title') ?: 'Customer service context' }}
         </h1>
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
             Verify package, terms, payment, invoice, and receipt status for this Suchak customer context.
@@ -37,15 +38,15 @@
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Portal Status</div>
-                <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ ucwords(str_replace('_', ' ', $portalLink->portal_status)) }}</div>
+                <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::label($portalLink->portal_status) }}</div>
             </div>
             <div>
                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Terms</div>
-                <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $agreement ? ucwords(str_replace('_', ' ', $agreement->terms_status)) : 'Not available' }}</div>
+                <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $agreement ? $suchakText::label($agreement->terms_status) : 'Not available' }}</div>
             </div>
             <div>
                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Payment Request</div>
-                <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $paymentRequest ? ucwords(str_replace('_', ' ', $paymentRequest->payment_status)) : 'Not available' }}</div>
+                <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $paymentRequest ? $suchakText::label($paymentRequest->payment_status) : 'Not available' }}</div>
             </div>
             <div>
                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Expires</div>
@@ -58,7 +59,7 @@
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Package And Terms</h2>
-                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $agreement?->agreement_title ?? 'Agreement not available' }}</p>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $suchakText::column($agreement, 'agreement_title') ?: 'Agreement not available' }}</p>
             </div>
             <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
                 @if ($agreement)
@@ -82,12 +83,12 @@
             </div>
             <div>
                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Collector</div>
-                <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ $paymentRequest?->collector_disclosure ?? 'Not available' }}</div>
+                <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ $suchakText::column($paymentRequest, 'collector_disclosure') ?: 'Not available' }}</div>
             </div>
         </div>
 
-        @if ($agreement?->agreement_body)
-            <p class="mt-5 whitespace-pre-line border-t border-gray-200 pt-4 text-sm leading-6 text-gray-700 dark:border-gray-700 dark:text-gray-200">{{ $agreement->agreement_body }}</p>
+        @if ($suchakText::column($agreement, 'agreement_body') !== '')
+            <p class="mt-5 whitespace-pre-line border-t border-gray-200 pt-4 text-sm leading-6 text-gray-700 dark:border-gray-700 dark:text-gray-200">{{ $suchakText::column($agreement, 'agreement_body') }}</p>
         @endif
     </section>
 
@@ -102,7 +103,7 @@
                     <div class="grid gap-4 sm:grid-cols-4">
                         <div>
                             <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Status</div>
-                            <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ ucwords(str_replace('_', ' ', $payment->payment_status)) }}</div>
+                            <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::label($payment->payment_status) }}</div>
                         </div>
                         <div>
                             <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Received</div>
@@ -114,7 +115,7 @@
                         </div>
                         <div>
                             <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Mode</div>
-                            <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ ucwords(str_replace('_', ' ', $payment->payment_mode)) }}</div>
+                            <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ $suchakText::label($payment->payment_mode) }}</div>
                         </div>
                     </div>
 
@@ -123,7 +124,7 @@
                         <div class="mt-2 flex flex-col gap-2">
                             @foreach ($payment->documents as $document)
                                 <div class="text-sm text-gray-900 dark:text-gray-100">
-                                    {{ ucwords(str_replace('_', ' ', $document->document_type)) }}:
+                                    {{ $suchakText::label($document->document_type) }}:
                                     <span class="font-semibold">{{ $document->document_number }}</span>
                                     <span class="text-gray-500 dark:text-gray-400">issued {{ optional($document->issued_at)->format('d M Y') }}</span>
                                     @if ($document->verification_code)
@@ -148,8 +149,8 @@
                 <div class="mt-3 space-y-2">
                     @forelse ($corrections as $correction)
                         <div class="text-sm text-gray-700 dark:text-gray-200">
-                            {{ ucwords(str_replace('_', ' ', $correction->correction_type)) }}:
-                            {{ ucwords(str_replace('_', ' ', $correction->correction_status)) }}
+                            {{ $suchakText::label($correction->correction_type) }}:
+                            {{ $suchakText::label($correction->correction_status) }}
                             - {{ $correction->currency }} {{ $correction->amount }}
                         </div>
                     @empty
@@ -162,8 +163,8 @@
                 <div class="mt-3 space-y-2">
                     @forelse ($overdueActions as $action)
                         <div class="text-sm text-gray-700 dark:text-gray-200">
-                            {{ ucwords(str_replace('_', ' ', $action->action_type)) }}:
-                            {{ ucwords(str_replace('_', ' ', $action->action_status)) }}
+                            {{ $suchakText::label($action->action_type) }}:
+                            {{ $suchakText::label($action->action_status) }}
                         </div>
                     @empty
                         <p class="text-sm text-gray-600 dark:text-gray-300">No overdue service action.</p>
@@ -178,10 +179,10 @@
         <div class="mt-4 grid gap-3 sm:grid-cols-2">
             @forelse ($familyMembers as $member)
                 <div class="rounded-md bg-gray-50 p-4 text-sm dark:bg-gray-900">
-                    <div class="font-semibold text-gray-900 dark:text-gray-100">{{ ucwords(str_replace('_', ' ', $member->member_role)) }}</div>
+                    <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::label($member->member_role) }}</div>
                     <div class="mt-1 text-gray-700 dark:text-gray-200">Relationship: {{ $member->relationship_to_candidate ?? 'Not specified' }}</div>
-                    <div class="mt-1 text-gray-700 dark:text-gray-200">Payer role: {{ ucwords(str_replace('_', ' ', $member->payer_role)) }}</div>
-                    <div class="mt-1 text-gray-700 dark:text-gray-200">Status: {{ ucwords(str_replace('_', ' ', $member->access_status)) }}</div>
+                    <div class="mt-1 text-gray-700 dark:text-gray-200">Payer role: {{ $suchakText::label($member->payer_role) }}</div>
+                    <div class="mt-1 text-gray-700 dark:text-gray-200">Status: {{ $suchakText::label($member->access_status) }}</div>
                 </div>
             @empty
                 <p class="text-sm text-gray-600 dark:text-gray-300">No shared family member context has been linked yet.</p>

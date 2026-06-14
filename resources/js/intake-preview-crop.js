@@ -1,4 +1,81 @@
-import PerspT from 'perspective-transform';
+function solveLinearSystem(matrix, values) {
+    const n = values.length;
+    const a = matrix.map((row, i) => [...row, values[i]]);
+
+    for (let col = 0; col < n; col += 1) {
+        let pivot = col;
+        for (let row = col + 1; row < n; row += 1) {
+            if (Math.abs(a[row][col]) > Math.abs(a[pivot][col])) {
+                pivot = row;
+            }
+        }
+
+        if (Math.abs(a[pivot][col]) < 1e-12) {
+            throw new Error('Singular matrix');
+        }
+
+        if (pivot !== col) {
+            [a[col], a[pivot]] = [a[pivot], a[col]];
+        }
+
+        const pivotValue = a[col][col];
+        for (let j = col; j <= n; j += 1) {
+            a[col][j] /= pivotValue;
+        }
+
+        for (let row = 0; row < n; row += 1) {
+            if (row === col) continue;
+            const factor = a[row][col];
+            if (factor === 0) continue;
+            for (let j = col; j <= n; j += 1) {
+                a[row][j] -= factor * a[col][j];
+            }
+        }
+    }
+
+    return a.map((row) => row[n]);
+}
+
+function createPerspectiveTransform(fromPts, toPts) {
+    if (!Array.isArray(fromPts) || !Array.isArray(toPts) || fromPts.length !== 8 || toPts.length !== 8) {
+        throw new Error('Invalid point set');
+    }
+
+    const rows = [];
+    const values = [];
+
+    for (let i = 0; i < 4; i += 1) {
+        const x = Number(fromPts[i * 2]);
+        const y = Number(fromPts[i * 2 + 1]);
+        const u = Number(toPts[i * 2]);
+        const v = Number(toPts[i * 2 + 1]);
+
+        if (![x, y, u, v].every(Number.isFinite)) {
+            throw new Error('Invalid point value');
+        }
+
+        rows.push([x, y, 1, 0, 0, 0, -u * x, -u * y]);
+        values.push(u);
+        rows.push([0, 0, 0, x, y, 1, -v * x, -v * y]);
+        values.push(v);
+    }
+
+    const h = solveLinearSystem(rows, values);
+
+    return {
+        transform(x, y) {
+            const denom = h[6] * x + h[7] * y + 1;
+            if (Math.abs(denom) < 1e-12) {
+                return [NaN, NaN];
+            }
+
+            return [
+                (h[0] * x + h[1] * y + h[2]) / denom,
+                (h[3] * x + h[4] * y + h[5]) / denom,
+            ];
+        },
+    };
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     const img = document.getElementById('intake-manual-crop-img');
@@ -468,7 +545,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let persp;
         try {
-            persp = new PerspT(srcPts, dstPts);
+            persp = createPerspectiveTransform(dstPts, srcPts);
         } catch {
             return Promise.reject(new Error('Invalid corner geometry'));
         }
@@ -485,7 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         for (let y = 0; y < destH; y++) {
             for (let x = 0; x < destW; x++) {
-                const mapped = persp.transformInverse(x, y);
+                const mapped = persp.transform(x, y);
                 const sx = mapped[0];
                 const sy = mapped[1];
                 const [r, g, b, a] = sampleBilinear(s, sw, sh, sx, sy);

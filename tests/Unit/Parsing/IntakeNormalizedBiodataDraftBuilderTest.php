@@ -4,6 +4,7 @@ namespace Tests\Unit\Parsing;
 
 use App\Services\Ocr\OcrNormalize;
 use App\Services\Parsing\IntakeNormalizedBiodataDraftBuilder;
+use App\Services\Parsing\IntakeNormalizedDraftToParsedJsonMapper;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -405,7 +406,7 @@ TXT);
 
         $core = $draft['normalized']['core'];
 
-        $this->assertSame('24/10/1998', $core['date_of_birth']);
+        $this->assertSame('1998-10-24', $core['date_of_birth']);
         $this->assertSame('रात्री 09 वा.45 मि.', $core['birth_time']);
         $this->assertFalse($this->hasReviewFlag($draft, 'review.missing', 'mixed_field_value'));
     }
@@ -1270,6 +1271,53 @@ TXT);
         $this->assertStringContainsString('किर्दत - ढवळेश्वर शिंदे', (string) ($core['other_relatives_text'] ?? ''));
         $this->assertStringNotContainsString('12. किर्दत', (string) ($core['other_relatives_text'] ?? ''));
         $this->assertSame([], $draft['coverage_audit']['review_flags'] ?? []);
+    }
+
+    public function test_fresh_sarvam_5june_biodata_normalizes_date_blood_group_sister_and_land_total(): void
+    {
+        $text = <<<'TXT'
+## बायोडाटा
+
+- नांव : कु. अर्जुन राजाराम पाटील
+- जन्मतारीख : ०८/०७/१९९७
+- जन्मवेळ : मंगळवार रात्री १२ वा. ४५ मि.
+- उंची : ५ फुट ३ इंच जातक : उंदीर नाडी : मध्य
+- रक्तगट : A Possitive
+- शिक्षण : १२ वी.
+- व्यवसाय : फुट सेंटर कळे स्वतःचे
+- जात : हिंदु- मराठा (९६ कुळी)
+- शेती : १.५ एकर बागायत १ एकर जिरायत
+- स्थावर मालमत्ता : १ गुंठे प्लॉट यशवंत बँक कळे, शेजारी.
+
+## कौटुंबिक माहिती
+
+- वडिलांचे नाव : श्री. राजाराम लक्ष्मण पाटील (शेती)
+- आईचे नांव : सौ. शकुंतला राजाराम पाटील (गृहिणी)
+- भाऊ : नाही
+- बहिण : एक (विवाहीत)
+- दाजी : श्री. विनायक पांडूरंग नाईक रा. कळे, ता. पन्हाळा.
+- मोबा नं : ९३२५०३४७१३
+TXT;
+
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($text);
+        $normalized = $draft['normalized'];
+        $core = $normalized['core'];
+
+        $this->assertSame('कु. अर्जुन राजाराम पाटील', $core['full_name']);
+        $this->assertSame('1997-07-08', $core['date_of_birth']);
+        $this->assertSame('A+', $core['blood_group']);
+        $this->assertSame(0, $core['brother_count']);
+        $this->assertSame(1, $core['sister_count']);
+
+        $siblings = $normalized['siblings'] ?? [];
+        $this->assertCount(1, $siblings);
+        $this->assertSame('sister', $siblings[0]['relation_type'] ?? null);
+        $this->assertSame('married', $siblings[0]['marital_status'] ?? null);
+        $this->assertSame('विनायक पांडूरंग नाईक', $siblings[0]['spouse']['name'] ?? null);
+        $this->assertSame('रा. कळे, ता. पन्हाळा.', $siblings[0]['spouse']['address_line'] ?? null);
+
+        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map($draft);
+        $this->assertSame(2.5, $parsed['property_summary']['total_land_acres'] ?? null);
     }
 
     private function akshadaText(): string

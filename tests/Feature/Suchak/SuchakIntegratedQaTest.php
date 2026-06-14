@@ -295,6 +295,7 @@ class SuchakIntegratedQaTest extends TestCase
             'admin.suchak.accounts.archive',
             'admin.suchak.accounts.reactivate',
             'admin.suchak.accounts.public-status.update',
+            'admin.suchak.accounts.verification-records.document',
             'admin.suchak.accounts.verification-records.approve',
             'admin.suchak.accounts.verification-records.reject',
             'matrimony.profile.suchak-requests.store',

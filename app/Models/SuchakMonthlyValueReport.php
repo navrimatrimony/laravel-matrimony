@@ -36,6 +36,7 @@ class SuchakMonthlyValueReport extends Model
         'growth_reward_cash_amount',
         'unsupported_claims_count',
         'unsupported_claims_note',
+        'unsupported_claims_note_mr',
         'report_status',
         'generated_by_admin_user_id',
         'admin_audit_log_id',

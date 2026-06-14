@@ -12,7 +12,7 @@ class PlanCreateBillingUiTest extends TestCase
 
     public function test_create_plan_page_includes_static_billing_period_rows(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
 
         $response = $this->actingAs($admin)->get(route('admin.plans.create'));
 
@@ -29,7 +29,7 @@ class PlanCreateBillingUiTest extends TestCase
 
     public function test_plans_index_includes_footer_create_cta(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
 
         $this->actingAs($admin)
             ->get(route('admin.plans.index'))

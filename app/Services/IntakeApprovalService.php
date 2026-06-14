@@ -14,9 +14,10 @@ class IntakeApprovalService
 {
     /**
      * @param  array<string, mixed>|null  $snapshot  Edited snapshot from preview; when null use parsed_json.
+     * @param  array<string, mixed>  $mutationOptions  Optional governed apply context passed to MutationService.
      * @return array{mutation_success: bool, conflict_detected: bool, profile_id: int|null}
      */
-    public function approve(BiodataIntake $intake, int $userId, ?array $snapshot = null): array
+    public function approve(BiodataIntake $intake, int $userId, ?array $snapshot = null, array $mutationOptions = []): array
     {
         if ($intake->intake_locked === true) {
             return [
@@ -40,7 +41,7 @@ class IntakeApprovalService
 
             // Already approved but not applied → directly trigger apply pipeline
             return app(\App\Services\MutationService::class)
-                ->applyApprovedIntake($intake->id);
+                ->applyApprovedIntake($intake->id, null, null, $mutationOptions);
         }
 
         $approvalSnapshot = $snapshot !== null ? $snapshot : $intake->parsed_json;
@@ -120,7 +121,7 @@ class IntakeApprovalService
         $metrics = $snapshot !== null ? ['manual_edits' => $manualEdits, 'auto_filled' => $autoFilled] : null;
 
         return app(\App\Services\MutationService::class)
-            ->applyApprovedIntake($intake->id, $snapshot !== null ? $approvalSnapshot : null, $metrics);
+            ->applyApprovedIntake($intake->id, $snapshot !== null ? $approvalSnapshot : null, $metrics, $mutationOptions);
 
     }
 

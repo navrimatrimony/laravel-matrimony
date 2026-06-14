@@ -71,6 +71,12 @@ final class HtmlMarathiBiodataTableExtractor
                 if ($slot === null) {
                     continue;
                 }
+                if ($slot === 'full_name' && ! isset($hints['candidate_gender'])) {
+                    $candidateGender = self::candidateGenderFromNameLabel($label);
+                    if ($candidateGender !== null) {
+                        $hints['candidate_gender'] = $candidateGender;
+                    }
+                }
                 // Multiple भाऊ/बहिण rows: preserve each line (merge splits in BiodataParserService).
                 if ($slot === 'sibling_brother_line' || $slot === 'sibling_sister_line') {
                     $prev = $hints[$slot] ?? '';
@@ -249,6 +255,19 @@ final class HtmlMarathiBiodataTableExtractor
     public static function isStructuredTableHints(?array $hints): bool
     {
         return is_array($hints) && ($hints[self::STRUCTURED_MARKER] ?? '') === '1';
+    }
+
+    private static function candidateGenderFromNameLabel(string $label): ?string
+    {
+        $n = self::normalizeLabel($label);
+        if (preg_match('/^(?:मुलीचे|वधूचे)\s+नां?व$/u', $n) === 1) {
+            return 'female';
+        }
+        if (preg_match('/^मुलाचे\s+नां?व$/u', $n) === 1) {
+            return 'male';
+        }
+
+        return null;
     }
 
     private static function mapLabelToSlot(string $label, string $value): ?string

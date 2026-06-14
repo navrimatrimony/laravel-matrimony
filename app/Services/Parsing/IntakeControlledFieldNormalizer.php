@@ -575,9 +575,12 @@ class IntakeControlledFieldNormalizer
                 continue;
             }
             $res = $this->locationNormalization->normalizeFromText($raw);
-            if (($res['confidence'] ?? 0.0) >= 0.80 && ($res['matched'] ?? false) && ($res['city_id'] ?? null) !== null) {
-                $addr['city_id'] = (int) $res['city_id'];
-                $addr['location_id'] = (int) $res['city_id'];
+            $resolvedLocationId = $res['location_id'] ?? $res['city_id'] ?? null;
+            if (($res['confidence'] ?? 0.0) >= 0.80 && ($res['matched'] ?? false) && $resolvedLocationId !== null) {
+                $addr['location_id'] = (int) $resolvedLocationId;
+                if (! empty($res['city_id'])) {
+                    $addr['city_id'] = (int) $res['city_id'];
+                }
                 $addr['district_id'] = $res['district_id'] ?? null;
                 $addr['state_id'] = $res['state_id'] ?? null;
                 $addr['country_id'] = $res['country_id'] ?? null;
@@ -670,11 +673,19 @@ class IntakeControlledFieldNormalizer
             }
         }
         $line = isset($addr['address_line']) && is_string($addr['address_line']) ? trim($addr['address_line']) : '';
-        if ($line !== '' && (
-            (mb_strlen($line, 'UTF-8') <= 48 && mb_strpos($line, ',') === false)
-            || $this->locationCompoundParser->looksCompound($line)
-        )) {
-            return $line;
+        if ($line !== '') {
+            if (mb_strpos($line, ',') !== false
+                && preg_match('/\b(ता\.?|जि\.?|तालुका|जिल्हा|taluka|ta\.|dist\.?|district)\b/iu', $line) !== 1) {
+                $segments = preg_split('/[,;|]+/u', $line) ?: [];
+                $last = trim((string) end($segments));
+                if ($last !== '' && mb_strlen($last, 'UTF-8') <= 48) {
+                    return $last;
+                }
+            }
+            if ((mb_strlen($line, 'UTF-8') <= 48 && mb_strpos($line, ',') === false)
+                || $this->locationCompoundParser->looksCompound($line)) {
+                return $line;
+            }
         }
 
         return null;

@@ -491,7 +491,7 @@
                     </div>
                 </div>
             </div>
-            <div class="{{ $adminContentWrapperClass ?? (($showcaseOpen ?? false) ? 'max-w-[1680px] w-full mx-auto px-4 sm:px-6 lg:px-8' : 'w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8') }} py-6">
+            <div class="{{ $adminContentWrapperClass ?? (($showcaseOpen ?? false) ? 'max-w-[1680px] w-full mx-auto px-4 sm:px-6 lg:px-8' : 'w-full max-w-none px-4 sm:px-6 lg:px-8') }} py-6">
                 @if (session('success'))
                     <div class="mb-4 px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800">{{ session('success') }}</div>
                 @endif

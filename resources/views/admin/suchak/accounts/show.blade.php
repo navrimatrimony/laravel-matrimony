@@ -204,7 +204,16 @@
                         <tr>
                             <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ ucfirst($record->verification_type) }}</td>
                             <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ ucfirst($record->admin_status) }}</td>
-                            <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ $record->document_path ?: '-' }}</td>
+                            <td class="px-3 py-2 text-gray-700 dark:text-gray-300">
+                                @if ($record->document_path)
+                                    <a href="{{ route('admin.suchak.accounts.verification-records.document', [$suchakAccount, $record]) }}" target="_blank" rel="noopener" class="inline-flex rounded-md bg-gray-900 px-2.5 py-1 text-xs font-semibold text-white hover:bg-gray-700 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white">
+                                        View document
+                                    </a>
+                                    <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">Uploaded</span>
+                                @else
+                                    -
+                                @endif
+                            </td>
                             <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ $record->adminUser?->email ?: '-' }}</td>
                             <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ $record->remarks ?: '-' }}</td>
                             <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ $record->created_at?->format('Y-m-d H:i') }}</td>

@@ -394,10 +394,7 @@ class OcrService
             OcrNormalize::normalizeRawTextForParsing($stored)
         );
 
-        $enhanced = $this->domainIntelligence->enhance($processed);
-        $domainApplied = $enhanced !== $processed;
-
-        $ocrDebug = [
+        return $this->buildStoredTextParseInputResponse($intake, $stored, $processed, [
             'kind' => 'stored_text',
             'ocr_source_type' => 'original',
             'ocr_pipeline' => 'stored_raw_ocr_text',
@@ -405,16 +402,7 @@ class OcrService
             'manual_prepared_storage_relative' => null,
             'final_ocr_input_path' => null,
             'note' => 'Parse uses upload-time OCR in raw_ocr_text (immutable). Manual crop not present.',
-        ];
-
-        if (config('app.debug')) {
-            $ocrDebug['domain_intelligence_applied'] = $domainApplied;
-        }
-
-        return [
-            'text' => $enhanced,
-            'ocr_debug' => $ocrDebug,
-        ];
+        ]);
     }
 
     /**
@@ -430,10 +418,8 @@ class OcrService
         $processed = $this->ocrPostProcessor->process(
             OcrNormalize::normalizeRawTextForParsing($stored)
         );
-        $enhanced = $this->domainIntelligence->enhance($processed);
-        $domainApplied = $enhanced !== $processed;
 
-        $ocrDebug = [
+        return $this->buildStoredTextParseInputResponse($intake, $stored, $processed, [
             'kind' => 'stored_text',
             'ocr_source_type' => 'raw_ocr_text_column',
             'ocr_pipeline' => 'reparse_raw_ocr_text_only',
@@ -442,7 +428,37 @@ class OcrService
             'final_ocr_input_path' => null,
             'note' => 'Re-parse uses DB raw_ocr_text only (no manual OCR, no vision cache).',
             'intake_id' => $intake->id,
-        ];
+        ]);
+    }
+
+    /**
+     * Pasted biodata (no upload file) with explicit "label :-" rows is already structured.
+     * OcrDomainIntelligenceService line rewriting strips separators and can mis-map full_name.
+     *
+     * @param  array<string, mixed>  $ocrDebugBase
+     * @return array{text: string, ocr_debug: array<string, mixed>}
+     */
+    private function buildStoredTextParseInputResponse(
+        BiodataIntake $intake,
+        string $stored,
+        string $processed,
+        array $ocrDebugBase,
+    ): array {
+        if ($this->shouldSkipDomainEnhancementForStoredText($intake, $stored)) {
+            $ocrDebug = $ocrDebugBase;
+            $ocrDebug['domain_intelligence_applied'] = false;
+            $ocrDebug['domain_intelligence_skipped'] = 'structured_paste_biodata';
+
+            return [
+                'text' => $processed,
+                'ocr_debug' => $ocrDebug,
+            ];
+        }
+
+        $enhanced = $this->domainIntelligence->enhance($processed);
+        $domainApplied = $enhanced !== $processed;
+
+        $ocrDebug = $ocrDebugBase;
         if (config('app.debug')) {
             $ocrDebug['domain_intelligence_applied'] = $domainApplied;
         }
@@ -451,6 +467,15 @@ class OcrService
             'text' => $enhanced,
             'ocr_debug' => $ocrDebug,
         ];
+    }
+
+    private function shouldSkipDomainEnhancementForStoredText(BiodataIntake $intake, string $stored): bool
+    {
+        if (trim((string) ($intake->file_path ?? '')) !== '') {
+            return false;
+        }
+
+        return str_contains($stored, ':-');
     }
 
     /**

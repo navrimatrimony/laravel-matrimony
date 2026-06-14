@@ -32,9 +32,12 @@ class AcademyController extends Controller
         $validated = $request->validate([
             'module_key' => ['required', 'string', 'max:96'],
             'module_title' => ['required', 'string', 'min:8', 'max:160'],
+            'module_title_mr' => ['nullable', 'string', 'max:160'],
             'module_category' => ['required', 'string', Rule::in(SuchakTrainingModule::CATEGORIES)],
             'summary' => ['required', 'string', 'min:10', 'max:1000'],
+            'summary_mr' => ['nullable', 'string', 'max:1000'],
             'content_outline' => ['required', 'string', 'min:10', 'max:4000'],
+            'content_outline_mr' => ['nullable', 'string', 'max:4000'],
             'is_required_for_certificate' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:65535'],
         ]);
@@ -85,10 +88,13 @@ class AcademyController extends Controller
         $validated = $request->validate([
             'template_key' => ['required', 'string', 'max:96'],
             'template_title' => ['required', 'string', 'min:8', 'max:160'],
+            'template_title_mr' => ['nullable', 'string', 'max:160'],
             'template_category' => ['required', 'string', Rule::in(SuchakMessageTemplate::CATEGORIES)],
             'template_channel' => ['required', 'string', Rule::in(SuchakMessageTemplate::CHANNELS)],
             'body_text' => ['required', 'string', 'min:10', 'max:4000'],
+            'body_text_mr' => ['nullable', 'string', 'max:4000'],
             'usage_guidance' => ['nullable', 'string', 'max:1000'],
+            'usage_guidance_mr' => ['nullable', 'string', 'max:1000'],
         ]);
 
         return $this->runAcademyAction(

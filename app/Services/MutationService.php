@@ -575,9 +575,10 @@ class MutationService
      *
      * @param  array<string, mixed>|null  $snapshot  When provided, use this (direct form→DB); intake row updated at end with this for audit.
      * @param  array{manual_edits?: int, auto_filled?: int}|null  $metrics  Optional when snapshot passed; stored on intake.
+     * @param  array<string, mixed>  $mutationOptions  Optional governed orchestration context; profile data still applies through this service.
      * @return array{mutation_success: bool, conflict_detected: bool, profile_id: int|null}
      */
-    public function applyApprovedIntake(int $intakeId, ?array $snapshot = null, ?array $metrics = null): array
+    public function applyApprovedIntake(int $intakeId, ?array $snapshot = null, ?array $metrics = null, array $mutationOptions = []): array
     {
         Log::info('MutationService::applyApprovedIntake START', ['intakeId' => $intakeId, 'snapshotInMemory' => $snapshot !== null]);
 
@@ -616,6 +617,13 @@ class MutationService
             throw new \RuntimeException('Unsupported or missing snapshot_schema_version. Supported: [1].');
         }
         $snapshotInMemory = $snapshotPassedInMemory;
+        $profileUserAttributes = is_array($mutationOptions['new_profile_user_attributes'] ?? null)
+            ? $mutationOptions['new_profile_user_attributes']
+            : null;
+        $duplicateDetectionUserId = array_key_exists('duplicate_detection_user_id', $mutationOptions)
+            ? $mutationOptions['duplicate_detection_user_id']
+            : $intake->uploaded_by;
+        $duplicateDetectionUserId = $duplicateDetectionUserId !== null ? (int) $duplicateDetectionUserId : null;
         Log::info('MutationService::applyApprovedIntake after snapshot version check', [
             'version' => $version,
             'version_type' => gettype($version),
@@ -625,6 +633,7 @@ class MutationService
         $duplicateDetected = false;
         $hadConflicts = false;
         $profileIdForLog = null;
+        $createdUserIdForLog = null;
         $blockedByConflictPending = false;
         $alreadyAppliedInTransaction = false;
 
@@ -632,7 +641,7 @@ class MutationService
         $this->mutationBatchId = now()->timestamp;
 
         try {
-            DB::transaction(function () use ($intake, $snapshot, $metrics, $snapshotInMemory, $version, &$duplicateDetected, &$hadConflicts, &$profileIdForLog, &$blockedByConflictPending, &$alreadyAppliedInTransaction): void {
+            DB::transaction(function () use ($intake, $snapshot, $metrics, $snapshotInMemory, $version, $profileUserAttributes, $duplicateDetectionUserId, &$duplicateDetected, &$hadConflicts, &$profileIdForLog, &$createdUserIdForLog, &$blockedByConflictPending, &$alreadyAppliedInTransaction): void {
                 $intakeId = $intake->id;
                 $intake = BiodataIntake::where('id', $intakeId)->lockForUpdate()->first();
                 if (! $intake) {
@@ -699,7 +708,7 @@ class MutationService
                 // ——— Step 1: Duplicate detection ———
                 $duplicateResult = app(DuplicateDetectionService::class)->detectFromSnapshot(
                     $snapshot,
-                    $intake->uploaded_by
+                    $duplicateDetectionUserId
                 );
                 Log::info('MutationService::applyApprovedIntake after duplicate detection (full DuplicateResult)', [
                     'isDuplicate' => $duplicateResult->isDuplicate,
@@ -759,6 +768,25 @@ class MutationService
 
                             return;
                         }
+                    } elseif ($profileUserAttributes !== null) {
+                        $actor = User::find($intake->uploaded_by);
+                        if (! $actor) {
+                            throw new \RuntimeException('Intake uploaded_by user not found.');
+                        }
+
+                        $member = $this->createTargetUserForNewIntakeProfile($profileUserAttributes);
+                        $createdUserIdForLog = (int) $member->id;
+
+                        $profile = new MatrimonyProfile;
+                        $profile->user_id = $member->id;
+                        $profile->full_name = $proposedCore['full_name'] ?? $profileUserAttributes['name'] ?? 'Draft';
+                        $profile->lifecycle_state = 'draft';
+                        if (! empty($proposedCore['gender_id'])) {
+                            $profile->gender_id = (int) $proposedCore['gender_id'];
+                        }
+                        $profile->save();
+                        $intake->update(['matrimony_profile_id' => $profile->id]);
+                        $profileCreatedInThisTransaction = true;
                     } else {
                         $actor = User::find($intake->uploaded_by);
                         if (! $actor) {
@@ -988,6 +1016,8 @@ class MutationService
                     $this->syncEntityDiff($profile, $table, $proposed);
                 }
 
+                $this->ensureCanonicalResidenceBeforeIntakeActivation($profile, $snapshot, $auditSnapshot, $intake);
+
                 if (isset($snapshot['preferences']) && is_array($snapshot['preferences'])) {
                     $prefRow = isset($snapshot['preferences'][0]) && is_array($snapshot['preferences'][0])
                         ? $snapshot['preferences'][0]
@@ -1105,7 +1135,163 @@ class MutationService
             'mutation_success' => ! $duplicateDetected && ! $hadConflicts,
             'conflict_detected' => $duplicateDetected || $hadConflicts,
             'profile_id' => $profileIdForLog,
+            'created_user_id' => $createdUserIdForLog,
         ];
+    }
+
+    /**
+     * Create the auth shell for a new intake-created candidate profile. Canonical profile data is still
+     * written below by the governed intake mutation pipeline.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function createTargetUserForNewIntakeProfile(array $attributes): User
+    {
+        $name = $this->limitedNullableString($attributes['name'] ?? null, 255) ?: 'Draft Candidate';
+        $gender = $this->limitedNullableString($attributes['gender'] ?? null, 32);
+        $email = $this->limitedNullableString($attributes['email'] ?? null, 255);
+        $mobile = $this->limitedNullableString($attributes['mobile'] ?? null, 32);
+        $registeringFor = $this->limitedNullableString($attributes['registering_for'] ?? null, 64) ?: 'other';
+
+        $payload = [
+            'name' => $name,
+            'email' => $email,
+            'mobile' => $mobile,
+            'password' => \Illuminate\Support\Facades\Hash::make(\Illuminate\Support\Str::random(40)),
+            'registering_for' => $registeringFor,
+            'gender' => $gender,
+            'referral_code' => User::generateUniqueReferralCode(),
+        ];
+
+        $allowed = array_fill_keys(Schema::getColumnListing('users'), true);
+        $payload = array_intersect_key($payload, $allowed);
+
+        return User::query()->create($payload);
+    }
+
+    /**
+     * Intake preview forms can omit the normalized address array. Before leaving draft, SSOT requires
+     * self + current residence, so fall back to the immutable parsed intake address when needed.
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @param  array<string, mixed>  $auditSnapshot
+     */
+    private function ensureCanonicalResidenceBeforeIntakeActivation(
+        MatrimonyProfile $profile,
+        array $snapshot,
+        array $auditSnapshot,
+        BiodataIntake $intake
+    ): void {
+        if ($this->profileHasCanonicalResidence($profile)) {
+            return;
+        }
+
+        $candidate = $this->firstCanonicalResidenceCandidate([
+            $snapshot['addresses'] ?? null,
+            $auditSnapshot['addresses'] ?? null,
+            is_array($intake->parsed_json ?? null) ? ($intake->parsed_json['addresses'] ?? null) : null,
+        ]);
+
+        if ($candidate === null) {
+            return;
+        }
+
+        $leafId = $this->positiveInt($candidate['location_id'] ?? $candidate['city_id'] ?? null);
+        $line = $this->limitedNullableString($candidate['address_line'] ?? $candidate['raw'] ?? null, 255);
+
+        if ($leafId === null && $line === null) {
+            return;
+        }
+
+        if (Schema::hasColumn($profile->getTable(), 'location_id')) {
+            if ($leafId !== null) {
+                $profile->location_id = $leafId;
+            }
+            if (Schema::hasColumn($profile->getTable(), 'address_line') && $line !== null) {
+                $profile->address_line = $line;
+            }
+            $profile->save();
+
+            return;
+        }
+
+        ProfileCanonicalResidenceService::upsertSelfCurrent(
+            (int) $profile->id,
+            $leafId,
+            $line,
+            $leafId !== null,
+            $line !== null
+        );
+    }
+
+    /**
+     * @param  array<int, mixed>  $addressLists
+     * @return array<string, mixed>|null
+     */
+    private function firstCanonicalResidenceCandidate(array $addressLists): ?array
+    {
+        $fallback = null;
+
+        foreach ($addressLists as $addresses) {
+            if (! is_array($addresses)) {
+                continue;
+            }
+            foreach ($addresses as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                if ($fallback === null && ($this->positiveInt($row['location_id'] ?? $row['city_id'] ?? null) !== null
+                    || $this->limitedNullableString($row['address_line'] ?? $row['raw'] ?? null, 255) !== null)) {
+                    $fallback = $row;
+                }
+                if (! $this->isSelfCurrentAddressCandidate($row)) {
+                    continue;
+                }
+                if ($this->positiveInt($row['location_id'] ?? $row['city_id'] ?? null) !== null
+                    || $this->limitedNullableString($row['address_line'] ?? $row['raw'] ?? null, 255) !== null) {
+                    return $row;
+                }
+            }
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    private function isSelfCurrentAddressCandidate(array $row): bool
+    {
+        $scope = trim((string) ($row['address_scope'] ?? 'self'));
+        if ($scope !== '' && $scope !== 'self') {
+            return false;
+        }
+
+        $type = strtolower(trim((string) ($row['type'] ?? $row['address_type_key'] ?? $row['address_type'] ?? 'current')));
+
+        return $type === '' || $type === 'current';
+    }
+
+    private function limitedNullableString(mixed $value, int $limit): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $string = trim((string) $value);
+
+        return $string !== '' ? mb_substr($string, 0, $limit) : null;
+    }
+
+    private function positiveInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '' || ! is_numeric($value)) {
+            return null;
+        }
+
+        $int = (int) $value;
+
+        return $int > 0 ? $int : null;
     }
 
     /**

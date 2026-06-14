@@ -58,13 +58,94 @@ class AdminProfileModerationController extends Controller
     {
         $perPage = (int) $request->input('per_page', 15);
         $perPage = $perPage >= 1 && $perPage <= 100 ? $perPage : 15;
-        $profiles = MatrimonyProfile::withTrashed()
-            ->with(['location', 'country', 'state', 'district', 'taluka', 'city'])
-            ->latest()
+
+        $filters = [
+            'q' => trim((string) $request->input('q', '')),
+            'source' => in_array($request->input('source'), ['direct', 'suchak'], true) ? (string) $request->input('source') : '',
+            'status' => in_array($request->input('status'), ['active', 'suspended', 'deleted'], true) ? (string) $request->input('status') : '',
+            'sort' => in_array($request->input('sort'), ['matrimony_id_desc', 'matrimony_id_asc', 'latest', 'oldest', 'name_asc', 'name_desc'], true) ? (string) $request->input('sort') : 'matrimony_id_desc',
+            'per_page' => $perPage,
+        ];
+
+        $profilesQuery = MatrimonyProfile::query()
+            ->withTrashed()
+            ->with([
+                'user',
+                'gender',
+                'location',
+                'country',
+                'state',
+                'district',
+                'taluka',
+                'city',
+                'suchakProfileRepresentations' => function ($query): void {
+                    $query
+                        ->with(['suchakAccount.user'])
+                        ->orderByRaw("CASE representation_status WHEN 'active' THEN 0 WHEN 'consent_pending' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END")
+                        ->latest('id');
+                },
+            ]);
+
+        if ($filters['q'] !== '') {
+            $search = mb_substr($filters['q'], 0, 80);
+            $profilesQuery->where(function ($query) use ($search): void {
+                $query->where('full_name', 'like', '%'.$search.'%')
+                    ->orWhereHas('user', function ($userQuery) use ($search): void {
+                        $userQuery
+                            ->where('name', 'like', '%'.$search.'%')
+                            ->orWhere('mobile', 'like', '%'.$search.'%')
+                            ->orWhere('email', 'like', '%'.$search.'%');
+                    })
+                    ->orWhereHas('suchakProfileRepresentations.suchakAccount', function ($suchakQuery) use ($search): void {
+                        $suchakQuery
+                            ->where('suchak_name', 'like', '%'.$search.'%')
+                            ->orWhere('office_name', 'like', '%'.$search.'%')
+                            ->orWhere('mobile_number', 'like', '%'.$search.'%');
+                    });
+
+                if (ctype_digit($search)) {
+                    $query
+                        ->orWhere('id', (int) $search)
+                        ->orWhere('user_id', (int) $search)
+                        ->orWhereHas('suchakProfileRepresentations', function ($representationQuery) use ($search): void {
+                            $representationQuery->where('suchak_account_id', (int) $search);
+                        });
+                }
+            });
+        }
+
+        if ($filters['source'] === 'direct') {
+            $profilesQuery->whereDoesntHave('suchakProfileRepresentations');
+        } elseif ($filters['source'] === 'suchak') {
+            $profilesQuery->whereHas('suchakProfileRepresentations');
+        }
+
+        if ($filters['status'] === 'deleted') {
+            $profilesQuery->onlyTrashed();
+        } elseif ($filters['status'] === 'suspended') {
+            $profilesQuery->whereNull('deleted_at')->where('is_suspended', true);
+        } elseif ($filters['status'] === 'active') {
+            $profilesQuery
+                ->whereNull('deleted_at')
+                ->where(function ($query): void {
+                    $query->whereNull('is_suspended')->orWhere('is_suspended', false);
+                });
+        }
+
+        match ($filters['sort']) {
+            'matrimony_id_asc' => $profilesQuery->orderBy('id'),
+            'latest' => $profilesQuery->latest(),
+            'oldest' => $profilesQuery->oldest(),
+            'name_asc' => $profilesQuery->orderBy('full_name')->orderByDesc('id'),
+            'name_desc' => $profilesQuery->orderByDesc('full_name')->orderByDesc('id'),
+            default => $profilesQuery->orderByDesc('id'),
+        };
+
+        $profiles = $profilesQuery
             ->paginate($perPage)
             ->withQueryString();
 
-        return view('admin.profiles.index', compact('profiles'));
+        return view('admin.profiles.index', compact('profiles', 'filters'));
     }
 
     /**
@@ -73,6 +154,17 @@ class AdminProfileModerationController extends Controller
     public function showProfile(string $id)
     {
         $profile = MatrimonyProfile::withTrashed()->findOrFail($id);
+
+        if (request()->boolean('edit')) {
+            session(['admin_edit_profile_id' => (int) $profile->id]);
+
+            return redirect()->route('matrimony.profile.wizard.section', [
+                'section' => 'full',
+                'all' => 1,
+                'profile_id' => $profile->id,
+            ]);
+        }
+
         $profile->load(['country', 'state', 'district', 'taluka', 'city', 'religion', 'caste', 'subCaste']);
 
         $religions = \App\Models\Religion::where('is_active', true)

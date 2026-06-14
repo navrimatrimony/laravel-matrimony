@@ -78,6 +78,7 @@ class EnforceCardOnboarding
             'logout',
             'mobile.verify',
             'verification.',
+            'intake.',
         ];
 
         foreach ($allowedPrefixes as $prefix) {
@@ -86,7 +87,7 @@ class EnforceCardOnboarding
             }
         }
 
-        if ($name === 'matrimony.internal.location.resolve-current') {
+        if ($name === 'matrimony.internal.location.resolve-current' || $name === 'api.intake-status') {
             return true;
         }
 

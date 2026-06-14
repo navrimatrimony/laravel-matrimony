@@ -6,6 +6,7 @@ use App\Models\Location;
 use App\Models\MasterRelative;
 use App\Models\MatrimonyProfile;
 use App\Models\OccupationCategory;
+use App\Models\SuchakProfileRepresentation;
 use App\Services\EducationService;
 use App\Services\FieldCatalogService;
 use App\Services\OccupationService;
@@ -14,6 +15,7 @@ use App\Services\PartnerPreferenceSnapshotBuilder;
 use App\Services\ProfileCompletionEngine;
 use App\Support\ErrorFactory;
 use App\Support\Validation\AddressHierarchyRules;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -131,7 +133,8 @@ class ProfileWizardController extends Controller
         $viewData['previousSection'] = $previousSection;
         $viewData['sectionStatuses'] = $sectionStatuses;
         $viewData['wizardMinimal'] = $minimal;
-        $viewData['wizardAdminTarget'] = $this->isAllowedAdminWizardTarget($user, $profile);
+        $viewData['wizardAdminTarget'] = $this->isCurrentAdminWizardTarget($user, $request, $profile);
+        $viewData['wizardSuchakTarget'] = $this->isAllowedSuchakWizardTarget($user, $profile);
 
         if ($section === 'about-preferences' || $section === 'full') {
             if ($section === 'about-preferences') {
@@ -166,12 +169,13 @@ class ProfileWizardController extends Controller
             $q = array_merge($q, $this->partnerPrefQuery($request));
         }
         $q = array_merge($q, $this->wizardAdminProfileIdQuery($request));
+        $q = array_merge($q, $this->wizardSuchakProfileIdQuery($request));
 
         return $q;
     }
 
     /**
-     * Preserve ?profile_id= when an admin is editing a showcase profile (POST body may not repeat query string).
+     * Preserve ?profile_id= when an admin is editing another profile (POST body may not repeat query string).
      *
      * @return array<string, string>
      */
@@ -186,7 +190,33 @@ class ProfileWizardController extends Controller
             return [];
         }
         $target = MatrimonyProfile::withTrashed()->find($targetId);
-        if ($target && $target->isShowcaseProfile()) {
+        if ($target && $this->isAllowedAdminWizardTarget($user, $target)) {
+            return ['profile_id' => (string) $target->id];
+        }
+
+        return [];
+    }
+
+    /**
+     * Preserve ?profile_id= while a verified Suchak is completing the existing wizard for
+     * a draft profile created by the Suchak manual-profile flow.
+     *
+     * @return array<string, string>
+     */
+    private function wizardSuchakProfileIdQuery(Request $request): array
+    {
+        $user = auth()->user();
+        if (! $user || ! $user->suchakAccount) {
+            return [];
+        }
+
+        $targetId = (int) ($request->input('profile_id') ?? $request->query('profile_id') ?? session('suchak_edit_profile_id') ?? 0);
+        if ($targetId <= 0) {
+            return [];
+        }
+
+        $target = MatrimonyProfile::withTrashed()->find($targetId);
+        if ($target && $this->isAllowedSuchakWizardTarget($user, $target)) {
             return ['profile_id' => (string) $target->id];
         }
 
@@ -228,6 +258,10 @@ class ProfileWizardController extends Controller
                     ->with('info', 'Use the photo upload engine above to add or change your photo.');
             }
 
+            if ($this->isSuchakRegistrationTarget($user, $profile)) {
+                return $this->completeSuchakWizard($profile, 'Profile saved. You can add a photo later from the profile form.');
+            }
+
             return redirect()->route('matrimony.profiles.index')->with('info', 'You can add a photo anytime from the photo section.');
         }
 
@@ -250,7 +284,8 @@ class ProfileWizardController extends Controller
         }
 
         try {
-            $mutationMode = $this->isAdminRegistrationTarget($user, $profile) ? 'admin' : 'manual';
+            $isAdminWizardTarget = $this->isCurrentAdminWizardTarget($user, $request, $profile);
+            $mutationMode = $isAdminWizardTarget ? 'admin' : 'manual';
             $result = app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, $mutationMode);
             if ($request->attributes->get('matrimony_apply_pending_photo_review')) {
                 app(\App\Services\Image\ProfilePhotoPendingStateService::class)->applyPendingReviewState($profile);
@@ -305,6 +340,16 @@ class ProfileWizardController extends Controller
                 ->with('success', 'Profile saved. You can complete the rest of your profile anytime from your profile page.');
         }
 
+        if ($this->isSuchakRegistrationTarget($user, $profile)) {
+            return $this->completeSuchakWizard($profile, __('wizard.profile_completed'));
+        }
+
+        if ($this->isCurrentAdminWizardTarget($user, $request, $profile)) {
+            return redirect()
+                ->route('admin.profiles.show', $profile)
+                ->with('success', __('wizard.profile_completed'));
+        }
+
         return redirect()->route('matrimony.profiles.index')->with('success', __('wizard.profile_completed'));
     }
 
@@ -317,7 +362,7 @@ class ProfileWizardController extends Controller
             return null;
         }
 
-        // Admin override: showcase profiles, plus the fresh draft created by this admin registration session.
+        // Admin override: admin profile editing uses the same governed wizard/full-form pipeline.
         if ($request && method_exists($user, 'isAnyAdmin') && $user->isAnyAdmin()) {
             $targetId = (int) ($request->input('profile_id') ?? $request->query('profile_id') ?? 0);
             if ($targetId <= 0) {
@@ -331,7 +376,26 @@ class ProfileWizardController extends Controller
                     return $target;
                 }
 
-                abort(403, 'This profile is not available in the current admin registration session.');
+                abort(403, 'This profile is not available for admin full-form editing.');
+            }
+        }
+
+        // Suchak override: only the draft profile created by this Suchak manual-profile
+        // session may be completed through the centralized wizard.
+        if ($request && $user->suchakAccount) {
+            $targetId = (int) ($request->input('profile_id') ?? $request->query('profile_id') ?? 0);
+            if ($targetId <= 0) {
+                $targetId = (int) (session('suchak_edit_profile_id') ?? 0);
+            }
+            if ($targetId > 0) {
+                $target = MatrimonyProfile::withTrashed()->find($targetId);
+                if ($target && $this->isAllowedSuchakWizardTarget($user, $target)) {
+                    session(['suchak_edit_profile_id' => (int) $target->id]);
+
+                    return $target;
+                }
+
+                abort(403, 'This profile is not available in the current Suchak manual profile session.');
             }
         }
 
@@ -361,7 +425,18 @@ class ProfileWizardController extends Controller
             return false;
         }
 
-        return $profile->isShowcaseProfile() || $this->isAdminRegistrationTarget($user, $profile);
+        return ! $profile->trashed();
+    }
+
+    private function isCurrentAdminWizardTarget($user, Request $request, MatrimonyProfile $profile): bool
+    {
+        if (! $this->isAllowedAdminWizardTarget($user, $profile)) {
+            return false;
+        }
+
+        $targetId = (int) ($request->input('profile_id') ?? $request->query('profile_id') ?? session('admin_edit_profile_id') ?? 0);
+
+        return $targetId > 0 && $targetId === (int) $profile->id;
     }
 
     private function isAdminRegistrationTarget($user, MatrimonyProfile $profile): bool
@@ -372,6 +447,56 @@ class ProfileWizardController extends Controller
 
         return (int) session('admin_registration_profile_id', 0) === (int) $profile->id
             && ! $profile->isShowcaseProfile();
+    }
+
+    private function isAllowedSuchakWizardTarget($user, MatrimonyProfile $profile): bool
+    {
+        if (! $user || ! $user->suchakAccount) {
+            return false;
+        }
+
+        $account = $user->suchakAccount;
+        if ($account->verification_status !== \App\Models\SuchakAccount::VERIFICATION_VERIFIED) {
+            return false;
+        }
+
+        if ((int) session('suchak_registration_account_id', 0) !== (int) $account->id) {
+            return false;
+        }
+
+        if ((int) session('suchak_registration_profile_id', 0) !== (int) $profile->id) {
+            return false;
+        }
+
+        $query = SuchakProfileRepresentation::query()
+            ->where('suchak_account_id', $account->id)
+            ->where('matrimony_profile_id', $profile->id);
+
+        $sessionRepresentationId = (int) session('suchak_registration_representation_id', 0);
+        if ($sessionRepresentationId > 0) {
+            $query->whereKey($sessionRepresentationId);
+        }
+
+        return $query->exists();
+    }
+
+    private function isSuchakRegistrationTarget($user, MatrimonyProfile $profile): bool
+    {
+        return $this->isAllowedSuchakWizardTarget($user, $profile);
+    }
+
+    private function completeSuchakWizard(MatrimonyProfile $profile, string $message): RedirectResponse
+    {
+        session()->forget([
+            'suchak_registration_account_id',
+            'suchak_registration_profile_id',
+            'suchak_registration_representation_id',
+            'suchak_edit_profile_id',
+        ]);
+
+        return redirect()
+            ->route('suchak.dashboard', ['dashboard_tab' => 'profiles'])
+            ->with('success', $message);
     }
 
     private function getSectionViewData(string $section, MatrimonyProfile $profile): array

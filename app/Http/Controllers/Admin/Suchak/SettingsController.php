@@ -10,7 +10,9 @@ use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class SettingsController extends Controller
@@ -43,6 +45,78 @@ class SettingsController extends Controller
             'suchak_grace_period_days' => ['required', 'integer', 'min:0', 'max:365'],
             'suchak_plan_pricing_mode' => ['required', 'string', Rule::in(array_keys($this->pricingModes()))],
             'suchak_payment_mode' => ['required', 'string', Rule::in(array_keys($this->paymentModes()))],
+            'suchak_allow_work_before_admin_approval' => ['required', 'boolean'],
+            'suchak_auto_publish_on_approval' => ['required', 'boolean'],
+            'suchak_hero_registration_form_enabled' => ['required', 'boolean'],
+            'suchak_hero_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+            'remove_suchak_hero_image' => ['nullable', 'boolean'],
+            'homepage_copy' => ['required', 'array'],
+            'homepage_copy.mr.eyebrow' => ['nullable', 'string', 'max:180'],
+            'homepage_copy.mr.title' => ['nullable', 'string', 'max:240'],
+            'homepage_copy.mr.subtitle' => ['nullable', 'string', 'max:700'],
+            'homepage_copy.mr.primary_cta' => ['nullable', 'string', 'max:120'],
+            'homepage_copy.mr.dashboard_cta' => ['nullable', 'string', 'max:120'],
+            'homepage_copy.mr.secondary_cta' => ['nullable', 'string', 'max:120'],
+            'homepage_copy.mr.trust' => ['nullable', 'string', 'max:700'],
+            'homepage_copy.mr.hero_form_title' => ['nullable', 'string', 'max:160'],
+            'homepage_copy.mr.hero_form_body' => ['nullable', 'string', 'max:700'],
+            'homepage_copy.mr.benefits_title' => ['nullable', 'string', 'max:160'],
+            'homepage_copy.mr.benefits_intro' => ['nullable', 'string', 'max:500'],
+            'homepage_copy.mr.business_title' => ['nullable', 'string', 'max:220'],
+            'homepage_copy.mr.business_body' => ['nullable', 'string', 'max:700'],
+            'homepage_copy.mr.process_title' => ['nullable', 'string', 'max:160'],
+            'homepage_copy.mr.tools_title' => ['nullable', 'string', 'max:160'],
+            'homepage_copy.mr.final_title' => ['nullable', 'string', 'max:240'],
+            'homepage_copy.mr.final_body' => ['nullable', 'string', 'max:700'],
+            'homepage_copy.mr.status_cta' => ['nullable', 'string', 'max:160'],
+            'homepage_copy.en.eyebrow' => ['nullable', 'string', 'max:180'],
+            'homepage_copy.en.title' => ['nullable', 'string', 'max:240'],
+            'homepage_copy.en.subtitle' => ['nullable', 'string', 'max:700'],
+            'homepage_copy.en.primary_cta' => ['nullable', 'string', 'max:120'],
+            'homepage_copy.en.dashboard_cta' => ['nullable', 'string', 'max:120'],
+            'homepage_copy.en.secondary_cta' => ['nullable', 'string', 'max:120'],
+            'homepage_copy.en.trust' => ['nullable', 'string', 'max:700'],
+            'homepage_copy.en.hero_form_title' => ['nullable', 'string', 'max:160'],
+            'homepage_copy.en.hero_form_body' => ['nullable', 'string', 'max:700'],
+            'homepage_copy.en.benefits_title' => ['nullable', 'string', 'max:160'],
+            'homepage_copy.en.benefits_intro' => ['nullable', 'string', 'max:500'],
+            'homepage_copy.en.business_title' => ['nullable', 'string', 'max:220'],
+            'homepage_copy.en.business_body' => ['nullable', 'string', 'max:700'],
+            'homepage_copy.en.process_title' => ['nullable', 'string', 'max:160'],
+            'homepage_copy.en.tools_title' => ['nullable', 'string', 'max:160'],
+            'homepage_copy.en.final_title' => ['nullable', 'string', 'max:240'],
+            'homepage_copy.en.final_body' => ['nullable', 'string', 'max:700'],
+            'homepage_copy.en.status_cta' => ['nullable', 'string', 'max:160'],
+            'homepage_benefits' => ['required', 'array', 'size:4'],
+            'homepage_benefits.*.title_mr' => ['nullable', 'string', 'max:160'],
+            'homepage_benefits.*.body_mr' => ['nullable', 'string', 'max:350'],
+            'homepage_benefits.*.title_en' => ['nullable', 'string', 'max:160'],
+            'homepage_benefits.*.body_en' => ['nullable', 'string', 'max:350'],
+            'homepage_process' => ['required', 'array', 'size:4'],
+            'homepage_process.*.label_mr' => ['nullable', 'string', 'max:140'],
+            'homepage_process.*.label_en' => ['nullable', 'string', 'max:140'],
+            'homepage_tools' => ['required', 'array', 'size:6'],
+            'homepage_tools.*.label_mr' => ['nullable', 'string', 'max:140'],
+            'homepage_tools.*.label_en' => ['nullable', 'string', 'max:140'],
+            'homepage_style' => ['required', 'array'],
+            'homepage_style.primary_color' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'homepage_style.primary_dark_color' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'homepage_style.ink_color' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'homepage_style.page_background_color' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'homepage_style.hero_background_color' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'homepage_style.overlay_color' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'homepage_style.desktop_overlay_opacity' => ['required', 'integer', 'min:20', 'max:100'],
+            'homepage_style.mobile_overlay_opacity' => ['required', 'integer', 'min:20', 'max:100'],
+            'homepage_style.image_position_desktop' => ['required', 'string', Rule::in(['center', 'top', 'bottom', 'left', 'right'])],
+            'homepage_style.image_position_mobile' => ['required', 'string', Rule::in(['center', 'top', 'bottom', 'left', 'right'])],
+            'homepage_style.hero_min_height_desktop' => ['required', 'integer', 'min:55', 'max:100'],
+            'homepage_style.hero_min_height_mobile' => ['required', 'integer', 'min:60', 'max:100'],
+            'homepage_style.hero_blur_px' => ['required', 'integer', 'min:0', 'max:12'],
+            'homepage_style.bottom_fade_enabled' => ['required', 'boolean'],
+            'homepage_style.bottom_fade_height_rem' => ['required', 'integer', 'min:0', 'max:16'],
+            'homepage_style.form_card_opacity' => ['required', 'integer', 'min:60', 'max:100'],
+            'homepage_style.form_shadow_enabled' => ['required', 'boolean'],
+            'suchak_work_area_min_consented_customers' => ['required', 'integer', 'min:1', 'max:1000'],
             'suchak_visit_confirmation_policy_mode' => ['required', 'string', Rule::in(array_keys($this->visitConfirmationModes()))],
             'commission_mode' => ['required', 'string', Rule::in(array_keys($this->commissionModes()))],
             'commission_default_percent' => ['required', 'integer', 'min:0', 'max:100'],
@@ -51,6 +125,8 @@ class SettingsController extends Controller
         ]);
 
         $rows = $this->policyRows($validated, $request);
+        $oldHeroImagePath = $this->currentHeroImagePath();
+        $newHeroImagePath = $rows[SuchakPolicyService::KEY_SUCHAK_HERO_IMAGE_PATH]['policy_value'] ?? '';
         $existing = SuchakPolicy::query()
             ->whereIn('policy_key', array_keys($rows))
             ->get()
@@ -98,6 +174,8 @@ class SettingsController extends Controller
             );
         });
 
+        $this->deleteReplacedHeroImage($oldHeroImagePath, $newHeroImagePath);
+
         return back()->with('success', 'Suchak settings updated and audited.');
     }
 
@@ -125,6 +203,13 @@ class SettingsController extends Controller
             SuchakPolicyService::KEY_SUCHAK_GRACE_PERIOD_DAYS => $policyService->gracePeriodDays(),
             SuchakPolicyService::KEY_SUCHAK_PLAN_PRICING_MODE => $policyService->planPricingMode(),
             SuchakPolicyService::KEY_SUCHAK_PAYMENT_MODE => $policyService->paymentMode(),
+            SuchakPolicyService::KEY_SUCHAK_ALLOW_WORK_BEFORE_ADMIN_APPROVAL => $policyService->allowsWorkBeforeAdminApproval(),
+            SuchakPolicyService::KEY_SUCHAK_AUTO_PUBLISH_ON_APPROVAL => $policyService->autoPublishesOnApproval(),
+            SuchakPolicyService::KEY_SUCHAK_HERO_REGISTRATION_FORM_ENABLED => $policyService->heroRegistrationFormEnabled(),
+            SuchakPolicyService::KEY_SUCHAK_HERO_IMAGE_PATH => $policyService->heroImagePath(),
+            SuchakPolicyService::KEY_SUCHAK_HOMEPAGE_COPY_JSON => $policyService->homepageCopy(),
+            SuchakPolicyService::KEY_SUCHAK_HOMEPAGE_STYLE_JSON => $policyService->homepageStyle(),
+            SuchakPolicyService::KEY_SUCHAK_WORK_AREA_MIN_CONSENTED_CUSTOMERS => $policyService->workAreaMinimumConsentedCustomers(),
             SuchakPolicyService::KEY_SUCHAK_VISIT_CONFIRMATION_POLICY_MODE => $policyService->visitConfirmationPolicyMode(),
             'commission_mode' => (string) $commissionRules['mode'],
             'commission_default_percent' => (int) $commissionRules['default_percent'],
@@ -139,6 +224,9 @@ class SettingsController extends Controller
      */
     private function policyRows(array $validated, Request $request): array
     {
+        $heroImagePath = $this->resolveHeroImagePath($request);
+        $homepageCopy = $this->homepageCopyFromValidated($validated);
+        $homepageStyle = $this->homepageStyleFromValidated($validated, $request);
         $commissionRules = [
             'mode' => (string) $validated['commission_mode'],
             'default_percent' => (int) $validated['commission_default_percent'],
@@ -160,6 +248,23 @@ class SettingsController extends Controller
             SuchakPolicyService::KEY_SUCHAK_GRACE_PERIOD_DAYS => $this->integerRow($validated, 'suchak_grace_period_days', 'Default grace period days after Suchak plan expiry.'),
             SuchakPolicyService::KEY_SUCHAK_PLAN_PRICING_MODE => $this->stringRow($validated, 'suchak_plan_pricing_mode', 'Suchak plan pricing mode.'),
             SuchakPolicyService::KEY_SUCHAK_PAYMENT_MODE => $this->stringRow($validated, 'suchak_payment_mode', 'Suchak platform payment mode.'),
+            SuchakPolicyService::KEY_SUCHAK_ALLOW_WORK_BEFORE_ADMIN_APPROVAL => $this->booleanRow($request, 'suchak_allow_work_before_admin_approval', 'Allow pending-review Suchak accounts to use operational dashboard tools before admin approval.'),
+            SuchakPolicyService::KEY_SUCHAK_AUTO_PUBLISH_ON_APPROVAL => $this->booleanRow($request, 'suchak_auto_publish_on_approval', 'Automatically publish a Suchak account publicly when admin approval succeeds.'),
+            SuchakPolicyService::KEY_SUCHAK_HERO_REGISTRATION_FORM_ENABLED => $this->booleanRow($request, 'suchak_hero_registration_form_enabled', 'Show the Suchak registration form directly inside the public Suchak hero section.'),
+            SuchakPolicyService::KEY_SUCHAK_HERO_IMAGE_PATH => [
+                'policy_value' => $heroImagePath,
+                'value_type' => SuchakPolicy::TYPE_STRING,
+                'description' => 'Public Suchak homepage hero image path stored on the public disk.',
+            ],
+            SuchakPolicyService::KEY_SUCHAK_HOMEPAGE_COPY_JSON => $this->jsonRow(
+                $homepageCopy,
+                'Public Suchak homepage bilingual copy, benefits, process steps, and tool labels.',
+            ),
+            SuchakPolicyService::KEY_SUCHAK_HOMEPAGE_STYLE_JSON => $this->jsonRow(
+                $homepageStyle,
+                'Public Suchak homepage hero visual style controls.',
+            ),
+            SuchakPolicyService::KEY_SUCHAK_WORK_AREA_MIN_CONSENTED_CUSTOMERS => $this->integerRow($validated, 'suchak_work_area_min_consented_customers', 'Minimum valid consented customers required before an area is treated as Suchak work area.'),
             SuchakPolicyService::KEY_SUCHAK_VISIT_CONFIRMATION_POLICY_MODE => $this->stringRow($validated, 'suchak_visit_confirmation_policy_mode', 'Confirmation policy required before platform visit payouts can be qualified.'),
             SuchakPolicyService::KEY_SUCHAK_COMMISSION_RULES_JSON => [
                 'policy_value' => json_encode($commissionRules, JSON_THROW_ON_ERROR),
@@ -167,6 +272,141 @@ class SettingsController extends Controller
                 'description' => 'Default Suchak collaboration commission rule.',
             ],
         ];
+    }
+
+    private function resolveHeroImagePath(Request $request): string
+    {
+        if ($request->hasFile('suchak_hero_image')) {
+            $storedPath = $request->file('suchak_hero_image')->store('suchak/hero-images', 'public');
+
+            if (! is_string($storedPath)) {
+                throw ValidationException::withMessages([
+                    'suchak_hero_image' => 'The Suchak hero image could not be stored. Please try again.',
+                ]);
+            }
+
+            return $storedPath;
+        }
+
+        if ($request->boolean('remove_suchak_hero_image')) {
+            return SuchakPolicyService::DEFAULT_SUCHAK_HERO_IMAGE_PATH;
+        }
+
+        return $this->currentHeroImagePath();
+    }
+
+    private function currentHeroImagePath(): string
+    {
+        $value = SuchakPolicy::query()
+            ->where('policy_key', SuchakPolicyService::KEY_SUCHAK_HERO_IMAGE_PATH)
+            ->where('is_active', true)
+            ->value('policy_value');
+
+        return is_string($value) ? trim($value) : SuchakPolicyService::DEFAULT_SUCHAK_HERO_IMAGE_PATH;
+    }
+
+    private function deleteReplacedHeroImage(string $oldPath, string $newPath): void
+    {
+        if ($oldPath === '' || $oldPath === $newPath || ! str_starts_with($oldPath, 'suchak/hero-images/')) {
+            return;
+        }
+
+        Storage::disk('public')->delete($oldPath);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function homepageCopyFromValidated(array $validated): array
+    {
+        $defaults = SuchakPolicyService::DEFAULT_SUCHAK_HOMEPAGE_COPY;
+        $input = is_array($validated['homepage_copy'] ?? null) ? $validated['homepage_copy'] : [];
+        $copy = $defaults;
+
+        foreach (['mr', 'en'] as $locale) {
+            $localeInput = is_array($input[$locale] ?? null) ? $input[$locale] : [];
+
+            foreach ($defaults[$locale] as $key => $default) {
+                $copy[$locale][$key] = $this->trimOrDefault($localeInput[$key] ?? null, $default);
+            }
+        }
+
+        $copy['benefits'] = $this->fixedLocalizedRows(
+            is_array($validated['homepage_benefits'] ?? null) ? $validated['homepage_benefits'] : [],
+            $defaults['benefits'],
+            ['title_mr', 'body_mr', 'title_en', 'body_en'],
+        );
+        $copy['process_steps'] = $this->fixedLocalizedRows(
+            is_array($validated['homepage_process'] ?? null) ? $validated['homepage_process'] : [],
+            $defaults['process_steps'],
+            ['label_mr', 'label_en'],
+        );
+        $copy['tools'] = $this->fixedLocalizedRows(
+            is_array($validated['homepage_tools'] ?? null) ? $validated['homepage_tools'] : [],
+            $defaults['tools'],
+            ['label_mr', 'label_en'],
+        );
+
+        return $copy;
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function homepageStyleFromValidated(array $validated, Request $request): array
+    {
+        $input = is_array($validated['homepage_style'] ?? null) ? $validated['homepage_style'] : [];
+
+        return [
+            'primary_color' => strtolower((string) $input['primary_color']),
+            'primary_dark_color' => strtolower((string) $input['primary_dark_color']),
+            'ink_color' => strtolower((string) $input['ink_color']),
+            'page_background_color' => strtolower((string) $input['page_background_color']),
+            'hero_background_color' => strtolower((string) $input['hero_background_color']),
+            'overlay_color' => strtolower((string) $input['overlay_color']),
+            'desktop_overlay_opacity' => (int) $input['desktop_overlay_opacity'],
+            'mobile_overlay_opacity' => (int) $input['mobile_overlay_opacity'],
+            'image_position_desktop' => (string) $input['image_position_desktop'],
+            'image_position_mobile' => (string) $input['image_position_mobile'],
+            'hero_min_height_desktop' => (int) $input['hero_min_height_desktop'],
+            'hero_min_height_mobile' => (int) $input['hero_min_height_mobile'],
+            'hero_blur_px' => (int) $input['hero_blur_px'],
+            'bottom_fade_enabled' => $request->boolean('homepage_style.bottom_fade_enabled'),
+            'bottom_fade_height_rem' => (int) $input['bottom_fade_height_rem'],
+            'form_card_opacity' => (int) $input['form_card_opacity'],
+            'form_shadow_enabled' => $request->boolean('homepage_style.form_shadow_enabled'),
+        ];
+    }
+
+    /**
+     * @param  array<int, mixed>  $input
+     * @param  array<int, array<string, string>>  $defaults
+     * @param  list<string>  $keys
+     * @return array<int, array<string, string>>
+     */
+    private function fixedLocalizedRows(array $input, array $defaults, array $keys): array
+    {
+        $rows = [];
+
+        foreach ($defaults as $index => $defaultRow) {
+            $inputRow = is_array($input[$index] ?? null) ? $input[$index] : [];
+            $row = [];
+
+            foreach ($keys as $key) {
+                $row[$key] = $this->trimOrDefault($inputRow[$key] ?? null, $defaultRow[$key]);
+            }
+
+            $rows[] = $row;
+        }
+
+        return $rows;
+    }
+
+    private function trimOrDefault(mixed $value, string $default): string
+    {
+        return is_string($value) && trim($value) !== '' ? trim($value) : $default;
     }
 
     /**
@@ -203,6 +443,19 @@ class SettingsController extends Controller
         return [
             'policy_value' => (string) $validated[$key],
             'value_type' => SuchakPolicy::TYPE_STRING,
+            'description' => $description,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $value
+     * @return array{policy_value: string, value_type: string, description: string}
+     */
+    private function jsonRow(array $value, string $description): array
+    {
+        return [
+            'policy_value' => json_encode($value, JSON_THROW_ON_ERROR),
+            'value_type' => SuchakPolicy::TYPE_JSON,
             'description' => $description,
         ];
     }

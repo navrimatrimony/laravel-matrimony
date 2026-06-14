@@ -4,6 +4,7 @@ namespace App\Services\Intake;
 
 use App\Models\BiodataIntake;
 use App\Models\MatrimonyProfile;
+use App\Models\SuchakBiodataIntakeLink;
 
 /**
  * Resolve the matrimony profile whose data must win over intake on preview (same user / linked id).
@@ -17,6 +18,11 @@ class IntakePreviewLinkedProfileResolver
             if ($profile) {
                 return $profile;
             }
+        }
+
+        // Suchak biodata intake creates a new candidate profile on approve — never overlay the Suchak owner's profile.
+        if (SuchakBiodataIntakeLink::query()->where('biodata_intake_id', $intake->id)->exists()) {
+            return null;
         }
 
         if ($intake->uploaded_by) {

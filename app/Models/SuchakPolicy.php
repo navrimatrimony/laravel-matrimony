@@ -21,6 +21,7 @@ class SuchakPolicy extends Model
         'policy_value',
         'value_type',
         'description',
+        'description_mr',
         'is_active',
     ];
 

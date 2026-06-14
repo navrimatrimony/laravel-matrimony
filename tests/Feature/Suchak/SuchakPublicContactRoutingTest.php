@@ -68,6 +68,90 @@ class SuchakPublicContactRoutingTest extends TestCase
         $this->assertSame($viewer->id, $viewerProfile->user_id);
     }
 
+    public function test_manual_suchak_created_profile_routes_contact_through_suchak_even_with_default_mode(): void
+    {
+        [$viewer, $viewerProfile, $representation, $targetProfile] = $this->validRoutingFixture([
+            'representation' => [
+                'representation_mode' => SuchakProfileRepresentation::MODE_MANUAL_FORM_BY_SUCHAK,
+            ],
+        ]);
+
+        $response = $this->actingAs($viewer)->get(route('matrimony.profile.show', $targetProfile));
+
+        $response->assertOk();
+        $response->assertSee(__('profile.suchak_contact_title'), false);
+        $response->assertSee(route('matrimony.profile.suchak-requests.store', [$targetProfile, $representation]), false);
+        $response->assertDontSee(route('matrimony.profile.contact-reveal', $targetProfile), false);
+        $response->assertDontSee(route('contact-requests.store', $targetProfile), false);
+        $response->assertDontSee('9876543210', false);
+
+        $this
+            ->actingAs($viewer)
+            ->post(route('contact-requests.store', $targetProfile), [
+                'reason' => 'talk_to_family',
+                'requested_scopes' => ['phone'],
+            ])
+            ->assertForbidden();
+
+        $this
+            ->actingAs($viewer)
+            ->post(route('matrimony.profile.contact-reveal', $targetProfile))
+            ->assertForbidden();
+
+        $this->assertSame($viewer->id, $viewerProfile->user_id);
+    }
+
+    public function test_manual_suchak_created_profile_appears_in_member_search_results(): void
+    {
+        [$viewer, $viewerProfile, $representation, $targetProfile] = $this->validRoutingFixture([
+            'target_profile' => [
+                'full_name' => 'Manual Search Candidate',
+                'visibility_override' => true,
+            ],
+            'representation' => [
+                'representation_mode' => SuchakProfileRepresentation::MODE_MANUAL_FORM_BY_SUCHAK,
+            ],
+        ]);
+
+        $response = $this->actingAs($viewer)->get(route('matrimony.profiles.index', [
+            'sort' => 'latest',
+            'per_page' => 50,
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('Manual Search Candidate', false);
+        $response->assertSee(route('matrimony.profile.show', $targetProfile), false);
+        $this->assertSame($viewer->id, $viewerProfile->user_id);
+        $this->assertSame($targetProfile->id, $representation->matrimony_profile_id);
+    }
+
+    public function test_manual_suchak_created_profile_waits_for_routable_representation_before_member_search(): void
+    {
+        [$viewer, $viewerProfile] = $this->validRoutingFixture([
+            'target_profile' => [
+                'full_name' => 'Manual Pending Candidate',
+                'visibility_override' => true,
+            ],
+            'representation' => [
+                'representation_mode' => SuchakProfileRepresentation::MODE_MANUAL_FORM_BY_SUCHAK,
+                'representation_status' => SuchakProfileRepresentation::STATUS_PENDING,
+                'consent_status' => SuchakProfileRepresentation::CONSENT_NOT_REQUESTED,
+                'first_verified_consent_at' => null,
+                'consent_verified_at' => null,
+                'consent_valid_until' => null,
+            ],
+        ]);
+
+        $response = $this->actingAs($viewer)->get(route('matrimony.profiles.index', [
+            'sort' => 'latest',
+            'per_page' => 50,
+        ]));
+
+        $response->assertOk();
+        $response->assertDontSee('Manual Pending Candidate', false);
+        $this->assertSame($viewer->id, $viewerProfile->user_id);
+    }
+
     public function test_public_suchak_request_post_creates_day_9_pipeline_trace(): void
     {
         [$viewer, $viewerProfile, $representation, $targetProfile] = $this->validRoutingFixture();

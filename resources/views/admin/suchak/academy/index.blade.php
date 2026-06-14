@@ -1,7 +1,8 @@
 @extends('layouts.admin')
 
 @php
-    $label = fn (string $value) => ucwords(str_replace('_', ' ', $value));
+    $suchakText = \App\Support\Suchak\SuchakLocalizedText::class;
+    $label = fn (string $value) => $suchakText::label($value);
 @endphp
 
 @section('content')
@@ -52,6 +53,7 @@
                 <div class="grid gap-3 md:grid-cols-2">
                     <input name="module_key" value="{{ old('module_key') }}" placeholder="privacy_basics_v1" class="rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
                     <input name="module_title" value="{{ old('module_title') }}" placeholder="Privacy Basics" class="rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                    <input name="module_title_mr" value="{{ old('module_title_mr') }}" placeholder="Marathi module title" class="rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
                     <select name="module_category" class="rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
                         @foreach ($moduleCategories as $category)
                             <option value="{{ $category }}">{{ $label($category) }}</option>
@@ -64,7 +66,9 @@
                     Required for internal certificate
                 </label>
                 <textarea name="summary" rows="3" placeholder="Short policy-safe summary" class="w-full rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">{{ old('summary') }}</textarea>
+                <textarea name="summary_mr" rows="3" placeholder="Marathi policy-safe summary" class="w-full rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">{{ old('summary_mr') }}</textarea>
                 <textarea name="content_outline" rows="4" placeholder="Training outline without contact details, direct payment handles, or success guarantees" class="w-full rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">{{ old('content_outline') }}</textarea>
+                <textarea name="content_outline_mr" rows="4" placeholder="Marathi training outline" class="w-full rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">{{ old('content_outline_mr') }}</textarea>
                 <button type="submit" class="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900">Create module</button>
             </form>
         </section>
@@ -76,6 +80,7 @@
                 <div class="grid gap-3 md:grid-cols-2">
                     <input name="template_key" value="{{ old('template_key') }}" placeholder="consent_followup_v1" class="rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
                     <input name="template_title" value="{{ old('template_title') }}" placeholder="Consent follow-up" class="rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                    <input name="template_title_mr" value="{{ old('template_title_mr') }}" placeholder="Marathi template title" class="rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
                     <select name="template_category" class="rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
                         @foreach ($templateCategories as $category)
                             <option value="{{ $category }}">{{ $label($category) }}</option>
@@ -88,7 +93,9 @@
                     </select>
                 </div>
                 <textarea name="body_text" rows="4" placeholder="Use platform links only. Keep details masked." class="w-full rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">{{ old('body_text') }}</textarea>
+                <textarea name="body_text_mr" rows="4" placeholder="Marathi template body" class="w-full rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">{{ old('body_text_mr') }}</textarea>
                 <textarea name="usage_guidance" rows="3" placeholder="When this template should be used" class="w-full rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">{{ old('usage_guidance') }}</textarea>
+                <textarea name="usage_guidance_mr" rows="3" placeholder="Marathi usage guidance" class="w-full rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">{{ old('usage_guidance_mr') }}</textarea>
                 <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Create template</button>
             </form>
         </section>
@@ -112,6 +119,9 @@
                         <tr>
                             <td class="py-3 pr-4 text-gray-900 dark:text-gray-100">
                                 <div class="font-semibold">{{ $module->module_title }}</div>
+                                @if ($module->module_title_mr)
+                                    <div class="mt-1 text-xs text-gray-600 dark:text-gray-300">{{ $module->module_title_mr }}</div>
+                                @endif
                                 <div class="text-xs text-gray-500">{{ $module->module_key }}</div>
                             </td>
                             <td class="py-3 pr-4 text-gray-600 dark:text-gray-300">{{ $label($module->module_category) }}</td>
@@ -160,10 +170,18 @@
                 @forelse ($summary['templates'] as $template)
                     <article class="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900">
                         <div class="flex flex-wrap items-center justify-between gap-2">
-                            <h3 class="font-semibold text-gray-900 dark:text-gray-100">{{ $template->template_title }}</h3>
+                            <div>
+                                <h3 class="font-semibold text-gray-900 dark:text-gray-100">{{ $template->template_title }}</h3>
+                                @if ($template->template_title_mr)
+                                    <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">{{ $template->template_title_mr }}</p>
+                                @endif
+                            </div>
                             <span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-100">{{ $label($template->policy_status) }}</span>
                         </div>
                         <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{{ $template->body_text }}</p>
+                        @if ($template->body_text_mr)
+                            <p class="mt-2 text-sm text-gray-700 dark:text-gray-200">{{ $template->body_text_mr }}</p>
+                        @endif
                         <p class="mt-2 text-xs text-gray-500">{{ $label($template->template_category) }} / {{ $label($template->template_channel) }} / {{ $template->usages_count }} uses</p>
                     </article>
                 @empty

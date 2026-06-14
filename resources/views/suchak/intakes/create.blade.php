@@ -11,6 +11,11 @@
             <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
                 Upload or paste biodata through the existing intake engine. This creates source tracking only.
             </p>
+            <div class="mt-4 flex flex-wrap gap-3">
+                <a href="{{ route('suchak.manual-profiles.create') }}" class="rounded-md border border-indigo-300 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 dark:border-indigo-700 dark:text-indigo-200 dark:hover:bg-indigo-950/40">
+                    Fill profile manually
+                </a>
+            </div>
         </div>
 
         @if ($errors->any())

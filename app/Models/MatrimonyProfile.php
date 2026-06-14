@@ -809,6 +809,11 @@ class MatrimonyProfile extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function suchakProfileRepresentations(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(SuchakProfileRepresentation::class, 'matrimony_profile_id');
+    }
+
     /**
      * Exclude profiles tied to admin/staff accounts ({@see User::isAnyAdmin()}).
      */

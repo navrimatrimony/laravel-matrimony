@@ -99,30 +99,40 @@ class SuchakSourceLinkFoundationTest extends TestCase
         Bus::assertDispatched(ParseIntakeJob::class);
     }
 
-    public function test_unverified_suchak_cannot_create_source_link(): void
+    public function test_pending_suchak_can_create_source_link_when_work_access_is_enabled(): void
     {
         Bus::fake();
 
         $user = User::factory()->create();
-        SuchakAccount::factory()->create([
+        $account = SuchakAccount::factory()->create([
             'user_id' => $user->id,
             'verification_status' => SuchakAccount::VERIFICATION_PENDING,
+            'public_status' => SuchakAccount::PUBLIC_HIDDEN,
         ]);
 
         $this->actingAs($user)
             ->get(route('suchak.intakes.create'))
-            ->assertRedirect(route('suchak.dashboard'));
+            ->assertOk()
+            ->assertSee('Create Suchak Intake Source Link', false);
 
-        $this->actingAs($user)
+        $response = $this->actingAs($user)
             ->post(route('suchak.intakes.store'), [
-                'raw_text' => 'Pending Suchak must not create source links.',
-            ])
-            ->assertRedirect(route('suchak.dashboard'));
+                'raw_text' => 'Pending Suchak can create source links before admin review.',
+            ]);
 
-        $this->assertDatabaseCount('biodata_intakes', 0);
-        $this->assertDatabaseCount('suchak_biodata_intake_links', 0);
+        $intake = BiodataIntake::query()->where('uploaded_by', $user->id)->first();
+        $this->assertNotNull($intake);
 
-        Bus::assertNotDispatched(ParseIntakeJob::class);
+        $response->assertRedirect(route('intake.status', $intake));
+
+        $this->assertDatabaseHas('suchak_biodata_intake_links', [
+            'suchak_account_id' => $account->id,
+            'biodata_intake_id' => $intake->id,
+            'source_status' => SuchakBiodataIntakeLink::STATUS_INTAKE_UPLOADED,
+            'created_by_user_id' => $user->id,
+        ]);
+
+        Bus::assertDispatched(ParseIntakeJob::class);
     }
 
     public function test_suspended_suchak_cannot_create_source_link(): void

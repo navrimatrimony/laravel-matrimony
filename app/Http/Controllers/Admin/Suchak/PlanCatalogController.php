@@ -190,6 +190,7 @@ class PlanCatalogController extends Controller
     {
         return $request->validate([
             'name' => ['required', 'string', 'max:120'],
+            'name_mr' => ['nullable', 'string', 'max:120'],
             'slug' => [
                 'required',
                 'string',
@@ -198,6 +199,7 @@ class PlanCatalogController extends Controller
                 Rule::unique('suchak_plans', 'slug')->ignore($plan?->id),
             ],
             'description' => ['nullable', 'string', 'max:2000'],
+            'description_mr' => ['nullable', 'string', 'max:2000'],
             'price_amount' => ['nullable', 'numeric', 'min:0', 'max:999999999.99'],
             'currency' => ['nullable', 'string', 'size:3', 'required_with:price_amount'],
             'billing_period_days' => ['required', 'integer', 'min:1', 'max:3650'],

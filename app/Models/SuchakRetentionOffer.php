@@ -45,11 +45,13 @@ class SuchakRetentionOffer extends Model
         'offer_amount',
         'currency',
         'offer_note',
+        'offer_note_mr',
         'offered_by_admin_user_id',
         'admin_audit_log_id',
         'offered_at',
         'responded_at',
         'response_note',
+        'response_note_mr',
     ];
 
     protected $casts = [

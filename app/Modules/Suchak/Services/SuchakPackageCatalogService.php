@@ -119,7 +119,9 @@ class SuchakPackageCatalogService
             $actor,
             [
                 'package_name' => $overrides['package_name'] ?? $overrides['name'] ?? $template->template_name,
+                'package_name_mr' => $overrides['package_name_mr'] ?? $overrides['name_mr'] ?? $template->template_name_mr,
                 'package_description' => $overrides['package_description'] ?? $overrides['description'] ?? $template->template_description,
+                'package_description_mr' => $overrides['package_description_mr'] ?? $overrides['description_mr'] ?? $template->template_description_mr,
                 'price_amount' => $overrides['price_amount'] ?? $template->base_price_amount,
                 'currency' => $overrides['currency'] ?? $template->currency,
             ],
@@ -131,7 +133,9 @@ class SuchakPackageCatalogService
             'template_stage_id' => $stage->id,
             'stage_key' => $stage->stage_key,
             'stage_name' => $stage->stage_name,
+            'stage_name_mr' => $stage->stage_name_mr,
             'stage_description' => $stage->stage_description,
+            'stage_description_mr' => $stage->stage_description_mr,
             'sort_order' => $stage->sort_order,
             'is_required' => $stage->is_required,
             'expected_days' => $stage->expected_days,
@@ -142,7 +146,9 @@ class SuchakPackageCatalogService
             'stage_key' => $deliverable->templateStage?->stage_key,
             'deliverable_key' => $deliverable->deliverable_key,
             'deliverable_name' => $deliverable->deliverable_name,
+            'deliverable_name_mr' => $deliverable->deliverable_name_mr,
             'deliverable_description' => $deliverable->deliverable_description,
+            'deliverable_description_mr' => $deliverable->deliverable_description_mr,
             'sort_order' => $deliverable->sort_order,
             'is_required' => $deliverable->is_required,
         ])->all();
@@ -297,7 +303,9 @@ class SuchakPackageCatalogService
     private function normalizedTemplateAttributes(User $admin, array $attributes): array
     {
         $templateName = $this->requiredText($attributes['template_name'] ?? $attributes['name'] ?? null, 'Suchak package template name is required.', 160);
+        $templateNameMr = $this->limitedText($attributes['template_name_mr'] ?? $attributes['name_mr'] ?? null, 160);
         $templateDescription = $this->limitedText($attributes['template_description'] ?? $attributes['description'] ?? null, 3000);
+        $templateDescriptionMr = $this->limitedText($attributes['template_description_mr'] ?? $attributes['description_mr'] ?? null, 3000);
         [$basePriceAmount, $currency] = $this->normalizedPrice($attributes['base_price_amount'] ?? $attributes['price_amount'] ?? null, $attributes['currency'] ?? null);
         $status = $this->allowedValue(
             $attributes['template_status'] ?? SuchakPackageTemplate::STATUS_APPROVED,
@@ -309,7 +317,9 @@ class SuchakPackageCatalogService
 
         return [
             'template_name' => $templateName,
+            'template_name_mr' => $templateNameMr,
             'template_description' => $templateDescription,
+            'template_description_mr' => $templateDescriptionMr,
             'base_price_amount' => $basePriceAmount,
             'currency' => $currency,
             'template_status' => $status,
@@ -332,7 +342,9 @@ class SuchakPackageCatalogService
         ?SuchakPackageTemplate $template,
     ): array {
         $packageName = $this->requiredText($attributes['package_name'] ?? $attributes['name'] ?? null, 'Suchak package name is required.', 160);
+        $packageNameMr = $this->limitedText($attributes['package_name_mr'] ?? $attributes['name_mr'] ?? null, 160);
         $packageDescription = $this->limitedText($attributes['package_description'] ?? $attributes['description'] ?? null, 3000);
+        $packageDescriptionMr = $this->limitedText($attributes['package_description_mr'] ?? $attributes['description_mr'] ?? null, 3000);
         [$priceAmount, $currency] = $this->normalizedPrice($attributes['price_amount'] ?? null, $attributes['currency'] ?? null);
         $approval = $this->approvalAttributes();
 
@@ -343,7 +355,9 @@ class SuchakPackageCatalogService
             'customer_context_id' => $customerContext?->id,
             'source_template_id' => $template?->id,
             'package_name' => $packageName,
+            'package_name_mr' => $packageNameMr,
             'package_description' => $packageDescription,
+            'package_description_mr' => $packageDescriptionMr,
             'price_amount' => $priceAmount,
             'currency' => $currency,
             'customized_by_user_id' => $actor->id,
@@ -360,19 +374,23 @@ class SuchakPackageCatalogService
 
         foreach ($stages as $index => $stage) {
             $stageName = $this->requiredText($stage['stage_name'] ?? $stage['name'] ?? null, 'Suchak package stage name is required.', 160);
+            $stageNameMr = $this->limitedText($stage['stage_name_mr'] ?? $stage['name_mr'] ?? null, 160);
             $stageKey = $this->normalizedKey($stage['stage_key'] ?? $stageName, 'Suchak package stage key is required.');
             if (isset($payloads[$stageKey])) {
                 throw new InvalidArgumentException('Suchak package stage keys must be unique.');
             }
 
             $stageDescription = $this->limitedText($stage['stage_description'] ?? $stage['description'] ?? null, 3000);
+            $stageDescriptionMr = $this->limitedText($stage['stage_description_mr'] ?? $stage['description_mr'] ?? null, 3000);
             $this->assertNoMisleadingClaims([$stageName, $stageDescription]);
 
             $payloads[$stageKey] = [
                 'template_stage_id' => $stage['template_stage_id'] ?? null,
                 'stage_key' => $stageKey,
                 'stage_name' => $stageName,
+                'stage_name_mr' => $stageNameMr,
                 'stage_description' => $stageDescription,
+                'stage_description_mr' => $stageDescriptionMr,
                 'sort_order' => $this->sortOrder($stage['sort_order'] ?? $index),
                 'is_required' => filter_var($stage['is_required'] ?? true, FILTER_VALIDATE_BOOLEAN),
                 'expected_days' => $this->expectedDays($stage['expected_days'] ?? null),
@@ -398,6 +416,7 @@ class SuchakPackageCatalogService
 
         foreach ($deliverables as $index => $deliverable) {
             $deliverableName = $this->requiredText($deliverable['deliverable_name'] ?? $deliverable['name'] ?? null, 'Suchak package deliverable name is required.', 160);
+            $deliverableNameMr = $this->limitedText($deliverable['deliverable_name_mr'] ?? $deliverable['name_mr'] ?? null, 160);
             $deliverableKey = $this->normalizedKey($deliverable['deliverable_key'] ?? $deliverableName, 'Suchak package deliverable key is required.');
             if (isset($payloads[$deliverableKey])) {
                 throw new InvalidArgumentException('Suchak package deliverable keys must be unique.');
@@ -412,6 +431,7 @@ class SuchakPackageCatalogService
             }
 
             $deliverableDescription = $this->limitedText($deliverable['deliverable_description'] ?? $deliverable['description'] ?? null, 3000);
+            $deliverableDescriptionMr = $this->limitedText($deliverable['deliverable_description_mr'] ?? $deliverable['description_mr'] ?? null, 3000);
             $this->assertNoMisleadingClaims([$deliverableName, $deliverableDescription]);
 
             $payloads[$deliverableKey] = [
@@ -419,7 +439,9 @@ class SuchakPackageCatalogService
                 'stage_key' => $stageKey,
                 'deliverable_key' => $deliverableKey,
                 'deliverable_name' => $deliverableName,
+                'deliverable_name_mr' => $deliverableNameMr,
                 'deliverable_description' => $deliverableDescription,
+                'deliverable_description_mr' => $deliverableDescriptionMr,
                 'sort_order' => $this->sortOrder($deliverable['sort_order'] ?? $index),
                 'is_required' => filter_var($deliverable['is_required'] ?? true, FILTER_VALIDATE_BOOLEAN),
             ];

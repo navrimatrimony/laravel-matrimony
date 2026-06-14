@@ -17,7 +17,7 @@ class SuchakAccountLifecycleService
     {
     }
 
-    public function approve(SuchakAccount $account, User $admin, string $reason, ?string $ipAddress = null, ?string $userAgent = null): SuchakAccount
+    public function approve(SuchakAccount $account, User $admin, string $reason, ?string $ipAddress = null, ?string $userAgent = null, bool $publishOnApproval = false): SuchakAccount
     {
         $this->assertStatus($account, SuchakAccount::VERIFICATION_PENDING, 'Only pending Suchak accounts can be approved on Day-4.');
 
@@ -27,7 +27,29 @@ class SuchakAccountLifecycleService
             reason: $reason,
             actionType: 'suchak_account_approved',
             newVerificationStatus: SuchakAccount::VERIFICATION_VERIFIED,
-            newPublicStatus: SuchakAccount::PUBLIC_HIDDEN,
+            newPublicStatus: $publishOnApproval ? SuchakAccount::PUBLIC_ACTIVE : SuchakAccount::PUBLIC_HIDDEN,
+            timestamps: [
+                'verified_at' => now(),
+                'rejected_at' => null,
+                'suspended_at' => null,
+                'suspension_reason' => null,
+            ],
+            verificationRecordStatus: SuchakVerificationRecord::STATUS_APPROVED,
+            ipAddress: $ipAddress,
+            userAgent: $userAgent,
+        );
+    }
+
+    public function autoApproveAfterOtp(SuchakAccount $account, string $reason, ?string $ipAddress = null, ?string $userAgent = null, bool $publishOnApproval = false): SuchakAccount
+    {
+        $this->assertStatus($account, SuchakAccount::VERIFICATION_PENDING, 'Only pending Suchak accounts can be auto-approved after WhatsApp OTP verification.');
+
+        return $this->systemTransition(
+            account: $account,
+            reason: $reason,
+            actionType: SuchakActivityLog::ACTION_SUCHAK_AUTO_APPROVED,
+            newVerificationStatus: SuchakAccount::VERIFICATION_VERIFIED,
+            newPublicStatus: $publishOnApproval ? SuchakAccount::PUBLIC_ACTIVE : SuchakAccount::PUBLIC_HIDDEN,
             timestamps: [
                 'verified_at' => now(),
                 'rejected_at' => null,
@@ -319,6 +341,76 @@ class SuchakAccountLifecycleService
         });
     }
 
+    /**
+     * @param  array<string, mixed>  $timestamps
+     */
+    private function systemTransition(
+        SuchakAccount $account,
+        string $reason,
+        string $actionType,
+        string $newVerificationStatus,
+        string $newPublicStatus,
+        array $timestamps,
+        ?string $verificationRecordStatus,
+        ?string $ipAddress,
+        ?string $userAgent,
+    ): SuchakAccount {
+        return DB::transaction(function () use (
+            $account,
+            $reason,
+            $actionType,
+            $newVerificationStatus,
+            $newPublicStatus,
+            $timestamps,
+            $verificationRecordStatus,
+            $ipAddress,
+            $userAgent
+        ): SuchakAccount {
+            $account->refresh();
+
+            $oldValue = [
+                'verification_status' => $account->verification_status,
+                'public_status' => $account->public_status,
+            ];
+
+            $newValue = [
+                'verification_status' => $newVerificationStatus,
+                'public_status' => $newPublicStatus,
+            ];
+
+            $account->forceFill(array_merge($timestamps, [
+                'verification_status' => $newVerificationStatus,
+                'public_status' => $newPublicStatus,
+            ]))->save();
+
+            if ($verificationRecordStatus !== null) {
+                $this->writeSystemVerificationRecord($account, $reason, $verificationRecordStatus);
+            }
+
+            $this->activityLogger->record([
+                'suchak_account_id' => $account->id,
+                'actor_user_id' => null,
+                'actor_type' => SuchakActivityLog::ACTOR_SYSTEM,
+                'action_type' => $actionType,
+                'target_type' => 'suchak_account',
+                'target_id' => $account->id,
+                'admin_audit_log_id' => null,
+                'ip_address' => $ipAddress,
+                'user_agent' => $userAgent,
+                'metadata_json' => [
+                    'system_action_type' => $actionType,
+                    'reason' => $reason,
+                    'from_verification_status' => $oldValue['verification_status'],
+                    'to_verification_status' => $newValue['verification_status'],
+                    'from_public_status' => $oldValue['public_status'],
+                    'to_public_status' => $newValue['public_status'],
+                ],
+            ]);
+
+            return $account->fresh();
+        });
+    }
+
     private function assertStatus(SuchakAccount $account, string $expectedStatus, string $message): void
     {
         $account->refresh();
@@ -391,6 +483,23 @@ class SuchakAccountLifecycleService
             'document_path' => null,
             'admin_status' => $adminStatus,
             'admin_user_id' => $admin->id,
+            'remarks' => $reason,
+            'verified_at' => $adminStatus === SuchakVerificationRecord::STATUS_APPROVED ? now() : null,
+            'rejected_at' => $adminStatus === SuchakVerificationRecord::STATUS_REJECTED ? now() : null,
+        ]);
+    }
+
+    private function writeSystemVerificationRecord(
+        SuchakAccount $account,
+        string $reason,
+        string $adminStatus
+    ): void {
+        SuchakVerificationRecord::query()->create([
+            'suchak_account_id' => $account->id,
+            'verification_type' => SuchakVerificationRecord::TYPE_OTHER,
+            'document_path' => null,
+            'admin_status' => $adminStatus,
+            'admin_user_id' => null,
             'remarks' => $reason,
             'verified_at' => $adminStatus === SuchakVerificationRecord::STATUS_APPROVED ? now() : null,
             'rejected_at' => $adminStatus === SuchakVerificationRecord::STATUS_REJECTED ? now() : null,

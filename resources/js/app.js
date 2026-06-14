@@ -29,6 +29,51 @@ if (document.readyState === 'loading') {
     initLaravelValidationUi();
 }
 
+function initPasswordInputToggles() {
+    document.querySelectorAll('[data-password-field]').forEach((wrap) => {
+        if (wrap.dataset.passwordToggleBound === '1') {
+            return;
+        }
+
+        const input = wrap.querySelector('input');
+        const btn = wrap.querySelector('[data-password-toggle]');
+        if (!input || !btn) {
+            return;
+        }
+
+        wrap.dataset.passwordToggleBound = '1';
+        const showIcon = btn.querySelector('[data-icon="show"]');
+        const hideIcon = btn.querySelector('[data-icon="hide"]');
+        const labelShow = wrap.getAttribute('data-label-show') || 'Show password';
+        const labelHide = wrap.getAttribute('data-label-hide') || 'Hide password';
+
+        const syncUi = () => {
+            const visible = input.type === 'text';
+            btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+            btn.setAttribute('aria-label', visible ? labelHide : labelShow);
+            if (showIcon) {
+                showIcon.classList.toggle('hidden', visible);
+            }
+            if (hideIcon) {
+                hideIcon.classList.toggle('hidden', !visible);
+            }
+        };
+
+        btn.addEventListener('click', () => {
+            input.type = input.type === 'password' ? 'text' : 'password';
+            syncUi();
+        });
+
+        syncUi();
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initPasswordInputToggles);
+} else {
+    initPasswordInputToggles();
+}
+
 /** Flash banners in layouts.app: auto-dismiss + manual close so stacked messages do not linger. */
 function initFlashDismiss() {
     document.querySelectorAll('[data-flash-dismissible]').forEach((el) => {

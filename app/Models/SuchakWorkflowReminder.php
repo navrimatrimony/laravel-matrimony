@@ -58,6 +58,7 @@ class SuchakWorkflowReminder extends Model
         'acknowledged_at',
         'skipped_at',
         'message_copy',
+        'message_copy_mr',
         'metadata_json',
     ];
 

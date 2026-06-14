@@ -10,12 +10,15 @@ use App\Models\SuchakVerificationRecord;
 use App\Modules\Suchak\Services\SuchakAccountLifecycleService;
 use App\Modules\Suchak\Services\SuchakBillingCatalogService;
 use App\Modules\Suchak\Services\SuchakPaymentStatusService;
+use App\Modules\Suchak\Services\SuchakPolicyService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use InvalidArgumentException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class AccountVerificationController extends Controller
 {
@@ -87,7 +90,8 @@ class AccountVerificationController extends Controller
     public function approve(
         Request $request,
         SuchakAccount $suchakAccount,
-        SuchakAccountLifecycleService $lifecycleService
+        SuchakAccountLifecycleService $lifecycleService,
+        SuchakPolicyService $policyService
     ): RedirectResponse {
         $validated = $this->validateReason($request);
 
@@ -97,7 +101,8 @@ class AccountVerificationController extends Controller
                 $request->user(),
                 $validated['reason'],
                 $request->ip(),
-                Str::limit((string) $request->userAgent(), 512, '')
+                Str::limit((string) $request->userAgent(), 512, ''),
+                $policyService->autoPublishesOnApproval()
             ),
             $suchakAccount,
             'Suchak account approved.'
@@ -242,6 +247,17 @@ class AccountVerificationController extends Controller
             SuchakVerificationRecord::STATUS_REJECTED,
             'Suchak verification record rejected.'
         );
+    }
+
+    public function viewVerificationDocument(
+        SuchakAccount $suchakAccount,
+        SuchakVerificationRecord $verificationRecord
+    ): BinaryFileResponse {
+        abort_unless($verificationRecord->suchak_account_id === $suchakAccount->id, 404);
+        abort_if(blank($verificationRecord->document_path), 404);
+        abort_unless(Storage::disk('local')->exists($verificationRecord->document_path), 404);
+
+        return response()->file(Storage::disk('local')->path($verificationRecord->document_path));
     }
 
     /**

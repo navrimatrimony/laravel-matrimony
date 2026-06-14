@@ -1,5 +1,9 @@
 @extends('layouts.admin')
 
+@php
+    $suchakText = \App\Support\Suchak\SuchakLocalizedText::class;
+@endphp
+
 @section('content')
 <div class="space-y-6">
     <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -52,11 +56,11 @@
         </div>
         <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Pricing mode</div>
-            <div class="mt-2 text-lg font-bold text-gray-900 dark:text-gray-100">{{ ucwords(str_replace('_', ' ', $policySummary['pricing_mode'])) }}</div>
+            <div class="mt-2 text-lg font-bold text-gray-900 dark:text-gray-100">{{ $suchakText::label($policySummary['pricing_mode']) }}</div>
         </div>
         <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Payment mode</div>
-            <div class="mt-2 text-lg font-bold text-gray-900 dark:text-gray-100">{{ ucwords(str_replace('_', ' ', $policySummary['payment_mode'])) }}</div>
+            <div class="mt-2 text-lg font-bold text-gray-900 dark:text-gray-100">{{ $suchakText::label($policySummary['payment_mode']) }}</div>
         </div>
     </section>
 
@@ -68,6 +72,10 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="new_plan_name">Name</label>
                     <input id="new_plan_name" name="name" value="{{ old('name') }}" required maxlength="120" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="new_plan_name_mr">Name Marathi</label>
+                    <input id="new_plan_name_mr" name="name_mr" value="{{ old('name_mr') }}" maxlength="120" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="new_plan_slug">Slug</label>
@@ -88,6 +96,10 @@
                 <div class="lg:col-span-2">
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="new_plan_description">Description</label>
                     <textarea id="new_plan_description" name="description" rows="3" maxlength="2000" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('description') }}</textarea>
+                </div>
+                <div class="lg:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="new_plan_description_mr">Description Marathi</label>
+                    <textarea id="new_plan_description_mr" name="description_mr" rows="3" maxlength="2000" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('description_mr') }}</textarea>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="new_plan_sort">Display order</label>
@@ -168,6 +180,9 @@
                     <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                         <div>
                             <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">{{ $plan->name }}</h3>
+                            @if ($plan->name_mr)
+                                <p class="mt-1 text-sm font-medium text-gray-700 dark:text-gray-300">{{ $plan->name_mr }}</p>
+                            @endif
                             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                 {{ $plan->slug }} · {{ $plan->hasConfiguredPrice() ? $plan->currency.' '.$plan->price_amount : 'Manual assignment / price not configured' }} · {{ number_format($plan->billing_period_days ?? 30) }} days
                             </p>
@@ -191,6 +206,10 @@
                                 <input id="plan_{{ $plan->id }}_name" name="name" value="{{ old('name', $plan->name) }}" required maxlength="120" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                             </div>
                             <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="plan_{{ $plan->id }}_name_mr">Name Marathi</label>
+                                <input id="plan_{{ $plan->id }}_name_mr" name="name_mr" value="{{ old('name_mr', $plan->name_mr) }}" maxlength="120" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                            </div>
+                            <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="plan_{{ $plan->id }}_slug">Slug</label>
                                 <input id="plan_{{ $plan->id }}_slug" name="slug" value="{{ old('slug', $plan->slug) }}" required maxlength="80" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                             </div>
@@ -209,6 +228,10 @@
                             <div class="lg:col-span-2">
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="plan_{{ $plan->id }}_description">Description</label>
                                 <textarea id="plan_{{ $plan->id }}_description" name="description" rows="3" maxlength="2000" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('description', $plan->description) }}</textarea>
+                            </div>
+                            <div class="lg:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="plan_{{ $plan->id }}_description_mr">Description Marathi</label>
+                                <textarea id="plan_{{ $plan->id }}_description_mr" name="description_mr" rows="3" maxlength="2000" class="mt-1 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">{{ old('description_mr', $plan->description_mr) }}</textarea>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="plan_{{ $plan->id }}_sort">Display order</label>

@@ -56,15 +56,19 @@ class SuchakRouteAccessTest extends TestCase
             ->assertSee('Work', false)
             ->assertSee('Network', false)
             ->assertSee('Tools', false)
+            ->assertSee('Profile setup', false)
             ->assertSee('Today', false)
             ->assertSee('Customers', false)
             ->assertSee('Money', false)
             ->assertSee('Sharing', false)
             ->assertSee('Records', false)
+            ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'profile']), false)
             ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'profiles']), false)
-            ->assertSee('Biodata Entry', false)
+            ->assertSee('Upload / Paste', false)
+            ->assertSee('Manual Form', false)
             ->assertSee('Offline Camps', false)
             ->assertSee('Suchak privacy & public listing', false)
+            ->assertSee('Contact numbers', false)
             ->assertSee('Account & Security', false)
             ->assertSee('Notification preferences', false)
             ->assertSee('Notification inbox', false)
@@ -92,8 +96,32 @@ class SuchakRouteAccessTest extends TestCase
             ->assertSee('data-suchak-nav', false)
             ->assertSee('data-suchak-subnav', false)
             ->assertSee('Work', false)
-            ->assertSee('Biodata Entry', false)
+            ->assertSee('Upload / Paste', false)
+            ->assertSee('Manual Form', false)
             ->assertSee('Masked Search', false)
+            ->assertDontSee('id="connect-main-badge"', false)
+            ->assertDontSee('id="activity-main-badge"', false)
+            ->assertDontSee('id="mobile-sticky-quick-nav"', false)
+            ->assertDontSee('nav.personal_menu_profile_section', false)
+            ->assertDontSee('My Profile', false);
+    }
+
+    public function test_suchak_manual_profile_page_keeps_suchak_navigation_and_not_member_menu(): void
+    {
+        $user = User::factory()->create();
+        SuchakAccount::factory()->create([
+            'user_id' => $user->id,
+            'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+            'public_status' => SuchakAccount::PUBLIC_ACTIVE,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('suchak.manual-profiles.create'))
+            ->assertOk()
+            ->assertSee('data-suchak-nav', false)
+            ->assertSee('data-suchak-subnav', false)
+            ->assertSee('Manual Form', false)
+            ->assertSee('Manual candidate profile', false)
             ->assertDontSee('id="connect-main-badge"', false)
             ->assertDontSee('id="activity-main-badge"', false)
             ->assertDontSee('id="mobile-sticky-quick-nav"', false)
@@ -111,6 +139,7 @@ class SuchakRouteAccessTest extends TestCase
         ]);
 
         foreach ([
+            route('suchak.account-settings.edit') => 'Account contacts',
             route('user.settings.security') => 'Account & Security',
             route('user.settings.notifications') => 'Notification preferences',
             route('notifications.index') => 'Notification inbox',
@@ -121,6 +150,7 @@ class SuchakRouteAccessTest extends TestCase
                 ->assertSee('data-suchak-nav', false)
                 ->assertSee('data-suchak-subnav', false)
                 ->assertSee('Suchak privacy & public listing', false)
+                ->assertSee('Contact numbers', false)
                 ->assertSee('Account & Security', false)
                 ->assertSee('Notification preferences', false)
                 ->assertSee('Notification inbox', false)

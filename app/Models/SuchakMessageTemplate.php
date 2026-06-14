@@ -53,12 +53,15 @@ class SuchakMessageTemplate extends Model
     protected $fillable = [
         'template_key',
         'template_title',
+        'template_title_mr',
         'template_category',
         'template_channel',
         'template_status',
         'policy_status',
         'body_text',
+        'body_text_mr',
         'usage_guidance',
+        'usage_guidance_mr',
         'created_by_admin_user_id',
         'admin_audit_log_id',
     ];

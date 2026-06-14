@@ -8,16 +8,27 @@ use InvalidArgumentException;
 
 class SuchakAccessService
 {
+    public function __construct(private readonly SuchakPolicyService $policyService) {}
+
     public function canOperate(?SuchakAccount $account): bool
     {
-        return $account !== null
-            && $account->verification_status === SuchakAccount::VERIFICATION_VERIFIED;
+        if ($account === null) {
+            return false;
+        }
+
+        if ($account->verification_status === SuchakAccount::VERIFICATION_VERIFIED) {
+            return true;
+        }
+
+        return $account->verification_status === SuchakAccount::VERIFICATION_PENDING
+            && $this->policyService->allowsWorkBeforeAdminApproval();
     }
 
     public function canPubliclyRoute(?SuchakAccount $account): bool
     {
-        return $this->canOperate($account)
-            && $account?->public_status === SuchakAccount::PUBLIC_ACTIVE;
+        return $account !== null
+            && $account->verification_status === SuchakAccount::VERIFICATION_VERIFIED
+            && $account->public_status === SuchakAccount::PUBLIC_ACTIVE;
     }
 
     public function owns(SuchakAccount $account, User $actor): bool

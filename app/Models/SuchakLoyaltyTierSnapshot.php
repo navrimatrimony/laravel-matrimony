@@ -20,6 +20,7 @@ class SuchakLoyaltyTierSnapshot extends Model
         'policy_key',
         'tier_key',
         'tier_label',
+        'tier_label_mr',
         'tier_score',
         'platform_leads_count',
         'platform_value_amount',

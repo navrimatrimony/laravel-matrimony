@@ -3,6 +3,9 @@
     if (auth()->check() && auth()->user()->isAnyAdmin() && $profile->isShowcaseProfile()) {
         $wizardPhotoQuery['profile_id'] = $profile->id;
     }
+    if (! empty($wizardSuchakTarget)) {
+        $wizardPhotoQuery['profile_id'] = $profile->id;
+    }
 @endphp
 {{-- Centralized photo workflow: always forward to the dedicated photo manager page. --}}
 <div style="padding: 18px 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px;">

@@ -25,6 +25,7 @@ class SuchakOfflineCampPackageAssignment extends Model
         'service_package_id',
         'assignment_status',
         'assignment_note',
+        'assignment_note_mr',
         'assigned_by_user_id',
         'assigned_at',
     ];
