@@ -163,6 +163,46 @@ class SuchakCollaborationFoundationTest extends TestCase
         ]);
     }
 
+    public function test_collaboration_center_direction_filters_are_participant_scoped(): void
+    {
+        [$requestingUser, $requestingAccount, $requestingRepresentation, $targetAccount, $targetRepresentation] = $this->validCollaborationFixture();
+
+        app(SuchakCollaborationService::class)->createRequest(
+            $requestingAccount,
+            $requestingUser,
+            $requestingRepresentation,
+            $targetRepresentation,
+            ['message' => 'Direction filter check.'],
+        );
+
+        $this->actingAs($targetAccount->user)
+            ->get(route('suchak.collaborations.index', [
+                'direction' => 'incoming',
+                'status' => SuchakCollaborationRequest::STATUS_PENDING,
+            ]))
+            ->assertOk()
+            ->assertSee('Incoming request from', false)
+            ->assertSee('Direction filter check.', false)
+            ->assertDontSee('Sensitive Requesting Candidate', false);
+
+        $this->actingAs($requestingUser)
+            ->get(route('suchak.collaborations.index', [
+                'direction' => 'incoming',
+                'status' => SuchakCollaborationRequest::STATUS_PENDING,
+            ]))
+            ->assertOk()
+            ->assertSee('No collaboration requests found.', false);
+
+        $this->actingAs($requestingUser)
+            ->get(route('suchak.collaborations.index', [
+                'direction' => 'outgoing',
+                'status' => SuchakCollaborationRequest::STATUS_PENDING,
+            ]))
+            ->assertOk()
+            ->assertSee('Outgoing request to', false)
+            ->assertSee('Direction filter check.', false);
+    }
+
     public function test_target_suchak_rejection_closes_request_without_contact_exchange(): void
     {
         [$requestingUser, $requestingAccount, $requestingRepresentation, $targetAccount, $targetRepresentation] = $this->validCollaborationFixture();
@@ -288,7 +328,9 @@ class SuchakCollaborationFoundationTest extends TestCase
         $response = $this->actingAs($requestingUser)->get(route('suchak.search.index'));
 
         $response->assertOk();
-        $response->assertSee('Request collaboration', false);
+        $response->assertSee('Available through: #', false);
+        $response->assertSee('Request goes only to this Suchak', false);
+        $response->assertSee('Send collaboration request to this Suchak', false);
         $response->assertSee((string) $requestingRepresentation->id, false);
         $response->assertDontSee('Sensitive Target Candidate', false);
         $response->assertDontSee('9876543210', false);

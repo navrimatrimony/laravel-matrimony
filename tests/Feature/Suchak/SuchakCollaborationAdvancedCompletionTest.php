@@ -97,7 +97,7 @@ class SuchakCollaborationAdvancedCompletionTest extends TestCase
         $this->actingAs($targetAccount->user)
             ->get(route('suchak.collaborations.index'))
             ->assertOk()
-            ->assertSee('Accept', false)
+            ->assertSee('Review and accept', false)
             ->assertSee('INR 25000.00', false)
             ->assertDontSee('Sensitive Requesting Candidate', false);
 

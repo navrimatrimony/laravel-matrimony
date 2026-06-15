@@ -10,6 +10,7 @@ use App\Models\SuchakPaymentContext;
 use App\Models\SuchakProfileRepresentation;
 use App\Modules\Suchak\Services\SuchakCollaborationService;
 use App\Modules\Suchak\Services\SuchakCrmLedgerService;
+use App\Modules\Suchak\Services\SuchakCandidateMaskingService;
 use App\Modules\Suchak\Services\SuchakLimitService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class CollaborationController extends Controller
         Request $request,
         SuchakLimitService $limitService,
         SuchakCollaborationService $collaborationService,
+        SuchakCandidateMaskingService $maskingService,
     ): View {
         $account = $request->user()?->suchakAccount;
         if (! $account) {
@@ -31,13 +33,34 @@ class CollaborationController extends Controller
 
         $status = $request->query('status');
         $status = in_array($status, SuchakCollaborationRequest::STATUSES, true) ? $status : null;
+        $direction = $request->query('direction');
+        $direction = in_array($direction, ['incoming', 'outgoing'], true) ? $direction : null;
+        $statusGroup = $request->query('status_group') === 'closed' ? 'closed' : null;
+        $overdue = $request->boolean('overdue');
+        if ($statusGroup !== null) {
+            $status = null;
+        }
+        if ($overdue) {
+            $status = null;
+            $statusGroup = null;
+        }
 
-        $collaborations = SuchakCollaborationRequest::query()
+        $collaborationsQuery = SuchakCollaborationRequest::query()
             ->with([
                 'requestingSuchakAccount.user',
                 'targetSuchakAccount.user',
                 'requestingRepresentation.matrimonyProfile.gender',
+                'requestingRepresentation.matrimonyProfile.maritalStatus',
+                'requestingRepresentation.matrimonyProfile.religion',
+                'requestingRepresentation.matrimonyProfile.caste',
+                'requestingRepresentation.matrimonyProfile.location.parent.parent.parent',
+                'requestingRepresentation.matrimonyProfile.occupationMaster',
                 'targetRepresentation.matrimonyProfile.gender',
+                'targetRepresentation.matrimonyProfile.maritalStatus',
+                'targetRepresentation.matrimonyProfile.religion',
+                'targetRepresentation.matrimonyProfile.caste',
+                'targetRepresentation.matrimonyProfile.location.parent.parent.parent',
+                'targetRepresentation.matrimonyProfile.occupationMaster',
                 'commissionAgreement.collectorSuchakAccount',
                 'ledgerEntries' => fn ($query) => $query
                     ->where('suchak_account_id', $account->id)
@@ -48,15 +71,45 @@ class CollaborationController extends Controller
                     ->where('requesting_suchak_account_id', $account->id)
                     ->orWhere('target_suchak_account_id', $account->id);
             })
-            ->when($status, fn ($query) => $query->where('status', $status))
-            ->latest('requested_at')
-            ->paginate(20)
-            ->withQueryString();
+            ->when($direction === 'incoming', fn ($query) => $query->where('target_suchak_account_id', $account->id))
+            ->when($direction === 'outgoing', fn ($query) => $query->where('requesting_suchak_account_id', $account->id))
+            ->when($statusGroup === 'closed', fn ($query) => $query->whereIn('status', [
+                SuchakCollaborationRequest::STATUS_EXPIRED,
+                SuchakCollaborationRequest::STATUS_REJECTED,
+                SuchakCollaborationRequest::STATUS_CANCELLED,
+            ]))
+            ->when($overdue, fn ($query) => $query
+                ->where('status', SuchakCollaborationRequest::STATUS_PENDING)
+                ->where('expires_at', '<=', now()))
+            ->when(! $overdue && $status, fn ($query) => $query->where('status', $status))
+            ->latest('requested_at');
+
+        $collaborations = $collaborationsQuery->paginate(20)->withQueryString();
+        $collaborationSummaries = $collaborations->getCollection()
+            ->mapWithKeys(function (SuchakCollaborationRequest $collaboration) use ($maskingService): array {
+                $requestingProfile = $collaboration->requestingRepresentation?->matrimonyProfile;
+                $targetProfile = $collaboration->targetRepresentation?->matrimonyProfile;
+
+                return [
+                    $collaboration->id => [
+                        'requesting' => $requestingProfile
+                            ? $maskingService->maskedSummary($requestingProfile, $collaboration->requestingRepresentation)
+                            : [],
+                        'target' => $targetProfile
+                            ? $maskingService->maskedSummary($targetProfile, $collaboration->targetRepresentation)
+                            : [],
+                    ],
+                ];
+            });
 
         return view('suchak.collaborations.index', [
             'suchakAccount' => $account,
             'collaborations' => $collaborations,
+            'collaborationSummaries' => $collaborationSummaries,
             'status' => $status,
+            'direction' => $direction,
+            'statusGroup' => $statusGroup,
+            'overdue' => $overdue,
             'statuses' => SuchakCollaborationRequest::STATUSES,
             'splitTypes' => SuchakCommissionAgreement::SPLIT_TYPES,
             'ledgerTypeOptions' => SuchakLedgerEntry::TYPES,

@@ -9,6 +9,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 class SuchakCrossSearchService
 {
@@ -58,8 +59,11 @@ class SuchakCrossSearchService
             ->through(function (SuchakProfileRepresentation $representation): array {
                 /** @var MatrimonyProfile $profile */
                 $profile = $representation->matrimonyProfile;
+                $summary = $this->maskingService->maskedSummary($profile, $representation);
+                $suchakName = trim((string) ($representation->suchakAccount?->suchak_name ?: 'Public Suchak'));
+                $summary['target_suchak_label'] = '#'.$representation->suchak_account_id.' '.Str::limit($suchakName, 80, '');
 
-                return $this->maskingService->maskedSummary($profile, $representation);
+                return $summary;
             });
     }
 
@@ -73,6 +77,8 @@ class SuchakCrossSearchService
                 'suchakAccount',
                 'matrimonyProfile.gender',
                 'matrimonyProfile.maritalStatus',
+                'matrimonyProfile.religion',
+                'matrimonyProfile.caste',
                 'matrimonyProfile.location.parent.parent.parent',
                 'matrimonyProfile.occupationMaster',
             ])
@@ -91,8 +97,10 @@ class SuchakCrossSearchService
             ->map(function (SuchakProfileRepresentation $representation): array {
                 /** @var MatrimonyProfile $profile */
                 $profile = $representation->matrimonyProfile;
+                $summary = $this->maskingService->maskedSummary($profile, $representation);
+                $summary['option_label'] = $this->ownRepresentationOptionLabel($summary);
 
-                return $this->maskingService->maskedSummary($profile, $representation);
+                return $summary;
             });
     }
 
@@ -111,6 +119,21 @@ class SuchakCrossSearchService
         $genderId = (int) ($filters['gender_id'] ?? 0);
         if ($genderId > 0) {
             $query->where('gender_id', $genderId);
+        }
+
+        $casteId = (int) ($filters['caste_id'] ?? 0);
+        if ($casteId > 0) {
+            $query->where('caste_id', $casteId);
+        }
+
+        $religionId = (int) ($filters['religion_id'] ?? 0);
+        if ($religionId > 0) {
+            $query->where('religion_id', $religionId);
+        }
+
+        $maritalStatusId = (int) ($filters['marital_status_id'] ?? 0);
+        if ($maritalStatusId > 0) {
+            $query->where('marital_status_id', $maritalStatusId);
         }
 
         $ageMin = (int) ($filters['age_min'] ?? 0);
@@ -134,5 +157,27 @@ class SuchakCrossSearchService
                     });
             });
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $summary
+     */
+    private function ownRepresentationOptionLabel(array $summary): string
+    {
+        $community = collect([
+            $summary['community']['religion'] ?? null,
+            $summary['community']['caste'] ?? null,
+        ])->filter()->implode(' / ');
+        $location = collect([
+            $summary['location']['city'] ?? null,
+            $summary['location']['district'] ?? null,
+        ])->filter()->implode(', ');
+
+        return collect([
+            $summary['candidate_reference'] ?? null,
+            $summary['basic']['age_range'] ?? null,
+            $community !== '' ? $community : null,
+            $location !== '' ? $location : null,
+        ])->filter()->implode(' · ');
     }
 }

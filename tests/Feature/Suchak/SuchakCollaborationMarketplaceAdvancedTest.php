@@ -43,17 +43,22 @@ class SuchakCollaborationMarketplaceAdvancedTest extends TestCase
 
         $suggestions = app(SuchakCollaborationService::class)->suggestedOpportunities($requestingAccount);
         $this->assertCount(1, $suggestions);
-        $this->assertSame($requestingRepresentation->id, $suggestions->first()['requesting_representation_id']);
-        $this->assertSame($targetRepresentation->id, $suggestions->first()['target_representation_id']);
+        $firstSuggestion = $suggestions->first();
+        $this->assertSame($requestingRepresentation->id, $firstSuggestion['requesting_representation_id']);
+        $this->assertSame($targetRepresentation->id, $firstSuggestion['target_representation_id']);
+        $this->assertContains('Same caste.', $firstSuggestion['reasons']);
+        $this->assertSame('Strong preliminary fit', $firstSuggestion['fit_label']);
+        $this->assertArrayHasKey('warnings', $firstSuggestion);
 
         $this->actingAs($requestingUser)
             ->get(route('suchak.collaborations.index'))
             ->assertOk()
-            ->assertSee('Suggested collaboration opportunities', false)
+            ->assertSee('Suggested opportunities', false)
             ->assertSee('masked-', false)
-            ->assertSee('Same caste as an active Suchak representation.', false)
-            ->assertSee('Collector lock after acceptance', false)
-            ->assertSee('Request collaboration', false)
+            ->assertSee('Same caste.', false)
+            ->assertSee('Request will go to: #'.$targetAccount->id.' Day51 Target Suchak', false)
+            ->assertSee('Candidate contact and identity remain masked', false)
+            ->assertSee('Send collaboration request to this Suchak', false)
             ->assertDontSee('Day51 Sensitive Target Candidate', false)
             ->assertDontSee('9876543210', false)
             ->assertDontSee('Day51 Secret Lane', false);
