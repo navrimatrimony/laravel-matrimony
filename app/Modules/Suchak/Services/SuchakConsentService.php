@@ -2,11 +2,15 @@
 
 namespace App\Modules\Suchak\Services;
 
+use App\Models\AdminSetting;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakConsent;
 use App\Models\SuchakConsentEvent;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
+use App\Services\Messaging\MetaWhatsAppCloudService;
+use App\Support\MobileNumber;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -195,6 +199,75 @@ class SuchakConsentService
     }
 
     /**
+     * Platform-generated OTP flow. The raw OTP is never persisted; in dev mode it
+     * is returned once so local/demo flows can be verified without a provider.
+     *
+     * @return array{consent: SuchakConsent, raw_otp: string|null, delivery: string, suchak_message: string}
+     */
+    public function issuePlatformOtp(
+        SuchakConsent $consent,
+        User $actor,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): array {
+        $consent->refresh()->loadMissing(['suchakAccount', 'matrimonyProfile']);
+        $this->assertConsentSuchakActor($consent, $actor);
+        $this->assertConsentCanReceiveOtp($consent);
+
+        $mobile = MobileNumber::normalize($consent->consent_mobile_number);
+        if ($mobile === null) {
+            throw new InvalidArgumentException('Customer mobile number is required for platform OTP consent.');
+        }
+
+        $mode = (string) AdminSetting::getValue('mobile_verification_mode', 'dev_show');
+        if ($mode === 'off') {
+            throw new InvalidArgumentException('Platform OTP delivery is disabled.');
+        }
+
+        $otp = (string) random_int(100000, 999999);
+        $delivery = 'dev_show';
+        if ($mode !== 'dev_show') {
+            /** @var MetaWhatsAppCloudService $whatsapp */
+            $whatsapp = app(MetaWhatsAppCloudService::class);
+            if (! $whatsapp->isConfiguredForOtp()) {
+                throw new InvalidArgumentException('Platform WhatsApp OTP provider is not configured.');
+            }
+
+            if (! $whatsapp->sendOtp($mobile, $otp)) {
+                throw new InvalidArgumentException('Platform could not send OTP to the customer.');
+            }
+
+            $delivery = 'whatsapp';
+        }
+
+        $updated = DB::transaction(function () use ($consent, $otp, $delivery, $ipAddress, $userAgent): SuchakConsent {
+            SuchakConsent::query()
+                ->whereKey($consent->id)
+                ->update([
+                    'consent_status' => SuchakConsent::STATUS_OTP_SENT,
+                    'otp_hash' => Hash::make($otp),
+                    'last_otp_sent_at' => now(),
+                ]);
+
+            $updated = $consent->fresh(['matrimonyProfile']);
+            $note = $delivery === 'dev_show'
+                ? 'Platform generated customer OTP in demo mode.'
+                : 'Platform sent customer OTP through configured provider.';
+            $this->recordEvent($updated, SuchakConsentEvent::EVENT_OTP_SENT, SuchakConsentEvent::ACTOR_SYSTEM, null, $note);
+            $this->recordActivity($updated, null, SuchakActivityLog::ACTION_CONSENT_OTP_SENT, 'consent_otp_sent_by_platform', $ipAddress, $userAgent);
+
+            return $updated;
+        });
+
+        return [
+            'consent' => $updated,
+            'raw_otp' => $delivery === 'dev_show' ? $otp : null,
+            'delivery' => $delivery,
+            'suchak_message' => $this->suchakRelayMessage($updated),
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $attributes
      */
     public function verifyOtpAndAccept(SuchakConsent $consent, string $otp, array $attributes = []): SuchakConsent
@@ -268,10 +341,26 @@ class SuchakConsentService
             throw new InvalidArgumentException('Manual consent evidence note is required.');
         }
 
+        $proofDocument = $attributes['proof_document'] ?? null;
+        if (! $proofDocument instanceof UploadedFile) {
+            throw new InvalidArgumentException('Signed consent proof file is required.');
+        }
+
+        $proofPath = $proofDocument->store('suchak/consent-proofs/'.$consent->suchak_account_id.'/'.$consent->id, 'local');
+        if (! is_string($proofPath) || $proofPath === '') {
+            throw new InvalidArgumentException('Unable to store signed consent proof file.');
+        }
+
+        $proofNote = implode("\n", array_filter([
+            $evidenceNote,
+            'Proof file: '.$proofPath,
+            'Original file: '.Str::limit($proofDocument->getClientOriginalName(), 160, ''),
+        ]));
+
         $validFrom = now();
         $validUntil = $this->validUntilFor($consent->consent_type, $validFrom);
 
-        return DB::transaction(function () use ($consent, $actor, $attributes, $evidenceNote, $validFrom, $validUntil, $ipAddress, $userAgent): SuchakConsent {
+        return DB::transaction(function () use ($consent, $actor, $attributes, $proofNote, $validFrom, $validUntil, $ipAddress, $userAgent): SuchakConsent {
             SuchakConsent::query()
                 ->whereKey($consent->id)
                 ->update([
@@ -297,7 +386,7 @@ class SuchakConsentService
                 ]);
 
             $updated = $consent->fresh(['representation']);
-            $this->recordEvent($updated, SuchakConsentEvent::EVENT_CONSENT_ACCEPTED, SuchakConsentEvent::ACTOR_SUCHAK, $actor->id, $evidenceNote);
+            $this->recordEvent($updated, SuchakConsentEvent::EVENT_CONSENT_ACCEPTED, SuchakConsentEvent::ACTOR_SUCHAK, $actor->id, $proofNote);
             $this->recordActivity($updated, $actor, SuchakActivityLog::ACTION_CONSENT_VERIFIED, 'consent_manual_proof_accepted', $ipAddress, $userAgent);
 
             return $updated;
@@ -520,5 +609,15 @@ class SuchakConsentService
                 'consent_status' => $consent->consent_status,
             ],
         ]);
+    }
+
+    private function suchakRelayMessage(SuchakConsent $consent): string
+    {
+        $profileLabel = '#'.$consent->matrimony_profile_id;
+
+        return trim("Consent request for matrimony profile {$profileLabel}.\n"
+            ."Please read this consent text: {$consent->consent_text_snapshot}\n"
+            .'The platform has sent a 6 digit OTP to your registered mobile number. '
+            .'If you agree, reply with that OTP to your Suchak so consent can be verified.');
     }
 }

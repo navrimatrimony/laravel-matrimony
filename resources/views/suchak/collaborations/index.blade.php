@@ -17,6 +17,23 @@
 
         return $value !== '' ? $value : 'Broad location unavailable';
     };
+    $ageText = static function (array $summary) use ($summaryText): string {
+        return isset($summary['basic']['age_years'])
+            ? $summary['basic']['age_years'].' years'
+            : $summaryText($summary, 'basic', 'age_range');
+    };
+    $heightText = static function (array $summary) use ($summaryText): string {
+        $height = $summary['basic']['height_feet_inches'] ?? null;
+
+        return is_string($height) && trim($height) !== ''
+            ? trim($height)
+            : $summaryText($summary, 'basic', 'height_range');
+    };
+    $candidateLabel = static function (array $summary): string {
+        $gender = trim((string) ($summary['basic']['gender'] ?? ''));
+
+        return $gender !== '' ? $gender : 'Candidate';
+    };
     $statusTone = static fn (string $status): string => match ($status) {
         \App\Models\SuchakCollaborationRequest::STATUS_ACCEPTED => 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100',
         \App\Models\SuchakCollaborationRequest::STATUS_REJECTED,
@@ -125,13 +142,14 @@
                 @foreach ($suggestedOpportunities as $opportunity)
                     @php
                         $summary = $opportunity['target_summary'] ?? [];
+                        $ownSummary = $opportunity['requesting_summary'] ?? [];
                         $reasons = collect($opportunity['reasons'] ?? [])->filter()->values();
                         $warnings = collect($opportunity['warnings'] ?? [])->filter()->values();
                     @endphp
                     <article class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
                         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                             <div>
-                                <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{{ $opportunity['target_candidate_reference'] }}</p>
+                                <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Target candidate</p>
                                 <h3 class="mt-1 text-base font-semibold text-gray-900 dark:text-gray-100">{{ $opportunity['fit_label'] ?? 'Possible preliminary fit' }}</h3>
                                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{{ $opportunity['fit_summary'] ?? $opportunity['reason'] }}</p>
                             </div>
@@ -143,17 +161,19 @@
                         <div class="mt-4 grid gap-3 md:grid-cols-2">
                             <div class="rounded-md bg-white p-3 text-sm dark:bg-gray-950">
                                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Your side</div>
-                                <div class="mt-1 font-semibold text-gray-900 dark:text-gray-100">{{ $opportunity['requesting_candidate_reference'] }}</div>
+                                <div class="mt-1 font-semibold text-gray-900 dark:text-gray-100">{{ $candidateLabel($ownSummary) }}</div>
+                                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $summaryText($ownSummary, 'basic', 'marital_status', 'Marital status unavailable') }}</div>
                             </div>
                             <div class="rounded-md bg-white p-3 text-sm dark:bg-gray-950">
                                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Target side</div>
-                                <div class="mt-1 font-semibold text-gray-900 dark:text-gray-100">{{ $opportunity['target_candidate_reference'] }}</div>
+                                <div class="mt-1 font-semibold text-gray-900 dark:text-gray-100">{{ $candidateLabel($summary) }}</div>
+                                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $summaryText($summary, 'basic', 'marital_status', 'Marital status unavailable') }}</div>
                             </div>
                         </div>
 
                         <dl class="mt-4 grid gap-2 text-sm text-gray-700 dark:text-gray-300 md:grid-cols-2">
-                            <div><dt class="font-semibold text-gray-900 dark:text-gray-100">Age</dt><dd>{{ $summaryText($summary, 'basic', 'age_range') }}</dd></div>
-                            <div><dt class="font-semibold text-gray-900 dark:text-gray-100">Height</dt><dd>{{ $summaryText($summary, 'basic', 'height_range') }}</dd></div>
+                            <div><dt class="font-semibold text-gray-900 dark:text-gray-100">Age</dt><dd>{{ $ageText($summary) }}</dd></div>
+                            <div><dt class="font-semibold text-gray-900 dark:text-gray-100">Height</dt><dd>{{ $heightText($summary) }}</dd></div>
                             <div><dt class="font-semibold text-gray-900 dark:text-gray-100">Marital status</dt><dd>{{ $summaryText($summary, 'basic', 'marital_status') }}</dd></div>
                             <div><dt class="font-semibold text-gray-900 dark:text-gray-100">Community</dt><dd>{{ $communityText($summary) }}</dd></div>
                             <div><dt class="font-semibold text-gray-900 dark:text-gray-100">Location</dt><dd>{{ $locationText($summary) }}</dd></div>
@@ -222,6 +242,18 @@
                 $requestingName = trim((string) ($collaboration->requestingSuchakAccount?->suchak_name ?? 'Requesting Suchak'));
                 $targetName = trim((string) ($collaboration->targetSuchakAccount?->suchak_name ?? 'Target Suchak'));
                 $headerText = $isTarget ? 'Incoming request from '.$requestingName : 'Outgoing request to '.$targetName;
+                $roleNotice = match (true) {
+                    $isRequester && $isPending => 'You sent this request to '.$targetName.'. It is in your Outgoing pending list and in '.$targetName.'\'s Incoming pending list.',
+                    $isTarget && $isPending => 'You received this request from '.$requestingName.'. It is in your Incoming pending list and in '.$requestingName.'\'s Outgoing pending list.',
+                    $isRequester && $collaboration->status === \App\Models\SuchakCollaborationRequest::STATUS_ACCEPTED => $targetName.' accepted this request. Continue from the accepted collaboration workflow.',
+                    $isTarget && $collaboration->status === \App\Models\SuchakCollaborationRequest::STATUS_ACCEPTED => 'You accepted this request from '.$requestingName.'. Continue from the accepted collaboration workflow.',
+                    $isRequester => 'You created this collaboration request to '.$targetName.'. Current status: '.$label($collaboration->status).'.',
+                    $isTarget => 'You received this collaboration request from '.$requestingName.'. Current status: '.$label($collaboration->status).'.',
+                    default => 'Collaboration request status: '.$label($collaboration->status).'.',
+                };
+                $roleNoticeTone = $isTarget && $isPending
+                    ? 'border-indigo-200 bg-indigo-50 text-indigo-900 dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-100'
+                    : 'border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200';
                 $summaries = $collaborationSummaries[$collaboration->id] ?? [];
                 $requestingSummary = $summaries['requesting'] ?? [];
                 $targetSummary = $summaries['target'] ?? [];
@@ -258,6 +290,9 @@
                                 Requested {{ $collaboration->requested_at?->format('Y-m-d H:i') ?: '-' }} · Expires {{ $collaboration->expires_at?->format('Y-m-d H:i') ?: '-' }}
                             </p>
                             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Support reference: Collaboration #{{ $collaboration->id }}</p>
+                            <div class="mt-3 rounded-md border px-3 py-2 text-sm font-medium {{ $roleNoticeTone }}">
+                                {{ $roleNotice }}
+                            </div>
                         </div>
                         @if ($isOverdue)
                             <form method="POST" action="{{ route('suchak.collaborations.expire', $collaboration) }}">
@@ -276,11 +311,11 @@
                                 @php($summary = $block['summary'])
                                 <div class="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-700 dark:bg-gray-900">
                                     <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{{ $block['label'] }}</div>
-                                    <div class="mt-1 font-semibold text-gray-900 dark:text-gray-100">{{ $summary['candidate_reference'] ?? 'Masked candidate' }}</div>
+                                    <div class="mt-1 font-semibold text-gray-900 dark:text-gray-100">{{ $candidateLabel($summary) }}</div>
+                                    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $summaryText($summary, 'basic', 'marital_status', 'Marital status unavailable') }}</div>
                                     <dl class="mt-2 grid gap-1 text-gray-700 dark:text-gray-300">
-                                        <div class="flex justify-between gap-3"><dt>Age</dt><dd class="font-medium">{{ $summaryText($summary, 'basic', 'age_range') }}</dd></div>
-                                        <div class="flex justify-between gap-3"><dt>Height</dt><dd class="font-medium">{{ $summaryText($summary, 'basic', 'height_range') }}</dd></div>
-                                        <div class="flex justify-between gap-3"><dt>Marital</dt><dd class="font-medium">{{ $summaryText($summary, 'basic', 'marital_status') }}</dd></div>
+                                        <div class="flex justify-between gap-3"><dt>Age</dt><dd class="font-medium">{{ $ageText($summary) }}</dd></div>
+                                        <div class="flex justify-between gap-3"><dt>Height</dt><dd class="font-medium">{{ $heightText($summary) }}</dd></div>
                                         <div class="flex justify-between gap-3"><dt>Community</dt><dd class="text-right font-medium">{{ $communityText($summary) }}</dd></div>
                                         <div class="flex justify-between gap-3"><dt>Location</dt><dd class="text-right font-medium">{{ $locationText($summary) }}</dd></div>
                                         <div class="flex justify-between gap-3"><dt>Education</dt><dd class="text-right font-medium">{{ $summaryText($summary, 'education', 'highest') }}</dd></div>

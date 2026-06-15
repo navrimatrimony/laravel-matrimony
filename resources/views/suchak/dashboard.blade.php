@@ -37,6 +37,10 @@
     $consentChannelLabels = collect($consentChannelOptions)
         ->mapWithKeys(fn (string $channel) => [$channel => ucwords(str_replace('_', ' ', $channel))])
         ->all();
+    $consentChannelLabels[\App\Models\SuchakConsent::CHANNEL_SMS_OTP] = 'Customer OTP via Suchak';
+    $consentChannelLabels[\App\Models\SuchakConsent::CHANNEL_OFFLINE_PROOF] = 'Offline signed proof';
+    $consentChannelLabels[\App\Models\SuchakConsent::CHANNEL_WHATSAPP_DEEP_LINK] = 'Platform-assisted consent';
+    $consentChannelLabels[\App\Models\SuchakConsent::CHANNEL_ADMIN_ASSISTED] = 'Platform-assisted consent';
     $noteTypeLabels = collect($noteTypeOptions)
         ->mapWithKeys(fn (string $type) => [$type => ucwords(str_replace('_', ' ', $type))])
         ->all();
@@ -800,75 +804,120 @@
                                     @endif
 
                                     @if ($card['can_request_consent'] || $card['can_renew_consent'])
-                                        <form method="POST" action="{{ $card['can_renew_consent'] ? route('suchak.representations.consents.renew', $representation) : route('suchak.representations.consents.request', $representation) }}" class="space-y-2 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900">
-                                            @csrf
-                                            <label class="sr-only" for="consent_type_{{ $representation->id }}">Consent type</label>
-                                            <select id="consent_type_{{ $representation->id }}" name="consent_type" required class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
-                                                @foreach ($consentTypeLabels as $type => $label)
-                                                    <option value="{{ $type }}">{{ $label }}</option>
-                                                @endforeach
-                                            </select>
-                                            <label class="sr-only" for="consent_channel_{{ $representation->id }}">Consent channel</label>
-                                            <select id="consent_channel_{{ $representation->id }}" name="consent_channel" required class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
-                                                @foreach ($consentChannelLabels as $channel => $label)
-                                                    <option value="{{ $channel }}">{{ $label }}</option>
-                                                @endforeach
-                                            </select>
-                                            <input name="consent_given_by_name" maxlength="255" placeholder="Consent giver name" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
-                                            <input name="relationship_to_candidate" maxlength="255" placeholder="Relationship" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
-                                            <input name="consent_mobile_number" maxlength="20" placeholder="Mobile number" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
-                                            <button type="submit" class="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
-                                                {{ $card['can_renew_consent'] ? 'Renew consent' : 'Request consent' }}
-                                            </button>
-                                        </form>
+                                        @php
+                                            $consentAction = $card['can_renew_consent'] ? route('suchak.representations.consents.renew', $representation) : route('suchak.representations.consents.request', $representation);
+                                            $defaultConsentType = \App\Models\SuchakConsent::TYPE_ONE_YEAR;
+                                        @endphp
+                                        <div class="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900">
+                                            <div class="flex items-center justify-between gap-2">
+                                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $card['can_renew_consent'] ? 'Renew consent' : 'Get consent' }}</p>
+                                                <span class="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-gray-600 ring-1 ring-gray-200 dark:bg-gray-950 dark:text-gray-300 dark:ring-gray-700">3 options</span>
+                                            </div>
+                                            <div class="mt-3 grid gap-2 xl:grid-cols-3">
+                                                <form method="POST" action="{{ $consentAction }}" class="space-y-2 rounded-md border border-emerald-200 bg-white p-3 dark:border-emerald-900 dark:bg-gray-950">
+                                                    @csrf
+                                                    <input type="hidden" name="consent_type" value="{{ $defaultConsentType }}">
+                                                    <input type="hidden" name="consent_channel" value="{{ \App\Models\SuchakConsent::CHANNEL_SMS_OTP }}">
+                                                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Send OTP to customer</p>
+                                                    <p class="text-xs text-gray-600 dark:text-gray-400">Platform sends OTP. Suchak sends the consent message and enters the OTP received from customer.</p>
+                                                    <input name="consent_given_by_name" maxlength="255" placeholder="Consent giver name" class="w-full rounded-md border-gray-300 text-xs shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                                                    <input name="relationship_to_candidate" maxlength="255" placeholder="Relationship" class="w-full rounded-md border-gray-300 text-xs shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                                                    <input name="consent_mobile_number" maxlength="20" placeholder="Customer mobile" required class="w-full rounded-md border-gray-300 text-xs shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                                                    <button type="submit" class="w-full rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700">Start OTP</button>
+                                                </form>
+
+                                                <form method="POST" action="{{ $consentAction }}" enctype="multipart/form-data" class="space-y-2 rounded-md border border-amber-200 bg-white p-3 dark:border-amber-900 dark:bg-gray-950">
+                                                    @csrf
+                                                    <input type="hidden" name="consent_type" value="{{ $defaultConsentType }}">
+                                                    <input type="hidden" name="consent_channel" value="{{ \App\Models\SuchakConsent::CHANNEL_OFFLINE_PROOF }}">
+                                                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Upload signed proof</p>
+                                                    <p class="text-xs text-gray-600 dark:text-gray-400">Use when the customer has already signed a form/photo/PDF consent.</p>
+                                                    <input name="consent_given_by_name" maxlength="255" placeholder="Consent giver name" class="w-full rounded-md border-gray-300 text-xs shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                                                    <input name="relationship_to_candidate" maxlength="255" placeholder="Relationship" class="w-full rounded-md border-gray-300 text-xs shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                                                    <input name="consent_mobile_number" maxlength="20" placeholder="Customer mobile" required class="w-full rounded-md border-gray-300 text-xs shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                                                    <input type="file" name="proof_document" required accept=".pdf,.jpg,.jpeg,.png,.webp" class="w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-xs shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                                                    <textarea name="evidence_note" rows="2" required minlength="10" maxlength="1000" placeholder="Proof note" class="w-full rounded-md border-gray-300 text-xs shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"></textarea>
+                                                    <button type="submit" class="w-full rounded-md bg-amber-700 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-800">Upload proof</button>
+                                                </form>
+
+                                                <form method="POST" action="{{ $consentAction }}" class="space-y-2 rounded-md border border-blue-200 bg-white p-3 dark:border-blue-900 dark:bg-gray-950">
+                                                    @csrf
+                                                    <input type="hidden" name="consent_type" value="{{ $defaultConsentType }}">
+                                                    <input type="hidden" name="consent_channel" value="{{ \App\Models\SuchakConsent::CHANNEL_WHATSAPP_DEEP_LINK }}">
+                                                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Platform-assisted consent</p>
+                                                    <p class="text-xs text-gray-600 dark:text-gray-400">Platform generates the consent message and OTP without admin/manual approval.</p>
+                                                    <input name="consent_given_by_name" maxlength="255" placeholder="Consent giver name" class="w-full rounded-md border-gray-300 text-xs shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                                                    <input name="relationship_to_candidate" maxlength="255" placeholder="Relationship" class="w-full rounded-md border-gray-300 text-xs shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                                                    <input name="consent_mobile_number" maxlength="20" placeholder="Customer mobile" required class="w-full rounded-md border-gray-300 text-xs shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                                                    <button type="submit" class="w-full rounded-md bg-blue-700 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-800">Start platform flow</button>
+                                                </form>
+                                            </div>
+                                        </div>
                                     @endif
 
                                     @if ($pendingConsent)
                                         @php
-                                            $manualConsentChannel = in_array($pendingConsent->consent_channel, [\App\Models\SuchakConsent::CHANNEL_OFFLINE_PROOF, \App\Models\SuchakConsent::CHANNEL_ADMIN_ASSISTED], true);
+                                            $offlineConsentChannel = $pendingConsent->consent_channel === \App\Models\SuchakConsent::CHANNEL_OFFLINE_PROOF;
+                                            $otpConsentChannel = in_array($pendingConsent->consent_channel, [
+                                                \App\Models\SuchakConsent::CHANNEL_WHATSAPP_DEEP_LINK,
+                                                \App\Models\SuchakConsent::CHANNEL_SMS_OTP,
+                                                \App\Models\SuchakConsent::CHANNEL_VOICE_OTP,
+                                                \App\Models\SuchakConsent::CHANNEL_ADMIN_ASSISTED,
+                                            ], true);
+                                            $noticeForPendingConsent = (int) session('suchak_consent_notice_id') === (int) $pendingConsent->id;
                                         @endphp
-                                        <div class="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30">
-                                            <div class="text-xs font-semibold uppercase text-amber-900 dark:text-amber-100">Open consent #{{ $pendingConsent->id }}</div>
-                                            <p class="text-xs text-amber-900 dark:text-amber-100">
-                                                {{ $consentChannelLabels[$pendingConsent->consent_channel] ?? ucfirst(str_replace('_', ' ', $pendingConsent->consent_channel)) }}
-                                                · {{ ucfirst(str_replace('_', ' ', $pendingConsent->consent_status)) }}
-                                            </p>
-                                            <form method="POST" action="{{ route('suchak.consents.resend', $pendingConsent) }}">
-                                                @csrf
-                                                <button type="submit" class="w-full rounded-md border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-100 dark:hover:bg-amber-900">
-                                                    Resend request
-                                                </button>
-                                            </form>
-                                            @unless ($manualConsentChannel)
-                                                <form method="POST" action="{{ route('suchak.consents.send-otp', $pendingConsent) }}" class="space-y-2">
-                                                    @csrf
-                                                    <input name="otp" required inputmode="numeric" minlength="6" maxlength="6" placeholder="6 digit OTP" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
-                                                    <button type="submit" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">
-                                                        Record OTP sent
-                                                    </button>
-                                                </form>
+                                        <div class="space-y-3 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30">
+                                            <div>
+                                                <div class="text-xs font-semibold uppercase text-amber-900 dark:text-amber-100">Open consent #{{ $pendingConsent->id }}</div>
+                                                <p class="mt-1 text-xs text-amber-900 dark:text-amber-100">
+                                                    {{ $consentChannelLabels[$pendingConsent->consent_channel] ?? ucfirst(str_replace('_', ' ', $pendingConsent->consent_channel)) }}
+                                                    · {{ ucfirst(str_replace('_', ' ', $pendingConsent->consent_status)) }}
+                                                </p>
+                                            </div>
+
+                                            @if ($noticeForPendingConsent && session('suchak_consent_forward_message'))
+                                                <div class="rounded-md border border-amber-300 bg-white p-2 dark:border-amber-800 dark:bg-gray-950">
+                                                    <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">Message for customer</p>
+                                                    <textarea readonly rows="4" class="mt-1 w-full rounded-md border-gray-300 bg-gray-50 text-xs shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">{{ session('suchak_consent_forward_message') }}</textarea>
+                                                    @if (session('suchak_consent_otp_display'))
+                                                        <p class="mt-2 rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-100 dark:ring-emerald-900">
+                                                            Demo OTP: {{ session('suchak_consent_otp_display') }}
+                                                        </p>
+                                                    @endif
+                                                </div>
+                                            @endif
+
+                                            @if ($otpConsentChannel)
                                                 <form method="POST" action="{{ route('suchak.consents.verify-otp', $pendingConsent) }}" class="space-y-2">
                                                     @csrf
-                                                    <input name="otp" required inputmode="numeric" minlength="6" maxlength="6" placeholder="Verify OTP" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
-                                                    <input name="consent_given_by_name" maxlength="255" placeholder="Consent giver name" value="{{ $pendingConsent->consent_given_by_name }}" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
-                                                    <input name="relationship_to_candidate" maxlength="255" placeholder="Relationship" value="{{ $pendingConsent->relationship_to_candidate }}" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
-                                                    <input name="consent_mobile_number" maxlength="20" placeholder="Mobile number" value="{{ $pendingConsent->consent_mobile_number }}" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                                    <input type="hidden" name="consent_given_by_name" value="{{ $pendingConsent->consent_given_by_name }}">
+                                                    <input type="hidden" name="relationship_to_candidate" value="{{ $pendingConsent->relationship_to_candidate }}">
+                                                    <input type="hidden" name="consent_mobile_number" value="{{ $pendingConsent->consent_mobile_number }}">
+                                                    <input name="otp" required inputmode="numeric" minlength="6" maxlength="6" placeholder="Enter customer OTP" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
                                                     <button type="submit" class="w-full rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
                                                         Verify consent
                                                     </button>
                                                 </form>
-                                            @else
-                                                <form method="POST" action="{{ route('suchak.consents.manual-accept', $pendingConsent) }}" class="space-y-2">
+
+                                                <form method="POST" action="{{ route('suchak.consents.send-otp', $pendingConsent) }}">
+                                                    @csrf
+                                                    <button type="submit" class="w-full rounded-md border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-100 dark:hover:bg-amber-900">
+                                                        Send new platform OTP
+                                                    </button>
+                                                </form>
+                                            @elseif ($offlineConsentChannel)
+                                                <form method="POST" action="{{ route('suchak.consents.manual-accept', $pendingConsent) }}" enctype="multipart/form-data" class="space-y-2">
                                                     @csrf
                                                     <input name="consent_given_by_name" maxlength="255" placeholder="Consent giver name" value="{{ $pendingConsent->consent_given_by_name }}" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
                                                     <input name="relationship_to_candidate" maxlength="255" placeholder="Relationship" value="{{ $pendingConsent->relationship_to_candidate }}" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
                                                     <input name="consent_mobile_number" maxlength="20" placeholder="Mobile number" value="{{ $pendingConsent->consent_mobile_number }}" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
-                                                    <textarea name="evidence_note" rows="2" required minlength="10" maxlength="1000" placeholder="Evidence note" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"></textarea>
+                                                    <input type="file" name="proof_document" required accept=".pdf,.jpg,.jpeg,.png,.webp" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
+                                                    <textarea name="evidence_note" rows="2" required minlength="10" maxlength="1000" placeholder="Signed proof note" class="w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"></textarea>
                                                     <button type="submit" class="w-full rounded-md bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800">
-                                                        Accept manual proof
+                                                        Upload signed proof
                                                     </button>
                                                 </form>
-                                            @endunless
+                                            @endif
                                         </div>
                                     @endif
 

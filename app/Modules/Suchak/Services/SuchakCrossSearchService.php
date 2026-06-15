@@ -43,6 +43,7 @@ class SuchakCrossSearchService
                 'matrimonyProfile.maritalStatus',
                 'matrimonyProfile.religion',
                 'matrimonyProfile.caste',
+                'matrimonyProfile.visibilitySetting',
                 'matrimonyProfile.location.parent.parent.parent',
                 'matrimonyProfile.occupationMaster',
             ])
@@ -81,6 +82,7 @@ class SuchakCrossSearchService
                 'matrimonyProfile.maritalStatus',
                 'matrimonyProfile.religion',
                 'matrimonyProfile.caste',
+                'matrimonyProfile.visibilitySetting',
                 'matrimonyProfile.location.parent.parent.parent',
                 'matrimonyProfile.occupationMaster',
             ])
@@ -174,6 +176,7 @@ class SuchakCrossSearchService
                 'matrimonyProfile.maritalStatus',
                 'matrimonyProfile.religion',
                 'matrimonyProfile.caste',
+                'matrimonyProfile.visibilitySetting',
                 'matrimonyProfile.location.parent.parent.parent',
                 'matrimonyProfile.occupationMaster',
             ])
@@ -197,8 +200,8 @@ class SuchakCrossSearchService
             return [
                 'reasons' => [],
                 'warnings' => [],
-                'fit_label' => 'Select your profile',
-                'fit_summary' => 'Select your represented profile to compare deterministic fit signals.',
+                'fit_label' => 'Select your side profile',
+                'fit_summary' => 'Select your represented profile above to compare fit signals.',
             ];
         }
 
@@ -390,9 +393,13 @@ class SuchakCrossSearchService
             $summary['location']['district'] ?? null,
         ])->filter()->implode(', ');
 
+        $age = isset($summary['basic']['age_years'])
+            ? $summary['basic']['age_years'].' years'
+            : null;
+
         return collect([
-            $summary['candidate_reference'] ?? null,
-            $summary['basic']['age_range'] ?? null,
+            $summary['basic']['gender'] ?? 'Represented profile',
+            $age,
             $community !== '' ? $community : null,
             $location !== '' ? $location : null,
         ])->filter()->implode(' · ');

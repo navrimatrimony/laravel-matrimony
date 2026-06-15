@@ -4,6 +4,7 @@ namespace App\Modules\Suchak\Services;
 
 use App\Models\MatrimonyProfile;
 use App\Models\Location;
+use App\Services\Image\ProfilePhotoUrlService;
 use App\Models\SuchakProfileRepresentation;
 use Illuminate\Support\Carbon;
 
@@ -21,6 +22,7 @@ class SuchakCandidateMaskingService
             'maritalStatus',
             'religion',
             'caste',
+            'visibilitySetting',
             'location.parent.parent.parent',
             'occupationMaster',
         ]);
@@ -32,7 +34,9 @@ class SuchakCandidateMaskingService
                 'gender' => $this->lookupLabel($profile->gender),
                 'marital_status_id' => $profile->marital_status_id,
                 'marital_status' => $this->lookupLabel($profile->maritalStatus),
+                'age_years' => $this->ageYears($profile->date_of_birth),
                 'age_range' => $this->ageRange($profile->date_of_birth),
+                'height_feet_inches' => $this->heightFeetInches($profile->height_cm),
                 'height_range' => $this->heightRange($profile->height_cm),
             ],
             'community' => [
@@ -70,10 +74,7 @@ class SuchakCandidateMaskingService
                 'email' => null,
                 'address_line' => null,
             ],
-            'photo' => [
-                'is_masked' => true,
-                'url' => null,
-            ],
+            'photo' => $this->photoSummary($profile),
             'quality' => [
                 'has_photo' => filled($profile->profile_photo),
                 'has_verified_consent' => $representation?->hasValidConsent() === true,
@@ -91,7 +92,7 @@ class SuchakCandidateMaskingService
         return 'masked-'.substr(hash('sha256', $source), 0, 12);
     }
 
-    private function ageRange(mixed $dateOfBirth): ?string
+    private function ageYears(mixed $dateOfBirth): ?int
     {
         if ($dateOfBirth === null || $dateOfBirth === '') {
             return null;
@@ -100,6 +101,16 @@ class SuchakCandidateMaskingService
         try {
             $age = Carbon::parse($dateOfBirth)->age;
         } catch (\Throwable) {
+            return null;
+        }
+
+        return $age >= 18 && $age <= 100 ? $age : null;
+    }
+
+    private function ageRange(mixed $dateOfBirth): ?string
+    {
+        $age = $this->ageYears($dateOfBirth);
+        if ($age === null) {
             return null;
         }
 
@@ -124,6 +135,59 @@ class SuchakCandidateMaskingService
         $upper = $lower + 4;
 
         return $lower.'-'.$upper.' cm';
+    }
+
+    private function heightFeetInches(mixed $heightCm): ?string
+    {
+        if (! is_numeric($heightCm)) {
+            return null;
+        }
+
+        $height = (int) $heightCm;
+        if ($height < 100) {
+            return null;
+        }
+
+        $totalInches = (int) round($height / 2.54);
+        $feet = intdiv($totalInches, 12);
+        $inches = $totalInches % 12;
+
+        return $feet.' ft '.$inches.' in';
+    }
+
+    /**
+     * @return array{is_masked: bool, url: ?string, placeholder_url: string, label: string}
+     */
+    private function photoSummary(MatrimonyProfile $profile): array
+    {
+        $showPhotoTo = strtolower(trim((string) ($profile->visibilitySetting?->show_photo_to ?? 'all')));
+        $path = trim((string) ($profile->profile_photo ?? ''));
+        $placeholderUrl = $this->placeholderPhotoUrl($profile);
+
+        if ($showPhotoTo === 'all' && $path !== '' && $profile->photo_approved !== false) {
+            return [
+                'is_masked' => false,
+                'url' => app(ProfilePhotoUrlService::class)->publicUrl($path, $profile),
+                'placeholder_url' => $placeholderUrl,
+                'label' => 'Photo visible',
+            ];
+        }
+
+        return [
+            'is_masked' => $showPhotoTo !== 'all' && $path !== '',
+            'url' => null,
+            'placeholder_url' => $placeholderUrl,
+            'label' => $path === '' ? 'No photo' : 'Photo hidden by setting',
+        ];
+    }
+
+    private function placeholderPhotoUrl(MatrimonyProfile $profile): string
+    {
+        return match ($profile->gender?->key) {
+            'male' => asset('images/placeholders/male-profile.svg'),
+            'female' => asset('images/placeholders/female-profile.svg'),
+            default => asset('images/placeholders/default-profile.svg'),
+        };
     }
 
     private function locationNameForCitySlot(?Location $location): ?string

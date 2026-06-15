@@ -45,6 +45,7 @@ class SuchakCollaborationService
                 'matrimonyProfile.maritalStatus',
                 'matrimonyProfile.religion',
                 'matrimonyProfile.caste',
+                'matrimonyProfile.visibilitySetting',
                 'matrimonyProfile.location.parent.parent.parent',
                 'matrimonyProfile.occupationMaster',
             ])
@@ -65,6 +66,7 @@ class SuchakCollaborationService
                 'matrimonyProfile.maritalStatus',
                 'matrimonyProfile.religion',
                 'matrimonyProfile.caste',
+                'matrimonyProfile.visibilitySetting',
                 'matrimonyProfile.location.parent.parent.parent',
                 'matrimonyProfile.occupationMaster',
             ])

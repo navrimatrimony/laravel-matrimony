@@ -53,7 +53,7 @@ class SuchakCollaborationAdvancedCompletionTest extends TestCase
                 'currency' => 'INR',
             ])
             ->assertRedirect()
-            ->assertSessionHas('success', 'Collaboration request created with commission acknowledgement.');
+            ->assertSessionHas('success', 'Collaboration request sent. Track it in Outgoing pending; the target Suchak will see it in Incoming pending.');
 
         $collaboration = SuchakCollaborationRequest::query()->with('commissionAgreement')->firstOrFail();
         $this->assertSame(SuchakCommissionAgreement::SPLIT_CUSTOM_PERCENT, $collaboration->commissionAgreement->split_type);

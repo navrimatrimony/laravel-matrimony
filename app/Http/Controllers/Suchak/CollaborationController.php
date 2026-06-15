@@ -53,12 +53,14 @@ class CollaborationController extends Controller
                 'requestingRepresentation.matrimonyProfile.maritalStatus',
                 'requestingRepresentation.matrimonyProfile.religion',
                 'requestingRepresentation.matrimonyProfile.caste',
+                'requestingRepresentation.matrimonyProfile.visibilitySetting',
                 'requestingRepresentation.matrimonyProfile.location.parent.parent.parent',
                 'requestingRepresentation.matrimonyProfile.occupationMaster',
                 'targetRepresentation.matrimonyProfile.gender',
                 'targetRepresentation.matrimonyProfile.maritalStatus',
                 'targetRepresentation.matrimonyProfile.religion',
                 'targetRepresentation.matrimonyProfile.caste',
+                'targetRepresentation.matrimonyProfile.visibilitySetting',
                 'targetRepresentation.matrimonyProfile.location.parent.parent.parent',
                 'targetRepresentation.matrimonyProfile.occupationMaster',
                 'commissionAgreement.collectorSuchakAccount',
@@ -182,7 +184,12 @@ class CollaborationController extends Controller
                 ->with('error', $exception->getMessage());
         }
 
-        return back()->with('success', 'Collaboration request created with commission acknowledgement.');
+        return redirect()
+            ->route('suchak.collaborations.index', [
+                'direction' => 'outgoing',
+                'status' => SuchakCollaborationRequest::STATUS_PENDING,
+            ])
+            ->with('success', 'Collaboration request sent. Track it in Outgoing pending; the target Suchak will see it in Incoming pending.');
     }
 
     public function updateCommission(

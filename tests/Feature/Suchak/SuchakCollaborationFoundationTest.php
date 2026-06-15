@@ -96,7 +96,7 @@ class SuchakCollaborationFoundationTest extends TestCase
 
         $response
             ->assertRedirect()
-            ->assertSessionHas('success', 'Collaboration request created with commission acknowledgement.');
+            ->assertSessionHas('success', 'Collaboration request sent. Track it in Outgoing pending; the target Suchak will see it in Incoming pending.');
 
         /** @var SuchakCollaborationRequest $collaboration */
         $collaboration = SuchakCollaborationRequest::query()->firstOrFail();
@@ -182,6 +182,8 @@ class SuchakCollaborationFoundationTest extends TestCase
             ]))
             ->assertOk()
             ->assertSee('Incoming request from', false)
+            ->assertSee('You received this request from', false)
+            ->assertSee('Incoming pending list', false)
             ->assertSee('Direction filter check.', false)
             ->assertDontSee('Sensitive Requesting Candidate', false);
 
@@ -200,6 +202,8 @@ class SuchakCollaborationFoundationTest extends TestCase
             ]))
             ->assertOk()
             ->assertSee('Outgoing request to', false)
+            ->assertSee('You sent this request to', false)
+            ->assertSee('Outgoing pending list', false)
             ->assertSee('Direction filter check.', false);
     }
 

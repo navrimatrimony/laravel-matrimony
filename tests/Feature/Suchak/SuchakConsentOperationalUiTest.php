@@ -11,22 +11,31 @@ use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakConsentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class SuchakConsentOperationalUiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_suchak_can_request_resend_record_and_verify_otp_consent_from_dashboard_routes(): void
+    public function test_suchak_can_request_platform_otp_and_verify_customer_reply_from_dashboard_routes(): void
     {
         [$suchakUser, $account, $representation] = $this->pendingRepresentationFixture();
+        $manageUrl = route('suchak.dashboard', [
+            'dashboard_tab' => 'profiles',
+            'manage_representation' => $representation->id,
+        ]);
 
         $this->actingAs($suchakUser)
-            ->get(route('suchak.dashboard'))
+            ->get($manageUrl)
             ->assertOk()
-            ->assertSee('Request consent', false);
+            ->assertSee('Get consent', false)
+            ->assertSee('Send OTP to customer', false)
+            ->assertSee('Upload signed proof', false)
+            ->assertSee('Platform-assisted consent', false);
 
-        $this->actingAs($suchakUser)
+        $response = $this->actingAs($suchakUser)
             ->post(route('suchak.representations.consents.request', $representation), [
                 'consent_type' => SuchakConsent::TYPE_ONE_YEAR,
                 'consent_channel' => SuchakConsent::CHANNEL_SMS_OTP,
@@ -35,21 +44,27 @@ class SuchakConsentOperationalUiTest extends TestCase
                 'consent_mobile_number' => '9876543210',
             ])
             ->assertRedirect()
-            ->assertSessionHas('success', 'Consent request recorded.');
+            ->assertSessionHas('success', 'Consent request recorded. Platform OTP sent to customer.')
+            ->assertSessionHas('suchak_consent_otp_display');
+
+        $otp = (string) $response->getSession()->get('suchak_consent_otp_display');
 
         $consent = SuchakConsent::query()->where('representation_id', $representation->id)->firstOrFail();
         $originalTokenHash = $consent->token_hash;
+        $originalOtpHash = $consent->otp_hash;
 
-        $this->assertSame(SuchakConsent::STATUS_REQUESTED, $consent->consent_status);
+        $this->assertSame(SuchakConsent::STATUS_OTP_SENT, $consent->consent_status);
         $this->assertSame(SuchakProfileRepresentation::STATUS_CONSENT_PENDING, $representation->fresh()->representation_status);
-        $this->assertNull($consent->otp_hash);
+        $this->assertNotNull($consent->otp_hash);
+        $this->assertNotSame($otp, $consent->otp_hash);
 
         $this->actingAs($suchakUser)
-            ->get(route('suchak.dashboard'))
+            ->get($manageUrl)
             ->assertOk()
             ->assertSee('Open consent #'.$consent->id, false)
-            ->assertSee('Record OTP sent', false)
-            ->assertSee('Verify consent', false);
+            ->assertSee('Enter customer OTP', false)
+            ->assertSee('Send new platform OTP', false)
+            ->assertDontSee('Record OTP sent', false);
 
         $this->actingAs($suchakUser)
             ->post(route('suchak.consents.resend', $consent))
@@ -58,20 +73,21 @@ class SuchakConsentOperationalUiTest extends TestCase
 
         $this->assertNotSame($originalTokenHash, $consent->fresh()->token_hash);
 
-        $this->actingAs($suchakUser)
-            ->post(route('suchak.consents.send-otp', $consent), [
-                'otp' => '123456',
-            ])
+        $otpResponse = $this->actingAs($suchakUser)
+            ->post(route('suchak.consents.send-otp', $consent))
             ->assertRedirect()
-            ->assertSessionHas('success', 'Consent OTP hash recorded.');
+            ->assertSessionHas('success', 'Platform OTP sent to customer.')
+            ->assertSessionHas('suchak_consent_otp_display');
 
         $withOtp = $consent->fresh();
         $this->assertSame(SuchakConsent::STATUS_OTP_SENT, $withOtp->consent_status);
-        $this->assertNotSame('123456', $withOtp->otp_hash);
+        $this->assertNotSame($originalOtpHash, $withOtp->otp_hash);
+
+        $otp = (string) $otpResponse->getSession()->get('suchak_consent_otp_display');
 
         $this->actingAs($suchakUser)
             ->post(route('suchak.consents.verify-otp', $consent), [
-                'otp' => '123456',
+                'otp' => $otp,
                 'consent_given_by_name' => 'Candidate Parent',
                 'relationship_to_candidate' => 'father',
                 'consent_mobile_number' => '9876543210',
@@ -92,7 +108,7 @@ class SuchakConsentOperationalUiTest extends TestCase
         ]);
 
         $this->actingAs($suchakUser)
-            ->get(route('suchak.dashboard'))
+            ->get($manageUrl)
             ->assertOk()
             ->assertSee('Consent timeline', false)
             ->assertSee('Renew consent', false)
@@ -104,6 +120,11 @@ class SuchakConsentOperationalUiTest extends TestCase
     public function test_suchak_can_accept_manual_offline_consent_proof_without_otp(): void
     {
         [$suchakUser, , $representation] = $this->pendingRepresentationFixture();
+        Storage::fake('local');
+        $manageUrl = route('suchak.dashboard', [
+            'dashboard_tab' => 'profiles',
+            'manage_representation' => $representation->id,
+        ]);
 
         $this->actingAs($suchakUser)
             ->post(route('suchak.representations.consents.request', $representation), [
@@ -112,26 +133,19 @@ class SuchakConsentOperationalUiTest extends TestCase
                 'consent_given_by_name' => 'Candidate Brother',
                 'relationship_to_candidate' => 'brother',
                 'consent_mobile_number' => '9876543211',
+                'evidence_note' => 'Candidate brother signed physical consent form.',
+                'proof_document' => UploadedFile::fake()->create('signed-consent.pdf', 128, 'application/pdf'),
             ])
-            ->assertRedirect();
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Signed proof uploaded and consent accepted.');
 
         $consent = SuchakConsent::query()->where('representation_id', $representation->id)->firstOrFail();
 
         $this->actingAs($suchakUser)
-            ->get(route('suchak.dashboard'))
+            ->get($manageUrl)
             ->assertOk()
-            ->assertSee('Accept manual proof', false)
+            ->assertSee('Renew consent', false)
             ->assertDontSee('Record OTP sent', false);
-
-        $this->actingAs($suchakUser)
-            ->post(route('suchak.consents.manual-accept', $consent), [
-                'consent_given_by_name' => 'Candidate Brother',
-                'relationship_to_candidate' => 'brother',
-                'consent_mobile_number' => '9876543211',
-                'evidence_note' => 'Candidate brother signed physical consent form.',
-            ])
-            ->assertRedirect()
-            ->assertSessionHas('success', 'Manual consent proof accepted.');
 
         $accepted = $consent->fresh();
 
@@ -139,21 +153,34 @@ class SuchakConsentOperationalUiTest extends TestCase
         $this->assertNull($accepted->otp_hash);
         $this->assertSame(SuchakProfileRepresentation::STATUS_ACTIVE, $representation->fresh()->representation_status);
 
+        $event = SuchakConsentEvent::query()
+            ->where('consent_id', $consent->id)
+            ->where('event_type', SuchakConsentEvent::EVENT_CONSENT_ACCEPTED)
+            ->firstOrFail();
+
+        $this->assertStringContainsString('Candidate brother signed physical consent form.', (string) $event->event_note);
+        $this->assertStringContainsString('Proof file: suchak/consent-proofs/', (string) $event->event_note);
+        $proofPath = trim((string) str($event->event_note)->after('Proof file: ')->before("\n"));
+        Storage::disk('local')->assertExists($proofPath);
+
         $this->assertDatabaseHas('suchak_consent_events', [
             'consent_id' => $consent->id,
             'event_type' => SuchakConsentEvent::EVENT_CONSENT_ACCEPTED,
             'actor_type' => SuchakConsentEvent::ACTOR_SUCHAK,
             'actor_id' => $suchakUser->id,
-            'event_note' => 'Candidate brother signed physical consent form.',
         ]);
     }
 
     public function test_suchak_can_renew_active_consent_and_revoke_existing_consent_from_ui_routes(): void
     {
         [$suchakUser, , $representation, $acceptedConsent] = $this->activeRepresentationFixture();
+        $manageUrl = route('suchak.dashboard', [
+            'dashboard_tab' => 'profiles',
+            'manage_representation' => $representation->id,
+        ]);
 
         $this->actingAs($suchakUser)
-            ->get(route('suchak.dashboard'))
+            ->get($manageUrl)
             ->assertOk()
             ->assertSee('Renew consent', false)
             ->assertSee('Revoke consent', false);
@@ -191,15 +218,15 @@ class SuchakConsentOperationalUiTest extends TestCase
     public function test_admin_can_inspect_consent_evidence_without_rendering_hash_values(): void
     {
         [$suchakUser, $account, $representation] = $this->pendingRepresentationFixture();
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $service = app(SuchakConsentService::class);
-        $consent = $service->recordOtpSent(
+        $consent = $service->issuePlatformOtp(
             $service->requestConsent($representation, $suchakUser, [
                 'consent_channel' => SuchakConsent::CHANNEL_SMS_OTP,
+                'consent_mobile_number' => '9876543210',
             ])['consent'],
-            '123456',
             $suchakUser,
-        )->fresh();
+        )['consent']->fresh();
 
         $this->actingAs($admin)
             ->get(route('admin.suchak.accounts.show', $account))

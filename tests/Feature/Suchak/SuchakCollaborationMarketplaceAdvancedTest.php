@@ -56,11 +56,14 @@ class SuchakCollaborationMarketplaceAdvancedTest extends TestCase
             ->get(route('suchak.collaborations.index'))
             ->assertOk()
             ->assertSee('Suggested opportunities', false)
-            ->assertSee('masked-', false)
+            ->assertSee('Target candidate', false)
+            ->assertSee('29 years', false)
+            ->assertSee('5 ft 5 in', false)
             ->assertSee('Same caste.', false)
             ->assertSee('Request will go to: #'.$targetAccount->id.' Day51 Target Suchak', false)
             ->assertSee('Candidate contact and identity remain masked', false)
             ->assertSee('Send collaboration request to this Suchak', false)
+            ->assertDontSee('masked-', false)
             ->assertDontSee('Day51 Sensitive Target Candidate', false)
             ->assertDontSee('9876543210', false)
             ->assertDontSee('Day51 Secret Lane', false);
@@ -75,7 +78,7 @@ class SuchakCollaborationMarketplaceAdvancedTest extends TestCase
                 'currency' => 'INR',
             ])
             ->assertRedirect()
-            ->assertSessionHas('success', 'Collaboration request created with commission acknowledgement.');
+            ->assertSessionHas('success', 'Collaboration request sent. Track it in Outgoing pending; the target Suchak will see it in Incoming pending.');
 
         $collaboration = SuchakCollaborationRequest::query()
             ->with('commissionAgreement')
@@ -241,11 +244,12 @@ class SuchakCollaborationMarketplaceAdvancedTest extends TestCase
             ]))
             ->assertOk()
             ->assertSee('Find Matches', false)
-            ->assertSee('masked-', false)
+            ->assertSee('Male', false)
             ->assertSee('M.Tech Software', false)
             ->assertSee('Send collaboration request', false)
             ->assertSee((string) $brideAaryaRepresentation->id, false)
             ->assertSee((string) $groomAdvaitRepresentation->id, false)
+            ->assertDontSee('masked-', false)
             ->assertDontSee('Demo Groom Advait Deshmukh', false)
             ->assertDontSee('Groom Advait Secret Avenue', false)
             ->assertDontSee('9822222222', false)
@@ -272,7 +276,7 @@ class SuchakCollaborationMarketplaceAdvancedTest extends TestCase
                 'currency' => 'INR',
             ])
             ->assertRedirect()
-            ->assertSessionHas('success', 'Collaboration request created with commission acknowledgement.');
+            ->assertSessionHas('success', 'Collaboration request sent. Track it in Outgoing pending; the target Suchak will see it in Incoming pending.');
 
         $collaboration = SuchakCollaborationRequest::query()
             ->with('commissionAgreement')
@@ -300,6 +304,8 @@ class SuchakCollaborationMarketplaceAdvancedTest extends TestCase
             ]))
             ->assertOk()
             ->assertSee('Outgoing request to Demo Suchak B', false)
+            ->assertSee('You sent this request to Demo Suchak B.', false)
+            ->assertSee('Demo Suchak B&#039;s Incoming pending list', false)
             ->assertSee('Demo 2x2 matching collaboration request.', false)
             ->assertDontSee('Demo Groom Advait Deshmukh', false)
             ->assertDontSee('9822222222', false)
@@ -312,6 +318,8 @@ class SuchakCollaborationMarketplaceAdvancedTest extends TestCase
             ]))
             ->assertOk()
             ->assertSee('Incoming request from Demo Suchak A', false)
+            ->assertSee('You received this request from Demo Suchak A.', false)
+            ->assertSee('Demo Suchak A&#039;s Outgoing pending list', false)
             ->assertSee('Review and accept', false)
             ->assertSee('Demo 2x2 matching collaboration request.', false)
             ->assertDontSee('Demo Bride Aarya Patil', false)

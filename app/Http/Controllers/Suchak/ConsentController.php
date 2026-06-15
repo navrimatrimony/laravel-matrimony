@@ -8,6 +8,7 @@ use App\Models\SuchakProfileRepresentation;
 use App\Modules\Suchak\Services\SuchakConsentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
 use InvalidArgumentException;
 
@@ -21,13 +22,37 @@ class ConsentController extends Controller
         $validated = $this->requestPayload($request);
 
         try {
-            $consentService->requestConsent(
+            $result = $consentService->requestConsent(
                 $representation,
                 $request->user(),
                 $validated,
                 $request->ip(),
                 $request->userAgent(),
             );
+
+            if (($validated['consent_channel'] ?? null) === SuchakConsent::CHANNEL_OFFLINE_PROOF) {
+                $consentService->acceptManualProof(
+                    $result['consent'],
+                    $request->user(),
+                    $validated,
+                    $request->ip(),
+                    $request->userAgent(),
+                );
+
+                return back()->with('success', 'Signed proof uploaded and consent accepted.');
+            }
+
+            if ($this->shouldIssuePlatformOtp((string) ($validated['consent_channel'] ?? ''))) {
+                return $this->backWithPlatformOtpResult(
+                    $consentService->issuePlatformOtp(
+                        $result['consent'],
+                        $request->user(),
+                        $request->ip(),
+                        $request->userAgent(),
+                    ),
+                    'Consent request recorded. Platform OTP sent to customer.',
+                );
+            }
         } catch (InvalidArgumentException $exception) {
             return back()->with('error', $exception->getMessage())->withInput();
         }
@@ -81,23 +106,19 @@ class ConsentController extends Controller
         SuchakConsent $consent,
         SuchakConsentService $consentService,
     ): RedirectResponse {
-        $validated = $request->validate([
-            'otp' => ['required', 'digits:6'],
-        ]);
-
         try {
-            $consentService->recordOtpSent(
-                $consent,
-                $validated['otp'],
-                $request->user(),
-                $request->ip(),
-                $request->userAgent(),
+            return $this->backWithPlatformOtpResult(
+                $consentService->issuePlatformOtp(
+                    $consent,
+                    $request->user(),
+                    $request->ip(),
+                    $request->userAgent(),
+                ),
+                'Platform OTP sent to customer.',
             );
         } catch (InvalidArgumentException $exception) {
             return back()->with('error', $exception->getMessage());
         }
-
-        return back()->with('success', 'Consent OTP hash recorded.');
     }
 
     public function verifyOtp(
@@ -125,6 +146,7 @@ class ConsentController extends Controller
     ): RedirectResponse {
         $validated = $request->validate(array_merge($this->acceptanceRules(), [
             'evidence_note' => ['required', 'string', 'min:10', 'max:1000'],
+            'proof_document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:5120'],
         ]));
 
         try {
@@ -139,7 +161,7 @@ class ConsentController extends Controller
             return back()->with('error', $exception->getMessage())->withInput();
         }
 
-        return back()->with('success', 'Manual consent proof accepted.');
+        return back()->with('success', 'Signed proof uploaded and consent accepted.');
     }
 
     public function revoke(
@@ -165,13 +187,30 @@ class ConsentController extends Controller
      */
     private function requestPayload(Request $request): array
     {
-        return $request->validate([
+        $channel = (string) $request->input('consent_channel');
+        $needsCustomerMobile = in_array($channel, [
+            SuchakConsent::CHANNEL_WHATSAPP_DEEP_LINK,
+            SuchakConsent::CHANNEL_SMS_OTP,
+            SuchakConsent::CHANNEL_VOICE_OTP,
+            SuchakConsent::CHANNEL_ADMIN_ASSISTED,
+        ], true);
+        $needsSignedProof = $channel === SuchakConsent::CHANNEL_OFFLINE_PROOF;
+
+        $validated = $request->validate([
             'consent_type' => ['required', 'string', Rule::in(SuchakConsent::TYPES)],
             'consent_channel' => ['required', 'string', Rule::in(SuchakConsent::CHANNELS)],
             'consent_given_by_name' => ['nullable', 'string', 'max:255'],
             'relationship_to_candidate' => ['nullable', 'string', 'max:255'],
-            'consent_mobile_number' => ['nullable', 'string', 'max:20'],
+            'consent_mobile_number' => [Rule::requiredIf($needsCustomerMobile || $needsSignedProof), 'nullable', 'string', 'max:20'],
+            'evidence_note' => [Rule::requiredIf($needsSignedProof), 'nullable', 'string', 'min:10', 'max:1000'],
+            'proof_document' => [Rule::requiredIf($needsSignedProof), 'nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:5120'],
         ]);
+
+        if (($validated['proof_document'] ?? null) instanceof UploadedFile) {
+            $validated['proof_document'] = $request->file('proof_document');
+        }
+
+        return $validated;
     }
 
     /**
@@ -184,5 +223,32 @@ class ConsentController extends Controller
             'relationship_to_candidate' => ['nullable', 'string', 'max:255'],
             'consent_mobile_number' => ['nullable', 'string', 'max:20'],
         ];
+    }
+
+    private function shouldIssuePlatformOtp(string $channel): bool
+    {
+        return in_array($channel, [
+            SuchakConsent::CHANNEL_WHATSAPP_DEEP_LINK,
+            SuchakConsent::CHANNEL_SMS_OTP,
+            SuchakConsent::CHANNEL_VOICE_OTP,
+            SuchakConsent::CHANNEL_ADMIN_ASSISTED,
+        ], true);
+    }
+
+    /**
+     * @param  array{consent: SuchakConsent, raw_otp: string|null, delivery: string, suchak_message: string}  $result
+     */
+    private function backWithPlatformOtpResult(array $result, string $success): RedirectResponse
+    {
+        $redirect = back()
+            ->with('success', $success)
+            ->with('suchak_consent_notice_id', $result['consent']->id)
+            ->with('suchak_consent_forward_message', $result['suchak_message']);
+
+        if ($result['raw_otp'] !== null) {
+            $redirect->with('suchak_consent_otp_display', $result['raw_otp']);
+        }
+
+        return $redirect;
     }
 }

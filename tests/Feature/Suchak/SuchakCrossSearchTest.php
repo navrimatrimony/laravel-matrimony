@@ -4,6 +4,7 @@ namespace Tests\Feature\Suchak;
 
 use App\Models\City;
 use App\Models\Caste;
+use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
 use App\Models\Religion;
 use App\Models\SuchakAccount;
@@ -17,6 +18,7 @@ use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class SuchakCrossSearchTest extends TestCase
@@ -37,6 +39,7 @@ class SuchakCrossSearchTest extends TestCase
         $targetAccount = $this->publicVerifiedSuchakAccount();
         $profile = $this->activeProfile([
             'full_name' => 'Secret Candidate Alpha',
+            'gender_id' => $this->genderId('female'),
             'date_of_birth' => now()->subYears(26)->toDateString(),
             'height_cm' => 166,
             'highest_education' => 'B.Tech Computer',
@@ -55,10 +58,13 @@ class SuchakCrossSearchTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Find Matches', false);
-        $response->assertSee('masked-', false);
+        $response->assertSee('Female', false);
         $response->assertSee('B.Tech Computer', false);
-        $response->assertSee('25-29', false);
-        $response->assertSee('165-169 cm', false);
+        $response->assertSee('26 years', false);
+        $response->assertSee('5 ft 5 in', false);
+        $response->assertDontSee('masked-', false);
+        $response->assertDontSee('25-29', false);
+        $response->assertDontSee('165-169 cm', false);
         $response->assertSee('Pune City', false);
         $response->assertDontSee('Secret Candidate Alpha', false);
         $response->assertDontSee('9876543210', false);
@@ -110,6 +116,51 @@ class SuchakCrossSearchTest extends TestCase
         $response->assertDontSee('Selected Target Secret Lane', false);
     }
 
+    public function test_cross_search_shows_photo_by_default_and_honours_photo_visibility_setting(): void
+    {
+        Storage::fake('public');
+        Storage::disk('public')->put('matrimony_photos/suchak-search/visible.jpg', 'visible-photo');
+        Storage::disk('public')->put('matrimony_photos/suchak-search/hidden.jpg', 'hidden-photo');
+
+        [$actorUser] = $this->verifiedSuchakActor();
+        $targetAccount = $this->publicVerifiedSuchakAccount();
+        $femaleGenderId = $this->genderId('female');
+
+        $visiblePhotoProfile = $this->activeProfile([
+            'full_name' => 'Visible Photo Candidate',
+            'gender_id' => $femaleGenderId,
+            'highest_education' => 'Visible Photo Education',
+            'profile_photo' => 'suchak-search/visible.jpg',
+            'photo_approved' => true,
+        ]);
+        $hiddenPhotoProfile = $this->activeProfile([
+            'full_name' => 'Hidden Photo Candidate',
+            'gender_id' => $femaleGenderId,
+            'highest_education' => 'Hidden Photo Education',
+            'profile_photo' => 'suchak-search/hidden.jpg',
+            'photo_approved' => true,
+        ]);
+
+        $this->activeRepresentation($targetAccount, $visiblePhotoProfile);
+        $this->activeRepresentation($targetAccount, $hiddenPhotoProfile);
+
+        DB::table('profile_visibility_settings')
+            ->where('profile_id', $hiddenPhotoProfile->id)
+            ->update([
+                'show_photo_to' => 'accepted_interest',
+                'updated_at' => now(),
+            ]);
+
+        $response = $this->actingAs($actorUser)->get(route('suchak.search.index'));
+
+        $response->assertOk();
+        $response->assertSee('storage/matrimony_photos/suchak-search/visible.jpg', false);
+        $response->assertSee('Photo hidden by setting', false);
+        $response->assertDontSee('suchak-search/hidden.jpg', false);
+        $response->assertDontSee('Visible Photo Candidate', false);
+        $response->assertDontSee('Hidden Photo Candidate', false);
+    }
+
     public function test_selected_representation_from_another_suchak_is_not_used_for_fit_explanation(): void
     {
         [$actorUser] = $this->verifiedSuchakActor();
@@ -134,8 +185,10 @@ class SuchakCrossSearchTest extends TestCase
         ]));
 
         $response->assertOk();
-        $response->assertSee('Select your profile', false);
-        $response->assertSee('Select your represented profile to compare deterministic fit signals.', false);
+        $response->assertSee('Profile to search for', false);
+        $response->assertSee('Pick the bride/groom profile on your side. Search results and fit signals use this selection.', false);
+        $response->assertSee('Select your side profile', false);
+        $response->assertSee('Select your represented profile above to compare fit signals.', false);
         $response->assertDontSee('Strong preliminary fit', false);
         $response->assertDontSee('Same caste.', false);
         $response->assertDontSee('Same religion.', false);
@@ -190,7 +243,7 @@ class SuchakCrossSearchTest extends TestCase
         $response = $this->actingAs($actorUser)->get(route('suchak.search.index'));
 
         $response->assertOk();
-        $response->assertSee('No masked profiles matched the current filters.', false);
+        $response->assertSee('No profiles matched the current filters.', false);
         $response->assertDontSee('Revoked Education', false);
         $response->assertDontSee('Expired Education', false);
         $response->assertDontSee('Hidden Account Education', false);
@@ -272,6 +325,17 @@ class SuchakCrossSearchTest extends TestCase
         ]);
 
         return [$religion, $caste];
+    }
+
+    private function genderId(string $key): int
+    {
+        return (int) MasterGender::query()->firstOrCreate(
+            ['key' => $key],
+            [
+                'label' => ucfirst($key),
+                'is_active' => true,
+            ],
+        )->id;
     }
 
     /**

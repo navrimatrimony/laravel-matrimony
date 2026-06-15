@@ -4,11 +4,18 @@
     $lookupLabel = static fn ($model): string => (string) ($model?->display_label ?? $model?->label ?? $model?->name ?? '');
     $ownRepresentationOptions = collect($ownRepresentationOptions ?? [])->values();
     $selectedOwnRepresentationId = (int) ($selectedOwnRepresentation['representation']['id'] ?? 0);
+    $advancedFiltersActive = collect([
+        $filters['marital_status_id'] ?? null,
+        $filters['age_min'] ?? null,
+        $filters['age_max'] ?? null,
+        $filters['religion_id'] ?? null,
+        $filters['caste_id'] ?? null,
+    ])->contains(fn ($value): bool => filled($value));
     $safeOwnOptions = $ownRepresentationOptions
         ->map(function (array $option): array {
             return [
                 'id' => (int) ($option['representation']['id'] ?? 0),
-                'label' => (string) ($option['option_label'] ?? $option['candidate_reference'] ?? 'Represented profile'),
+                'label' => (string) ($option['option_label'] ?? 'Represented profile'),
             ];
         })
         ->filter(fn (array $option): bool => $option['id'] > 0)
@@ -28,7 +35,12 @@
         return $value !== '' ? $value : 'Broad location unavailable';
     };
     $ageHeightText = static function (array $summary): string {
-        return collect([$summary['basic']['age_range'] ?? null, $summary['basic']['height_range'] ?? null])
+        $age = isset($summary['basic']['age_years'])
+            ? $summary['basic']['age_years'].' years'
+            : ($summary['basic']['age_range'] ?? null);
+        $height = $summary['basic']['height_feet_inches'] ?? ($summary['basic']['height_range'] ?? null);
+
+        return collect([$age, $height])
             ->filter()
             ->implode(' / ') ?: 'Not available';
     };
@@ -37,6 +49,16 @@
             ->filter()
             ->implode(' / ') ?: 'Not available';
     };
+    $candidateLabel = static function (array $summary): string {
+        $gender = trim((string) ($summary['basic']['gender'] ?? ''));
+
+        return $gender !== '' ? $gender : 'Candidate';
+    };
+    $photoSource = static fn (array $summary): string => (string) (
+        $summary['photo']['url']
+        ?? $summary['photo']['placeholder_url']
+        ?? asset('images/placeholders/default-profile.svg')
+    );
 @endphp
 
 @section('content')
@@ -45,6 +67,7 @@
     x-data="{
         open: false,
         result: null,
+        filtersExpanded: @js($advancedFiltersActive),
         requestingId: @js($selectedOwnRepresentationId > 0 ? (string) $selectedOwnRepresentationId : ''),
         ownOptions: @js($safeOwnOptions),
         openResult(payload) {
@@ -68,6 +91,62 @@
     }"
     @keydown.escape.window="close()"
 >
+    <style>
+        @media (min-width: 1024px) {
+            .suchak-search-main-row {
+                display: flex !important;
+                align-items: center;
+                gap: 0.5rem;
+                flex-wrap: nowrap;
+            }
+
+            .suchak-search-main-row .suchak-search-field {
+                min-width: 0;
+            }
+
+            .suchak-search-main-row .suchak-search-profile {
+                flex: 1.25 1 0;
+            }
+
+            .suchak-search-main-row .suchak-search-query {
+                flex: 0.9 1 0;
+            }
+
+            .suchak-search-main-row .suchak-search-gender {
+                flex: 0 0 11rem;
+            }
+
+            .suchak-search-main-row .suchak-search-actions {
+                display: flex !important;
+                flex: 0 0 auto;
+                gap: 0.5rem;
+            }
+
+            .suchak-search-main-row .suchak-search-actions > * {
+                min-width: 6.25rem;
+                white-space: nowrap;
+            }
+
+            .suchak-search-main-row .suchak-search-label,
+            .suchak-search-main-row .suchak-search-profile-help {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                padding: 0;
+                margin: -1px;
+                overflow: hidden;
+                clip: rect(0, 0, 0, 0);
+                white-space: nowrap;
+                border: 0;
+            }
+
+            .suchak-search-main-row select,
+            .suchak-search-main-row input {
+                margin-top: 0 !important;
+            }
+        }
+    </style>
+
     <div class="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
             <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Find Matches</h1>
@@ -92,92 +171,96 @@
         </div>
     @endif
 
-    <form method="GET" action="{{ route('suchak.search.index') }}" class="mb-5 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <div class="grid gap-3 lg:grid-cols-12">
-            <div class="lg:col-span-4">
-                <label for="requesting_representation_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">My side represented profile</label>
+    <form method="GET" action="{{ route('suchak.search.index') }}" class="suchak-search-form mb-5 rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="suchak-search-main-row grid gap-3 lg:items-center">
+            <div class="suchak-search-field suchak-search-profile">
+                <label for="requesting_representation_id" class="suchak-search-label block text-xs font-semibold text-gray-600 dark:text-gray-300">Profile to search for</label>
                 <select
                     id="requesting_representation_id"
                     name="requesting_representation_id"
-                    class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                    class="mt-1 h-10 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                     @disabled($ownRepresentationOptions->isEmpty())
                 >
-                    <option value="">Select profile for fit</option>
+                    <option value="">Choose your represented profile</option>
                     @foreach ($ownRepresentationOptions as $option)
                         @php
                             $optionId = (int) ($option['representation']['id'] ?? 0);
                         @endphp
                         <option value="{{ $optionId }}" @selected($selectedOwnRepresentationId === $optionId)>
-                            {{ $option['option_label'] ?? $option['candidate_reference'] }}
+                            {{ $option['option_label'] ?? 'Represented profile' }}
                         </option>
                     @endforeach
                 </select>
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    @if ($ownRepresentationOptions->isEmpty())
-                        No active represented profiles are available for request creation.
-                    @else
-                        Select once here to compare fit signals and reuse it in the request modal.
-                    @endif
+                <p class="suchak-search-profile-help mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                    Pick the bride/groom profile on your side. Search results and fit signals use this selection.
                 </p>
             </div>
-            <div class="lg:col-span-3">
-                <label for="q" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Education or occupation</label>
-                <input id="q" name="q" value="{{ $filters['q'] ?? '' }}" maxlength="80" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+            <div class="suchak-search-field suchak-search-query">
+                <label for="q" class="suchak-search-label block text-xs font-semibold text-gray-600 dark:text-gray-300">Education/job</label>
+                <input id="q" name="q" value="{{ $filters['q'] ?? '' }}" maxlength="80" placeholder="Education/job" class="mt-1 h-10 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
             </div>
-            <div class="lg:col-span-2">
-                <label for="gender_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Gender</label>
-                <select id="gender_id" name="gender_id" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+            <div class="suchak-search-field suchak-search-gender">
+                <label for="gender_id" class="suchak-search-label block text-xs font-semibold text-gray-600 dark:text-gray-300">Gender</label>
+                <select id="gender_id" name="gender_id" class="mt-1 h-10 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
                     <option value="">Any gender</option>
                     @foreach ($genderOptions as $option)
                         <option value="{{ $option->id }}" @selected((int) ($filters['gender_id'] ?? 0) === (int) $option->id)>{{ $lookupLabel($option) }}</option>
                     @endforeach
                 </select>
             </div>
-            <div class="lg:col-span-3">
-                <label for="marital_status_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Marital status</label>
-                <select id="marital_status_id" name="marital_status_id" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+            <div class="suchak-search-actions grid gap-2 sm:grid-cols-3">
+                <button type="submit" class="h-10 rounded-md bg-red-700 px-4 text-sm font-semibold text-white hover:bg-red-800">Search</button>
+                <a href="{{ route('suchak.search.index') }}" class="inline-flex h-10 items-center justify-center rounded-md border border-gray-300 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900">Reset</a>
+                <button type="button" @click="filtersExpanded = !filtersExpanded" class="h-10 rounded-md border border-gray-300 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900" x-text="filtersExpanded ? 'Compact' : 'Full search'"></button>
+            </div>
+        </div>
+
+        <div x-show="filtersExpanded" x-cloak class="mt-3 grid gap-3 border-t border-gray-100 pt-3 dark:border-gray-700 sm:grid-cols-2 lg:grid-cols-5">
+            <div>
+                <label for="marital_status_id" class="block text-xs font-semibold text-gray-600 dark:text-gray-300">Marital status</label>
+                <select id="marital_status_id" name="marital_status_id" class="mt-1 h-10 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
                     <option value="">Any status</option>
                     @foreach ($maritalStatusOptions as $option)
                         <option value="{{ $option->id }}" @selected((int) ($filters['marital_status_id'] ?? 0) === (int) $option->id)>{{ $lookupLabel($option) }}</option>
                     @endforeach
                 </select>
             </div>
-            <div class="lg:col-span-2">
-                <label for="age_min" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Min age</label>
-                <input id="age_min" name="age_min" type="number" min="18" max="100" value="{{ $filters['age_min'] ?? '' }}" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+            <div>
+                <label for="age_min" class="block text-xs font-semibold text-gray-600 dark:text-gray-300">Min age</label>
+                <input id="age_min" name="age_min" type="number" min="18" max="100" value="{{ $filters['age_min'] ?? '' }}" class="mt-1 h-10 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
             </div>
-            <div class="lg:col-span-2">
-                <label for="age_max" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Max age</label>
-                <input id="age_max" name="age_max" type="number" min="18" max="100" value="{{ $filters['age_max'] ?? '' }}" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+            <div>
+                <label for="age_max" class="block text-xs font-semibold text-gray-600 dark:text-gray-300">Max age</label>
+                <input id="age_max" name="age_max" type="number" min="18" max="100" value="{{ $filters['age_max'] ?? '' }}" class="mt-1 h-10 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
             </div>
-            <div class="lg:col-span-3">
-                <label for="religion_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Religion</label>
-                <select id="religion_id" name="religion_id" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+            <div>
+                <label for="religion_id" class="block text-xs font-semibold text-gray-600 dark:text-gray-300">Religion</label>
+                <select id="religion_id" name="religion_id" class="mt-1 h-10 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
                     <option value="">Any religion</option>
                     @foreach ($religionOptions as $option)
                         <option value="{{ $option->id }}" @selected((int) ($filters['religion_id'] ?? 0) === (int) $option->id)>{{ $lookupLabel($option) }}</option>
                     @endforeach
                 </select>
             </div>
-            <div class="lg:col-span-3">
-                <label for="caste_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Caste</label>
-                <select id="caste_id" name="caste_id" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+            <div>
+                <label for="caste_id" class="block text-xs font-semibold text-gray-600 dark:text-gray-300">Caste</label>
+                <select id="caste_id" name="caste_id" class="mt-1 h-10 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
                     <option value="">Any caste</option>
                     @foreach ($casteOptions as $option)
                         <option value="{{ $option->id }}" @selected((int) ($filters['caste_id'] ?? 0) === (int) $option->id)>{{ $lookupLabel($option) }}</option>
                     @endforeach
                 </select>
             </div>
-            <div class="flex items-end gap-2 lg:col-span-2">
-                <a href="{{ route('suchak.search.index') }}" class="inline-flex w-full justify-center rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900">Reset</a>
-                <button type="submit" class="inline-flex w-full justify-center rounded-md bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800">Search</button>
-            </div>
         </div>
+
+        @if ($ownRepresentationOptions->isEmpty())
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">No active represented profiles are available for request creation.</p>
+        @endif
     </form>
 
     <div class="mb-3 flex flex-col gap-2 text-sm text-gray-600 dark:text-gray-300 md:flex-row md:items-center md:justify-between">
         <p>
-            Showing {{ $results->firstItem() ?? 0 }}-{{ $results->lastItem() ?? 0 }} of {{ number_format($results->total()) }} masked profiles
+            Showing {{ $results->firstItem() ?? 0 }}-{{ $results->lastItem() ?? 0 }} of {{ number_format($results->total()) }} profiles
         </p>
         <p class="text-xs text-gray-500 dark:text-gray-400">
             Requests go only to the selected target Suchak. No phone, email, exact address, family names, PDFs, or private notes are shown here.
@@ -189,7 +272,7 @@
             <table class="min-w-full divide-y divide-gray-200 text-left text-sm dark:divide-gray-700">
                 <thead class="bg-gray-50 text-xs font-semibold uppercase text-gray-600 dark:bg-gray-900 dark:text-gray-300">
                     <tr>
-                        <th class="px-3 py-3">Photo/Mask</th>
+                        <th class="px-3 py-3">Photo</th>
                         <th class="px-3 py-3">Candidate</th>
                         <th class="px-3 py-3">Age/Height</th>
                         <th class="px-3 py-3">Community</th>
@@ -207,27 +290,35 @@
                             $targetLocation = $locationText($result);
                             $targetAgeHeight = $ageHeightText($result);
                             $targetEducationJob = $educationJobText($result);
+                            $targetCandidateLabel = $candidateLabel($result);
+                            $targetPhotoSource = $photoSource($result);
+                            $targetPhotoLabel = (string) ($result['photo']['label'] ?? '');
                             $modalResult = [
                                 'target_representation_id' => (int) ($result['representation']['id'] ?? 0),
-                                'candidate_reference' => (string) ($result['candidate_reference'] ?? 'Masked candidate'),
+                                'candidate_label' => $targetCandidateLabel,
                                 'age_height' => $targetAgeHeight,
                                 'community' => $targetCommunity,
                                 'location' => $targetLocation,
                                 'education_job' => $targetEducationJob,
                                 'marital_status' => (string) ($result['basic']['marital_status'] ?? 'Not available'),
                                 'target_suchak_label' => (string) ($result['target_suchak_label'] ?? 'Target Suchak'),
-                                'fit_label' => (string) ($result['fit_label'] ?? 'Select your profile'),
-                                'fit_summary' => (string) ($result['fit_summary'] ?? 'Select your represented profile to compare deterministic fit signals.'),
+                                'fit_label' => (string) ($result['fit_label'] ?? 'Select your side profile'),
+                                'fit_summary' => (string) ($result['fit_summary'] ?? 'Select your represented profile above to compare fit signals.'),
                                 'reasons' => collect($result['reasons'] ?? [])->filter()->values()->all(),
                                 'warnings' => collect($result['warnings'] ?? [])->filter()->values()->all(),
                             ];
                         @endphp
                         <tr class="align-top hover:bg-gray-50 dark:hover:bg-gray-900/60">
                             <td class="px-3 py-4">
-                                <span class="inline-flex rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">Masked</span>
+                                <div class="flex items-center gap-2">
+                                    <img src="{{ $targetPhotoSource }}" alt="" class="h-14 w-14 rounded-md border border-gray-200 object-cover object-center dark:border-gray-700" loading="lazy">
+                                    @if (($result['photo']['url'] ?? null) === null)
+                                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ $targetPhotoLabel }}</span>
+                                    @endif
+                                </div>
                             </td>
                             <td class="px-3 py-4">
-                                <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $result['candidate_reference'] }}</div>
+                                <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $targetCandidateLabel }}</div>
                                 <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $result['basic']['marital_status'] ?? 'Marital status unavailable' }}</div>
                             </td>
                             <td class="px-3 py-4 text-gray-700 dark:text-gray-300">{{ $targetAgeHeight }}</td>
@@ -238,8 +329,8 @@
                                 {{ $result['target_suchak_label'] ?? 'Target Suchak' }}
                             </td>
                             <td class="max-w-[13rem] px-3 py-4">
-                                <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $result['fit_label'] ?? 'Select your profile' }}</div>
-                                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $result['fit_summary'] ?? 'Select your represented profile to compare deterministic fit signals.' }}</div>
+                                <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $result['fit_label'] ?? 'Select your side profile' }}</div>
+                                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $result['fit_summary'] ?? 'Select your represented profile above to compare fit signals.' }}</div>
                             </td>
                             <td class="px-3 py-4 text-right">
                                 <div class="flex justify-end gap-2">
@@ -264,28 +355,37 @@
                     $targetLocation = $locationText($result);
                     $targetAgeHeight = $ageHeightText($result);
                     $targetEducationJob = $educationJobText($result);
+                    $targetCandidateLabel = $candidateLabel($result);
+                    $targetPhotoSource = $photoSource($result);
+                    $targetPhotoLabel = (string) ($result['photo']['label'] ?? '');
                     $modalResult = [
                         'target_representation_id' => (int) ($result['representation']['id'] ?? 0),
-                        'candidate_reference' => (string) ($result['candidate_reference'] ?? 'Masked candidate'),
+                        'candidate_label' => $targetCandidateLabel,
                         'age_height' => $targetAgeHeight,
                         'community' => $targetCommunity,
                         'location' => $targetLocation,
                         'education_job' => $targetEducationJob,
                         'marital_status' => (string) ($result['basic']['marital_status'] ?? 'Not available'),
                         'target_suchak_label' => (string) ($result['target_suchak_label'] ?? 'Target Suchak'),
-                        'fit_label' => (string) ($result['fit_label'] ?? 'Select your profile'),
-                        'fit_summary' => (string) ($result['fit_summary'] ?? 'Select your represented profile to compare deterministic fit signals.'),
+                        'fit_label' => (string) ($result['fit_label'] ?? 'Select your side profile'),
+                        'fit_summary' => (string) ($result['fit_summary'] ?? 'Select your represented profile above to compare fit signals.'),
                         'reasons' => collect($result['reasons'] ?? [])->filter()->values()->all(),
                         'warnings' => collect($result['warnings'] ?? [])->filter()->values()->all(),
                     ];
                 @endphp
                 <article class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                     <div class="flex items-start justify-between gap-3">
-                        <div class="min-w-0">
-                            <p class="truncate text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{{ $result['candidate_reference'] }}</p>
-                            <h2 class="mt-1 text-base font-semibold text-gray-900 dark:text-gray-100">{{ $result['fit_label'] ?? 'Select your profile' }}</h2>
+                        <div class="flex min-w-0 gap-3">
+                            <img src="{{ $targetPhotoSource }}" alt="" class="h-14 w-14 shrink-0 rounded-md border border-gray-200 object-cover object-center dark:border-gray-700" loading="lazy">
+                            <div class="min-w-0">
+                                <p class="truncate text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{{ $targetPhotoLabel }}</p>
+                                <h2 class="mt-1 text-base font-semibold text-gray-900 dark:text-gray-100">{{ $targetCandidateLabel }}</h2>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $result['basic']['marital_status'] ?? 'Marital status unavailable' }}</p>
+                            </div>
                         </div>
-                        <span class="shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">Masked</span>
+                        <div class="min-w-0 text-right">
+                            <h2 class="mt-1 text-base font-semibold text-gray-900 dark:text-gray-100">{{ $result['fit_label'] ?? 'Select your side profile' }}</h2>
+                        </div>
                     </div>
                     <dl class="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
                         <div>
@@ -319,7 +419,7 @@
         </div>
     @else
         <div class="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
-            No masked profiles matched the current filters.
+            No profiles matched the current filters.
         </div>
     @endif
 
@@ -332,7 +432,7 @@
             <div class="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-gray-200 bg-white px-5 py-4 dark:border-gray-700 dark:bg-gray-800">
                 <div>
                     <h2 id="suchak-search-request-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">Details and request</h2>
-                    <p class="mt-1 text-sm text-gray-600 dark:text-gray-300" x-text="result ? result.candidate_reference : 'Masked candidate'"></p>
+                    <p class="mt-1 text-sm text-gray-600 dark:text-gray-300" x-text="result ? result.candidate_label : 'Candidate'"></p>
                 </div>
                 <button type="button" @click="close()" class="rounded-md border border-gray-300 px-2.5 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900" aria-label="Close request modal">
                     Close
@@ -364,8 +464,8 @@
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                             <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Fit explanation</div>
-                            <h3 class="mt-1 text-base font-semibold text-gray-900 dark:text-gray-100" x-text="result ? result.fit_label : 'Select your profile'"></h3>
-                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300" x-text="result ? result.fit_summary : 'Select your represented profile to compare deterministic fit signals.'"></p>
+                            <h3 class="mt-1 text-base font-semibold text-gray-900 dark:text-gray-100" x-text="result ? result.fit_label : 'Select your side profile'"></h3>
+                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300" x-text="result ? result.fit_summary : 'Select your represented profile above to compare fit signals.'"></p>
                         </div>
                         <div class="rounded-md bg-gray-50 px-3 py-2 text-xs font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-300" x-text="optionLabel(requestingId)"></div>
                     </div>
@@ -409,7 +509,7 @@
                                 @php
                                     $optionId = (int) ($option['representation']['id'] ?? 0);
                                 @endphp
-                                <option value="{{ $optionId }}">{{ $option['option_label'] ?? $option['candidate_reference'] }}</option>
+                                <option value="{{ $optionId }}">{{ $option['option_label'] ?? 'Represented profile' }}</option>
                             @endforeach
                         </select>
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Select at the top and search again if you want the table fit explanation refreshed for a different profile.</p>
