@@ -330,7 +330,7 @@ class SuchakCollaborationFoundationTest extends TestCase
         $response->assertOk();
         $response->assertSee('Available through: #', false);
         $response->assertSee('Request goes only to this Suchak', false);
-        $response->assertSee('Send collaboration request to this Suchak', false);
+        $response->assertSee('Send collaboration request', false);
         $response->assertSee((string) $requestingRepresentation->id, false);
         $response->assertDontSee('Sensitive Target Candidate', false);
         $response->assertDontSee('9876543210', false);

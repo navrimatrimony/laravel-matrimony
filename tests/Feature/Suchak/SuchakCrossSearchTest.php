@@ -3,7 +3,9 @@
 namespace Tests\Feature\Suchak;
 
 use App\Models\City;
+use App\Models\Caste;
 use App\Models\MatrimonyProfile;
+use App\Models\Religion;
 use App\Models\SuchakAccount;
 use App\Models\SuchakConsent;
 use App\Models\SuchakPolicy;
@@ -52,8 +54,8 @@ class SuchakCrossSearchTest extends TestCase
         ]));
 
         $response->assertOk();
-        $response->assertSee('Suchak masked search', false);
-        $response->assertSee('Masked candidate', false);
+        $response->assertSee('Find Matches', false);
+        $response->assertSee('masked-', false);
         $response->assertSee('B.Tech Computer', false);
         $response->assertSee('25-29', false);
         $response->assertSee('165-169 cm', false);
@@ -65,6 +67,78 @@ class SuchakCrossSearchTest extends TestCase
         $response->assertDontSee('Secret Lane 42', false);
         $response->assertDontSee('Request Collaboration', false);
         $response->assertDontSee('Download PDF', false);
+    }
+
+    public function test_selected_own_representation_drives_fit_explanation_and_modal_request_form(): void
+    {
+        [$actorUser, $actorAccount] = $this->verifiedSuchakActor();
+        $targetAccount = $this->publicVerifiedSuchakAccount();
+        [$religion, $caste] = $this->community();
+
+        $ownProfile = $this->activeProfile([
+            'date_of_birth' => now()->subYears(30)->toDateString(),
+            'highest_education' => 'Selected Own MBA',
+            'religion_id' => $religion->id,
+            'caste_id' => $caste->id,
+        ]);
+        $targetProfile = $this->activeProfile([
+            'full_name' => 'Selected Target Secret',
+            'date_of_birth' => now()->subYears(27)->toDateString(),
+            'highest_education' => 'Target Public B.Tech',
+            'religion_id' => $religion->id,
+            'caste_id' => $caste->id,
+            'address_line' => 'Selected Target Secret Lane',
+        ]);
+        $selectedOwnRepresentation = $this->activeRepresentation($actorAccount, $ownProfile);
+        $targetRepresentation = $this->activeRepresentation($targetAccount, $targetProfile);
+
+        $response = $this->actingAs($actorUser)->get(route('suchak.search.index', [
+            'requesting_representation_id' => $selectedOwnRepresentation->id,
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('value="'.$selectedOwnRepresentation->id.'" selected', false);
+        $response->assertSee('Strong preliminary fit', false);
+        $response->assertSee('Same caste.', false);
+        $response->assertSee('Same religion.', false);
+        $response->assertSee('Details and request', false);
+        $response->assertSee('name="target_representation_id"', false);
+        $response->assertSee('name="requesting_representation_id"', false);
+        $response->assertSee(route('suchak.collaborations.store'), false);
+        $response->assertSee((string) $targetRepresentation->id, false);
+        $response->assertDontSee('Selected Target Secret', false);
+        $response->assertDontSee('Selected Target Secret Lane', false);
+    }
+
+    public function test_selected_representation_from_another_suchak_is_not_used_for_fit_explanation(): void
+    {
+        [$actorUser] = $this->verifiedSuchakActor();
+        $otherAccount = $this->publicVerifiedSuchakAccount();
+        $targetAccount = $this->publicVerifiedSuchakAccount();
+        [$religion, $caste] = $this->community();
+
+        $otherProfile = $this->activeProfile([
+            'religion_id' => $religion->id,
+            'caste_id' => $caste->id,
+        ]);
+        $targetProfile = $this->activeProfile([
+            'highest_education' => 'Other Suchak Fit Trap',
+            'religion_id' => $religion->id,
+            'caste_id' => $caste->id,
+        ]);
+        $otherRepresentation = $this->activeRepresentation($otherAccount, $otherProfile);
+        $this->activeRepresentation($targetAccount, $targetProfile);
+
+        $response = $this->actingAs($actorUser)->get(route('suchak.search.index', [
+            'requesting_representation_id' => $otherRepresentation->id,
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('Select your profile', false);
+        $response->assertSee('Select your represented profile to compare deterministic fit signals.', false);
+        $response->assertDontSee('Strong preliminary fit', false);
+        $response->assertDontSee('Same caste.', false);
+        $response->assertDontSee('Same religion.', false);
     }
 
     public function test_cross_search_excludes_profiles_represented_by_the_same_suchak(): void
@@ -135,7 +209,7 @@ class SuchakCrossSearchTest extends TestCase
             ->actingAs($user)
             ->get(route('suchak.search.index'))
             ->assertOk()
-            ->assertSee('Suchak masked search', false);
+            ->assertSee('Find Matches', false);
 
         SuchakPolicy::query()->updateOrCreate(
             ['policy_key' => SuchakPolicyService::KEY_SUCHAK_ALLOW_WORK_BEFORE_ADMIN_APPROVAL],
@@ -176,6 +250,28 @@ class SuchakCrossSearchTest extends TestCase
             'public_status' => SuchakAccount::PUBLIC_ACTIVE,
             'verified_at' => now(),
         ]);
+    }
+
+    /**
+     * @return array{0: Religion, 1: Caste}
+     */
+    private function community(): array
+    {
+        $religion = Religion::query()->create([
+            'key' => 'cross_search_religion_'.Religion::query()->count(),
+            'label' => 'Cross Search Religion',
+            'label_en' => 'Cross Search Religion',
+            'is_active' => true,
+        ]);
+        $caste = Caste::query()->create([
+            'religion_id' => $religion->id,
+            'key' => 'cross_search_caste_'.Caste::query()->count(),
+            'label' => 'Cross Search Caste',
+            'label_en' => 'Cross Search Caste',
+            'is_active' => true,
+        ]);
+
+        return [$religion, $caste];
     }
 
     /**

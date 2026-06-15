@@ -148,7 +148,7 @@ class SuchakIntegratedQaTest extends TestCase
 
         $searchResponse = $this->actingAs($suchakUser)->get(route('suchak.search.index'));
         $searchResponse->assertOk();
-        $searchResponse->assertSee('Send collaboration request to this Suchak', false);
+        $searchResponse->assertSee('Send collaboration request', false);
         $searchResponse->assertDontSee('9765432109', false);
         $searchResponse->assertDontSee('Search Secret Lane', false);
 

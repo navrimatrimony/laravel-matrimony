@@ -44,7 +44,7 @@ class SuchakWebUiCompletionTest extends TestCase
 
         $dashboard->assertOk()
             ->assertSee('Create intake source', false)
-            ->assertSee('Masked search', false)
+            ->assertSee('Find Matches', false)
             ->assertSee('Generate PDF/QR', false)
             ->assertSee('Suggest profile update', false)
             ->assertSee(route('suchak.intakes.create'), false)

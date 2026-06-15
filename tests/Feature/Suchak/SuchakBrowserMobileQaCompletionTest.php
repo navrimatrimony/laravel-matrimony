@@ -83,7 +83,7 @@ class SuchakBrowserMobileQaCompletionTest extends TestCase
         );
         $this->assertMobileReadyMarkup(
             $this->actingAs($pendingUser)->withMobileHeaders()->get(route('suchak.search.index')),
-            ['Suchak masked search'],
+            ['Find Matches'],
         );
 
         $this->assertMobileReadyMarkup(

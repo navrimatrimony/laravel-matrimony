@@ -29,12 +29,19 @@ class CrossSearchController extends Controller
             'caste_id' => ['nullable', 'integer', 'min:1'],
             'religion_id' => ['nullable', 'integer', 'min:1'],
             'marital_status_id' => ['nullable', 'integer', 'min:1'],
+            'requesting_representation_id' => ['nullable', 'integer', 'exists:suchak_profile_representations,id'],
         ]);
+        $ownRepresentationOptions = $searchService->ownRepresentationOptions($account);
+        $selectedOwnRepresentationId = (int) ($filters['requesting_representation_id'] ?? 0);
+        $selectedOwnRepresentation = $ownRepresentationOptions->first(
+            fn (array $option): bool => (int) ($option['representation']['id'] ?? 0) === $selectedOwnRepresentationId,
+        );
 
         return view('suchak.search.index', [
             'filters' => $filters,
             'results' => $searchService->search($account, $filters),
-            'ownRepresentationOptions' => $searchService->ownRepresentationOptions($account),
+            'ownRepresentationOptions' => $ownRepresentationOptions,
+            'selectedOwnRepresentation' => $selectedOwnRepresentation,
             'genderOptions' => MasterGender::query()->where('is_active', true)->orderBy('id')->get(),
             'religionOptions' => Religion::query()->where('is_active', true)->orderBy('label')->get(),
             'casteOptions' => Caste::query()->where('is_active', true)->orderBy('label')->get(),

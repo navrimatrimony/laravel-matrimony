@@ -46,7 +46,7 @@
         'work' => [
             ['label' => 'Upload / Paste', 'href' => route('suchak.intakes.create'), 'active' => request()->routeIs('suchak.intakes.*')],
             ['label' => 'Manual Form', 'href' => route('suchak.manual-profiles.create'), 'active' => request()->routeIs('suchak.manual-profiles.*')],
-            ['label' => 'Masked Search', 'href' => route('suchak.search.index'), 'active' => request()->routeIs('suchak.search.*')],
+            ['label' => 'Find Matches', 'href' => route('suchak.search.index'), 'active' => request()->routeIs('suchak.search.*')],
         ],
         'network' => [
             ['label' => 'Collaborations', 'href' => route('suchak.collaborations.index'), 'active' => request()->routeIs('suchak.collaborations.*')],

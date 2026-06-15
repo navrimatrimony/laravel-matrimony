@@ -98,7 +98,7 @@ class SuchakRouteAccessTest extends TestCase
             ->assertSee('Work', false)
             ->assertSee('Upload / Paste', false)
             ->assertSee('Manual Form', false)
-            ->assertSee('Masked Search', false)
+            ->assertSee('Find Matches', false)
             ->assertDontSee('id="connect-main-badge"', false)
             ->assertDontSee('id="activity-main-badge"', false)
             ->assertDontSee('id="mobile-sticky-quick-nav"', false)

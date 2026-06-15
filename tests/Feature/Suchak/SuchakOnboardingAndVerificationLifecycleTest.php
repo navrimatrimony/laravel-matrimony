@@ -518,7 +518,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
         $this->actingAs($user->fresh())
             ->get(route('suchak.search.index'))
             ->assertOk()
-            ->assertSee('Suchak masked search', false);
+            ->assertSee('Find Matches', false);
 
         $this->actingAs($user->fresh())
             ->get(route('suchak.intakes.create'))
