@@ -2,24 +2,43 @@
 
 namespace Tests\Feature\Chat;
 
+use App\Models\City;
 use App\Models\Conversation;
 use App\Models\MatrimonyProfile;
 use App\Models\Message;
+use App\Models\Plan;
 use App\Models\ShowcaseChatSetting;
 use App\Models\User;
+use App\Services\Profile\ProfileCanonicalResidenceService;
+use App\Services\SubscriptionService;
+use Database\Seeders\MinimalLocationSeeder;
+use Database\Seeders\PlanStandardFeatureKeysSeeder;
+use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class ChatMessageModerationTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->seed(MinimalLocationSeeder::class);
+        $this->seed(SubscriptionPlansSeeder::class);
+        $this->seed(PlanStandardFeatureKeysSeeder::class);
+        ProfileCanonicalResidenceService::forgetCachedMasters();
+    }
+
     protected function createPair(): array
     {
         $aUser = User::factory()->create();
         $bUser = User::factory()->create();
-        $a = MatrimonyProfile::factory()->create(['user_id' => $aUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
-        $b = MatrimonyProfile::factory()->create(['user_id' => $bUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
+        $a = $this->createActiveProfile($aUser);
+        $b = $this->createActiveProfile($bUser);
 
         return [$aUser, $bUser, $a, $b];
     }
@@ -123,6 +142,8 @@ class ChatMessageModerationTest extends TestCase
             'last_message_at' => $msg->sent_at,
         ]);
 
+        $this->subscribeToPlan($bUser, 'basic_male');
+
         $response = $this->actingAs($bUser)->get(route('chat.show', ['conversation' => $conv->id]));
         $response->assertOk();
         $response->assertSee('हा संदेश उपलब्ध नाही.', false);
@@ -131,12 +152,12 @@ class ChatMessageModerationTest extends TestCase
 
     public function test_admin_showcase_conversation_shows_filtered_indicator_for_flagged_message(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $realUser = User::factory()->create();
         $showUser = User::factory()->create();
 
-        $real = MatrimonyProfile::factory()->create(['user_id' => $realUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
-        $showcase = MatrimonyProfile::factory()->create(['user_id' => $showUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false, 'is_showcase' => true]);
+        $real = $this->createActiveProfile($realUser);
+        $showcase = $this->createActiveProfile($showUser, ['is_showcase' => true]);
 
         ShowcaseChatSetting::create([
             'matrimony_profile_id' => $showcase->id,
@@ -194,9 +215,46 @@ class ChatMessageModerationTest extends TestCase
             'last_message_at' => $msg->sent_at,
         ]);
 
+        $this->subscribeToPlan($bUser, 'basic_male');
+
         $response = $this->actingAs($bUser)->get(route('chat.show', ['conversation' => $conv->id]));
         $response->assertOk();
         $response->assertDontSee('sexual_explicit', false);
         $response->assertDontSee('hate_caste_religion', false);
+    }
+
+    private function createActiveProfile(User $user, array $attributes = []): MatrimonyProfile
+    {
+        $profile = MatrimonyProfile::factory()->create(array_merge($attributes, [
+            'user_id' => $user->id,
+            'lifecycle_state' => 'draft',
+            'is_suspended' => false,
+        ]));
+
+        $leafId = (int) City::query()->where('name', 'Pune City')->firstOrFail()->id;
+
+        if (Schema::hasColumn($profile->getTable(), 'location_id')) {
+            DB::table($profile->getTable())->where('id', $profile->id)->update(['location_id' => $leafId]);
+            $profile->refresh();
+        } else {
+            ProfileCanonicalResidenceService::upsertSelfCurrent((int) $profile->id, $leafId, null, true, false);
+        }
+
+        $profile->update(['lifecycle_state' => 'active']);
+
+        return $profile->fresh();
+    }
+
+    private function subscribeToPlan(User $user, string $slug): void
+    {
+        $plan = Plan::query()->where('slug', $slug)->firstOrFail();
+        $plan->loadMissing('terms');
+
+        $termId = $plan->terms
+            ->where('is_visible', true)
+            ->sortBy('sort_order')
+            ->first()?->id;
+
+        app(SubscriptionService::class)->subscribe($user, $plan, $termId ? (int) $termId : null, null);
     }
 }

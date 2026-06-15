@@ -59,6 +59,8 @@ class SuchakActivityLog extends Model
 
     public const ACTION_USER_REQUEST_CREATED = 'user_request_created';
 
+    public const ACTION_USER_REQUEST_REPLIED = 'user_request_replied';
+
     public const ACTION_PIPELINE_STATUS_CHANGED = 'pipeline_status_changed';
 
     public const ACTION_COLLABORATION_REQUEST_CREATED = 'collaboration_request_created';

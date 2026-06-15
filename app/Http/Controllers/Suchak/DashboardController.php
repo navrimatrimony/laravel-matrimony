@@ -13,6 +13,7 @@ use App\Models\SuchakPaymentContext;
 use App\Models\SuchakPlanPayment;
 use App\Models\SuchakProfileNote;
 use App\Models\SuchakProfileRepresentation;
+use App\Models\SuchakProfileRequest;
 use App\Models\SuchakProfileUpdateSuggestion;
 use App\Modules\Suchak\Services\SuchakAccessService;
 use App\Modules\Suchak\Services\SuchakBillingCatalogService;
@@ -142,6 +143,19 @@ class DashboardController extends Controller
             ->limit(5)
             ->get();
 
+        $incomingProfileRequests = SuchakProfileRequest::query()
+            ->with([
+                'requestingMatrimonyProfile.user',
+                'targetMatrimonyProfile',
+                'chatConversation.messages.senderProfile',
+                'requestChatMessage',
+                'chatMessage',
+            ])
+            ->where('selected_suchak_account_id', $account->id)
+            ->latest()
+            ->limit(10)
+            ->get();
+
         $recentSourceLinks = SuchakBiodataIntakeLink::query()
             ->with(['biodataIntake.profile', 'matrimonyProfile'])
             ->where('suchak_account_id', $account->id)
@@ -197,6 +211,7 @@ class DashboardController extends Controller
             'representationCards' => $representationCards,
             'customerListRows' => $customerListService->rowsForAccount($account),
             'pendingCollaborations' => $pendingCollaborations,
+            'incomingProfileRequests' => $incomingProfileRequests,
             'recentSourceLinks' => $recentSourceLinks,
             'recentExports' => $recentExports,
             'recentSuggestions' => $recentSuggestions,

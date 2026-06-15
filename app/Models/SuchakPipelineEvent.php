@@ -16,6 +16,7 @@ class SuchakPipelineEvent extends Model
     public const EVENT_REQUEST_CREATED = 'request_created';
     public const EVENT_SUCHAK_VIEWED = 'suchak_viewed';
     public const EVENT_SUCHAK_ACCEPTED = 'suchak_accepted';
+    public const EVENT_SUCHAK_REPLIED = 'suchak_replied';
     public const EVENT_FORWARDED_TO_CANDIDATE = 'forwarded_to_candidate';
     public const EVENT_CANDIDATE_INTERESTED = 'candidate_interested';
     public const EVENT_CANDIDATE_NOT_INTERESTED = 'candidate_not_interested';
@@ -29,6 +30,7 @@ class SuchakPipelineEvent extends Model
         self::EVENT_REQUEST_CREATED,
         self::EVENT_SUCHAK_VIEWED,
         self::EVENT_SUCHAK_ACCEPTED,
+        self::EVENT_SUCHAK_REPLIED,
         self::EVENT_FORWARDED_TO_CANDIDATE,
         self::EVENT_CANDIDATE_INTERESTED,
         self::EVENT_CANDIDATE_NOT_INTERESTED,

@@ -54,6 +54,15 @@ class SuchakProfileRequest extends Model
         'request_status',
         'request_reason',
         'message',
+        'request_chat_message_id',
+        'chat_conversation_id',
+        'chat_message_id',
+        'replied_by_user_id',
+        'replied_at',
+    ];
+
+    protected $casts = [
+        'replied_at' => 'datetime',
     ];
 
     public function requestingUser(): BelongsTo
@@ -84,6 +93,26 @@ class SuchakProfileRequest extends Model
     public function pipeline(): HasOne
     {
         return $this->hasOne(SuchakPipeline::class, 'request_id');
+    }
+
+    public function chatConversation(): BelongsTo
+    {
+        return $this->belongsTo(Conversation::class, 'chat_conversation_id');
+    }
+
+    public function requestChatMessage(): BelongsTo
+    {
+        return $this->belongsTo(Message::class, 'request_chat_message_id');
+    }
+
+    public function chatMessage(): BelongsTo
+    {
+        return $this->belongsTo(Message::class, 'chat_message_id');
+    }
+
+    public function repliedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'replied_by_user_id');
     }
 
     public function isOpen(): bool

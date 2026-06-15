@@ -1349,6 +1349,7 @@ class MatrimonyProfileController extends Controller
 
             if ($suchakContactRepresentations->isNotEmpty()) {
                 $openSuchakRequestsByRepresentationId = SuchakProfileRequest::query()
+                    ->with(['chatConversation', 'chatMessage'])
                     ->where('requesting_user_id', (int) $user->id)
                     ->where('requesting_matrimony_profile_id', (int) $user->matrimonyProfile->id)
                     ->where('target_matrimony_profile_id', (int) $profile->id)

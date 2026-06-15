@@ -42,9 +42,10 @@ class ChatMessageService
 
     public function getMessagesPaginated(Conversation $conversation, int $perPage = 30): LengthAwarePaginator
     {
-        // Order by id (insert order) so the thread stays chronological even if sent_at ever skews.
+        // Order by sent_at first so backfilled/routed messages keep conversation chronology.
         return Message::query()
             ->where('conversation_id', $conversation->id)
+            ->orderByDesc('sent_at')
             ->orderByDesc('id')
             ->paginate($perPage);
     }

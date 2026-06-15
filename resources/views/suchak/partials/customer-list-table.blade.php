@@ -80,6 +80,11 @@
                                             {{ __('suchak.dashboard.customer_view') }}
                                         </a>
                                     @endif
+                                    @if ($row['edit_url'])
+                                        <a href="{{ $row['edit_url'] }}" class="rounded-md border border-indigo-300 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 dark:border-indigo-700 dark:text-indigo-200 dark:hover:bg-indigo-950/40">
+                                            {{ __('suchak.dashboard.customer_edit_profile') }}
+                                        </a>
+                                    @endif
                                     @if ($row['manage_url'])
                                         <a href="{{ $row['manage_url'] }}" class="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white">
                                             {{ __('suchak.dashboard.customer_manage') }}

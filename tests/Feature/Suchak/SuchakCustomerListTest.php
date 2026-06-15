@@ -28,7 +28,7 @@ class SuchakCustomerListTest extends TestCase
             'date_of_birth' => '1998-06-15',
         ]);
 
-        SuchakProfileRepresentation::factory()->create([
+        $representation = SuchakProfileRepresentation::factory()->create([
             'suchak_account_id' => $account->id,
             'matrimony_profile_id' => $profile->id,
             'representation_status' => SuchakProfileRepresentation::STATUS_ACTIVE,
@@ -42,7 +42,12 @@ class SuchakCustomerListTest extends TestCase
             ->assertSee('Customer List Candidate', false)
             ->assertSee('#'.$profile->id, false)
             ->assertSee('View', false)
-            ->assertSee('Manage', false);
+            ->assertSee('Edit profile', false)
+            ->assertSee(route('suchak.representations.profile-form', $representation), false)
+            ->assertSee('Manage', false)
+            ->assertSee('manage_representation='.$representation->id, false)
+            ->assertDontSee('Customer management', false)
+            ->assertDontSee('Manage selected customer', false);
     }
 
     public function test_pending_intake_appears_in_customer_list_with_review_action(): void

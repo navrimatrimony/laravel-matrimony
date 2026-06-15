@@ -22,8 +22,12 @@ class SuchakCrmLedgerOperationalUiTest extends TestCase
         $beforeUpdatedAt = $profile->updated_at?->toDateTimeString();
 
         $this->actingAs($suchakUser)
-            ->get(route('suchak.dashboard'))
+            ->get(route('suchak.dashboard', [
+                'dashboard_tab' => 'profiles',
+                'manage_representation' => $representation->id,
+            ]))
             ->assertOk()
+            ->assertSee('Manage selected customer', false)
             ->assertSee('CRM Notes & Follow-ups', false)
             ->assertSee('Ledger & Customer Payments', false)
             ->assertSee('Search CRM or ledger', false);
@@ -80,6 +84,8 @@ class SuchakCrmLedgerOperationalUiTest extends TestCase
 
         $this->actingAs($suchakUser)
             ->get(route('suchak.dashboard', [
+                'dashboard_tab' => 'profiles',
+                'manage_representation' => $representation->id,
                 'note_type' => SuchakProfileNote::TYPE_FOLLOW_UP,
                 'ledger_status' => SuchakLedgerEntry::STATUS_PAID,
             ]))
@@ -148,7 +154,7 @@ class SuchakCrmLedgerOperationalUiTest extends TestCase
     public function test_crm_ledger_dashboard_search_stays_scoped_to_the_logged_in_suchak(): void
     {
         [$suchakUser, $account, $profile, $representation] = $this->representedProfileFixture();
-        [$otherUser, $otherAccount, $otherProfile] = $this->representedProfileFixture();
+        [$otherUser, $otherAccount, $otherProfile, $otherRepresentation] = $this->representedProfileFixture();
 
         SuchakProfileNote::factory()->create([
             'suchak_account_id' => $account->id,
@@ -171,14 +177,22 @@ class SuchakCrmLedgerOperationalUiTest extends TestCase
         ]);
 
         $this->actingAs($suchakUser)
-            ->get(route('suchak.dashboard', ['business_q' => 'marker']))
+            ->get(route('suchak.dashboard', [
+                'dashboard_tab' => 'profiles',
+                'manage_representation' => $representation->id,
+                'business_q' => 'marker',
+            ]))
             ->assertOk()
             ->assertSee('Private owner follow-up marker.', false)
             ->assertSee('Owner payment marker.', false)
             ->assertDontSee('Other Suchak private marker.', false);
 
         $this->actingAs($otherUser)
-            ->get(route('suchak.dashboard', ['business_q' => 'marker']))
+            ->get(route('suchak.dashboard', [
+                'dashboard_tab' => 'profiles',
+                'manage_representation' => $otherRepresentation->id,
+                'business_q' => 'marker',
+            ]))
             ->assertOk()
             ->assertSee('Other Suchak private marker.', false)
             ->assertDontSee('Private owner follow-up marker.', false);

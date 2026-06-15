@@ -1357,7 +1357,9 @@
                                         </div>
 
                                         @if ($existingSuchakRequest)
-                                            <p class="mt-3 text-sm text-stone-600 dark:text-stone-300">{{ __('profile.suchak_contact_pending_help') }}</p>
+                                            @include('matrimony.profile.partials.suchak-request-status', [
+                                                'existingSuchakRequest' => $existingSuchakRequest,
+                                            ])
                                         @elseif ($suchakCanMessage)
                                             <form method="POST" action="{{ route('matrimony.profile.suchak-requests.store', [$profile, $suchakRepresentation]) }}" class="mt-4 space-y-3">
                                                 @csrf
@@ -1377,7 +1379,9 @@
                                             </div>
                                         @endif
                                     @elseif ($existingSuchakRequest)
-                                        <p class="mt-3 text-sm text-stone-600 dark:text-stone-300">{{ __('profile.suchak_contact_pending_help') }}</p>
+                                        @include('matrimony.profile.partials.suchak-request-status', [
+                                            'existingSuchakRequest' => $existingSuchakRequest,
+                                        ])
                                     @else
                                         <form method="POST" action="{{ route('matrimony.profile.suchak-requests.store', [$profile, $suchakRepresentation]) }}" class="mt-3 space-y-3">
                                             @csrf

@@ -3,31 +3,40 @@
 namespace Tests\Feature\Chat;
 
 use App\Models\AdminSetting;
+use App\Models\City;
 use App\Models\Conversation;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
+use App\Services\Profile\ProfileCanonicalResidenceService;
+use Database\Seeders\MinimalLocationSeeder;
+use Database\Seeders\PlanStandardFeatureKeysSeeder;
+use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class FreeChatReplyGateTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->seed(MinimalLocationSeeder::class);
+        $this->seed(SubscriptionPlansSeeder::class);
+        $this->seed(PlanStandardFeatureKeysSeeder::class);
+        ProfileCanonicalResidenceService::forgetCachedMasters();
+    }
+
     public function test_sender_can_send_two_messages_but_third_is_blocked_without_reply(): void
     {
         $aUser = User::factory()->create();
         $bUser = User::factory()->create();
 
-        $a = MatrimonyProfile::factory()->create([
-            'user_id' => $aUser->id,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
-        ]);
-        $b = MatrimonyProfile::factory()->create([
-            'user_id' => $bUser->id,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
-        ]);
+        $a = $this->createActiveProfile($aUser);
+        $b = $this->createActiveProfile($bUser);
 
         // Defaults: free_chat_with_reply_gate, max consecutive = 2
         $this->actingAs($aUser)
@@ -54,8 +63,8 @@ class FreeChatReplyGateTest extends TestCase
         $aUser = User::factory()->create();
         $bUser = User::factory()->create();
 
-        $a = MatrimonyProfile::factory()->create(['user_id' => $aUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
-        $b = MatrimonyProfile::factory()->create(['user_id' => $bUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
+        $a = $this->createActiveProfile($aUser);
+        $b = $this->createActiveProfile($bUser);
 
         $this->actingAs($aUser)->post(route('chat.start', ['matrimony_profile' => $b->id]))->assertRedirect();
         $conversation = Conversation::firstOrFail();
@@ -80,8 +89,8 @@ class FreeChatReplyGateTest extends TestCase
 
         $aUser = User::factory()->create();
         $bUser = User::factory()->create();
-        $a = MatrimonyProfile::factory()->create(['user_id' => $aUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
-        $b = MatrimonyProfile::factory()->create(['user_id' => $bUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
+        $a = $this->createActiveProfile($aUser);
+        $b = $this->createActiveProfile($bUser);
 
         $now = now()->startOfHour();
         $this->travelTo($now);
@@ -112,9 +121,9 @@ class FreeChatReplyGateTest extends TestCase
         $bUser = User::factory()->create();
         $cUser = User::factory()->create();
 
-        $a = MatrimonyProfile::factory()->create(['user_id' => $aUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
-        $b = MatrimonyProfile::factory()->create(['user_id' => $bUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
-        $c = MatrimonyProfile::factory()->create(['user_id' => $cUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
+        $a = $this->createActiveProfile($aUser);
+        $b = $this->createActiveProfile($bUser);
+        $c = $this->createActiveProfile($cUser);
 
         $this->actingAs($aUser)->post(route('chat.start', ['matrimony_profile' => $b->id]))->assertRedirect();
         $convAB = Conversation::firstOrFail();
@@ -129,5 +138,26 @@ class FreeChatReplyGateTest extends TestCase
         $convAC = Conversation::query()->orderByDesc('id')->firstOrFail();
         $this->actingAs($aUser)->post(route('chat.messages.text', ['conversation' => $convAC->id]), ['body_text' => 'AC1'])->assertRedirect();
     }
-}
 
+    private function createActiveProfile(User $user, array $attributes = []): MatrimonyProfile
+    {
+        $profile = MatrimonyProfile::factory()->create(array_merge($attributes, [
+            'user_id' => $user->id,
+            'lifecycle_state' => 'draft',
+            'is_suspended' => false,
+        ]));
+
+        $leafId = (int) City::query()->where('name', 'Pune City')->firstOrFail()->id;
+
+        if (Schema::hasColumn($profile->getTable(), 'location_id')) {
+            DB::table($profile->getTable())->where('id', $profile->id)->update(['location_id' => $leafId]);
+            $profile->refresh();
+        } else {
+            ProfileCanonicalResidenceService::upsertSelfCurrent((int) $profile->id, $leafId, null, true, false);
+        }
+
+        $profile->update(['lifecycle_state' => 'active']);
+
+        return $profile->fresh();
+    }
+}

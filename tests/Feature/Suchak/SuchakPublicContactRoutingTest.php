@@ -2,9 +2,11 @@
 
 namespace Tests\Feature\Suchak;
 
-use App\Models\City;
 use App\Models\AdminSetting;
+use App\Models\City;
+use App\Models\Conversation;
 use App\Models\MatrimonyProfile;
+use App\Models\Message;
 use App\Models\ProfileVisibilitySetting;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
@@ -250,6 +252,127 @@ class SuchakPublicContactRoutingTest extends TestCase
             'target_id' => $request->id,
             'matrimony_profile_id' => $targetProfile->id,
         ]);
+    }
+
+    public function test_suchak_reply_uses_existing_member_chat_and_updates_request_state(): void
+    {
+        [$viewer, $viewerProfile, $representation, $targetProfile] = $this->validRoutingFixture([
+            'contact_routing_mode' => ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY,
+        ]);
+
+        $this
+            ->actingAs($viewer)
+            ->post(route('matrimony.profile.suchak-requests.store', [$targetProfile, $representation]), [
+                'message' => 'Please share meeting details through Suchak.',
+            ])
+            ->assertRedirect();
+
+        $profileRequest = SuchakProfileRequest::query()->firstOrFail();
+        $suchakAccount = $representation->suchakAccount()->with('user')->firstOrFail();
+
+        $this->assertNotNull($profileRequest->chat_conversation_id);
+        $this->assertNotNull($profileRequest->request_chat_message_id);
+
+        $requestMessage = Message::query()->findOrFail($profileRequest->request_chat_message_id);
+        $this->assertSame($profileRequest->chat_conversation_id, $requestMessage->conversation_id);
+        $this->assertSame($viewerProfile->id, $requestMessage->sender_profile_id);
+        $this->assertSame($targetProfile->id, $requestMessage->receiver_profile_id);
+        $this->assertSame('Please share meeting details through Suchak.', $requestMessage->body_text);
+
+        $dashboard = $this
+            ->actingAs($suchakAccount->user)
+            ->get(route('suchak.dashboard', ['dashboard_tab' => 'requests']));
+
+        $dashboard
+            ->assertOk()
+            ->assertSee('Incoming Profile Requests', false)
+            ->assertSee('Please share meeting details through Suchak.', false)
+            ->assertSee(route('suchak.profile-requests.reply', $profileRequest), false)
+            ->assertSee('Quick reply', false)
+            ->assertSee('मी हे स्थळ संबंधित कुटुंबाला दाखवतो.', false)
+            ->assertSee('Conversation history', false)
+            ->assertDontSee('Suchak onboarding', false)
+            ->assertDontSee('Suchak Dashboard', false)
+            ->assertDontSee('Represented', false);
+
+        $this
+            ->actingAs($suchakAccount->user)
+            ->post(route('suchak.profile-requests.reply', $profileRequest), [
+                'reply_message' => 'Please call our office tomorrow after 10 AM.',
+            ])
+            ->assertRedirect(route('suchak.dashboard', ['dashboard_tab' => 'requests']));
+
+        $profileRequest->refresh();
+
+        $this->assertSame(SuchakProfileRequest::STATUS_ACCEPTED_BY_SUCHAK, $profileRequest->request_status);
+        $this->assertNotNull($profileRequest->chat_conversation_id);
+        $this->assertNotNull($profileRequest->chat_message_id);
+        $this->assertNotNull($profileRequest->replied_at);
+        $this->assertSame($suchakAccount->user_id, $profileRequest->replied_by_user_id);
+
+        $message = Message::query()->findOrFail($profileRequest->chat_message_id);
+        $this->assertSame($profileRequest->chat_conversation_id, $message->conversation_id);
+        $this->assertSame($targetProfile->id, $message->sender_profile_id);
+        $this->assertSame($viewerProfile->id, $message->receiver_profile_id);
+        $this->assertStringContainsString('सूचकांकडून संदेश', (string) $message->body_text);
+        $this->assertStringContainsString('Please call our office tomorrow after 10 AM.', (string) $message->body_text);
+
+        [$profileOneId, $profileTwoId] = Conversation::normalizePairIds($targetProfile->id, $viewerProfile->id);
+        $this->assertDatabaseHas('conversations', [
+            'id' => $profileRequest->chat_conversation_id,
+            'profile_one_id' => $profileOneId,
+            'profile_two_id' => $profileTwoId,
+            'last_message_id' => $message->id,
+        ]);
+        $this->assertDatabaseHas('suchak_pipeline_events', [
+            'event_type' => SuchakPipelineEvent::EVENT_SUCHAK_REPLIED,
+            'actor_type' => SuchakPipelineEvent::ACTOR_SUCHAK,
+            'actor_id' => $suchakAccount->user_id,
+        ]);
+        $this->assertDatabaseHas('suchak_activity_logs', [
+            'action_type' => SuchakActivityLog::ACTION_USER_REQUEST_REPLIED,
+            'target_type' => 'suchak_profile_request',
+            'target_id' => $profileRequest->id,
+        ]);
+
+        $chatResponse = $this
+            ->actingAs($viewer)
+            ->get(route('chat.show', $profileRequest->chatConversation));
+
+        $chatResponse
+            ->assertOk()
+            ->assertSeeInOrder([
+                'Please share meeting details through Suchak.',
+                'Please call our office tomorrow after 10 AM.',
+            ], false);
+
+        $this
+            ->actingAs($viewer)
+            ->post(route('chat.messages.text', $profileRequest->chatConversation), [
+                'body_text' => 'chalel',
+            ])
+            ->assertRedirect();
+
+        $dashboardAfterMemberReply = $this
+            ->actingAs($suchakAccount->user)
+            ->get(route('suchak.dashboard', ['dashboard_tab' => 'requests']));
+
+        $dashboardAfterMemberReply
+            ->assertOk()
+            ->assertSee('Conversation history', false)
+            ->assertSee('chalel', false);
+
+        $profileResponse = $this
+            ->actingAs($viewer)
+            ->get(route('matrimony.profile.show', $targetProfile));
+
+        $profileResponse
+            ->assertOk()
+            ->assertSee('Please share meeting details through Suchak.', false)
+            ->assertSee('Please call our office tomorrow after 10 AM.', false)
+            ->assertSee(route('chat.show', $profileRequest->chatConversation), false);
+
+        $this->assertSame(3, Message::query()->where('conversation_id', $profileRequest->chat_conversation_id)->count());
     }
 
     public function test_invalid_revoked_or_expired_suchak_representation_is_not_publicly_routable(): void

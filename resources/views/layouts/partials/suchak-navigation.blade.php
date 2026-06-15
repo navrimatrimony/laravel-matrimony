@@ -3,7 +3,7 @@
     $suchakName = $suchakAccount?->suchak_name ?: $suchakUser?->name;
     $statusLabel = \Illuminate\Support\Str::headline((string) ($suchakAccount?->verification_status ?? 'pending'));
     $hasMatrimonyProfile = (bool) $suchakUser?->matrimonyProfile;
-    $dashboardTabKeys = ['profile', 'work', 'profiles', 'money', 'sharing', 'records'];
+    $dashboardTabKeys = ['profile', 'work', 'profiles', 'requests', 'money', 'sharing', 'records'];
     $dashboardHasBusinessFilters = request('business_q', '') !== ''
         || request('note_type') !== null
         || request('ledger_status') !== null;
@@ -38,6 +38,7 @@
             ['label' => 'Profile setup', 'href' => $dashboardTabUrl('profile'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'profile'],
             ['label' => 'Today', 'href' => $dashboardTabUrl('work'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'work'],
             ['label' => 'Customers', 'href' => $dashboardTabUrl('profiles'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'profiles'],
+            ['label' => 'Requests', 'href' => $dashboardTabUrl('requests'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'requests'],
             ['label' => 'Money', 'href' => $dashboardTabUrl('money'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'money'],
             ['label' => 'Sharing', 'href' => $dashboardTabUrl('sharing'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'sharing'],
             ['label' => 'Records', 'href' => $dashboardTabUrl('records'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'records'],

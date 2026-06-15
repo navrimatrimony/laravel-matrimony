@@ -16,6 +16,7 @@ use App\Http\Controllers\Suchak\ManualProfileController;
 use App\Http\Controllers\Suchak\OfflineCampController;
 use App\Http\Controllers\Suchak\PaymentRequestPublicController;
 use App\Http\Controllers\Suchak\PlanPaymentController;
+use App\Http\Controllers\Suchak\ProfileRequestReplyController;
 use App\Http\Controllers\Suchak\ProfileUpdateSuggestionController;
 use App\Http\Controllers\Suchak\PublicMarketplaceController;
 use App\Http\Controllers\Suchak\QrScanController;
@@ -115,6 +116,9 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
         Route::post('/profile-photo', [DashboardController::class, 'storeProfilePhoto'])
             ->middleware('throttle:10,1')
             ->name('profile-photo.store');
+        Route::post('/profile-requests/{profileRequest}/reply', [ProfileRequestReplyController::class, 'store'])
+            ->middleware('throttle:20,1')
+            ->name('profile-requests.reply');
         Route::get('/account-settings', [AccountSettingsController::class, 'edit'])
             ->name('account-settings.edit');
         Route::post('/account-settings/contact-numbers', [AccountSettingsController::class, 'storeContactNumber'])

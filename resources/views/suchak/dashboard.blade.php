@@ -55,7 +55,7 @@
         ->mapWithKeys(fn (string $collector) => [$collector => ucwords(str_replace('_', ' ', $collector))])
         ->all();
     $formatAnalyticsMoney = fn ($amount, string $currency = 'INR') => $currency.' '.number_format((float) ($amount ?? 0), 2);
-    $dashboardSectionKeys = ['profile', 'work', 'profiles', 'money', 'sharing', 'records'];
+    $dashboardSectionKeys = ['profile', 'work', 'profiles', 'requests', 'money', 'sharing', 'records'];
     $dashboardHasBusinessFilters = $businessRecordFilters['business_q'] !== ''
         || $businessRecordFilters['note_type'] !== null
         || $businessRecordFilters['ledger_status'] !== null;
@@ -63,6 +63,12 @@
     $activeDashboardTab = in_array($requestedDashboardTab, $dashboardSectionKeys, true)
         ? $requestedDashboardTab
         : ($dashboardHasBusinessFilters ? 'profiles' : 'work');
+    $selectedRepresentationId = (int) request('manage_representation', 0);
+    $selectedRepresentationCard = $selectedRepresentationId > 0
+        ? $representationCards->first(fn (array $card): bool => (int) $card['representation']->id === $selectedRepresentationId)
+        : null;
+    $showOnboardingPanel = $activeDashboardTab === 'profile';
+    $showDashboardSummary = $activeDashboardTab === 'work';
     $onboardingSteps = collect($onboarding['steps'] ?? []);
     $kycRows = collect($onboarding['document_rows'] ?? []);
     $identityKycRow = $kycRows->firstWhere('type', \App\Models\SuchakVerificationRecord::TYPE_IDENTITY);
@@ -86,6 +92,11 @@
     $cardAddress = $suchakAccount->address_line_mr ?: $suchakAccount->address_line;
     $cardShareText = trim($cardName."\n".$cardOffice."\nWhatsApp: ".($suchakAccount->whatsapp_number ?: $suchakAccount->mobile_number)."\n".($cardAddress ?: '')."\n\nलग्न जुळवण्यासाठी विश्वासार्ह सूचक सेवा. अधिक माहितीसाठी संपर्क करा.");
     $cardWhatsappUrl = 'https://wa.me/?text='.rawurlencode($cardShareText);
+    $profileRequestReplyTemplates = [
+        'मी हे स्थळ संबंधित कुटुंबाला दाखवतो. उत्तर आले की तुम्हाला कळवतो.',
+        'या स्थळाबद्दल अधिक माहिती देण्यासाठी कृपया तुमचा संपर्क क्रमांक आणि सोयीची वेळ पाठवा.',
+        'हे स्थळ सध्या चर्चेत आहे. पुढील माहिती मिळताच तुम्हाला कळवतो.',
+    ];
 @endphp
 
 @section('content')
@@ -123,6 +134,7 @@
         </section>
     @endif
 
+    @if ($showOnboardingPanel)
     <section class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -156,7 +168,9 @@
             @endforeach
         </div>
     </section>
+    @endif
 
+    @if ($showDashboardSummary)
     <div class="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
             <p class="text-sm font-semibold text-gray-500 dark:text-gray-400">{{ $suchakAccount->office_name ?: $suchakAccount->suchak_name }}</p>
@@ -191,6 +205,7 @@
             <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ $stats['pending_collaborations'] }}</div>
         </div>
     </div>
+    @endif
 
     <div class="space-y-6">
 
@@ -649,12 +664,21 @@
     <div class="space-y-6">
             @include('suchak.partials.customer-list-table', ['activeDashboardTab' => $activeDashboardTab])
 
-            <section class="{{ $activeDashboardTab !== 'profiles' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            @if ($selectedRepresentationCard)
+            <section id="customer-management" class="{{ $activeDashboardTab !== 'profiles' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
-                    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Customer management</h2>
-                    <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Consent, CRM notes, ledger, and exports for each represented profile.</p>
+                    <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Manage selected customer</h2>
+                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Consent, CRM notes, ledger, and exports for the selected represented profile.</p>
+                        </div>
+                        <a href="{{ route('suchak.dashboard', ['dashboard_tab' => 'profiles']) }}" class="inline-flex w-fit rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">
+                            Back to customer list
+                        </a>
+                    </div>
                     <form method="GET" action="{{ route('suchak.dashboard') }}" class="mt-4 grid gap-3 md:grid-cols-[1fr_12rem_12rem_auto_auto]">
                         <input type="hidden" name="dashboard_tab" value="profiles">
+                        <input type="hidden" name="manage_representation" value="{{ $selectedRepresentationId }}">
                         <label class="sr-only" for="business_q">Search CRM and ledger</label>
                         <input id="business_q" name="business_q" value="{{ $businessRecordFilters['business_q'] }}" maxlength="80" placeholder="Search CRM or ledger" class="rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
                         <label class="sr-only" for="note_type_filter">Note type</label>
@@ -672,11 +696,11 @@
                             @endforeach
                         </select>
                         <button type="submit" class="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white">Filter</button>
-                        <a href="{{ route('suchak.dashboard') }}" class="rounded-md border border-gray-300 px-4 py-2 text-center text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">Clear</a>
+                        <a href="{{ route('suchak.dashboard', ['dashboard_tab' => 'profiles', 'manage_representation' => $selectedRepresentationId]) }}#customer-management" class="rounded-md border border-gray-300 px-4 py-2 text-center text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">Clear</a>
                     </form>
                 </div>
                 <div class="divide-y divide-gray-200 dark:divide-gray-700">
-                    @forelse ($representationCards as $card)
+                    @foreach ([$selectedRepresentationCard] as $card)
                         @php
                             $representation = $card['representation'];
                             $summary = $card['summary'];
@@ -1002,14 +1026,177 @@
                                 </section>
                             </div>
                         </article>
-                    @empty
-                        <div class="p-6 text-sm text-gray-600 dark:text-gray-300">
-                            No represented profiles yet. Upload/paste biodata or fill the existing profile form manually.
-                            <div class="mt-3 flex flex-wrap gap-2">
-                                <a href="{{ route('suchak.intakes.create') }}" class="inline-flex rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Upload / paste biodata</a>
-                                <a href="{{ route('suchak.manual-profiles.create') }}" class="inline-flex rounded-md border border-indigo-300 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 dark:border-indigo-700 dark:text-indigo-200 dark:hover:bg-indigo-950/40">Manual profile form</a>
-                            </div>
+                    @endforeach
+                </div>
+            </section>
+            @endif
+
+            <section class="{{ $activeDashboardTab !== 'requests' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
+                    <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Incoming Profile Requests</h2>
+                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Members who asked you for more information about your represented profiles.</p>
                         </div>
+                        <span class="inline-flex w-fit rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-100">
+                            {{ $incomingProfileRequests->count() }} recent
+                        </span>
+                    </div>
+                </div>
+                <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                    @forelse ($incomingProfileRequests as $profileRequest)
+                        @php
+                            $requesterProfile = $profileRequest->requestingMatrimonyProfile;
+                            $targetProfile = $profileRequest->targetMatrimonyProfile;
+                            $requestMessage = trim((string) ($profileRequest->message ?? ''));
+                            $replyMessage = trim((string) ($profileRequest->chatMessage?->body_text ?? ''));
+                            $conversationMessages = $profileRequest->chatConversation?->messages
+                                ? $profileRequest->chatConversation->messages
+                                    ->sortBy(fn ($message) => sprintf(
+                                        '%012d-%012d',
+                                        $message->sent_at?->timestamp ?? 0,
+                                        (int) $message->id,
+                                    ))
+                                    ->values()
+                                : collect();
+                            if ($conversationMessages->count() > 8) {
+                                $conversationMessages = $conversationMessages->slice(-8)->values();
+                            }
+                            $statusLabel = \Illuminate\Support\Str::headline((string) $profileRequest->request_status);
+                            $latestConversationMessage = $conversationMessages->last();
+                            $latestMessagePreview = trim((string) ($latestConversationMessage?->body_text ?: $requestMessage));
+                            if (mb_strlen($latestMessagePreview) > 120) {
+                                $latestMessagePreview = mb_substr($latestMessagePreview, 0, 120).'...';
+                            }
+                        @endphp
+                        <article class="p-4">
+                            <details class="group">
+                                <summary class="list-none cursor-pointer rounded-md border border-gray-200 bg-gray-50 px-4 py-3 transition hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:hover:bg-gray-950 [&::-webkit-details-marker]:hidden">
+                                    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                        <div class="min-w-0">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="text-sm font-semibold text-gray-900 dark:text-gray-100">Request #{{ $profileRequest->id }}</span>
+                                                <span class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 shadow-sm dark:bg-gray-950 dark:text-gray-200">{{ $statusLabel }}</span>
+                                                <span class="text-xs text-gray-500 dark:text-gray-400">{{ $profileRequest->created_at?->format('Y-m-d H:i') }}</span>
+                                            </div>
+                                            <p class="mt-2 truncate text-sm text-gray-700 dark:text-gray-300">
+                                                {{ $requesterProfile?->full_name ?: 'Profile #'.$profileRequest->requesting_matrimony_profile_id }}
+                                                <span class="text-gray-400">→</span>
+                                                {{ $targetProfile?->full_name ?: 'Profile #'.$profileRequest->target_matrimony_profile_id }}
+                                            </p>
+                                            <p class="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">{{ $latestMessagePreview !== '' ? $latestMessagePreview : 'No message provided.' }}</p>
+                                        </div>
+                                        <span class="inline-flex w-fit shrink-0 rounded-md bg-gray-900 px-3 py-2 text-xs font-semibold text-white dark:bg-gray-100 dark:text-gray-900">
+                                            Open details / reply
+                                        </span>
+                                    </div>
+                                </summary>
+                                <div class="mt-4">
+                            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                            Request #{{ $profileRequest->id }}
+                                        </p>
+                                        <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700 dark:bg-gray-900 dark:text-gray-200">
+                                            {{ $statusLabel }}
+                                        </span>
+                                        <span class="text-xs text-gray-500 dark:text-gray-400">
+                                            {{ $profileRequest->created_at?->format('Y-m-d H:i') }}
+                                        </span>
+                                    </div>
+
+                                    <dl class="mt-3 grid gap-3 text-sm text-gray-700 dark:text-gray-300 md:grid-cols-2">
+                                        <div class="rounded-md bg-gray-50 px-3 py-2 dark:bg-gray-900">
+                                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Member</dt>
+                                            <dd class="mt-1 font-semibold text-gray-900 dark:text-gray-100">
+                                                {{ $requesterProfile?->full_name ?: 'Profile #'.$profileRequest->requesting_matrimony_profile_id }}
+                                            </dd>
+                                        </div>
+                                        <div class="rounded-md bg-gray-50 px-3 py-2 dark:bg-gray-900">
+                                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">For profile</dt>
+                                            <dd class="mt-1 font-semibold text-gray-900 dark:text-gray-100">
+                                                {{ $targetProfile?->full_name ?: 'Profile #'.$profileRequest->target_matrimony_profile_id }}
+                                            </dd>
+                                        </div>
+                                    </dl>
+
+                                    <div class="mt-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                                        <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Member message</p>
+                                        <p class="mt-1 whitespace-pre-line">{{ $requestMessage !== '' ? $requestMessage : 'No message provided.' }}</p>
+                                    </div>
+
+                                    @if ($conversationMessages->isNotEmpty())
+                                        <div class="mt-3 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-950">
+                                            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Conversation history</p>
+                                            <div class="mt-2 space-y-2">
+                                                @foreach ($conversationMessages as $conversationMessage)
+                                                    @php
+                                                        $fromMember = (int) $conversationMessage->sender_profile_id === (int) $profileRequest->requesting_matrimony_profile_id;
+                                                        $lineTone = $fromMember
+                                                            ? 'border-blue-100 bg-blue-50 text-blue-950 dark:border-blue-900/60 dark:bg-blue-950/25 dark:text-blue-100'
+                                                            : 'border-emerald-100 bg-emerald-50 text-emerald-950 dark:border-emerald-900/60 dark:bg-emerald-950/25 dark:text-emerald-100';
+                                                    @endphp
+                                                    <div class="rounded-md border px-3 py-2 {{ $lineTone }}">
+                                                        <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                                            <span class="font-semibold">{{ $fromMember ? 'Member' : 'Suchak reply' }}</span>
+                                                            <span>{{ $conversationMessage->sent_at?->format('Y-m-d H:i') }}</span>
+                                                        </div>
+                                                        <p class="mt-1 whitespace-pre-line leading-relaxed">{{ $conversationMessage->body_text ?: '[Attachment]' }}</p>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    @endif
+                                </div>
+
+                                <div class="w-full lg:max-w-md">
+                                    @if ($profileRequest->chatMessage)
+                                        <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/35 dark:text-emerald-100">
+                                            <p class="font-semibold">Reply sent to member chat</p>
+                                            <p class="mt-1 text-xs">
+                                                {{ $profileRequest->replied_at?->format('Y-m-d H:i') ?: $profileRequest->chatMessage->sent_at?->format('Y-m-d H:i') }}
+                                            </p>
+                                            @if ($replyMessage !== '')
+                                                <p class="mt-2 whitespace-pre-line text-emerald-950 dark:text-emerald-50">{{ $replyMessage }}</p>
+                                            @endif
+                                        </div>
+                                    @elseif ($profileRequest->isOpen())
+                                        <div class="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                                            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Quick reply</p>
+                                            <div class="mt-2 grid gap-2">
+                                                @foreach ($profileRequestReplyTemplates as $template)
+                                                    <form method="POST" action="{{ route('suchak.profile-requests.reply', $profileRequest) }}">
+                                                        @csrf
+                                                        <input type="hidden" name="reply_message" value="{{ $template }}">
+                                                        <button type="submit" class="w-full rounded-md border border-emerald-200 bg-white px-3 py-2 text-left text-sm font-medium leading-6 text-emerald-900 hover:bg-emerald-50 dark:border-emerald-900 dark:bg-gray-950 dark:text-emerald-100 dark:hover:bg-emerald-950/35">
+                                                            {{ $template }}
+                                                        </button>
+                                                    </form>
+                                                @endforeach
+                                            </div>
+
+                                            <form method="POST" action="{{ route('suchak.profile-requests.reply', $profileRequest) }}" class="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+                                                @csrf
+                                                <label for="profile_request_reply_{{ $profileRequest->id }}" class="block text-sm font-semibold text-gray-900 dark:text-gray-100">Custom reply</label>
+                                                <textarea id="profile_request_reply_{{ $profileRequest->id }}" name="reply_message" rows="3" maxlength="1600" required class="mt-2 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-950 dark:text-gray-100" placeholder="Write what the member should know next.">{{ old('reply_message') }}</textarea>
+                                                <button type="submit" class="mt-3 inline-flex rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+                                                    Send custom reply
+                                                </button>
+                                            </form>
+                                        </div>
+                                    @else
+                                        <div class="rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                                            This request is not open.
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                                </div>
+                            </details>
+                        </article>
+                    @empty
+                        <div class="p-6 text-sm text-gray-600 dark:text-gray-300">No incoming profile requests yet.</div>
                     @endforelse
                 </div>
             </section>

@@ -5,14 +5,18 @@ namespace App\Modules\Suchak\Services;
 use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
+use App\Models\Message;
 use App\Models\SuchakPipeline;
 use App\Models\SuchakPipelineEvent;
 use App\Models\SuchakFeatureSuspension;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakProfileRequest;
 use App\Models\User;
+use App\Services\Chat\ChatConversationService;
+use App\Services\Chat\ChatMessageService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 class SuchakRequestPipelineService
@@ -20,6 +24,8 @@ class SuchakRequestPipelineService
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakAccessService $accessService,
+        private readonly ChatConversationService $chatConversationService,
+        private readonly ChatMessageService $chatMessageService,
         private readonly SuchakLimitService $limitService,
         private readonly SuchakQualityControlService $qualityControlService,
     ) {
@@ -117,8 +123,18 @@ class SuchakRequestPipelineService
                 ],
             ]);
 
+            $requestChatMessage = $this->storeInitialRequestMessageInExistingChat(
+                $request,
+                $requestingProfile,
+                $lockedRepresentation->matrimonyProfile,
+            );
+
+            if ($requestChatMessage !== null) {
+                $request = $request->fresh(['pipeline', 'requestChatMessage', 'chatConversation']);
+            }
+
             return [
-                'request' => $request->fresh(['pipeline']),
+                'request' => $request->fresh(['pipeline', 'requestChatMessage', 'chatConversation']),
                 'pipeline' => $pipeline->fresh(['request', 'events']),
                 'event' => $event,
             ];
@@ -190,6 +206,117 @@ class SuchakRequestPipelineService
             ]);
 
             return $expiredPipeline->fresh(['request', 'events']);
+        });
+    }
+
+    /**
+     * Route a Suchak reply through the existing profile-to-profile chat engine.
+     *
+     * @return array{request: SuchakProfileRequest, message: Message}
+     */
+    public function replyThroughExistingChat(
+        SuchakProfileRequest $request,
+        SuchakAccount $account,
+        User $actor,
+        string $replyText,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): array {
+        $replyText = $this->normalizeReplyText($replyText);
+
+        return DB::transaction(function () use ($request, $account, $actor, $replyText, $ipAddress, $userAgent): array {
+            /** @var SuchakProfileRequest $lockedRequest */
+            $lockedRequest = SuchakProfileRequest::query()
+                ->whereKey($request->id)
+                ->lockForUpdate()
+                ->with([
+                    'pipeline',
+                    'requestingMatrimonyProfile.user',
+                    'targetMatrimonyProfile.user',
+                ])
+                ->firstOrFail();
+
+            if ((int) $lockedRequest->selected_suchak_account_id !== (int) $account->id) {
+                throw new InvalidArgumentException('Suchak request does not belong to this Suchak account.');
+            }
+
+            if (! $lockedRequest->isOpen()) {
+                throw new InvalidArgumentException('Suchak request is not open.');
+            }
+
+            if ($lockedRequest->chat_message_id !== null) {
+                throw new InvalidArgumentException('A reply was already sent for this Suchak request.');
+            }
+
+            if (! $this->profileIsActive($lockedRequest->requestingMatrimonyProfile)) {
+                throw new InvalidArgumentException('Requesting profile must be active before Suchak can reply.');
+            }
+
+            if (! $this->profileIsActive($lockedRequest->targetMatrimonyProfile)) {
+                throw new InvalidArgumentException('Target profile must be active before Suchak can reply.');
+            }
+
+            $conversation = $this->chatConversationService->findOrCreateConversationBetweenProfiles(
+                $lockedRequest->targetMatrimonyProfile,
+                $lockedRequest->requestingMatrimonyProfile,
+            );
+
+            $message = $this->chatMessageService->sendTextMessage(
+                $lockedRequest->targetMatrimonyProfile,
+                $lockedRequest->requestingMatrimonyProfile,
+                $conversation,
+                $this->suchakReplyChatBody($account, $replyText),
+            );
+
+            $repliedAt = now();
+
+            SuchakProfileRequest::query()
+                ->whereKey($lockedRequest->id)
+                ->update([
+                    'request_status' => SuchakProfileRequest::STATUS_ACCEPTED_BY_SUCHAK,
+                    'chat_conversation_id' => $conversation->id,
+                    'chat_message_id' => $message->id,
+                    'replied_by_user_id' => $actor->id,
+                    'replied_at' => $repliedAt,
+                    'updated_at' => $repliedAt,
+                ]);
+
+            $updatedRequest = $lockedRequest->fresh(['pipeline', 'chatConversation', 'chatMessage']);
+
+            if ($updatedRequest?->pipeline) {
+                $this->recordPipelineEvent(
+                    $updatedRequest->pipeline,
+                    SuchakPipelineEvent::EVENT_SUCHAK_REPLIED,
+                    SuchakPipelineEvent::ACTOR_SUCHAK,
+                    $actor->id,
+                    'Reply routed through chat conversation #'.$conversation->id.' message #'.$message->id,
+                );
+            }
+
+            $this->activityLogger->record([
+                'suchak_account_id' => $account->id,
+                'actor_user_id' => $actor->id,
+                'actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
+                'action_type' => SuchakActivityLog::ACTION_USER_REQUEST_REPLIED,
+                'target_type' => 'suchak_profile_request',
+                'target_id' => $lockedRequest->id,
+                'matrimony_profile_id' => $lockedRequest->target_matrimony_profile_id,
+                'ip_address' => $ipAddress,
+                'user_agent' => Str::limit((string) $userAgent, 512, ''),
+                'metadata_json' => [
+                    'context' => 'reply_routed_to_existing_chat',
+                    'conversation_id' => $conversation->id,
+                    'message_id' => $message->id,
+                    'requesting_matrimony_profile_id' => $lockedRequest->requesting_matrimony_profile_id,
+                    'target_matrimony_profile_id' => $lockedRequest->target_matrimony_profile_id,
+                    'representation_id' => $lockedRequest->representation_id,
+                ],
+            ]);
+
+            return [
+                'request' => $updatedRequest,
+                'message' => $message,
+            ];
         });
     }
 
@@ -268,13 +395,14 @@ class SuchakRequestPipelineService
         string $eventType,
         string $actorType,
         ?int $actorId,
+        ?string $eventNote = null,
     ): SuchakPipelineEvent {
         return SuchakPipelineEvent::query()->create([
             'pipeline_id' => $pipeline->id,
             'event_type' => $eventType,
             'actor_type' => $actorType,
             'actor_id' => $actorId,
-            'event_note' => null,
+            'event_note' => $eventNote,
             'created_at' => now(),
         ]);
     }
@@ -286,5 +414,71 @@ class SuchakRequestPipelineService
         return $normalized === ''
             ? null
             : Str::limit($normalized, $limit, '');
+    }
+
+    private function storeInitialRequestMessageInExistingChat(
+        SuchakProfileRequest $request,
+        MatrimonyProfile $requestingProfile,
+        ?MatrimonyProfile $targetProfile,
+    ): ?Message {
+        $messageText = trim((string) ($request->message ?? ''));
+        if ($messageText === '' || $targetProfile === null) {
+            return null;
+        }
+
+        $conversation = $this->chatConversationService->findOrCreateConversationBetweenProfiles(
+            $requestingProfile,
+            $targetProfile,
+        );
+
+        try {
+            $message = $this->chatMessageService->sendTextMessage(
+                $requestingProfile,
+                $targetProfile,
+                $conversation,
+                $messageText,
+            );
+        } catch (ValidationException $e) {
+            $errors = $e->errors();
+            $message = $errors['policy'][0] ?? $errors['body_text'][0] ?? $e->getMessage();
+
+            throw new InvalidArgumentException($message);
+        }
+
+        SuchakProfileRequest::query()
+            ->whereKey($request->id)
+            ->update([
+                'chat_conversation_id' => $conversation->id,
+                'request_chat_message_id' => $message->id,
+                'updated_at' => now(),
+            ]);
+
+        return $message;
+    }
+
+    private function normalizeReplyText(string $replyText): string
+    {
+        $normalized = trim($replyText);
+        if ($normalized === '') {
+            throw new InvalidArgumentException('Reply message cannot be empty.');
+        }
+        if (mb_strlen($normalized) > 1600) {
+            throw new InvalidArgumentException('Reply message must not be greater than 1600 characters.');
+        }
+
+        return $normalized;
+    }
+
+    private function suchakReplyChatBody(SuchakAccount $account, string $replyText): string
+    {
+        $displayName = trim((string) (
+            $account->office_name_mr
+            ?: $account->office_name
+            ?: $account->suchak_name_mr
+            ?: $account->suchak_name
+            ?: 'Suchak'
+        ));
+
+        return "सूचकांकडून संदेश ({$displayName}):\n".$replyText;
     }
 }

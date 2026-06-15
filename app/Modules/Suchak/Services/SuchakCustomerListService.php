@@ -29,6 +29,7 @@ class SuchakCustomerListService
      *     consent_label: ?string,
      *     lifecycle_label: ?string,
      *     view_url: ?string,
+     *     edit_url: ?string,
      *     manage_url: ?string,
      *     review_url: ?string,
      *     sort_at: ?\Illuminate\Support\Carbon,
@@ -96,7 +97,11 @@ class SuchakCustomerListService
             'consent_label' => ucfirst(str_replace('_', ' ', (string) $representation->consent_status)),
             'lifecycle_label' => $profile ? ucfirst((string) ($profile->lifecycle_state ?? 'unknown')) : null,
             'view_url' => $profile ? route('matrimony.profile.show', $profile) : null,
-            'manage_url' => route('suchak.representations.profile-form', $representation),
+            'edit_url' => route('suchak.representations.profile-form', $representation),
+            'manage_url' => route('suchak.dashboard', [
+                'dashboard_tab' => 'profiles',
+                'manage_representation' => $representation->id,
+            ]).'#customer-management',
             'review_url' => null,
             'sort_at' => $representation->created_at,
         ];
@@ -133,6 +138,7 @@ class SuchakCustomerListService
             'consent_label' => null,
             'lifecycle_label' => $intake ? ucwords(str_replace('_', ' ', (string) $intake->parse_status)) : null,
             'view_url' => null,
+            'edit_url' => null,
             'manage_url' => null,
             'review_url' => $intake ? route('intake.status', $intake) : null,
             'sort_at' => $link->created_at,

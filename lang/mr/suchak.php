@@ -317,6 +317,7 @@ return [
         'customer_intake_label' => 'Intake #:id',
         'customer_consent' => 'Consent',
         'customer_view' => 'View',
+        'customer_edit_profile' => 'Edit profile',
         'customer_manage' => 'Manage',
         'customer_review' => 'Review',
     ],
