@@ -4,6 +4,7 @@ namespace Tests\Feature\Suchak;
 
 use App\Models\Caste;
 use App\Models\City;
+use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
 use App\Models\Religion;
 use App\Models\SuchakAccount;
@@ -15,6 +16,7 @@ use App\Models\SuchakPaymentContext;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakCollaborationService;
+use App\Modules\Suchak\Services\SuchakCrossSearchService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -125,6 +127,210 @@ class SuchakCollaborationMarketplaceAdvancedTest extends TestCase
         $this->assertSame($accepted->id, $ledger->paymentContext->collaboration_request_id);
     }
 
+    public function test_demo_two_suchaks_with_two_brides_and_two_grooms_can_request_masked_collaboration(): void
+    {
+        [$religion, $caste] = $this->community();
+        $femaleGenderId = $this->genderId('female');
+        $maleGenderId = $this->genderId('male');
+
+        $suchakAUser = User::factory()->create([
+            'name' => 'Demo Suchak A Login',
+            'email' => 'suchak-a-demo@example.test',
+        ]);
+        $suchakA = $this->suchakAccount([
+            'user_id' => $suchakAUser->id,
+            'suchak_name' => 'Demo Suchak A',
+        ]);
+        $suchakB = $this->suchakAccount([
+            'suchak_name' => 'Demo Suchak B',
+            'email' => 'suchak-b-demo@example.test',
+        ]);
+        $unrelatedSuchak = $this->suchakAccount([
+            'suchak_name' => 'Unrelated Demo Suchak',
+        ]);
+        $privateSuchak = SuchakAccount::factory()->create([
+            'suchak_name' => 'Private Desk Suchak',
+            'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+            'public_status' => SuchakAccount::PUBLIC_HIDDEN,
+            'verified_at' => now(),
+        ]);
+
+        $brideAarya = $this->activeProfile([
+            'full_name' => 'Demo Bride Aarya Patil',
+            'gender_id' => $femaleGenderId,
+            'date_of_birth' => now()->subYears(26)->toDateString(),
+            'height_cm' => 162,
+            'highest_education' => 'M.Com Finance',
+            'religion_id' => $religion->id,
+            'caste_id' => $caste->id,
+            'address_line' => 'Bride Aarya Private Lane',
+        ]);
+        $brideNeha = $this->activeProfile([
+            'full_name' => 'Demo Bride Neha Kulkarni',
+            'gender_id' => $femaleGenderId,
+            'date_of_birth' => now()->subYears(27)->toDateString(),
+            'height_cm' => 160,
+            'highest_education' => 'MBA HR',
+            'religion_id' => $religion->id,
+            'caste_id' => $caste->id,
+            'address_line' => 'Bride Neha Private Lane',
+        ]);
+        $groomAdvait = $this->activeProfile([
+            'full_name' => 'Demo Groom Advait Deshmukh',
+            'gender_id' => $maleGenderId,
+            'date_of_birth' => now()->subYears(29)->toDateString(),
+            'height_cm' => 174,
+            'highest_education' => 'MBA Finance',
+            'religion_id' => $religion->id,
+            'caste_id' => $caste->id,
+            'address_line' => 'Groom Advait Secret Avenue',
+        ]);
+        $groomNikhil = $this->activeProfile([
+            'full_name' => 'Demo Groom Nikhil Joshi',
+            'gender_id' => $maleGenderId,
+            'date_of_birth' => now()->subYears(31)->toDateString(),
+            'height_cm' => 176,
+            'highest_education' => 'M.Tech Software',
+            'religion_id' => $religion->id,
+            'caste_id' => $caste->id,
+            'address_line' => 'Groom Nikhil Secret Avenue',
+        ]);
+        $privateProfile = $this->activeProfile([
+            'full_name' => 'Unrelated Private Candidate',
+            'gender_id' => $maleGenderId,
+            'date_of_birth' => now()->subYears(30)->toDateString(),
+            'highest_education' => 'Private Hidden Education',
+            'religion_id' => $religion->id,
+            'caste_id' => $caste->id,
+            'address_line' => 'Unrelated Private Lane',
+        ]);
+
+        $brideAaryaRepresentation = $this->activeRepresentation($suchakA, $brideAarya);
+        $brideNehaRepresentation = $this->activeRepresentation($suchakA, $brideNeha);
+        $groomAdvaitRepresentation = $this->activeRepresentation($suchakB, $groomAdvait);
+        $groomNikhilRepresentation = $this->activeRepresentation($suchakB, $groomNikhil);
+        $privateRepresentation = $this->activeRepresentation($privateSuchak, $privateProfile);
+
+        $this->insertPrivateContactFixture($brideAarya, 'Bride Aarya Private Contact', '9811111111');
+        $this->insertPrivateContactFixture($groomAdvait, 'Groom Advait Private Contact', '9822222222');
+        $this->insertPrivateContactFixture($privateProfile, 'Unrelated Private Contact', '9833333333');
+
+        $searchResults = app(SuchakCrossSearchService::class)
+            ->search($suchakA, ['requesting_representation_id' => $brideAaryaRepresentation->id])
+            ->getCollection()
+            ->pluck('representation.id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
+        $this->assertContains($groomAdvaitRepresentation->id, $searchResults);
+        $this->assertContains($groomNikhilRepresentation->id, $searchResults);
+        $this->assertNotContains($privateRepresentation->id, $searchResults);
+
+        $suggestions = app(SuchakCollaborationService::class)->suggestedOpportunities($suchakA);
+        $suggestedTargetIds = $suggestions
+            ->pluck('target_representation_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+        $this->assertContains($groomAdvaitRepresentation->id, $suggestedTargetIds);
+        $this->assertContains($groomNikhilRepresentation->id, $suggestedTargetIds);
+        $this->assertNotContains($privateRepresentation->id, $suggestedTargetIds);
+
+        $this->actingAs($suchakAUser)
+            ->get(route('suchak.search.index', [
+                'requesting_representation_id' => $brideAaryaRepresentation->id,
+            ]))
+            ->assertOk()
+            ->assertSee('Find Matches', false)
+            ->assertSee('masked-', false)
+            ->assertSee('M.Tech Software', false)
+            ->assertSee('Send collaboration request', false)
+            ->assertSee((string) $brideAaryaRepresentation->id, false)
+            ->assertSee((string) $groomAdvaitRepresentation->id, false)
+            ->assertDontSee('Demo Groom Advait Deshmukh', false)
+            ->assertDontSee('Groom Advait Secret Avenue', false)
+            ->assertDontSee('9822222222', false)
+            ->assertDontSee('Unrelated Private Candidate', false)
+            ->assertDontSee('9833333333', false);
+
+        $this->actingAs($suchakAUser)
+            ->get(route('suchak.collaborations.index'))
+            ->assertOk()
+            ->assertSee('Suggested opportunities', false)
+            ->assertSee('Request will go to: #'.$suchakB->id.' Demo Suchak B', false)
+            ->assertSee('Send collaboration request to this Suchak', false)
+            ->assertDontSee('Demo Groom Advait Deshmukh', false)
+            ->assertDontSee('9822222222', false)
+            ->assertDontSee('Unrelated Private Candidate', false);
+
+        $this->actingAs($suchakAUser)
+            ->post(route('suchak.collaborations.store'), [
+                'requesting_representation_id' => $brideAaryaRepresentation->id,
+                'target_representation_id' => $groomAdvaitRepresentation->id,
+                'message' => 'Demo 2x2 matching collaboration request.',
+                'commission_ack' => '1',
+                'split_type' => SuchakCommissionAgreement::SPLIT_TO_BE_DISCUSSED,
+                'currency' => 'INR',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Collaboration request created with commission acknowledgement.');
+
+        $collaboration = SuchakCollaborationRequest::query()
+            ->with('commissionAgreement')
+            ->where('requesting_suchak_account_id', $suchakA->id)
+            ->where('target_suchak_account_id', $suchakB->id)
+            ->where('requesting_representation_id', $brideAaryaRepresentation->id)
+            ->where('target_representation_id', $groomAdvaitRepresentation->id)
+            ->firstOrFail();
+
+        $this->assertSame(SuchakCollaborationRequest::STATUS_PENDING, $collaboration->status);
+        $this->assertSame($brideAarya->id, $collaboration->requesting_matrimony_profile_id);
+        $this->assertSame($groomAdvait->id, $collaboration->target_matrimony_profile_id);
+        $this->assertSame($suchakB->id, $collaboration->commissionAgreement->groom_side_suchak_account_id);
+        $this->assertSame($suchakA->id, $collaboration->commissionAgreement->bride_side_suchak_account_id);
+        $this->assertSame($suchakB->id, $collaboration->commissionAgreement->collector_suchak_account_id);
+        $this->assertSame(SuchakCommissionAgreement::MVP_ACK_TEXT, $collaboration->commissionAgreement->agreement_text_snapshot);
+        $this->assertSame(SuchakCommissionAgreement::STATUS_PENDING, $collaboration->commissionAgreement->agreement_status);
+        $this->assertNotNull($collaboration->commissionAgreement->accepted_by_bride_suchak_at);
+        $this->assertNull($collaboration->commissionAgreement->accepted_by_groom_suchak_at);
+
+        $this->actingAs($suchakAUser)
+            ->get(route('suchak.collaborations.index', [
+                'direction' => 'outgoing',
+                'status' => SuchakCollaborationRequest::STATUS_PENDING,
+            ]))
+            ->assertOk()
+            ->assertSee('Outgoing request to Demo Suchak B', false)
+            ->assertSee('Demo 2x2 matching collaboration request.', false)
+            ->assertDontSee('Demo Groom Advait Deshmukh', false)
+            ->assertDontSee('9822222222', false)
+            ->assertDontSee('Groom Advait Secret Avenue', false);
+
+        $this->actingAs($suchakB->user)
+            ->get(route('suchak.collaborations.index', [
+                'direction' => 'incoming',
+                'status' => SuchakCollaborationRequest::STATUS_PENDING,
+            ]))
+            ->assertOk()
+            ->assertSee('Incoming request from Demo Suchak A', false)
+            ->assertSee('Review and accept', false)
+            ->assertSee('Demo 2x2 matching collaboration request.', false)
+            ->assertDontSee('Demo Bride Aarya Patil', false)
+            ->assertDontSee('9811111111', false)
+            ->assertDontSee('Bride Aarya Private Lane', false);
+
+        $this->actingAs($unrelatedSuchak->user)
+            ->get(route('suchak.collaborations.index'))
+            ->assertOk()
+            ->assertSee('No collaboration requests found.', false)
+            ->assertDontSee('Demo 2x2 matching collaboration request.', false)
+            ->assertDontSee('Incoming request from Demo Suchak A', false)
+            ->assertDontSee('Outgoing request to Demo Suchak B', false);
+
+        $this->assertSame(2, SuchakProfileRepresentation::query()->where('suchak_account_id', $suchakA->id)->count());
+        $this->assertSame(2, SuchakProfileRepresentation::query()->where('suchak_account_id', $suchakB->id)->count());
+        $this->assertSame($brideNehaRepresentation->suchak_account_id, $suchakA->id);
+    }
+
     /**
      * @return array{0: User, 1: SuchakAccount, 2: SuchakProfileRepresentation, 3: SuchakAccount, 4: SuchakProfileRepresentation}
      */
@@ -181,6 +387,17 @@ class SuchakCollaborationMarketplaceAdvancedTest extends TestCase
         ]);
 
         return [$religion, $caste];
+    }
+
+    private function genderId(string $key): int
+    {
+        return (int) MasterGender::query()->firstOrCreate(
+            ['key' => $key],
+            [
+                'label' => ucfirst($key),
+                'is_active' => true,
+            ],
+        )->id;
     }
 
     /**
@@ -267,12 +484,16 @@ class SuchakCollaborationMarketplaceAdvancedTest extends TestCase
         ];
     }
 
-    private function insertPrivateContactFixture(MatrimonyProfile $profile): void
+    private function insertPrivateContactFixture(
+        MatrimonyProfile $profile,
+        string $contactName = 'Day51 Sensitive Target Candidate',
+        string $phoneNumber = '9876543210',
+    ): void
     {
         $contactRow = [
             'profile_id' => $profile->id,
-            'contact_name' => 'Day51 Sensitive Target Candidate',
-            'phone_number' => '9876543210',
+            'contact_name' => $contactName,
+            'phone_number' => $phoneNumber,
             'is_primary' => true,
             'visibility_rule' => 'unlock_only',
             'verified_status' => true,
