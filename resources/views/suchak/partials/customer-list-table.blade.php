@@ -33,7 +33,8 @@
                         <th class="px-4 py-3">{{ __('suchak.dashboard.customer_col_age') }}</th>
                         <th class="px-4 py-3">{{ __('suchak.dashboard.customer_col_gender') }}</th>
                         <th class="px-4 py-3">{{ __('suchak.dashboard.customer_col_address') }}</th>
-                        <th class="px-4 py-3">{{ __('suchak.dashboard.customer_col_status') }}</th>
+                        <th class="px-4 py-3">{{ __('suchak.dashboard.customer_col_profile_status') }}</th>
+                        <th class="px-4 py-3">{{ __('suchak.dashboard.customer_col_consent_status') }}</th>
                         <th class="px-4 py-3 text-right">{{ __('suchak.dashboard.customer_col_actions') }}</th>
                     </tr>
                 </thead>
@@ -65,11 +66,35 @@
                             <td class="px-4 py-3 align-top">
                                 <div class="flex flex-col gap-1">
                                     <span class="inline-flex w-fit rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700 dark:bg-gray-900 dark:text-gray-200">{{ $row['status_label'] }}</span>
-                                    @if ($row['consent_label'])
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('suchak.dashboard.customer_consent') }}: {{ $row['consent_label'] }}</span>
-                                    @endif
                                     @if ($row['lifecycle_label'])
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ $row['lifecycle_label'] }}</span>
+                                        <span class="text-xs text-gray-500 dark:text-gray-400">Profile: {{ $row['lifecycle_label'] }}</span>
+                                    @endif
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 align-top">
+                                <div class="flex flex-col gap-1">
+                                    @if ($row['consent_label'])
+                                        <span class="inline-flex w-fit rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700 dark:bg-gray-900 dark:text-gray-200">Consent: {{ $row['consent_label'] }}</span>
+                                    @else
+                                        <span class="text-xs text-gray-500 dark:text-gray-400">—</span>
+                                    @endif
+                                    @if ($row['has_active_consent'] ?? false)
+                                        <span class="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Consent active</span>
+                                    @elseif ($row['has_pending_consent'] ?? false)
+                                        <span class="text-xs font-semibold text-amber-700 dark:text-amber-300">Waiting for consent response</span>
+                                    @elseif (($row['can_request_consent'] ?? false) && $row['consent_action_url'])
+                                        @include('suchak.partials.consent-action-modal', [
+                                            'representationId' => $row['representation_id'],
+                                            'modalKey' => 'customer-list-'.$row['representation_id'],
+                                            'consentAction' => $row['consent_action_url'],
+                                            'buttonLabel' => 'Get consent',
+                                            'buttonClass' => 'mt-1 inline-flex w-fit rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700',
+                                            'defaultConsentMobile' => $row['default_consent_mobile'],
+                                            'defaultConsentGiverName' => $row['default_consent_giver_name'],
+                                            'defaultConsentRelation' => 'candidate_self',
+                                            'defaultConsentType' => \App\Models\SuchakConsent::TYPE_ONE_YEAR,
+                                            'consentRelationOptions' => $consentRelationOptions ?? null,
+                                        ])
                                     @endif
                                 </div>
                             </td>

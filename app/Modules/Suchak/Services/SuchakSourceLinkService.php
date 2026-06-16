@@ -26,7 +26,7 @@ class SuchakSourceLinkService
 
     public function canCreate(SuchakAccount $account): bool
     {
-        return $this->accessService->canOperate($account);
+        return $this->accessService->canPrepareCustomers($account);
     }
 
     public function createFromIntakeUpload(
@@ -93,9 +93,9 @@ class SuchakSourceLinkService
 
     private function assertCanCreate(SuchakAccount $account): void
     {
-        $this->accessService->assertCanOperate(
+        $this->accessService->assertCanPrepareCustomers(
             $account,
-            'Only verified Suchak accounts can create biodata intake source links.',
+            'Only active Suchak accounts can create biodata intake source links.',
         );
     }
 }

@@ -49,7 +49,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
             ->assertSee('data-gps-auto-apply="1"', false)
             ->assertSee('aria-label="Use current location"', false)
             ->assertDontSee('Aadhaar card / Passport upload', false)
-            ->assertSee('Register and send OTP', false);
+            ->assertSee('Register Free', false);
 
         $this->assertDatabaseCount('suchak_accounts', 0);
     }
@@ -92,7 +92,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
             ->assertOk()
             ->assertSee('Suchak registration', false)
             ->assertSee('name="suchak_name"', false)
-            ->assertSee('Register and send OTP', false);
+            ->assertSee('Register Free', false);
 
         SuchakPolicy::query()->updateOrCreate(
             ['policy_key' => SuchakPolicyService::KEY_SUCHAK_HERO_REGISTRATION_FORM_ENABLED],
@@ -122,6 +122,29 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
         $this->get(route('suchak.home'))
             ->assertOk()
             ->assertSee('/storage/suchak/hero-images/custom-hero.webp', false);
+    }
+
+    public function test_suchak_home_hero_has_inline_login_and_recovery_options_without_home_link(): void
+    {
+        $this->get(route('suchak.home'))
+            ->assertOk()
+            ->assertSee('data-suchak-auth-panel="register"', false)
+            ->assertSee('data-suchak-auth-panel="login"', false)
+            ->assertSee('data-suchak-auth-toggle="login"', false)
+            ->assertSee('name="login"', false)
+            ->assertSee('Forgot your password?', false)
+            ->assertSee('New Suchak? Register here', false)
+            ->assertDontSee('>Home</a>', false);
+    }
+
+    public function test_suchak_home_hero_inline_login_uses_selected_marathi_locale(): void
+    {
+        $this->get(route('suchak.home', ['locale' => 'mr']))
+            ->assertOk()
+            ->assertSee('सूचक login', false)
+            ->assertSee('पासवर्ड विसरलात?', false)
+            ->assertSee('नवीन सूचक? नोंदणी करा', false)
+            ->assertDontSee('New Suchak? Register here', false);
     }
 
     public function test_guest_can_register_separate_suchak_account_and_reaches_otp_step(): void
@@ -189,8 +212,9 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
             ->assertOk()
             ->assertSee('data-suchak-progress-current="otp"', false)
             ->assertSee('WhatsApp OTP', false)
-            ->assertSee('Admin review', false)
-            ->assertSee('KYC upload', false)
+            ->assertSee('Suchak photo', false)
+            ->assertSee('KYC documents', false)
+            ->assertSee('Ready to work', false)
             ->assertDontSee('Suchak card', false)
             ->assertDontSee('Work area', false)
             ->assertDontSee('Start Suchak work', false);
@@ -338,8 +362,9 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
         $this->assertSame(2, $summary['earned_areas'][0]['customer_count']);
     }
 
-    public function test_suchak_profile_photo_upload_updates_suchak_account_only(): void
+    public function test_suchak_profile_photo_upload_uses_review_record_before_public_card_photo(): void
     {
+        Storage::fake('local');
         Storage::fake('public');
 
         $user = User::factory()->create([
@@ -353,19 +378,47 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->post(route('suchak.profile-photo.store'), [
+            ->get(route('suchak.register.photo'))
+            ->assertOk()
+            ->assertSee('cropper.min.js', false)
+            ->assertSee(route('suchak.register.photo.store'), false)
+            ->assertDontSee('<input type="hidden" name="profile_id"', false);
+
+        $this->actingAs($user)
+            ->post(route('suchak.register.photo.store'), [
                 'profile_photo' => UploadedFile::fake()->image('suchak-card.jpg', 320, 320),
             ])
-            ->assertRedirect()
+            ->assertRedirect(route('suchak.register.status'))
             ->assertSessionHas('success');
 
         $account->refresh();
+        $record = SuchakVerificationRecord::query()
+            ->where('suchak_account_id', $account->id)
+            ->where('verification_type', SuchakVerificationRecord::TYPE_PROFILE_PHOTO)
+            ->firstOrFail();
 
-        $this->assertNotEmpty($account->profile_photo_path);
-        Storage::disk('public')->assertExists($account->profile_photo_path);
+        $this->assertNull($account->profile_photo_path);
+        $this->assertSame(SuchakVerificationRecord::STATUS_PENDING, $record->admin_status);
+        $this->assertNotEmpty($record->document_path);
+        Storage::disk('local')->assertExists($record->document_path);
         $this->assertDatabaseMissing('matrimony_profiles', [
             'user_id' => $user->id,
         ]);
+
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
+
+        $this->actingAs($admin)
+            ->post(route('admin.suchak.accounts.verification-records.approve', [$account, $record]), [
+                'reason' => 'Suchak photo is clear and acceptable.',
+            ])
+            ->assertRedirect(route('admin.suchak.accounts.show', $account));
+
+        $account->refresh();
+        $record->refresh();
+
+        $this->assertSame(SuchakVerificationRecord::STATUS_APPROVED, $record->admin_status);
+        $this->assertNotEmpty($account->profile_photo_path);
+        Storage::disk('public')->assertExists($account->profile_photo_path);
     }
 
     public function test_suchak_registration_password_fields_use_native_password_visibility_only(): void
@@ -383,7 +436,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
                 'Address',
                 'Password',
                 'Confirm password',
-                'Register and send OTP',
+                'Register Free',
             ], false);
     }
 
@@ -499,10 +552,13 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
         $this->actingAs($user->fresh())
             ->get(route('suchak.register.status'))
             ->assertOk()
-            ->assertSee('KYC upload is still pending', false)
-            ->assertSee('data-suchak-progress-current="documents"', false)
-            ->assertSee('Admin review', false)
-            ->assertSee('In progress', false)
+            ->assertSee('Suchak photo is pending', false)
+            ->assertSee('data-suchak-progress-current="profile_photo"', false)
+            ->assertSee('data-suchak-active-step-panel="profile_photo"', false)
+            ->assertSee('Suchak photo', false)
+            ->assertSee('Upload photo', false)
+            ->assertSee('Admin review: Upcoming', false)
+            ->assertSee('Upcoming', false)
             ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'profile']), false)
             ->assertDontSee('Documents and details checked.', false)
             ->assertDontSee('Suchak card', false)
@@ -539,6 +595,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
             'user_id' => $user->id,
             'mobile_number' => '9876543214',
             'whatsapp_number' => '9876543214',
+            'profile_photo_path' => 'suchak/profile-photos/1/photo.jpg',
             'verification_status' => SuchakAccount::VERIFICATION_PENDING,
             'public_status' => SuchakAccount::PUBLIC_HIDDEN,
         ]);
@@ -552,19 +609,24 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
         $this->actingAs($user)
             ->get(route('suchak.register.status'))
             ->assertOk()
-            ->assertSee('Suchak Request Status', false)
+            ->assertDontSee('Suchak Request Status', false)
+            ->assertDontSee('Track what is complete, where your request is now, and what will happen next.', false)
             ->assertSee('Suchak pipeline', false)
-            ->assertSee('You are here', false)
-            ->assertSee('data-suchak-progress-current="admin_review"', false)
-            ->assertSee('Documents submitted, KYC pending by admin', false)
+            ->assertSee('lg:grid-cols-[minmax(0,3fr)_minmax(0,7fr)]', false)
+            ->assertSee('data-suchak-progress-current="ready_work"', false)
+            ->assertSee('data-suchak-active-step-panel="ready_work"', false)
+            ->assertSee('Ready to work', false)
+            ->assertSee('Your Suchak profile is ready. Admin review will continue in the background.', false)
+            ->assertSee('Add customer profile', false)
+            ->assertSee('Open Suchak Dashboard', false)
+            ->assertSee('Admin review: In progress', false)
             ->assertSee('Submitted for review', false)
-            ->assertSee('Pending review', false)
-            ->assertSee('Next:', false)
             ->assertSee('WhatsApp OTP', false)
-            ->assertSee('Verified', false)
-            ->assertSee('KYC Documents', false)
-            ->assertSee('Identity proof', false)
-            ->assertSee('Uploaded', false)
+            ->assertSee('Suchak photo', false)
+            ->assertSee('KYC documents', false)
+            ->assertDontSee('data-suchak-active-step-panel="admin_review"', false)
+            ->assertDontSee('You are here', false)
+            ->assertDontSee('Next:', false)
             ->assertDontSee('Automatic work area', false)
             ->assertDontSee('You do not select a work area manually', false)
             ->assertDontSee('Suchak card', false)
@@ -607,12 +669,83 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
             ->assertSee('Visiting card / office proof', false)
             ->assertSee('Organization logo / document', false)
             ->assertSee('Add customer entry', false)
-            ->assertSee(route('suchak.profile-photo.store'), false)
+            ->assertSee(route('suchak.register.photo'), false)
             ->assertSee(route('suchak.register.documents.store'), false)
             ->assertSee(route('suchak.intakes.create'), false)
             ->assertSee(route('suchak.manual-profiles.create'), false)
             ->assertSee('Work unlocked. Admin/KYC review is still pending.', false)
             ->assertDontSee('Approved. You can start Suchak work.', false);
+    }
+
+    public function test_pending_suchak_can_create_customer_profile_and_request_consent_without_public_visibility(): void
+    {
+        MasterGender::query()->firstOrCreate(
+            ['key' => 'female'],
+            ['label' => 'Female', 'is_active' => true],
+        );
+        SuchakPolicy::query()->updateOrCreate(
+            ['policy_key' => SuchakPolicyService::KEY_SUCHAK_ALLOW_WORK_BEFORE_ADMIN_APPROVAL],
+            [
+                'policy_value' => 'false',
+                'value_type' => SuchakPolicy::TYPE_BOOLEAN,
+                'is_active' => true,
+            ],
+        );
+
+        $user = User::factory()->create([
+            'mobile' => '9876543230',
+            'mobile_verified_at' => now(),
+        ]);
+        $account = SuchakAccount::factory()->create([
+            'user_id' => $user->id,
+            'mobile_number' => '9876543230',
+            'verification_status' => SuchakAccount::VERIFICATION_PENDING,
+            'public_status' => SuchakAccount::PUBLIC_HIDDEN,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('suchak.manual-profiles.create'))
+            ->assertOk()
+            ->assertDontSee('Only verified Suchak accounts can create a manual candidate profile.', false);
+
+        $this->actingAs($user)
+            ->post(route('suchak.manual-profiles.store'), [
+                'candidate_name' => 'Pending Suchak Candidate',
+                'candidate_mobile' => '9876543231',
+                'candidate_email' => 'pending-suchak-candidate@example.test',
+                'candidate_gender' => 'female',
+                'registering_for' => 'self',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $representation = SuchakProfileRepresentation::query()
+            ->where('suchak_account_id', $account->id)
+            ->with('matrimonyProfile')
+            ->firstOrFail();
+
+        $this->assertSame(SuchakProfileRepresentation::STATUS_PENDING, $representation->representation_status);
+        $this->assertFalse($representation->isPubliclyVisible());
+        $this->assertSame(SuchakAccount::PUBLIC_HIDDEN, $account->fresh()->public_status);
+
+        $this->actingAs($user)
+            ->post(route('suchak.representations.consents.request', $representation), [
+                'consent_method' => SuchakConsent::METHOD_SUCHAK_RELAYED_LINK,
+                'consent_type' => SuchakConsent::TYPE_ONE_YEAR,
+                'consent_given_by_name' => 'Pending Suchak Candidate',
+                'consent_giver_relation' => 'candidate_self',
+                'intended_mobile' => '9876543231',
+                'consent_mobile_number' => '9876543231',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('suchak_consents', [
+            'suchak_account_id' => $account->id,
+            'representation_id' => $representation->id,
+            'consent_status' => SuchakConsent::STATUS_REQUESTED,
+            'consent_channel' => SuchakConsent::CHANNEL_SUCHAK_RELAYED_LINK,
+        ]);
     }
 
     public function test_suchak_can_manage_extra_contact_numbers_from_account_settings(): void
@@ -738,7 +871,8 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
         $this->actingAs($user)
             ->get(route('suchak.dashboard', ['dashboard_tab' => 'profiles']))
             ->assertOk()
-            ->assertSee('Matrimony ID #'.$profile->id, false)
+            ->assertSee('Matrimony ID', false)
+            ->assertSee('#'.$profile->id, false)
             ->assertSee('Manual Suchak Candidate', false)
             ->assertSee('Gender', false)
             ->assertSee('Height', false)
@@ -919,7 +1053,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
             ->firstOrFail();
 
         $this->assertSame(SuchakConsent::STATUS_REQUESTED, $consent->consent_status);
-        $this->assertSame(SuchakConsent::CHANNEL_WHATSAPP_DEEP_LINK, $consent->consent_channel);
+        $this->assertSame(SuchakConsent::CHANNEL_SUCHAK_RELAYED_LINK, $consent->consent_channel);
         $this->assertSame('9876543220', $consent->consent_mobile_number);
 
         $this->assertDatabaseHas('suchak_customer_contexts', [
@@ -1009,7 +1143,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
 
     public function test_admin_can_review_and_approve_pending_suchak_account_with_audit_links(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $account = SuchakAccount::factory()->create([
             'suchak_name' => 'Pending Review Suchak',
             'verification_status' => SuchakAccount::VERIFICATION_PENDING,
@@ -1065,7 +1199,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
 
     public function test_admin_auto_publish_policy_can_make_approved_suchak_public_active(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $account = SuchakAccount::factory()->create([
             'verification_status' => SuchakAccount::VERIFICATION_PENDING,
             'public_status' => SuchakAccount::PUBLIC_HIDDEN,
@@ -1095,7 +1229,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
 
     public function test_admin_can_reject_pending_suchak_account_with_audit_links(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $account = SuchakAccount::factory()->create([
             'verification_status' => SuchakAccount::VERIFICATION_PENDING,
             'public_status' => SuchakAccount::PUBLIC_ACTIVE,
@@ -1136,7 +1270,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
 
     public function test_admin_can_suspend_verified_suchak_account_with_audit_links(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $account = SuchakAccount::factory()->create([
             'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
             'public_status' => SuchakAccount::PUBLIC_ACTIVE,
@@ -1173,7 +1307,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
 
     public function test_admin_can_archive_verified_suchak_account_with_audit_links(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $account = SuchakAccount::factory()->create([
             'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
             'public_status' => SuchakAccount::PUBLIC_ACTIVE,
@@ -1209,7 +1343,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
 
     public function test_admin_can_reactivate_suspended_suchak_account_to_verified_hidden(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $account = SuchakAccount::factory()->create([
             'verification_status' => SuchakAccount::VERIFICATION_SUSPENDED,
             'public_status' => SuchakAccount::PUBLIC_HIDDEN,
@@ -1240,7 +1374,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
 
     public function test_admin_reactivation_from_archived_reopens_pending_review_without_direct_verified_jump(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $account = SuchakAccount::factory()->create([
             'verification_status' => SuchakAccount::VERIFICATION_ARCHIVED,
             'public_status' => SuchakAccount::PUBLIC_HIDDEN,
@@ -1270,7 +1404,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
 
     public function test_admin_can_change_verified_suchak_public_status_with_audit(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $account = SuchakAccount::factory()->create([
             'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
             'public_status' => SuchakAccount::PUBLIC_HIDDEN,
@@ -1304,7 +1438,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
 
     public function test_admin_cannot_make_unverified_suchak_public_active(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $account = SuchakAccount::factory()->create([
             'verification_status' => SuchakAccount::VERIFICATION_PENDING,
             'public_status' => SuchakAccount::PUBLIC_HIDDEN,
@@ -1327,7 +1461,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
 
     public function test_admin_can_review_document_verification_record_status_with_audit_links(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $account = SuchakAccount::factory()->create([
             'verification_status' => SuchakAccount::VERIFICATION_PENDING,
         ]);
@@ -1373,7 +1507,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
     {
         Storage::fake('local');
 
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $account = SuchakAccount::factory()->create([
             'verification_status' => SuchakAccount::VERIFICATION_PENDING,
         ]);
@@ -1401,7 +1535,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
 
     public function test_admin_cannot_approve_non_pending_suchak_account_on_day_4(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $account = SuchakAccount::factory()->create([
             'verification_status' => SuchakAccount::VERIFICATION_REJECTED,
         ]);

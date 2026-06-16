@@ -18,6 +18,7 @@ use App\Http\Controllers\Suchak\PaymentRequestPublicController;
 use App\Http\Controllers\Suchak\PlanPaymentController;
 use App\Http\Controllers\Suchak\ProfileRequestReplyController;
 use App\Http\Controllers\Suchak\ProfileUpdateSuggestionController;
+use App\Http\Controllers\Suchak\PublicConsentController;
 use App\Http\Controllers\Suchak\PublicMarketplaceController;
 use App\Http\Controllers\Suchak\QrScanController;
 use App\Http\Controllers\Suchak\ReceiptVerificationController;
@@ -78,6 +79,14 @@ Route::prefix('suchak')
             ->where('code', '[A-Za-z0-9]{32}')
             ->middleware('throttle:30,1')
             ->name('receipts.verify');
+        Route::get('/consent/{token}', [PublicConsentController::class, 'show'])
+            ->where('token', '[A-Za-z0-9]{64}')
+            ->middleware('throttle:30,1')
+            ->name('consents.public.show');
+        Route::post('/consent/{token}/decision', [PublicConsentController::class, 'decision'])
+            ->where('token', '[A-Za-z0-9]{64}')
+            ->middleware('throttle:10,1')
+            ->name('consents.public.decision');
     });
 
 Route::middleware('auth')
@@ -94,6 +103,11 @@ Route::middleware('auth')
         Route::post('/register/otp/resend', [AccountRequestController::class, 'resendRegistrationOtp'])
             ->middleware('throttle:5,1')
             ->name('register.otp.resend');
+        Route::get('/register/photo', [AccountRequestController::class, 'photo'])
+            ->name('register.photo');
+        Route::post('/register/photo', [AccountRequestController::class, 'storeRegistrationPhoto'])
+            ->middleware('throttle:10,1')
+            ->name('register.photo.store');
         Route::post('/register/documents', [AccountRequestController::class, 'storeRegistrationDocuments'])
             ->middleware('throttle:10,1')
             ->name('register.documents.store');
@@ -113,9 +127,6 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
     ->name('suchak.')
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-        Route::post('/profile-photo', [DashboardController::class, 'storeProfilePhoto'])
-            ->middleware('throttle:10,1')
-            ->name('profile-photo.store');
         Route::post('/profile-requests/{profileRequest}/reply', [ProfileRequestReplyController::class, 'store'])
             ->middleware('throttle:20,1')
             ->name('profile-requests.reply');
@@ -152,6 +163,9 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
         Route::post('/consents/{consent}/resend', [ConsentController::class, 'resend'])
             ->middleware('throttle:10,1')
             ->name('consents.resend');
+        Route::post('/consents/{consent}/cancel-pending', [ConsentController::class, 'cancelPending'])
+            ->middleware('throttle:10,1')
+            ->name('consents.cancel-pending');
         Route::post('/consents/{consent}/send-otp', [ConsentController::class, 'sendOtp'])
             ->middleware('throttle:10,1')
             ->name('consents.send-otp');

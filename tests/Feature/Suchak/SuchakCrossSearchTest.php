@@ -82,6 +82,7 @@ class SuchakCrossSearchTest extends TestCase
         [$religion, $caste] = $this->community();
 
         $ownProfile = $this->activeProfile([
+            'full_name' => 'Requester Bride Maya',
             'date_of_birth' => now()->subYears(30)->toDateString(),
             'highest_education' => 'Selected Own MBA',
             'religion_id' => $religion->id,
@@ -103,7 +104,10 @@ class SuchakCrossSearchTest extends TestCase
         ]));
 
         $response->assertOk();
-        $response->assertSee('value="'.$selectedOwnRepresentation->id.'" selected', false);
+        $response->assertSee('Search your represented profile', false);
+        $response->assertSee('Search by name, age, location, education', false);
+        $response->assertSee('Requester Bride Maya', false);
+        $response->assertSee((string) $selectedOwnRepresentation->id, false);
         $response->assertSee('Strong preliminary fit', false);
         $response->assertSee('Same caste.', false);
         $response->assertSee('Same religion.', false);
@@ -112,8 +116,41 @@ class SuchakCrossSearchTest extends TestCase
         $response->assertSee('name="requesting_representation_id"', false);
         $response->assertSee(route('suchak.collaborations.store'), false);
         $response->assertSee((string) $targetRepresentation->id, false);
+        $response->assertDontSee('id="modal_requesting_representation_id"', false);
         $response->assertDontSee('Selected Target Secret', false);
         $response->assertDontSee('Selected Target Secret Lane', false);
+    }
+
+    public function test_cross_search_uses_searchable_picker_for_large_own_profile_lists(): void
+    {
+        [$actorUser, $actorAccount] = $this->verifiedSuchakActor();
+        $targetAccount = $this->publicVerifiedSuchakAccount();
+
+        for ($i = 1; $i <= 15; $i++) {
+            $profile = $this->activeProfile([
+                'full_name' => 'Large Own Candidate '.$i,
+                'date_of_birth' => now()->subYears(24 + $i)->toDateString(),
+                'highest_education' => 'Large Own Education '.$i,
+            ]);
+            $this->activeRepresentation($actorAccount, $profile);
+        }
+
+        $targetProfile = $this->activeProfile([
+            'highest_education' => 'Large List Target Education',
+        ]);
+        $this->activeRepresentation($targetAccount, $targetProfile);
+
+        $response = $this->actingAs($actorUser)->get(route('suchak.search.index'));
+
+        $response->assertOk();
+        $response->assertSee('Search your represented profile', false);
+        $response->assertSee('Search by name, age, location, education', false);
+        $response->assertSee('Large Own Candidate 15', false);
+        $response->assertSee('Large Own Education 15', false);
+        $response->assertSee('Showing first 12. Type name, age, location, education, or gender to narrow.', false);
+        $response->assertSee('Showing first 12. Type to narrow large profile lists.', false);
+        $response->assertDontSee('<select id="requesting_representation_id"', false);
+        $response->assertDontSee('<select id="modal_requesting_representation_id"', false);
     }
 
     public function test_cross_search_shows_photo_by_default_and_honours_photo_visibility_setting(): void
@@ -186,7 +223,7 @@ class SuchakCrossSearchTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Profile to search for', false);
-        $response->assertSee('Pick the bride/groom profile on your side. Search results and fit signals use this selection.', false);
+        $response->assertSee('Type to find your side profile. Search results and fit signals use this selection.', false);
         $response->assertSee('Select your side profile', false);
         $response->assertSee('Select your represented profile above to compare fit signals.', false);
         $response->assertDontSee('Strong preliminary fit', false);
@@ -212,8 +249,8 @@ class SuchakCrossSearchTest extends TestCase
         $response = $this->actingAs($actorUser)->get(route('suchak.search.index'));
 
         $response->assertOk();
+        $response->assertSee('Showing 1-1 of 1 profiles', false);
         $response->assertSee('Visible B.Pharm', false);
-        $response->assertDontSee('Own Hidden MCA', false);
     }
 
     public function test_cross_search_hides_invalid_revoked_expired_or_non_public_representations(): void

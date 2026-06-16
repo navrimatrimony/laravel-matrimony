@@ -2,9 +2,15 @@
 
 namespace Tests\Feature\Suchak;
 
+use App\Models\City;
+use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\User;
+use App\Services\Profile\ProfileCanonicalResidenceService;
+use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class SuchakRouteAccessTest extends TestCase
@@ -32,6 +38,75 @@ class SuchakRouteAccessTest extends TestCase
         SuchakAccount::factory()->create([
             'user_id' => $user->id,
             'verification_status' => SuchakAccount::VERIFICATION_PENDING,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('suchak.dashboard'))
+            ->assertOk()
+            ->assertSee('Suchak Dashboard', false);
+    }
+
+    public function test_suchak_user_is_redirected_from_member_dashboard_even_when_member_profile_exists(): void
+    {
+        $this->seed(MinimalLocationSeeder::class);
+
+        $user = User::factory()->create();
+        SuchakAccount::factory()->create([
+            'user_id' => $user->id,
+            'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+            'public_status' => SuchakAccount::PUBLIC_ACTIVE,
+        ]);
+        $profile = MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'full_name' => 'Abhiruchi',
+            'lifecycle_state' => 'draft',
+        ]);
+        $leafId = (int) City::query()->where('name', 'Pune City')->firstOrFail()->id;
+        if (Schema::hasColumn($profile->getTable(), 'location_id')) {
+            DB::table($profile->getTable())->where('id', $profile->id)->update(['location_id' => $leafId]);
+        } else {
+            ProfileCanonicalResidenceService::upsertSelfCurrent((int) $profile->id, $leafId, null, true, false);
+        }
+        $profile->update(['lifecycle_state' => 'active']);
+
+        $this->actingAs($user)
+            ->get(route('dashboard'))
+            ->assertRedirect(route('suchak.dashboard'));
+    }
+
+    public function test_suchak_user_is_redirected_from_member_dashboard_even_when_member_onboarding_is_incomplete(): void
+    {
+        $user = User::factory()->create();
+        SuchakAccount::factory()->create([
+            'user_id' => $user->id,
+            'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+            'public_status' => SuchakAccount::PUBLIC_ACTIVE,
+        ]);
+        MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'full_name' => 'Abhiruchi',
+            'card_onboarding_resume_step' => 2,
+            'lifecycle_state' => 'draft',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('dashboard'))
+            ->assertRedirect(route('suchak.dashboard'));
+    }
+
+    public function test_member_onboarding_lock_does_not_block_suchak_workspace(): void
+    {
+        $user = User::factory()->create();
+        SuchakAccount::factory()->create([
+            'user_id' => $user->id,
+            'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+            'public_status' => SuchakAccount::PUBLIC_ACTIVE,
+        ]);
+        MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'full_name' => 'Abhiruchi',
+            'card_onboarding_resume_step' => 2,
+            'lifecycle_state' => 'draft',
         ]);
 
         $this->actingAs($user)

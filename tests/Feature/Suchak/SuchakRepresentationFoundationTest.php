@@ -105,10 +105,25 @@ class SuchakRepresentationFoundationTest extends TestCase
         $service->createPendingFromSourceLink($firstAccount, $firstUser, $firstSourceLink, $profile);
     }
 
-    public function test_non_verified_suchak_statuses_cannot_create_representation(): void
+    public function test_pending_suchak_can_prepare_representation_but_restricted_statuses_cannot(): void
     {
+        [$pendingUser, $pendingAccount, $pendingProfile, $pendingSourceLink] = $this->linkedSourceFixture([
+            'verification_status' => SuchakAccount::VERIFICATION_PENDING,
+            'verified_at' => null,
+            'public_status' => SuchakAccount::PUBLIC_HIDDEN,
+        ]);
+
+        $pendingRepresentation = app(SuchakRepresentationService::class)->createPendingFromSourceLink(
+            $pendingAccount,
+            $pendingUser,
+            $pendingSourceLink,
+            $pendingProfile,
+        );
+
+        $this->assertSame(SuchakProfileRepresentation::STATUS_PENDING, $pendingRepresentation->representation_status);
+        $this->assertFalse($pendingRepresentation->isPubliclyVisible());
+
         foreach ([
-            SuchakAccount::VERIFICATION_PENDING,
             SuchakAccount::VERIFICATION_REJECTED,
             SuchakAccount::VERIFICATION_SUSPENDED,
             SuchakAccount::VERIFICATION_ARCHIVED,
@@ -123,11 +138,11 @@ class SuchakRepresentationFoundationTest extends TestCase
 
                 $this->fail("Suchak status [{$status}] should not create a representation.");
             } catch (InvalidArgumentException $exception) {
-                $this->assertSame('Only verified Suchak accounts can create profile representations.', $exception->getMessage());
+                $this->assertSame('Only active Suchak accounts can create profile representations.', $exception->getMessage());
             }
         }
 
-        $this->assertDatabaseCount('suchak_profile_representations', 0);
+        $this->assertDatabaseCount('suchak_profile_representations', 1);
     }
 
     public function test_source_link_must_already_reference_requested_canonical_profile(): void

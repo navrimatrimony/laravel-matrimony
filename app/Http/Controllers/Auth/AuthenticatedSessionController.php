@@ -31,6 +31,10 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        if ($request->user()->suchakAccount()->exists()) {
+            return redirect()->route('suchak.dashboard');
+        }
+
         if ($redirect = $this->redirectIfNoMatrimonyProfile($request->user(), fromRegistration: false)) {
             return $redirect;
         }

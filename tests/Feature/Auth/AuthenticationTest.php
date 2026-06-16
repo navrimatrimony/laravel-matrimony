@@ -1,8 +1,14 @@
 <?php
 
+use App\Models\City;
 use App\Models\MatrimonyProfile;
+use App\Models\SuchakAccount;
 use App\Models\User;
+use App\Services\Profile\ProfileCanonicalResidenceService;
+use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 test('login screen can be rendered', function () {
     $response = $this->get('/login');
@@ -63,6 +69,39 @@ test('users can authenticate using username in single login field', function () 
 
     $this->assertAuthenticated();
     $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 2], absolute: false));
+});
+
+test('suchak users authenticate into suchak workspace even when a member profile exists', function () {
+    $this->seed(MinimalLocationSeeder::class);
+
+    $user = User::factory()->create([
+        'mobile' => '9876543222',
+    ]);
+    SuchakAccount::factory()->create([
+        'user_id' => $user->id,
+        'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+        'public_status' => SuchakAccount::PUBLIC_ACTIVE,
+    ]);
+    $profile = MatrimonyProfile::factory()->create([
+        'user_id' => $user->id,
+        'full_name' => 'Abhiruchi',
+        'lifecycle_state' => 'draft',
+    ]);
+    $leafId = (int) City::query()->where('name', 'Pune City')->firstOrFail()->id;
+    if (Schema::hasColumn($profile->getTable(), 'location_id')) {
+        DB::table($profile->getTable())->where('id', $profile->id)->update(['location_id' => $leafId]);
+    } else {
+        ProfileCanonicalResidenceService::upsertSelfCurrent((int) $profile->id, $leafId, null, true, false);
+    }
+    $profile->update(['lifecycle_state' => 'active']);
+
+    $response = $this->post('/login', [
+        'login' => $user->mobile,
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
+    $response->assertRedirect(route('suchak.dashboard'));
 });
 
 test('users can logout', function () {

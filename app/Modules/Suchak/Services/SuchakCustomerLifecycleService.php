@@ -205,11 +205,11 @@ class SuchakCustomerLifecycleService
 
     private function assertSuchakActor(SuchakAccount $account, User $actor): void
     {
-        $this->accessService->assertOwnerCanOperate(
+        $this->accessService->assertOwnerCanPrepareCustomers(
             $account,
             $actor,
             'Only the owning Suchak account can manage customer lifecycle records.',
-            'Only verified Suchak accounts can manage customer lifecycle records.',
+            'Only active Suchak accounts can manage customer lifecycle records.',
         );
     }
 

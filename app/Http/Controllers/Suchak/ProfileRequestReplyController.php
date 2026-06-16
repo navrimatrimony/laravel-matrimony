@@ -41,6 +41,6 @@ class ProfileRequestReplyController extends Controller
 
         return redirect()
             ->route('suchak.dashboard', ['dashboard_tab' => 'requests'])
-            ->with('success', 'Reply sent to the member chat.');
+            ->with('success', 'Message sent to the member chat.');
     }
 }

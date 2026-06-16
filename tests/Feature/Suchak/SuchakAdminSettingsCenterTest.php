@@ -30,6 +30,7 @@ class SuchakAdminSettingsCenterTest extends TestCase
             ->assertSee('Work area customer threshold', false)
             ->assertSee('Allow Suchak work before admin approval', false)
             ->assertSee('Auto publish approved Suchak publicly', false)
+            ->assertSee('WhatsApp consent privacy paragraph', false)
             ->assertSee('Visit payout confirmation policy', false)
             ->assertSee('Commission Rules', false)
             ->assertSee(route('admin.suchak.settings.update'), false);
@@ -86,6 +87,12 @@ class SuchakAdminSettingsCenterTest extends TestCase
             'is_active' => true,
         ]);
         $this->assertDatabaseHas('suchak_policies', [
+            'policy_key' => SuchakPolicyService::KEY_SUCHAK_CONSENT_WHATSAPP_PRIVACY_PARAGRAPH,
+            'policy_value' => 'Admin configured WhatsApp privacy assurance paragraph.',
+            'value_type' => SuchakPolicy::TYPE_STRING,
+            'is_active' => true,
+        ]);
+        $this->assertDatabaseHas('suchak_policies', [
             'policy_key' => SuchakPolicyService::KEY_SUCHAK_HERO_REGISTRATION_FORM_ENABLED,
             'policy_value' => 'false',
             'value_type' => SuchakPolicy::TYPE_BOOLEAN,
@@ -131,6 +138,7 @@ class SuchakAdminSettingsCenterTest extends TestCase
         $this->assertSame('payu_test_mode', $policyService->paymentMode());
         $this->assertTrue($policyService->allowsWorkBeforeAdminApproval());
         $this->assertTrue($policyService->autoPublishesOnApproval());
+        $this->assertSame('Admin configured WhatsApp privacy assurance paragraph.', $policyService->consentWhatsappPrivacyParagraph());
         $this->assertFalse($policyService->heroRegistrationFormEnabled());
         $this->assertSame($heroImagePolicy->policy_value, $policyService->heroImagePath());
         $this->assertSame(6, $policyService->workAreaMinimumConsentedCustomers());
@@ -212,6 +220,7 @@ class SuchakAdminSettingsCenterTest extends TestCase
             'suchak_payment_mode' => 'payu_test_mode',
             'suchak_allow_work_before_admin_approval' => '1',
             'suchak_auto_publish_on_approval' => '1',
+            'suchak_consent_whatsapp_privacy_paragraph' => 'Admin configured WhatsApp privacy assurance paragraph.',
             'suchak_hero_registration_form_enabled' => '0',
             'homepage_copy' => array_replace_recursive(SuchakPolicyService::DEFAULT_SUCHAK_HOMEPAGE_COPY, [
                 'mr' => [

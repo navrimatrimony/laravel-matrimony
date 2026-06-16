@@ -12,6 +12,7 @@
     $heroImageKey = \App\Modules\Suchak\Services\SuchakPolicyService::KEY_SUCHAK_HERO_IMAGE_PATH;
     $homepageCopyKey = \App\Modules\Suchak\Services\SuchakPolicyService::KEY_SUCHAK_HOMEPAGE_COPY_JSON;
     $homepageStyleKey = \App\Modules\Suchak\Services\SuchakPolicyService::KEY_SUCHAK_HOMEPAGE_STYLE_JSON;
+    $consentWhatsappPrivacyParagraphKey = \App\Modules\Suchak\Services\SuchakPolicyService::KEY_SUCHAK_CONSENT_WHATSAPP_PRIVACY_PARAGRAPH;
     $suchakHeroImagePath = trim((string) ($current[$heroImageKey] ?? ''));
     $suchakHeroImageUrl = $suchakHeroImagePath !== ''
         ? \Illuminate\Support\Facades\Storage::disk('public')->url($suchakHeroImagePath)
@@ -329,6 +330,11 @@
         <section class="{{ $panelClass }} {{ $activeTab !== 'consent' ? 'hidden' : '' }}">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Consent and SLA</h2>
             <div class="mt-4 grid gap-4 md:grid-cols-2">
+                <div class="md:col-span-2">
+                    <label for="suchak_consent_whatsapp_privacy_paragraph" class="{{ $labelClass }}">WhatsApp consent privacy paragraph</label>
+                    <textarea id="suchak_consent_whatsapp_privacy_paragraph" name="suchak_consent_whatsapp_privacy_paragraph" rows="3" maxlength="700" required class="{{ $fieldClass }} mt-1">{{ old('suchak_consent_whatsapp_privacy_paragraph', $current[$consentWhatsappPrivacyParagraphKey] ?? \App\Modules\Suchak\Services\SuchakPolicyService::DEFAULT_SUCHAK_CONSENT_WHATSAPP_PRIVACY_PARAGRAPH) }}</textarea>
+                    <p class="{{ $helpClass }}">Shown in the Suchak WhatsApp consent message before the secure consent link. Keep this customer-friendly; placeholders are not used in this paragraph.</p>
+                </div>
                 <div>
                     <label for="default_consent_validity_months" class="{{ $labelClass }}">Default consent validity (months)</label>
                     <input id="default_consent_validity_months" type="number" name="default_consent_validity_months" min="1" max="60" value="{{ old('default_consent_validity_months', $current['default_consent_validity_months'] ?? 12) }}" class="{{ $fieldClass }} mt-1">

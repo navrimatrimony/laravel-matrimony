@@ -20,6 +20,7 @@ class SuchakConsentEvent extends Model
     public const EVENT_CONSENT_ACCEPTED = 'consent_accepted';
     public const EVENT_CONSENT_REJECTED = 'consent_rejected';
     public const EVENT_CONSENT_EXPIRED = 'consent_expired';
+    public const EVENT_CONSENT_CANCELLED = 'consent_cancelled';
     public const EVENT_CONSENT_REVOKED = 'consent_revoked';
     public const EVENT_FALLBACK_TRIGGERED = 'fallback_triggered';
 
@@ -31,6 +32,7 @@ class SuchakConsentEvent extends Model
         self::EVENT_CONSENT_ACCEPTED,
         self::EVENT_CONSENT_REJECTED,
         self::EVENT_CONSENT_EXPIRED,
+        self::EVENT_CONSENT_CANCELLED,
         self::EVENT_CONSENT_REVOKED,
         self::EVENT_FALLBACK_TRIGGERED,
     ];

@@ -23,7 +23,7 @@ class SuchakRepresentationService
 
     public function canCreate(SuchakAccount $account): bool
     {
-        return $this->accessService->canOperate($account);
+        return $this->accessService->canPrepareCustomers($account);
     }
 
     public function createPendingFromSourceLink(
@@ -106,11 +106,11 @@ class SuchakRepresentationService
         $account->refresh();
         $profile->refresh();
 
-        $this->accessService->assertOwnerCanOperate(
+        $this->accessService->assertOwnerCanPrepareCustomers(
             $account,
             $actor,
             'Only the owning Suchak account can create manual profile representations.',
-            'Only verified Suchak accounts can create manual profile representations.',
+            'Only active Suchak accounts can create manual profile representations.',
         );
         $this->limitService->assertActiveProfileSlotAvailable($account);
 
@@ -120,11 +120,11 @@ class SuchakRepresentationService
                 ->whereKey($account->id)
                 ->lockForUpdate()
                 ->firstOrFail();
-            $this->accessService->assertOwnerCanOperate(
+            $this->accessService->assertOwnerCanPrepareCustomers(
                 $lockedAccount,
                 $actor,
                 'Only the owning Suchak account can create manual profile representations.',
-                'Only verified Suchak accounts can create manual profile representations.',
+                'Only active Suchak accounts can create manual profile representations.',
             );
             $this->limitService->assertActiveProfileSlotAvailable($lockedAccount);
 
@@ -181,11 +181,11 @@ class SuchakRepresentationService
         $account->refresh();
         $profile->refresh();
 
-        $this->accessService->assertOwnerCanOperate(
+        $this->accessService->assertOwnerCanPrepareCustomers(
             $account,
             $actor,
             'Only the owning Suchak account can link existing profile representations.',
-            'Only verified Suchak accounts can link existing profile representations.',
+            'Only active Suchak accounts can link existing profile representations.',
         );
         $this->limitService->assertActiveProfileSlotAvailable($account);
 
@@ -195,11 +195,11 @@ class SuchakRepresentationService
                 ->whereKey($account->id)
                 ->lockForUpdate()
                 ->firstOrFail();
-            $this->accessService->assertOwnerCanOperate(
+            $this->accessService->assertOwnerCanPrepareCustomers(
                 $lockedAccount,
                 $actor,
                 'Only the owning Suchak account can link existing profile representations.',
-                'Only verified Suchak accounts can link existing profile representations.',
+                'Only active Suchak accounts can link existing profile representations.',
             );
             $this->limitService->assertActiveProfileSlotAvailable($lockedAccount);
 
@@ -248,9 +248,9 @@ class SuchakRepresentationService
 
     private function assertCanCreate(SuchakAccount $account): void
     {
-        $this->accessService->assertCanOperate(
+        $this->accessService->assertCanPrepareCustomers(
             $account,
-            'Only verified Suchak accounts can create profile representations.',
+            'Only active Suchak accounts can create profile representations.',
         );
     }
 

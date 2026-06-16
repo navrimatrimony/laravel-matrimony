@@ -39,6 +39,10 @@ class SuchakActivityLog extends Model
 
     public const ACTION_CONSENT_VERIFIED = 'consent_verified';
 
+    public const ACTION_CONSENT_REJECTED = 'consent_rejected';
+
+    public const ACTION_CONSENT_EXPIRED = 'consent_expired';
+
     public const ACTION_CONSENT_RENEWED = 'consent_renewed';
 
     public const ACTION_CONSENT_REVOKED = 'consent_revoked';

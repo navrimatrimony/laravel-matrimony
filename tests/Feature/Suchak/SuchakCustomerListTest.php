@@ -39,6 +39,8 @@ class SuchakCustomerListTest extends TestCase
             ->get(route('suchak.dashboard', ['dashboard_tab' => 'profiles']))
             ->assertOk()
             ->assertSee('Customer list', false)
+            ->assertSee('Profile status', false)
+            ->assertSee('Consent status', false)
             ->assertSee('Customer List Candidate', false)
             ->assertSee('#'.$profile->id, false)
             ->assertSee('View', false)
@@ -48,6 +50,43 @@ class SuchakCustomerListTest extends TestCase
             ->assertSee('manage_representation='.$representation->id, false)
             ->assertDontSee('Customer management', false)
             ->assertDontSee('Manage selected customer', false);
+    }
+
+    public function test_manage_customer_view_is_separate_from_customer_list(): void
+    {
+        $user = User::factory()->create(['mobile' => '2222222277']);
+        $account = SuchakAccount::factory()->create([
+            'user_id' => $user->id,
+            'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+        ]);
+
+        $profile = MatrimonyProfile::factory()->create([
+            'user_id' => User::factory()->create()->id,
+            'full_name' => 'Managed Customer Candidate',
+            'date_of_birth' => '1997-06-15',
+        ]);
+
+        $representation = SuchakProfileRepresentation::factory()->create([
+            'suchak_account_id' => $account->id,
+            'matrimony_profile_id' => $profile->id,
+            'representation_status' => SuchakProfileRepresentation::STATUS_ACTIVE,
+            'consent_status' => SuchakProfileRepresentation::CONSENT_ACCEPTED,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('suchak.dashboard', [
+                'dashboard_tab' => 'profiles',
+                'manage_representation' => $representation->id,
+            ]))
+            ->assertOk()
+            ->assertSee('Customer details', false)
+            ->assertSee('Back to customer list', false)
+            ->assertSee('Managed Customer Candidate', false)
+            ->assertSee('CRM Notes & Follow-ups', false)
+            ->assertSee('Ledger & Customer Payments', false)
+            ->assertDontSee('Customer list', false)
+            ->assertDontSee('All your customers in one place', false)
+            ->assertDontSee('Incoming Collaborations', false);
     }
 
     public function test_pending_intake_appears_in_customer_list_with_review_action(): void

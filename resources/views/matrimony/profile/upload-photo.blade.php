@@ -3,6 +3,17 @@
 @section('content')
 @php
     $photoTargetQuery = isset($photoTargetQuery) && is_array($photoTargetQuery) ? $photoTargetQuery : [];
+    $suchakAccountPhotoUpload = ! empty($suchakAccountPhotoUpload);
+    $photoUploadAction = $photoUploadAction ?? route('matrimony.profile.store-photo');
+    $photoUploadBackUrl = $photoUploadBackUrl ?? null;
+    $photoUploadTitle = $photoUploadTitle ?? __('photo.upload_your_photo');
+    $photoUploadSubtitle = $photoUploadSubtitle ?? __('photo.good_photo_better_matches');
+    $photoUploadSubmitLabel = $photoUploadSubmitLabel ?? __('photo.upload_photo_complete_profile').' ✓';
+    $photoUploadUploadingLabel = $photoUploadUploadingLabel ?? 'Uploading…';
+    $photoUploadSelectError = $photoUploadSelectError ?? 'Please select a photo first.';
+    $photoUploadDefaultError = $photoUploadDefaultError ?? 'Photo upload failed. Please try again.';
+    $showPhotoGallery = ! $suchakAccountPhotoUpload;
+    $allowMultiplePhotos = ! $suchakAccountPhotoUpload;
 @endphp
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 <style>
@@ -162,14 +173,14 @@ body.upload-landscape .upload-gallery-col {
 
             {{-- Title --}}
             <h1 style="font-size: 24px; font-weight: 700; color: #1f2937; margin: 0 0 8px 0;">
-                {{ __('photo.upload_your_photo') }}
+                {{ $photoUploadTitle }}
             </h1>
             <p style="font-size: 14px; color: #6b7280; margin: 0 0 28px 0;">
-                {{ __('photo.good_photo_better_matches') }}
+                {{ $photoUploadSubtitle }}
             </p>
 
             @php
-                $genderKey = $profile->gender?->key ?? null;
+                $genderKey = $profile?->gender?->key ?? null;
                 if ($genderKey === 'male') {
                     $placeholderImage = asset('images/placeholders/male-profile.svg');
                     $borderColor = '#0ea5e9';
@@ -182,9 +193,9 @@ body.upload-landscape .upload-gallery-col {
                 }
             @endphp
 
-            <form method="POST" action="{{ route('matrimony.profile.store-photo') }}" enctype="multipart/form-data" id="photoUploadForm">
+            <form method="POST" action="{{ $photoUploadAction }}" enctype="multipart/form-data" id="photoUploadForm">
                 @csrf
-                @if (count($photoTargetQuery))
+                @if (! $suchakAccountPhotoUpload && count($photoTargetQuery))
                     <input type="hidden" name="profile_id" value="{{ $profile->id }}">
                 @endif
                 @if (! empty($fromOnboarding))
@@ -234,7 +245,7 @@ body.upload-landscape .upload-gallery-col {
                             {{ __('photo.click_to_upload') }}
                         @endif
                     </p>
-                    <input type="file" name="profile_photo" id="profile_photo_input" {{ $photoLimitReached ? 'disabled' : 'required' }} multiple accept="image/jpeg,image/png" style="display: none;">
+                    <input type="file" name="profile_photo" id="profile_photo_input" {{ $photoLimitReached ? 'disabled' : 'required' }} {{ $allowMultiplePhotos ? 'multiple' : '' }} accept="image/jpeg,image/png,image/webp" style="display: none;">
                     <p id="selectedFileName" style="font-size: 14px; color: #059669; font-weight: 500; margin: 0 0 8px 0; display: none;"></p>
                 </div>
 
@@ -259,13 +270,13 @@ body.upload-landscape .upload-gallery-col {
                 </div>
 
                 <p style="font-size: 13px; color: #9ca3af; margin: 0 0 24px 0;">
-                    {{ __('photo.clear_face_jpg_png_max_2mb') }}
+                    {{ $suchakAccountPhotoUpload ? __('suchak.status.photo_upload_help') : __('photo.clear_face_jpg_png_max_2mb') }}
                 </p>
 
                 {{-- Trust indicator --}}
                 <div style="background: #fef3c7; border-radius: 8px; padding: 12px 16px; margin-bottom: 24px;">
                     <p style="margin: 0; font-size: 13px; color: #92400e;">
-                        {!! __('photo.profiles_with_photos_get_more_interests_html') !!}
+                        {!! $suchakAccountPhotoUpload ? e(__('suchak.status.photo_review_note')) : __('photo.profiles_with_photos_get_more_interests_html') !!}
                     </p>
                 </div>
 
@@ -279,12 +290,13 @@ body.upload-landscape .upload-gallery-col {
                     @if ($photoLimitReached)
                         Photo limit reached
                     @else
-                        {{ __('photo.upload_photo_complete_profile') }} ✓
+                        {{ $photoUploadSubmitLabel }}
                     @endif
                 </button>
             </form>
 
             {{-- Secondary action: clear onboarding lock via onboarding.complete (server enforces photo when required) --}}
+            @if (! $suchakAccountPhotoUpload)
             <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #f3f4f6;">
                 @php
                     $skipUploadHref = route('matrimony.profile.show', $profile->id);
@@ -296,9 +308,17 @@ body.upload-landscape .upload-gallery-col {
                     {{ __('wizard.skip_for_now') }} →
                 </a>
             </div>
+            @elseif ($photoUploadBackUrl)
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #f3f4f6;">
+                <a href="{{ $photoUploadBackUrl }}" style="font-size: 13px; color: #6b7280; text-decoration: none; font-weight: 700;">
+                    ← {{ __('suchak.status.back_to_status') }}
+                </a>
+            </div>
+            @endif
         </div>
 
             {{-- Your uploaded photos --}}
+            @if ($showPhotoGallery)
             <div class="upload-gallery-col" style="margin-top: 36px; text-align: left; background: #ffffff; border-radius: 18px; box-shadow: 0 18px 50px rgba(17,24,39,0.06); padding: 22px 20px;">
             <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;">
                 <div>
@@ -482,11 +502,12 @@ body.upload-landscape .upload-gallery-col {
                 </div>
             @endif
             </div>
+            @endif
         </div>
 
         {{-- Footer note --}}
         <p style="text-align: center; font-size: 12px; color: #9ca3af; margin-top: 24px;">
-            {{ __('photo.secure_visible_to_registered_members') }}
+            {{ $suchakAccountPhotoUpload ? __('suchak.status.photo_secure_note') : __('photo.secure_visible_to_registered_members') }}
         </p>
 
     </div>
@@ -519,8 +540,12 @@ body.upload-landscape .upload-gallery-col {
     const photoLimitReached = {{ $photoLimitReached ? 'true' : 'false' }};
     const photoSlotsRemaining = {{ (int) $photoSlotsRemaining }};
     const photoMaxPerProfile = {{ (int) $photoMaxPerProfile }};
+    const allowMultiplePhotos = @json($allowMultiplePhotos);
+    const submitLabel = @json($photoUploadSubmitLabel);
+    const uploadingLabel = @json($photoUploadUploadingLabel);
+    const selectPhotoError = @json($photoUploadSelectError);
 
-    const PHOTO_UPLOAD_DEFAULT_ERR = @json($photoUploadFailMsg);
+    const PHOTO_UPLOAD_DEFAULT_ERR = @json($suchakAccountPhotoUpload ? $photoUploadDefaultError : $photoUploadFailMsg);
 
     const uploadLimitMessage = 'You have already used all ' + photoMaxPerProfile + ' photo slots. Delete one photo before uploading a new one.';
 
@@ -766,13 +791,13 @@ body.upload-landscape .upload-gallery-col {
             // so native validation shows "not focusable" and blocks properly saving.
             e.preventDefault();
             btnSubmit.disabled = false;
-            btnSubmit.textContent = 'Upload Photo & Complete Profile ✓';
-            showFetchError('Please select a photo first.');
+            btnSubmit.textContent = submitLabel;
+            showFetchError(selectPhotoError);
             return;
         }
         e.preventDefault();
         btnSubmit.disabled = true;
-        btnSubmit.textContent = 'Uploading…';
+        btnSubmit.textContent = uploadingLabel;
 
         function doSubmit(blob) {
             const fd = new FormData();
@@ -787,7 +812,7 @@ body.upload-landscape .upload-gallery-col {
             }
             fd.append('profile_photo', blob, (file && file.name) ? file.name.replace(/\.[^.]+$/, '.jpg') : 'photo.jpg');
             // Send remaining photos to gallery (no cropper for them; they are compressed server-side).
-            if (files && files.length > 1) {
+            if (allowMultiplePhotos && files && files.length > 1) {
                 for (let i = 1; i < files.length; i++) {
                     if (files[i]) {
                         fd.append('profile_photos[]', files[i], files[i].name);
@@ -829,6 +854,8 @@ body.upload-landscape .upload-gallery-col {
 
                     if (data && typeof data.message === 'string' && data.message) {
                         showFetchError(data.message);
+                    } else if (data && data.errors && data.errors.profile_photo && Array.isArray(data.errors.profile_photo) && data.errors.profile_photo[0]) {
+                        showFetchError(data.errors.profile_photo[0]);
                     } else if (data && data.errors && data.errors.profile_photos && Array.isArray(data.errors.profile_photos) && data.errors.profile_photos[0]) {
                         showFetchError(data.errors.profile_photos[0]);
                     } else {
@@ -842,13 +869,13 @@ body.upload-landscape .upload-gallery-col {
                     }
 
                     btnSubmit.disabled = false;
-                    btnSubmit.textContent = 'Upload Photo & Complete Profile ✓';
+                    btnSubmit.textContent = submitLabel;
                 })
                 .catch(function(err) {
                     console.error('Photo upload failed', err);
                     showFetchError(PHOTO_UPLOAD_DEFAULT_ERR);
                     btnSubmit.disabled = false;
-                    btnSubmit.textContent = 'Upload Photo & Complete Profile ✓';
+                    btnSubmit.textContent = submitLabel;
                 });
         }
 
@@ -866,7 +893,7 @@ body.upload-landscape .upload-gallery-col {
             doSubmit(file);
         } else {
             btnSubmit.disabled = false;
-            btnSubmit.textContent = 'Upload Photo & Complete Profile ✓';
+            btnSubmit.textContent = submitLabel;
         }
     });
 })();

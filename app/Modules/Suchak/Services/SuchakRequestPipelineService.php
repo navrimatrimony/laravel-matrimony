@@ -244,10 +244,6 @@ class SuchakRequestPipelineService
                 throw new InvalidArgumentException('Suchak request is not open.');
             }
 
-            if ($lockedRequest->chat_message_id !== null) {
-                throw new InvalidArgumentException('A reply was already sent for this Suchak request.');
-            }
-
             if (! $this->profileIsActive($lockedRequest->requestingMatrimonyProfile)) {
                 throw new InvalidArgumentException('Requesting profile must be active before Suchak can reply.');
             }

@@ -9,6 +9,7 @@ use App\Models\SuchakVerificationRecord;
 use App\Models\User;
 use App\Services\AuditLogService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 class SuchakAccountLifecycleService
@@ -247,6 +248,8 @@ class SuchakAccountLifecycleService
                 'rejected_at' => $adminStatus === SuchakVerificationRecord::STATUS_REJECTED ? now() : null,
             ])->save();
 
+            $this->publishApprovedProfilePhoto($verificationRecord, $account, $adminStatus);
+
             $this->activityLogger->record([
                 'suchak_account_id' => $account->id,
                 'actor_user_id' => $admin->id,
@@ -266,6 +269,37 @@ class SuchakAccountLifecycleService
 
             return $verificationRecord->fresh();
         });
+    }
+
+    private function publishApprovedProfilePhoto(
+        SuchakVerificationRecord $verificationRecord,
+        SuchakAccount $account,
+        string $adminStatus,
+    ): void {
+        if ($verificationRecord->verification_type !== SuchakVerificationRecord::TYPE_PROFILE_PHOTO) {
+            return;
+        }
+
+        if ($adminStatus !== SuchakVerificationRecord::STATUS_APPROVED) {
+            return;
+        }
+
+        $sourcePath = trim((string) $verificationRecord->document_path);
+        if ($sourcePath === '' || ! Storage::disk('local')->exists($sourcePath)) {
+            return;
+        }
+
+        $extension = strtolower((string) pathinfo($sourcePath, PATHINFO_EXTENSION));
+        if (! in_array($extension, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+            $extension = 'jpg';
+        }
+
+        $publicPath = 'suchak/profile-photos/'.$account->id.'/approved-'.$verificationRecord->id.'.'.$extension;
+        Storage::disk('public')->put($publicPath, Storage::disk('local')->get($sourcePath));
+
+        $account->forceFill([
+            'profile_photo_path' => $publicPath,
+        ])->save();
     }
 
     /**

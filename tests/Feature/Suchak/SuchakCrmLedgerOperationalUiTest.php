@@ -27,7 +27,7 @@ class SuchakCrmLedgerOperationalUiTest extends TestCase
                 'manage_representation' => $representation->id,
             ]))
             ->assertOk()
-            ->assertSee('Manage selected customer', false)
+            ->assertSee('Customer details', false)
             ->assertSee('CRM Notes & Follow-ups', false)
             ->assertSee('Ledger & Customer Payments', false)
             ->assertSee('Search CRM or ledger', false);

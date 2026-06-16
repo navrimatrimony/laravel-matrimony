@@ -47,6 +47,7 @@ class SettingsController extends Controller
             'suchak_payment_mode' => ['required', 'string', Rule::in(array_keys($this->paymentModes()))],
             'suchak_allow_work_before_admin_approval' => ['required', 'boolean'],
             'suchak_auto_publish_on_approval' => ['required', 'boolean'],
+            'suchak_consent_whatsapp_privacy_paragraph' => ['required', 'string', 'max:700', 'not_regex:/^\s*$/'],
             'suchak_hero_registration_form_enabled' => ['required', 'boolean'],
             'suchak_hero_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'remove_suchak_hero_image' => ['nullable', 'boolean'],
@@ -205,6 +206,7 @@ class SettingsController extends Controller
             SuchakPolicyService::KEY_SUCHAK_PAYMENT_MODE => $policyService->paymentMode(),
             SuchakPolicyService::KEY_SUCHAK_ALLOW_WORK_BEFORE_ADMIN_APPROVAL => $policyService->allowsWorkBeforeAdminApproval(),
             SuchakPolicyService::KEY_SUCHAK_AUTO_PUBLISH_ON_APPROVAL => $policyService->autoPublishesOnApproval(),
+            SuchakPolicyService::KEY_SUCHAK_CONSENT_WHATSAPP_PRIVACY_PARAGRAPH => $policyService->consentWhatsappPrivacyParagraph(),
             SuchakPolicyService::KEY_SUCHAK_HERO_REGISTRATION_FORM_ENABLED => $policyService->heroRegistrationFormEnabled(),
             SuchakPolicyService::KEY_SUCHAK_HERO_IMAGE_PATH => $policyService->heroImagePath(),
             SuchakPolicyService::KEY_SUCHAK_HOMEPAGE_COPY_JSON => $policyService->homepageCopy(),
@@ -250,6 +252,7 @@ class SettingsController extends Controller
             SuchakPolicyService::KEY_SUCHAK_PAYMENT_MODE => $this->stringRow($validated, 'suchak_payment_mode', 'Suchak platform payment mode.'),
             SuchakPolicyService::KEY_SUCHAK_ALLOW_WORK_BEFORE_ADMIN_APPROVAL => $this->booleanRow($request, 'suchak_allow_work_before_admin_approval', 'Allow pending-review Suchak accounts to use operational dashboard tools before admin approval.'),
             SuchakPolicyService::KEY_SUCHAK_AUTO_PUBLISH_ON_APPROVAL => $this->booleanRow($request, 'suchak_auto_publish_on_approval', 'Automatically publish a Suchak account publicly when admin approval succeeds.'),
+            SuchakPolicyService::KEY_SUCHAK_CONSENT_WHATSAPP_PRIVACY_PARAGRAPH => $this->trimmedStringRow($validated, 'suchak_consent_whatsapp_privacy_paragraph', 'WhatsApp consent message privacy paragraph shown before the secure consent link.'),
             SuchakPolicyService::KEY_SUCHAK_HERO_REGISTRATION_FORM_ENABLED => $this->booleanRow($request, 'suchak_hero_registration_form_enabled', 'Show the Suchak registration form directly inside the public Suchak hero section.'),
             SuchakPolicyService::KEY_SUCHAK_HERO_IMAGE_PATH => [
                 'policy_value' => $heroImagePath,
@@ -442,6 +445,19 @@ class SettingsController extends Controller
     {
         return [
             'policy_value' => (string) $validated[$key],
+            'value_type' => SuchakPolicy::TYPE_STRING,
+            'description' => $description,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array{policy_value: string, value_type: string, description: string}
+     */
+    private function trimmedStringRow(array $validated, string $key, string $description): array
+    {
+        return [
+            'policy_value' => trim((string) $validated[$key]),
             'value_type' => SuchakPolicy::TYPE_STRING,
             'description' => $description,
         ];

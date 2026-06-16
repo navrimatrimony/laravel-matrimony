@@ -39,6 +39,8 @@
             $primaryLabel = $suchakAccount
                 ? (string) ($copy['dashboard_cta'] ?? $homepageCopyDefaults[$localeKey]['dashboard_cta'])
                 : (string) ($copy['primary_cta'] ?? $homepageCopyDefaults[$localeKey]['primary_cta']);
+            $showLoginPanel = request('mode') === 'login'
+                || (old('login') !== null && old('suchak_name') === null);
 
             $benefits = collect($homepageCopy['benefits'] ?? $homepageCopyDefaults['benefits'])
                 ->map(fn (array $benefit): array => [
@@ -243,6 +245,31 @@
                 font-size: .875rem;
                 line-height: 1.85;
             }
+            .suchak-auth-panel[hidden] {
+                display: none;
+            }
+            .suchak-auth-links {
+                margin-top: 1rem;
+                border-top: 1px solid #fee2e2;
+                padding-top: .9rem;
+                text-align: center;
+                color: #4b5563;
+                font-size: .82rem;
+                line-height: 1.6;
+            }
+            .suchak-auth-link {
+                color: #991b1b;
+                font-weight: 800;
+                text-decoration: underline;
+                text-underline-offset: 3px;
+            }
+            .suchak-auth-link:hover {
+                color: #7f1d1d;
+            }
+            .suchak-auth-separator {
+                margin: 0 .45rem;
+                color: #d1d5db;
+            }
             @media (max-width: 767px) {
                 .suchak-language {
                     left: .75rem;
@@ -346,9 +373,7 @@
                     </div>
 
                     @if (($showHeroRegistrationForm ?? true) && ! $suchakAccount && ! auth()->check())
-                        <aside class="suchak-hero-form">
-                            <h2 class="{{ $fontClass }} suchak-hero-form-title">{{ $copy['hero_form_title'] }}</h2>
-                            <p class="{{ $fontClass }} suchak-hero-form-body">{{ $copy['hero_form_body'] }}</p>
+                        <aside class="suchak-hero-form" data-suchak-auth-card>
 
                             @if ($errors->any())
                                 <div class="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800">
@@ -360,20 +385,88 @@
                                 </div>
                             @endif
 
-                            <form method="POST" action="{{ route('suchak.register.store') }}" data-suchak-registration-form class="mt-4 space-y-4">
-                                @csrf
-                                @include('suchak.partials.registration-fields', [
-                                    'businessTypes' => $businessTypes,
-                                    'fieldIdPrefix' => 'hero_suchak_',
-                                    'gridClass' => 'grid gap-3',
-                                    'fieldClass' => 'mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-red-500 focus:ring-red-500',
-                                    'labelClass' => 'block text-xs font-bold text-gray-700',
-                                    'helpClass' => 'mt-1 text-[11px] leading-4 text-gray-500',
-                                ])
-                                <button type="submit" class="suchak-primary w-full">
-                                    {{ __('suchak.register.submit') }}
-                                </button>
-                            </form>
+                            <div class="suchak-auth-panel" data-suchak-auth-panel="register" @if ($showLoginPanel) hidden @endif>
+                                <h2 class="{{ $fontClass }} suchak-hero-form-title">{{ $copy['hero_form_title'] }}</h2>
+                                <p class="{{ $fontClass }} suchak-hero-form-body">{{ $copy['hero_form_body'] }}</p>
+
+                                <form method="POST" action="{{ route('suchak.register.store') }}" data-suchak-registration-form class="mt-4 space-y-4">
+                                    @csrf
+                                    @include('suchak.partials.registration-fields', [
+                                        'businessTypes' => $businessTypes,
+                                        'fieldIdPrefix' => 'hero_suchak_',
+                                        'gridClass' => 'grid gap-3',
+                                        'fieldClass' => 'mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-red-500 focus:ring-red-500',
+                                        'labelClass' => 'block text-xs font-bold text-gray-700',
+                                        'helpClass' => 'mt-1 text-[11px] leading-4 text-gray-500',
+                                    ])
+                                    <button type="submit" class="suchak-primary w-full">
+                                        {{ __('suchak.register.submit') }}
+                                    </button>
+                                </form>
+
+                                <div class="{{ $fontClass }} suchak-auth-links">
+                                    <span>{{ __('suchak.register.already_have_account') }}</span>
+                                    <a href="#suchak-login" class="suchak-auth-link" data-suchak-auth-toggle="login">
+                                        {{ __('suchak.register.login_here') }}
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="suchak-auth-panel" data-suchak-auth-panel="login" @if (! $showLoginPanel) hidden @endif>
+                                <h2 class="{{ $fontClass }} suchak-hero-form-title">{{ __('suchak.register.login_title') }}</h2>
+                                <p class="{{ $fontClass }} suchak-hero-form-body">{{ __('suchak.register.login_intro') }}</p>
+
+                                <form id="suchak-login-form" method="POST" action="{{ route('login') }}" class="mt-4 space-y-4">
+                                    @csrf
+                                    <div>
+                                        <label for="suchak_login" class="block text-xs font-bold text-gray-700">{{ __('suchak.register.login_identifier') }}</label>
+                                        <input
+                                            id="suchak_login"
+                                            name="login"
+                                            value="{{ old('login') }}"
+                                            type="text"
+                                            required
+                                            autocomplete="username"
+                                            placeholder="{{ __('suchak.register.login_identifier_placeholder') }}"
+                                            class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-red-500 focus:ring-red-500"
+                                        >
+                                        <p class="mt-1 text-[11px] leading-4 text-gray-500">{{ __('suchak.register.login_identifier_help') }}</p>
+                                    </div>
+
+                                    <div>
+                                        <label for="suchak_login_password" class="block text-xs font-bold text-gray-700">{{ __('suchak.register.password') }}</label>
+                                        <input
+                                            id="suchak_login_password"
+                                            name="password"
+                                            type="password"
+                                            required
+                                            autocomplete="current-password"
+                                            class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-red-500 focus:ring-red-500"
+                                        >
+                                    </div>
+
+                                    <label for="suchak_login_remember" class="inline-flex items-center gap-2 text-xs font-semibold text-gray-600">
+                                        <input id="suchak_login_remember" type="checkbox" name="remember" class="rounded border-gray-300 text-red-600 focus:ring-red-500">
+                                        <span>{{ __('Remember me') }}</span>
+                                    </label>
+
+                                    <button type="submit" class="suchak-primary w-full">
+                                        {{ __('suchak.register.login_submit') }}
+                                    </button>
+                                </form>
+
+                                <div class="{{ $fontClass }} suchak-auth-links">
+                                    @if (Route::has('password.request'))
+                                        <a href="{{ route('password.request') }}" class="suchak-auth-link">
+                                            {{ __('suchak.register.forgot_password') }}
+                                        </a>
+                                        <span class="suchak-auth-separator" aria-hidden="true">|</span>
+                                    @endif
+                                    <a href="#suchak-register" class="suchak-auth-link" data-suchak-auth-toggle="register">
+                                        {{ __('suchak.register.new_suchak_register') }}
+                                    </a>
+                                </div>
+                            </div>
                         </aside>
                     @endif
                 </div>
@@ -464,5 +557,54 @@
                 </div>
             </section>
         </main>
+        <script>
+            (function () {
+                var card = document.querySelector('[data-suchak-auth-card]');
+                if (!card) {
+                    return;
+                }
+
+                var panels = card.querySelectorAll('[data-suchak-auth-panel]');
+                var toggles = card.querySelectorAll('[data-suchak-auth-toggle]');
+
+                var showPanel = function (name, shouldFocus) {
+                    panels.forEach(function (panel) {
+                        panel.hidden = panel.getAttribute('data-suchak-auth-panel') !== name;
+                    });
+
+                    if (shouldFocus) {
+                        var focusTarget = card.querySelector(
+                            name === 'login' ? '#suchak_login' : '#hero_suchak_suchak_name'
+                        );
+                        if (focusTarget) {
+                            focusTarget.focus({ preventScroll: true });
+                        }
+                    }
+                };
+
+                toggles.forEach(function (toggle) {
+                    toggle.addEventListener('click', function (event) {
+                        event.preventDefault();
+                        showPanel(toggle.getAttribute('data-suchak-auth-toggle'), true);
+                    });
+                });
+
+                if (window.location.hash === '#suchak-login') {
+                    showPanel('login', false);
+                }
+
+                card.querySelectorAll('form').forEach(function (form) {
+                    form.addEventListener('submit', function () {
+                        var button = form.querySelector('button[type="submit"]');
+                        if (!button || button.dataset.once) {
+                            return;
+                        }
+
+                        button.dataset.once = '1';
+                        button.disabled = true;
+                    });
+                });
+            })();
+        </script>
     </body>
 </html>

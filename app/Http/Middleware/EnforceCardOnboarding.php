@@ -21,6 +21,10 @@ class EnforceCardOnboarding
             return $next($request);
         }
 
+        if ($user->suchakAccount()->exists() && $request->routeIs('dashboard', 'suchak.*')) {
+            return $next($request);
+        }
+
         $step = MatrimonyProfile::query()
             ->where('user_id', $user->id)
             ->value('card_onboarding_resume_step');

@@ -28,7 +28,6 @@ use App\Modules\Suchak\Services\SuchakProfileUpdateSuggestionService;
 use App\Modules\Suchak\Services\SuchakWhiteLabelSharingKitService;
 use App\Modules\Suchak\Services\SuchakWorkflowAutomationService;
 use App\Support\Suchak\SuchakOnboardingPresenter;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
@@ -58,6 +57,7 @@ class DashboardController extends Controller
             ->firstOrFail();
         $businessRecordFilters = $this->businessRecordFilters($request);
         $accountCanOperate = $accessService->canOperate($account);
+        $accountCanPrepareCustomers = $accessService->canPrepareCustomers($account);
 
         $representations = $account->profileRepresentations()
             ->with([
@@ -72,7 +72,7 @@ class DashboardController extends Controller
             ->latest()
             ->get();
 
-        $representationCards = $representations->map(function (SuchakProfileRepresentation $representation) use ($account, $accountCanOperate, $maskingService, $businessRecordFilters): array {
+        $representationCards = $representations->map(function (SuchakProfileRepresentation $representation) use ($account, $accountCanOperate, $accountCanPrepareCustomers, $maskingService, $businessRecordFilters): array {
             $summary = $representation->matrimonyProfile
                 ? $maskingService->maskedSummary($representation->matrimonyProfile, $representation)
                 : [];
@@ -93,6 +93,7 @@ class DashboardController extends Controller
                 && ($representation->matrimonyProfile->lifecycle_state ?? null) === 'active'
                 && ! (bool) ($representation->matrimonyProfile->is_suspended ?? false);
             $canOperate = $accountCanOperate;
+            $canPrepareCustomers = $accountCanPrepareCustomers;
             $consents = $representation->consents->sortByDesc('created_at')->values();
             $pendingConsent = $consents
                 ->first(fn (SuchakConsent $consent): bool => in_array($consent->consent_status, SuchakConsent::PENDING_ACTION_STATUSES, true));
@@ -115,19 +116,21 @@ class DashboardController extends Controller
                 'crm_notes' => $crmNotes,
                 'ledger_entries' => $ledgerEntries,
                 'can_export' => $canOperate && $hasActionableConsent,
-                'can_request_consent' => $canOperate
+                'can_request_consent' => $canPrepareCustomers
                     && $pendingConsent === null
                     && in_array($representation->representation_status, [
                         SuchakProfileRepresentation::STATUS_PENDING,
                         SuchakProfileRepresentation::STATUS_CONSENT_PENDING,
+                        SuchakProfileRepresentation::STATUS_REJECTED,
+                        SuchakProfileRepresentation::STATUS_EXPIRED,
+                        SuchakProfileRepresentation::STATUS_REVOKED,
                     ], true)
-                    && $representation->revoked_at === null
                     && $representation->candidate_deactivated_at === null,
-                'can_renew_consent' => $canOperate
+                'can_renew_consent' => $canPrepareCustomers
                     && $pendingConsent === null
                     && $representation->representation_status === SuchakProfileRepresentation::STATUS_ACTIVE
                     && $representation->hasValidConsent(),
-                'can_revoke_consent' => $canOperate && $acceptedConsent !== null && $representation->hasValidConsent(),
+                'can_revoke_consent' => $canPrepareCustomers && $acceptedConsent !== null && $representation->hasValidConsent(),
                 'can_suggest_updates' => $canOperate && $hasActionableConsent && $profileIsActive,
             ];
         });
@@ -145,8 +148,9 @@ class DashboardController extends Controller
 
         $incomingProfileRequests = SuchakProfileRequest::query()
             ->with([
+                'requestingMatrimonyProfile.gender',
                 'requestingMatrimonyProfile.user',
-                'targetMatrimonyProfile',
+                'targetMatrimonyProfile.gender',
                 'chatConversation.messages.senderProfile',
                 'requestChatMessage',
                 'chatMessage',
@@ -252,29 +256,6 @@ class DashboardController extends Controller
                 'pending_collaborations' => $pendingCollaborations->count(),
             ],
         ]);
-    }
-
-    public function storeProfilePhoto(Request $request): RedirectResponse
-    {
-        $account = $request->user()
-            ->suchakAccount()
-            ->firstOrFail();
-
-        $validated = $request->validate([
-            'profile_photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-        ]);
-
-        $path = $validated['profile_photo']->store('suchak/profile-photos/'.$account->id, 'public');
-
-        if (! is_string($path) || $path === '') {
-            return back()->with('error', 'Unable to upload Suchak profile photo.');
-        }
-
-        $account->forceFill([
-            'profile_photo_path' => $path,
-        ])->save();
-
-        return back()->with('success', 'Suchak card photo updated.');
     }
 
     /**

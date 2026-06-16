@@ -243,6 +243,84 @@ class AccountRequestController extends Controller
         return back()->with('success', __('suchak.status.document_upload_success'));
     }
 
+    public function photo(Request $request): View|RedirectResponse
+    {
+        $user = $request->user();
+        $account = $user?->suchakAccount;
+
+        if (! $user || ! $account) {
+            return redirect()->route('suchak.home');
+        }
+
+        if (! $user->mobile_verified_at) {
+            return redirect()->route('suchak.register.status');
+        }
+
+        return view('matrimony.profile.upload-photo', [
+            'profile' => null,
+            'galleryPhotos' => collect(),
+            'photoApprovalRequired' => true,
+            'photoMaxPerProfile' => 1,
+            'currentPhotoCount' => 0,
+            'photoSlotsRemaining' => 1,
+            'photoLimitReached' => false,
+            'fromOnboarding' => false,
+            'onboardingPhotoRequired' => false,
+            'primaryPhotoProcessing' => false,
+            'primaryOnlyOnCoreColumn' => false,
+            'photoTargetQuery' => [],
+            'suchakAccountPhotoUpload' => true,
+            'photoUploadAction' => route('suchak.register.photo.store'),
+            'photoUploadBackUrl' => route('suchak.register.status'),
+            'photoUploadTitle' => __('suchak.status.photo_page_title'),
+            'photoUploadSubtitle' => __('suchak.status.photo_page_intro'),
+            'photoUploadSubmitLabel' => __('suchak.status.upload_photo_for_review'),
+            'photoUploadUploadingLabel' => __('suchak.status.uploading_photo'),
+            'photoUploadSelectError' => __('suchak.status.photo_select_error'),
+            'photoUploadDefaultError' => __('suchak.status.photo_upload_failed'),
+        ]);
+    }
+
+    public function storeRegistrationPhoto(
+        Request $request,
+        SuchakRegistrationService $registrationService,
+    ): RedirectResponse|JsonResponse {
+        $user = $request->user();
+        $account = $user?->suchakAccount;
+
+        if (! $user || ! $account) {
+            return redirect()->route('suchak.home');
+        }
+
+        if (! $user->mobile_verified_at) {
+            return redirect()->route('suchak.register.status');
+        }
+
+        $validated = $request->validate([
+            'profile_photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+
+        $registrationService->uploadVerificationDocument(
+            $account,
+            $validated['profile_photo'],
+            SuchakVerificationRecord::TYPE_PROFILE_PHOTO,
+            (int) $user->id,
+            $request->ip(),
+            $request->userAgent(),
+        );
+
+        $request->session()->flash('success', __('suchak.status.photo_upload_success'));
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'redirect' => route('suchak.register.status'),
+            ]);
+        }
+
+        return redirect()->route('suchak.register.status');
+    }
+
     public function status(Request $request, SuchakOnboardingPresenter $onboardingPresenter): View|RedirectResponse
     {
         $account = $request->user()?->suchakAccount;

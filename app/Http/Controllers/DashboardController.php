@@ -47,6 +47,10 @@ class DashboardController extends Controller
     public function index()
     {
         $user = auth()->user();
+        if ($user?->suchakAccount()->exists()) {
+            return redirect()->route('suchak.dashboard');
+        }
+
         $referralShareTools = $this->referralService->shareToolsForReferrer($user);
         $referralShareUrl = $referralShareTools['share_url'] ?? null;
         $referralSummary = $this->referralService->summaryForReferrer($user);

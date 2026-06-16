@@ -19,6 +19,7 @@ class SuchakConsent extends Model
     public const STATUS_ACCEPTED = 'accepted';
     public const STATUS_REJECTED = 'rejected';
     public const STATUS_EXPIRED = 'expired';
+    public const STATUS_CANCELLED = 'cancelled';
     public const STATUS_REVOKED = 'revoked';
 
     public const STATUSES = [
@@ -29,6 +30,7 @@ class SuchakConsent extends Model
         self::STATUS_ACCEPTED,
         self::STATUS_REJECTED,
         self::STATUS_EXPIRED,
+        self::STATUS_CANCELLED,
         self::STATUS_REVOKED,
     ];
 
@@ -62,6 +64,9 @@ class SuchakConsent extends Model
     public const CHANNEL_VOICE_OTP = 'voice_otp';
     public const CHANNEL_OFFLINE_PROOF = 'offline_proof';
     public const CHANNEL_ADMIN_ASSISTED = 'admin_assisted';
+    public const CHANNEL_SUCHAK_RELAYED_LINK = 'suchak_relayed_link';
+    public const CHANNEL_OFFLINE_SIGNED_PROOF = 'offline_signed_proof';
+    public const CHANNEL_PLATFORM_ASSISTED_LINK = 'platform_assisted_link';
 
     public const CHANNELS = [
         self::CHANNEL_WHATSAPP_DEEP_LINK,
@@ -69,9 +74,28 @@ class SuchakConsent extends Model
         self::CHANNEL_VOICE_OTP,
         self::CHANNEL_OFFLINE_PROOF,
         self::CHANNEL_ADMIN_ASSISTED,
+        self::CHANNEL_SUCHAK_RELAYED_LINK,
+        self::CHANNEL_OFFLINE_SIGNED_PROOF,
+        self::CHANNEL_PLATFORM_ASSISTED_LINK,
+    ];
+
+    public const METHOD_SUCHAK_RELAYED_LINK = self::CHANNEL_SUCHAK_RELAYED_LINK;
+    public const METHOD_OFFLINE_SIGNED_PROOF = self::CHANNEL_OFFLINE_SIGNED_PROOF;
+    public const METHOD_PLATFORM_ASSISTED_LINK = self::CHANNEL_PLATFORM_ASSISTED_LINK;
+
+    public const METHODS = [
+        self::METHOD_SUCHAK_RELAYED_LINK,
+        self::METHOD_OFFLINE_SIGNED_PROOF,
+        self::METHOD_PLATFORM_ASSISTED_LINK,
+    ];
+
+    public const LINK_METHODS = [
+        self::METHOD_SUCHAK_RELAYED_LINK,
+        self::METHOD_PLATFORM_ASSISTED_LINK,
     ];
 
     public const TEMPLATE_VERSION_V1 = 'v1';
+    public const CONSENT_TEXT_VERSION_V1 = 'suchak_consent_v1';
 
     public const DEFAULT_TOKEN_EXPIRY_DAYS = 7;
     public const MAX_OTP_ATTEMPTS = 5;
@@ -87,11 +111,17 @@ class SuchakConsent extends Model
         'consent_text_snapshot',
         'consent_text_snapshot_mr',
         'consent_template_version',
+        'consent_text_version',
         'consent_given_by_name',
         'relationship_to_candidate',
+        'consent_giver_relation',
         'consent_mobile_number',
+        'intended_mobile',
+        'submitted_mobile',
+        'mobile_match',
         'token_hash',
         'token_expires_at',
+        'expires_at',
         'otp_hash',
         'otp_attempts',
         'last_otp_sent_at',
@@ -99,27 +129,39 @@ class SuchakConsent extends Model
         'rejected_at',
         'revoked_at',
         'used_at',
+        'public_token_used_at',
+        'decided_at',
         'otp_verified_at',
         'consent_channel',
+        'consent_method',
         'valid_from',
         'valid_until',
         'revocation_reason',
         'revocation_reason_mr',
         'ip_address',
         'user_agent',
+        'proof_file_path',
+        'proof_original_name',
+        'proof_uploaded_at',
+        'delivery_status',
     ];
 
     protected $casts = [
         'token_expires_at' => 'datetime',
+        'expires_at' => 'datetime',
         'last_otp_sent_at' => 'datetime',
         'accepted_at' => 'datetime',
         'rejected_at' => 'datetime',
         'revoked_at' => 'datetime',
         'used_at' => 'datetime',
+        'public_token_used_at' => 'datetime',
+        'decided_at' => 'datetime',
         'otp_verified_at' => 'datetime',
         'valid_from' => 'datetime',
         'valid_until' => 'datetime',
+        'proof_uploaded_at' => 'datetime',
         'otp_attempts' => 'integer',
+        'mobile_match' => 'boolean',
     ];
 
     public function suchakAccount(): BelongsTo
@@ -167,7 +209,9 @@ class SuchakConsent extends Model
 
     public function isTokenExpired(): bool
     {
-        return $this->token_expires_at !== null && $this->token_expires_at->isPast();
+        $expiresAt = $this->expires_at ?? $this->token_expires_at;
+
+        return $expiresAt !== null && $expiresAt->isPast();
     }
 
     public function delete(): ?bool

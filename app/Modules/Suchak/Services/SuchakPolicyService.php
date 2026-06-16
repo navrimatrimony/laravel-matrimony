@@ -26,6 +26,7 @@ class SuchakPolicyService
     public const KEY_SUCHAK_AUTO_APPROVE_ON_OTP = 'suchak_auto_approve_on_otp';
     public const KEY_SUCHAK_ALLOW_WORK_BEFORE_ADMIN_APPROVAL = 'suchak_allow_work_before_admin_approval';
     public const KEY_SUCHAK_AUTO_PUBLISH_ON_APPROVAL = 'suchak_auto_publish_on_approval';
+    public const KEY_SUCHAK_CONSENT_WHATSAPP_PRIVACY_PARAGRAPH = 'suchak_consent_whatsapp_privacy_paragraph';
     public const KEY_SUCHAK_HERO_REGISTRATION_FORM_ENABLED = 'suchak_hero_registration_form_enabled';
     public const KEY_SUCHAK_HERO_IMAGE_PATH = 'suchak_hero_image_path';
     public const KEY_SUCHAK_HOMEPAGE_COPY_JSON = 'suchak_homepage_copy_json';
@@ -55,6 +56,7 @@ class SuchakPolicyService
     public const DEFAULT_SUCHAK_AUTO_APPROVE_ON_OTP = false;
     public const DEFAULT_SUCHAK_ALLOW_WORK_BEFORE_ADMIN_APPROVAL = true;
     public const DEFAULT_SUCHAK_AUTO_PUBLISH_ON_APPROVAL = false;
+    public const DEFAULT_SUCHAK_CONSENT_WHATSAPP_PRIVACY_PARAGRAPH = 'तुम्ही होकार दिल्यानंतरच हे स्थळ विवाह जुळवणीसाठी पुढे दाखवले जाईल. तुमचा मोबाईल नंबर किंवा कुटुंबाची खाजगी माहिती तुमच्या मंजुरीशिवाय कोणालाही दिली जाणार नाही, याची खात्री बाळगा.';
     public const DEFAULT_SUCHAK_HERO_REGISTRATION_FORM_ENABLED = true;
     public const DEFAULT_SUCHAK_HERO_IMAGE_PATH = '';
     public const DEFAULT_SUCHAK_HOMEPAGE_COPY = [
@@ -353,6 +355,14 @@ class SuchakPolicyService
         return $this->boolean(
             self::KEY_SUCHAK_AUTO_PUBLISH_ON_APPROVAL,
             self::DEFAULT_SUCHAK_AUTO_PUBLISH_ON_APPROVAL,
+        );
+    }
+
+    public function consentWhatsappPrivacyParagraph(): string
+    {
+        return $this->string(
+            self::KEY_SUCHAK_CONSENT_WHATSAPP_PRIVACY_PARAGRAPH,
+            self::DEFAULT_SUCHAK_CONSENT_WHATSAPP_PRIVACY_PARAGRAPH,
         );
     }
 

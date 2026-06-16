@@ -289,8 +289,16 @@
                             <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ $consent->valid_until?->format('Y-m-d H:i') ?: 'Until revoked / not active' }}</dd>
                         </div>
                         <div>
-                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">OTP evidence</dt>
-                            <dd class="mt-1 text-gray-900 dark:text-gray-100">{{ $consent->otp_hash ? 'Hashed OTP stored' : 'No OTP hash' }}</dd>
+                            <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Evidence type</dt>
+                            <dd class="mt-1 text-gray-900 dark:text-gray-100">
+                                @if ($consent->proof_file_path)
+                                    Signed proof file stored
+                                @elseif ($consent->mobile_match)
+                                    Accepted for requested mobile number
+                                @else
+                                    Secure request pending
+                                @endif
+                            </dd>
                         </div>
                         <div>
                             <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Token expiry</dt>

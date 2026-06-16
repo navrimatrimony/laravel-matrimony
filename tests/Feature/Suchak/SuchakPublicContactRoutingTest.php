@@ -24,6 +24,7 @@ use Database\Seeders\PlanStandardFeatureKeysSeeder;
 use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -256,8 +257,20 @@ class SuchakPublicContactRoutingTest extends TestCase
 
     public function test_suchak_reply_uses_existing_member_chat_and_updates_request_state(): void
     {
+        Notification::fake();
+
         [$viewer, $viewerProfile, $representation, $targetProfile] = $this->validRoutingFixture([
             'contact_routing_mode' => ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY,
+            'viewer_profile' => [
+                'full_name' => 'Anand Shinde',
+                'date_of_birth' => now()->subYears(31)->toDateString(),
+                'profile_photo' => 'anand-shinde.jpg',
+            ],
+            'target_profile' => [
+                'full_name' => 'Vaishali Shinde',
+                'date_of_birth' => now()->subYears(27)->toDateString(),
+                'profile_photo' => 'vaishali-shinde.jpg',
+            ],
         ]);
 
         $this
@@ -288,9 +301,21 @@ class SuchakPublicContactRoutingTest extends TestCase
             ->assertSee('Incoming Profile Requests', false)
             ->assertSee('Please share meeting details through Suchak.', false)
             ->assertSee(route('suchak.profile-requests.reply', $profileRequest), false)
-            ->assertSee('Quick reply', false)
+            ->assertSee(route('matrimony.profile.show', $viewerProfile->id), false)
+            ->assertSee(route('matrimony.profile.show', $targetProfile->id), false)
+            ->assertSee('Anand Shinde', false)
+            ->assertSee('Vaishali Shinde', false)
+            ->assertSee('31 years', false)
+            ->assertSee('27 years', false)
+            ->assertSee('uploads/matrimony_photos/anand-shinde.jpg', false)
+            ->assertSee('uploads/matrimony_photos/vaishali-shinde.jpg', false)
+            ->assertSee('Message member', false)
+            ->assertSee('Send message', false)
+            ->assertSee('data-profile-request-template', false)
             ->assertSee('मी हे स्थळ संबंधित कुटुंबाला दाखवतो.', false)
             ->assertSee('Conversation history', false)
+            ->assertDontSee('type="hidden" name="reply_message"', false)
+            ->assertDontSee('Quick reply', false)
             ->assertDontSee('Suchak onboarding', false)
             ->assertDontSee('Suchak Dashboard', false)
             ->assertDontSee('Represented', false);
@@ -316,6 +341,7 @@ class SuchakPublicContactRoutingTest extends TestCase
         $this->assertSame($viewerProfile->id, $message->receiver_profile_id);
         $this->assertStringContainsString('सूचकांकडून संदेश', (string) $message->body_text);
         $this->assertStringContainsString('Please call our office tomorrow after 10 AM.', (string) $message->body_text);
+        $firstSuchakMessageId = (int) $message->id;
 
         [$profileOneId, $profileTwoId] = Conversation::normalizePairIds($targetProfile->id, $viewerProfile->id);
         $this->assertDatabaseHas('conversations', [
@@ -360,7 +386,36 @@ class SuchakPublicContactRoutingTest extends TestCase
         $dashboardAfterMemberReply
             ->assertOk()
             ->assertSee('Conversation history', false)
-            ->assertSee('chalel', false);
+            ->assertSee('chalel', false)
+            ->assertSee('Message member', false)
+            ->assertSee('Send message', false);
+
+        $this
+            ->actingAs($suchakAccount->user)
+            ->post(route('suchak.profile-requests.reply', $profileRequest), [
+                'reply_message' => 'We can arrange a call tomorrow evening.',
+            ])
+            ->assertRedirect(route('suchak.dashboard', ['dashboard_tab' => 'requests']));
+
+        $profileRequest->refresh();
+        $secondSuchakMessage = Message::query()->findOrFail($profileRequest->chat_message_id);
+        $this->assertNotSame($firstSuchakMessageId, (int) $secondSuchakMessage->id);
+        $this->assertSame($targetProfile->id, $secondSuchakMessage->sender_profile_id);
+        $this->assertSame($viewerProfile->id, $secondSuchakMessage->receiver_profile_id);
+        $this->assertStringContainsString('We can arrange a call tomorrow evening.', (string) $secondSuchakMessage->body_text);
+
+        $chatResponseAfterSecondReply = $this
+            ->actingAs($viewer)
+            ->get(route('chat.show', $profileRequest->chatConversation));
+
+        $chatResponseAfterSecondReply
+            ->assertOk()
+            ->assertSeeInOrder([
+                'Please share meeting details through Suchak.',
+                'Please call our office tomorrow after 10 AM.',
+                'chalel',
+                'We can arrange a call tomorrow evening.',
+            ], false);
 
         $profileResponse = $this
             ->actingAs($viewer)
@@ -369,10 +424,9 @@ class SuchakPublicContactRoutingTest extends TestCase
         $profileResponse
             ->assertOk()
             ->assertSee('Please share meeting details through Suchak.', false)
-            ->assertSee('Please call our office tomorrow after 10 AM.', false)
             ->assertSee(route('chat.show', $profileRequest->chatConversation), false);
 
-        $this->assertSame(3, Message::query()->where('conversation_id', $profileRequest->chat_conversation_id)->count());
+        $this->assertSame(4, Message::query()->where('conversation_id', $profileRequest->chat_conversation_id)->count());
     }
 
     public function test_invalid_revoked_or_expired_suchak_representation_is_not_publicly_routable(): void

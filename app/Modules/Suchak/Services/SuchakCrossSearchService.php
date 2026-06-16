@@ -102,7 +102,8 @@ class SuchakCrossSearchService
                 /** @var MatrimonyProfile $profile */
                 $profile = $representation->matrimonyProfile;
                 $summary = $this->maskingService->maskedSummary($profile, $representation);
-                $summary['option_label'] = $this->ownRepresentationOptionLabel($summary);
+                $summary['own_profile'] = $this->ownRepresentationOptionMeta($profile, $summary);
+                $summary['option_label'] = $this->ownRepresentationOptionLabel($profile, $summary);
 
                 return $summary;
             });
@@ -382,7 +383,7 @@ class SuchakCrossSearchService
     /**
      * @param  array<string, mixed>  $summary
      */
-    private function ownRepresentationOptionLabel(array $summary): string
+    private function ownRepresentationOptionLabel(MatrimonyProfile $profile, array $summary): string
     {
         $community = collect([
             $summary['community']['religion'] ?? null,
@@ -398,10 +399,45 @@ class SuchakCrossSearchService
             : null;
 
         return collect([
-            $summary['basic']['gender'] ?? 'Represented profile',
+            trim((string) ($profile->full_name ?? '')) ?: ($summary['basic']['gender'] ?? 'Represented profile'),
             $age,
+            $summary['basic']['gender'] ?? null,
             $community !== '' ? $community : null,
             $location !== '' ? $location : null,
         ])->filter()->implode(' · ');
+    }
+
+    /**
+     * @param  array<string, mixed>  $summary
+     * @return array<string, mixed>
+     */
+    private function ownRepresentationOptionMeta(MatrimonyProfile $profile, array $summary): array
+    {
+        $location = collect([
+            $summary['location']['city'] ?? null,
+            $summary['location']['district'] ?? null,
+        ])->filter()->implode(', ');
+
+        $educationJob = collect([
+            $summary['education']['highest'] ?? null,
+            $summary['occupation']['broad'] ?? null,
+        ])->filter()->implode(' / ');
+
+        $age = isset($summary['basic']['age_years'])
+            ? $summary['basic']['age_years'].' years'
+            : null;
+
+        $name = trim((string) ($profile->full_name ?? ''));
+
+        return [
+            'name' => $name !== '' ? $name : 'Represented profile',
+            'gender' => $summary['basic']['gender'] ?? null,
+            'age' => $age,
+            'location' => $location !== '' ? $location : null,
+            'education_job' => $educationJob !== '' ? $educationJob : null,
+            'photo_url' => $summary['photo']['url']
+                ?? $summary['photo']['placeholder_url']
+                ?? asset('images/placeholders/default-profile.svg'),
+        ];
     }
 }

@@ -18,7 +18,7 @@ class IntakeSourceController extends Controller
         if (! $account || ! $sourceLinkService->canCreate($account)) {
             return redirect()
                 ->route('suchak.dashboard')
-                ->with('error', 'Only verified Suchak accounts can create biodata intake source links.');
+                ->with('error', 'Only active Suchak accounts can create biodata intake source links.');
         }
 
         return view('suchak.intakes.create', [

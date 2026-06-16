@@ -33,10 +33,10 @@ class ManualProfileController extends Controller
     {
         $account = $request->user()->suchakAccount;
 
-        if (! $account || ! $accessService->canOwnerOperate($account, $request->user())) {
+        if (! $account || ! $accessService->canOwnerPrepareCustomers($account, $request->user())) {
             return redirect()
                 ->route('suchak.dashboard')
-                ->with('error', 'Only verified Suchak accounts can create a manual candidate profile.');
+                ->with('error', 'Only active Suchak accounts can create a manual candidate profile.');
         }
 
         return view('suchak.manual-profiles.create', [
@@ -56,10 +56,10 @@ class ManualProfileController extends Controller
     ): RedirectResponse {
         $account = $request->user()->suchakAccount;
 
-        if (! $account || ! $accessService->canOwnerOperate($account, $request->user())) {
+        if (! $account || ! $accessService->canOwnerPrepareCustomers($account, $request->user())) {
             return redirect()
                 ->route('suchak.dashboard')
-                ->with('error', 'Only verified Suchak accounts can create a manual candidate profile.');
+                ->with('error', 'Only active Suchak accounts can create a manual candidate profile.');
         }
 
         $validated = $request->validate([
@@ -193,10 +193,10 @@ class ManualProfileController extends Controller
     ): RedirectResponse {
         $account = $request->user()->suchakAccount;
 
-        if (! $account || ! $accessService->canOwnerOperate($account, $request->user())) {
+        if (! $account || ! $accessService->canOwnerPrepareCustomers($account, $request->user())) {
             return redirect()
                 ->route('suchak.dashboard')
-                ->with('error', 'Only verified Suchak accounts can manage represented candidate profiles.');
+                ->with('error', 'Only active Suchak accounts can manage represented candidate profiles.');
         }
 
         if ((int) $representation->suchak_account_id !== (int) $account->id || $representation->matrimony_profile_id === null) {
@@ -354,13 +354,12 @@ class ManualProfileController extends Controller
             return $existing;
         }
 
-        $result = $consentService->requestConsent(
+        $result = $consentService->createSuchakRelayedLinkConsent(
             $representation,
             $actor,
             [
                 'consent_type' => SuchakConsent::TYPE_ONE_YEAR,
-                'consent_channel' => SuchakConsent::CHANNEL_WHATSAPP_DEEP_LINK,
-                'consent_mobile_number' => $mobile,
+                'intended_mobile' => $mobile,
             ],
             $ipAddress,
             $userAgent,

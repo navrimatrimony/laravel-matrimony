@@ -41,32 +41,54 @@ class SuchakOnboardingPresenter
                 && $record->admin_user_id !== null,
         );
         $isSystemAutoApproved = $isVerified && ! $hasManualAdminApproval;
+        $profilePhotoRecord = $verificationRecords->first(
+            fn (SuchakVerificationRecord $record): bool => $record->verification_type === SuchakVerificationRecord::TYPE_PROFILE_PHOTO,
+        );
+        $profilePhotoApproved = filled($account->profile_photo_path);
+        $profilePhotoSubmitted = $profilePhotoApproved
+            || (filled($profilePhotoRecord?->document_path)
+                && $profilePhotoRecord?->admin_status !== SuchakVerificationRecord::STATUS_REJECTED);
+        $profilePhotoRejected = filled($profilePhotoRecord?->document_path)
+            && $profilePhotoRecord?->admin_status === SuchakVerificationRecord::STATUS_REJECTED;
 
         $documentState = match (true) {
             $hasRejectedRequiredDocument => 'blocked',
+            ! $mobileVerified || ! $profilePhotoSubmitted => 'upcoming',
             $requiredDocumentsApproved => 'complete',
             $requiredDocumentsUploaded => 'submitted',
-            $mobileVerified => 'current',
             default => 'upcoming',
         };
         $adminReviewState = match (true) {
             ! $mobileVerified => 'upcoming',
+            ! $profilePhotoSubmitted => 'upcoming',
+            ! $requiredDocumentsUploaded => 'upcoming',
             $isBlocked => 'blocked',
             $hasManualAdminApproval => 'complete',
-            $isSystemAutoApproved => 'submitted',
+            $isSystemAutoApproved => 'in_progress',
             default => 'in_progress',
+        };
+        $readyState = match (true) {
+            $isBlocked => 'blocked',
+            $mobileVerified && $profilePhotoSubmitted && $requiredDocumentsUploaded && ! $hasRejectedRequiredDocument => 'current',
+            default => 'upcoming',
         };
 
         $state = [
             'registration' => 'complete',
             'otp' => $mobileVerified ? 'complete' : 'current',
-            'admin_review' => $adminReviewState,
+            'profile_photo' => match (true) {
+                ! $mobileVerified => 'upcoming',
+                $profilePhotoRejected => 'blocked',
+                $profilePhotoSubmitted => 'complete',
+                default => 'current',
+            },
             'documents' => $documentState,
+            'ready_work' => $readyState,
         ];
 
-        $currentKey = $this->currentStepKey($state, $mobileVerified, $requiredDocumentsUploaded);
+        $currentKey = $this->currentStepKey($state, $mobileVerified, $profilePhotoSubmitted, $requiredDocumentsUploaded);
         $steps = collect(array_keys($state))
-            ->map(function (string $key, int $index) use ($account, $state, $mobileVerified, $requiredDocumentsUploaded): array {
+            ->map(function (string $key, int $index) use ($state, $mobileVerified, $profilePhotoSubmitted, $requiredDocumentsUploaded): array {
                 return [
                     'key' => $key,
                     'index' => $index + 1,
@@ -74,7 +96,7 @@ class SuchakOnboardingPresenter
                     'label' => __('suchak.status.steps.'.$key.'.label'),
                     'detail' => __('suchak.status.steps.'.$key.'.detail'),
                     'body' => $this->stepBody($key, $state[$key], $requiredDocumentsUploaded),
-                    'action_label' => $this->stepActionLabel($key, $mobileVerified, $requiredDocumentsUploaded),
+                    'action_label' => $this->stepActionLabel($key, $mobileVerified, $profilePhotoSubmitted, $requiredDocumentsUploaded),
                     'action_url' => $this->stepActionUrl($key, $mobileVerified),
                 ];
             })
@@ -88,15 +110,22 @@ class SuchakOnboardingPresenter
             'current_step' => $steps->firstWhere('key', $currentKey) ?? $steps->first(),
             'steps' => $steps,
             'document_rows' => $documentRows,
+            'profile_photo_uploaded' => $profilePhotoSubmitted,
+            'profile_photo_approved' => $profilePhotoApproved,
+            'profile_photo_rejected' => $profilePhotoRejected,
+            'profile_photo_review_status' => $profilePhotoRecord?->admin_status,
+            'profile_photo_review_remarks' => $profilePhotoRecord?->remarks_mr ?: $profilePhotoRecord?->remarks,
             'required_documents_uploaded' => $requiredDocumentsUploaded,
             'required_documents_approved' => $requiredDocumentsApproved,
             'manual_admin_review_complete' => $hasManualAdminApproval,
+            'admin_review_state' => $adminReviewState,
             'admin_review_pending' => $isSystemAutoApproved || ($requiredDocumentsUploaded && ! $requiredDocumentsApproved),
             'uploaded_document_count' => $documentRows->filter(fn (array $row): bool => $row['uploaded'])->count(),
             'message_key' => $this->messageKey(
                 $mobileVerified,
                 $isVerified,
                 $isBlocked,
+                $profilePhotoSubmitted,
                 $requiredDocumentsUploaded,
                 $requiredDocumentsApproved,
                 $hasManualAdminApproval,
@@ -143,10 +172,14 @@ class SuchakOnboardingPresenter
     /**
      * @param  array<string, string>  $state
      */
-    private function currentStepKey(array $state, bool $mobileVerified, bool $requiredDocumentsUploaded): string
+    private function currentStepKey(array $state, bool $mobileVerified, bool $profilePhotoUploaded, bool $requiredDocumentsUploaded): string
     {
         if (! $mobileVerified) {
             return 'otp';
+        }
+
+        if (! $profilePhotoUploaded) {
+            return 'profile_photo';
         }
 
         if (! $requiredDocumentsUploaded || $state['documents'] === 'blocked') {
@@ -154,18 +187,25 @@ class SuchakOnboardingPresenter
         }
 
         foreach ($state as $key => $value) {
-            if (in_array($value, ['blocked', 'current', 'in_progress', 'submitted'], true)) {
+            if (in_array($value, ['blocked', 'current', 'in_progress'], true)) {
                 return $key;
             }
         }
 
-        return 'documents';
+        foreach (array_reverse($state, true) as $key => $value) {
+            if ($value === 'submitted') {
+                return $key;
+            }
+        }
+
+        return 'ready_work';
     }
 
     private function messageKey(
         bool $mobileVerified,
         bool $isVerified,
         bool $isBlocked,
+        bool $profilePhotoUploaded,
         bool $requiredDocumentsUploaded,
         bool $requiredDocumentsApproved,
         bool $hasManualAdminApproval,
@@ -173,9 +213,8 @@ class SuchakOnboardingPresenter
         return match (true) {
             ! $mobileVerified => 'otp_pending',
             $isBlocked => 'blocked',
+            ! $profilePhotoUploaded => 'photo_pending',
             ! $requiredDocumentsUploaded => 'kyc_pending',
-            $isVerified && (! $requiredDocumentsApproved || ! $hasManualAdminApproval) => 'work_allowed_review_pending',
-            ! $isVerified => 'review_pending',
             default => 'ready',
         };
     }
@@ -186,21 +225,18 @@ class SuchakOnboardingPresenter
             return __('suchak.status.steps.documents.submitted_body');
         }
 
-        if ($key === 'admin_review' && $state === 'submitted') {
-            return __('suchak.status.steps.admin_review.submitted_body');
-        }
-
         return __('suchak.status.steps.'.$key.'.body');
     }
 
-    private function stepActionLabel(string $key, bool $mobileVerified, bool $requiredDocumentsUploaded): ?string
+    private function stepActionLabel(string $key, bool $mobileVerified, bool $profilePhotoUploaded, bool $requiredDocumentsUploaded): ?string
     {
         return match ($key) {
             'otp' => $mobileVerified ? null : __('suchak.status.step_actions.verify_otp'),
+            'profile_photo' => $mobileVerified && ! $profilePhotoUploaded ? __('suchak.status.step_actions.upload_photo') : null,
             'documents' => $mobileVerified
                 ? ($requiredDocumentsUploaded ? __('suchak.status.step_actions.view_documents') : __('suchak.status.step_actions.upload_documents'))
                 : null,
-            'admin_review' => $mobileVerified ? __('suchak.status.step_actions.view_status') : null,
+            'ready_work' => $mobileVerified ? __('suchak.status.step_actions.open_dashboard') : null,
             default => null,
         };
     }
@@ -209,8 +245,9 @@ class SuchakOnboardingPresenter
     {
         return match ($key) {
             'otp' => $mobileVerified ? null : route('suchak.register.verify'),
+            'profile_photo' => $mobileVerified ? route('suchak.register.photo', absolute: false) : null,
             'documents' => $mobileVerified ? route('suchak.register.status', absolute: false).'#kyc-documents' : null,
-            'admin_review' => $mobileVerified ? route('suchak.register.status', absolute: false).'#kyc-documents' : null,
+            'ready_work' => $mobileVerified ? route('suchak.dashboard', absolute: false) : null,
             default => null,
         };
     }

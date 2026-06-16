@@ -5,11 +5,16 @@ namespace App\Modules\Suchak\Services;
 use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\SuchakBiodataIntakeLink;
+use App\Models\SuchakConsent;
 use App\Models\SuchakProfileRepresentation;
 use Illuminate\Support\Carbon;
 
 class SuchakCustomerListService
 {
+    public function __construct(
+        private readonly SuchakAccessService $accessService,
+    ) {}
+
     /**
      * Compact rows for Suchak dashboard customer list (owned candidates + pending intakes).
      *
@@ -27,6 +32,14 @@ class SuchakCustomerListService
      *     address: string,
      *     status_label: string,
      *     consent_label: ?string,
+     *     consent_status: ?string,
+     *     consent_action_url: ?string,
+     *     can_request_consent: bool,
+     *     can_renew_consent: bool,
+     *     default_consent_mobile: ?string,
+     *     default_consent_giver_name: ?string,
+     *     has_pending_consent: bool,
+     *     has_active_consent: bool,
      *     lifecycle_label: ?string,
      *     view_url: ?string,
      *     edit_url: ?string,
@@ -37,16 +50,20 @@ class SuchakCustomerListService
      */
     public function rowsForAccount(SuchakAccount $account): array
     {
+        $canPrepareCustomers = $this->accessService->canPrepareCustomers($account);
+
         $representations = $account->profileRepresentations()
             ->with([
+                'consents',
                 'matrimonyProfile.gender',
                 'matrimonyProfile.location.parent.parent.parent',
+                'matrimonyProfile.user',
             ])
             ->latest()
             ->get();
 
         $rows = $representations
-            ->map(fn (SuchakProfileRepresentation $representation): array => $this->rowFromRepresentation($representation))
+            ->map(fn (SuchakProfileRepresentation $representation): array => $this->rowFromRepresentation($representation, $canPrepareCustomers))
             ->values();
 
         $representedProfileIds = $representations
@@ -76,10 +93,31 @@ class SuchakCustomerListService
     /**
      * @return array<string, mixed>
      */
-    private function rowFromRepresentation(SuchakProfileRepresentation $representation): array
+    private function rowFromRepresentation(SuchakProfileRepresentation $representation, bool $canPrepareCustomers): array
     {
         /** @var MatrimonyProfile|null $profile */
         $profile = $representation->matrimonyProfile;
+        $consents = $representation->consents->sortByDesc('created_at')->values();
+        $pendingConsent = $consents
+            ->first(fn (SuchakConsent $consent): bool => in_array($consent->consent_status, SuchakConsent::PENDING_ACTION_STATUSES, true));
+        $acceptedConsent = $consents
+            ->first(fn (SuchakConsent $consent): bool => $consent->consent_status === SuchakConsent::STATUS_ACCEPTED && $consent->revoked_at === null);
+        $canRequestConsent = $canPrepareCustomers
+            && $pendingConsent === null
+            && $acceptedConsent === null
+            && in_array($representation->representation_status, [
+                SuchakProfileRepresentation::STATUS_PENDING,
+                SuchakProfileRepresentation::STATUS_CONSENT_PENDING,
+                SuchakProfileRepresentation::STATUS_REJECTED,
+                SuchakProfileRepresentation::STATUS_EXPIRED,
+                SuchakProfileRepresentation::STATUS_REVOKED,
+            ], true)
+            && $representation->candidate_deactivated_at === null;
+        $canRenewConsent = $canPrepareCustomers
+            && $pendingConsent === null
+            && $acceptedConsent !== null
+            && $representation->representation_status === SuchakProfileRepresentation::STATUS_ACTIVE
+            && $representation->hasValidConsent();
 
         return [
             'row_key' => 'rep:'.$representation->id,
@@ -95,6 +133,16 @@ class SuchakCustomerListService
             'address' => $profile?->residenceLocationDisplayLine() ?: '—',
             'status_label' => ucfirst(str_replace('_', ' ', (string) $representation->representation_status)),
             'consent_label' => ucfirst(str_replace('_', ' ', (string) $representation->consent_status)),
+            'consent_status' => (string) $representation->consent_status,
+            'consent_action_url' => $canRenewConsent
+                ? route('suchak.representations.consents.renew', $representation)
+                : ($canRequestConsent ? route('suchak.representations.consents.request', $representation) : null),
+            'can_request_consent' => $canRequestConsent,
+            'can_renew_consent' => $canRenewConsent,
+            'default_consent_mobile' => $profile?->primary_contact_number,
+            'default_consent_giver_name' => $profile?->full_name,
+            'has_pending_consent' => $pendingConsent !== null,
+            'has_active_consent' => $acceptedConsent !== null && $representation->hasValidConsent(),
             'lifecycle_label' => $profile ? ucfirst((string) ($profile->lifecycle_state ?? 'unknown')) : null,
             'view_url' => $profile ? route('matrimony.profile.show', $profile) : null,
             'edit_url' => route('suchak.representations.profile-form', $representation),
@@ -136,6 +184,14 @@ class SuchakCustomerListService
             'address' => $addressLine !== '' ? $addressLine : '—',
             'status_label' => ucwords(str_replace('_', ' ', (string) $link->source_status)),
             'consent_label' => null,
+            'consent_status' => null,
+            'consent_action_url' => null,
+            'can_request_consent' => false,
+            'can_renew_consent' => false,
+            'default_consent_mobile' => null,
+            'default_consent_giver_name' => null,
+            'has_pending_consent' => false,
+            'has_active_consent' => false,
             'lifecycle_label' => $intake ? ucwords(str_replace('_', ' ', (string) $intake->parse_status)) : null,
             'view_url' => null,
             'edit_url' => null,

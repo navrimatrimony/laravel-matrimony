@@ -24,6 +24,15 @@ class SuchakAccessService
             && $this->policyService->allowsWorkBeforeAdminApproval();
     }
 
+    public function canPrepareCustomers(?SuchakAccount $account): bool
+    {
+        return $account !== null
+            && in_array($account->verification_status, [
+                SuchakAccount::VERIFICATION_PENDING,
+                SuchakAccount::VERIFICATION_VERIFIED,
+            ], true);
+    }
+
     public function canPubliclyRoute(?SuchakAccount $account): bool
     {
         return $account !== null
@@ -41,6 +50,11 @@ class SuchakAccessService
         return $this->owns($account, $actor) && $this->canOperate($account);
     }
 
+    public function canOwnerPrepareCustomers(SuchakAccount $account, User $actor): bool
+    {
+        return $this->owns($account, $actor) && $this->canPrepareCustomers($account);
+    }
+
     public function isAdmin(User $actor): bool
     {
         return (bool) $actor->is_admin;
@@ -49,6 +63,13 @@ class SuchakAccessService
     public function assertCanOperate(SuchakAccount $account, string $message): void
     {
         if (! $this->canOperate($account)) {
+            throw new InvalidArgumentException($message);
+        }
+    }
+
+    public function assertCanPrepareCustomers(SuchakAccount $account, string $message): void
+    {
+        if (! $this->canPrepareCustomers($account)) {
             throw new InvalidArgumentException($message);
         }
     }
@@ -68,6 +89,16 @@ class SuchakAccessService
     ): void {
         $this->assertOwner($account, $actor, $ownerMessage);
         $this->assertCanOperate($account, $statusMessage);
+    }
+
+    public function assertOwnerCanPrepareCustomers(
+        SuchakAccount $account,
+        User $actor,
+        string $ownerMessage,
+        string $statusMessage,
+    ): void {
+        $this->assertOwner($account, $actor, $ownerMessage);
+        $this->assertCanPrepareCustomers($account, $statusMessage);
     }
 
     public function assertPubliclyRoutable(SuchakAccount $account, string $message): void

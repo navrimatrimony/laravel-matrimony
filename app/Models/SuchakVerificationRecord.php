@@ -14,6 +14,7 @@ class SuchakVerificationRecord extends Model
     public const TYPE_OFFICE = 'office';
     public const TYPE_BUSINESS = 'business';
     public const TYPE_PHONE = 'phone';
+    public const TYPE_PROFILE_PHOTO = 'profile_photo';
     public const TYPE_OTHER = 'other';
 
     public const STATUS_PENDING = 'pending';

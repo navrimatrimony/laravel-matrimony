@@ -13,9 +13,26 @@
     ])->contains(fn ($value): bool => filled($value));
     $safeOwnOptions = $ownRepresentationOptions
         ->map(function (array $option): array {
+            $ownProfile = $option['own_profile'] ?? [];
+            $searchText = collect([
+                $option['option_label'] ?? null,
+                $ownProfile['name'] ?? null,
+                $ownProfile['gender'] ?? null,
+                $ownProfile['age'] ?? null,
+                $ownProfile['location'] ?? null,
+                $ownProfile['education_job'] ?? null,
+            ])->filter()->implode(' ');
+
             return [
                 'id' => (int) ($option['representation']['id'] ?? 0),
                 'label' => (string) ($option['option_label'] ?? 'Represented profile'),
+                'name' => (string) ($ownProfile['name'] ?? 'Represented profile'),
+                'gender' => (string) ($ownProfile['gender'] ?? ''),
+                'age' => (string) ($ownProfile['age'] ?? ''),
+                'location' => (string) ($ownProfile['location'] ?? ''),
+                'education_job' => (string) ($ownProfile['education_job'] ?? ''),
+                'photo_url' => (string) ($ownProfile['photo_url'] ?? asset('images/placeholders/default-profile.svg')),
+                'search' => mb_strtolower($searchText),
             ];
         })
         ->filter(fn (array $option): bool => $option['id'] > 0)
@@ -70,9 +87,21 @@
         filtersExpanded: @js($advancedFiltersActive),
         requestingId: @js($selectedOwnRepresentationId > 0 ? (string) $selectedOwnRepresentationId : ''),
         ownOptions: @js($safeOwnOptions),
+        profilePickerOpen: false,
+        modalProfilePickerOpen: false,
+        profileQuery: '',
+        modalProfileQuery: '',
+        init() {
+            const label = this.optionLabel(this.requestingId);
+            if (this.requestingId) {
+                this.profileQuery = label;
+                this.modalProfileQuery = label;
+            }
+        },
         openResult(payload) {
             this.result = payload;
             this.open = true;
+            this.modalProfileQuery = this.requestingId ? this.optionLabel(this.requestingId) : '';
             document.body.classList.add('overflow-hidden');
         },
         close() {
@@ -83,6 +112,33 @@
         optionLabel(id) {
             const found = this.ownOptions.find((option) => String(option.id) === String(id));
             return found ? found.label : 'Select your represented profile';
+        },
+        selectedOwnOption() {
+            return this.ownOptions.find((option) => String(option.id) === String(this.requestingId)) || null;
+        },
+        filteredOwnOptions(query) {
+            const needle = String(query || '').trim().toLowerCase();
+            const source = needle
+                ? this.ownOptions.filter((option) => String(option.search || option.label || '').toLowerCase().includes(needle))
+                : this.ownOptions;
+
+            return source.slice(0, 12);
+        },
+        selectOwnOption(option) {
+            if (!option) {
+                return;
+            }
+
+            this.requestingId = String(option.id);
+            this.profileQuery = option.label;
+            this.modalProfileQuery = option.label;
+            this.profilePickerOpen = false;
+            this.modalProfilePickerOpen = false;
+        },
+        clearOwnOption() {
+            this.requestingId = '';
+            this.profileQuery = '';
+            this.modalProfileQuery = '';
         },
         join(items, fallback) {
             const clean = (items || []).filter(Boolean);
@@ -174,25 +230,42 @@
     <form method="GET" action="{{ route('suchak.search.index') }}" class="suchak-search-form mb-5 rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="suchak-search-main-row grid gap-3 lg:items-center">
             <div class="suchak-search-field suchak-search-profile">
-                <label for="requesting_representation_id" class="suchak-search-label block text-xs font-semibold text-gray-600 dark:text-gray-300">Profile to search for</label>
-                <select
-                    id="requesting_representation_id"
-                    name="requesting_representation_id"
-                    class="mt-1 h-10 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-                    @disabled($ownRepresentationOptions->isEmpty())
-                >
-                    <option value="">Choose your represented profile</option>
-                    @foreach ($ownRepresentationOptions as $option)
-                        @php
-                            $optionId = (int) ($option['representation']['id'] ?? 0);
-                        @endphp
-                        <option value="{{ $optionId }}" @selected($selectedOwnRepresentationId === $optionId)>
-                            {{ $option['option_label'] ?? 'Represented profile' }}
-                        </option>
-                    @endforeach
-                </select>
+                <label for="requesting_representation_search" class="suchak-search-label block text-xs font-semibold text-gray-600 dark:text-gray-300">Profile to search for</label>
+                <div class="relative mt-1" @click.outside="profilePickerOpen = false">
+                    <input type="hidden" name="requesting_representation_id" :value="requestingId">
+                    <div class="flex h-10 rounded-md border border-gray-300 bg-white shadow-sm focus-within:border-red-600 focus-within:ring-1 focus-within:ring-red-600 dark:border-gray-700 dark:bg-gray-900">
+                        <input
+                            id="requesting_representation_search"
+                            type="search"
+                            x-model="profileQuery"
+                            @focus="profilePickerOpen = true"
+                            @input="profilePickerOpen = true; if (requestingId && profileQuery !== optionLabel(requestingId)) requestingId = ''"
+                            placeholder="Search your represented profile"
+                            class="min-w-0 flex-1 border-0 bg-transparent px-3 text-sm text-gray-900 placeholder-gray-500 focus:ring-0 dark:text-gray-100"
+                            @disabled($ownRepresentationOptions->isEmpty())
+                        >
+                        <button type="button" x-show="requestingId" @click="clearOwnOption(); profilePickerOpen = true" class="px-2 text-xs font-semibold text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100">Clear</button>
+                    </div>
+                    <div x-show="profilePickerOpen" x-cloak class="absolute left-0 right-0 z-30 mt-1 max-h-80 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
+                        <template x-if="filteredOwnOptions(profileQuery).length === 0">
+                            <div class="px-3 py-3 text-sm text-gray-500 dark:text-gray-400">No represented profile matched.</div>
+                        </template>
+                        <template x-for="option in filteredOwnOptions(profileQuery)" :key="option.id">
+                            <button type="button" @click="selectOwnOption(option)" class="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-800">
+                                <img :src="option.photo_url" alt="" class="h-9 w-9 rounded-full border border-gray-200 object-cover dark:border-gray-700">
+                                <span class="min-w-0">
+                                    <span class="block truncate text-sm font-semibold text-gray-900 dark:text-gray-100" x-text="option.name"></span>
+                                    <span class="block truncate text-xs text-gray-500 dark:text-gray-400" x-text="join([option.age, option.gender, option.location, option.education_job], option.label)"></span>
+                                </span>
+                            </button>
+                        </template>
+                        <template x-if="ownOptions.length > 12 && !profileQuery">
+                            <div class="border-t border-gray-100 px-3 py-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">Showing first 12. Type name, age, location, education, or gender to narrow.</div>
+                        </template>
+                    </div>
+                </div>
                 <p class="suchak-search-profile-help mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-                    Pick the bride/groom profile on your side. Search results and fit signals use this selection.
+                    Type to find your side profile. Search results and fit signals use this selection.
                 </p>
             </div>
             <div class="suchak-search-field suchak-search-query">
@@ -502,17 +575,46 @@
                     <input type="hidden" name="currency" value="INR">
 
                     <div>
-                        <label for="modal_requesting_representation_id" class="block text-sm font-semibold text-gray-700 dark:text-gray-300">My side represented profile</label>
-                        <select id="modal_requesting_representation_id" name="requesting_representation_id" x-model="requestingId" required class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
-                            <option value="">Select your represented profile</option>
-                            @foreach ($ownRepresentationOptions as $option)
-                                @php
-                                    $optionId = (int) ($option['representation']['id'] ?? 0);
-                                @endphp
-                                <option value="{{ $optionId }}">{{ $option['option_label'] ?? 'Represented profile' }}</option>
-                            @endforeach
-                        </select>
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Select at the top and search again if you want the table fit explanation refreshed for a different profile.</p>
+                        <label for="modal_requesting_representation_search" class="block text-sm font-semibold text-gray-700 dark:text-gray-300">My side represented profile</label>
+                        <div class="relative mt-1" @click.outside="modalProfilePickerOpen = false">
+                            <input type="hidden" name="requesting_representation_id" :value="requestingId">
+                            <div class="flex min-h-11 rounded-md border border-gray-300 bg-white shadow-sm focus-within:border-emerald-600 focus-within:ring-1 focus-within:ring-emerald-600 dark:border-gray-700 dark:bg-gray-950">
+                                <input
+                                    id="modal_requesting_representation_search"
+                                    type="search"
+                                    x-model="modalProfileQuery"
+                                    @focus="modalProfilePickerOpen = true"
+                                    @input="modalProfilePickerOpen = true; if (requestingId && modalProfileQuery !== optionLabel(requestingId)) requestingId = ''"
+                                    placeholder="Search by name, age, location, education"
+                                    class="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:ring-0 dark:text-gray-100"
+                                    @disabled($ownRepresentationOptions->isEmpty())
+                                >
+                                <button type="button" x-show="requestingId" @click="clearOwnOption(); modalProfilePickerOpen = true" class="px-3 text-xs font-semibold text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100">Clear</button>
+                            </div>
+                            <div x-show="modalProfilePickerOpen" x-cloak class="absolute left-0 right-0 z-30 mt-1 max-h-80 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
+                                <template x-if="filteredOwnOptions(modalProfileQuery).length === 0">
+                                    <div class="px-3 py-3 text-sm text-gray-500 dark:text-gray-400">No represented profile matched.</div>
+                                </template>
+                                <template x-for="option in filteredOwnOptions(modalProfileQuery)" :key="option.id">
+                                    <button type="button" @click="selectOwnOption(option)" class="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-800">
+                                        <img :src="option.photo_url" alt="" class="h-10 w-10 rounded-full border border-gray-200 object-cover dark:border-gray-700">
+                                        <span class="min-w-0">
+                                            <span class="block truncate text-sm font-semibold text-gray-900 dark:text-gray-100" x-text="option.name"></span>
+                                            <span class="block truncate text-xs text-gray-500 dark:text-gray-400" x-text="join([option.age, option.gender, option.location, option.education_job], option.label)"></span>
+                                        </span>
+                                    </button>
+                                </template>
+                                <template x-if="ownOptions.length > 12 && !modalProfileQuery">
+                                    <div class="border-t border-gray-100 px-3 py-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">Showing first 12. Type to narrow large profile lists.</div>
+                                </template>
+                            </div>
+                        </div>
+                        @if ($ownRepresentationOptions->isEmpty())
+                            <div class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+                                Collaboration request करण्यासाठी तुमच्या बाजूचा active consented represented profile आवश्यक आहे.
+                            </div>
+                        @endif
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Type to select from your active consented profiles. Search again if you want table fit signals refreshed.</p>
                     </div>
 
                     <div>
