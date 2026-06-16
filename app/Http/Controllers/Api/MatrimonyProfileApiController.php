@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
-use App\Services\FieldValueHistoryService;
+use App\Services\MutationService;
+use App\Services\Parsing\IntakeControlledFieldNormalizer;
 use App\Services\ProfileLifecycleService;
+use App\Services\ProfileFieldLockService;
 use App\Services\ProfileVisibilityPolicyService;
 use App\Services\ViewTrackingService;
 use Illuminate\Http\Request;
@@ -18,7 +20,7 @@ class MatrimonyProfileApiController extends Controller
     /**
      * Phase-5B: Build snapshot from API request (same structure as manual). Only keys present in request.
      */
-    private function buildManualSnapshotFromApi(Request $request, MatrimonyProfile $profile): array
+    private function buildMobileProfileSnapshotFromApi(Request $request): array
     {
         $core = [];
         $coreFields = ['full_name', 'date_of_birth', 'caste', 'highest_education', 'location_id', 'address_line'];
@@ -33,7 +35,23 @@ class MatrimonyProfileApiController extends Controller
             $core[$key] = $val === '' ? null : $val;
         }
 
+        if ($core !== []) {
+            $normalizedCore = app(IntakeControlledFieldNormalizer::class)->normalizeCore($core);
+            if (array_key_exists('caste_id', $normalizedCore)) {
+                $core['caste_id'] = $normalizedCore['caste_id'];
+            }
+        }
+
         return ['core' => $core];
+    }
+
+    /**
+     * Lock canonical keys after mobile writes. Raw legacy text keys such as caste are accepted for
+     * compatibility, but MutationService writes canonical *_id fields when the value resolves.
+     */
+    private function lockKeysForMobileSnapshot(array $core): array
+    {
+        return array_values(array_diff(array_keys($core), ['caste']));
     }
 
     /**
@@ -64,38 +82,17 @@ class MatrimonyProfileApiController extends Controller
             ], 409);
         }
 
-        // Create new profile
-        $profile = MatrimonyProfile::create([
-            'user_id' => $user->id,
-            'full_name' => $request->full_name,
-            'date_of_birth' => $request->date_of_birth,
-            'caste' => $request->caste,
-            'highest_education' => $request->highest_education,
-            'location_id' => $request->location_id,
-        ]);
+        $mutation = app(MutationService::class);
+        $profile = $mutation->createDraftProfileForUser($user);
+        $snapshot = $this->buildMobileProfileSnapshotFromApi($request);
+        $mutation->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
 
-        // Day-6 BUGFIX-B FINAL: API create initial history (Law 9) — प्रत्येक initial field साठी एक row
-        $initialFields = ['full_name', 'date_of_birth', 'caste', 'highest_education', 'location_id'];
-        foreach ($initialFields as $fieldKey) {
-            $newVal = $profile->$fieldKey;
-            if ($newVal instanceof \Carbon\Carbon) {
-                $newVal = $newVal->format('Y-m-d');
-            }
-            $newVal = $newVal === '' || $newVal === null ? null : (string) $newVal;
-            FieldValueHistoryService::record(
-                $profile->id,
-                $fieldKey,
-                'CORE',
-                null,
-                $newVal,
-                'API'
-            );
-        }
+        $profileData = $this->buildGovernanceParityProfilePayload($profile->fresh(['user', 'horoscope', 'preferenceCriteria']));
 
         return response()->json([
             'success' => true,
             'message' => 'Matrimony profile created',
-            'profile' => $profile,
+            'profile' => $profileData,
         ]);
     }
 
@@ -158,12 +155,12 @@ class MatrimonyProfileApiController extends Controller
         }
 
         // Phase-5B: All updates via MutationService (source=manual, profile_change_history)
-        $snapshot = $this->buildManualSnapshotFromApi($request, $profile);
+        $snapshot = $this->buildMobileProfileSnapshotFromApi($request);
         if (! empty($snapshot['core'])) {
-            $result = app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
-            $changedFields = array_keys($snapshot['core']);
+            app(MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
+            $changedFields = $this->lockKeysForMobileSnapshot($snapshot['core']);
             if (! empty($changedFields)) {
-                \App\Services\ProfileFieldLockService::applyLocks($profile, $changedFields, 'CORE', $user);
+                ProfileFieldLockService::applyLocks($profile, $changedFields, 'CORE', $user);
             }
         }
 
