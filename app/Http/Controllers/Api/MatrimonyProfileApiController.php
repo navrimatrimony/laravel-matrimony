@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Caste;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
+use App\Models\SubCaste;
 use App\Services\MutationService;
 use App\Services\Parsing\IntakeControlledFieldNormalizer;
 use App\Services\ProfileLifecycleService;
@@ -14,6 +16,7 @@ use App\Services\ViewTrackingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
 
 class MatrimonyProfileApiController extends Controller
 {
@@ -23,7 +26,17 @@ class MatrimonyProfileApiController extends Controller
     private function buildMobileProfileSnapshotFromApi(Request $request): array
     {
         $core = [];
-        $coreFields = ['full_name', 'date_of_birth', 'caste', 'highest_education', 'location_id', 'address_line'];
+        $coreFields = [
+            'full_name',
+            'date_of_birth',
+            'caste',
+            'highest_education',
+            'location_id',
+            'address_line',
+            'religion_id',
+            'caste_id',
+            'sub_caste_id',
+        ];
         foreach ($coreFields as $key) {
             if (! $request->has($key)) {
                 continue;
@@ -37,12 +50,55 @@ class MatrimonyProfileApiController extends Controller
 
         if ($core !== []) {
             $normalizedCore = app(IntakeControlledFieldNormalizer::class)->normalizeCore($core);
-            if (array_key_exists('caste_id', $normalizedCore)) {
-                $core['caste_id'] = $normalizedCore['caste_id'];
+            foreach (['religion_id', 'caste_id', 'sub_caste_id'] as $key) {
+                if (array_key_exists($key, $normalizedCore)) {
+                    $core[$key] = $normalizedCore[$key];
+                }
             }
         }
 
         return ['core' => $core];
+    }
+
+    private function validateMobileProfileRequest(Request $request, bool $creating): void
+    {
+        $rules = [
+            'full_name' => [$creating ? 'required' : 'sometimes', 'required', 'string', 'max:255'],
+            'date_of_birth' => [$creating ? 'required' : 'sometimes', 'required', 'date'],
+            'caste' => [$creating ? 'required' : 'sometimes', 'required', 'string', 'max:255'],
+            'highest_education' => [$creating ? 'required' : 'sometimes', 'required', 'string', 'max:255'],
+            'location_id' => [$creating ? 'required' : 'sometimes', 'required', 'exists:'.Location::geoTable().',id'],
+            'religion_id' => ['nullable', 'integer', 'exists:master_religions,id'],
+            'caste_id' => ['nullable', 'integer', 'exists:master_castes,id'],
+            'sub_caste_id' => ['nullable', 'integer', 'exists:master_sub_castes,id'],
+        ];
+
+        if (! $creating) {
+            $rules['address_line'] = ['nullable', 'string', 'max:255'];
+        }
+
+        $validator = Validator::make($request->all(), $rules);
+        $validator->after(function ($validator) use ($request): void {
+            $religionId = $request->input('religion_id');
+            $casteId = $request->input('caste_id');
+            $subCasteId = $request->input('sub_caste_id');
+
+            if ($religionId !== null && $religionId !== '' && $casteId !== null && $casteId !== '') {
+                $casteReligionId = Caste::query()->whereKey((int) $casteId)->value('religion_id');
+                if ($casteReligionId !== null && (int) $casteReligionId !== (int) $religionId) {
+                    $validator->errors()->add('caste_id', 'The selected caste does not belong to the selected religion.');
+                }
+            }
+
+            if ($casteId !== null && $casteId !== '' && $subCasteId !== null && $subCasteId !== '') {
+                $subCasteCasteId = SubCaste::query()->whereKey((int) $subCasteId)->value('caste_id');
+                if ($subCasteCasteId !== null && (int) $subCasteCasteId !== (int) $casteId) {
+                    $validator->errors()->add('sub_caste_id', 'The selected sub-caste does not belong to the selected caste.');
+                }
+            }
+        });
+
+        $validator->validate();
     }
 
     /**
@@ -62,13 +118,7 @@ class MatrimonyProfileApiController extends Controller
     public function store(Request $request)
     {
         // Phase-4 Day-8: Location hierarchy validation
-        $request->validate([
-            'full_name' => ['required', 'string', 'max:255'],
-            'date_of_birth' => ['required', 'date'],
-            'caste' => ['required', 'string', 'max:255'],
-            'highest_education' => ['required', 'string', 'max:255'],
-            'location_id' => ['required', 'exists:'.Location::geoTable().',id'],
-        ]);
+        $this->validateMobileProfileRequest($request, creating: true);
 
         $user = $request->user(); // sanctum authenticated user
 
@@ -126,14 +176,7 @@ class MatrimonyProfileApiController extends Controller
     public function update(Request $request)
     {
         // Phase-4 Day-8: Location hierarchy validation
-        $request->validate([
-            'full_name' => ['sometimes', 'required', 'string', 'max:255'],
-            'date_of_birth' => ['sometimes', 'required', 'date'],
-            'caste' => ['sometimes', 'required', 'string', 'max:255'],
-            'highest_education' => ['sometimes', 'required', 'string', 'max:255'],
-            'location_id' => ['sometimes', 'required', 'exists:'.Location::geoTable().',id'],
-            'address_line' => ['nullable', 'string', 'max:255'],
-        ]);
+        $this->validateMobileProfileRequest($request, creating: false);
 
         $user = $request->user();
 

@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\FieldRegistryApiController;
 use App\Http\Controllers\Api\InterestApiController;
 use App\Http\Controllers\Api\MatrimonyProfileApiController;
 use App\Http\Controllers\Api\ProfileFieldLockApiController;
+use App\Http\Controllers\Api\ReligionLookupController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -62,6 +63,7 @@ Route::middleware('auth:sanctum')->group(function () {
     /*
     | Religion → Caste → SubCaste lookup (Phase-5)
     */
+    Route::get('/religions', [ReligionLookupController::class, 'index']);
     Route::get('/castes', [CasteLookupController::class, 'getCastes']); // GET ?religion_id=
     Route::get('/sub-castes', [CasteLookupController::class, 'getSubCastes']); // GET ?caste_id=&q=
     Route::post('/sub-castes', [CasteLookupController::class, 'createSubCaste']);
