@@ -430,6 +430,7 @@ class MatrimonyProfileApiController extends Controller
             'gender_id' => $profile->gender_id,
             'caste_id' => $profile->caste_id,
             'sub_caste_id' => $profile->sub_caste_id,
+            'location_id' => $profile->location_id,
             'country_id' => $geo['country_id'],
             'state_id' => $geo['state_id'],
             'district_id' => $geo['district_id'],

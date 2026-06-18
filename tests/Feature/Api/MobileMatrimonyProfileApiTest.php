@@ -224,6 +224,7 @@ test('MobileProfile POST api v1 matrimony-profile accepts canonical community id
                 'caste_label' => $caste->fresh()->display_label,
                 'sub_caste_id' => $subCaste->id,
                 'sub_caste_label' => $subCaste->fresh()->display_label,
+                'location_id' => $location->id,
             ],
         ]);
 
@@ -352,6 +353,7 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
                 'full_name' => 'Updated Mobile Candidate',
                 'highest_education' => 'MCA',
                 'caste_id' => $caste->id,
+                'location_id' => $location->id,
             ],
         ]);
 
