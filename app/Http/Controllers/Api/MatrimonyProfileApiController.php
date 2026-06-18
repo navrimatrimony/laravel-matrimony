@@ -414,11 +414,12 @@ class MatrimonyProfileApiController extends Controller
      */
     private function buildGovernanceParityProfilePayload(MatrimonyProfile $profile): array
     {
-        $profile->loadMissing(['user', 'horoscope', 'preferenceCriteria']);
+        $profile->loadMissing(['user', 'horoscope', 'preferenceCriteria', 'religion', 'caste', 'subCaste']);
 
         $hints = $profile->residenceLocationHierarchyHints();
         $geo = $profile->residenceGeoAddressIds();
         $horoscope = $profile->horoscope;
+        $locationLabel = trim($profile->residenceLocationDisplayLine());
 
         $criteria = $profile->preferenceCriteria;
         $partnerPreferences = $criteria !== null ? $criteria->toArray() : null;
@@ -428,12 +429,17 @@ class MatrimonyProfileApiController extends Controller
             'gender' => $profile->user ? ($profile->user->gender ?? null) : null,
             'gender_id' => $profile->gender_id,
             'caste_id' => $profile->caste_id,
+            'sub_caste_id' => $profile->sub_caste_id,
             'country_id' => $geo['country_id'],
             'state_id' => $geo['state_id'],
             'district_id' => $geo['district_id'],
             'taluka_id' => $hints['taluka_id'] !== '' ? (int) $hints['taluka_id'] : null,
             'height_cm' => $profile->height_cm,
             'religion_id' => $profile->religion_id,
+            'religion_label' => $profile->getRelation('religion')?->display_label,
+            'caste_label' => $profile->getRelation('caste')?->display_label,
+            'sub_caste_label' => $profile->getRelation('subCaste')?->display_label,
+            'location_label' => $locationLabel !== '' ? $locationLabel : null,
             'mother_tongue_id' => $profile->mother_tongue_id,
             'marital_status_id' => $profile->marital_status_id,
             'occupation_title' => $profile->occupation_title,

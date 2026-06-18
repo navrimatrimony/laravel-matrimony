@@ -219,10 +219,15 @@ test('MobileProfile POST api v1 matrimony-profile accepts canonical community id
             'profile' => [
                 'full_name' => 'Canonical Mobile Candidate',
                 'religion_id' => $religion->id,
+                'religion_label' => $religion->fresh()->display_label,
                 'caste_id' => $caste->id,
+                'caste_label' => $caste->fresh()->display_label,
                 'sub_caste_id' => $subCaste->id,
+                'sub_caste_label' => $subCaste->fresh()->display_label,
             ],
         ]);
+
+    expect($response->json('profile.location_label'))->toContain('Wakad');
 
     $profile = MatrimonyProfile::where('user_id', $user->id)->firstOrFail();
 
