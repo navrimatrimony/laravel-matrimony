@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Payments\PayuController;
+use App\Http\Controllers\PublicProfileShareController;
 use App\Http\Controllers\SubscriptionController;
 use App\Models\Caste;
 use App\Models\Country;
@@ -132,6 +133,10 @@ Route::get('/', function () {
         'defaultCountry',
     ));
 });
+
+Route::get('/share/profile/{id}', [PublicProfileShareController::class, 'show'])
+    ->whereNumber('id')
+    ->name('profile.share.public');
 
 // Local-only smoke route (not exposed in production)
 if (app()->environment('local')) {

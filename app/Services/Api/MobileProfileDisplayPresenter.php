@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\IncomeEngineService;
 use App\Services\ProfileLifecycleService;
+use App\Services\SiteIdentityService;
 use App\Services\ViewTrackingService;
 use App\Support\HeightDisplay;
 use App\Support\ProfileDisplayCopy;
@@ -110,6 +111,37 @@ class MobileProfileDisplayPresenter
             'chips' => $this->chips($profile, $viewerProfile, $photoCount),
             'sections' => $sections,
             'actions' => $this->actions($profile, $viewerProfile),
+            'share' => $this->sharePayload($profile, $age, $communityLabel, $occupationLabel, $locationLabel),
+        ];
+    }
+
+    private function sharePayload(
+        MatrimonyProfile $profile,
+        ?int $age,
+        ?string $communityLabel,
+        ?string $occupationLabel,
+        ?string $locationLabel
+    ): array {
+        $siteName = trim((string) app(SiteIdentityService::class)->get('site_name_en', 'Navri Mile Navryala'));
+        if ($siteName === '') {
+            $siteName = 'Navri Mile Navryala';
+        }
+
+        $name = $this->cleanString($profile->full_name) ?? 'Profile';
+        $title = $age !== null
+            ? $name.', '.$age.' - '.$siteName
+            : $name.' - '.$siteName;
+        $description = $this->joinLabels([
+            $communityLabel,
+            $occupationLabel,
+            $locationLabel,
+        ], ' • ') ?? 'View this profile on '.$siteName.'.';
+        $url = route('profile.share.public', ['id' => $profile->id]);
+
+        return [
+            'url' => $url,
+            'title' => $title,
+            'text' => trim($title."\n".$description."\n".$url),
         ];
     }
 
