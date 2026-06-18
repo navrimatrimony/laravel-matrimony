@@ -369,3 +369,64 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
         ->where('field_key', 'caste_id')
         ->exists())->toBeTrue();
 });
+
+test('MobileProfile GET api v1 matrimony profile returns clean display payload beside profile', function () {
+    mobileApiProfileTestSeedCurrentAddressType();
+    $user = User::factory()->create(['name' => 'Display Account']);
+    $location = mobileApiProfileTestLeafLocation();
+    [$religion, $caste, $subCaste] = mobileApiProfileTestCommunity();
+    Sanctum::actingAs($user);
+
+    $create = $this->postJson('/api/v1/matrimony-profile', [
+        'full_name' => 'Display Mobile Candidate',
+        'date_of_birth' => '1995-01-05',
+        'caste' => $caste->label,
+        'highest_education' => 'B.A., B.Com.',
+        'location_id' => $location->id,
+        'religion_id' => $religion->id,
+        'caste_id' => $caste->id,
+        'sub_caste_id' => $subCaste->id,
+    ]);
+    $create->assertOk();
+
+    $profile = MatrimonyProfile::where('user_id', $user->id)->firstOrFail();
+    $response = $this->getJson('/api/v1/matrimony-profile');
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('profile.id', $profile->id)
+        ->assertJsonPath('profile.location_id', $location->id)
+        ->assertJsonPath('display.version', 1)
+        ->assertJsonStructure([
+            'profile',
+            'display' => [
+                'version',
+                'hero',
+                'about',
+                'chips',
+                'sections',
+                'actions',
+            ],
+        ]);
+
+    $display = $response->json('display');
+    expect($display['hero'])->toBeArray();
+    expect($display['sections'])->toBeArray()->not->toBeEmpty();
+
+    foreach ($display['sections'] as $section) {
+        expect($section['items'])->toBeArray()->not->toBeEmpty();
+        foreach ($section['items'] as $item) {
+            expect($item['value'])->toBeString();
+            expect((bool) preg_match('/^\s*[\{\[]|=>|\bcreated_at\b|\bupdated_at\b/i', $item['value']))->toBeFalse();
+        }
+    }
+
+    $detail = $this->getJson('/api/v1/matrimony-profiles/'.$profile->id);
+    $detail
+        ->assertOk()
+        ->assertJsonPath('profile.id', $profile->id)
+        ->assertJsonPath('profile.location_id', $location->id)
+        ->assertJsonPath('display.version', 1)
+        ->assertJsonStructure(['profile', 'display' => ['hero', 'sections']]);
+});

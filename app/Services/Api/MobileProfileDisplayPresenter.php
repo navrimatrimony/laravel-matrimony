@@ -1,0 +1,726 @@
+<?php
+
+namespace App\Services\Api;
+
+use App\Models\Interest;
+use App\Models\MatrimonyProfile;
+use App\Models\Plan;
+use App\Models\ProfilePhoto;
+use App\Models\Subscription;
+use App\Models\User;
+use App\Services\Image\ProfilePhotoUrlService;
+use App\Services\IncomeEngineService;
+use App\Support\HeightDisplay;
+use App\Support\ProfileDisplayCopy;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+class MobileProfileDisplayPresenter
+{
+    private const LABEL_KEYS = [
+        'label_mr',
+        'display_label',
+        'label',
+        'label_en',
+        'name_mr',
+        'name',
+        'title',
+        'code_mr',
+        'code',
+        'full_form',
+        'raw_name',
+        'key',
+    ];
+
+    public function forProfile(MatrimonyProfile $profile, ?User $viewer = null): array
+    {
+        $profile->loadMissing([
+            'user',
+            'gender',
+            'religion',
+            'caste',
+            'subCaste',
+            'maritalStatus',
+            'motherTongue',
+            'diet',
+            'familyType',
+            'incomeCurrency',
+            'familyIncomeCurrency',
+            'occupationMaster',
+            'occupationCustom',
+            'fatherOccupationMaster',
+            'fatherOccupationCustom',
+            'motherOccupationMaster',
+            'motherOccupationCustom',
+            'siblings',
+            'children',
+            'horoscope.rashi',
+            'horoscope.nakshatra',
+            'horoscope.mangalDoshType',
+            'preferenceCriteria.preferredMaritalStatus',
+            'preferenceCriteria.settledCity',
+            'preferenceCriteria.marriageTypePreference',
+            'preferredReligions',
+            'preferredCastes',
+            'preferredEducationDegrees',
+            'preferredOccupationMasters',
+        ]);
+
+        $viewerProfile = $viewer?->matrimonyProfile;
+        $isOwnProfile = $viewerProfile !== null && (int) $viewerProfile->id === (int) $profile->id;
+        $age = $this->age($profile);
+        $ageLabel = $age !== null ? $age.' years' : null;
+        $heightLabel = $this->heightLabel($profile);
+        $communityLabel = $this->communityLabel($profile);
+        $occupationLabel = $this->occupationLabel($profile);
+        $locationLabel = $this->cleanLocation(ProfileDisplayCopy::profileResidenceDisplayLine($profile));
+        [$photoCount, $primaryPhotoUrl] = $this->visiblePhotoSummary($profile);
+
+        $sections = array_values(array_filter([
+            $this->basicSection($profile, $isOwnProfile, $ageLabel, $heightLabel, $communityLabel, $locationLabel),
+            $this->familySection($profile),
+            $this->careerEducationSection($profile, $isOwnProfile),
+            $this->astroSection($profile, $isOwnProfile),
+            $this->partnerPreferenceSection($profile),
+        ]));
+
+        return [
+            'version' => 1,
+            'hero' => [
+                'name' => $this->cleanString($profile->full_name),
+                'age' => $age,
+                'age_label' => $ageLabel,
+                'height_label' => $heightLabel,
+                'community_label' => $communityLabel,
+                'occupation_label' => $occupationLabel,
+                'location_label' => $locationLabel,
+                'verified' => $this->isVerified($profile),
+                'premium' => $this->isPremium($profile),
+                'photo_count' => $photoCount,
+                'primary_photo_url' => $primaryPhotoUrl,
+            ],
+            'about' => $this->about($profile),
+            'chips' => $this->chips($profile, $viewerProfile, $photoCount),
+            'sections' => $sections,
+            'actions' => $this->actions($profile, $viewerProfile),
+        ];
+    }
+
+    private function basicSection(
+        MatrimonyProfile $profile,
+        bool $isOwnProfile,
+        ?string $ageLabel,
+        ?string $heightLabel,
+        ?string $communityLabel,
+        ?string $locationLabel
+    ): ?array {
+        $items = [
+            $this->item('Profile ID', (string) $profile->id, 'id'),
+            $this->item('Age', $ageLabel, 'age'),
+            $this->item('Height', $heightLabel, 'height'),
+            $isOwnProfile ? $this->item('Birth Date', $this->dateLabel($profile->date_of_birth), 'calendar') : null,
+            $this->item('Marital Status', $this->labelFrom($profile->maritalStatus), 'heart'),
+            $this->item('Lives in', $locationLabel, 'location'),
+            $this->item('Religion', $this->labelFrom($profile->religion), 'community'),
+            $this->item('Mother Tongue', $this->labelFrom($profile->motherTongue), 'language'),
+            $this->item('Community', $communityLabel, 'community'),
+            $this->item('Diet', $this->labelFrom($profile->diet), 'diet'),
+        ];
+
+        return $this->section('basic', 'Basic Details', $items);
+    }
+
+    private function familySection(MatrimonyProfile $profile): ?array
+    {
+        $items = [
+            $this->item('Family Type', $this->labelFrom($profile->familyType), 'family'),
+            $this->item('Parents Details', $this->parentsDetails($profile), 'parents'),
+            $this->item('Siblings', $this->siblingsLabel($profile), 'siblings'),
+            $this->familyIncomeItem($profile),
+            $this->item('Property Details', $profile->property_details, 'property'),
+            $this->item('Other Relatives', $profile->other_relatives_text, 'relatives'),
+        ];
+
+        return $this->section('family', 'Family Details', $items);
+    }
+
+    private function careerEducationSection(MatrimonyProfile $profile, bool $isOwnProfile): ?array
+    {
+        $items = [
+            $this->item('Highest Education', $profile->highest_education, 'education'),
+            $this->item('Occupation', $this->occupationLabel($profile), 'work'),
+            $isOwnProfile ? $this->item('Company Name', $this->companyLabel($profile), 'company') : null,
+            $this->item('Work Location', $this->cleanLocation($profile->workLocationDisplayLine()), 'location'),
+            $this->incomeItem($profile),
+        ];
+
+        return $this->section('career_education', 'Career & Education', $items);
+    }
+
+    private function astroSection(MatrimonyProfile $profile, bool $isOwnProfile): ?array
+    {
+        $horoscope = $profile->horoscope;
+        $items = [
+            $this->item('Rashi', $this->labelFrom($horoscope?->rashi), 'astro'),
+            $this->item('Nakshatra', $this->labelFrom($horoscope?->nakshatra), 'astro'),
+            $this->item('Mangal Dosh', $this->labelFrom($horoscope?->mangalDoshType), 'astro'),
+            $this->item('Gotra', $horoscope?->gotra, 'astro'),
+            $this->item('Devak', $horoscope?->devak, 'astro'),
+            $isOwnProfile ? $this->item('Birth Time', $profile->birth_time, 'time') : null,
+            $isOwnProfile ? $this->item('Birth Place', $this->cleanLocation($profile->birthLocationDisplayLine()), 'location') : null,
+        ];
+
+        return $this->section('astro', 'Astro / Gunamilan', $items);
+    }
+
+    private function partnerPreferenceSection(MatrimonyProfile $profile): ?array
+    {
+        $criteria = $profile->preferenceCriteria;
+        if ($criteria === null) {
+            $items = [
+                $this->item('Preferred Religions', $this->collectionLabels($profile->preferredReligions), 'community'),
+                $this->item('Preferred Castes', $this->collectionLabels($profile->preferredCastes), 'community'),
+                $this->item('Preferred Education', $this->collectionLabels($profile->preferredEducationDegrees), 'education'),
+                $this->item('Preferred Occupation', $this->collectionLabels($profile->preferredOccupationMasters), 'work'),
+            ];
+
+            return $this->section('partner_preferences', 'Partner Preferences', $items);
+        }
+
+        $items = [
+            $this->item('Age Preference', $this->rangeLabel($criteria->preferred_age_min, $criteria->preferred_age_max, ' years'), 'age'),
+            $this->item('Height Preference', $this->heightRangeLabel($criteria->preferred_height_min_cm, $criteria->preferred_height_max_cm), 'height'),
+            $this->item('Preferred Religions', $this->collectionLabels($profile->preferredReligions), 'community'),
+            $this->item('Preferred Castes', $this->collectionLabels($profile->preferredCastes), 'community'),
+            $this->item('Preferred Education', $this->collectionLabels($profile->preferredEducationDegrees) ?? $criteria->preferred_education, 'education'),
+            $this->item('Preferred Occupation', $this->collectionLabels($profile->preferredOccupationMasters), 'work'),
+            $this->item('Preferred City', $this->labelFrom($criteria->settledCity), 'location'),
+            $this->item('Preferred Marital Status', $this->labelFrom($criteria->preferredMaritalStatus), 'heart'),
+            $this->item('Marriage Type Preference', $this->labelFrom($criteria->marriageTypePreference), 'heart'),
+            $this->item('Willing to Relocate', $criteria->willing_to_relocate === null ? null : ($criteria->willing_to_relocate ? 'Yes' : 'No'), 'location'),
+            $this->item('Profile Managed By', $this->managedByLabel($criteria->preferred_profile_managed_by), 'profile'),
+            $this->item('Partner with Children', $this->withChildrenLabel($criteria->partner_profile_with_children), 'family'),
+            $this->item('Income Preference', $this->rangeLabel($criteria->preferred_income_min, $criteria->preferred_income_max), 'income'),
+        ];
+
+        return $this->section('partner_preferences', 'Partner Preferences', $items);
+    }
+
+    private function about(MatrimonyProfile $profile): array
+    {
+        $body = $this->aboutBody($profile) ?? ProfileDisplayCopy::introSentence($profile);
+        $body = $this->cleanString($body);
+        $name = $this->cleanString($profile->full_name);
+
+        return [
+            'title' => $name !== null ? 'About '.$name : null,
+            'body' => $body,
+        ];
+    }
+
+    private function chips(MatrimonyProfile $profile, ?MatrimonyProfile $viewerProfile, int $photoCount): array
+    {
+        $chips = [];
+        if ($this->isVerified($profile)) {
+            $chips[] = ['label' => 'Verified', 'icon' => 'verified', 'tone' => 'trust'];
+        }
+        if ($this->isPremium($profile)) {
+            $chips[] = ['label' => 'Premium', 'icon' => 'premium', 'tone' => 'premium'];
+        }
+        if ($photoCount > 0) {
+            $chips[] = ['label' => $photoCount.' photo'.($photoCount === 1 ? '' : 's'), 'icon' => 'photo', 'tone' => 'neutral'];
+        }
+        if ($viewerProfile !== null && (int) $viewerProfile->id !== (int) $profile->id) {
+            $chips[] = ['label' => $this->comparisonLabel($profile), 'icon' => 'compare', 'tone' => 'dark'];
+        }
+        if ($profile->horoscope !== null) {
+            $chips[] = ['label' => 'Astro', 'icon' => 'astro', 'tone' => 'warm'];
+        }
+
+        return $chips;
+    }
+
+    private function actions(MatrimonyProfile $profile, ?MatrimonyProfile $viewerProfile): array
+    {
+        $canInteract = $viewerProfile !== null && (int) $viewerProfile->id !== (int) $profile->id;
+        $alreadyInterested = false;
+        if ($canInteract && Schema::hasTable('interests')) {
+            $alreadyInterested = Interest::query()
+                ->where('sender_profile_id', $viewerProfile->id)
+                ->where('receiver_profile_id', $profile->id)
+                ->exists();
+        }
+
+        return [
+            'can_send_interest' => $canInteract && ! $alreadyInterested,
+            'can_report' => $canInteract && Schema::hasTable('abuse_reports'),
+            'can_shortlist' => $canInteract && Schema::hasTable('shortlists'),
+            'can_hide' => $canInteract && Schema::hasTable('hidden_profiles'),
+            'can_block' => $canInteract && Schema::hasTable('blocks'),
+        ];
+    }
+
+    private function section(string $key, string $title, array $items): ?array
+    {
+        $items = array_values(array_filter($items));
+        if ($items === []) {
+            return null;
+        }
+
+        return [
+            'key' => $key,
+            'title' => $title,
+            'items' => $items,
+        ];
+    }
+
+    private function item(string $label, mixed $value, ?string $icon = null, bool $locked = false): ?array
+    {
+        $displayValue = $locked ? $this->cleanString($value) : $this->cleanDisplayValue($value);
+        if ($displayValue === null) {
+            return null;
+        }
+
+        return [
+            'label' => $label,
+            'value' => $displayValue,
+            'icon' => $icon,
+            'locked' => $locked,
+        ];
+    }
+
+    private function labelFrom(mixed $value): ?string
+    {
+        if ($value instanceof Model) {
+            foreach (self::LABEL_KEYS as $key) {
+                $label = $this->cleanString($value->getAttribute($key));
+                if ($label !== null) {
+                    return $label;
+                }
+            }
+
+            return null;
+        }
+
+        if (is_array($value)) {
+            foreach (self::LABEL_KEYS as $key) {
+                if (! array_key_exists($key, $value)) {
+                    continue;
+                }
+                $label = $this->cleanString($value[$key]);
+                if ($label !== null) {
+                    return $label;
+                }
+            }
+
+            return null;
+        }
+
+        return $this->cleanDisplayValue($value);
+    }
+
+    private function cleanDisplayValue(mixed $value): ?string
+    {
+        if (is_array($value) || is_object($value)) {
+            return $this->labelFrom($value);
+        }
+        if (is_bool($value)) {
+            return $value ? 'Yes' : 'No';
+        }
+        if (is_int($value) || is_float($value)) {
+            return null;
+        }
+
+        return $this->cleanString($value);
+    }
+
+    private function cleanString(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        if (is_array($value) || is_object($value)) {
+            return null;
+        }
+        if (is_bool($value)) {
+            return $value ? 'Yes' : 'No';
+        }
+        $text = trim((string) $value);
+        if ($text === '') {
+            return null;
+        }
+        if (preg_match('/^[{\[].*[}\]]$/s', $text)) {
+            return null;
+        }
+        if (str_contains($text, '=>') || preg_match('/^\{[^}]*\b(id|label|key|created_at)\s*:/i', $text)) {
+            return null;
+        }
+
+        return $text;
+    }
+
+    private function cleanLocation(mixed $value): ?string
+    {
+        $label = $this->cleanString($value);
+        if ($label === null) {
+            return null;
+        }
+        if (preg_match('/^location\s+id\s*:/i', $label)) {
+            return null;
+        }
+
+        return $label;
+    }
+
+    private function age(MatrimonyProfile $profile): ?int
+    {
+        if (empty($profile->date_of_birth)) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($profile->date_of_birth)->age;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function dateLabel(mixed $date): ?string
+    {
+        if ($date === null || $date === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($date)->toDateString();
+        } catch (\Throwable) {
+            return $this->cleanString($date);
+        }
+    }
+
+    private function heightLabel(MatrimonyProfile $profile): ?string
+    {
+        $cm = (int) ($profile->height_cm ?? 0);
+        if ($cm <= 0) {
+            return null;
+        }
+
+        return HeightDisplay::formatFeetInches($cm);
+    }
+
+    private function communityLabel(MatrimonyProfile $profile): ?string
+    {
+        return $this->joinLabels([
+            $this->labelFrom($profile->religion),
+            $this->labelFrom($profile->caste),
+            $this->labelFrom($profile->subCaste),
+        ]);
+    }
+
+    private function occupationLabel(MatrimonyProfile $profile): ?string
+    {
+        return $this->cleanString($profile->occupation_title)
+            ?? $this->labelFrom($profile->occupationMaster)
+            ?? $this->labelFrom($profile->occupationCustom)
+            ?? $this->cleanString($profile->resolvedProfession()?->name ?? null);
+    }
+
+    private function companyLabel(MatrimonyProfile $profile): ?string
+    {
+        $company = $this->cleanString($profile->company_name);
+
+        return $company !== null ? ProfileDisplayCopy::formatCompanyName($company) : null;
+    }
+
+    private function parentsDetails(MatrimonyProfile $profile): ?string
+    {
+        $father = $this->joinLabels([
+            $this->cleanString($profile->father_name),
+            $this->cleanString($profile->father_occupation)
+                ?? $this->labelFrom($profile->fatherOccupationMaster)
+                ?? $this->labelFrom($profile->fatherOccupationCustom),
+            $this->cleanString($profile->father_extra_info),
+        ]);
+        $mother = $this->joinLabels([
+            $this->cleanString($profile->mother_name),
+            $this->cleanString($profile->mother_occupation)
+                ?? $this->labelFrom($profile->motherOccupationMaster)
+                ?? $this->labelFrom($profile->motherOccupationCustom),
+            $this->cleanString($profile->mother_extra_info),
+        ]);
+
+        return $this->joinLabels([
+            $father !== null ? 'Father: '.$father : null,
+            $mother !== null ? 'Mother: '.$mother : null,
+        ], '. ');
+    }
+
+    private function siblingsLabel(MatrimonyProfile $profile): ?string
+    {
+        $siblings = $profile->siblings;
+        if ($siblings === null || $siblings->isEmpty()) {
+            return null;
+        }
+
+        $brothers = $siblings->where('relation_type', 'brother')->count();
+        $sisters = $siblings->where('relation_type', 'sister')->count();
+        $others = max(0, $siblings->count() - $brothers - $sisters);
+
+        return $this->joinLabels([
+            $brothers > 0 ? $brothers.' Brother'.($brothers === 1 ? '' : 's') : null,
+            $sisters > 0 ? $sisters.' Sister'.($sisters === 1 ? '' : 's') : null,
+            $others > 0 ? $others.' Sibling'.($others === 1 ? '' : 's') : null,
+        ]);
+    }
+
+    private function incomeItem(MatrimonyProfile $profile): ?array
+    {
+        if ((bool) ($profile->income_private ?? false)) {
+            return $this->item('Annual Income', 'Hidden', 'income', true);
+        }
+
+        $display = app(IncomeEngineService::class)->formatForDisplay(
+            $profile->toArray(),
+            'income',
+            $profile->incomeCurrency
+        );
+
+        return $this->item('Annual Income', $this->notDisclosedToNull($display), 'income');
+    }
+
+    private function familyIncomeItem(MatrimonyProfile $profile): ?array
+    {
+        if ((bool) ($profile->family_income_private ?? false)) {
+            return $this->item('Family Income', 'Hidden', 'income', true);
+        }
+
+        $display = app(IncomeEngineService::class)->formatForDisplay(
+            $profile->toArray(),
+            'family_income',
+            $profile->familyIncomeCurrency ?? $profile->incomeCurrency
+        );
+
+        return $this->item('Family Income', $this->notDisclosedToNull($display), 'income');
+    }
+
+    private function notDisclosedToNull(?string $value): ?string
+    {
+        $clean = $this->cleanString($value);
+        if ($clean === null || strcasecmp($clean, 'Not disclosed') === 0) {
+            return null;
+        }
+
+        return $clean;
+    }
+
+    private function aboutBody(MatrimonyProfile $profile): ?string
+    {
+        if (Schema::hasTable('profile_extended_attributes')) {
+            $body = DB::table('profile_extended_attributes')
+                ->where('profile_id', $profile->id)
+                ->value('narrative_about_me');
+            $clean = $this->cleanString($body);
+            if ($clean !== null) {
+                return $clean;
+            }
+        }
+
+        if (Schema::hasTable('profile_extended_fields')) {
+            $body = DB::table('profile_extended_fields')
+                ->where('profile_id', $profile->id)
+                ->where('field_key', 'narrative_about_me')
+                ->value('field_value');
+            $clean = $this->cleanString($body);
+            if ($clean !== null) {
+                return $clean;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{0: int, 1: string|null}
+     */
+    private function visiblePhotoSummary(MatrimonyProfile $profile): array
+    {
+        $urls = [];
+        if (Schema::hasTable('profile_photos')) {
+            ProfilePhoto::query()
+                ->where('profile_id', $profile->id)
+                ->effectivelyApproved()
+                ->ordered()
+                ->get(['file_path'])
+                ->each(function (ProfilePhoto $photo) use ($profile, &$urls): void {
+                    $path = ltrim((string) $photo->file_path, '/');
+                    if ($path === '' || ProfilePhotoUrlService::isPendingPlaceholder($path)) {
+                        return;
+                    }
+                    $urls[] = app(ProfilePhotoUrlService::class)->publicUrl($path, $profile);
+                });
+        }
+
+        $legacy = ltrim((string) ($profile->profile_photo ?? ''), '/');
+        if ($legacy !== '' && $profile->photo_approved !== false && ! ProfilePhotoUrlService::isPendingPlaceholder($legacy)) {
+            $urls[] = app(ProfilePhotoUrlService::class)->publicUrl($legacy, $profile);
+        }
+
+        $urls = array_values(array_unique(array_filter($urls)));
+
+        return [count($urls), $urls[0] ?? null];
+    }
+
+    private function isVerified(MatrimonyProfile $profile): bool
+    {
+        if ($profile->user && ($profile->user->mobile_verified_at || $profile->user->email_verified_at)) {
+            return true;
+        }
+
+        if (! Schema::hasTable('profile_verification_tag')) {
+            return false;
+        }
+
+        return DB::table('profile_verification_tag')
+            ->where('matrimony_profile_id', $profile->id)
+            ->whereNull('deleted_at')
+            ->exists();
+    }
+
+    private function isPremium(MatrimonyProfile $profile): bool
+    {
+        if (! $profile->user) {
+            return false;
+        }
+
+        try {
+            $subscription = Subscription::query()
+                ->where('user_id', $profile->user->id)
+                ->effectivelyActiveForAccess()
+                ->with('plan')
+                ->orderByDesc('starts_at')
+                ->orderByDesc('id')
+                ->first();
+            if ($subscription === null) {
+                return false;
+            }
+            $slug = $subscription->plan?->slug;
+
+            return $slug !== null && ! Plan::isFreeCatalogSlug((string) $slug);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function comparisonLabel(MatrimonyProfile $profile): string
+    {
+        $gender = mb_strtolower(trim((string) ($this->labelFrom($profile->gender) ?? $profile->user?->gender ?? '')));
+
+        if (str_contains($gender, 'female') || str_contains($gender, 'स्त्री') || str_contains($gender, 'महिला')) {
+            return 'You & Her';
+        }
+        if (str_contains($gender, 'male') || str_contains($gender, 'पुरुष')) {
+            return 'You & Him';
+        }
+
+        return 'You & Profile';
+    }
+
+    private function collectionLabels(mixed $collection): ?string
+    {
+        if (! $collection || ! is_iterable($collection)) {
+            return null;
+        }
+
+        $labels = [];
+        foreach ($collection as $item) {
+            $label = $this->labelFrom($item);
+            if ($label !== null) {
+                $labels[] = $label;
+            }
+        }
+
+        return $this->joinLabels($labels);
+    }
+
+    private function joinLabels(array $values, string $separator = ', '): ?string
+    {
+        $parts = [];
+        foreach ($values as $value) {
+            $clean = $this->cleanString($value);
+            if ($clean !== null) {
+                $parts[] = $clean;
+            }
+        }
+        $parts = array_values(array_unique($parts));
+
+        return $parts !== [] ? implode($separator, $parts) : null;
+    }
+
+    private function rangeLabel(mixed $min, mixed $max, string $suffix = ''): ?string
+    {
+        $min = $this->numericDisplay($min);
+        $max = $this->numericDisplay($max);
+        if ($min === null && $max === null) {
+            return null;
+        }
+        if ($min !== null && $max !== null) {
+            return $min.' - '.$max.$suffix;
+        }
+        if ($min !== null) {
+            return $min.$suffix.' and above';
+        }
+
+        return 'Up to '.$max.$suffix;
+    }
+
+    private function heightRangeLabel(mixed $minCm, mixed $maxCm): ?string
+    {
+        $min = is_numeric($minCm) ? (int) $minCm : null;
+        $max = is_numeric($maxCm) ? (int) $maxCm : null;
+        if ($min === null && $max === null) {
+            return null;
+        }
+        if ($min !== null && $max !== null) {
+            return HeightDisplay::formatFeetInchesRange($min, $max);
+        }
+        if ($min !== null) {
+            return HeightDisplay::formatFeetInches($min).' and above';
+        }
+
+        return 'Up to '.HeightDisplay::formatFeetInches((int) $max);
+    }
+
+    private function numericDisplay(mixed $value): ?string
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        return rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
+    }
+
+    private function managedByLabel(?string $value): ?string
+    {
+        return match ($value) {
+            'self' => 'Self',
+            'parent_guardian' => 'Parent / Guardian',
+            'sibling' => 'Sibling',
+            'relative' => 'Relative',
+            'friend' => 'Friend',
+            'other' => 'Other',
+            default => $this->cleanString($value),
+        };
+    }
+
+    private function withChildrenLabel(?string $value): ?string
+    {
+        return match ($value) {
+            'no' => 'No',
+            'yes_if_live_separate' => 'Yes, if living separately',
+            'yes' => 'Yes',
+            default => $this->cleanString($value),
+        };
+    }
+}

@@ -7,6 +7,7 @@ use App\Models\Caste;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Models\SubCaste;
+use App\Services\Api\MobileProfileDisplayPresenter;
 use App\Services\MutationService;
 use App\Services\Parsing\IntakeControlledFieldNormalizer;
 use App\Services\ProfileLifecycleService;
@@ -167,6 +168,7 @@ class MatrimonyProfileApiController extends Controller
         return response()->json([
             'success' => true,
             'profile' => $profileData,
+            'display' => app(MobileProfileDisplayPresenter::class)->forProfile($profile, $user),
         ]);
     }
 
@@ -403,6 +405,7 @@ class MatrimonyProfileApiController extends Controller
         return response()->json([
             'success' => true,
             'profile' => $profileData,
+            'display' => app(MobileProfileDisplayPresenter::class)->forProfile($profile, $user),
         ]);
     }
 
