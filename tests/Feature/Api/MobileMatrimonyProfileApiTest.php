@@ -10,6 +10,7 @@ use App\Models\Religion;
 use App\Models\Shortlist;
 use App\Models\SubCaste;
 use App\Models\User;
+use App\Services\Api\MobileProfileDisplayPresenter;
 use App\Services\MutationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -192,6 +193,33 @@ function mobileApiCreateValidActionProfile(User $user, string $name): MatrimonyP
     $profile->save();
 
     return $profile->refresh();
+}
+
+function mobileApiAddTargetPartnerPreferences(MatrimonyProfile $targetProfile, MatrimonyProfile $viewerProfile): void
+{
+    DB::table('profile_preference_criteria')->updateOrInsert(
+        ['profile_id' => $targetProfile->id],
+        [
+            'preferred_age_min' => 28,
+            'preferred_age_max' => 35,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]
+    );
+
+    DB::table('profile_preferred_religions')->insert([
+        'profile_id' => $targetProfile->id,
+        'religion_id' => $viewerProfile->religion_id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    DB::table('profile_preferred_castes')->insert([
+        'profile_id' => $targetProfile->id,
+        'caste_id' => $viewerProfile->caste_id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
 }
 
 test('MobileProfile GET api v1 religions returns active religions for authenticated user', function () {
@@ -470,6 +498,90 @@ test('MobileProfile GET api v1 matrimony profile returns clean display payload b
         ->assertJsonPath('profile.location_id', $location->id)
         ->assertJsonPath('display.version', 1)
         ->assertJsonStructure(['profile', 'display' => ['hero', 'sections']]);
+});
+
+test('MobileProfile GET api v1 profile detail returns clean comparison payload for target preferences', function () {
+    $viewerUser = User::factory()->create(['name' => 'Comparison Viewer', 'gender' => 'male']);
+    $targetUser = User::factory()->create(['name' => 'Comparison Target', 'gender' => 'female']);
+    $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Comparison Viewer');
+    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Comparison Target');
+    mobileApiAddTargetPartnerPreferences($targetProfile, $viewerProfile);
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('display.comparison.title', 'You & Her')
+        ->assertJsonStructure([
+            'profile',
+            'display' => [
+                'hero',
+                'sections',
+                'share',
+                'comparison' => [
+                    'title',
+                    'summary',
+                    'matched_count',
+                    'total_count',
+                    'items',
+                ],
+            ],
+        ]);
+
+    $comparison = $response->json('display.comparison');
+    expect($comparison['matched_count'])->toBeGreaterThanOrEqual(1);
+    expect($comparison['total_count'])->toBeGreaterThanOrEqual($comparison['matched_count']);
+    expect($comparison['summary'])->toBe('You match '.$comparison['matched_count'].'/'.$comparison['total_count'].' preferences');
+    expect($comparison['items'])->toBeArray()->not->toBeEmpty();
+
+    foreach ($comparison['items'] as $item) {
+        expect($item['key'])->toBeString();
+        expect($item['label'])->toBeString();
+        expect($item['target_preference'])->toBeString();
+        expect($item['viewer_value'])->toBeString();
+        expect((bool) preg_match('/^\s*[\{\[]|=>|\bcreated_at\b|\bupdated_at\b/i', $item['target_preference']))->toBeFalse();
+        expect((bool) preg_match('/^\s*[\{\[]|=>|\bcreated_at\b|\bupdated_at\b/i', $item['viewer_value']))->toBeFalse();
+        expect(in_array($item['matched'], [true, false, null], true))->toBeTrue();
+    }
+
+    $partnerMatchSection = collect($response->json('display.sections'))->firstWhere('key', 'partner_match');
+    expect($partnerMatchSection)->not->toBeNull();
+    expect($partnerMatchSection['title'])->toBe('You & Her');
+});
+
+test('MobileProfile GET api v1 profile detail keeps comparison null without target preferences', function () {
+    [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('display.comparison', null)
+        ->assertJsonStructure([
+            'profile',
+            'display' => [
+                'hero',
+                'sections',
+                'share',
+                'actions',
+            ],
+        ]);
+
+    expect(collect($response->json('display.sections'))->firstWhere('key', 'partner_match'))->toBeNull();
+});
+
+test('MobileProfile presenter keeps comparison null when viewer has no profile', function () {
+    [, $viewerProfile, , $targetProfile] = mobileApiProfileActionPair();
+    mobileApiAddTargetPartnerPreferences($targetProfile, $viewerProfile);
+
+    $viewerWithoutProfile = User::factory()->create(['name' => 'No Profile Viewer']);
+    $display = app(MobileProfileDisplayPresenter::class)->forProfile($targetProfile, $viewerWithoutProfile);
+
+    expect($display['comparison'])->toBeNull();
 });
 
 test('MobileProfile POST api v1 profile action can shortlist safely', function () {

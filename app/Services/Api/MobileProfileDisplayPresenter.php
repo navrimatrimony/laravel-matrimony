@@ -13,6 +13,7 @@ use App\Models\Subscription;
 use App\Models\User;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\IncomeEngineService;
+use App\Services\ProfilePreferenceMatchService;
 use App\Services\ProfileLifecycleService;
 use App\Services\SiteIdentityService;
 use App\Services\ViewTrackingService;
@@ -83,12 +84,14 @@ class MobileProfileDisplayPresenter
         $occupationLabel = $this->occupationLabel($profile);
         $locationLabel = $this->cleanLocation(ProfileDisplayCopy::profileResidenceDisplayLine($profile));
         [$photoCount, $primaryPhotoUrl] = $this->visiblePhotoSummary($profile);
+        $comparison = $this->comparisonPayload($profile, $viewerProfile);
 
         $sections = array_values(array_filter([
             $this->basicSection($profile, $isOwnProfile, $ageLabel, $heightLabel, $communityLabel, $locationLabel),
             $this->familySection($profile),
             $this->careerEducationSection($profile, $isOwnProfile),
             $this->astroSection($profile, $isOwnProfile),
+            $this->comparisonSection($comparison),
             $this->partnerPreferenceSection($profile),
         ]));
 
@@ -112,7 +115,187 @@ class MobileProfileDisplayPresenter
             'sections' => $sections,
             'actions' => $this->actions($profile, $viewerProfile),
             'share' => $this->sharePayload($profile, $age, $communityLabel, $occupationLabel, $locationLabel),
+            'comparison' => $comparison,
         ];
+    }
+
+    private function comparisonPayload(MatrimonyProfile $profile, ?MatrimonyProfile $viewerProfile): ?array
+    {
+        if ($viewerProfile === null || (int) $viewerProfile->id === (int) $profile->id) {
+            return null;
+        }
+
+        try {
+            $raw = ProfilePreferenceMatchService::build($viewerProfile, $profile);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (($raw['target_has_preferences'] ?? false) !== true) {
+            return null;
+        }
+
+        $items = [];
+        foreach (($raw['rows'] ?? []) as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $item = $this->comparisonItem($row, $viewerProfile);
+            if ($item !== null) {
+                $items[] = $item;
+            }
+        }
+
+        if ($items === []) {
+            return null;
+        }
+
+        $matchedCount = count(array_filter($items, fn (array $item): bool => $item['matched'] === true));
+        $totalCount = count(array_filter($items, fn (array $item): bool => $item['matched'] !== null));
+
+        return [
+            'title' => $this->comparisonLabel($profile),
+            'summary' => $totalCount > 0 ? 'You match '.$matchedCount.'/'.$totalCount.' preferences' : null,
+            'matched_count' => $matchedCount,
+            'total_count' => $totalCount,
+            'items' => $items,
+        ];
+    }
+
+    private function comparisonItem(array $row, MatrimonyProfile $viewerProfile): ?array
+    {
+        $key = $this->cleanString($row['id'] ?? null);
+        $label = $this->cleanString($row['label'] ?? null);
+        $targetPreference = $this->cleanComparisonString($row['their_preference'] ?? null);
+        $viewerValue = $this->cleanComparisonString($row['your_value'] ?? null);
+        $status = $this->cleanString($row['status'] ?? null);
+
+        if ($key === null || $label === null || $targetPreference === null || $viewerValue === null) {
+            return null;
+        }
+        if ($this->isOpenComparisonPreference($targetPreference) || $this->isUnknownComparisonValue($viewerValue)) {
+            return null;
+        }
+        if ($key === 'income' && (bool) ($viewerProfile->income_private ?? false)) {
+            return null;
+        }
+
+        return [
+            'key' => $key,
+            'label' => $label,
+            'target_preference' => $this->normalizeComparisonValue($key, $targetPreference),
+            'viewer_value' => $this->normalizeComparisonValue($key, $viewerValue),
+            'matched' => $this->comparisonMatched($status),
+        ];
+    }
+
+    private function comparisonMatched(?string $status): ?bool
+    {
+        return match ($status) {
+            ProfilePreferenceMatchService::STATUS_MATCH => true,
+            ProfilePreferenceMatchService::STATUS_NOT_MATCHED => false,
+            default => null,
+        };
+    }
+
+    private function cleanComparisonString(mixed $value): ?string
+    {
+        $text = $this->cleanString($value);
+        if ($text === null) {
+            return null;
+        }
+
+        $text = preg_replace('/\s+/u', ' ', $text);
+        $text = is_string($text) ? trim($text) : null;
+        if ($text === null || $text === '' || $text === '—' || $text === '-') {
+            return null;
+        }
+        if (mb_strlen($text) > 140) {
+            $text = rtrim(mb_substr($text, 0, 137)).'...';
+        }
+
+        return $text;
+    }
+
+    private function isOpenComparisonPreference(string $value): bool
+    {
+        $normalized = mb_strtolower(trim($value));
+
+        return $normalized === ''
+            || str_contains($normalized, 'open to all')
+            || str_contains($normalized, 'no preference')
+            || str_contains($normalized, 'preference_match.open_to_all')
+            || str_contains($normalized, 'preference_match.no_preference_set');
+    }
+
+    private function isUnknownComparisonValue(string $value): bool
+    {
+        $normalized = mb_strtolower(trim($value));
+
+        return $normalized === ''
+            || str_contains($normalized, 'unknown')
+            || str_contains($normalized, 'not specified')
+            || str_contains($normalized, 'value_unknown')
+            || str_contains($normalized, 'preference_match.value_unknown');
+    }
+
+    private function normalizeComparisonValue(string $key, string $value): string
+    {
+        if ($key === 'age') {
+            if (preg_match('/^\d+$/', $value) === 1) {
+                return $value.' years';
+            }
+
+            return str_replace(' – ', ' to ', $value).(str_contains($value, 'year') ? '' : ' years');
+        }
+
+        return $value;
+    }
+
+    private function comparisonSection(?array $comparison): ?array
+    {
+        if ($comparison === null || empty($comparison['items']) || ! is_array($comparison['items'])) {
+            return null;
+        }
+
+        $items = [];
+        foreach ($comparison['items'] as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            $label = $this->cleanString($item['label'] ?? null);
+            $viewerValue = $this->cleanString($item['viewer_value'] ?? null);
+            if ($label === null || $viewerValue === null) {
+                continue;
+            }
+
+            $matched = $item['matched'] ?? null;
+            $status = $matched === true ? 'Match' : ($matched === false ? 'Not matched' : 'Review');
+            $items[] = $this->item(
+                $label,
+                $viewerValue.' — '.$status,
+                $this->comparisonIcon($this->cleanString($item['key'] ?? null))
+            );
+        }
+
+        return $this->section('partner_match', (string) ($comparison['title'] ?? 'You & Profile'), $items);
+    }
+
+    private function comparisonIcon(?string $key): string
+    {
+        return match ($key) {
+            'age' => 'age',
+            'height' => 'height',
+            'religion', 'caste' => 'community',
+            'location' => 'location',
+            'education' => 'education',
+            'profession' => 'work',
+            'income' => 'income',
+            'marital_status' => 'heart',
+            'diet' => 'diet',
+            default => 'compare',
+        };
     }
 
     private function sharePayload(
