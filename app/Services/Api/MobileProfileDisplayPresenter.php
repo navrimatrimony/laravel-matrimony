@@ -2,14 +2,19 @@
 
 namespace App\Services\Api;
 
+use App\Models\Block;
+use App\Models\HiddenProfile;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Models\Plan;
 use App\Models\ProfilePhoto;
+use App\Models\Shortlist;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\IncomeEngineService;
+use App\Services\ProfileLifecycleService;
+use App\Services\ViewTrackingService;
 use App\Support\HeightDisplay;
 use App\Support\ProfileDisplayCopy;
 use Carbon\Carbon;
@@ -245,20 +250,55 @@ class MobileProfileDisplayPresenter
     private function actions(MatrimonyProfile $profile, ?MatrimonyProfile $viewerProfile): array
     {
         $canInteract = $viewerProfile !== null && (int) $viewerProfile->id !== (int) $profile->id;
+        $hasInterests = Schema::hasTable('interests');
+        $hasShortlists = Schema::hasTable('shortlists');
+        $hasHiddenProfiles = Schema::hasTable('hidden_profiles');
+        $hasBlocks = Schema::hasTable('blocks');
+
         $alreadyInterested = false;
-        if ($canInteract && Schema::hasTable('interests')) {
+        if ($canInteract && $hasInterests) {
             $alreadyInterested = Interest::query()
                 ->where('sender_profile_id', $viewerProfile->id)
                 ->where('receiver_profile_id', $profile->id)
                 ->exists();
         }
 
+        $blockedEitherWay = $canInteract && $hasBlocks
+            ? ViewTrackingService::isBlocked($viewerProfile->id, $profile->id)
+            : false;
+        $canAct = $canInteract
+            && ! $blockedEitherWay
+            && ProfileLifecycleService::canInitiateInteraction($viewerProfile)
+            && ProfileLifecycleService::canReceiveInterest($profile);
+
+        $isShortlisted = $canInteract && $hasShortlists
+            ? Shortlist::query()
+                ->where('owner_profile_id', $viewerProfile->id)
+                ->where('shortlisted_profile_id', $profile->id)
+                ->exists()
+            : false;
+        $isHidden = $canInteract && $hasHiddenProfiles
+            ? HiddenProfile::query()
+                ->where('owner_profile_id', $viewerProfile->id)
+                ->where('hidden_profile_id', $profile->id)
+                ->exists()
+            : false;
+        $isBlocked = $canInteract && $hasBlocks
+            ? Block::query()
+                ->where('blocker_profile_id', $viewerProfile->id)
+                ->where('blocked_profile_id', $profile->id)
+                ->exists()
+            : false;
+
         return [
-            'can_send_interest' => $canInteract && ! $alreadyInterested,
+            'can_send_interest' => $canAct && ! $alreadyInterested,
             'can_report' => $canInteract && Schema::hasTable('abuse_reports'),
-            'can_shortlist' => $canInteract && Schema::hasTable('shortlists'),
-            'can_hide' => $canInteract && Schema::hasTable('hidden_profiles'),
-            'can_block' => $canInteract && Schema::hasTable('blocks'),
+            'can_shortlist' => $canAct && $hasShortlists && ! $isShortlisted,
+            'can_hide' => $canAct && $hasHiddenProfiles && ! $isHidden,
+            'can_block' => $canAct && $hasBlocks && ! $isBlocked,
+            'is_shortlisted' => $isShortlisted,
+            'is_hidden' => $isHidden,
+            'is_blocked' => $isBlocked,
         ];
     }
 

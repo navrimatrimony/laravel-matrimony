@@ -1,9 +1,13 @@
 <?php
 
+use App\Models\Block;
 use App\Models\Caste;
+use App\Models\HiddenProfile;
+use App\Models\Interest;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Models\Religion;
+use App\Models\Shortlist;
 use App\Models\SubCaste;
 use App\Models\User;
 use App\Services\MutationService;
@@ -151,6 +155,43 @@ function mobileApiProfileTestSeedCurrentAddressType(): void
         $values
     );
     \App\Services\Profile\ProfileCanonicalResidenceService::forgetCachedMasters();
+}
+
+function mobileApiProfileActionPair(): array
+{
+    $viewerUser = User::factory()->create(['name' => 'Mobile Action Viewer']);
+    $targetUser = User::factory()->create(['name' => 'Mobile Action Target']);
+    $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Mobile Action Viewer');
+    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Mobile Action Target');
+
+    return [$viewerUser, $viewerProfile, $targetUser, $targetProfile];
+}
+
+function mobileApiCreateValidActionProfile(User $user, string $name): MatrimonyProfile
+{
+    mobileApiProfileTestSeedCurrentAddressType();
+    $location = mobileApiProfileTestLeafLocation();
+    [$religion, $caste, $subCaste] = mobileApiProfileTestCommunity();
+
+    $profile = app(MutationService::class)->createDraftProfileForUser($user);
+    app(MutationService::class)->applyManualSnapshot($profile, [
+        'core' => [
+            'full_name' => $name,
+            'date_of_birth' => '1995-01-05',
+            'highest_education' => 'B.A.',
+            'location_id' => $location->id,
+            'religion_id' => $religion->id,
+            'caste_id' => $caste->id,
+            'sub_caste_id' => $subCaste->id,
+        ],
+    ], (int) $user->id, 'manual');
+
+    $profile->refresh();
+    $profile->lifecycle_state = 'active';
+    $profile->is_suspended = false;
+    $profile->save();
+
+    return $profile->refresh();
 }
 
 test('MobileProfile GET api v1 religions returns active religions for authenticated user', function () {
@@ -429,4 +470,183 @@ test('MobileProfile GET api v1 matrimony profile returns clean display payload b
         ->assertJsonPath('profile.location_id', $location->id)
         ->assertJsonPath('display.version', 1)
         ->assertJsonStructure(['profile', 'display' => ['hero', 'sections']]);
+});
+
+test('MobileProfile POST api v1 profile action can shortlist safely', function () {
+    [$viewerUser, $viewerProfile, , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->postJson('/api/v1/matrimony-profiles/'.$targetProfile->id.'/shortlist');
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('state.shortlisted', true)
+        ->assertJsonPath('state.hidden', false)
+        ->assertJsonPath('state.blocked', false);
+
+    expect(Shortlist::query()
+        ->where('owner_profile_id', $viewerProfile->id)
+        ->where('shortlisted_profile_id', $targetProfile->id)
+        ->count())->toBe(1);
+
+    $duplicate = $this->postJson('/api/v1/matrimony-profiles/'.$targetProfile->id.'/shortlist');
+
+    $duplicate
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('state.shortlisted', true);
+
+    expect(Shortlist::query()
+        ->where('owner_profile_id', $viewerProfile->id)
+        ->where('shortlisted_profile_id', $targetProfile->id)
+        ->count())->toBe(1);
+});
+
+test('MobileProfile DELETE api v1 profile action can unshortlist safely', function () {
+    [$viewerUser, $viewerProfile, , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    Shortlist::query()->create([
+        'owner_profile_id' => $viewerProfile->id,
+        'shortlisted_profile_id' => $targetProfile->id,
+    ]);
+
+    $response = $this->deleteJson('/api/v1/matrimony-profiles/'.$targetProfile->id.'/shortlist');
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('state.shortlisted', false);
+
+    expect(Shortlist::query()
+        ->where('owner_profile_id', $viewerProfile->id)
+        ->where('shortlisted_profile_id', $targetProfile->id)
+        ->exists())->toBeFalse();
+});
+
+test('MobileProfile POST api v1 profile action can hide safely', function () {
+    [$viewerUser, $viewerProfile, , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->postJson('/api/v1/matrimony-profiles/'.$targetProfile->id.'/hide');
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('state.hidden', true);
+
+    $duplicate = $this->postJson('/api/v1/matrimony-profiles/'.$targetProfile->id.'/hide');
+
+    $duplicate
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('state.hidden', true);
+
+    expect(HiddenProfile::query()
+        ->where('owner_profile_id', $viewerProfile->id)
+        ->where('hidden_profile_id', $targetProfile->id)
+        ->count())->toBe(1);
+});
+
+test('MobileProfile POST api v1 profile action can block and cleanup interests and shortlists', function () {
+    [$viewerUser, $viewerProfile, , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    Interest::query()->create([
+        'sender_profile_id' => $viewerProfile->id,
+        'receiver_profile_id' => $targetProfile->id,
+        'status' => 'pending',
+    ]);
+    Interest::query()->create([
+        'sender_profile_id' => $targetProfile->id,
+        'receiver_profile_id' => $viewerProfile->id,
+        'status' => 'pending',
+    ]);
+    Shortlist::query()->create([
+        'owner_profile_id' => $viewerProfile->id,
+        'shortlisted_profile_id' => $targetProfile->id,
+    ]);
+    Shortlist::query()->create([
+        'owner_profile_id' => $targetProfile->id,
+        'shortlisted_profile_id' => $viewerProfile->id,
+    ]);
+
+    $response = $this->postJson('/api/v1/matrimony-profiles/'.$targetProfile->id.'/block');
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('state.shortlisted', false)
+        ->assertJsonPath('state.blocked', true);
+
+    expect(Interest::query()
+        ->whereIn('sender_profile_id', [$viewerProfile->id, $targetProfile->id])
+        ->whereIn('receiver_profile_id', [$viewerProfile->id, $targetProfile->id])
+        ->count())->toBe(0);
+    expect(Shortlist::query()
+        ->whereIn('owner_profile_id', [$viewerProfile->id, $targetProfile->id])
+        ->whereIn('shortlisted_profile_id', [$viewerProfile->id, $targetProfile->id])
+        ->count())->toBe(0);
+    expect(Block::query()
+        ->where('blocker_profile_id', $viewerProfile->id)
+        ->where('blocked_profile_id', $targetProfile->id)
+        ->count())->toBe(1);
+
+    $duplicate = $this->postJson('/api/v1/matrimony-profiles/'.$targetProfile->id.'/block');
+
+    $duplicate
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('state.blocked', true);
+
+    expect(Block::query()
+        ->where('blocker_profile_id', $viewerProfile->id)
+        ->where('blocked_profile_id', $targetProfile->id)
+        ->count())->toBe(1);
+});
+
+test('MobileProfile DELETE api v1 profile action can unblock without restoring related rows', function () {
+    [$viewerUser, $viewerProfile, , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    Block::query()->create([
+        'blocker_profile_id' => $viewerProfile->id,
+        'blocked_profile_id' => $targetProfile->id,
+    ]);
+
+    $response = $this->deleteJson('/api/v1/matrimony-profiles/'.$targetProfile->id.'/block');
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('state.blocked', false);
+
+    expect(Block::query()
+        ->where('blocker_profile_id', $viewerProfile->id)
+        ->where('blocked_profile_id', $targetProfile->id)
+        ->exists())->toBeFalse();
+});
+
+test('MobileProfile api v1 profile actions reject self action', function () {
+    $user = User::factory()->create(['name' => 'Self Action User']);
+    $profile = mobileApiCreateValidActionProfile($user, 'Self Action User');
+    Sanctum::actingAs($user);
+
+    $this->postJson('/api/v1/matrimony-profiles/'.$profile->id.'/shortlist')
+        ->assertStatus(422)
+        ->assertJsonPath('success', false);
+    $this->postJson('/api/v1/matrimony-profiles/'.$profile->id.'/hide')
+        ->assertStatus(422)
+        ->assertJsonPath('success', false);
+    $this->postJson('/api/v1/matrimony-profiles/'.$profile->id.'/block')
+        ->assertStatus(422)
+        ->assertJsonPath('success', false);
+});
+
+test('MobileProfile api v1 profile actions require authentication', function () {
+    [, , , $targetProfile] = mobileApiProfileActionPair();
+
+    $this->postJson('/api/v1/matrimony-profiles/'.$targetProfile->id.'/shortlist')
+        ->assertUnauthorized();
 });

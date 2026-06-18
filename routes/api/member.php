@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ExtendedFieldApiController;
 use App\Http\Controllers\Api\FieldRegistryApiController;
 use App\Http\Controllers\Api\InterestApiController;
 use App\Http\Controllers\Api\MatrimonyProfileApiController;
+use App\Http\Controllers\Api\ProfileActionApiController;
 use App\Http\Controllers\Api\ProfileFieldLockApiController;
 use App\Http\Controllers\Api\ReligionLookupController;
 use Illuminate\Support\Facades\Route;
@@ -26,6 +27,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/matrimony-profile/photo', [MatrimonyProfileApiController::class, 'uploadPhoto']); // PHOTO UPLOAD
     Route::get('/matrimony-profiles', [MatrimonyProfileApiController::class, 'index']); // LIST ALL PROFILES
     Route::get('/matrimony-profiles/{id}', [MatrimonyProfileApiController::class, 'showById']); // GET PROFILE BY ID
+    Route::post('/matrimony-profiles/{id}/shortlist', [ProfileActionApiController::class, 'shortlist']); // SHORTLIST PROFILE
+    Route::delete('/matrimony-profiles/{id}/shortlist', [ProfileActionApiController::class, 'unshortlist']); // REMOVE SHORTLIST
+    Route::post('/matrimony-profiles/{id}/hide', [ProfileActionApiController::class, 'hide']); // HIDE PROFILE FROM LISTS
+    Route::post('/matrimony-profiles/{id}/block', [ProfileActionApiController::class, 'block']); // BLOCK PROFILE
+    Route::delete('/matrimony-profiles/{id}/block', [ProfileActionApiController::class, 'unblock']); // UNBLOCK PROFILE
     Route::post('/interests', [InterestApiController::class, 'store']); // SEND INTEREST
     Route::get('/interests/sent', [InterestApiController::class, 'sent']); // GET SENT INTERESTS
     Route::get('/interests/received', [InterestApiController::class, 'received']); // GET RECEIVED INTERESTS
