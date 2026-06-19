@@ -277,7 +277,21 @@ class MatrimonyProfileApiController extends Controller
      */
     public function index(Request $request)
     {
-        $query = MatrimonyProfile::with('user')->latest();
+        $relations = [
+            'user.activeSubscription.plan',
+            'gender',
+            'religion',
+            'caste',
+            'subCaste',
+            'occupationMaster',
+            'occupationCustom',
+            'horoscope',
+        ];
+        if (Schema::hasTable('profile_photos')) {
+            $relations['photos'] = fn ($query) => $query->effectivelyApproved();
+        }
+
+        $query = MatrimonyProfile::with($relations)->latest();
 
         // Day 7: Only active profiles searchable; NULL treated as active (backward compat)
         $query->where(function ($q) {
@@ -323,11 +337,13 @@ class MatrimonyProfileApiController extends Controller
         }
 
         $profiles = $query->get();
+        $presenter = app(MobileProfileDisplayPresenter::class);
+        $viewer = $request->user();
 
         // Transform to include gender from user relationship (SSOT-approved fields only)
         // PIR-006: Null-safe when profile's user is missing (orphaned profile)
         // Phase-4 Day-8: Use hierarchical location fields
-        $profiles = $profiles->map(function ($profile) {
+        $profiles = $profiles->map(function ($profile) use ($presenter, $viewer) {
             $hints = $profile->residenceLocationHierarchyHints();
             $geo = $profile->residenceGeoAddressIds();
 
@@ -347,6 +363,7 @@ class MatrimonyProfileApiController extends Controller
                 'profile_photo' => ($profile->profile_photo && $profile->photo_approved !== false) ? $profile->profile_photo : null,
                 'created_at' => $profile->created_at,
                 'updated_at' => $profile->updated_at,
+                'display' => $presenter->forListCard($profile, $viewer),
             ];
         });
 

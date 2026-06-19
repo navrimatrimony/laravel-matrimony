@@ -625,6 +625,78 @@ test('MobileProfile GET api v1 matrimony profile returns clean display payload b
         ->assertJsonStructure(['profile', 'display' => ['hero', 'sections', 'contact']]);
 });
 
+test('MobileProfile GET api v1 matrimony profiles includes safe list card display payload', function () {
+    [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles');
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonStructure([
+            'profiles' => [
+                '*' => [
+                    'id',
+                    'user_id',
+                    'full_name',
+                    'gender',
+                    'date_of_birth',
+                    'caste',
+                    'highest_education',
+                    'location_id',
+                    'country_id',
+                    'state_id',
+                    'district_id',
+                    'taluka_id',
+                    'profile_photo',
+                    'created_at',
+                    'updated_at',
+                    'display' => [
+                        'card' => [
+                            'name',
+                            'age',
+                            'age_label',
+                            'height_label',
+                            'community_label',
+                            'education_label',
+                            'occupation_label',
+                            'location_label',
+                            'verified',
+                            'premium',
+                            'photo_count',
+                            'primary_photo_url',
+                            'comparison_label',
+                            'has_astro',
+                        ],
+                        'actions' => [
+                            'can_send_interest',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+    $row = collect($response->json('profiles'))->firstWhere('id', $targetProfile->id);
+    expect($row)->toBeArray();
+    expect($row['display']['card']['name'])->toBe('Mobile Action Target');
+    expect($row['display']['card'])->toHaveKeys([
+        'age',
+        'age_label',
+        'primary_photo_url',
+        'photo_count',
+        'verified',
+        'premium',
+    ]);
+    expect($row['display']['actions'])->toHaveKey('can_send_interest');
+
+    $displayJson = json_encode($row['display'], JSON_THROW_ON_ERROR);
+    expect($displayJson)->not->toContain('phone');
+    expect($displayJson)->not->toContain('email');
+    expect(mb_strtolower($displayJson))->not->toContain('whatsapp');
+    expect(mb_strtolower($displayJson))->not->toContain('contact');
+});
+
 test('MobileProfile display contact keeps own profile unlock disabled', function () {
     $user = User::factory()->create(['name' => 'Own Contact Account']);
     $profile = mobileApiCreateValidActionProfile($user, 'Own Contact Candidate', 'male');

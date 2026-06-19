@@ -286,7 +286,7 @@ Success response: HTTP 200
 
 ### GET `/api/v1/matrimony-profiles`
 
-Requires bearer token. Lists visible, non-suspended active profiles.
+Requires bearer token. Lists visible, non-suspended active profiles. Legacy top-level fields remain present for backward compatibility. Newer clients may use the optional `display.card` and `display.actions` payload for match-card rendering.
 
 Optional query filters:
 
@@ -320,11 +320,42 @@ Success response: HTTP 200
       "taluka_id": 4,
       "profile_photo": null,
       "created_at": "2026-06-16T00:00:00.000000Z",
-      "updated_at": "2026-06-16T00:00:00.000000Z"
+      "updated_at": "2026-06-16T00:00:00.000000Z",
+      "display": {
+        "card": {
+          "name": "Candidate Name",
+          "age": 28,
+          "age_label": "28 years",
+          "height_label": "5' 5\"",
+          "community_label": "Hindu, Maratha",
+          "education_label": "B.E.",
+          "occupation_label": "Software Engineer",
+          "location_label": "Pune, Maharashtra",
+          "verified": true,
+          "premium": false,
+          "photo_count": 1,
+          "primary_photo_url": "https://navrimilenavryala.com/storage/matrimony_photos/example.jpg",
+          "comparison_label": "You & Her",
+          "has_astro": true
+        },
+        "actions": {
+          "can_send_interest": true,
+          "interest_sent": false,
+          "can_report": true,
+          "can_shortlist": true,
+          "can_hide": true,
+          "can_block": true,
+          "is_shortlisted": false,
+          "is_hidden": false,
+          "is_blocked": false
+        }
+      }
     }
   ]
 }
 ```
+
+The list `display` payload is intentionally lightweight. It does not include contact phone, email, WhatsApp number, contact unlock state, full profile sections, about text, or partner preferences.
 
 ### GET `/api/v1/matrimony-profiles/{id}`
 

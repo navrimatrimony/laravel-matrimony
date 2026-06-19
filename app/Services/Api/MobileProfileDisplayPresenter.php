@@ -130,6 +130,44 @@ class MobileProfileDisplayPresenter
         ];
     }
 
+    public function forListCard(MatrimonyProfile $profile, ?User $viewer = null): array
+    {
+        $profile->loadMissing([
+            'user',
+            'gender',
+            'religion',
+            'caste',
+            'subCaste',
+            'occupationMaster',
+            'occupationCustom',
+            'horoscope',
+        ]);
+
+        $viewerProfile = $viewer?->matrimonyProfile;
+        $age = $this->age($profile);
+        [$photoCount, $primaryPhotoUrl] = $this->visiblePhotoSummary($profile);
+
+        return [
+            'card' => [
+                'name' => $this->cleanString($profile->full_name),
+                'age' => $age,
+                'age_label' => $age !== null ? $age.' years' : null,
+                'height_label' => $this->heightLabel($profile),
+                'community_label' => $this->communityLabel($profile),
+                'education_label' => $this->cleanDisplayValue($profile->highest_education),
+                'occupation_label' => $this->occupationLabel($profile),
+                'location_label' => $this->cleanLocation(ProfileDisplayCopy::profileResidenceDisplayLine($profile)),
+                'verified' => $this->isVerified($profile),
+                'premium' => $this->isPremium($profile),
+                'photo_count' => $photoCount,
+                'primary_photo_url' => $primaryPhotoUrl,
+                'comparison_label' => $this->comparisonLabel($profile),
+                'has_astro' => $profile->horoscope !== null,
+            ],
+            'actions' => $this->actions($profile, $viewerProfile),
+        ];
+    }
+
     private function comparisonPayload(MatrimonyProfile $profile, ?MatrimonyProfile $viewerProfile): ?array
     {
         if ($viewerProfile === null || (int) $viewerProfile->id === (int) $profile->id) {
@@ -1207,6 +1245,7 @@ class MobileProfileDisplayPresenter
 
         return [
             'can_send_interest' => $canAct && ! $alreadyInterested,
+            'interest_sent' => $alreadyInterested,
             'can_report' => $canInteract && Schema::hasTable('abuse_reports'),
             'can_shortlist' => $canAct && $hasShortlists && ! $isShortlisted,
             'can_hide' => $canAct && $hasHiddenProfiles && ! $isHidden,
@@ -1504,7 +1543,17 @@ class MobileProfileDisplayPresenter
     private function visiblePhotoSummary(MatrimonyProfile $profile): array
     {
         $urls = [];
-        if (Schema::hasTable('profile_photos')) {
+        if ($profile->relationLoaded('photos')) {
+            $profile->photos
+                ->filter(fn (ProfilePhoto $photo): bool => $photo->effectiveApprovedStatus() === 'approved')
+                ->each(function (ProfilePhoto $photo) use ($profile, &$urls): void {
+                    $path = ltrim((string) $photo->file_path, '/');
+                    if ($path === '' || ProfilePhotoUrlService::isPendingPlaceholder($path)) {
+                        return;
+                    }
+                    $urls[] = app(ProfilePhotoUrlService::class)->publicUrl($path, $profile);
+                });
+        } elseif (Schema::hasTable('profile_photos')) {
             ProfilePhoto::query()
                 ->where('profile_id', $profile->id)
                 ->effectivelyApproved()
@@ -1552,16 +1601,19 @@ class MobileProfileDisplayPresenter
         }
 
         try {
-            $subscription = Subscription::query()
-                ->where('user_id', $profile->user->id)
-                ->effectivelyActiveForAccess()
-                ->with('plan')
-                ->orderByDesc('starts_at')
-                ->orderByDesc('id')
-                ->first();
+            $subscription = $profile->user->relationLoaded('activeSubscription')
+                ? $profile->user->activeSubscription
+                : Subscription::query()
+                    ->where('user_id', $profile->user->id)
+                    ->effectivelyActiveForAccess()
+                    ->with('plan')
+                    ->orderByDesc('starts_at')
+                    ->orderByDesc('id')
+                    ->first();
             if ($subscription === null) {
                 return false;
             }
+            $subscription->loadMissing('plan');
             $slug = $subscription->plan?->slug;
 
             return $slug !== null && ! Plan::isFreeCatalogSlug((string) $slug);
