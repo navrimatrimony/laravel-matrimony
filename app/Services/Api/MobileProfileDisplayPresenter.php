@@ -3,6 +3,7 @@
 namespace App\Services\Api;
 
 use App\Models\Block;
+use App\Models\EducationDegree;
 use App\Models\HiddenProfile;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
@@ -13,6 +14,10 @@ use App\Models\Subscription;
 use App\Models\User;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\IncomeEngineService;
+use App\Services\EducationService;
+use App\Services\Gunamilan\GunamilanService;
+use App\Services\Location\LocationService;
+use App\Services\PartnerPreferenceSuggestionService;
 use App\Services\ProfilePreferenceMatchService;
 use App\Services\ProfileLifecycleService;
 use App\Services\SiteIdentityService;
@@ -26,6 +31,8 @@ use Illuminate\Support\Facades\Schema;
 
 class MobileProfileDisplayPresenter
 {
+    private const LOCATION_NEARBY_RADIUS_KM = 25;
+
     private const LABEL_KEYS = [
         'label_mr',
         'display_label',
@@ -125,42 +132,524 @@ class MobileProfileDisplayPresenter
             return null;
         }
 
+        $viewerProfile->loadMissing(['user', 'gender', 'religion', 'caste', 'subCaste', 'horoscope']);
+        $profile->loadMissing(['user', 'gender', 'religion', 'caste', 'subCaste', 'preferenceCriteria', 'horoscope']);
+
+        $rows = $this->basicComparisonRows($profile, $viewerProfile);
+
+        if ($rows === []) {
+            return null;
+        }
+
+        $matchedCount = count(array_filter($rows, fn (array $row): bool => ($row['is_counted'] ?? false) === true));
+        [$viewerPhotoCount, $viewerPhotoUrl] = $this->visiblePhotoSummary($viewerProfile);
+        [$targetPhotoCount, $targetPhotoUrl] = $this->visiblePhotoSummary($profile);
+
+        unset($viewerPhotoCount, $targetPhotoCount);
+
+        return [
+            'enabled' => true,
+            'title' => $this->comparisonLabel($profile),
+            'summary' => $matchedCount > 0 ? $matchedCount.' जुळणारे मुद्दे' : null,
+            'viewer' => [
+                'name' => 'You',
+                'photo_url' => $viewerPhotoUrl,
+            ],
+            'target' => [
+                'name' => $this->cleanString($profile->full_name) ?? 'Profile',
+                'photo_url' => $targetPhotoUrl,
+            ],
+            'matched_count' => $matchedCount,
+            'total_count' => count($rows),
+            'rows' => $rows,
+            'items' => $this->legacyComparisonItems($rows),
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function basicComparisonRows(MatrimonyProfile $profile, MatrimonyProfile $viewerProfile): array
+    {
+        $rows = array_values(array_filter([
+            $this->ageComparisonRow($profile, $viewerProfile),
+            $this->heightComparisonRow($profile, $viewerProfile),
+            $this->locationComparisonRow($profile, $viewerProfile),
+            $this->communityComparisonRow($profile, $viewerProfile),
+            $this->sameSubCasteComparisonRow($profile, $viewerProfile),
+            $this->educationComparisonRow($profile, $viewerProfile),
+            $this->incomeComparisonRow($profile, $viewerProfile),
+            $this->gunamilanComparisonRow($profile, $viewerProfile),
+        ]));
+
+        return array_values($rows);
+    }
+
+    private function ageComparisonRow(MatrimonyProfile $profile, MatrimonyProfile $viewerProfile): ?array
+    {
+        $viewerAge = $this->age($viewerProfile);
+        $targetAge = $this->age($profile);
+        if ($viewerAge === null && $targetAge === null) {
+            return null;
+        }
+
+        $status = 'neutral';
+        $counted = false;
+        if ($viewerAge !== null && $targetAge !== null && $this->agePairFits($viewerProfile, $profile, $viewerAge, $targetAge)) {
+            $status = 'match';
+            $counted = true;
+        }
+
+        return $this->comparisonRow(
+            'age',
+            'Age',
+            $viewerAge !== null ? $viewerAge.' years' : null,
+            $targetAge !== null ? $targetAge.' years' : null,
+            $status,
+            $counted
+        );
+    }
+
+    private function agePairFits(MatrimonyProfile $viewerProfile, MatrimonyProfile $targetProfile, int $viewerAge, int $targetAge): bool
+    {
+        $viewerGender = $this->profileGenderKey($viewerProfile);
+        $targetGender = $this->profileGenderKey($targetProfile);
+
+        if ($viewerGender === 'male' && $targetGender === 'female') {
+            $diff = $viewerAge - $targetAge;
+
+            return $diff >= 0 && $diff <= 5;
+        }
+        if ($viewerGender === 'female' && $targetGender === 'male') {
+            $diff = $targetAge - $viewerAge;
+
+            return $diff >= 0 && $diff <= 5;
+        }
+
+        return abs($viewerAge - $targetAge) <= 5;
+    }
+
+    private function heightComparisonRow(MatrimonyProfile $profile, MatrimonyProfile $viewerProfile): ?array
+    {
+        $viewerHeight = $this->heightLabel($viewerProfile);
+        $targetHeight = $this->heightLabel($profile);
+        if ($viewerHeight === null && $targetHeight === null) {
+            return null;
+        }
+
+        $status = 'neutral';
+        $counted = false;
+        $viewerCm = (int) ($viewerProfile->height_cm ?? 0);
+        $targetCm = (int) ($profile->height_cm ?? 0);
+        if ($viewerCm > 0 && $targetCm > 0 && $this->heightPairFits($viewerProfile, $profile, $viewerCm, $targetCm)) {
+            $status = 'match';
+            $counted = true;
+        }
+
+        return $this->comparisonRow('height', 'Height', $viewerHeight, $targetHeight, $status, $counted);
+    }
+
+    private function heightPairFits(MatrimonyProfile $viewerProfile, MatrimonyProfile $targetProfile, int $viewerCm, int $targetCm): bool
+    {
+        $viewerGender = $this->profileGenderKey($viewerProfile);
+        $targetGender = $this->profileGenderKey($targetProfile);
+        $fourInchesCm = PartnerPreferenceSuggestionService::fourInchesCm();
+
+        if ($viewerGender === 'male' && $targetGender === 'female') {
+            $diff = $viewerCm - $targetCm;
+
+            return $diff >= 0 && $diff <= $fourInchesCm;
+        }
+        if ($viewerGender === 'female' && $targetGender === 'male') {
+            $diff = $targetCm - $viewerCm;
+
+            return $diff >= 0 && $diff <= $fourInchesCm;
+        }
+
+        return abs($viewerCm - $targetCm) <= $fourInchesCm;
+    }
+
+    private function locationComparisonRow(MatrimonyProfile $profile, MatrimonyProfile $viewerProfile): ?array
+    {
+        $viewerLocation = $this->cleanLocation(ProfileDisplayCopy::profileResidenceDisplayLine($viewerProfile));
+        $targetLocation = $this->cleanLocation(ProfileDisplayCopy::profileResidenceDisplayLine($profile));
+        if ($viewerLocation === null && $targetLocation === null) {
+            return null;
+        }
+
+        [$status, $isCounted] = $this->locationComparisonStatus($profile, $viewerProfile);
+
+        return $this->comparisonRow('location', 'Location', $viewerLocation, $targetLocation, $status, $isCounted);
+    }
+
+    /**
+     * @return array{0: string, 1: bool}
+     */
+    private function locationComparisonStatus(MatrimonyProfile $profile, MatrimonyProfile $viewerProfile): array
+    {
         try {
-            $raw = ProfilePreferenceMatchService::build($viewerProfile, $profile);
+            $viewerHints = $viewerProfile->residenceLocationHierarchyHints();
+            $targetHints = $profile->residenceLocationHierarchyHints();
+
+            $viewerTalukaId = $this->positiveInt($viewerHints['taluka_id'] ?? null);
+            $targetTalukaId = $this->positiveInt($targetHints['taluka_id'] ?? null);
+            if ($viewerTalukaId !== null && $targetTalukaId !== null) {
+                if ($viewerTalukaId === $targetTalukaId) {
+                    return ['strong', true];
+                }
+                if ($this->locationIsNearby($viewerTalukaId, $targetTalukaId, 'taluka')) {
+                    return ['strong', true];
+                }
+            }
+
+            $viewerDistrictId = $this->positiveInt($viewerHints['district_id'] ?? null);
+            $targetDistrictId = $this->positiveInt($targetHints['district_id'] ?? null);
+            if ($viewerDistrictId !== null && $targetDistrictId !== null) {
+                if ($viewerDistrictId === $targetDistrictId) {
+                    return ['match', true];
+                }
+                if ($this->locationIsNearby($viewerDistrictId, $targetDistrictId, 'district')) {
+                    return ['near', true];
+                }
+            }
+        } catch (\Throwable) {
+            return ['neutral', false];
+        }
+
+        return ['neutral', false];
+    }
+
+    private function locationIsNearby(int $sourceLocationId, int $targetLocationId, string $hierarchy): bool
+    {
+        try {
+            foreach (app(LocationService::class)->getNearbyLocations($sourceLocationId, self::LOCATION_NEARBY_RADIUS_KM, $hierarchy) as $row) {
+                if ((int) ($row['id'] ?? 0) === $targetLocationId) {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return false;
+    }
+
+    private function positiveInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (! is_numeric($value)) {
+            return null;
+        }
+        $int = (int) $value;
+
+        return $int > 0 ? $int : null;
+    }
+
+    private function communityComparisonRow(MatrimonyProfile $profile, MatrimonyProfile $viewerProfile): ?array
+    {
+        $viewerCommunity = $this->joinLabels([
+            $this->labelFrom($viewerProfile->religion),
+            $this->labelFrom($viewerProfile->caste),
+        ]);
+        $targetCommunity = $this->joinLabels([
+            $this->labelFrom($profile->religion),
+            $this->labelFrom($profile->caste),
+        ]);
+        if ($viewerCommunity === null && $targetCommunity === null) {
+            return null;
+        }
+
+        $status = 'neutral';
+        $counted = false;
+        $viewerCasteId = (int) ($viewerProfile->caste_id ?? 0);
+        $targetCasteId = (int) ($profile->caste_id ?? 0);
+        if ($viewerCasteId > 0 && $viewerCasteId === $targetCasteId) {
+            $status = 'match';
+            $counted = true;
+        }
+
+        return $this->comparisonRow('community', 'Religion / Caste', $viewerCommunity, $targetCommunity, $status, $counted);
+    }
+
+    private function sameSubCasteComparisonRow(MatrimonyProfile $profile, MatrimonyProfile $viewerProfile): ?array
+    {
+        $viewerSubCasteId = $this->positiveInt($viewerProfile->sub_caste_id ?? null);
+        $targetSubCasteId = $this->positiveInt($profile->sub_caste_id ?? null);
+        if ($viewerSubCasteId === null || $targetSubCasteId === null || $viewerSubCasteId !== $targetSubCasteId) {
+            return null;
+        }
+
+        $viewerSubCaste = $this->labelFrom($viewerProfile->subCaste);
+        $targetSubCaste = $this->labelFrom($profile->subCaste);
+        if ($viewerSubCaste === null || $targetSubCaste === null) {
+            return null;
+        }
+
+        return $this->comparisonRow('same_sub_caste', 'Same sub-caste', $viewerSubCaste, $targetSubCaste, 'match', true);
+    }
+
+    private function educationComparisonRow(MatrimonyProfile $profile, MatrimonyProfile $viewerProfile): ?array
+    {
+        $viewerEducation = $this->educationText($viewerProfile);
+        $targetEducation = $this->educationText($profile);
+        if ($viewerEducation === null || $targetEducation === null) {
+            return null;
+        }
+
+        $viewerDegree = $this->profileEducationDegree($viewerEducation);
+        $targetDegree = $this->profileEducationDegree($targetEducation);
+        $viewerLabel = $this->educationDegreeLabel($viewerDegree);
+        $targetLabel = $this->educationDegreeLabel($targetDegree);
+
+        if ($viewerDegree !== null && $targetDegree !== null && $viewerLabel !== null && $targetLabel !== null && (int) $viewerDegree->id === (int) $targetDegree->id) {
+            return $this->comparisonRow('education', 'Education', $viewerLabel, $targetLabel, 'match', true);
+        }
+
+        $viewerSort = $viewerDegree !== null ? $this->positiveInt($viewerDegree->sort_order ?? null) : null;
+        $targetSort = $targetDegree !== null ? $this->positiveInt($targetDegree->sort_order ?? null) : null;
+        if ($viewerSort !== null && $targetSort !== null && abs($viewerSort - $targetSort) <= 1) {
+            return $this->comparisonRow('education', 'Education', $viewerLabel, $targetLabel, 'near', true);
+        }
+
+        if ($this->normalizeEducationText($viewerEducation) === $this->normalizeEducationText($targetEducation)) {
+            return $this->comparisonRow('education', 'Education', $viewerEducation, $targetEducation, 'match', true);
+        }
+
+        return null;
+    }
+
+    private function incomeComparisonRow(MatrimonyProfile $profile, MatrimonyProfile $viewerProfile): ?array
+    {
+        if ((bool) ($viewerProfile->income_private ?? false)) {
+            return null;
+        }
+
+        $criteria = $profile->preferenceCriteria;
+        $min = $criteria?->preferred_income_min ?? null;
+        $max = $criteria?->preferred_income_max ?? null;
+        if ($min === null && $max === null) {
+            return null;
+        }
+
+        $viewerIncome = $this->profileAnnualIncomeRupees($viewerProfile);
+        if ($viewerIncome === null) {
+            return null;
+        }
+
+        $minValue = is_numeric($min) ? (float) $min : null;
+        $maxValue = is_numeric($max) ? (float) $max : null;
+        if ($minValue !== null && $viewerIncome < $minValue) {
+            return null;
+        }
+        if ($maxValue !== null && $viewerIncome > $maxValue) {
+            return null;
+        }
+
+        $viewerValue = $this->formatRupeesLakh($viewerIncome);
+        $targetValue = $this->formatIncomeRange($minValue, $maxValue);
+        if ($viewerValue === null || $targetValue === null) {
+            return null;
+        }
+
+        return $this->comparisonRow('income', 'Income', $viewerValue, $targetValue, 'match', true);
+    }
+
+    private function gunamilanComparisonRow(MatrimonyProfile $profile, MatrimonyProfile $viewerProfile): ?array
+    {
+        try {
+            $result = app(GunamilanService::class)->calculate($viewerProfile, $profile);
         } catch (\Throwable) {
             return null;
         }
 
-        if (($raw['target_has_preferences'] ?? false) !== true) {
+        if (($result['available'] ?? false) !== true) {
             return null;
         }
 
-        $items = [];
-        foreach (($raw['rows'] ?? []) as $row) {
-            if (! is_array($row)) {
-                continue;
-            }
-
-            $item = $this->comparisonItem($row, $viewerProfile);
-            if ($item !== null) {
-                $items[] = $item;
-            }
-        }
-
-        if ($items === []) {
+        $points = $result['total_points'] ?? null;
+        if (! is_numeric($points) || (float) $points <= 18.0) {
             return null;
         }
 
-        $matchedCount = count(array_filter($items, fn (array $item): bool => $item['matched'] === true));
-        $totalCount = count(array_filter($items, fn (array $item): bool => $item['matched'] !== null));
+        $max = is_numeric($result['max_points'] ?? null) ? (float) $result['max_points'] : 36.0;
+        $score = $this->formatGunamilanScore((float) $points, $max);
+
+        return $this->comparisonRow('gunamilan', 'Gunamilan', $score, 'Compatible', 'match', true);
+    }
+
+    private function educationText(MatrimonyProfile $profile): ?string
+    {
+        $text = $this->cleanComparisonString($profile->highest_education);
+        if ($text === null) {
+            return null;
+        }
+
+        $normalized = mb_strtolower($text);
+        if (in_array($normalized, ['not disclosed', 'unknown', 'n/a', 'na', 'माहिती नाही'], true)) {
+            return null;
+        }
+
+        return $text;
+    }
+
+    private function profileEducationDegree(string $education): ?EducationDegree
+    {
+        try {
+            return app(EducationService::class)->findDegreeMatch($education);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function educationDegreeLabel(?EducationDegree $degree): ?string
+    {
+        if ($degree === null) {
+            return null;
+        }
+
+        return $this->cleanString($degree->shortDisplayLabel())
+            ?? $this->cleanString($degree->full_form)
+            ?? $this->cleanString($degree->code);
+    }
+
+    private function normalizeEducationText(string $value): string
+    {
+        $value = mb_strtolower(trim($value));
+        $value = str_replace(["\xc2\xa0", '.', ','], ' ', $value);
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+
+        return trim($value);
+    }
+
+    private function profileAnnualIncomeRupees(MatrimonyProfile $profile): ?float
+    {
+        if ($profile->income_normalized_annual_amount !== null && $profile->income_normalized_annual_amount !== '') {
+            return is_numeric($profile->income_normalized_annual_amount) ? (float) $profile->income_normalized_annual_amount : null;
+        }
+        if ($profile->annual_income !== null && $profile->annual_income !== '') {
+            return is_numeric($profile->annual_income) ? (float) $profile->annual_income : null;
+        }
+
+        return null;
+    }
+
+    private function formatIncomeRange(?float $min, ?float $max): ?string
+    {
+        $minLabel = $min !== null ? $this->formatRupeesLakh($min) : null;
+        $maxLabel = $max !== null ? $this->formatRupeesLakh($max) : null;
+        if ($minLabel !== null && $maxLabel !== null) {
+            return $minLabel.' - '.$maxLabel;
+        }
+        if ($minLabel !== null) {
+            return $minLabel.' and above';
+        }
+        if ($maxLabel !== null) {
+            return 'Up to '.$maxLabel;
+        }
+
+        return null;
+    }
+
+    private function formatRupeesLakh(float $rupees): ?string
+    {
+        if ($rupees <= 0) {
+            return null;
+        }
+
+        $lakh = $rupees / 100000.0;
+        $label = abs($lakh - round($lakh)) < 0.01
+            ? (string) (int) round($lakh)
+            : rtrim(rtrim(number_format($lakh, 1, '.', ''), '0'), '.');
+
+        return '₹'.$label.' L';
+    }
+
+    private function formatGunamilanScore(float $points, float $max): string
+    {
+        $pointsLabel = abs($points - round($points)) < 0.01
+            ? (string) (int) round($points)
+            : rtrim(rtrim(number_format($points, 1, '.', ''), '0'), '.');
+        $maxLabel = abs($max - round($max)) < 0.01
+            ? (string) (int) round($max)
+            : rtrim(rtrim(number_format($max, 1, '.', ''), '0'), '.');
+
+        return $pointsLabel.'/'.$maxLabel;
+    }
+
+    private function comparisonRow(
+        string $key,
+        string $label,
+        ?string $viewerValue,
+        ?string $targetValue,
+        string $status,
+        bool $isCounted
+    ): ?array {
+        $viewerValue = $this->cleanComparisonString($viewerValue) ?? 'माहिती नाही';
+        $targetValue = $this->cleanComparisonString($targetValue) ?? 'माहिती नाही';
+        if ($viewerValue === 'माहिती नाही' && $targetValue === 'माहिती नाही') {
+            return null;
+        }
+
+        $status = in_array($status, ['strong', 'match', 'near', 'neutral'], true) ? $status : 'neutral';
+        $positive = in_array($status, ['strong', 'match', 'near'], true);
 
         return [
-            'title' => $this->comparisonLabel($profile),
-            'summary' => $totalCount > 0 ? 'You match '.$matchedCount.'/'.$totalCount.' preferences' : null,
-            'matched_count' => $matchedCount,
-            'total_count' => $totalCount,
-            'items' => $items,
+            'key' => $key,
+            'label' => $label,
+            'status' => $status,
+            'status_label' => $this->comparisonStatusLabel($status),
+            'viewer_value' => $viewerValue,
+            'target_value' => $targetValue,
+            'is_counted' => $positive && $isCounted,
         ];
+    }
+
+    private function comparisonStatusLabel(string $status): string
+    {
+        return match ($status) {
+            'strong' => 'Strong',
+            'match' => 'Match',
+            'near' => 'Near',
+            default => 'Basic',
+        };
+    }
+
+    private function profileGenderKey(MatrimonyProfile $profile): ?string
+    {
+        $key = mb_strtolower(trim((string) ($profile->gender?->key ?? '')));
+        if ($key === '') {
+            $key = mb_strtolower(trim((string) ($profile->user?->gender ?? '')));
+        }
+
+        if (str_contains($key, 'female') || str_contains($key, 'स्त्री') || str_contains($key, 'महिला')) {
+            return 'female';
+        }
+        if (str_contains($key, 'male') || str_contains($key, 'पुरुष')) {
+            return 'male';
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function legacyComparisonItems(array $rows): array
+    {
+        return array_map(function (array $row): array {
+            $status = (string) ($row['status'] ?? 'neutral');
+
+            return [
+                'key' => (string) ($row['key'] ?? ''),
+                'label' => (string) ($row['label'] ?? ''),
+                'target_preference' => (string) ($row['target_value'] ?? ''),
+                'viewer_value' => (string) ($row['viewer_value'] ?? ''),
+                'matched' => in_array($status, ['strong', 'match'], true) ? true : null,
+            ];
+        }, $rows);
     }
 
     private function comparisonItem(array $row, MatrimonyProfile $viewerProfile): ?array
@@ -255,27 +744,35 @@ class MobileProfileDisplayPresenter
 
     private function comparisonSection(?array $comparison): ?array
     {
-        if ($comparison === null || empty($comparison['items']) || ! is_array($comparison['items'])) {
+        if ($comparison === null) {
+            return null;
+        }
+
+        $rows = $comparison['rows'] ?? $comparison['items'] ?? [];
+        if (! is_array($rows) || $rows === []) {
             return null;
         }
 
         $items = [];
-        foreach ($comparison['items'] as $item) {
-            if (! is_array($item)) {
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
                 continue;
             }
-            $label = $this->cleanString($item['label'] ?? null);
-            $viewerValue = $this->cleanString($item['viewer_value'] ?? null);
+            $label = $this->cleanString($row['label'] ?? null);
+            $viewerValue = $this->cleanString($row['viewer_value'] ?? null);
             if ($label === null || $viewerValue === null) {
                 continue;
             }
 
-            $matched = $item['matched'] ?? null;
-            $status = $matched === true ? 'Match' : ($matched === false ? 'Not matched' : 'Review');
+            $status = $this->cleanString($row['status_label'] ?? null);
+            if ($status === null && array_key_exists('matched', $row)) {
+                $matched = $row['matched'] ?? null;
+                $status = $matched === true ? 'Match' : ($matched === false ? 'Not matched' : 'Review');
+            }
             $items[] = $this->item(
                 $label,
-                $viewerValue.' — '.$status,
-                $this->comparisonIcon($this->cleanString($item['key'] ?? null))
+                $status !== null ? $viewerValue.' — '.$status : $viewerValue,
+                $this->comparisonIcon($this->cleanString($row['key'] ?? null))
             );
         }
 
@@ -636,7 +1133,9 @@ class MobileProfileDisplayPresenter
         }
 
         try {
-            return Carbon::parse($profile->date_of_birth)->age;
+            $age = Carbon::parse($profile->date_of_birth)->age;
+
+            return $age > 0 ? $age : null;
         } catch (\Throwable) {
             return null;
         }

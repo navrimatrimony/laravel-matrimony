@@ -2,15 +2,19 @@
 
 use App\Models\Block;
 use App\Models\Caste;
+use App\Models\EducationCategory;
+use App\Models\EducationDegree;
 use App\Models\HiddenProfile;
 use App\Models\Interest;
 use App\Models\Location;
+use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
 use App\Models\Religion;
 use App\Models\Shortlist;
 use App\Models\SubCaste;
 use App\Models\User;
 use App\Services\Api\MobileProfileDisplayPresenter;
+use App\Services\Gunamilan\GunamilanService;
 use App\Services\MutationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -56,6 +60,56 @@ function mobileApiProfileTestLeafLocation(): Location
         'parent_id' => $taluka->id,
         'is_active' => true,
     ]);
+}
+
+function mobileApiProfileTestLocationNode(
+    string $hierarchy,
+    string $name,
+    ?Location $parent = null,
+    array $extra = []
+): Location {
+    $suffix = strtolower(str_replace('.', '-', uniqid('mobile-api-location-', true)));
+    $data = [
+        'name' => $name.' '.$suffix,
+        'slug' => strtolower(str_replace(' ', '-', $name)).'-'.$suffix,
+        'hierarchy' => $hierarchy,
+        'parent_id' => $parent?->id,
+        'is_active' => true,
+    ];
+    if ($hierarchy === 'village') {
+        $data['tag'] = 'city';
+    }
+    foreach (['lat', 'lng', 'pincode'] as $key) {
+        if (array_key_exists($key, $extra)) {
+            $data[$key] = $extra[$key];
+        }
+    }
+
+    return Location::create($data);
+}
+
+function mobileApiProfileTestLocationChain(
+    ?Location $country = null,
+    ?Location $state = null,
+    ?Location $district = null,
+    ?Location $taluka = null,
+    array $districtExtra = [],
+    array $talukaExtra = [],
+    array $leafExtra = []
+): array {
+    $country ??= mobileApiProfileTestLocationNode('country', 'India');
+    $state ??= mobileApiProfileTestLocationNode('state', 'Maharashtra', $country);
+    $district ??= mobileApiProfileTestLocationNode('district', 'Pune', $state, $districtExtra);
+    $taluka ??= mobileApiProfileTestLocationNode('taluka', 'Haveli', $district, $talukaExtra);
+    $leaf = mobileApiProfileTestLocationNode('village', 'Wakad', $taluka, $leafExtra);
+
+    return [
+        'country' => $country,
+        'state' => $state,
+        'district' => $district,
+        'taluka' => $taluka,
+        'leaf' => $leaf,
+    ];
 }
 
 function mobileApiProfileTestCaste(): Caste
@@ -140,6 +194,17 @@ function mobileApiProfileTestCommunity(): array
     return [$religion, $caste, $subCaste];
 }
 
+function mobileApiProfileTestGender(string $key): MasterGender
+{
+    return MasterGender::query()->firstOrCreate(
+        ['key' => $key],
+        [
+            'label' => ucfirst($key),
+            'is_active' => true,
+        ]
+    );
+}
+
 function mobileApiProfileTestSeedCurrentAddressType(): void
 {
     $values = [
@@ -160,31 +225,41 @@ function mobileApiProfileTestSeedCurrentAddressType(): void
 
 function mobileApiProfileActionPair(): array
 {
-    $viewerUser = User::factory()->create(['name' => 'Mobile Action Viewer']);
-    $targetUser = User::factory()->create(['name' => 'Mobile Action Target']);
-    $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Mobile Action Viewer');
-    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Mobile Action Target');
+    $viewerUser = User::factory()->create(['name' => 'Mobile Action Viewer', 'gender' => 'male']);
+    $targetUser = User::factory()->create(['name' => 'Mobile Action Target', 'gender' => 'female']);
+    $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Mobile Action Viewer', 'male');
+    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Mobile Action Target', 'female');
 
     return [$viewerUser, $viewerProfile, $targetUser, $targetProfile];
 }
 
-function mobileApiCreateValidActionProfile(User $user, string $name): MatrimonyProfile
+function mobileApiCreateValidActionProfile(
+    User $user,
+    string $name,
+    string $genderKey = 'male',
+    ?Location $location = null,
+    array $coreOverrides = []
+): MatrimonyProfile
 {
     mobileApiProfileTestSeedCurrentAddressType();
-    $location = mobileApiProfileTestLeafLocation();
+    $location ??= mobileApiProfileTestLeafLocation();
     [$religion, $caste, $subCaste] = mobileApiProfileTestCommunity();
+    $gender = mobileApiProfileTestGender($genderKey);
 
     $profile = app(MutationService::class)->createDraftProfileForUser($user);
+    $core = array_merge([
+        'full_name' => $name,
+        'gender_id' => $gender->id,
+        'date_of_birth' => '1995-01-05',
+        'highest_education' => 'B.A.',
+        'location_id' => $location->id,
+        'religion_id' => $religion->id,
+        'caste_id' => $caste->id,
+        'sub_caste_id' => $subCaste->id,
+    ], $coreOverrides);
+
     app(MutationService::class)->applyManualSnapshot($profile, [
-        'core' => [
-            'full_name' => $name,
-            'date_of_birth' => '1995-01-05',
-            'highest_education' => 'B.A.',
-            'location_id' => $location->id,
-            'religion_id' => $religion->id,
-            'caste_id' => $caste->id,
-            'sub_caste_id' => $subCaste->id,
-        ],
+        'core' => $core,
     ], (int) $user->id, 'manual');
 
     $profile->refresh();
@@ -193,6 +268,54 @@ function mobileApiCreateValidActionProfile(User $user, string $name): MatrimonyP
     $profile->save();
 
     return $profile->refresh();
+}
+
+function mobileApiCreateComparisonProfilesAt(Location $viewerLocation, Location $targetLocation): array
+{
+    $viewerUser = User::factory()->create(['name' => 'Location Rule Viewer', 'gender' => 'male']);
+    $targetUser = User::factory()->create(['name' => 'Location Rule Target', 'gender' => 'female']);
+    $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Location Rule Viewer', 'male', $viewerLocation);
+    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Location Rule Target', 'female', $targetLocation);
+
+    return [$viewerUser, $viewerProfile, $targetUser, $targetProfile];
+}
+
+function mobileApiLocationComparisonRow(array $comparison): array
+{
+    $row = mobileApiComparisonRow($comparison, 'location');
+    expect($row)->toBeArray();
+
+    return $row;
+}
+
+function mobileApiComparisonRow(array $comparison, string $key): ?array
+{
+    $row = collect($comparison['rows'] ?? [])->firstWhere('key', $key);
+
+    return is_array($row) ? $row : null;
+}
+
+function mobileApiProfileTestEducationDegree(string $code, int $sortOrder): EducationDegree
+{
+    $suffix = strtolower(str_replace('.', '-', uniqid('mobile-api-edu-', true)));
+    $category = EducationCategory::create([
+        'name' => 'Comparison Education '.$suffix,
+        'slug' => 'comparison-education-'.$suffix,
+        'sort_order' => $sortOrder,
+        'is_active' => true,
+    ]);
+
+    $data = [
+        'category_id' => $category->id,
+        'code' => $code.' '.$suffix,
+        'full_form' => $code.' comparison degree '.$suffix,
+        'sort_order' => $sortOrder,
+    ];
+    if (Schema::hasColumn('master_education', 'code_mr')) {
+        $data['code_mr'] = null;
+    }
+
+    return EducationDegree::create($data);
 }
 
 function mobileApiAddTargetPartnerPreferences(MatrimonyProfile $targetProfile, MatrimonyProfile $viewerProfile): void
@@ -503,8 +626,8 @@ test('MobileProfile GET api v1 matrimony profile returns clean display payload b
 test('MobileProfile GET api v1 profile detail returns clean comparison payload for target preferences', function () {
     $viewerUser = User::factory()->create(['name' => 'Comparison Viewer', 'gender' => 'male']);
     $targetUser = User::factory()->create(['name' => 'Comparison Target', 'gender' => 'female']);
-    $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Comparison Viewer');
-    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Comparison Target');
+    $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Comparison Viewer', 'male');
+    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Comparison Target', 'female');
     mobileApiAddTargetPartnerPreferences($targetProfile, $viewerProfile);
     Sanctum::actingAs($viewerUser);
 
@@ -521,29 +644,42 @@ test('MobileProfile GET api v1 profile detail returns clean comparison payload f
                 'sections',
                 'share',
                 'comparison' => [
+                    'enabled',
                     'title',
                     'summary',
+                    'viewer' => ['name', 'photo_url'],
+                    'target' => ['name', 'photo_url'],
                     'matched_count',
                     'total_count',
+                    'rows',
                     'items',
                 ],
             ],
         ]);
 
     $comparison = $response->json('display.comparison');
+    expect($comparison['enabled'])->toBeTrue();
+    expect($comparison['viewer']['name'])->toBe('You');
+    expect($comparison['target']['name'])->toBe('Comparison Target');
     expect($comparison['matched_count'])->toBeGreaterThanOrEqual(1);
     expect($comparison['total_count'])->toBeGreaterThanOrEqual($comparison['matched_count']);
-    expect($comparison['summary'])->toBe('You match '.$comparison['matched_count'].'/'.$comparison['total_count'].' preferences');
+    expect($comparison['summary'])->toBe($comparison['matched_count'].' जुळणारे मुद्दे');
+    expect($comparison['rows'])->toBeArray()->not->toBeEmpty();
     expect($comparison['items'])->toBeArray()->not->toBeEmpty();
 
-    foreach ($comparison['items'] as $item) {
-        expect($item['key'])->toBeString();
-        expect($item['label'])->toBeString();
-        expect($item['target_preference'])->toBeString();
-        expect($item['viewer_value'])->toBeString();
-        expect((bool) preg_match('/^\s*[\{\[]|=>|\bcreated_at\b|\bupdated_at\b/i', $item['target_preference']))->toBeFalse();
-        expect((bool) preg_match('/^\s*[\{\[]|=>|\bcreated_at\b|\bupdated_at\b/i', $item['viewer_value']))->toBeFalse();
-        expect(in_array($item['matched'], [true, false, null], true))->toBeTrue();
+    foreach ($comparison['rows'] as $row) {
+        expect($row['key'])->toBeString();
+        expect($row['label'])->toBeString();
+        expect($row['status'])->toBeString();
+        expect($row['status_label'])->toBeString();
+        expect($row['target_value'])->toBeString();
+        expect($row['viewer_value'])->toBeString();
+        expect($row['is_counted'])->toBeBool();
+        expect(in_array($row['status'], ['strong', 'match', 'near', 'neutral'], true))->toBeTrue();
+        expect((bool) preg_match('/^\s*[\{\[]|=>|\bcreated_at\b|\bupdated_at\b/i', $row['target_value']))->toBeFalse();
+        expect((bool) preg_match('/^\s*[\{\[]|=>|\bcreated_at\b|\bupdated_at\b/i', $row['viewer_value']))->toBeFalse();
+        expect($row['target_value'])->not->toBe('0 years');
+        expect($row['viewer_value'])->not->toBe('0 years');
     }
 
     $partnerMatchSection = collect($response->json('display.sections'))->firstWhere('key', 'partner_match');
@@ -551,7 +687,7 @@ test('MobileProfile GET api v1 profile detail returns clean comparison payload f
     expect($partnerMatchSection['title'])->toBe('You & Her');
 });
 
-test('MobileProfile GET api v1 profile detail keeps comparison null without target preferences', function () {
+test('MobileProfile GET api v1 profile detail returns basic comparison without target preferences', function () {
     [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
     Sanctum::actingAs($viewerUser);
 
@@ -560,7 +696,7 @@ test('MobileProfile GET api v1 profile detail keeps comparison null without targ
     $response
         ->assertOk()
         ->assertJsonPath('success', true)
-        ->assertJsonPath('display.comparison', null)
+        ->assertJsonPath('display.comparison.enabled', true)
         ->assertJsonStructure([
             'profile',
             'display' => [
@@ -568,10 +704,148 @@ test('MobileProfile GET api v1 profile detail keeps comparison null without targ
                 'sections',
                 'share',
                 'actions',
+                'comparison' => [
+                    'title',
+                    'summary',
+                    'viewer',
+                    'target',
+                    'rows',
+                ],
             ],
         ]);
 
-    expect(collect($response->json('display.sections'))->firstWhere('key', 'partner_match'))->toBeNull();
+    $comparison = $response->json('display.comparison');
+    $keys = collect($comparison['rows'])->pluck('key')->all();
+
+    expect($comparison['title'])->toBe('You & Her');
+    expect($keys)->toContain('age')->toContain('location')->toContain('community');
+    expect(collect($comparison['rows'])->where('key', 'location')->first()['status'])->toBe('neutral');
+    expect(collect($response->json('display.sections'))->firstWhere('key', 'partner_match'))->not->toBeNull();
+});
+
+test('MobileProfile comparison marks same taluka location as strong', function () {
+    $chain = mobileApiProfileTestLocationChain();
+    $targetLeaf = mobileApiProfileTestLocationNode('village', 'Pimple Saudagar', $chain['taluka']);
+    [$viewerUser, , , $targetProfile] = mobileApiCreateComparisonProfilesAt($chain['leaf'], $targetLeaf);
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $row = mobileApiLocationComparisonRow($response->json('display.comparison'));
+    expect($row['status'])->toBe('strong');
+    expect($row['status_label'])->toBe('Strong');
+    expect($row['is_counted'])->toBeTrue();
+});
+
+test('MobileProfile comparison marks nearby taluka location as strong using lat lng', function () {
+    $base = mobileApiProfileTestLocationChain(
+        talukaExtra: ['lat' => 18.5912, 'lng' => 73.7400]
+    );
+    $targetTaluka = mobileApiProfileTestLocationNode(
+        'taluka',
+        'Mulshi',
+        $base['district'],
+        ['lat' => 18.5990, 'lng' => 73.7520]
+    );
+    $targetLeaf = mobileApiProfileTestLocationNode('village', 'Hinjewadi', $targetTaluka);
+    [$viewerUser, , , $targetProfile] = mobileApiCreateComparisonProfilesAt($base['leaf'], $targetLeaf);
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $row = mobileApiLocationComparisonRow($response->json('display.comparison'));
+    expect($row['status'])->toBe('strong');
+    expect($row['status_label'])->toBe('Strong');
+    expect($row['is_counted'])->toBeTrue();
+});
+
+test('MobileProfile comparison marks same district different taluka as match', function () {
+    $base = mobileApiProfileTestLocationChain();
+    $targetTaluka = mobileApiProfileTestLocationNode('taluka', 'Maval', $base['district']);
+    $targetLeaf = mobileApiProfileTestLocationNode('village', 'Talegaon', $targetTaluka);
+    [$viewerUser, , , $targetProfile] = mobileApiCreateComparisonProfilesAt($base['leaf'], $targetLeaf);
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $row = mobileApiLocationComparisonRow($response->json('display.comparison'));
+    expect($row['status'])->toBe('match');
+    expect($row['status_label'])->toBe('Match');
+    expect($row['is_counted'])->toBeTrue();
+});
+
+test('MobileProfile comparison marks nearby district location as near using lat lng', function () {
+    $country = mobileApiProfileTestLocationNode('country', 'India');
+    $state = mobileApiProfileTestLocationNode('state', 'Maharashtra', $country);
+    $viewerDistrict = mobileApiProfileTestLocationNode('district', 'Pune', $state, ['lat' => 18.5204, 'lng' => 73.8567]);
+    $targetDistrict = mobileApiProfileTestLocationNode('district', 'Satara', $state, ['lat' => 18.6100, 'lng' => 73.9100]);
+    $viewerTaluka = mobileApiProfileTestLocationNode('taluka', 'Haveli', $viewerDistrict);
+    $targetTaluka = mobileApiProfileTestLocationNode('taluka', 'Wai', $targetDistrict);
+    $viewerLeaf = mobileApiProfileTestLocationNode('village', 'Wakad', $viewerTaluka);
+    $targetLeaf = mobileApiProfileTestLocationNode('village', 'Wai City', $targetTaluka);
+    [$viewerUser, , , $targetProfile] = mobileApiCreateComparisonProfilesAt($viewerLeaf, $targetLeaf);
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $row = mobileApiLocationComparisonRow($response->json('display.comparison'));
+    expect($row['status'])->toBe('near');
+    expect($row['status_label'])->toBe('Near');
+    expect($row['is_counted'])->toBeTrue();
+});
+
+test('MobileProfile comparison keeps same state only location neutral and uncounted', function () {
+    $country = mobileApiProfileTestLocationNode('country', 'India');
+    $state = mobileApiProfileTestLocationNode('state', 'Maharashtra', $country);
+    $viewerDistrict = mobileApiProfileTestLocationNode('district', 'Pune', $state, ['lat' => 18.5204, 'lng' => 73.8567]);
+    $targetDistrict = mobileApiProfileTestLocationNode('district', 'Nagpur', $state, ['lat' => 21.1458, 'lng' => 79.0882]);
+    $viewerTaluka = mobileApiProfileTestLocationNode('taluka', 'Haveli', $viewerDistrict);
+    $targetTaluka = mobileApiProfileTestLocationNode('taluka', 'Nagpur Rural', $targetDistrict);
+    $viewerLeaf = mobileApiProfileTestLocationNode('village', 'Wakad', $viewerTaluka);
+    $targetLeaf = mobileApiProfileTestLocationNode('village', 'Nagpur City', $targetTaluka);
+    [$viewerUser, , , $targetProfile] = mobileApiCreateComparisonProfilesAt($viewerLeaf, $targetLeaf);
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $row = mobileApiLocationComparisonRow($response->json('display.comparison'));
+    expect($row['status'])->toBe('neutral');
+    expect($row['status_label'])->toBe('Basic');
+    expect($row['is_counted'])->toBeFalse();
+});
+
+test('MobileProfile comparison does not treat pincode without lat lng as nearby', function () {
+    $country = mobileApiProfileTestLocationNode('country', 'India');
+    $state = mobileApiProfileTestLocationNode('state', 'Maharashtra', $country);
+    $viewerDistrict = mobileApiProfileTestLocationNode('district', 'Pune', $state, ['pincode' => '411001']);
+    $targetDistrict = mobileApiProfileTestLocationNode('district', 'Raigad', $state, ['pincode' => '411001']);
+    $viewerTaluka = mobileApiProfileTestLocationNode('taluka', 'Haveli', $viewerDistrict, ['pincode' => '411057']);
+    $targetTaluka = mobileApiProfileTestLocationNode('taluka', 'Panvel', $targetDistrict, ['pincode' => '411057']);
+    $viewerLeaf = mobileApiProfileTestLocationNode('village', 'Wakad', $viewerTaluka, ['pincode' => '411057']);
+    $targetLeaf = mobileApiProfileTestLocationNode('village', 'Panvel City', $targetTaluka, ['pincode' => '411057']);
+    [$viewerUser, , , $targetProfile] = mobileApiCreateComparisonProfilesAt($viewerLeaf, $targetLeaf);
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $row = mobileApiLocationComparisonRow($response->json('display.comparison'));
+    expect($row['status'])->toBe('neutral');
+    expect($row['status_label'])->toBe('Basic');
+    expect($row['is_counted'])->toBeFalse();
+});
+
+test('MobileProfile GET api v1 profile detail labels male target comparison as You and Him', function () {
+    $viewerUser = User::factory()->create(['name' => 'Male Label Viewer', 'gender' => 'female']);
+    $targetUser = User::factory()->create(['name' => 'Male Label Target', 'gender' => 'male']);
+    mobileApiCreateValidActionProfile($viewerUser, 'Male Label Viewer', 'female');
+    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Male Label Target', 'male');
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('display.comparison.title', 'You & Him');
 });
 
 test('MobileProfile presenter keeps comparison null when viewer has no profile', function () {
@@ -582,6 +856,217 @@ test('MobileProfile presenter keeps comparison null when viewer has no profile',
     $display = app(MobileProfileDisplayPresenter::class)->forProfile($targetProfile, $viewerWithoutProfile);
 
     expect($display['comparison'])->toBeNull();
+});
+
+test('MobileProfile comparison shows same sub caste as counted match', function () {
+    [$religion, $caste, $subCaste] = mobileApiProfileTestCommunity();
+    $viewerUser = User::factory()->create(['name' => 'Sub Caste Viewer', 'gender' => 'male']);
+    $targetUser = User::factory()->create(['name' => 'Sub Caste Target', 'gender' => 'female']);
+    $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Sub Caste Viewer', 'male', null, [
+        'religion_id' => $religion->id,
+        'caste_id' => $caste->id,
+        'sub_caste_id' => $subCaste->id,
+    ]);
+    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Sub Caste Target', 'female', null, [
+        'religion_id' => $religion->id,
+        'caste_id' => $caste->id,
+        'sub_caste_id' => $subCaste->id,
+    ]);
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $row = mobileApiComparisonRow($response->json('display.comparison'), 'same_sub_caste');
+    expect($row)->toBeArray();
+    expect($row['status'])->toBe('match');
+    expect($row['status_label'])->toBe('Match');
+    expect($row['is_counted'])->toBeTrue();
+    expect($row['viewer_value'])->toBe($row['target_value']);
+});
+
+test('MobileProfile comparison hides sub caste row when sub caste is missing or different', function () {
+    [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    $targetProfile->forceFill(['sub_caste_id' => null])->save();
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    expect(mobileApiComparisonRow($response->json('display.comparison'), 'same_sub_caste'))->toBeNull();
+});
+
+test('MobileProfile comparison marks same education degree as match', function () {
+    $degree = mobileApiProfileTestEducationDegree('B.A.', 50);
+    $viewerUser = User::factory()->create(['name' => 'Education Viewer', 'gender' => 'male']);
+    $targetUser = User::factory()->create(['name' => 'Education Target', 'gender' => 'female']);
+    mobileApiCreateValidActionProfile($viewerUser, 'Education Viewer', 'male', null, [
+        'highest_education' => $degree->code,
+    ]);
+    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Education Target', 'female', null, [
+        'highest_education' => $degree->code,
+    ]);
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $row = mobileApiComparisonRow($response->json('display.comparison'), 'education');
+    expect($row)->toBeArray();
+    expect($row['status'])->toBe('match');
+    expect($row['status_label'])->toBe('Match');
+    expect($row['is_counted'])->toBeTrue();
+});
+
+test('MobileProfile comparison marks nearby education degree sort order as near', function () {
+    $viewerDegree = mobileApiProfileTestEducationDegree('B.Com.', 60);
+    $targetDegree = mobileApiProfileTestEducationDegree('B.Sc.', 61);
+    $viewerUser = User::factory()->create(['name' => 'Near Education Viewer', 'gender' => 'male']);
+    $targetUser = User::factory()->create(['name' => 'Near Education Target', 'gender' => 'female']);
+    mobileApiCreateValidActionProfile($viewerUser, 'Near Education Viewer', 'male', null, [
+        'highest_education' => $viewerDegree->code,
+    ]);
+    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Near Education Target', 'female', null, [
+        'highest_education' => $targetDegree->code,
+    ]);
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $row = mobileApiComparisonRow($response->json('display.comparison'), 'education');
+    expect($row)->toBeArray();
+    expect($row['status'])->toBe('near');
+    expect($row['status_label'])->toBe('Near');
+    expect($row['is_counted'])->toBeTrue();
+});
+
+test('MobileProfile comparison hides far education degree row', function () {
+    $viewerDegree = mobileApiProfileTestEducationDegree('SSC', 10);
+    $targetDegree = mobileApiProfileTestEducationDegree('MBA', 90);
+    $viewerUser = User::factory()->create(['name' => 'Far Education Viewer', 'gender' => 'male']);
+    $targetUser = User::factory()->create(['name' => 'Far Education Target', 'gender' => 'female']);
+    mobileApiCreateValidActionProfile($viewerUser, 'Far Education Viewer', 'male', null, [
+        'highest_education' => $viewerDegree->code,
+    ]);
+    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Far Education Target', 'female', null, [
+        'highest_education' => $targetDegree->code,
+    ]);
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    expect(mobileApiComparisonRow($response->json('display.comparison'), 'education'))->toBeNull();
+});
+
+test('MobileProfile comparison shows income when viewer income is within target expectation', function () {
+    $viewerUser = User::factory()->create(['name' => 'Income Viewer', 'gender' => 'male']);
+    $targetUser = User::factory()->create(['name' => 'Income Target', 'gender' => 'female']);
+    mobileApiCreateValidActionProfile($viewerUser, 'Income Viewer', 'male', null, [
+        'annual_income' => 800000,
+        'income_private' => false,
+    ]);
+    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Income Target', 'female');
+    DB::table('profile_preference_criteria')->updateOrInsert(
+        ['profile_id' => $targetProfile->id],
+        [
+            'preferred_income_min' => 700000,
+            'preferred_income_max' => 900000,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]
+    );
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $row = mobileApiComparisonRow($response->json('display.comparison'), 'income');
+    expect($row)->toBeArray();
+    expect($row['status'])->toBe('match');
+    expect($row['is_counted'])->toBeTrue();
+    expect($row['viewer_value'])->toBe('₹8 L');
+});
+
+test('MobileProfile comparison hides income when viewer income is outside target expectation', function () {
+    $viewerUser = User::factory()->create(['name' => 'Outside Income Viewer', 'gender' => 'male']);
+    $targetUser = User::factory()->create(['name' => 'Outside Income Target', 'gender' => 'female']);
+    mobileApiCreateValidActionProfile($viewerUser, 'Outside Income Viewer', 'male', null, [
+        'annual_income' => 500000,
+        'income_private' => false,
+    ]);
+    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Outside Income Target', 'female');
+    DB::table('profile_preference_criteria')->updateOrInsert(
+        ['profile_id' => $targetProfile->id],
+        [
+            'preferred_income_min' => 700000,
+            'preferred_income_max' => 900000,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]
+    );
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    expect(mobileApiComparisonRow($response->json('display.comparison'), 'income'))->toBeNull();
+});
+
+test('MobileProfile comparison shows gunamilan when available points are above threshold', function () {
+    $this->app->instance(GunamilanService::class, new class
+    {
+        public function calculate(): array
+        {
+            return [
+                'available' => true,
+                'total_points' => 24.0,
+                'max_points' => 36.0,
+            ];
+        }
+    });
+    [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $row = mobileApiComparisonRow($response->json('display.comparison'), 'gunamilan');
+    expect($row)->toBeArray();
+    expect($row['status'])->toBe('match');
+    expect($row['viewer_value'])->toBe('24/36');
+    expect($row['target_value'])->toBe('Compatible');
+    expect($row['is_counted'])->toBeTrue();
+});
+
+test('MobileProfile comparison hides gunamilan when unavailable or below threshold', function () {
+    $this->app->instance(GunamilanService::class, new class
+    {
+        public function calculate(): array
+        {
+            return [
+                'available' => true,
+                'total_points' => 18.0,
+                'max_points' => 36.0,
+            ];
+        }
+    });
+    [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    expect(mobileApiComparisonRow($response->json('display.comparison'), 'gunamilan'))->toBeNull();
+});
+
+test('MobileProfile comparison hides gunamilan when service fails without breaking API', function () {
+    $this->app->instance(GunamilanService::class, new class
+    {
+        public function calculate(): array
+        {
+            throw new RuntimeException('Gunamilan fixture failure');
+        }
+    });
+    [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $response->assertOk();
+    expect(mobileApiComparisonRow($response->json('display.comparison'), 'gunamilan'))->toBeNull();
 });
 
 test('MobileProfile POST api v1 profile action can shortlist safely', function () {
