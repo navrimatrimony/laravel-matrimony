@@ -26,6 +26,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/matrimony-profile', [MatrimonyProfileApiController::class, 'update']); // UPDATE
     Route::post('/matrimony-profile/photo', [MatrimonyProfileApiController::class, 'uploadPhoto']); // PHOTO UPLOAD
     Route::get('/matrimony-profiles', [MatrimonyProfileApiController::class, 'index']); // LIST ALL PROFILES
+    Route::get('/matrimony-profiles/more-sections', [MatrimonyProfileApiController::class, 'moreSections']); // MOBILE MORE MATCHES SECTIONS
     Route::get('/matrimony-profiles/{id}', [MatrimonyProfileApiController::class, 'showById']); // GET PROFILE BY ID
     Route::post('/matrimony-profiles/{id}/shortlist', [ProfileActionApiController::class, 'shortlist']); // SHORTLIST PROFILE
     Route::delete('/matrimony-profiles/{id}/shortlist', [ProfileActionApiController::class, 'unshortlist']); // REMOVE SHORTLIST

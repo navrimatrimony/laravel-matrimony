@@ -10,6 +10,8 @@ use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
 use App\Models\OccupationMaster;
 use App\Models\Religion;
+use Carbon\CarbonInterface;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -213,7 +215,15 @@ class ProfilePreferenceMatchService
             return null;
         }
         try {
-            return max(0, now()->diffInYears($viewer->date_of_birth));
+            $dateOfBirth = $viewer->date_of_birth instanceof CarbonInterface
+                ? $viewer->date_of_birth
+                : Carbon::parse($viewer->date_of_birth);
+
+            if ($dateOfBirth->isFuture()) {
+                return null;
+            }
+
+            return (int) $dateOfBirth->age;
         } catch (\Throwable $e) {
             return null;
         }

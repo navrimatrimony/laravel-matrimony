@@ -697,6 +697,127 @@ test('MobileProfile GET api v1 matrimony profiles includes safe list card displa
     expect(mb_strtolower($displayJson))->not->toContain('contact');
 });
 
+test('MobileProfile more sections endpoint requires authentication', function () {
+    $this->getJson('/api/v1/matrimony-profiles/more-sections')
+        ->assertUnauthorized();
+});
+
+test('MobileProfile more sections returns gender aware real sections and safe card rows', function () {
+    [$viewerUser, $viewerProfile, , $targetProfile] = mobileApiProfileActionPair();
+    mobileApiAddTargetPartnerPreferences($targetProfile, $viewerProfile);
+    DB::table('profile_views')->insert([
+        'viewer_profile_id' => $viewerProfile->id,
+        'viewed_profile_id' => $targetProfile->id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    DB::table('profile_views')->insert([
+        'viewer_profile_id' => $targetProfile->id,
+        'viewed_profile_id' => $viewerProfile->id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/more-sections');
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('viewer_context.viewer_gender', 'male')
+        ->assertJsonPath('viewer_context.target_gender', 'female')
+        ->assertJsonPath('viewer_context.target_singular_en', 'Bride')
+        ->assertJsonPath('viewer_context.target_plural_en', 'Brides')
+        ->assertJsonPath('viewer_context.target_plural_mr', 'वधू');
+
+    $sections = collect($response->json('sections'));
+    expect($sections->pluck('key')->all())->toBe([
+        'looking_for_me',
+        'recently_viewed',
+        'matching_my_preference',
+        'recent_visitors',
+        'you_may_like',
+    ]);
+
+    $lookingForMe = $sections->firstWhere('key', 'looking_for_me');
+    expect($lookingForMe['title_en'])->toBe('Brides looking for me');
+    expect($lookingForMe['title_mr'])->toBe('माझ्या शोधात असलेल्या वधू');
+    expect(collect($lookingForMe['profiles'])->pluck('id')->all())->toContain($targetProfile->id);
+
+    $row = collect($lookingForMe['profiles'])->firstWhere('id', $targetProfile->id);
+    expect($row)->toBeArray();
+    expect($row['display']['card'])->toHaveKeys([
+        'name',
+        'age',
+        'age_label',
+        'primary_photo_url',
+        'photo_count',
+        'verified',
+        'premium',
+    ]);
+    expect($row['display']['actions'])->toHaveKey('can_send_interest');
+
+    $recentlyViewed = $sections->firstWhere('key', 'recently_viewed');
+    expect(collect($recentlyViewed['profiles'])->pluck('id')->all())->toContain($targetProfile->id);
+
+    $payloadJson = json_encode($response->json(), JSON_THROW_ON_ERROR);
+    expect($payloadJson)->not->toContain('phone');
+    expect($payloadJson)->not->toContain('email');
+    expect(mb_strtolower($payloadJson))->not->toContain('whatsapp');
+    expect(mb_strtolower($payloadJson))->not->toContain('contact_unlock');
+});
+
+test('MobileProfile more sections labels female viewer target as groom', function () {
+    $viewerUser = User::factory()->create(['name' => 'Female More Sections Viewer', 'gender' => 'female']);
+    $targetUser = User::factory()->create(['name' => 'Male More Sections Target', 'gender' => 'male']);
+    mobileApiCreateValidActionProfile($viewerUser, 'Female More Sections Viewer', 'female');
+    mobileApiCreateValidActionProfile($targetUser, 'Male More Sections Target', 'male');
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/more-sections');
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('viewer_context.viewer_gender', 'female')
+        ->assertJsonPath('viewer_context.target_gender', 'male')
+        ->assertJsonPath('viewer_context.target_singular_en', 'Groom')
+        ->assertJsonPath('viewer_context.target_plural_en', 'Grooms')
+        ->assertJsonPath('viewer_context.target_plural_mr', 'वर');
+
+    $sections = collect($response->json('sections'));
+    expect($sections->firstWhere('key', 'looking_for_me')['title_en'])->toBe('Grooms looking for me');
+    expect($sections->firstWhere('key', 'you_may_like')['title_mr'])->toBe('तुम्हाला आवडू शकणाऱ्या वर');
+});
+
+test('MobileProfile more sections locked recent visitors does not leak visitor identity', function () {
+    $ownerUser = User::factory()->create(['name' => 'Locked Owner', 'gender' => 'male']);
+    $visitorUser = User::factory()->create(['name' => 'Locked Recent Visitor User', 'gender' => 'female']);
+    $ownerProfile = mobileApiCreateValidActionProfile($ownerUser, 'Locked Owner Profile', 'male');
+    $visitorProfile = mobileApiCreateValidActionProfile($visitorUser, 'Locked Recent Visitor Profile', 'female');
+    DB::table('profile_views')->insert([
+        'viewer_profile_id' => $visitorProfile->id,
+        'viewed_profile_id' => $ownerProfile->id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    Sanctum::actingAs($ownerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/more-sections');
+
+    $response->assertOk();
+    $recentVisitors = collect($response->json('sections'))->firstWhere('key', 'recent_visitors');
+    expect($recentVisitors['locked'])->toBeTrue();
+    expect($recentVisitors['requires_upgrade'])->toBeTrue();
+    expect($recentVisitors['teaser_count'])->toBeGreaterThanOrEqual(1);
+    expect($recentVisitors['profiles'])->toBe([]);
+
+    $recentVisitorsJson = json_encode($recentVisitors, JSON_THROW_ON_ERROR);
+    expect($recentVisitorsJson)->not->toContain('Locked Recent Visitor Profile');
+    expect($recentVisitorsJson)->not->toContain('phone');
+    expect($recentVisitorsJson)->not->toContain('email');
+    expect(mb_strtolower($recentVisitorsJson))->not->toContain('whatsapp');
+});
+
 test('MobileProfile display contact keeps own profile unlock disabled', function () {
     $user = User::factory()->create(['name' => 'Own Contact Account']);
     $profile = mobileApiCreateValidActionProfile($user, 'Own Contact Candidate', 'male');

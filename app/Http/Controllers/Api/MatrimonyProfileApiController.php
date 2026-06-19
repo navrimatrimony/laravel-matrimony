@@ -7,6 +7,7 @@ use App\Models\Caste;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Models\SubCaste;
+use App\Services\Api\MobileMoreMatchesSectionService;
 use App\Services\Api\MobileProfileDisplayPresenter;
 use App\Services\MutationService;
 use App\Services\Parsing\IntakeControlledFieldNormalizer;
@@ -371,6 +372,14 @@ class MatrimonyProfileApiController extends Controller
             'success' => true,
             'profiles' => $profiles,
         ]);
+    }
+
+    /**
+     * Mobile More Matches sections for the Flutter discovery screen.
+     */
+    public function moreSections(Request $request, MobileMoreMatchesSectionService $sections)
+    {
+        return response()->json($sections->forUser($request->user()));
     }
 
     /**

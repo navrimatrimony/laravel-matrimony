@@ -1,0 +1,557 @@
+<?php
+
+namespace App\Services\Api;
+
+use App\Models\HiddenProfile;
+use App\Models\MatrimonyProfile;
+use App\Models\ProfileView;
+use App\Models\User;
+use App\Services\FeatureUsageService;
+use App\Services\Matching\MatchingService;
+use App\Services\ProfileLifecycleService;
+use App\Services\ProfilePreferenceMatchService;
+use App\Services\ViewTrackingService;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
+
+class MobileMoreMatchesSectionService
+{
+    private const SECTION_LIMIT = 12;
+
+    private const CANDIDATE_POOL_LIMIT = 160;
+
+    public function __construct(
+        private readonly MobileProfileDisplayPresenter $presenter,
+        private readonly MatchingService $matchingService,
+        private readonly FeatureUsageService $featureUsage,
+    ) {}
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function forUser(User $viewer): array
+    {
+        $viewer->loadMissing('matrimonyProfile.gender');
+        $viewerProfile = $viewer->matrimonyProfile;
+        $context = $this->viewerContext($viewerProfile, $viewer);
+
+        if (! $viewerProfile instanceof MatrimonyProfile) {
+            return [
+                'success' => true,
+                'viewer_context' => $context,
+                'sections' => $this->emptySections($context),
+            ];
+        }
+
+        $viewerProfile->loadMissing(['gender', 'preferenceCriteria', 'user']);
+
+        return [
+            'success' => true,
+            'viewer_context' => $context,
+            'sections' => [
+                $this->lookingForMeSection($viewerProfile, $viewer, $context),
+                $this->recentlyViewedSection($viewerProfile, $viewer, $context),
+                $this->matchingMyPreferenceSection($viewerProfile, $viewer, $context),
+                $this->recentVisitorsSection($viewerProfile, $viewer, $context),
+                $this->youMayLikeSection($viewerProfile, $viewer, $context),
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, string|null>
+     */
+    private function viewerContext(?MatrimonyProfile $viewerProfile, User $viewer): array
+    {
+        $viewerGender = $this->genderKey($viewerProfile) ?? $this->genderString($viewer->gender ?? null);
+        $targetGender = match ($viewerGender) {
+            'male' => 'female',
+            'female' => 'male',
+            default => null,
+        };
+
+        $labels = match ($targetGender) {
+            'female' => ['Bride', 'Brides', 'वधू'],
+            'male' => ['Groom', 'Grooms', 'वर'],
+            default => ['Profile', 'Profiles', 'स्थळे'],
+        };
+
+        return [
+            'viewer_gender' => $viewerGender,
+            'target_gender' => $targetGender,
+            'target_singular_en' => $labels[0],
+            'target_plural_en' => $labels[1],
+            'target_plural_mr' => $labels[2],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @return list<array<string, mixed>>
+     */
+    private function emptySections(array $context): array
+    {
+        return [
+            $this->section('looking_for_me', $context, 'looking_for_me', collect()),
+            $this->section('recently_viewed', $context, 'recently_viewed', collect()),
+            $this->section('matching_my_preference', $context, 'matching_my_preference', collect()),
+            $this->section('recent_visitors', $context, 'recent_visitors', collect(), [
+                'locked' => true,
+                'requires_upgrade' => true,
+                'teaser_count' => 0,
+            ]),
+            $this->section('you_may_like', $context, 'you_may_like', collect()),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    private function lookingForMeSection(MatrimonyProfile $viewerProfile, User $viewer, array $context): array
+    {
+        $candidates = $this->candidateQuery($viewerProfile)
+            ->with($this->cardRelations())
+            ->limit(self::CANDIDATE_POOL_LIMIT)
+            ->get();
+
+        $rows = collect();
+        foreach ($candidates as $candidate) {
+            try {
+                $fit = ProfilePreferenceMatchService::build($viewerProfile, $candidate);
+            } catch (\Throwable) {
+                continue;
+            }
+
+            if (($fit['target_has_preferences'] ?? false) !== true) {
+                continue;
+            }
+            $counts = is_array($fit['counts'] ?? null) ? $fit['counts'] : [];
+            if ((int) ($counts[ProfilePreferenceMatchService::STATUS_NOT_MATCHED] ?? 0) > 0) {
+                continue;
+            }
+
+            $score = ((int) ($counts[ProfilePreferenceMatchService::STATUS_MATCH] ?? 0) * 3)
+                + ((int) ($counts[ProfilePreferenceMatchService::STATUS_FLEXIBLE] ?? 0));
+
+            $rows->push([
+                'profile' => $candidate,
+                'section_score' => $score,
+            ]);
+        }
+
+        $profiles = $rows
+            ->sortByDesc(fn (array $row): int => (int) ($row['section_score'] ?? 0))
+            ->take(self::SECTION_LIMIT)
+            ->mapWithKeys(fn (array $row): array => [(int) $row['profile']->id => $row])
+            ->values();
+
+        return $this->sectionFromRows('looking_for_me', $context, $profiles, $viewer);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    private function recentlyViewedSection(MatrimonyProfile $viewerProfile, User $viewer, array $context): array
+    {
+        if (! Schema::hasTable('profile_views')) {
+            return $this->section('recently_viewed', $context, 'recently_viewed', collect());
+        }
+
+        $views = $this->distinctProfileViews('viewer_profile_id', (int) $viewerProfile->id, 'viewed_profile_id');
+        $profileIds = $views->pluck('profile_id')->all();
+        $profiles = $this->profilesByOrderedIds($viewerProfile, $profileIds);
+
+        $rows = $profiles->map(function (MatrimonyProfile $profile) use ($views): array {
+            $meta = $views->firstWhere('profile_id', (int) $profile->id);
+
+            return [
+                'profile' => $profile,
+                'viewed_at' => $meta['viewed_at'] ?? null,
+                'viewed_at_human' => $meta['viewed_at_human'] ?? null,
+            ];
+        });
+
+        return $this->sectionFromRows('recently_viewed', $context, $rows, $viewer);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    private function matchingMyPreferenceSection(MatrimonyProfile $viewerProfile, User $viewer, array $context): array
+    {
+        $rows = $this->matchingService
+            ->findMatchesForTab($viewerProfile, MatchingService::TAB_PERFECT, self::SECTION_LIMIT)
+            ->map(fn (array $row): array => [
+                'profile' => $row['profile'],
+                'section_score' => (int) ($row['score'] ?? 0),
+            ]);
+
+        return $this->sectionFromRows('matching_my_preference', $context, $rows, $viewer);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    private function recentVisitorsSection(MatrimonyProfile $viewerProfile, User $viewer, array $context): array
+    {
+        $canSee = $this->canSeeRecentVisitors($viewer);
+        if (! $canSee) {
+            return $this->section('recent_visitors', $context, 'recent_visitors', collect(), [
+                'locked' => true,
+                'requires_upgrade' => true,
+                'teaser_count' => ViewTrackingService::countEligibleDistinctViewersForTeaser((int) $viewerProfile->id),
+            ]);
+        }
+
+        $limit = self::SECTION_LIMIT;
+        try {
+            if (! $this->featureUsage->whoViewedMeHasFullViewerList($viewer)) {
+                $previewLimit = max(0, $this->featureUsage->getWhoViewedMePreviewLimit((int) $viewer->id));
+                $limit = min(self::SECTION_LIMIT, $previewLimit);
+            }
+        } catch (\Throwable) {
+            $limit = 0;
+        }
+        if ($limit < 1) {
+            return $this->section('recent_visitors', $context, 'recent_visitors', collect(), [
+                'locked' => true,
+                'requires_upgrade' => true,
+                'teaser_count' => ViewTrackingService::countEligibleDistinctViewersForTeaser((int) $viewerProfile->id),
+            ]);
+        }
+
+        $views = $this->distinctProfileViews('viewed_profile_id', (int) $viewerProfile->id, 'viewer_profile_id', $limit);
+        $profileIds = $views->pluck('profile_id')->all();
+        $profiles = $this->profilesByOrderedIds($viewerProfile, $profileIds);
+        $rows = $profiles->map(function (MatrimonyProfile $profile) use ($views): array {
+            $meta = $views->firstWhere('profile_id', (int) $profile->id);
+
+            return [
+                'profile' => $profile,
+                'viewed_at' => $meta['viewed_at'] ?? null,
+                'viewed_at_human' => $meta['viewed_at_human'] ?? null,
+            ];
+        });
+
+        return $this->sectionFromRows('recent_visitors', $context, $rows, $viewer, [
+            'locked' => false,
+            'requires_upgrade' => false,
+            'teaser_count' => null,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    private function youMayLikeSection(MatrimonyProfile $viewerProfile, User $viewer, array $context): array
+    {
+        $dateKey = now()->toDateString();
+        $profiles = $this->candidateQuery($viewerProfile)
+            ->with($this->cardRelations())
+            ->limit(80)
+            ->get()
+            ->sortBy(fn (MatrimonyProfile $profile): int => crc32($viewerProfile->id.'|'.$dateKey.'|you_may_like|'.$profile->id))
+            ->take(self::SECTION_LIMIT)
+            ->values();
+
+        return $this->section('you_may_like', $context, 'you_may_like', $profiles, [], $viewer);
+    }
+
+    private function canSeeRecentVisitors(User $viewer): bool
+    {
+        try {
+            return $this->featureUsage->canUse((int) $viewer->id, FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * @return Builder<MatrimonyProfile>
+     */
+    private function candidateQuery(MatrimonyProfile $viewerProfile): Builder
+    {
+        $query = MatrimonyProfile::query()
+            ->whereMemberAccountsOnly()
+            ->whereKeyNot($viewerProfile->id)
+            ->where('lifecycle_state', 'active')
+            ->where('is_suspended', false)
+            ->whereNonShowcase();
+
+        $targetGender = $this->oppositeGenderKey($viewerProfile);
+        if ($targetGender !== null) {
+            $query->whereHas('gender', static fn (Builder $gender): Builder => $gender->where('key', $targetGender));
+        }
+
+        $excluded = $this->excludedProfileIds($viewerProfile);
+        if ($excluded !== []) {
+            $query->whereNotIn('id', $excluded);
+        }
+
+        return $query->orderByDesc('updated_at');
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function excludedProfileIds(MatrimonyProfile $viewerProfile): array
+    {
+        $ids = ViewTrackingService::getBlockedProfileIds((int) $viewerProfile->id)
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
+        if (Schema::hasTable('hidden_profiles')) {
+            $hidden = HiddenProfile::query()
+                ->where('owner_profile_id', $viewerProfile->id)
+                ->pluck('hidden_profile_id')
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+            $ids = array_merge($ids, $hidden);
+        }
+
+        return array_values(array_unique(array_filter($ids)));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function cardRelations(): array
+    {
+        $relations = [
+            'user.activeSubscription.plan',
+            'gender',
+            'religion',
+            'caste',
+            'subCaste',
+            'occupationMaster',
+            'occupationCustom',
+            'horoscope',
+        ];
+        if (Schema::hasTable('profile_photos')) {
+            $relations[] = 'photos';
+        }
+
+        return $relations;
+    }
+
+    /**
+     * @return Collection<int, array{profile_id: int, viewed_at: string|null, viewed_at_human: string|null}>
+     */
+    private function distinctProfileViews(string $ownerColumn, int $ownerProfileId, string $profileColumn, ?int $limit = null): Collection
+    {
+        if (! Schema::hasTable('profile_views')) {
+            return collect();
+        }
+
+        $seen = [];
+        $out = collect();
+        $rows = ProfileView::query()
+            ->where($ownerColumn, $ownerProfileId)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(300)
+            ->get([$profileColumn, 'created_at']);
+
+        foreach ($rows as $row) {
+            $profileId = (int) $row->{$profileColumn};
+            if ($profileId <= 0 || isset($seen[$profileId])) {
+                continue;
+            }
+            $seen[$profileId] = true;
+            $out->push([
+                'profile_id' => $profileId,
+                'viewed_at' => $row->created_at?->toIso8601String(),
+                'viewed_at_human' => $row->created_at?->diffForHumans(),
+            ]);
+            if ($limit !== null && $out->count() >= $limit) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  list<int>  $profileIds
+     * @return Collection<int, MatrimonyProfile>
+     */
+    private function profilesByOrderedIds(MatrimonyProfile $viewerProfile, array $profileIds): Collection
+    {
+        $profileIds = array_values(array_unique(array_map('intval', $profileIds)));
+        if ($profileIds === []) {
+            return collect();
+        }
+
+        $profiles = $this->candidateQuery($viewerProfile)
+            ->whereIn('id', $profileIds)
+            ->with($this->cardRelations())
+            ->get()
+            ->filter(fn (MatrimonyProfile $profile): bool => ProfileLifecycleService::isVisibleToOthers($profile))
+            ->keyBy(fn (MatrimonyProfile $profile): int => (int) $profile->id);
+
+        return collect($profileIds)
+            ->map(fn (int $id) => $profiles->get($id))
+            ->filter()
+            ->take(self::SECTION_LIMIT)
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @param  array<string, mixed>  $context
+     * @param  array<string, mixed>  $extra
+     * @return array<string, mixed>
+     */
+    private function sectionFromRows(string $key, array $context, Collection $rows, User $viewer, array $extra = []): array
+    {
+        $profiles = $rows->mapWithKeys(function (array $row): array {
+            $profile = $row['profile'] ?? null;
+
+            return $profile instanceof MatrimonyProfile ? [(int) $profile->id => $row] : [];
+        })->values()->take(self::SECTION_LIMIT);
+
+        $profileModels = $profiles->map(fn (array $row) => $row['profile']);
+
+        return $this->section($key, $context, $key, $profileModels, $extra, $viewer, $profiles);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @param  Collection<int, MatrimonyProfile>  $profiles
+     * @param  array<string, mixed>  $extra
+     * @param  Collection<int, array<string, mixed>>|null  $rowMeta
+     * @return array<string, mixed>
+     */
+    private function section(
+        string $key,
+        array $context,
+        string $labelKey,
+        Collection $profiles,
+        array $extra = [],
+        ?User $viewer = null,
+        ?Collection $rowMeta = null,
+    ): array {
+        return array_merge([
+            'key' => $key,
+            'title_en' => $this->title($labelKey, $context, 'en'),
+            'title_mr' => $this->title($labelKey, $context, 'mr'),
+            'subtitle_en' => $this->subtitle($labelKey, 'en'),
+            'subtitle_mr' => $this->subtitle($labelKey, 'mr'),
+            'locked' => false,
+            'requires_upgrade' => false,
+            'profiles' => $this->profileRows($profiles, $viewer, $rowMeta),
+        ], $extra);
+    }
+
+    /**
+     * @param  Collection<int, MatrimonyProfile>  $profiles
+     * @param  Collection<int, array<string, mixed>>|null  $rowMeta
+     * @return list<array<string, mixed>>
+     */
+    private function profileRows(Collection $profiles, ?User $viewer, ?Collection $rowMeta = null): array
+    {
+        $metaById = $rowMeta?->mapWithKeys(function (array $row): array {
+            $profile = $row['profile'] ?? null;
+
+            return $profile instanceof MatrimonyProfile ? [(int) $profile->id => $row] : [];
+        }) ?? collect();
+
+        return $profiles
+            ->filter(fn (MatrimonyProfile $profile): bool => ProfileLifecycleService::isVisibleToOthers($profile))
+            ->unique(fn (MatrimonyProfile $profile): int => (int) $profile->id)
+            ->take(self::SECTION_LIMIT)
+            ->map(function (MatrimonyProfile $profile) use ($viewer, $metaById): array {
+                $row = [
+                    'id' => (int) $profile->id,
+                    'display' => $this->presenter->forListCard($profile, $viewer),
+                ];
+                $meta = $metaById->get((int) $profile->id, []);
+                foreach (['section_score', 'viewed_at', 'viewed_at_human'] as $key) {
+                    if (array_key_exists($key, $meta) && $meta[$key] !== null) {
+                        $row[$key] = $meta[$key];
+                    }
+                }
+
+                return $row;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function title(string $key, array $context, string $locale): string
+    {
+        $pluralEn = (string) ($context['target_plural_en'] ?? 'Profiles');
+        $pluralMr = (string) ($context['target_plural_mr'] ?? 'स्थळे');
+
+        return match ($key.'|'.$locale) {
+            'looking_for_me|en' => $pluralEn.' looking for me',
+            'looking_for_me|mr' => 'माझ्या शोधात असलेल्या '.$pluralMr,
+            'recently_viewed|en' => 'Recently viewed '.$pluralEn,
+            'recently_viewed|mr' => 'अलीकडे पाहिलेल्या '.$pluralMr,
+            'matching_my_preference|en' => $pluralEn.' matching my preference',
+            'matching_my_preference|mr' => 'माझ्या पसंतीशी जुळणाऱ्या '.$pluralMr,
+            'recent_visitors|en' => 'Recent visitors',
+            'recent_visitors|mr' => 'अलीकडील भेट देणाऱ्या '.$pluralMr,
+            'you_may_like|en' => $pluralEn.' you may like',
+            'you_may_like|mr' => 'तुम्हाला आवडू शकणाऱ्या '.$pluralMr,
+            default => $pluralEn,
+        };
+    }
+
+    private function subtitle(string $key, string $locale): string
+    {
+        return match ($key.'|'.$locale) {
+            'looking_for_me|en' => 'Profiles whose preferences may match you',
+            'looking_for_me|mr' => 'ज्यांच्या पसंतीशी तुमचे स्थळ जुळू शकते',
+            'recently_viewed|en' => 'Profiles you opened recently',
+            'recently_viewed|mr' => 'तुम्ही अलीकडे पाहिलेली स्थळे',
+            'matching_my_preference|en' => 'Profiles matching your saved preferences',
+            'matching_my_preference|mr' => 'तुमच्या सेव्ह केलेल्या पसंतीशी जुळणारी स्थळे',
+            'recent_visitors|en' => 'See who viewed your profile',
+            'recent_visitors|mr' => 'तुमचे प्रोफाइल कोणी पाहिले ते पहा',
+            'you_may_like|en' => 'More profiles from your active search pool',
+            'you_may_like|mr' => 'तुमच्या शोधातून आणखी योग्य स्थळे',
+            default => '',
+        };
+    }
+
+    private function oppositeGenderKey(MatrimonyProfile $profile): ?string
+    {
+        return match ($this->genderKey($profile)) {
+            'male' => 'female',
+            'female' => 'male',
+            default => null,
+        };
+    }
+
+    private function genderKey(?MatrimonyProfile $profile): ?string
+    {
+        if (! $profile) {
+            return null;
+        }
+
+        return $this->genderString($profile->gender?->key ?? $profile->gender?->label ?? $profile->user?->gender ?? null);
+    }
+
+    private function genderString(mixed $gender): ?string
+    {
+        $value = mb_strtolower(trim((string) $gender));
+        if ($value === '') {
+            return null;
+        }
+        if (str_contains($value, 'female') || str_contains($value, 'स्त्री') || str_contains($value, 'महिला')) {
+            return 'female';
+        }
+        if (str_contains($value, 'male') || str_contains($value, 'पुरुष')) {
+            return 'male';
+        }
+
+        return null;
+    }
+}

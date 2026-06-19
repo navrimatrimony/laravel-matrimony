@@ -357,6 +357,116 @@ Success response: HTTP 200
 
 The list `display` payload is intentionally lightweight. It does not include contact phone, email, WhatsApp number, contact unlock state, full profile sections, about text, or partner preferences.
 
+### GET `/api/v1/matrimony-profiles/more-sections`
+
+Requires bearer token. Returns gender-aware, real-data sections for the mobile Matches / More Matches discovery UI. This endpoint is read-only and keeps profile rows lightweight by reusing the list-card `display.card` and `display.actions` payload.
+
+Success response: HTTP 200
+
+```json
+{
+  "success": true,
+  "viewer_context": {
+    "viewer_gender": "male",
+    "target_gender": "female",
+    "target_singular_en": "Bride",
+    "target_plural_en": "Brides",
+    "target_plural_mr": "वधू"
+  },
+  "sections": [
+    {
+      "key": "looking_for_me",
+      "title_en": "Brides looking for me",
+      "title_mr": "माझ्या शोधात असलेल्या वधू",
+      "subtitle_en": "Profiles whose preferences may match you",
+      "subtitle_mr": "ज्यांच्या पसंतीशी तुमचे स्थळ जुळू शकते",
+      "locked": false,
+      "requires_upgrade": false,
+      "profiles": [
+        {
+          "id": 20,
+          "display": {
+            "card": {
+              "name": "Candidate Name",
+              "age": 28,
+              "age_label": "28 years",
+              "height_label": "5' 5\"",
+              "community_label": "Hindu, Maratha",
+              "education_label": "B.E.",
+              "occupation_label": "Software Engineer",
+              "location_label": "Pune, Maharashtra",
+              "verified": true,
+              "premium": false,
+              "photo_count": 1,
+              "primary_photo_url": "https://navrimilenavryala.com/storage/matrimony_photos/example.jpg",
+              "comparison_label": "You & Her",
+              "has_astro": true
+            },
+            "actions": {
+              "can_send_interest": true,
+              "interest_sent": false,
+              "can_report": true,
+              "can_shortlist": true,
+              "can_hide": true,
+              "can_block": true,
+              "is_shortlisted": false,
+              "is_hidden": false,
+              "is_blocked": false
+            }
+          },
+          "section_score": 6
+        }
+      ]
+    },
+    {
+      "key": "recently_viewed",
+      "title_en": "Recently viewed Brides",
+      "title_mr": "अलीकडे पाहिलेल्या वधू",
+      "profiles": []
+    },
+    {
+      "key": "matching_my_preference",
+      "title_en": "Brides matching my preference",
+      "title_mr": "माझ्या पसंतीशी जुळणाऱ्या वधू",
+      "profiles": []
+    },
+    {
+      "key": "recent_visitors",
+      "title_en": "Recent visitors",
+      "title_mr": "अलीकडील भेट देणाऱ्या वधू",
+      "locked": true,
+      "requires_upgrade": true,
+      "teaser_count": 12,
+      "profiles": []
+    },
+    {
+      "key": "you_may_like",
+      "title_en": "Brides you may like",
+      "title_mr": "तुम्हाला आवडू शकणाऱ्या वधू",
+      "profiles": []
+    }
+  ]
+}
+```
+
+Section order is stable:
+
+1. `looking_for_me`
+2. `recently_viewed`
+3. `matching_my_preference`
+4. `recent_visitors`
+5. `you_may_like`
+
+Gender labels are derived from the logged-in member profile:
+
+- male viewer → female target labels: `Bride`, `Brides`, `वधू`
+- female viewer → male target labels: `Groom`, `Grooms`, `वर`
+- unknown viewer gender → neutral target labels: `Profile`, `Profiles`, `स्थळे`
+
+`recent_visitors` follows the existing who-viewed entitlement gate. When locked, it returns `locked=true`, `requires_upgrade=true`, a safe `teaser_count`, and an empty `profiles` array. It must not leak viewer profile IDs, names, photos, phone, email, WhatsApp, or contact unlock data.
+
+All section profile rows intentionally exclude contact phone, email, WhatsApp number, contact unlock state, full profile sections, full about text, and partner preferences.
+
 ### GET `/api/v1/matrimony-profiles/{id}`
 
 Requires bearer token. Returns HTTP 404 when the profile is missing, lifecycle-hidden, blocked, or not viewable by the current viewer.
