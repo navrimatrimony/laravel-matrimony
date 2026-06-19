@@ -14,6 +14,7 @@ use App\Models\Shortlist;
 use App\Models\SubCaste;
 use App\Models\User;
 use App\Services\Api\MobileProfileDisplayPresenter;
+use App\Services\ContactAccessService;
 use App\Services\Gunamilan\GunamilanService;
 use App\Services\MutationService;
 use Illuminate\Support\Facades\DB;
@@ -599,6 +600,7 @@ test('MobileProfile GET api v1 matrimony profile returns clean display payload b
                 'chips',
                 'sections',
                 'actions',
+                'contact',
             ],
         ]);
 
@@ -620,7 +622,132 @@ test('MobileProfile GET api v1 matrimony profile returns clean display payload b
         ->assertJsonPath('profile.id', $profile->id)
         ->assertJsonPath('profile.location_id', $location->id)
         ->assertJsonPath('display.version', 1)
-        ->assertJsonStructure(['profile', 'display' => ['hero', 'sections']]);
+        ->assertJsonStructure(['profile', 'display' => ['hero', 'sections', 'contact']]);
+});
+
+test('MobileProfile display contact keeps own profile unlock disabled', function () {
+    $user = User::factory()->create(['name' => 'Own Contact Account']);
+    $profile = mobileApiCreateValidActionProfile($user, 'Own Contact Candidate', 'male');
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson('/api/v1/matrimony-profile');
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('profile.id', $profile->id)
+        ->assertJsonPath('display.contact.enabled', false)
+        ->assertJsonPath('display.contact.state', 'unavailable')
+        ->assertJsonPath('display.contact.phone', null)
+        ->assertJsonPath('display.contact.email', null)
+        ->assertJsonPath('display.contact.primary_cta', null)
+        ->assertJsonPath('display.contact.whatsapp_response.visible', false);
+});
+
+test('MobileProfile display contact exposes safe shape for other profile without leaking contact', function () {
+    [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $response
+        ->assertOk()
+        ->assertJsonStructure([
+            'display' => [
+                'contact' => [
+                    'enabled',
+                    'title',
+                    'state',
+                    'message',
+                    'phone',
+                    'email',
+                    'primary_cta',
+                    'whatsapp_response' => [
+                        'visible',
+                        'label',
+                        'message',
+                        'enabled',
+                    ],
+                ],
+            ],
+        ])
+        ->assertJsonPath('display.contact.title', 'Contact Information')
+        ->assertJsonPath('display.contact.phone', null)
+        ->assertJsonPath('display.contact.email', null)
+        ->assertJsonPath('display.contact.whatsapp_response.label', 'WhatsApp Response');
+
+    expect($response->json('display.contact.state'))->toBeIn([
+        'locked',
+        'unlock_available',
+        'upgrade_required',
+        'whatsapp_response_available',
+        'unavailable',
+    ]);
+});
+
+test('MobileProfile display contact reveals phone only from ContactAccessService context', function () {
+    [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    $this->app->instance(ContactAccessService::class, new class
+    {
+        public function resolveViewerContext(...$args): array
+        {
+            return [
+                'paid_contact_phone' => '9876543210',
+                'paid_contact_email' => 'candidate@example.test',
+                'show_mediator_cta' => false,
+                'needs_upgrade' => false,
+                'show_paid_reveal_button' => false,
+                'blocked' => false,
+                'reveal_blocked_reason' => null,
+                'paid_reveal_blocked_pending_matchmaking' => false,
+            ];
+        }
+    });
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('display.contact.state', 'revealed')
+        ->assertJsonPath('display.contact.phone', '9876543210')
+        ->assertJsonPath('display.contact.email', 'candidate@example.test')
+        ->assertJsonPath('display.contact.primary_cta', null);
+});
+
+test('MobileProfile display contact maps upgrade and WhatsApp Response without revealing phone', function () {
+    [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    $this->app->instance(ContactAccessService::class, new class
+    {
+        public function resolveViewerContext(...$args): array
+        {
+            return [
+                'paid_contact_phone' => null,
+                'paid_contact_email' => null,
+                'show_mediator_cta' => true,
+                'needs_upgrade' => true,
+                'show_paid_reveal_button' => false,
+                'blocked' => true,
+                'reveal_blocked_reason' => null,
+                'paid_reveal_blocked_pending_matchmaking' => false,
+            ];
+        }
+    });
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('display.contact.state', 'upgrade_required')
+        ->assertJsonPath('display.contact.phone', null)
+        ->assertJsonPath('display.contact.email', null)
+        ->assertJsonPath('display.contact.primary_cta.label', 'Upgrade to View Contact')
+        ->assertJsonPath('display.contact.primary_cta.action', 'upgrade')
+        ->assertJsonPath('display.contact.primary_cta.enabled', false)
+        ->assertJsonPath('display.contact.whatsapp_response.visible', true)
+        ->assertJsonPath('display.contact.whatsapp_response.enabled', false);
 });
 
 test('MobileProfile GET api v1 profile detail returns clean comparison payload for target preferences', function () {

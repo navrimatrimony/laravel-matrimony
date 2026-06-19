@@ -12,6 +12,7 @@ use App\Models\ProfilePhoto;
 use App\Models\Shortlist;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\ContactAccessService;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\IncomeEngineService;
 use App\Services\EducationService;
@@ -28,6 +29,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 class MobileProfileDisplayPresenter
 {
@@ -92,6 +94,7 @@ class MobileProfileDisplayPresenter
         $locationLabel = $this->cleanLocation(ProfileDisplayCopy::profileResidenceDisplayLine($profile));
         [$photoCount, $primaryPhotoUrl] = $this->visiblePhotoSummary($profile);
         $comparison = $this->comparisonPayload($profile, $viewerProfile);
+        $contact = $this->contactPayload($profile, $viewerProfile, $viewer);
 
         $sections = array_values(array_filter([
             $this->basicSection($profile, $isOwnProfile, $ageLabel, $heightLabel, $communityLabel, $locationLabel),
@@ -123,6 +126,7 @@ class MobileProfileDisplayPresenter
             'actions' => $this->actions($profile, $viewerProfile),
             'share' => $this->sharePayload($profile, $age, $communityLabel, $occupationLabel, $locationLabel),
             'comparison' => $comparison,
+            'contact' => $contact,
         ];
     }
 
@@ -957,6 +961,205 @@ class MobileProfileDisplayPresenter
         }
 
         return $chips;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function contactPayload(MatrimonyProfile $profile, ?MatrimonyProfile $viewerProfile, ?User $viewer): array
+    {
+        if ($viewer === null || $viewerProfile === null) {
+            return $this->contactPayloadState(
+                enabled: false,
+                state: 'unavailable',
+                message: 'Login and profile are required to view contact options.'
+            );
+        }
+
+        if ((int) $viewerProfile->id === (int) $profile->id) {
+            return $this->contactPayloadState(
+                enabled: false,
+                state: 'unavailable',
+                message: 'Contact unlock is not available on your own profile.'
+            );
+        }
+
+        try {
+            $profile->loadMissing('user');
+
+            $contactAccess = app(ContactAccessService::class)->resolveViewerContext(
+                $viewer,
+                $profile,
+                $this->acceptedInterestExists($viewerProfile, $profile),
+                $this->profileVisibilitySettings($profile),
+                null,
+            );
+        } catch (Throwable) {
+            return $this->contactPayloadState(
+                enabled: false,
+                state: 'unavailable',
+                message: 'Contact information is not available right now.'
+            );
+        }
+
+        return $this->contactPayloadFromAccess($contactAccess);
+    }
+
+    /**
+     * @param  array<string, mixed>  $contactAccess
+     * @return array<string, mixed>
+     */
+    private function contactPayloadFromAccess(array $contactAccess): array
+    {
+        $phone = $this->cleanString($contactAccess['paid_contact_phone'] ?? null);
+        $email = $this->cleanString($contactAccess['paid_contact_email'] ?? null);
+        $showMediator = ($contactAccess['show_mediator_cta'] ?? false) === true;
+
+        if ($phone !== null || $email !== null) {
+            return $this->contactPayloadState(
+                enabled: true,
+                state: 'revealed',
+                message: 'Contact information is available.',
+                phone: $phone,
+                email: $email,
+                whatsappVisible: $showMediator,
+            );
+        }
+
+        if (($contactAccess['needs_upgrade'] ?? false) === true) {
+            return $this->contactPayloadState(
+                enabled: true,
+                state: 'upgrade_required',
+                message: 'Upgrade is required to view contact information.',
+                primaryCta: $this->contactPrimaryCta('Upgrade to View Contact', 'primary', 'upgrade', false),
+                whatsappVisible: $showMediator,
+                whatsappMessage: $showMediator ? 'WhatsApp Response can be shown after eligible access.' : null,
+            );
+        }
+
+        if (($contactAccess['show_paid_reveal_button'] ?? false) === true) {
+            return $this->contactPayloadState(
+                enabled: true,
+                state: 'unlock_available',
+                message: 'Contact unlock is available for this profile.',
+                primaryCta: $this->contactPrimaryCta('View Contact', 'primary', 'view_contact', false),
+                whatsappVisible: $showMediator,
+            );
+        }
+
+        if ($showMediator) {
+            return $this->contactPayloadState(
+                enabled: true,
+                state: 'whatsapp_response_available',
+                message: 'WhatsApp Response is available for this profile.',
+                whatsappVisible: true,
+                whatsappMessage: 'You can request a WhatsApp Response when the mobile action is available.',
+                whatsappEnabled: false,
+            );
+        }
+
+        if (($contactAccess['paid_reveal_blocked_pending_matchmaking'] ?? false) === true
+            || $this->cleanString($contactAccess['reveal_blocked_reason'] ?? null) !== null
+            || ($contactAccess['blocked'] ?? false) === true) {
+            return $this->contactPayloadState(
+                enabled: true,
+                state: 'locked',
+                message: 'Contact information is currently locked.'
+            );
+        }
+
+        return $this->contactPayloadState(
+            enabled: true,
+            state: 'unavailable',
+            message: 'Contact information is not available for this profile.'
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function contactPayloadState(
+        bool $enabled,
+        string $state,
+        ?string $message,
+        ?string $phone = null,
+        ?string $email = null,
+        ?array $primaryCta = null,
+        bool $whatsappVisible = false,
+        ?string $whatsappMessage = null,
+        bool $whatsappEnabled = false,
+    ): array {
+        $state = in_array($state, [
+            'revealed',
+            'locked',
+            'unlock_available',
+            'upgrade_required',
+            'whatsapp_response_available',
+            'unavailable',
+        ], true) ? $state : 'unavailable';
+
+        return [
+            'enabled' => $enabled,
+            'title' => 'Contact Information',
+            'state' => $state,
+            'message' => $message,
+            'phone' => $phone,
+            'email' => $email,
+            'primary_cta' => $primaryCta,
+            'whatsapp_response' => [
+                'visible' => $whatsappVisible,
+                'label' => 'WhatsApp Response',
+                'message' => $whatsappMessage,
+                'enabled' => $whatsappEnabled,
+            ],
+        ];
+    }
+
+    /**
+     * @return array{label: string, style: string, action: string, enabled: bool}
+     */
+    private function contactPrimaryCta(string $label, string $style, string $action, bool $enabled): array
+    {
+        $style = in_array($style, ['primary', 'secondary', 'disabled'], true) ? $style : 'disabled';
+        $action = in_array($action, ['view_contact', 'upgrade', 'none'], true) ? $action : 'none';
+
+        return [
+            'label' => $label,
+            'style' => $enabled ? $style : 'disabled',
+            'action' => $action,
+            'enabled' => $enabled,
+        ];
+    }
+
+    private function acceptedInterestExists(MatrimonyProfile $viewerProfile, MatrimonyProfile $targetProfile): bool
+    {
+        if (! Schema::hasTable('interests')) {
+            return false;
+        }
+
+        return Interest::query()
+            ->where('status', 'accepted')
+            ->where(function ($query) use ($viewerProfile, $targetProfile): void {
+                $query->where(function ($inner) use ($viewerProfile, $targetProfile): void {
+                    $inner->where('sender_profile_id', $viewerProfile->id)
+                        ->where('receiver_profile_id', $targetProfile->id);
+                })->orWhere(function ($inner) use ($viewerProfile, $targetProfile): void {
+                    $inner->where('sender_profile_id', $targetProfile->id)
+                        ->where('receiver_profile_id', $viewerProfile->id);
+                });
+            })
+            ->exists();
+    }
+
+    private function profileVisibilitySettings(MatrimonyProfile $profile): ?object
+    {
+        if (! Schema::hasTable('profile_visibility_settings')) {
+            return null;
+        }
+
+        return DB::table('profile_visibility_settings')
+            ->where('profile_id', $profile->id)
+            ->first();
     }
 
     private function actions(MatrimonyProfile $profile, ?MatrimonyProfile $viewerProfile): array
