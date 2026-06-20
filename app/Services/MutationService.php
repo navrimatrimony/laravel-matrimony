@@ -10,6 +10,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\ProfileExtendedField;
 use App\Models\User;
 use App\Services\Core\ConflictPolicy;
+use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use App\Services\Profile\ProfileTypedSelfAddressService;
 use Illuminate\Support\Facades\DB;
@@ -134,6 +135,60 @@ class MutationService
 
             return $profile;
         });
+    }
+
+    public function activateDraftProfileAfterApprovedPrimaryPhoto(MatrimonyProfile $profile): bool
+    {
+        $previousSource = $this->historySourceContext;
+        $previousChangedBy = $this->historyChangedByContext;
+
+        $this->historySourceContext = 'system';
+        $this->historyChangedByContext = null;
+
+        try {
+            return DB::transaction(function () use ($profile): bool {
+                $lockedProfile = MatrimonyProfile::query()
+                    ->whereKey($profile->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $lockedProfile) {
+                    return false;
+                }
+
+                $current = $lockedProfile->lifecycle_state ?? 'draft';
+                if ($current !== 'draft') {
+                    return false;
+                }
+
+                if ($lockedProfile->trashed() || (bool) ($lockedProfile->is_suspended ?? false)) {
+                    return false;
+                }
+
+                if ($lockedProfile->isShowcaseProfile()) {
+                    return false;
+                }
+
+                if (! $this->profileHasCanonicalResidence($lockedProfile)) {
+                    return false;
+                }
+
+                if (! $this->profileHasApprovedPrimaryPhoto($lockedProfile)) {
+                    return false;
+                }
+
+                if ($this->profileHasPendingConflicts($lockedProfile)) {
+                    return false;
+                }
+
+                $this->setLifecycleState($lockedProfile, 'active');
+
+                return true;
+            });
+        } finally {
+            $this->historySourceContext = $previousSource;
+            $this->historyChangedByContext = $previousChangedBy;
+        }
     }
 
     /** When set, writeProfileChangeHistory uses these for source/changed_by (manual mutation). */
@@ -502,7 +557,7 @@ class MutationService
                     // treat photo upload / wizard edits as "go live" for member search.
                     if (
                         $current === 'draft'
-                        && ! empty($profile->profile_photo)
+                        && $this->profileHasApprovedPrimaryPhoto($profile)
                         && $this->profileHasCanonicalResidence($profile)
                         && ! in_array($current, self::NO_AUTO_ACTIVATE_STATES, true)
                     ) {
@@ -1333,6 +1388,32 @@ class MutationService
             : ProfileCanonicalResidenceService::locationLeafId((int) $profile->id);
 
         return $locationId !== null && $locationId !== '' && (int) $locationId > 0;
+    }
+
+    private function profileHasApprovedPrimaryPhoto(MatrimonyProfile $profile): bool
+    {
+        $path = trim((string) ($profile->profile_photo ?? ''));
+        if ($path === '' || ProfilePhotoUrlService::isPendingPlaceholder($path)) {
+            return false;
+        }
+
+        if ((bool) ($profile->photo_approved ?? false) !== true) {
+            return false;
+        }
+
+        return $profile->photo_rejected_at === null;
+    }
+
+    private function profileHasPendingConflicts(MatrimonyProfile $profile): bool
+    {
+        if (! Schema::hasTable('conflict_records')) {
+            return false;
+        }
+
+        return ConflictRecord::query()
+            ->where('profile_id', $profile->id)
+            ->where('resolution_status', 'PENDING')
+            ->exists();
     }
 
     /**
