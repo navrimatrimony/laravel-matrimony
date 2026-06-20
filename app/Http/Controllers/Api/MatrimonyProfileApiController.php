@@ -12,10 +12,14 @@ use App\Models\User;
 use App\Services\Api\MobileDiscoveryFilterService;
 use App\Services\Api\MobileMoreMatchesSectionService;
 use App\Services\Api\MobileProfileDisplayPresenter;
+use App\Services\Matching\MatchingService;
 use App\Services\MutationService;
 use App\Services\Parsing\IntakeControlledFieldNormalizer;
 use App\Services\ProfileFieldLockService;
+use App\Services\ProfileRotationService;
 use App\Services\ViewTrackingService;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -294,70 +298,14 @@ class MatrimonyProfileApiController extends Controller
     /**
      * List all matrimony profiles with filters
      */
-    public function index(Request $request, MobileDiscoveryFilterService $discovery)
+    public function index(Request $request, MobileDiscoveryFilterService $discovery, MatchingService $matching)
     {
         $viewer = $request->user();
-        $relations = [
-            'user.activeSubscription.plan',
-            'gender',
-            'religion',
-            'caste',
-            'subCaste',
-            'occupationMaster',
-            'occupationCustom',
-            'horoscope',
-        ];
-        if (Schema::hasTable('profile_photos')) {
-            $relations['photos'] = fn ($query) => $query->effectivelyApproved();
-        }
-
-        $query = MatrimonyProfile::with($relations)->latest();
-
-        if ($viewer instanceof User) {
-            $discovery->applyCandidateQuery($query, $viewer);
-        } else {
-            $query->whereRaw('1 = 0');
-        }
-        // Soft deletes are automatically excluded by Laravel's SoftDeletes trait
-
-        // Caste filter
-        if ($request->filled('caste')) {
-            $query->where('caste', $request->caste);
-        }
-
-        // Residence geo: filter by ancestor {@code addresses.id} (canonical leaf is {@see location_id}).
-        if ($request->filled('country_id')) {
-            $query->whereResidenceUnderAncestor((int) $request->country_id);
-        }
-        if ($request->filled('state_id')) {
-            $query->whereResidenceUnderAncestor((int) $request->state_id);
-        }
-        if ($request->filled('district_id')) {
-            $query->whereResidenceUnderAncestor((int) $request->district_id);
-        }
-        if ($request->filled('taluka_id')) {
-            $query->whereResidenceUnderAncestor((int) $request->taluka_id);
-        }
-        if ($request->filled('location_id')) {
-            $query->where('location_id', $request->location_id);
-        }
-
-        // Age filter (from date_of_birth)
-        if ($request->filled('age_from') || $request->filled('age_to')) {
-            $query->whereNotNull('date_of_birth');
-
-            if ($request->filled('age_from')) {
-                $minDate = now()->subYears($request->age_from)->format('Y-m-d');
-                $query->whereDate('date_of_birth', '<=', $minDate);
-            }
-
-            if ($request->filled('age_to')) {
-                $maxDate = now()->subYears($request->age_to + 1)->addDay()->format('Y-m-d');
-                $query->whereDate('date_of_birth', '>=', $maxDate);
-            }
-        }
-
-        $profiles = $query->get();
+        $relations = $this->mobileListRelations();
+        $feed = $this->mobileListFeed($request);
+        $profiles = $feed === null
+            ? $this->legacyMobileListProfiles($request, $viewer, $discovery, $relations)
+            : $this->feedMobileListProfiles($request, $viewer, $discovery, $matching, $relations, $feed);
         $presenter = app(MobileProfileDisplayPresenter::class);
 
         // Transform to include gender from the governed profile relation only.
@@ -391,6 +339,243 @@ class MatrimonyProfileApiController extends Controller
             'success' => true,
             'profiles' => $profiles,
         ]);
+    }
+
+    /**
+     * @return array<int|string, mixed>
+     */
+    private function mobileListRelations(): array
+    {
+        $relations = [
+            'user.activeSubscription.plan',
+            'gender',
+            'religion',
+            'caste',
+            'subCaste',
+            'occupationMaster',
+            'occupationCustom',
+            'horoscope',
+        ];
+        if (Schema::hasTable('profile_photos')) {
+            $relations['photos'] = fn ($query) => $query->effectivelyApproved();
+        }
+
+        return $relations;
+    }
+
+    private function mobileListFeed(Request $request): ?string
+    {
+        $feed = strtolower(trim((string) $request->query('feed', '')));
+
+        return match ($feed) {
+            'new' => 'new',
+            'daily' => 'daily',
+            'my_matches', 'my-matches', 'matches', 'perfect' => 'my_matches',
+            'near_me', 'near-me', 'nearby' => 'nearby',
+            default => null,
+        };
+    }
+
+    /**
+     * @param  array<int|string, mixed>  $relations
+     * @return Collection<int, MatrimonyProfile>
+     */
+    private function legacyMobileListProfiles(
+        Request $request,
+        ?User $viewer,
+        MobileDiscoveryFilterService $discovery,
+        array $relations
+    ): Collection {
+        $query = MatrimonyProfile::with($relations)->latest();
+        $this->applyMobileDiscoveryQuery($query, $viewer, $discovery);
+        $this->applyMobileListFilters($query, $request);
+
+        return $query->get();
+    }
+
+    /**
+     * @param  array<int|string, mixed>  $relations
+     * @return Collection<int, MatrimonyProfile>
+     */
+    private function feedMobileListProfiles(
+        Request $request,
+        ?User $viewer,
+        MobileDiscoveryFilterService $discovery,
+        MatchingService $matching,
+        array $relations,
+        string $feed
+    ): Collection {
+        if (! $viewer instanceof User || ! $discovery->viewerCanDiscover($viewer)) {
+            return collect();
+        }
+
+        return match ($feed) {
+            'daily' => $this->matchingFeedProfiles($request, $viewer, $discovery, $matching, $relations, MatchingService::TAB_DAILY),
+            'my_matches' => $this->matchingFeedProfiles($request, $viewer, $discovery, $matching, $relations, MatchingService::TAB_PERFECT),
+            'nearby' => $this->matchingFeedProfiles($request, $viewer, $discovery, $matching, $relations, MatchingService::TAB_NEAR),
+            default => $this->newFeedProfiles($request, $viewer, $discovery, $relations),
+        };
+    }
+
+    /**
+     * @param  array<int|string, mixed>  $relations
+     * @return Collection<int, MatrimonyProfile>
+     */
+    private function newFeedProfiles(
+        Request $request,
+        User $viewer,
+        MobileDiscoveryFilterService $discovery,
+        array $relations
+    ): Collection {
+        $query = MatrimonyProfile::with($relations);
+        $this->applyMobileDiscoveryQuery($query, $viewer, $discovery);
+        $this->applyMobileListFilters($query, $request);
+
+        $viewer->loadMissing('matrimonyProfile.gender');
+        $viewerProfile = $viewer->matrimonyProfile;
+        if ($viewerProfile instanceof MatrimonyProfile && ProfileRotationService::isEnabled()) {
+            ProfileRotationService::applyDiscoverScope($query, (int) $viewerProfile->id, (int) $viewer->id);
+            ProfileRotationService::applyDiscoverOrdering(
+                $query,
+                (int) $viewerProfile->id,
+                $this->mobileFeedSeed($viewerProfile, 'new')
+            );
+
+            return $query->get();
+        }
+
+        return $query->latest()->get();
+    }
+
+    /**
+     * @param  array<int|string, mixed>  $relations
+     * @return Collection<int, MatrimonyProfile>
+     */
+    private function matchingFeedProfiles(
+        Request $request,
+        User $viewer,
+        MobileDiscoveryFilterService $discovery,
+        MatchingService $matching,
+        array $relations,
+        string $matchingTab
+    ): Collection {
+        $viewer->loadMissing('matrimonyProfile.gender');
+        $viewerProfile = $viewer->matrimonyProfile;
+        if (! $viewerProfile instanceof MatrimonyProfile) {
+            return collect();
+        }
+
+        $ids = $matching
+            ->findMatchesForTab($viewerProfile, $matchingTab, 160)
+            ->filter(function (array $row) use ($viewer, $discovery): bool {
+                $profile = $row['profile'] ?? null;
+
+                return $profile instanceof MatrimonyProfile
+                    && $discovery->isAllowedTarget($viewer, $profile);
+            })
+            ->map(fn (array $row): int => (int) $row['profile']->id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        return $this->profilesByMobileFeedOrder($request, $viewer, $discovery, $relations, $ids);
+    }
+
+    private function mobileFeedSeed(MatrimonyProfile $viewerProfile, string $feed): string
+    {
+        return implode('|', [
+            'mobile',
+            $feed,
+            (string) $viewerProfile->id,
+            now()->toDateString(),
+        ]);
+    }
+
+    /**
+     * @param  array<int|string, mixed>  $relations
+     * @param  list<int>  $profileIds
+     * @return Collection<int, MatrimonyProfile>
+     */
+    private function profilesByMobileFeedOrder(
+        Request $request,
+        User $viewer,
+        MobileDiscoveryFilterService $discovery,
+        array $relations,
+        array $profileIds
+    ): Collection {
+        $profileIds = array_values(array_unique(array_filter(array_map('intval', $profileIds))));
+        if ($profileIds === []) {
+            return collect();
+        }
+
+        $query = MatrimonyProfile::with($relations)->whereIn('id', $profileIds);
+        $this->applyMobileDiscoveryQuery($query, $viewer, $discovery);
+        $this->applyMobileListFilters($query, $request);
+
+        $profiles = $query->get()->keyBy(fn (MatrimonyProfile $profile): int => (int) $profile->id);
+
+        return collect($profileIds)
+            ->map(fn (int $id) => $profiles->get($id))
+            ->filter()
+            ->values();
+    }
+
+    /**
+     * @param  Builder<MatrimonyProfile>  $query
+     */
+    private function applyMobileDiscoveryQuery(Builder $query, ?User $viewer, MobileDiscoveryFilterService $discovery): void
+    {
+        if ($viewer instanceof User) {
+            $discovery->applyCandidateQuery($query, $viewer);
+
+            return;
+        }
+
+        $query->whereRaw('1 = 0');
+    }
+
+    /**
+     * @param  Builder<MatrimonyProfile>  $query
+     */
+    private function applyMobileListFilters(Builder $query, Request $request): void
+    {
+        // Soft deletes are automatically excluded by Laravel's SoftDeletes trait.
+        if ($request->filled('caste')) {
+            $query->where('caste', $request->caste);
+        }
+
+        // Residence geo: filter by ancestor {@code addresses.id} (canonical leaf is {@see location_id}).
+        if ($request->filled('country_id')) {
+            $query->whereResidenceUnderAncestor((int) $request->country_id);
+        }
+        if ($request->filled('state_id')) {
+            $query->whereResidenceUnderAncestor((int) $request->state_id);
+        }
+        if ($request->filled('district_id')) {
+            $query->whereResidenceUnderAncestor((int) $request->district_id);
+        }
+        if ($request->filled('taluka_id')) {
+            $query->whereResidenceUnderAncestor((int) $request->taluka_id);
+        }
+        if ($request->filled('location_id')) {
+            $query->where('location_id', $request->location_id);
+        }
+
+        // Age filter (from date_of_birth).
+        if ($request->filled('age_from') || $request->filled('age_to')) {
+            $query->whereNotNull('date_of_birth');
+
+            if ($request->filled('age_from')) {
+                $minDate = now()->subYears((int) $request->age_from)->format('Y-m-d');
+                $query->whereDate('date_of_birth', '<=', $minDate);
+            }
+
+            if ($request->filled('age_to')) {
+                $maxDate = now()->subYears(((int) $request->age_to) + 1)->addDay()->format('Y-m-d');
+                $query->whereDate('date_of_birth', '>=', $maxDate);
+            }
+        }
     }
 
     /**

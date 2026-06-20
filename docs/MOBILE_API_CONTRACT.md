@@ -320,6 +320,7 @@ Requires bearer token. Lists visible, non-suspended active profiles. Legacy top-
 
 Optional query filters:
 
+- `feed` (`new`, `daily`, `my_matches`, `nearby`)
 - `caste`
 - `country_id`
 - `state_id`
@@ -328,6 +329,16 @@ Optional query filters:
 - `location_id`
 - `age_from`
 - `age_to`
+
+Feed behavior is backend-owned:
+
+- omitted `feed`: legacy latest-order list for backward compatibility
+- `feed=new`: discovery list using existing profile rotation; recently opened profiles are suppressed for the configured recent-view window and older viewed profiles resurface after never-viewed profiles
+- `feed=daily`: daily stable match rotation from `MatchingService::TAB_DAILY`
+- `feed=my_matches`: preference-backed match ordering from `MatchingService::TAB_PERFECT`
+- `feed=nearby`: location/proximity match ordering from `MatchingService::TAB_NEAR`
+
+All feeds still use the same mobile discovery eligibility rule: no own profile, no same-gender profile, no hidden/blocked/suspended/showcase/admin candidates, and no phone/email/WhatsApp/contact data in list rows.
 
 Success response: HTTP 200
 

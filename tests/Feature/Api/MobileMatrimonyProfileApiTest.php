@@ -9,6 +9,7 @@ use App\Models\Interest;
 use App\Models\Location;
 use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
+use App\Models\ProfileView;
 use App\Models\Religion;
 use App\Models\Shortlist;
 use App\Models\SubCaste;
@@ -783,6 +784,41 @@ test('MobileProfile GET api v1 matrimony profiles includes safe list card displa
     expect($displayJson)->not->toContain('email');
     expect(mb_strtolower($displayJson))->not->toContain('whatsapp');
     expect(mb_strtolower($displayJson))->not->toContain('contact');
+});
+
+test('MobileProfile feed new suppresses recently opened profiles from immediate discovery', function () {
+    [$viewerUser, $viewerProfile, , $recentlyViewedProfile] = mobileApiProfileActionPair();
+    $unopenedUser = User::factory()->create(['name' => 'Unopened Feed Target']);
+    $unopenedProfile = mobileApiCreateValidActionProfile($unopenedUser, 'Unopened Feed Target', 'female');
+
+    $recentlyViewedProfile->forceFill(['updated_at' => now()->addMinute()])->saveQuietly();
+    $unopenedProfile->forceFill(['updated_at' => now()->subDays(10)])->saveQuietly();
+    ProfileView::query()->create([
+        'viewer_profile_id' => $viewerProfile->id,
+        'viewed_profile_id' => $recentlyViewedProfile->id,
+    ]);
+
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles?feed=new');
+
+    $response->assertOk();
+    $ids = collect($response->json('profiles'))->pluck('id')->all();
+    expect($ids)->toContain($unopenedProfile->id);
+    expect($ids)->not->toContain($recentlyViewedProfile->id);
+});
+
+test('MobileProfile feed tabs use backend matching feeds', function () {
+    [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    foreach (['daily', 'my_matches', 'nearby'] as $feed) {
+        $response = $this->getJson('/api/v1/matrimony-profiles?feed='.$feed);
+
+        $response->assertOk();
+        $ids = collect($response->json('profiles'))->pluck('id')->all();
+        expect($ids)->toContain($targetProfile->id);
+    }
 });
 
 test('MobileProfile GET api v1 matrimony profiles shows only opposite gender member profiles', function () {
