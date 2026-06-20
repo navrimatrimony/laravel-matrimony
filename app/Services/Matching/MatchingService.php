@@ -530,6 +530,11 @@ class MatchingService
                     return $tb <=> $ta;
                 }
 
+                $photo = $this->comparePhotoRank($pa, $pb);
+                if ($photo !== 0) {
+                    return $photo;
+                }
+
                 return ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
             })->values();
         } elseif ($tab === self::TAB_FRESH) {
@@ -540,12 +545,22 @@ class MatchingService
                     return $ub <=> $ua;
                 }
 
+                $photo = $this->comparePhotoRank($a['profile'], $b['profile']);
+                if ($photo !== 0) {
+                    return $photo;
+                }
+
                 return ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
             })->values();
         } elseif ($tab === self::TAB_DAILY) {
             $dateKey = now()->toDateString();
 
             $rows = $rows->sort(function (array $a, array $b) use ($profile, $dateKey) {
+                $photo = $this->comparePhotoRank($a['profile'], $b['profile']);
+                if ($photo !== 0) {
+                    return $photo;
+                }
+
                 $ha = crc32($profile->id.'|'.$dateKey.'|daily|'.$a['profile']->id);
                 $hb = crc32($profile->id.'|'.$dateKey.'|daily|'.$b['profile']->id);
                 if ($ha !== $hb) {
@@ -556,6 +571,11 @@ class MatchingService
             })->values();
         } elseif ($tab === self::TAB_CURATED) {
             $rows = $rows->sort(function (array $a, array $b) {
+                $photo = $this->comparePhotoRank($a['profile'], $b['profile']);
+                if ($photo !== 0) {
+                    return $photo;
+                }
+
                 $liftA = (int) ($a['score'] ?? 0) - (int) ($a['base_score'] ?? 0);
                 $liftB = (int) ($b['score'] ?? 0) - (int) ($b['base_score'] ?? 0);
                 if ($liftA !== $liftB) {
@@ -566,6 +586,11 @@ class MatchingService
             })->values();
         } elseif ($tab === self::TAB_SECOND_CHANCE) {
             $rows = $rows->sort(function (array $a, array $b) {
+                $photo = $this->comparePhotoRank($a['profile'], $b['profile']);
+                if ($photo !== 0) {
+                    return $photo;
+                }
+
                 $ua = $a['profile']->updated_at?->timestamp ?? 0;
                 $ub = $b['profile']->updated_at?->timestamp ?? 0;
                 if ($ua !== $ub) {
@@ -575,7 +600,14 @@ class MatchingService
                 return ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
             })->values();
         } else {
-            $rows = $rows->sortByDesc('score')->values();
+            $rows = $rows->sort(function (array $a, array $b) {
+                $photo = $this->comparePhotoRank($a['profile'], $b['profile']);
+                if ($photo !== 0) {
+                    return $photo;
+                }
+
+                return ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
+            })->values();
         }
 
         if ($tab !== self::TAB_SECOND_CHANCE) {
@@ -583,6 +615,16 @@ class MatchingService
         }
 
         return $rows;
+    }
+
+    private function comparePhotoRank(MatrimonyProfile $a, MatrimonyProfile $b): int
+    {
+        return $this->approvedPhotoRank($b) <=> $this->approvedPhotoRank($a);
+    }
+
+    private function approvedPhotoRank(MatrimonyProfile $profile): int
+    {
+        return $profile->hasApprovedPublicPhoto() ? 1 : 0;
     }
 
     private function locationProximityTier(MatrimonyProfile $seeker, MatrimonyProfile $candidate): int
@@ -727,6 +769,7 @@ class MatchingService
             'occupationMaster.category.workingWithType', 'occupationCustom',
             'country', 'state', 'district', 'taluka', 'city',
             'preferenceCriteria',
+            'photos',
             'user',
         ]);
     }

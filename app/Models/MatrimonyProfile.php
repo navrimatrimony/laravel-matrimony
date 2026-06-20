@@ -392,6 +392,45 @@ class MatrimonyProfile extends Model
         return asset('images/placeholders/default-profile.svg');
     }
 
+    /**
+     * Public discovery/card rank: only approved, non-placeholder photos count.
+     */
+    public function hasApprovedPublicPhoto(): bool
+    {
+        if ($this->relationLoaded('photos')) {
+            foreach ($this->photos as $photo) {
+                if (! $photo instanceof ProfilePhoto) {
+                    continue;
+                }
+
+                $path = ltrim((string) $photo->file_path, '/');
+                if (
+                    $photo->effectiveApprovedStatus() === 'approved'
+                    && $path !== ''
+                    && ! \App\Services\Image\ProfilePhotoUrlService::isPendingPlaceholder($path)
+                ) {
+                    return true;
+                }
+            }
+        } elseif (Schema::hasTable('profile_photos')) {
+            foreach (ProfilePhoto::query()
+                ->where('profile_id', $this->id)
+                ->effectivelyApproved()
+                ->get(['file_path']) as $photo) {
+                $path = ltrim((string) $photo->file_path, '/');
+                if ($path !== '' && ! \App\Services\Image\ProfilePhotoUrlService::isPendingPlaceholder($path)) {
+                    return true;
+                }
+            }
+        }
+
+        $legacy = ltrim((string) ($this->profile_photo ?? ''), '/');
+
+        return $legacy !== ''
+            && $this->photo_approved !== false
+            && ! \App\Services\Image\ProfilePhotoUrlService::isPendingPlaceholder($legacy);
+    }
+
     public function getIsShowcaseAttribute(): bool
     {
         $raw = $this->attributes['is_showcase'] ?? null;

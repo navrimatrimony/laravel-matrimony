@@ -9,6 +9,7 @@ use App\Models\Interest;
 use App\Models\Location;
 use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
+use App\Models\ProfilePhoto;
 use App\Models\ProfileView;
 use App\Models\Religion;
 use App\Models\Shortlist;
@@ -271,6 +272,19 @@ function mobileApiCreateValidActionProfile(
     $profile->save();
 
     return $profile->refresh();
+}
+
+function mobileApiAttachProfilePhoto(MatrimonyProfile $profile, string $status = 'approved'): void
+{
+    ProfilePhoto::query()->create([
+        'profile_id' => $profile->id,
+        'file_path' => 'matrimony_photos/mobile-feed-'.$profile->id.'-'.$status.'.webp',
+        'is_primary' => true,
+        'sort_order' => 0,
+        'uploaded_via' => 'test',
+        'approved_status' => $status,
+        'watermark_detected' => false,
+    ]);
 }
 
 function mobileApiCreateComparisonProfilesAt(Location $viewerLocation, Location $targetLocation): array
@@ -806,6 +820,47 @@ test('MobileProfile feed new suppresses recently opened profiles from immediate 
     $ids = collect($response->json('profiles'))->pluck('id')->all();
     expect($ids)->toContain($unopenedProfile->id);
     expect($ids)->not->toContain($recentlyViewedProfile->id);
+});
+
+test('MobileProfile feed new orders approved photo profiles before no-photo profiles', function () {
+    $viewerUser = User::factory()->create(['name' => 'Photo First Viewer']);
+    mobileApiCreateValidActionProfile($viewerUser, 'Photo First Viewer', 'male');
+    $noPhotoUser = User::factory()->create(['name' => 'No Photo Feed Target']);
+    $noPhotoProfile = mobileApiCreateValidActionProfile($noPhotoUser, 'No Photo Feed Target', 'female');
+    $photoUser = User::factory()->create(['name' => 'Approved Photo Feed Target']);
+    $photoProfile = mobileApiCreateValidActionProfile($photoUser, 'Approved Photo Feed Target', 'female');
+    mobileApiAttachProfilePhoto($photoProfile);
+
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles?feed=new');
+
+    $response->assertOk();
+    $ids = collect($response->json('profiles'))->pluck('id')->all();
+    expect($ids)->toContain($photoProfile->id)
+        ->and($ids)->toContain($noPhotoProfile->id)
+        ->and(array_search($photoProfile->id, $ids, true))->toBeLessThan(array_search($noPhotoProfile->id, $ids, true));
+});
+
+test('MobileProfile feed new does not treat rejected photos as photo-first', function () {
+    $viewerUser = User::factory()->create(['name' => 'Rejected Photo Viewer']);
+    mobileApiCreateValidActionProfile($viewerUser, 'Rejected Photo Viewer', 'male');
+    $approvedUser = User::factory()->create(['name' => 'Approved Photo Target']);
+    $approvedProfile = mobileApiCreateValidActionProfile($approvedUser, 'Approved Photo Target', 'female');
+    mobileApiAttachProfilePhoto($approvedProfile);
+    $rejectedUser = User::factory()->create(['name' => 'Rejected Photo Target']);
+    $rejectedProfile = mobileApiCreateValidActionProfile($rejectedUser, 'Rejected Photo Target', 'female');
+    mobileApiAttachProfilePhoto($rejectedProfile, 'rejected');
+
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles?feed=new');
+
+    $response->assertOk();
+    $ids = collect($response->json('profiles'))->pluck('id')->all();
+    expect($ids)->toContain($approvedProfile->id)
+        ->and($ids)->toContain($rejectedProfile->id)
+        ->and(array_search($approvedProfile->id, $ids, true))->toBeLessThan(array_search($rejectedProfile->id, $ids, true));
 });
 
 test('MobileProfile feed tabs use backend matching feeds', function () {

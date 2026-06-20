@@ -386,11 +386,12 @@ class MatrimonyProfileApiController extends Controller
         MobileDiscoveryFilterService $discovery,
         array $relations
     ): Collection {
-        $query = MatrimonyProfile::with($relations)->latest();
+        $query = MatrimonyProfile::with($relations);
         $this->applyMobileDiscoveryQuery($query, $viewer, $discovery);
         $this->applyMobileListFilters($query, $request);
+        ProfileRotationService::applyApprovedPhotoOrdering($query);
 
-        return $query->get();
+        return $query->latest()->get();
     }
 
     /**
@@ -438,11 +439,14 @@ class MatrimonyProfileApiController extends Controller
             ProfileRotationService::applyDiscoverOrdering(
                 $query,
                 (int) $viewerProfile->id,
-                $this->mobileFeedSeed($viewerProfile, 'new')
+                $this->mobileFeedSeed($viewerProfile, 'new'),
+                true
             );
 
             return $query->get();
         }
+
+        ProfileRotationService::applyApprovedPhotoOrdering($query);
 
         return $query->latest()->get();
     }

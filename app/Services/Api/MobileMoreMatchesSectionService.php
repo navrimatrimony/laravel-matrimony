@@ -148,7 +148,7 @@ class MobileMoreMatchesSectionService
         }
 
         $profiles = $rows
-            ->sortByDesc(fn (array $row): int => (int) ($row['section_score'] ?? 0))
+            ->sort($this->compareRowsByPhotoThenScore(...))
             ->take(self::SECTION_LIMIT)
             ->mapWithKeys(fn (array $row): array => [(int) $row['profile']->id => $row])
             ->values();
@@ -313,7 +313,15 @@ class MobileMoreMatchesSectionService
             ->with($this->cardRelations())
             ->limit(80)
             ->get()
-            ->sortBy(fn (MatrimonyProfile $profile): int => crc32($viewerProfile->id.'|'.$dateKey.'|you_may_like|'.$profile->id))
+            ->sort(function (MatrimonyProfile $a, MatrimonyProfile $b) use ($viewerProfile, $dateKey): int {
+                $photo = $this->compareProfilesByPhoto($a, $b);
+                if ($photo !== 0) {
+                    return $photo;
+                }
+
+                return crc32($viewerProfile->id.'|'.$dateKey.'|you_may_like|'.$a->id)
+                    <=> crc32($viewerProfile->id.'|'.$dateKey.'|you_may_like|'.$b->id);
+            })
             ->take(self::SECTION_LIMIT)
             ->values();
 
@@ -337,6 +345,26 @@ class MobileMoreMatchesSectionService
         return $this->discovery
             ->applyCandidateQuery(MatrimonyProfile::query(), $viewer)
             ->orderByDesc('updated_at');
+    }
+
+    private function compareRowsByPhotoThenScore(array $a, array $b): int
+    {
+        $photo = $this->compareProfilesByPhoto($a['profile'], $b['profile']);
+        if ($photo !== 0) {
+            return $photo;
+        }
+
+        return (int) ($b['section_score'] ?? 0) <=> (int) ($a['section_score'] ?? 0);
+    }
+
+    private function compareProfilesByPhoto(MatrimonyProfile $a, MatrimonyProfile $b): int
+    {
+        return $this->approvedPhotoRank($b) <=> $this->approvedPhotoRank($a);
+    }
+
+    private function approvedPhotoRank(MatrimonyProfile $profile): int
+    {
+        return $profile->hasApprovedPublicPhoto() ? 1 : 0;
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Models\ContactRequest;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Optional "Discover" ordering for profile search: reduce repeats, stable pagination.
@@ -110,7 +111,7 @@ class ProfileRotationService
      * Freshness: profiles never recorded in profile_views for this viewer first, then older re-surfaces.
      * Tie-break: deterministic MD5/hex order from stable seed (stable pagination).
      */
-    public static function applyDiscoverOrdering(Builder $query, int $viewerProfileId, string $seed): void
+    public static function applyDiscoverOrdering(Builder $query, int $viewerProfileId, string $seed, bool $photoFirst = false): void
     {
         $query->select('matrimony_profiles.*');
 
@@ -125,8 +126,60 @@ class ProfileRotationService
 
         $query->orderByRaw('CASE WHEN pv_agg.last_viewed_at IS NULL THEN 0 ELSE 1 END ASC');
 
+        if ($photoFirst) {
+            self::applyApprovedPhotoOrdering($query);
+        }
+
         // Portable pseudo-random tie-break (same seed ⇒ same order across pages; not cryptographic).
         $mix = hexdec(substr(hash('sha256', $seed, false), 0, 8)) & 0x7FFFFFFF;
         $query->orderByRaw('((matrimony_profiles.id * 1103515245 + ?) & 2147483647)', [$mix]);
+    }
+
+    public static function applyApprovedPhotoOrdering(Builder $query): void
+    {
+        $conditions = [];
+
+        if (Schema::hasTable('profile_photos')) {
+            $statusSql = Schema::hasColumn('profile_photos', 'admin_override_status')
+                ? "CASE
+                    WHEN pp.admin_override_status IS NOT NULL THEN
+                        CASE pp.admin_override_status
+                            WHEN 'approved' THEN 'approved'
+                            WHEN 'review' THEN 'pending'
+                            WHEN 'rejected' THEN 'rejected'
+                            ELSE pp.approved_status
+                        END
+                    ELSE pp.approved_status
+                END"
+                : 'pp.approved_status';
+
+            $conditions[] = "EXISTS (
+                SELECT 1
+                FROM profile_photos pp
+                WHERE pp.profile_id = matrimony_profiles.id
+                    AND {$statusSql} = 'approved'
+                    AND pp.file_path IS NOT NULL
+                    AND pp.file_path != ''
+                    AND pp.file_path NOT LIKE 'pending/%'
+            )";
+        }
+
+        if (Schema::hasColumn('matrimony_profiles', 'profile_photo')) {
+            $legacy = "matrimony_profiles.profile_photo IS NOT NULL
+                AND matrimony_profiles.profile_photo != ''
+                AND matrimony_profiles.profile_photo NOT LIKE 'pending/%'";
+
+            if (Schema::hasColumn('matrimony_profiles', 'photo_approved')) {
+                $legacy .= ' AND (matrimony_profiles.photo_approved IS NULL OR matrimony_profiles.photo_approved != 0)';
+            }
+
+            $conditions[] = '('.$legacy.')';
+        }
+
+        if ($conditions === []) {
+            return;
+        }
+
+        $query->orderByRaw('CASE WHEN '.implode(' OR ', $conditions).' THEN 0 ELSE 1 END ASC');
     }
 }
