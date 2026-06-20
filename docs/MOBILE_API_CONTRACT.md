@@ -431,6 +431,16 @@ Success response: HTTP 200
       "profiles": []
     },
     {
+      "key": "nearby",
+      "title_en": "Nearby Brides",
+      "title_mr": "जवळच्या वधू",
+      "subtitle_en": "Profiles closer to your location",
+      "subtitle_mr": "तुमच्या ठिकाणाजवळील स्थळे",
+      "locked": false,
+      "requires_upgrade": false,
+      "profiles": []
+    },
+    {
       "key": "recent_visitors",
       "title_en": "Recent visitors",
       "title_mr": "अलीकडील भेट देणाऱ्या वधू",
@@ -493,14 +503,21 @@ Section order is stable:
 1. `looking_for_me`
 2. `recently_viewed`
 3. `matching_my_preference`
-4. `recent_visitors`
-5. `you_may_like`
+4. `nearby`
+5. `recent_visitors`
+6. `you_may_like`
 
 Gender labels are derived from the logged-in member profile:
 
 - male viewer → female target labels: `Bride`, `Brides`, `वधू`
 - female viewer → male target labels: `Groom`, `Grooms`, `वर`
 - unknown viewer gender → neutral target labels: `Profile`, `Profiles`, `स्थळे`
+
+`nearby` is backed by `MatchingService::findMatchesForTab($viewerProfile, MatchingService::TAB_NEAR, 12)`. It returns the same safe lightweight profile rows as the other profile sections:
+
+- male viewer / female target: `Nearby Brides`, `जवळच्या वधू`
+- female viewer / male target: `Nearby Grooms`, `जवळचे वर`
+- unknown target: `Nearby profiles`, `जवळची स्थळे`
 
 `recent_visitors` follows the existing who-viewed entitlement gate and reuses the Laravel website who-viewed teaser policy.
 

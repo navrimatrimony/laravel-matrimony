@@ -56,6 +56,7 @@ class MobileMoreMatchesSectionService
                 $this->lookingForMeSection($viewerProfile, $viewer, $context),
                 $this->recentlyViewedSection($viewerProfile, $viewer, $context),
                 $this->matchingMyPreferenceSection($viewerProfile, $viewer, $context),
+                $this->nearbySection($viewerProfile, $viewer, $context),
                 $this->recentVisitorsSection($viewerProfile, $viewer, $context),
                 $this->youMayLikeSection($viewerProfile, $viewer, $context),
             ],
@@ -99,6 +100,7 @@ class MobileMoreMatchesSectionService
             $this->section('looking_for_me', $context, 'looking_for_me', collect()),
             $this->section('recently_viewed', $context, 'recently_viewed', collect()),
             $this->section('matching_my_preference', $context, 'matching_my_preference', collect()),
+            $this->section('nearby', $context, 'nearby', collect()),
             $this->section('recent_visitors', $context, 'recent_visitors', collect(), [
                 'locked' => true,
                 'requires_upgrade' => true,
@@ -196,6 +198,22 @@ class MobileMoreMatchesSectionService
             ]);
 
         return $this->sectionFromRows('matching_my_preference', $context, $rows, $viewer);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    private function nearbySection(MatrimonyProfile $viewerProfile, User $viewer, array $context): array
+    {
+        $rows = $this->matchingService
+            ->findMatchesForTab($viewerProfile, MatchingService::TAB_NEAR, self::SECTION_LIMIT)
+            ->map(fn (array $row): array => [
+                'profile' => $row['profile'],
+                'section_score' => (int) ($row['score'] ?? 0),
+            ]);
+
+        return $this->sectionFromRows('nearby', $context, $rows, $viewer);
     }
 
     /**
@@ -657,6 +675,17 @@ class MobileMoreMatchesSectionService
     {
         $pluralEn = (string) ($context['target_plural_en'] ?? 'Profiles');
         $pluralMr = (string) ($context['target_plural_mr'] ?? 'स्थळे');
+        $targetGender = $this->genderString($context['target_gender'] ?? null);
+        $nearbyEn = match ($targetGender) {
+            'female' => 'Nearby Brides',
+            'male' => 'Nearby Grooms',
+            default => 'Nearby profiles',
+        };
+        $nearbyMr = match ($targetGender) {
+            'female' => 'जवळच्या वधू',
+            'male' => 'जवळचे वर',
+            default => 'जवळची स्थळे',
+        };
 
         return match ($key.'|'.$locale) {
             'looking_for_me|en' => $pluralEn.' looking for me',
@@ -665,6 +694,8 @@ class MobileMoreMatchesSectionService
             'recently_viewed|mr' => 'अलीकडे पाहिलेल्या '.$pluralMr,
             'matching_my_preference|en' => $pluralEn.' matching my preference',
             'matching_my_preference|mr' => 'माझ्या पसंतीशी जुळणाऱ्या '.$pluralMr,
+            'nearby|en' => $nearbyEn,
+            'nearby|mr' => $nearbyMr,
             'recent_visitors|en' => 'Recent visitors',
             'recent_visitors|mr' => 'अलीकडील भेट देणाऱ्या '.$pluralMr,
             'you_may_like|en' => $pluralEn.' you may like',
@@ -682,6 +713,8 @@ class MobileMoreMatchesSectionService
             'recently_viewed|mr' => 'तुम्ही अलीकडे पाहिलेली स्थळे',
             'matching_my_preference|en' => 'Profiles matching your saved preferences',
             'matching_my_preference|mr' => 'तुमच्या सेव्ह केलेल्या पसंतीशी जुळणारी स्थळे',
+            'nearby|en' => 'Profiles closer to your location',
+            'nearby|mr' => 'तुमच्या ठिकाणाजवळील स्थळे',
             'recent_visitors|en' => 'See who viewed your profile',
             'recent_visitors|mr' => 'तुमचे प्रोफाइल कोणी पाहिले ते पहा',
             'you_may_like|en' => 'More profiles from your active search pool',

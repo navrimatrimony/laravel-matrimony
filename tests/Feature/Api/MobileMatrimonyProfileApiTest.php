@@ -721,7 +721,11 @@ test('MobileProfile more sections endpoint requires authentication', function ()
 });
 
 test('MobileProfile more sections returns gender aware real sections and safe card rows', function () {
-    [$viewerUser, $viewerProfile, , $targetProfile] = mobileApiProfileActionPair();
+    $sharedLocation = mobileApiProfileTestLeafLocation();
+    $viewerUser = User::factory()->create(['name' => 'Mobile Action Viewer', 'gender' => 'male']);
+    $targetUser = User::factory()->create(['name' => 'Mobile Action Target', 'gender' => 'female']);
+    $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Mobile Action Viewer', 'male', $sharedLocation);
+    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Mobile Action Target', 'female', $sharedLocation);
     mobileApiAddTargetPartnerPreferences($targetProfile, $viewerProfile);
     DB::table('profile_views')->insert([
         'viewer_profile_id' => $viewerProfile->id,
@@ -753,6 +757,7 @@ test('MobileProfile more sections returns gender aware real sections and safe ca
         'looking_for_me',
         'recently_viewed',
         'matching_my_preference',
+        'nearby',
         'recent_visitors',
         'you_may_like',
     ]);
@@ -778,10 +783,37 @@ test('MobileProfile more sections returns gender aware real sections and safe ca
     $recentlyViewed = $sections->firstWhere('key', 'recently_viewed');
     expect(collect($recentlyViewed['profiles'])->pluck('id')->all())->toContain($targetProfile->id);
 
+    $nearby = $sections->firstWhere('key', 'nearby');
+    expect($nearby['title_en'])->toBe('Nearby Brides');
+    expect($nearby['title_mr'])->toBe('जवळच्या वधू');
+    expect($nearby['subtitle_en'])->toBe('Profiles closer to your location');
+    expect($nearby['subtitle_mr'])->toBe('तुमच्या ठिकाणाजवळील स्थळे');
+    expect(collect($nearby['profiles'])->pluck('id')->all())->toContain($targetProfile->id);
+
+    $nearbyRow = collect($nearby['profiles'])->firstWhere('id', $targetProfile->id);
+    expect($nearbyRow)->toBeArray();
+    expect($nearbyRow['display']['card'])->toHaveKeys([
+        'name',
+        'age',
+        'age_label',
+        'primary_photo_url',
+        'photo_count',
+        'verified',
+        'premium',
+    ]);
+    expect($nearbyRow['display']['actions'])->toHaveKey('can_send_interest');
+
+    $nearbyJson = json_encode($nearby, JSON_THROW_ON_ERROR);
+    expect($nearbyJson)->not->toContain('phone');
+    expect($nearbyJson)->not->toContain('email');
+    expect(mb_strtolower($nearbyJson))->not->toContain('whatsapp');
+    expect(mb_strtolower($nearbyJson))->not->toContain('contact');
+
     $payloadJson = json_encode($response->json(), JSON_THROW_ON_ERROR);
     expect($payloadJson)->not->toContain('phone');
     expect($payloadJson)->not->toContain('email');
     expect(mb_strtolower($payloadJson))->not->toContain('whatsapp');
+    expect(mb_strtolower($payloadJson))->not->toContain('contact');
     expect(mb_strtolower($payloadJson))->not->toContain('contact_unlock');
 });
 
@@ -804,6 +836,8 @@ test('MobileProfile more sections labels female viewer target as groom', functio
 
     $sections = collect($response->json('sections'));
     expect($sections->firstWhere('key', 'looking_for_me')['title_en'])->toBe('Grooms looking for me');
+    expect($sections->firstWhere('key', 'nearby')['title_en'])->toBe('Nearby Grooms');
+    expect($sections->firstWhere('key', 'nearby')['title_mr'])->toBe('जवळचे वर');
     expect($sections->firstWhere('key', 'you_may_like')['title_mr'])->toBe('तुम्हाला आवडू शकणाऱ्या वर');
 });
 
