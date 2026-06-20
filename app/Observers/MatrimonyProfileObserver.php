@@ -17,6 +17,15 @@ use Illuminate\Validation\ValidationException;
 
 class MatrimonyProfileObserver
 {
+    private const PHOTO_PROCESSING_ONLY_COLUMNS = [
+        'profile_photo',
+        'photo_approved',
+        'photo_rejected_at',
+        'photo_rejection_reason',
+        'photo_moderation_snapshot',
+        'updated_at',
+    ];
+
     /**
      * Residence SSOT: canonical leaf required once profile leaves draft ({@code profile_addresses} when profile columns dropped).
      */
@@ -59,17 +68,11 @@ class MatrimonyProfileObserver
         }
 
         $dirtyColumns = array_keys($profile->getDirty());
-        $dirtyColumns = array_values(array_diff($dirtyColumns, ['updated_at']));
+        if ($dirtyColumns === []) {
+            return false;
+        }
 
-        $photoOnlyColumns = [
-            'profile_photo',
-            'photo_approved',
-            'photo_rejected_at',
-            'photo_rejection_reason',
-            'photo_moderation_snapshot',
-        ];
-
-        return array_diff($dirtyColumns, $photoOnlyColumns) === [];
+        return array_values(array_diff($dirtyColumns, self::PHOTO_PROCESSING_ONLY_COLUMNS)) === [];
     }
 
     public function created(MatrimonyProfile $profile): void

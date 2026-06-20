@@ -122,6 +122,7 @@ if ($statusFromAI === 'error') {
         if ($primaryDecision['new_is_primary']) {
             // Always update the stored filename so admin can review it even when not approved.
             // Use bypass to avoid governance conflicts for profile_photo field changes via background job.
+            $priorBypass = MatrimonyProfile::$bypassGovernanceEnforcement;
             MatrimonyProfile::$bypassGovernanceEnforcement = true;
             try {
                 $fill = [
@@ -135,7 +136,7 @@ if ($statusFromAI === 'error') {
                 }
                 $profile->forceFill($fill)->save();
             } finally {
-                MatrimonyProfile::$bypassGovernanceEnforcement = false;
+                MatrimonyProfile::$bypassGovernanceEnforcement = $priorBypass;
             }
         }
 

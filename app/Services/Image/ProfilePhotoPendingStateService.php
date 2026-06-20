@@ -23,7 +23,10 @@ class ProfilePhotoPendingStateService
             if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'photo_moderation_snapshot')) {
                 $fill['photo_moderation_snapshot'] = null;
             }
-            $profile->forceFill($fill)->save();
+            $profile->forceFill($fill);
+            if ($profile->isDirty(array_keys($fill))) {
+                $profile->save();
+            }
         } finally {
             MatrimonyProfile::$bypassGovernanceEnforcement = $prior;
         }
