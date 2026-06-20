@@ -720,6 +720,110 @@ test('MobileProfile more sections endpoint requires authentication', function ()
         ->assertUnauthorized();
 });
 
+test('MobileProfile GET api v1 profile detail records a profile view for visible target', function () {
+    [$viewerUser, $viewerProfile, , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id)
+        ->assertOk()
+        ->assertJsonPath('success', true);
+
+    expect(DB::table('profile_views')
+        ->where('viewer_profile_id', $viewerProfile->id)
+        ->where('viewed_profile_id', $targetProfile->id)
+        ->count())->toBe(1);
+});
+
+test('MobileProfile GET api v1 profile detail does not record self views', function () {
+    $user = User::factory()->create(['name' => 'Self Detail Viewer', 'gender' => 'male']);
+    $profile = mobileApiCreateValidActionProfile($user, 'Self Detail Viewer', 'male');
+    Sanctum::actingAs($user);
+
+    $this->getJson('/api/v1/matrimony-profiles/'.$profile->id)
+        ->assertOk()
+        ->assertJsonPath('success', true);
+
+    expect(DB::table('profile_views')
+        ->where('viewer_profile_id', $profile->id)
+        ->where('viewed_profile_id', $profile->id)
+        ->count())->toBe(0);
+});
+
+test('MobileProfile GET api v1 profile detail does not record blocked profile views', function () {
+    [$viewerUser, $viewerProfile, , $targetProfile] = mobileApiProfileActionPair();
+    Block::create([
+        'blocker_profile_id' => $viewerProfile->id,
+        'blocked_profile_id' => $targetProfile->id,
+    ]);
+    Sanctum::actingAs($viewerUser);
+
+    $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id)
+        ->assertNotFound();
+
+    expect(DB::table('profile_views')
+        ->where('viewer_profile_id', $viewerProfile->id)
+        ->where('viewed_profile_id', $targetProfile->id)
+        ->count())->toBe(0);
+});
+
+test('MobileProfile GET api v1 profile detail does not record invisible profile views', function () {
+    [$viewerUser, $viewerProfile, , $targetProfile] = mobileApiProfileActionPair();
+    $targetProfile->forceFill(['lifecycle_state' => 'draft'])->saveQuietly();
+    Sanctum::actingAs($viewerUser);
+
+    $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id)
+        ->assertNotFound();
+
+    expect(DB::table('profile_views')
+        ->where('viewer_profile_id', $viewerProfile->id)
+        ->where('viewed_profile_id', $targetProfile->id)
+        ->count())->toBe(0);
+});
+
+test('MobileProfile index includes mobile-created profile after approved primary photo activation', function () {
+    mobileApiProfileTestSeedCurrentAddressType();
+    $location = mobileApiProfileTestLeafLocation();
+    [$religion, $caste, $subCaste] = mobileApiProfileTestCommunity();
+    $targetGender = mobileApiProfileTestGender('female');
+
+    $viewerUser = User::factory()->create(['name' => 'Mobile List Viewer', 'gender' => 'male']);
+    mobileApiCreateValidActionProfile($viewerUser, 'Mobile List Viewer', 'male', $location);
+
+    $targetUser = User::factory()->create(['name' => 'Mobile Created Target', 'gender' => 'female']);
+    $targetProfile = app(MutationService::class)->createDraftProfileForUser($targetUser);
+    app(MutationService::class)->applyManualSnapshot($targetProfile, [
+        'core' => [
+            'full_name' => 'Mobile Created Target',
+            'gender_id' => $targetGender->id,
+            'date_of_birth' => '1996-02-08',
+            'highest_education' => 'M.A.',
+            'location_id' => $location->id,
+            'religion_id' => $religion->id,
+            'caste_id' => $caste->id,
+            'sub_caste_id' => $subCaste->id,
+        ],
+    ], (int) $targetUser->id, 'manual');
+
+    $targetProfile->refresh();
+    expect($targetProfile->lifecycle_state)->toBe('draft');
+
+    $targetProfile->forceFill([
+        'profile_photo' => 'approved-mobile-created.webp',
+        'photo_approved' => true,
+        'photo_rejected_at' => null,
+        'photo_rejection_reason' => null,
+        'is_suspended' => false,
+    ])->saveQuietly();
+
+    expect(app(MutationService::class)->activateDraftProfileAfterApprovedPrimaryPhoto($targetProfile))->toBeTrue();
+
+    Sanctum::actingAs($viewerUser);
+    $response = $this->getJson('/api/v1/matrimony-profiles');
+
+    $response->assertOk();
+    expect(collect($response->json('profiles'))->pluck('id')->all())->toContain($targetProfile->id);
+});
+
 test('MobileProfile more sections returns gender aware real sections and safe card rows', function () {
     $sharedLocation = mobileApiProfileTestLeafLocation();
     $viewerUser = User::factory()->create(['name' => 'Mobile Action Viewer', 'gender' => 'male']);
@@ -875,6 +979,8 @@ test('MobileProfile more sections locked recent visitors does not leak visitor i
     expect($teaser)->toHaveKey('avatar_style');
     expect($recentVisitors['rows'][0]['mode'])->toBe('teaser');
     expect($recentVisitors['rows'][0]['teaser'])->toBeArray();
+    expect(collect($recentVisitors['rows'])->pluck('mode')->all())->toContain('teaser');
+    expect(collect($recentVisitors['rows'])->pluck('mode')->all())->not->toContain('profile');
 
     $forbiddenTeaserKeys = [
         'id',

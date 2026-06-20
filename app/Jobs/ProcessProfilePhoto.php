@@ -11,6 +11,7 @@ use App\Services\Image\ImageModerationService;
 use App\Services\Image\ImageOptimizationService;
 use App\Services\Image\PhotoModerationScanPayload;
 use App\Services\Image\ProfileGalleryPhotoModerationStatus;
+use App\Services\MutationService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -141,6 +142,9 @@ if ($statusFromAI === 'error') {
         }
 
         $this->syncPrimaryGalleryRow($profile, $finalFilename, $status, $moderationSnapshot, $primaryDecision);
+        if ($primaryDecision['new_is_primary'] && $status === 'approved') {
+            app(MutationService::class)->activateDraftProfileAfterApprovedPrimaryPhoto($profile);
+        }
 
         $this->safeDeleteTemp();
 

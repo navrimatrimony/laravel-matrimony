@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\ProcessProfilePhoto;
+use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfilePhoto;
 use App\Models\User;
@@ -10,6 +11,7 @@ use App\Observers\MatrimonyProfileObserver;
 use App\Services\Image\ImageModerationService;
 use App\Services\Image\ImageProcessingService;
 use App\Services\Image\ImageOptimizationService;
+use App\Services\ProfileLifecycleService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -219,5 +221,216 @@ class ProfilePhotoResidenceValidationTest extends TestCase
         ]);
         $this->assertSame(1, ProfilePhoto::query()->where('profile_id', $profile->id)->count());
         Storage::disk('public')->assertExists('matrimony_photos/processed-no-residence.webp');
+    }
+
+    public function test_process_profile_photo_activates_mobile_draft_with_canonical_residence_after_approved_primary_photo(): void
+    {
+        $location = $this->photoActivationLocation();
+        $profile = $this->draftPhotoActivationProfile($location);
+
+        $this->processProfilePhotoWithStatus($profile, 'approved', 'processed-approved-mobile.webp');
+
+        $profile->refresh();
+
+        $this->assertSame('processed-approved-mobile.webp', $profile->profile_photo);
+        $this->assertTrue((bool) $profile->photo_approved);
+        $this->assertSame('active', $profile->lifecycle_state);
+        $this->assertTrue(ProfileLifecycleService::isVisibleToOthers($profile));
+    }
+
+    public function test_process_profile_photo_does_not_activate_mobile_draft_without_canonical_residence(): void
+    {
+        $profile = $this->draftPhotoActivationProfile(null);
+
+        $this->processProfilePhotoWithStatus($profile, 'approved', 'processed-approved-no-residence.webp');
+
+        $profile->refresh();
+
+        $this->assertSame('processed-approved-no-residence.webp', $profile->profile_photo);
+        $this->assertTrue((bool) $profile->photo_approved);
+        $this->assertSame('draft', $profile->lifecycle_state);
+        $this->assertFalse(ProfileLifecycleService::isVisibleToOthers($profile));
+    }
+
+    public function test_process_profile_photo_does_not_activate_mobile_draft_for_rejected_pending_or_error_photo(): void
+    {
+        foreach (['rejected', 'pending', 'error'] as $status) {
+            $profile = $this->draftPhotoActivationProfile($this->photoActivationLocation());
+
+            $this->processProfilePhotoWithStatus($profile, $status, 'processed-'.$status.'-mobile.webp');
+
+            $profile->refresh();
+
+            $this->assertSame('processed-'.$status.'-mobile.webp', $profile->profile_photo);
+            $this->assertFalse((bool) $profile->photo_approved);
+            $this->assertSame('draft', $profile->lifecycle_state);
+            $this->assertFalse(ProfileLifecycleService::isVisibleToOthers($profile));
+
+            if ($status === 'rejected') {
+                $this->assertNotNull($profile->photo_rejected_at);
+            } else {
+                $this->assertNull($profile->photo_rejected_at);
+            }
+        }
+    }
+
+    private function draftPhotoActivationProfile(?Location $location): MatrimonyProfile
+    {
+        $user = User::factory()->create();
+
+        return MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'full_name' => 'Mobile Draft Profile',
+            'location_id' => $location?->id,
+            'profile_photo' => 'pending/mobile-upload.jpg',
+            'photo_approved' => false,
+            'photo_rejected_at' => null,
+            'photo_rejection_reason' => null,
+            'is_suspended' => false,
+            'is_showcase' => false,
+            'lifecycle_state' => 'draft',
+        ]);
+    }
+
+    private function photoActivationLocation(): Location
+    {
+        $suffix = strtolower(str_replace('.', '-', uniqid('photo-activation-', true)));
+        $country = Location::create([
+            'name' => 'India '.$suffix,
+            'slug' => 'india-'.$suffix,
+            'hierarchy' => 'country',
+            'is_active' => true,
+        ]);
+        $state = Location::create([
+            'name' => 'Maharashtra '.$suffix,
+            'slug' => 'maharashtra-'.$suffix,
+            'hierarchy' => 'state',
+            'parent_id' => $country->id,
+            'is_active' => true,
+        ]);
+        $district = Location::create([
+            'name' => 'Pune '.$suffix,
+            'slug' => 'pune-'.$suffix,
+            'hierarchy' => 'district',
+            'parent_id' => $state->id,
+            'is_active' => true,
+        ]);
+        $taluka = Location::create([
+            'name' => 'Haveli '.$suffix,
+            'slug' => 'haveli-'.$suffix,
+            'hierarchy' => 'taluka',
+            'parent_id' => $district->id,
+            'is_active' => true,
+        ]);
+
+        return Location::create([
+            'name' => 'Wakad '.$suffix,
+            'slug' => 'wakad-'.$suffix,
+            'hierarchy' => 'village',
+            'tag' => 'city',
+            'parent_id' => $taluka->id,
+            'is_active' => true,
+        ]);
+    }
+
+    private function processProfilePhotoWithStatus(
+        MatrimonyProfile $profile,
+        string $status,
+        string $finalFilename
+    ): void {
+        Storage::fake('public');
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'profile-photo-test-');
+        file_put_contents($tempPath, 'fake image bytes');
+
+        $moderation = \Mockery::mock(ImageModerationService::class);
+        $moderation->shouldReceive('moderateProfilePhoto')
+            ->once()
+            ->with($tempPath)
+            ->andReturn($this->moderationResult($status));
+
+        $optimizer = \Mockery::mock(ImageOptimizationService::class);
+        $optimizer->shouldReceive('optimizeAndStoreProfilePhoto')
+            ->once()
+            ->with($tempPath, \Mockery::type('string'))
+            ->andReturnUsing(function () use ($finalFilename): array {
+                Storage::disk('public')->put('matrimony_photos/'.$finalFilename, 'processed');
+
+                return [
+                    'filename' => $finalFilename,
+                    'relative_path' => 'matrimony_photos/'.$finalFilename,
+                    'bytes' => 9,
+                    'quality' => 82,
+                ];
+            });
+
+        (new ProcessProfilePhoto($tempPath, (int) $profile->id, 'user_mobile'))
+            ->handle($moderation, $optimizer);
+    }
+
+    private function moderationResult(string $status): array
+    {
+        return match ($status) {
+            'approved' => [
+                'status' => 'approved',
+                'reason' => null,
+                'meta' => [
+                    'nudenet' => [
+                        'safe' => true,
+                        'confidence' => 0.99,
+                        'raw' => [
+                            'api_status' => 'safe',
+                            'pipeline_confidence' => 0.99,
+                            'detections' => [],
+                        ],
+                    ],
+                ],
+            ],
+            'rejected' => [
+                'status' => 'rejected',
+                'reason' => 'Rejected by moderation.',
+                'meta' => [
+                    'nudenet' => [
+                        'safe' => false,
+                        'confidence' => 0.99,
+                        'raw' => [
+                            'api_status' => 'unsafe',
+                            'pipeline_confidence' => 0.99,
+                            'detections' => ['unsafe'],
+                        ],
+                    ],
+                ],
+            ],
+            'error' => [
+                'status' => 'error',
+                'reason' => 'AI service down.',
+                'meta' => [
+                    'nudenet' => [
+                        'safe' => false,
+                        'confidence' => 0.0,
+                        'raw' => [
+                            'api_status' => 'error',
+                            'pipeline_confidence' => 0.0,
+                            'detections' => [],
+                        ],
+                    ],
+                ],
+            ],
+            default => [
+                'status' => 'pending',
+                'reason' => null,
+                'meta' => [
+                    'nudenet' => [
+                        'safe' => false,
+                        'confidence' => 0.5,
+                        'raw' => [
+                            'api_status' => 'review',
+                            'pipeline_confidence' => 0.5,
+                            'detections' => [],
+                        ],
+                    ],
+                ],
+            ],
+        };
     }
 }

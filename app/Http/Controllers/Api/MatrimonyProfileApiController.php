@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\QuotaPolicySourceViolation;
 use App\Http\Controllers\Controller;
 use App\Models\Caste;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Models\SubCaste;
+use App\Models\User;
 use App\Services\Api\MobileMoreMatchesSectionService;
 use App\Services\Api\MobileProfileDisplayPresenter;
 use App\Services\MutationService;
@@ -423,6 +425,8 @@ class MatrimonyProfileApiController extends Controller
             }
         }
 
+        $this->recordMobileProfileViewIfEligible($user, $viewerProfile, $profile, (bool) $isOwnProfile);
+
         // Transform to include gender from user relationship (SSOT-approved field)
         // PIR-006: Null-safe when user relation is missing
         // Phase-4 Day-8: Use hierarchical location fields
@@ -433,6 +437,40 @@ class MatrimonyProfileApiController extends Controller
             'profile' => $profileData,
             'display' => app(MobileProfileDisplayPresenter::class)->forProfile($profile, $user),
         ]);
+    }
+
+    private function recordMobileProfileViewIfEligible(
+        ?User $user,
+        ?MatrimonyProfile $viewerProfile,
+        MatrimonyProfile $profile,
+        bool $isOwnProfile
+    ): void {
+        if (! $user || ! $viewerProfile || $isOwnProfile || $this->shouldSkipMobileProfileViewTracking($user)) {
+            return;
+        }
+
+        if (ViewTrackingService::recordView($viewerProfile, $profile)) {
+            try {
+                ViewTrackingService::consumeDailyProfileViewUsageForViewer($viewerProfile);
+            } catch (QuotaPolicySourceViolation $exception) {
+                Log::warning('Mobile profile view quota consumption skipped because quota policy is incomplete.', [
+                    'viewer_profile_id' => $viewerProfile->id,
+                    'viewed_profile_id' => $profile->id,
+                    'exception' => $exception::class,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+            ViewTrackingService::maybeTriggerViewBack($viewerProfile, $profile);
+        }
+    }
+
+    private function shouldSkipMobileProfileViewTracking(User $user): bool
+    {
+        if ($user->isAnyAdmin()) {
+            return true;
+        }
+
+        return $user->suchakAccount()->exists();
     }
 
     /**
