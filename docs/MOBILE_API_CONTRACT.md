@@ -437,7 +437,46 @@ Success response: HTTP 200
       "locked": true,
       "requires_upgrade": true,
       "teaser_count": 12,
-      "profiles": []
+      "profiles": [],
+      "teasers": [
+        {
+          "headline": "A girl from Pune",
+          "lines": [
+            "Pune / Maharashtra",
+            "25 years"
+          ],
+          "viewed_summary": "Viewed your profile recently",
+          "photo_url": "https://navrimilenavryala.com/images/placeholders/female-profile.svg",
+          "avatar_style": "blur",
+          "blur_photo_class": "blur-md scale-110 opacity-90",
+          "accent_line": null,
+          "match_line": null,
+          "interest_hint": "Upgrade to know more"
+        }
+      ],
+      "rows": [
+        {
+          "mode": "teaser",
+          "teaser": {
+            "headline": "A girl from Pune",
+            "lines": [
+              "Pune / Maharashtra",
+              "25 years"
+            ],
+            "viewed_summary": "Viewed your profile recently",
+            "photo_url": "https://navrimilenavryala.com/images/placeholders/female-profile.svg",
+            "avatar_style": "blur",
+            "blur_photo_class": "blur-md scale-110 opacity-90",
+            "accent_line": null,
+            "match_line": null,
+            "interest_hint": "Upgrade to know more"
+          }
+        }
+      ],
+      "partial_mode": false,
+      "preview_limit": 0,
+      "unique_count": 12,
+      "overflow_count": 12
     },
     {
       "key": "you_may_like",
@@ -463,7 +502,13 @@ Gender labels are derived from the logged-in member profile:
 - female viewer → male target labels: `Groom`, `Grooms`, `वर`
 - unknown viewer gender → neutral target labels: `Profile`, `Profiles`, `स्थळे`
 
-`recent_visitors` follows the existing who-viewed entitlement gate. When locked, it returns `locked=true`, `requires_upgrade=true`, a safe `teaser_count`, and an empty `profiles` array. It must not leak viewer profile IDs, names, photos, phone, email, WhatsApp, or contact unlock data.
+`recent_visitors` follows the existing who-viewed entitlement gate and reuses the Laravel website who-viewed teaser policy.
+
+- Full who-viewed access: `profiles[]` contains normal safe profile rows using the same lightweight list-card `display.card` and `display.actions` shape as other sections. `rows[]` may include ordered `{ "mode": "profile", "profile": { ... } }` rows.
+- Locked access: `locked=true`, `requires_upgrade=true`, safe `teaser_count`, `profiles=[]`, and `teasers[]` contains privacy-safe teaser payloads. `rows[]` contains ordered `{ "mode": "teaser", "teaser": { ... } }` rows.
+- Partial access: `profiles[]` contains only the allowed full profile rows, `teasers[]` contains the locked overflow teaser rows, and `rows[]` preserves the ordered mixed list with `mode="profile"` or `mode="teaser"`.
+
+Teaser rows are not profile rows and must not be opened as profile-detail records. Locked teaser rows expose only these fields: `headline`, `lines`, `viewed_summary`, `photo_url`, `avatar_style`, `blur_photo_class`, `accent_line`, `match_line`, and `interest_hint`. They must not include `id`, `profile_id`, `viewer_profile_id`, `user_id`, `display`, `actions`, `contact`, phone, email, WhatsApp, contact unlock state, paid contact data, or profile contact data.
 
 All section profile rows intentionally exclude contact phone, email, WhatsApp number, contact unlock state, full profile sections, full about text, and partner preferences.
 

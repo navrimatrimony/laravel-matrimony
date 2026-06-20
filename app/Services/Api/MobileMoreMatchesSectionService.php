@@ -11,6 +11,8 @@ use App\Services\Matching\MatchingService;
 use App\Services\ProfileLifecycleService;
 use App\Services\ProfilePreferenceMatchService;
 use App\Services\ViewTrackingService;
+use App\Services\WhoViewed\WhoViewedRowsService;
+use App\Services\WhoViewed\WhoViewedTeaserPolicy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
@@ -25,6 +27,7 @@ class MobileMoreMatchesSectionService
         private readonly MobileProfileDisplayPresenter $presenter,
         private readonly MatchingService $matchingService,
         private readonly FeatureUsageService $featureUsage,
+        private readonly WhoViewedRowsService $whoViewedRows,
     ) {}
 
     /**
@@ -100,6 +103,8 @@ class MobileMoreMatchesSectionService
                 'locked' => true,
                 'requires_upgrade' => true,
                 'teaser_count' => 0,
+                'teasers' => [],
+                'rows' => [],
             ]),
             $this->section('you_may_like', $context, 'you_may_like', collect()),
         ];
@@ -199,49 +204,80 @@ class MobileMoreMatchesSectionService
      */
     private function recentVisitorsSection(MatrimonyProfile $viewerProfile, User $viewer, array $context): array
     {
+        $targetGender = $this->genderString($context['target_gender'] ?? null);
+        $teaserPolicy = WhoViewedTeaserPolicy::normalized();
         $canSee = $this->canSeeRecentVisitors($viewer);
         if (! $canSee) {
-            return $this->section('recent_visitors', $context, 'recent_visitors', collect(), [
+            $whoViewed = $this->whoViewedRows->lockedTeaserRows(
+                $viewerProfile,
+                $teaserPolicy,
+                self::SECTION_LIMIT,
+                $targetGender,
+            );
+
+            return $this->recentVisitorsPayload($context, [], $whoViewed, [
                 'locked' => true,
                 'requires_upgrade' => true,
-                'teaser_count' => ViewTrackingService::countEligibleDistinctViewersForTeaser((int) $viewerProfile->id),
+                'teaser_count' => (int) $whoViewed['unique_count'],
+                'partial_mode' => false,
+                'preview_limit' => 0,
+                'unique_count' => (int) $whoViewed['unique_count'],
+                'overflow_count' => (int) $whoViewed['overflow_count'],
             ]);
         }
 
-        $limit = self::SECTION_LIMIT;
+        $hasFullAccess = false;
+        $previewLimit = 0;
+        $previewWindow = ['since' => null, 'window_days' => null];
         try {
-            if (! $this->featureUsage->whoViewedMeHasFullViewerList($viewer)) {
-                $previewLimit = max(0, $this->featureUsage->getWhoViewedMePreviewLimit((int) $viewer->id));
-                $limit = min(self::SECTION_LIMIT, $previewLimit);
-            }
+            $hasFullAccess = $this->featureUsage->whoViewedMeHasFullViewerList($viewer);
+            $previewWindow = $this->featureUsage->whoViewedMePreviewWindow($viewer);
+            $previewLimit = $hasFullAccess ? self::SECTION_LIMIT : max(0, $this->featureUsage->getWhoViewedMePreviewLimit((int) $viewer->id));
         } catch (\Throwable) {
-            $limit = 0;
+            $hasFullAccess = false;
+            $previewLimit = 0;
         }
-        if ($limit < 1) {
-            return $this->section('recent_visitors', $context, 'recent_visitors', collect(), [
+        if (! $hasFullAccess && $previewLimit < 1) {
+            $whoViewed = $this->whoViewedRows->lockedTeaserRows(
+                $viewerProfile,
+                $teaserPolicy,
+                self::SECTION_LIMIT,
+                $targetGender,
+            );
+
+            return $this->recentVisitorsPayload($context, [], $whoViewed, [
                 'locked' => true,
                 'requires_upgrade' => true,
-                'teaser_count' => ViewTrackingService::countEligibleDistinctViewersForTeaser((int) $viewerProfile->id),
+                'teaser_count' => (int) $whoViewed['unique_count'],
+                'partial_mode' => false,
+                'preview_limit' => 0,
+                'unique_count' => (int) $whoViewed['unique_count'],
+                'overflow_count' => (int) $whoViewed['overflow_count'],
             ]);
         }
 
-        $views = $this->distinctProfileViews('viewed_profile_id', (int) $viewerProfile->id, 'viewer_profile_id', $limit);
-        $profileIds = $views->pluck('profile_id')->all();
-        $profiles = $this->profilesByOrderedIds($viewerProfile, $profileIds);
-        $rows = $profiles->map(function (MatrimonyProfile $profile) use ($views): array {
-            $meta = $views->firstWhere('profile_id', (int) $profile->id);
+        $whoViewed = $hasFullAccess
+            ? $this->whoViewedRows->fullRows($viewerProfile, null, self::SECTION_LIMIT, $targetGender)
+            : $this->whoViewedRows->partialRows(
+                $viewerProfile,
+                $previewLimit,
+                $teaserPolicy,
+                $previewWindow['since'] ?? null,
+                self::SECTION_LIMIT,
+                $targetGender,
+            );
+        $profileRows = $this->profileRowsFromWhoViewedRows($viewerProfile, $viewer, $whoViewed['rows']);
+        $teaserRows = $this->teasersFromWhoViewedRows($whoViewed['rows']);
 
-            return [
-                'profile' => $profile,
-                'viewed_at' => $meta['viewed_at'] ?? null,
-                'viewed_at_human' => $meta['viewed_at_human'] ?? null,
-            ];
-        });
-
-        return $this->sectionFromRows('recent_visitors', $context, $rows, $viewer, [
+        return $this->recentVisitorsPayload($context, $profileRows, $whoViewed, [
             'locked' => false,
-            'requires_upgrade' => false,
-            'teaser_count' => null,
+            'requires_upgrade' => $hasFullAccess ? false : $teaserRows !== [],
+            'teaser_count' => $hasFullAccess ? null : (int) $whoViewed['unique_count'],
+            'partial_mode' => ! $hasFullAccess && $teaserRows !== [],
+            'preview_limit' => $hasFullAccess ? null : $previewLimit,
+            'unique_count' => (int) $whoViewed['unique_count'],
+            'overflow_count' => $hasFullAccess ? 0 : (int) $whoViewed['overflow_count'],
+            'window_days' => $previewWindow['window_days'] ?? null,
         ]);
     }
 
@@ -482,6 +518,139 @@ class MobileMoreMatchesSectionService
             })
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  list<array{display: string, view: \App\Models\ProfileView, teaser: ?array<string, mixed>}>  $whoViewedRows
+     * @return list<array<string, mixed>>
+     */
+    private function profileRowsFromWhoViewedRows(MatrimonyProfile $viewerProfile, User $viewer, array $whoViewedRows): array
+    {
+        $profileIds = collect($whoViewedRows)
+            ->filter(static fn (array $row): bool => ($row['display'] ?? null) === 'full')
+            ->map(static fn (array $row): int => (int) $row['view']->viewer_profile_id)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+
+        $profiles = $this->profilesByOrderedIds($viewerProfile, $profileIds)
+            ->keyBy(fn (MatrimonyProfile $profile): int => (int) $profile->id);
+
+        $rows = [];
+        foreach ($whoViewedRows as $row) {
+            if (($row['display'] ?? null) !== 'full') {
+                continue;
+            }
+            $view = $row['view'];
+            $profile = $profiles->get((int) $view->viewer_profile_id);
+            if (! $profile instanceof MatrimonyProfile) {
+                continue;
+            }
+
+            $payload = [
+                'id' => (int) $profile->id,
+                'display' => $this->presenter->forListCard($profile, $viewer),
+            ];
+            if ($view->created_at !== null) {
+                $payload['viewed_at'] = $view->created_at->toIso8601String();
+                $payload['viewed_at_human'] = $view->created_at->diffForHumans();
+            }
+
+            $rows[] = $payload;
+        }
+
+        return array_values($rows);
+    }
+
+    /**
+     * @param  list<array{display: string, view: \App\Models\ProfileView, teaser: ?array<string, mixed>}>  $whoViewedRows
+     * @return list<array<string, mixed>>
+     */
+    private function teasersFromWhoViewedRows(array $whoViewedRows): array
+    {
+        $teasers = [];
+        foreach ($whoViewedRows as $row) {
+            if (($row['display'] ?? null) !== 'teaser' || ! is_array($row['teaser'] ?? null)) {
+                continue;
+            }
+            $teasers[] = $this->safeWhoViewedTeaser($row['teaser']);
+        }
+
+        return $teasers;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $profileRows
+     * @param  array{rows: list<array{display: string, view: \App\Models\ProfileView, teaser: ?array<string, mixed>}>, unique_count: int, full_count: int, overflow_count: int}  $whoViewed
+     * @param  array<string, mixed>  $extra
+     * @return array<string, mixed>
+     */
+    private function recentVisitorsPayload(array $context, array $profileRows, array $whoViewed, array $extra): array
+    {
+        $profilesById = [];
+        foreach ($profileRows as $profileRow) {
+            $id = (int) ($profileRow['id'] ?? 0);
+            if ($id > 0) {
+                $profilesById[$id] = $profileRow;
+            }
+        }
+
+        $mixedRows = [];
+        foreach ($whoViewed['rows'] as $row) {
+            if (($row['display'] ?? null) === 'full') {
+                $profileId = (int) $row['view']->viewer_profile_id;
+                if (isset($profilesById[$profileId])) {
+                    $mixedRows[] = [
+                        'mode' => 'profile',
+                        'profile' => $profilesById[$profileId],
+                    ];
+                }
+
+                continue;
+            }
+
+            if (($row['display'] ?? null) === 'teaser' && is_array($row['teaser'] ?? null)) {
+                $mixedRows[] = [
+                    'mode' => 'teaser',
+                    'teaser' => $this->safeWhoViewedTeaser($row['teaser']),
+                ];
+            }
+        }
+
+        return $this->section('recent_visitors', $context, 'recent_visitors', collect(), array_merge([
+            'profiles' => array_values($profileRows),
+            'teasers' => $this->teasersFromWhoViewedRows($whoViewed['rows']),
+            'rows' => $mixedRows,
+        ], $extra));
+    }
+
+    /**
+     * @param  array<string, mixed>  $teaser
+     * @return array<string, mixed>
+     */
+    private function safeWhoViewedTeaser(array $teaser): array
+    {
+        $safe = [];
+        foreach ([
+            'headline',
+            'lines',
+            'viewed_summary',
+            'photo_url',
+            'avatar_style',
+            'blur_photo_class',
+            'accent_line',
+            'match_line',
+            'interest_hint',
+        ] as $key) {
+            $safe[$key] = $teaser[$key] ?? ($key === 'lines' ? [] : null);
+        }
+
+        if (! is_array($safe['lines'])) {
+            $safe['lines'] = [];
+        }
+        $safe['lines'] = array_values(array_map(static fn ($line): string => (string) $line, $safe['lines']));
+
+        return $safe;
     }
 
     private function title(string $key, array $context, string $locale): string

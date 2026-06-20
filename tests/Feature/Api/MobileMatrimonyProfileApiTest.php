@@ -15,6 +15,7 @@ use App\Models\SubCaste;
 use App\Models\User;
 use App\Services\Api\MobileProfileDisplayPresenter;
 use App\Services\ContactAccessService;
+use App\Services\FeatureUsageService;
 use App\Services\Gunamilan\GunamilanService;
 use App\Services\MutationService;
 use Illuminate\Support\Facades\DB;
@@ -294,6 +295,23 @@ function mobileApiComparisonRow(array $comparison, string $key): ?array
     $row = collect($comparison['rows'] ?? [])->firstWhere('key', $key);
 
     return is_array($row) ? $row : null;
+}
+
+function mobileApiRecursivePayloadKeys(mixed $payload): array
+{
+    if (! is_array($payload)) {
+        return [];
+    }
+
+    $keys = [];
+    foreach ($payload as $key => $value) {
+        if (is_string($key)) {
+            $keys[] = $key;
+        }
+        $keys = array_merge($keys, mobileApiRecursivePayloadKeys($value));
+    }
+
+    return array_values(array_unique($keys));
 }
 
 function mobileApiProfileTestEducationDegree(string $code, int $sortOrder): EducationDegree
@@ -806,16 +824,95 @@ test('MobileProfile more sections locked recent visitors does not leak visitor i
 
     $response->assertOk();
     $recentVisitors = collect($response->json('sections'))->firstWhere('key', 'recent_visitors');
+    foreach (['locked', 'requires_upgrade', 'teaser_count', 'profiles', 'teasers', 'rows'] as $key) {
+        expect($recentVisitors)->toHaveKey($key);
+    }
     expect($recentVisitors['locked'])->toBeTrue();
     expect($recentVisitors['requires_upgrade'])->toBeTrue();
     expect($recentVisitors['teaser_count'])->toBeGreaterThanOrEqual(1);
     expect($recentVisitors['profiles'])->toBe([]);
+    expect($recentVisitors['teasers'])->toBeArray()->not->toBeEmpty();
+    expect($recentVisitors['rows'])->toBeArray()->not->toBeEmpty();
+
+    $teaser = $recentVisitors['teasers'][0];
+    expect($teaser)->toBeArray();
+    expect($teaser)->toHaveKey('headline');
+    expect($teaser)->toHaveKey('viewed_summary');
+    expect($teaser)->toHaveKey('avatar_style');
+    expect($recentVisitors['rows'][0]['mode'])->toBe('teaser');
+    expect($recentVisitors['rows'][0]['teaser'])->toBeArray();
+
+    $forbiddenTeaserKeys = [
+        'id',
+        'profile_id',
+        'viewer_profile_id',
+        'user_id',
+        'display',
+        'actions',
+        'contact',
+        'phone',
+        'email',
+        'whatsapp',
+        'paid_contact',
+        'primary_cta',
+    ];
+    $teaserKeys = mobileApiRecursivePayloadKeys($teaser);
+    foreach ($forbiddenTeaserKeys as $key) {
+        expect($teaserKeys)->not->toContain($key);
+    }
 
     $recentVisitorsJson = json_encode($recentVisitors, JSON_THROW_ON_ERROR);
     expect($recentVisitorsJson)->not->toContain('Locked Recent Visitor Profile');
     expect($recentVisitorsJson)->not->toContain('phone');
     expect($recentVisitorsJson)->not->toContain('email');
     expect(mb_strtolower($recentVisitorsJson))->not->toContain('whatsapp');
+});
+
+test('MobileProfile more sections full recent visitors access returns safe profile rows', function () {
+    $ownerUser = User::factory()->create(['name' => 'Full Access Owner', 'gender' => 'male']);
+    $visitorUser = User::factory()->create(['name' => 'Full Access Visitor User', 'gender' => 'female']);
+    $ownerProfile = mobileApiCreateValidActionProfile($ownerUser, 'Full Access Owner Profile', 'male');
+    $visitorProfile = mobileApiCreateValidActionProfile($visitorUser, 'Full Access Visitor Profile', 'female');
+    DB::table('profile_views')->insert([
+        'viewer_profile_id' => $visitorProfile->id,
+        'viewed_profile_id' => $ownerProfile->id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $this->mock(FeatureUsageService::class, function ($mock): void {
+        $mock->shouldReceive('canUse')
+            ->withAnyArgs()
+            ->andReturnUsing(fn (int $userId, string $featureKey): bool => $featureKey === FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS);
+        $mock->shouldReceive('whoViewedMeHasFullViewerList')
+            ->withAnyArgs()
+            ->andReturn(true);
+        $mock->shouldReceive('whoViewedMePreviewWindow')
+            ->withAnyArgs()
+            ->andReturn(['since' => null, 'window_days' => null, 'uses_month_copy' => false]);
+    });
+
+    Sanctum::actingAs($ownerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/more-sections');
+
+    $response->assertOk();
+    $recentVisitors = collect($response->json('sections'))->firstWhere('key', 'recent_visitors');
+    expect($recentVisitors['locked'])->toBeFalse();
+    expect($recentVisitors['requires_upgrade'])->toBeFalse();
+    expect($recentVisitors['teasers'])->toBe([]);
+    expect(collect($recentVisitors['profiles'])->pluck('id')->all())->toContain($visitorProfile->id);
+
+    $row = collect($recentVisitors['rows'])->firstWhere('mode', 'profile');
+    expect($row)->toBeArray();
+    expect($row['profile']['id'])->toBe($visitorProfile->id);
+    expect($row['profile']['display']['card'])->toHaveKey('name');
+    expect($row['profile']['display']['actions'])->toHaveKey('can_send_interest');
+
+    $payloadJson = json_encode($recentVisitors, JSON_THROW_ON_ERROR);
+    expect($payloadJson)->not->toContain('phone');
+    expect($payloadJson)->not->toContain('email');
+    expect(mb_strtolower($payloadJson))->not->toContain('whatsapp');
 });
 
 test('MobileProfile display contact keeps own profile unlock disabled', function () {
