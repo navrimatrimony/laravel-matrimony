@@ -661,9 +661,6 @@ class MobileProfileDisplayPresenter
     private function profileGenderKey(MatrimonyProfile $profile): ?string
     {
         $key = mb_strtolower(trim((string) ($profile->gender?->key ?? '')));
-        if ($key === '') {
-            $key = mb_strtolower(trim((string) ($profile->user?->gender ?? '')));
-        }
 
         if (str_contains($key, 'female') || str_contains($key, 'स्त्री') || str_contains($key, 'महिला')) {
             return 'female';
@@ -1624,7 +1621,7 @@ class MobileProfileDisplayPresenter
 
     private function comparisonLabel(MatrimonyProfile $profile): string
     {
-        $gender = mb_strtolower(trim((string) ($this->labelFrom($profile->gender) ?? $profile->user?->gender ?? '')));
+        $gender = mb_strtolower(trim((string) ($this->labelFrom($profile->gender) ?? '')));
 
         if (str_contains($gender, 'female') || str_contains($gender, 'स्त्री') || str_contains($gender, 'महिला')) {
             return 'You & Her';

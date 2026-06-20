@@ -6,7 +6,6 @@ use App\Models\User;
 use App\Services\WhatsAppService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
 class WhatsAppController extends Controller
 {
@@ -24,7 +23,6 @@ class WhatsAppController extends Controller
         $request->validate([
             'phone' => ['required', 'string', 'max:64'],
             'name' => ['nullable', 'string', 'max:255'],
-            'gender' => ['nullable', 'string', 'max:32'],
             'dob' => ['nullable', 'date'],
             'marital_status' => ['nullable', 'string', 'max:64'],
         ]);
@@ -40,15 +38,9 @@ class WhatsAppController extends Controller
             ]);
         }
 
-        $gender = $request->input('gender');
-        if (is_string($gender) && $gender !== '') {
-            $gender = Str::lower(trim($gender));
-        }
-
         $user = User::create([
             'name' => $request->input('name') ?? '',
             'mobile' => $phone,
-            'gender' => $gender,
             'dob' => $request->input('dob'),
             'marital_status' => $request->input('marital_status'),
             'password' => '123456',

@@ -69,8 +69,8 @@ test('contact request is blocked until receiver accepts interest (no mutual requ
         'status' => 'pending',
     ]);
 
-    $senderUser = $senderProfile->user ?: User::factory()->create(['gender' => 'Male']);
-    $receiverUser = $receiverProfile->user ?: User::factory()->create(['gender' => 'Male']);
+    $senderUser = $senderProfile->user ?: User::factory()->create();
+    $receiverUser = $receiverProfile->user ?: User::factory()->create();
     $senderProfile->update(['user_id' => $senderUser->id]);
     $receiverProfile->update(['user_id' => $receiverUser->id]);
 
@@ -107,8 +107,8 @@ test('contact request works after accepted interest only + reveals only primary 
         'updated_at' => now(),
     ]);
 
-    $senderUser = $senderProfile->user ?: User::factory()->create(['gender' => 'Male']);
-    $receiverUser = $receiverProfile->user ?: User::factory()->create(['gender' => 'Male']);
+    $senderUser = $senderProfile->user ?: User::factory()->create();
+    $receiverUser = $receiverProfile->user ?: User::factory()->create();
     $senderProfile->update(['user_id' => $senderUser->id]);
     $receiverProfile->update(['user_id' => $receiverUser->id]);
 

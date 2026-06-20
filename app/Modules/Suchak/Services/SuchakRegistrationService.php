@@ -48,7 +48,6 @@ class SuchakRegistrationService
                 'mobile' => $mobile,
                 'password' => Hash::make((string) $attributes['password']),
                 'registering_for' => 'other',
-                'gender' => '',
             ]);
 
             $account = SuchakAccount::query()->create([

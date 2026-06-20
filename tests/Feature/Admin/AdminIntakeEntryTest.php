@@ -31,7 +31,7 @@ class AdminIntakeEntryTest extends TestCase
 
     public function test_admin_can_open_intake_entry_page(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->adminUser();
         $member = User::factory()->create([
             'is_admin' => false,
             'admin_role' => null,
@@ -50,7 +50,7 @@ class AdminIntakeEntryTest extends TestCase
 
     public function test_admin_can_open_manual_profile_registration_tab(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->adminUser();
 
         $this->actingAs($admin)
             ->get(route('admin.biodata-intakes.create-profile'))
@@ -62,7 +62,7 @@ class AdminIntakeEntryTest extends TestCase
 
     public function test_admin_intake_show_reuses_normalized_biodata_draft_preview(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->adminUser();
         $member = User::factory()->create(['is_admin' => false, 'admin_role' => null]);
         $intake = BiodataIntake::create([
             'uploaded_by' => $member->id,
@@ -91,7 +91,7 @@ class AdminIntakeEntryTest extends TestCase
     public function test_admin_can_create_intake_for_existing_user_without_creating_profile(): void
     {
         Queue::fake();
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->adminUser();
         $member = User::factory()->create(['is_admin' => false, 'admin_role' => null]);
 
         $response = $this->actingAs($admin)->post(route('admin.biodata-intakes.store'), [
@@ -113,7 +113,7 @@ class AdminIntakeEntryTest extends TestCase
     public function test_admin_can_create_new_user_and_intake_atomically_without_profile(): void
     {
         Queue::fake();
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->adminUser();
 
         $response = $this->actingAs($admin)->post(route('admin.biodata-intakes.store'), [
             'user_mode' => 'new',
@@ -129,7 +129,6 @@ class AdminIntakeEntryTest extends TestCase
 
         $response->assertRedirect(route('admin.biodata-intakes.show', $intake));
         $this->assertSame('Admin Registered Member', $member->name);
-        $this->assertSame('female', $member->gender);
         $this->assertSame((int) $member->id, (int) $intake->uploaded_by);
         $this->assertSame(0, MatrimonyProfile::query()->count());
         Queue::assertPushed(ParseIntakeJob::class);
@@ -138,7 +137,7 @@ class AdminIntakeEntryTest extends TestCase
     public function test_admin_new_registration_rejects_duplicate_mobile_without_creating_intake(): void
     {
         Queue::fake();
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->adminUser();
         User::factory()->create(['mobile' => '9876543210']);
 
         $response = $this->actingAs($admin)
@@ -186,7 +185,7 @@ class AdminIntakeEntryTest extends TestCase
 
     public function test_admin_manual_registration_opens_existing_full_wizard_for_new_profile(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->adminUser();
 
         $response = $this->actingAs($admin)->post(route('admin.biodata-intakes.store-profile'), [
             'new_name' => 'Manual Form Member',
@@ -203,14 +202,14 @@ class AdminIntakeEntryTest extends TestCase
             'all' => 1,
             'profile_id' => $profile->id,
         ]));
-        $this->assertSame('male', $member->gender);
         $this->assertSame('draft', $profile->lifecycle_state);
+        $this->assertSame('male', $profile->gender?->key);
         $this->assertSame((int) $profile->id, (int) session('admin_registration_profile_id'));
     }
 
     public function test_admin_manual_registration_rejects_duplicate_mobile(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->adminUser();
         User::factory()->create(['mobile' => '9234567890']);
 
         $response = $this->actingAs($admin)
@@ -229,7 +228,7 @@ class AdminIntakeEntryTest extends TestCase
 
     public function test_admin_registration_session_cannot_target_another_regular_profile_in_wizard(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->adminUser();
         $allowedProfile = MatrimonyProfile::factory()->create(['lifecycle_state' => 'draft', 'is_showcase' => false]);
         $otherProfile = MatrimonyProfile::factory()->create(['lifecycle_state' => 'draft', 'is_showcase' => false]);
 
@@ -244,5 +243,13 @@ class AdminIntakeEntryTest extends TestCase
                 'profile_id' => $otherProfile->id,
             ]))
             ->assertForbidden();
+    }
+
+    private function adminUser(): User
+    {
+        return User::factory()->create([
+            'is_admin' => true,
+            'admin_role' => 'super_admin',
+        ]);
     }
 }

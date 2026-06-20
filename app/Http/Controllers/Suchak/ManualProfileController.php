@@ -131,7 +131,6 @@ class ManualProfileController extends Controller
                     'mobile' => $mobile,
                     'password' => Hash::make(Str::random(40)),
                     'registering_for' => $validated['registering_for'],
-                    'gender' => $validated['candidate_gender'],
                     'referral_code' => User::generateUniqueReferralCode(),
                 ]);
 

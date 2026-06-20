@@ -119,7 +119,6 @@ class AdminIntakeController extends Controller
                     'mobile' => $mobile,
                     'password' => Hash::make(Str::random(40)),
                     'registering_for' => $validated['registering_for'],
-                    'gender' => $validated['new_gender'],
                     'referral_code' => User::generateUniqueReferralCode(),
                 ]);
 
@@ -175,7 +174,6 @@ class AdminIntakeController extends Controller
                 'mobile' => $mobile,
                 'password' => Hash::make(Str::random(40)),
                 'registering_for' => $validated['registering_for'],
-                'gender' => $validated['new_gender'],
                 'referral_code' => User::generateUniqueReferralCode(),
             ]);
 

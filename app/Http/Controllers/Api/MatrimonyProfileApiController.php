@@ -9,18 +9,18 @@ use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Models\SubCaste;
 use App\Models\User;
+use App\Services\Api\MobileDiscoveryFilterService;
 use App\Services\Api\MobileMoreMatchesSectionService;
 use App\Services\Api\MobileProfileDisplayPresenter;
 use App\Services\MutationService;
 use App\Services\Parsing\IntakeControlledFieldNormalizer;
-use App\Services\ProfileLifecycleService;
 use App\Services\ProfileFieldLockService;
-use App\Services\ProfileVisibilityPolicyService;
 use App\Services\ViewTrackingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class MatrimonyProfileApiController extends Controller
 {
@@ -32,6 +32,7 @@ class MatrimonyProfileApiController extends Controller
         $core = [];
         $coreFields = [
             'full_name',
+            'gender_id',
             'date_of_birth',
             'caste',
             'highest_education',
@@ -68,6 +69,11 @@ class MatrimonyProfileApiController extends Controller
     {
         $rules = [
             'full_name' => [$creating ? 'required' : 'sometimes', 'required', 'string', 'max:255'],
+            'gender_id' => [
+                $creating ? 'required' : 'sometimes',
+                'integer',
+                Rule::exists('master_genders', 'id')->where('is_active', true),
+            ],
             'date_of_birth' => [$creating ? 'required' : 'sometimes', 'required', 'date'],
             'caste' => [$creating ? 'required' : 'sometimes', 'required', 'string', 'max:255'],
             'highest_education' => [$creating ? 'required' : 'sometimes', 'required', 'string', 'max:255'],
@@ -202,6 +208,16 @@ class MatrimonyProfileApiController extends Controller
             ], 403);
         }
 
+        if (! $request->filled('gender_id') && ! $this->profileHasGovernedGender($profile)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The gender id field is required.',
+                'errors' => [
+                    'gender_id' => ['The gender id field is required.'],
+                ],
+            ], 422);
+        }
+
         // Phase-5B: All updates via MutationService (source=manual, profile_change_history)
         $snapshot = $this->buildMobileProfileSnapshotFromApi($request);
         if (! empty($snapshot['core'])) {
@@ -278,8 +294,9 @@ class MatrimonyProfileApiController extends Controller
     /**
      * List all matrimony profiles with filters
      */
-    public function index(Request $request)
+    public function index(Request $request, MobileDiscoveryFilterService $discovery)
     {
+        $viewer = $request->user();
         $relations = [
             'user.activeSubscription.plan',
             'gender',
@@ -296,10 +313,11 @@ class MatrimonyProfileApiController extends Controller
 
         $query = MatrimonyProfile::with($relations)->latest();
 
-        // Day 7: Only active profiles searchable; NULL treated as active (backward compat)
-        $query->where(function ($q) {
-            $q->where('lifecycle_state', 'active')->orWhereNull('lifecycle_state');
-        })->where('is_suspended', false);
+        if ($viewer instanceof User) {
+            $discovery->applyCandidateQuery($query, $viewer);
+        } else {
+            $query->whereRaw('1 = 0');
+        }
         // Soft deletes are automatically excluded by Laravel's SoftDeletes trait
 
         // Caste filter
@@ -341,9 +359,8 @@ class MatrimonyProfileApiController extends Controller
 
         $profiles = $query->get();
         $presenter = app(MobileProfileDisplayPresenter::class);
-        $viewer = $request->user();
 
-        // Transform to include gender from user relationship (SSOT-approved fields only)
+        // Transform to include gender from the governed profile relation only.
         // PIR-006: Null-safe when profile's user is missing (orphaned profile)
         // Phase-4 Day-8: Use hierarchical location fields
         $profiles = $profiles->map(function ($profile) use ($presenter, $viewer) {
@@ -354,7 +371,7 @@ class MatrimonyProfileApiController extends Controller
                 'id' => $profile->id,
                 'user_id' => $profile->user_id,
                 'full_name' => $profile->full_name,
-                'gender' => $profile->user ? ($profile->user->gender ?? null) : null,
+                'gender' => $profile->gender?->key,
                 'date_of_birth' => $profile->date_of_birth,
                 'caste' => $profile->caste,
                 'highest_education' => $profile->highest_education,
@@ -387,9 +404,9 @@ class MatrimonyProfileApiController extends Controller
     /**
      * Get matrimony profile by ID
      * PIR-005: Visibility parity with Web — 404 when not visible to others or blocked.
-     * PIR-006: Null-safe gender when profile's user is missing.
+     * PIR-006: Null-safe when profile's user is missing.
      */
-    public function showById($id)
+    public function showById($id, MobileDiscoveryFilterService $discovery)
     {
         $profile = MatrimonyProfile::with('user')->find($id);
 
@@ -401,33 +418,17 @@ class MatrimonyProfileApiController extends Controller
         }
 
         $user = request()->user();
-        $viewerProfile = $user ? $user->matrimonyProfile : null;
-        $isOwnProfile = $viewerProfile && (int) $viewerProfile->id === (int) $profile->id;
-
-        if (! $isOwnProfile) {
-            if (! ProfileLifecycleService::isVisibleToOthers($profile)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Profile not found',
-                ], 404);
-            }
-            if ($viewerProfile && ViewTrackingService::isBlocked($viewerProfile->id, $profile->id)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Profile not found',
-                ], 404);
-            }
-            if (! ProfileVisibilityPolicyService::canViewProfile($profile, $user)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Profile not found',
-                ], 404);
-            }
+        if (! $user instanceof User || ! $discovery->isAllowedTarget($user, $profile)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Profile not found',
+            ], 404);
         }
 
-        $this->recordMobileProfileViewIfEligible($user, $viewerProfile, $profile, (bool) $isOwnProfile);
+        $viewerProfile = $user->matrimonyProfile;
+        $this->recordMobileProfileViewIfEligible($user, $viewerProfile, $profile, false);
 
-        // Transform to include gender from user relationship (SSOT-approved field)
+        // Transform to include gender from the governed profile relation only.
         // PIR-006: Null-safe when user relation is missing
         // Phase-4 Day-8: Use hierarchical location fields
         $profileData = $this->buildGovernanceParityProfilePayload($profile);
@@ -437,6 +438,11 @@ class MatrimonyProfileApiController extends Controller
             'profile' => $profileData,
             'display' => app(MobileProfileDisplayPresenter::class)->forProfile($profile, $user),
         ]);
+    }
+
+    private function profileHasGovernedGender(MatrimonyProfile $profile): bool
+    {
+        return $profile->gender_id !== null && (int) $profile->gender_id > 0;
     }
 
     private function recordMobileProfileViewIfEligible(
@@ -481,7 +487,7 @@ class MatrimonyProfileApiController extends Controller
      */
     private function buildGovernanceParityProfilePayload(MatrimonyProfile $profile): array
     {
-        $profile->loadMissing(['user', 'horoscope', 'preferenceCriteria', 'religion', 'caste', 'subCaste']);
+        $profile->loadMissing(['user', 'gender', 'horoscope', 'preferenceCriteria', 'religion', 'caste', 'subCaste']);
 
         $hints = $profile->residenceLocationHierarchyHints();
         $geo = $profile->residenceGeoAddressIds();
@@ -493,7 +499,7 @@ class MatrimonyProfileApiController extends Controller
 
         $base = $profile->toArray();
         $parity = [
-            'gender' => $profile->user ? ($profile->user->gender ?? null) : null,
+            'gender' => $profile->gender?->key,
             'gender_id' => $profile->gender_id,
             'caste_id' => $profile->caste_id,
             'sub_caste_id' => $profile->sub_caste_id,

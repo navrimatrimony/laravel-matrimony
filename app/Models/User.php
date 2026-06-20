@@ -51,7 +51,6 @@ class User extends Authenticatable implements MustVerifyEmail
         'mobile_backup',
         'mobile_duplicate_of_user_id',
         'password',
-        'gender',
         'dob',
         'marital_status',
         'mobile_verified_at',

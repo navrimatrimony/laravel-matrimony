@@ -227,8 +227,8 @@ function mobileApiProfileTestSeedCurrentAddressType(): void
 
 function mobileApiProfileActionPair(): array
 {
-    $viewerUser = User::factory()->create(['name' => 'Mobile Action Viewer', 'gender' => 'male']);
-    $targetUser = User::factory()->create(['name' => 'Mobile Action Target', 'gender' => 'female']);
+    $viewerUser = User::factory()->create(['name' => 'Mobile Action Viewer']);
+    $targetUser = User::factory()->create(['name' => 'Mobile Action Target']);
     $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Mobile Action Viewer', 'male');
     $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Mobile Action Target', 'female');
 
@@ -274,8 +274,8 @@ function mobileApiCreateValidActionProfile(
 
 function mobileApiCreateComparisonProfilesAt(Location $viewerLocation, Location $targetLocation): array
 {
-    $viewerUser = User::factory()->create(['name' => 'Location Rule Viewer', 'gender' => 'male']);
-    $targetUser = User::factory()->create(['name' => 'Location Rule Target', 'gender' => 'female']);
+    $viewerUser = User::factory()->create(['name' => 'Location Rule Viewer']);
+    $targetUser = User::factory()->create(['name' => 'Location Rule Target']);
     $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Location Rule Viewer', 'male', $viewerLocation);
     $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Location Rule Target', 'female', $targetLocation);
 
@@ -404,15 +404,52 @@ test('MobileProfile GET api v1 religions returns active religions for authentica
         ]);
 });
 
+test('MobileProfile GET api v1 genders returns active governed gender options', function () {
+    $male = MasterGender::query()->updateOrCreate(
+        ['key' => 'male'],
+        ['label' => 'Male', 'is_active' => true]
+    );
+    $female = MasterGender::query()->updateOrCreate(
+        ['key' => 'female'],
+        ['label' => 'Female', 'is_active' => true]
+    );
+    $inactive = MasterGender::query()->updateOrCreate(
+        ['key' => 'inactive-mobile-gender'],
+        ['label' => 'Inactive Mobile Gender', 'is_active' => false]
+    );
+
+    if (Schema::hasColumn('master_genders', 'label_mr')) {
+        $male->forceFill(['label_mr' => 'वर'])->save();
+        $female->forceFill(['label_mr' => 'वधू'])->save();
+    }
+
+    $response = $this->getJson('/api/v1/genders');
+
+    $response->assertOk();
+
+    $payload = $response->json();
+    expect($payload[0])->toHaveKeys(['id', 'key', 'label', 'label_mr']);
+    expect($payload[0]['id'])->toBe($male->id);
+    expect($payload[0]['key'])->toBe('male');
+    expect($payload[0]['label'])->toBe('Male');
+    expect($payload[0]['label_mr'])->toBe('वर');
+    expect($payload[1]['id'])->toBe($female->id);
+    expect($payload[1]['key'])->toBe('female');
+    expect($payload[1]['label_mr'])->toBe('वधू');
+    expect(collect($payload)->pluck('id')->all())->not->toContain($inactive->id);
+});
+
 test('MobileProfile POST api v1 matrimony-profile accepts canonical community ids', function () {
     mobileApiProfileTestSeedCurrentAddressType();
     $user = User::factory()->create(['name' => 'Canonical Account']);
     $location = mobileApiProfileTestLeafLocation();
     [$religion, $caste, $subCaste] = mobileApiProfileTestCommunity();
+    $gender = mobileApiProfileTestGender('female');
     Sanctum::actingAs($user);
 
     $response = $this->postJson('/api/v1/matrimony-profile', [
         'full_name' => 'Canonical Mobile Candidate',
+        'gender_id' => $gender->id,
         'date_of_birth' => '1998-04-15',
         'caste' => $caste->label,
         'highest_education' => 'B.E.',
@@ -429,6 +466,7 @@ test('MobileProfile POST api v1 matrimony-profile accepts canonical community id
             'message' => 'Matrimony profile created',
             'profile' => [
                 'full_name' => 'Canonical Mobile Candidate',
+                'gender_id' => $gender->id,
                 'religion_id' => $religion->id,
                 'religion_label' => $religion->fresh()->display_label,
                 'caste_id' => $caste->id,
@@ -443,9 +481,32 @@ test('MobileProfile POST api v1 matrimony-profile accepts canonical community id
 
     $profile = MatrimonyProfile::where('user_id', $user->id)->firstOrFail();
 
+    expect((int) $profile->gender_id)->toBe((int) $gender->id);
     expect((int) $profile->religion_id)->toBe((int) $religion->id);
     expect((int) $profile->caste_id)->toBe((int) $caste->id);
     expect((int) $profile->sub_caste_id)->toBe((int) $subCaste->id);
+});
+
+test('MobileProfile POST api v1 matrimony-profile requires governed gender id', function () {
+    mobileApiProfileTestSeedCurrentAddressType();
+    $user = User::factory()->create(['name' => 'Missing Gender Account']);
+    $location = mobileApiProfileTestLeafLocation();
+    $caste = mobileApiProfileTestCaste();
+    Sanctum::actingAs($user);
+
+    $response = $this->postJson('/api/v1/matrimony-profile', [
+        'full_name' => 'Missing Gender Candidate',
+        'date_of_birth' => '1998-04-15',
+        'caste' => $caste->label,
+        'highest_education' => 'B.E.',
+        'location_id' => $location->id,
+    ]);
+
+    $response
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['gender_id']);
+
+    expect(MatrimonyProfile::where('user_id', $user->id)->exists())->toBeFalse();
 });
 
 test('MobileProfile POST api v1 matrimony-profile rejects caste religion mismatch', function () {
@@ -454,10 +515,12 @@ test('MobileProfile POST api v1 matrimony-profile rejects caste religion mismatc
     $location = mobileApiProfileTestLeafLocation();
     [$religion, $caste] = mobileApiProfileTestCommunity();
     [$otherReligion] = mobileApiProfileTestCommunity();
+    $gender = mobileApiProfileTestGender('female');
     Sanctum::actingAs($user);
 
     $response = $this->postJson('/api/v1/matrimony-profile', [
         'full_name' => 'Mismatch Mobile Candidate',
+        'gender_id' => $gender->id,
         'date_of_birth' => '1998-04-15',
         'caste' => $caste->label,
         'highest_education' => 'B.E.',
@@ -479,10 +542,12 @@ test('MobileProfile POST api v1 matrimony-profile rejects sub caste caste mismat
     $location = mobileApiProfileTestLeafLocation();
     [$religion, $caste] = mobileApiProfileTestCommunity();
     [, , $otherSubCaste] = mobileApiProfileTestCommunity();
+    $gender = mobileApiProfileTestGender('female');
     Sanctum::actingAs($user);
 
     $response = $this->postJson('/api/v1/matrimony-profile', [
         'full_name' => 'Sub Caste Mismatch Candidate',
+        'gender_id' => $gender->id,
         'date_of_birth' => '1998-04-15',
         'caste' => $caste->label,
         'highest_education' => 'B.E.',
@@ -504,10 +569,12 @@ test('MobileProfile POST api v1 matrimony-profile creates through governed mutat
     $user = User::factory()->create(['name' => 'Bootstrap Account']);
     $location = mobileApiProfileTestLeafLocation();
     $caste = mobileApiProfileTestCaste();
+    $gender = mobileApiProfileTestGender('female');
     Sanctum::actingAs($user);
 
     $response = $this->postJson('/api/v1/matrimony-profile', [
         'full_name' => 'Mobile Candidate',
+        'gender_id' => $gender->id,
         'date_of_birth' => '1998-04-15',
         'caste' => 'Maratha',
         'highest_education' => 'B.E.',
@@ -521,6 +588,7 @@ test('MobileProfile POST api v1 matrimony-profile creates through governed mutat
             'message' => 'Matrimony profile created',
             'profile' => [
                 'full_name' => 'Mobile Candidate',
+                'gender_id' => $gender->id,
                 'highest_education' => 'B.E.',
                 'caste_id' => $caste->id,
             ],
@@ -529,14 +597,15 @@ test('MobileProfile POST api v1 matrimony-profile creates through governed mutat
     $profile = MatrimonyProfile::where('user_id', $user->id)->firstOrFail();
 
     expect($profile->full_name)->toBe('Mobile Candidate');
+    expect((int) $profile->gender_id)->toBe((int) $gender->id);
     expect(substr((string) $profile->date_of_birth, 0, 10))->toBe('1998-04-15');
     expect($profile->highest_education)->toBe('B.E.');
     expect((int) $profile->location_id)->toBe((int) $location->id);
     expect((int) $profile->caste_id)->toBe((int) $caste->id);
     expect(DB::table('profile_change_history')
         ->where('profile_id', $profile->id)
-        ->whereIn('field_name', ['full_name', 'date_of_birth', 'highest_education', 'location_id', 'caste_id'])
-        ->count())->toBeGreaterThanOrEqual(5);
+        ->whereIn('field_name', ['full_name', 'gender_id', 'date_of_birth', 'highest_education', 'location_id', 'caste_id'])
+        ->count())->toBeGreaterThanOrEqual(6);
 });
 
 test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields through MutationService', function () {
@@ -545,10 +614,12 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
     $profile = app(MutationService::class)->createDraftProfileForUser($user);
     $location = mobileApiProfileTestLeafLocation();
     $caste = mobileApiProfileTestCaste();
+    $gender = mobileApiProfileTestGender('female');
     Sanctum::actingAs($user);
 
     $response = $this->putJson('/api/v1/matrimony-profile', [
         'full_name' => 'Updated Mobile Candidate',
+        'gender_id' => $gender->id,
         'date_of_birth' => '1997-03-20',
         'caste' => 'Maratha',
         'highest_education' => 'MCA',
@@ -562,6 +633,7 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
             'message' => 'Matrimony profile updated',
             'profile' => [
                 'full_name' => 'Updated Mobile Candidate',
+                'gender_id' => $gender->id,
                 'highest_education' => 'MCA',
                 'caste_id' => $caste->id,
                 'location_id' => $location->id,
@@ -571,6 +643,7 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
     $profile->refresh();
 
     expect($profile->full_name)->toBe('Updated Mobile Candidate');
+    expect((int) $profile->gender_id)->toBe((int) $gender->id);
     expect(substr((string) $profile->date_of_birth, 0, 10))->toBe('1997-03-20');
     expect($profile->highest_education)->toBe('MCA');
     expect((int) $profile->location_id)->toBe((int) $location->id);
@@ -586,10 +659,12 @@ test('MobileProfile GET api v1 matrimony profile returns clean display payload b
     $user = User::factory()->create(['name' => 'Display Account']);
     $location = mobileApiProfileTestLeafLocation();
     [$religion, $caste, $subCaste] = mobileApiProfileTestCommunity();
+    $gender = mobileApiProfileTestGender('female');
     Sanctum::actingAs($user);
 
     $create = $this->postJson('/api/v1/matrimony-profile', [
         'full_name' => 'Display Mobile Candidate',
+        'gender_id' => $gender->id,
         'date_of_birth' => '1995-01-05',
         'caste' => $caste->label,
         'highest_education' => 'B.A., B.Com.',
@@ -634,13 +709,8 @@ test('MobileProfile GET api v1 matrimony profile returns clean display payload b
         }
     }
 
-    $detail = $this->getJson('/api/v1/matrimony-profiles/'.$profile->id);
-    $detail
-        ->assertOk()
-        ->assertJsonPath('profile.id', $profile->id)
-        ->assertJsonPath('profile.location_id', $location->id)
-        ->assertJsonPath('display.version', 1)
-        ->assertJsonStructure(['profile', 'display' => ['hero', 'sections', 'contact']]);
+    $this->getJson('/api/v1/matrimony-profiles/'.$profile->id)
+        ->assertNotFound();
 });
 
 test('MobileProfile GET api v1 matrimony profiles includes safe list card display payload', function () {
@@ -715,6 +785,90 @@ test('MobileProfile GET api v1 matrimony profiles includes safe list card displa
     expect(mb_strtolower($displayJson))->not->toContain('contact');
 });
 
+test('MobileProfile GET api v1 matrimony profiles shows only opposite gender member profiles', function () {
+    $viewerUser = User::factory()->create(['name' => 'Gender Rule Viewer']);
+    $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Gender Rule Viewer', 'male');
+    $femaleUser = User::factory()->create(['name' => 'Visible Female Member']);
+    $femaleProfile = mobileApiCreateValidActionProfile($femaleUser, 'Visible Female Member', 'female');
+    $missingGenderUser = User::factory()->create(['name' => 'Hidden Missing Gender Female']);
+    $missingGenderProfile = MatrimonyProfile::factory()->create([
+        'user_id' => $missingGenderUser->id,
+        'full_name' => 'Hidden Missing Gender Female',
+        'gender_id' => null,
+        'location_id' => mobileApiProfileTestLeafLocation()->id,
+        'lifecycle_state' => 'draft',
+        'is_suspended' => false,
+    ]);
+    $missingGenderProfile->forceFill(['lifecycle_state' => 'active'])->save();
+    $maleUser = User::factory()->create(['name' => 'Hidden Male Member']);
+    $maleProfile = mobileApiCreateValidActionProfile($maleUser, 'Hidden Male Member', 'male');
+    $adminUser = User::factory()->create([
+        'name' => 'Hidden Admin Female',
+        'is_admin' => true,
+    ]);
+    $adminProfile = mobileApiCreateValidActionProfile($adminUser, 'Hidden Admin Female', 'female');
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles');
+
+    $response->assertOk();
+    $ids = collect($response->json('profiles'))->pluck('id')->all();
+    expect($ids)->toContain($femaleProfile->id);
+    expect($ids)->not->toContain($viewerProfile->id);
+    expect($ids)->not->toContain($missingGenderProfile->id);
+    expect($ids)->not->toContain($maleProfile->id);
+    expect($ids)->not->toContain($adminProfile->id);
+});
+
+test('MobileProfile GET api v1 matrimony profiles shows male profiles for female viewer', function () {
+    $viewerUser = User::factory()->create(['name' => 'Female Gender Rule Viewer']);
+    $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Female Gender Rule Viewer', 'female');
+    $maleUser = User::factory()->create(['name' => 'Visible Male Member']);
+    $maleProfile = mobileApiCreateValidActionProfile($maleUser, 'Visible Male Member', 'male');
+    $femaleUser = User::factory()->create(['name' => 'Hidden Female Member']);
+    $femaleProfile = mobileApiCreateValidActionProfile($femaleUser, 'Hidden Female Member', 'female');
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles');
+
+    $response->assertOk();
+    $ids = collect($response->json('profiles'))->pluck('id')->all();
+    expect($ids)->toContain($maleProfile->id);
+    expect($ids)->not->toContain($viewerProfile->id);
+    expect($ids)->not->toContain($femaleProfile->id);
+});
+
+test('MobileProfile discovery returns empty payloads when viewer profile gender is missing', function () {
+    $viewerUser = User::factory()->create(['name' => 'Missing Gender Viewer']);
+    $viewerProfile = MatrimonyProfile::factory()->create([
+        'user_id' => $viewerUser->id,
+        'full_name' => 'Missing Gender Viewer',
+        'gender_id' => null,
+        'location_id' => mobileApiProfileTestLeafLocation()->id,
+        'lifecycle_state' => 'draft',
+        'is_suspended' => false,
+    ]);
+    $viewerProfile->forceFill(['lifecycle_state' => 'active'])->save();
+    $targetUser = User::factory()->create(['name' => 'Hidden Missing Gender Target']);
+    mobileApiCreateValidActionProfile($targetUser, 'Hidden Missing Gender Target', 'female');
+    Sanctum::actingAs($viewerUser);
+
+    $listResponse = $this->getJson('/api/v1/matrimony-profiles');
+    $listResponse->assertOk();
+    expect($listResponse->json('profiles'))->toBe([]);
+
+    $sectionsResponse = $this->getJson('/api/v1/matrimony-profiles/more-sections');
+    $sectionsResponse
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('viewer_context.viewer_gender', null)
+        ->assertJsonPath('viewer_context.target_gender', null);
+
+    foreach ($sectionsResponse->json('sections') as $section) {
+        expect($section['profiles'])->toBe([]);
+    }
+});
+
 test('MobileProfile more sections endpoint requires authentication', function () {
     $this->getJson('/api/v1/matrimony-profiles/more-sections')
         ->assertUnauthorized();
@@ -735,13 +889,12 @@ test('MobileProfile GET api v1 profile detail records a profile view for visible
 });
 
 test('MobileProfile GET api v1 profile detail does not record self views', function () {
-    $user = User::factory()->create(['name' => 'Self Detail Viewer', 'gender' => 'male']);
+    $user = User::factory()->create(['name' => 'Self Detail Viewer']);
     $profile = mobileApiCreateValidActionProfile($user, 'Self Detail Viewer', 'male');
     Sanctum::actingAs($user);
 
     $this->getJson('/api/v1/matrimony-profiles/'.$profile->id)
-        ->assertOk()
-        ->assertJsonPath('success', true);
+        ->assertNotFound();
 
     expect(DB::table('profile_views')
         ->where('viewer_profile_id', $profile->id)
@@ -780,16 +933,39 @@ test('MobileProfile GET api v1 profile detail does not record invisible profile 
         ->count())->toBe(0);
 });
 
+test('MobileProfile GET api v1 profile detail hides same gender and admin profiles', function () {
+    $viewerUser = User::factory()->create(['name' => 'Detail Rule Viewer']);
+    $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Detail Rule Viewer', 'female');
+    $sameGenderUser = User::factory()->create(['name' => 'Hidden Female Detail']);
+    $sameGenderProfile = mobileApiCreateValidActionProfile($sameGenderUser, 'Hidden Female Detail', 'female');
+    $adminUser = User::factory()->create([
+        'name' => 'Hidden Admin Male Detail',
+        'is_admin' => true,
+    ]);
+    $adminProfile = mobileApiCreateValidActionProfile($adminUser, 'Hidden Admin Male Detail', 'male');
+    Sanctum::actingAs($viewerUser);
+
+    $this->getJson('/api/v1/matrimony-profiles/'.$sameGenderProfile->id)
+        ->assertNotFound();
+    $this->getJson('/api/v1/matrimony-profiles/'.$adminProfile->id)
+        ->assertNotFound();
+
+    expect(DB::table('profile_views')
+        ->where('viewer_profile_id', $viewerProfile->id)
+        ->whereIn('viewed_profile_id', [$sameGenderProfile->id, $adminProfile->id])
+        ->count())->toBe(0);
+});
+
 test('MobileProfile index includes mobile-created profile after approved primary photo activation', function () {
     mobileApiProfileTestSeedCurrentAddressType();
     $location = mobileApiProfileTestLeafLocation();
     [$religion, $caste, $subCaste] = mobileApiProfileTestCommunity();
     $targetGender = mobileApiProfileTestGender('female');
 
-    $viewerUser = User::factory()->create(['name' => 'Mobile List Viewer', 'gender' => 'male']);
+    $viewerUser = User::factory()->create(['name' => 'Mobile List Viewer']);
     mobileApiCreateValidActionProfile($viewerUser, 'Mobile List Viewer', 'male', $location);
 
-    $targetUser = User::factory()->create(['name' => 'Mobile Created Target', 'gender' => 'female']);
+    $targetUser = User::factory()->create(['name' => 'Mobile Created Target']);
     $targetProfile = app(MutationService::class)->createDraftProfileForUser($targetUser);
     app(MutationService::class)->applyManualSnapshot($targetProfile, [
         'core' => [
@@ -826,10 +1002,12 @@ test('MobileProfile index includes mobile-created profile after approved primary
 
 test('MobileProfile more sections returns gender aware real sections and safe card rows', function () {
     $sharedLocation = mobileApiProfileTestLeafLocation();
-    $viewerUser = User::factory()->create(['name' => 'Mobile Action Viewer', 'gender' => 'male']);
-    $targetUser = User::factory()->create(['name' => 'Mobile Action Target', 'gender' => 'female']);
+    $viewerUser = User::factory()->create(['name' => 'Mobile Action Viewer']);
+    $targetUser = User::factory()->create(['name' => 'Mobile Action Target']);
+    $sameGenderUser = User::factory()->create(['name' => 'Mobile Same Gender Target']);
     $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Mobile Action Viewer', 'male', $sharedLocation);
     $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Mobile Action Target', 'female', $sharedLocation);
+    $sameGenderProfile = mobileApiCreateValidActionProfile($sameGenderUser, 'Mobile Same Gender Target', 'male', $sharedLocation);
     mobileApiAddTargetPartnerPreferences($targetProfile, $viewerProfile);
     DB::table('profile_views')->insert([
         'viewer_profile_id' => $viewerProfile->id,
@@ -839,6 +1017,18 @@ test('MobileProfile more sections returns gender aware real sections and safe ca
     ]);
     DB::table('profile_views')->insert([
         'viewer_profile_id' => $targetProfile->id,
+        'viewed_profile_id' => $viewerProfile->id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    DB::table('profile_views')->insert([
+        'viewer_profile_id' => $viewerProfile->id,
+        'viewed_profile_id' => $sameGenderProfile->id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    DB::table('profile_views')->insert([
+        'viewer_profile_id' => $sameGenderProfile->id,
         'viewed_profile_id' => $viewerProfile->id,
         'created_at' => now(),
         'updated_at' => now(),
@@ -865,6 +1055,11 @@ test('MobileProfile more sections returns gender aware real sections and safe ca
         'recent_visitors',
         'you_may_like',
     ]);
+    foreach ($sections as $section) {
+        $profileIds = collect($section['profiles'])->pluck('id')->all();
+        expect($profileIds)->not->toContain($viewerProfile->id);
+        expect($profileIds)->not->toContain($sameGenderProfile->id);
+    }
 
     $lookingForMe = $sections->firstWhere('key', 'looking_for_me');
     expect($lookingForMe['title_en'])->toBe('Brides looking for me');
@@ -922,8 +1117,8 @@ test('MobileProfile more sections returns gender aware real sections and safe ca
 });
 
 test('MobileProfile more sections labels female viewer target as groom', function () {
-    $viewerUser = User::factory()->create(['name' => 'Female More Sections Viewer', 'gender' => 'female']);
-    $targetUser = User::factory()->create(['name' => 'Male More Sections Target', 'gender' => 'male']);
+    $viewerUser = User::factory()->create(['name' => 'Female More Sections Viewer']);
+    $targetUser = User::factory()->create(['name' => 'Male More Sections Target']);
     mobileApiCreateValidActionProfile($viewerUser, 'Female More Sections Viewer', 'female');
     mobileApiCreateValidActionProfile($targetUser, 'Male More Sections Target', 'male');
     Sanctum::actingAs($viewerUser);
@@ -946,8 +1141,8 @@ test('MobileProfile more sections labels female viewer target as groom', functio
 });
 
 test('MobileProfile more sections locked recent visitors does not leak visitor identity', function () {
-    $ownerUser = User::factory()->create(['name' => 'Locked Owner', 'gender' => 'male']);
-    $visitorUser = User::factory()->create(['name' => 'Locked Recent Visitor User', 'gender' => 'female']);
+    $ownerUser = User::factory()->create(['name' => 'Locked Owner']);
+    $visitorUser = User::factory()->create(['name' => 'Locked Recent Visitor User']);
     $ownerProfile = mobileApiCreateValidActionProfile($ownerUser, 'Locked Owner Profile', 'male');
     $visitorProfile = mobileApiCreateValidActionProfile($visitorUser, 'Locked Recent Visitor Profile', 'female');
     DB::table('profile_views')->insert([
@@ -1009,8 +1204,8 @@ test('MobileProfile more sections locked recent visitors does not leak visitor i
 });
 
 test('MobileProfile more sections full recent visitors access returns safe profile rows', function () {
-    $ownerUser = User::factory()->create(['name' => 'Full Access Owner', 'gender' => 'male']);
-    $visitorUser = User::factory()->create(['name' => 'Full Access Visitor User', 'gender' => 'female']);
+    $ownerUser = User::factory()->create(['name' => 'Full Access Owner']);
+    $visitorUser = User::factory()->create(['name' => 'Full Access Visitor User']);
     $ownerProfile = mobileApiCreateValidActionProfile($ownerUser, 'Full Access Owner Profile', 'male');
     $visitorProfile = mobileApiCreateValidActionProfile($visitorUser, 'Full Access Visitor Profile', 'female');
     DB::table('profile_views')->insert([
@@ -1181,8 +1376,8 @@ test('MobileProfile display contact maps upgrade and WhatsApp Response without r
 });
 
 test('MobileProfile GET api v1 profile detail returns clean comparison payload for target preferences', function () {
-    $viewerUser = User::factory()->create(['name' => 'Comparison Viewer', 'gender' => 'male']);
-    $targetUser = User::factory()->create(['name' => 'Comparison Target', 'gender' => 'female']);
+    $viewerUser = User::factory()->create(['name' => 'Comparison Viewer']);
+    $targetUser = User::factory()->create(['name' => 'Comparison Target']);
     $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Comparison Viewer', 'male');
     $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Comparison Target', 'female');
     mobileApiAddTargetPartnerPreferences($targetProfile, $viewerProfile);
@@ -1392,8 +1587,8 @@ test('MobileProfile comparison does not treat pincode without lat lng as nearby'
 });
 
 test('MobileProfile GET api v1 profile detail labels male target comparison as You and Him', function () {
-    $viewerUser = User::factory()->create(['name' => 'Male Label Viewer', 'gender' => 'female']);
-    $targetUser = User::factory()->create(['name' => 'Male Label Target', 'gender' => 'male']);
+    $viewerUser = User::factory()->create(['name' => 'Male Label Viewer']);
+    $targetUser = User::factory()->create(['name' => 'Male Label Target']);
     mobileApiCreateValidActionProfile($viewerUser, 'Male Label Viewer', 'female');
     $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Male Label Target', 'male');
     Sanctum::actingAs($viewerUser);
@@ -1417,8 +1612,8 @@ test('MobileProfile presenter keeps comparison null when viewer has no profile',
 
 test('MobileProfile comparison shows same sub caste as counted match', function () {
     [$religion, $caste, $subCaste] = mobileApiProfileTestCommunity();
-    $viewerUser = User::factory()->create(['name' => 'Sub Caste Viewer', 'gender' => 'male']);
-    $targetUser = User::factory()->create(['name' => 'Sub Caste Target', 'gender' => 'female']);
+    $viewerUser = User::factory()->create(['name' => 'Sub Caste Viewer']);
+    $targetUser = User::factory()->create(['name' => 'Sub Caste Target']);
     $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Sub Caste Viewer', 'male', null, [
         'religion_id' => $religion->id,
         'caste_id' => $caste->id,
@@ -1453,8 +1648,8 @@ test('MobileProfile comparison hides sub caste row when sub caste is missing or 
 
 test('MobileProfile comparison marks same education degree as match', function () {
     $degree = mobileApiProfileTestEducationDegree('B.A.', 50);
-    $viewerUser = User::factory()->create(['name' => 'Education Viewer', 'gender' => 'male']);
-    $targetUser = User::factory()->create(['name' => 'Education Target', 'gender' => 'female']);
+    $viewerUser = User::factory()->create(['name' => 'Education Viewer']);
+    $targetUser = User::factory()->create(['name' => 'Education Target']);
     mobileApiCreateValidActionProfile($viewerUser, 'Education Viewer', 'male', null, [
         'highest_education' => $degree->code,
     ]);
@@ -1475,8 +1670,8 @@ test('MobileProfile comparison marks same education degree as match', function (
 test('MobileProfile comparison marks nearby education degree sort order as near', function () {
     $viewerDegree = mobileApiProfileTestEducationDegree('B.Com.', 60);
     $targetDegree = mobileApiProfileTestEducationDegree('B.Sc.', 61);
-    $viewerUser = User::factory()->create(['name' => 'Near Education Viewer', 'gender' => 'male']);
-    $targetUser = User::factory()->create(['name' => 'Near Education Target', 'gender' => 'female']);
+    $viewerUser = User::factory()->create(['name' => 'Near Education Viewer']);
+    $targetUser = User::factory()->create(['name' => 'Near Education Target']);
     mobileApiCreateValidActionProfile($viewerUser, 'Near Education Viewer', 'male', null, [
         'highest_education' => $viewerDegree->code,
     ]);
@@ -1497,8 +1692,8 @@ test('MobileProfile comparison marks nearby education degree sort order as near'
 test('MobileProfile comparison hides far education degree row', function () {
     $viewerDegree = mobileApiProfileTestEducationDegree('SSC', 10);
     $targetDegree = mobileApiProfileTestEducationDegree('MBA', 90);
-    $viewerUser = User::factory()->create(['name' => 'Far Education Viewer', 'gender' => 'male']);
-    $targetUser = User::factory()->create(['name' => 'Far Education Target', 'gender' => 'female']);
+    $viewerUser = User::factory()->create(['name' => 'Far Education Viewer']);
+    $targetUser = User::factory()->create(['name' => 'Far Education Target']);
     mobileApiCreateValidActionProfile($viewerUser, 'Far Education Viewer', 'male', null, [
         'highest_education' => $viewerDegree->code,
     ]);
@@ -1513,8 +1708,8 @@ test('MobileProfile comparison hides far education degree row', function () {
 });
 
 test('MobileProfile comparison shows income when viewer income is within target expectation', function () {
-    $viewerUser = User::factory()->create(['name' => 'Income Viewer', 'gender' => 'male']);
-    $targetUser = User::factory()->create(['name' => 'Income Target', 'gender' => 'female']);
+    $viewerUser = User::factory()->create(['name' => 'Income Viewer']);
+    $targetUser = User::factory()->create(['name' => 'Income Target']);
     mobileApiCreateValidActionProfile($viewerUser, 'Income Viewer', 'male', null, [
         'annual_income' => 800000,
         'income_private' => false,
@@ -1541,8 +1736,8 @@ test('MobileProfile comparison shows income when viewer income is within target 
 });
 
 test('MobileProfile comparison hides income when viewer income is outside target expectation', function () {
-    $viewerUser = User::factory()->create(['name' => 'Outside Income Viewer', 'gender' => 'male']);
-    $targetUser = User::factory()->create(['name' => 'Outside Income Target', 'gender' => 'female']);
+    $viewerUser = User::factory()->create(['name' => 'Outside Income Viewer']);
+    $targetUser = User::factory()->create(['name' => 'Outside Income Target']);
     mobileApiCreateValidActionProfile($viewerUser, 'Outside Income Viewer', 'male', null, [
         'annual_income' => 500000,
         'income_private' => false,

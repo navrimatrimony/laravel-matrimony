@@ -27,8 +27,9 @@ final class WhoViewedRowsService
         ?CarbonInterface $since = null,
         ?int $limit = null,
         ?string $targetGender = null,
+        array $excludedProfileIds = [],
     ): array {
-        $result = $this->orderedUniqueViews($owner, $since, false, 0, 'fifo_unlocked_first', $targetGender);
+        $result = $this->orderedUniqueViews($owner, $since, false, 0, 'fifo_unlocked_first', $targetGender, $excludedProfileIds);
         $views = $this->limitViews($result['views'], $limit);
         $this->eagerLoadViewerRelations($views);
 
@@ -58,13 +59,14 @@ final class WhoViewedRowsService
         array $teaserPolicy,
         ?int $limit = null,
         ?string $targetGender = null,
+        array $excludedProfileIds = [],
     ): array {
         $max = $this->maxViewerCardsFromPolicy($teaserPolicy);
         if ($limit !== null) {
             $max = min($max, max(0, $limit));
         }
 
-        $result = $this->orderedUniqueViews($owner, null, false, 0, 'fifo_unlocked_first', $targetGender);
+        $result = $this->orderedUniqueViews($owner, null, false, 0, 'fifo_unlocked_first', $targetGender, $excludedProfileIds);
         $views = $this->limitViews($result['views'], $max);
         $this->eagerLoadViewerRelations($views);
 
@@ -106,6 +108,7 @@ final class WhoViewedRowsService
         ?CarbonInterface $since = null,
         ?int $limit = null,
         ?string $targetGender = null,
+        array $excludedProfileIds = [],
     ): array {
         $listOrder = (string) ($teaserPolicy['partial_plan_list_order'] ?? 'fifo_unlocked_first');
         if (! in_array($listOrder, WhoViewedTeaserPolicy::PARTIAL_PLAN_LIST_ORDERS, true)) {
@@ -120,6 +123,7 @@ final class WhoViewedRowsService
             max(0, $previewLimit),
             $listOrder,
             $targetGender,
+            $excludedProfileIds,
             $fifoSlotViewerIds,
         );
 
@@ -188,6 +192,7 @@ final class WhoViewedRowsService
         int $previewLimitForFifo,
         string $partialListOrder,
         ?string $targetGender = null,
+        array $excludedProfileIds = [],
         ?array &$fifoSlotViewerIdsOut = null,
     ): array {
         $fifoSlotViewerIdsOut = null;
@@ -198,6 +203,7 @@ final class WhoViewedRowsService
         $blockedIds = ViewTrackingService::getBlockedProfileIds((int) $owner->id)
             ->map(fn ($id): int => (int) $id)
             ->all();
+        $excludedProfileIds = array_values(array_unique(array_filter(array_map('intval', array_merge($blockedIds, $excludedProfileIds)))));
 
         $query = ProfileView::query()
             ->where('viewed_profile_id', $owner->id)
@@ -207,15 +213,15 @@ final class WhoViewedRowsService
             ->orderByDesc('id')
             ->limit(self::PROFILE_VIEW_EVENTS_FETCH_CAP);
 
-        if ($blockedIds !== []) {
-            $query->whereNotIn('viewer_profile_id', $blockedIds);
+        if ($excludedProfileIds !== []) {
+            $query->whereNotIn('viewer_profile_id', $excludedProfileIds);
         }
         if ($since !== null) {
             $query->where('created_at', '>=', $since);
         }
 
         $rows = $query->get()
-            ->filter(fn (ProfileView $view): bool => $this->eligibleViewer($owner, $view, $targetGender));
+            ->filter(fn (ProfileView $view): bool => $this->eligibleViewer($owner, $view, $targetGender, $excludedProfileIds));
 
         $perViewer = $rows->groupBy('viewer_profile_id')->map(function (Collection $group): array {
             /** @var ProfileView $latest */
@@ -276,7 +282,7 @@ final class WhoViewedRowsService
         return ['views' => $ordered, 'unique_count' => $ordered->count()];
     }
 
-    private function eligibleViewer(MatrimonyProfile $owner, ProfileView $view, ?string $targetGender): bool
+    private function eligibleViewer(MatrimonyProfile $owner, ProfileView $view, ?string $targetGender, array $excludedProfileIds = []): bool
     {
         $viewerProfile = $view->viewerProfile;
         $viewerUser = $viewerProfile?->user;
@@ -284,6 +290,9 @@ final class WhoViewedRowsService
             return false;
         }
         if ((int) $viewerProfile->id === (int) $owner->id) {
+            return false;
+        }
+        if (in_array((int) $viewerProfile->id, $excludedProfileIds, true)) {
             return false;
         }
         if ($viewerUser->is_admin ?? false) {
@@ -389,9 +398,9 @@ final class WhoViewedRowsService
         if (! $profile) {
             return null;
         }
-        $profile->loadMissing(['gender', 'user']);
+        $profile->loadMissing(['gender']);
 
-        return $this->genderString($profile->gender?->key ?? $profile->gender?->label ?? $profile->user?->gender ?? null);
+        return $this->genderString($profile->gender?->key ?? $profile->gender?->label ?? null);
     }
 
     private function genderString(mixed $gender): ?string

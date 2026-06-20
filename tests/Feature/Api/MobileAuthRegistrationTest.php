@@ -32,15 +32,15 @@ test('ApiAuthRegister returns token when registered event notification fails', f
             'user' => [
                 'name' => 'Mobile Register User',
                 'email' => 'mobile-register@example.test',
-                'gender' => 'female',
             ],
         ])
         ->assertJsonStructure([
             'token',
-            'user' => ['id', 'name', 'email', 'gender'],
+            'user' => ['id', 'name', 'email'],
         ]);
 
     expect($response->json('token'))->toBeString()->not->toBeEmpty();
+    expect($response->json('user'))->not->toHaveKey('gender');
     expect(User::query()->where('email', 'mobile-register@example.test')->exists())->toBeTrue();
 
     Log::shouldHaveReceived('warning')

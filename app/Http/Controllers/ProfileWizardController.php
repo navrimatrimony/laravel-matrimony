@@ -404,15 +404,10 @@ class ProfileWizardController extends Controller
             return $profile;
         }
         $manualActivation = \App\Services\Admin\AdminSettingService::isManualProfileActivationRequired();
-        $genderId = null;
-        if (! empty($user->gender)) {
-            $genderId = \App\Models\MasterGender::where('key', $user->gender)->where('is_active', true)->value('id');
-        }
         $profile = MatrimonyProfile::create([
             'user_id' => $user->id,
             'lifecycle_state' => 'draft',
             'full_name' => $user->defaultBootstrapProfileFullName(),
-            'gender_id' => $genderId,
             'is_suspended' => $manualActivation,
         ]);
 
@@ -425,7 +420,17 @@ class ProfileWizardController extends Controller
             return false;
         }
 
-        return ! $profile->trashed();
+        if ($profile->trashed()) {
+            return false;
+        }
+
+        $registrationProfileId = (int) session('admin_registration_profile_id', 0);
+        if ($registrationProfileId > 0) {
+            return $registrationProfileId === (int) $profile->id
+                && ! $profile->isShowcaseProfile();
+        }
+
+        return true;
     }
 
     private function isCurrentAdminWizardTarget($user, Request $request, MatrimonyProfile $profile): bool

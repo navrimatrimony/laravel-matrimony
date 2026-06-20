@@ -22,7 +22,6 @@ Request:
 ```json
 {
   "name": "User Name",
-  "gender": "male",
   "email": "user@example.com",
   "password": "Password value accepted by Laravel password defaults"
 }
@@ -31,9 +30,9 @@ Request:
 Rules:
 
 - `name`: required string, max 255
-- `gender`: required, `male` or `female`
 - `email`: required lowercase email, unique in `users.email`, max 255
 - `password`: required, Laravel `Rules\Password::defaults()`
+- Extra account-level `gender` input from old clients is ignored. Matrimony gender must be sent later as `gender_id` on the matrimony profile payload.
 
 Success response: HTTP 200
 
@@ -45,8 +44,7 @@ Success response: HTTP 200
   "user": {
     "id": 1,
     "name": "User Name",
-    "email": "user@example.com",
-    "gender": "male"
+    "email": "user@example.com"
   }
 }
 ```
@@ -98,6 +96,31 @@ Success response: HTTP 200
 }
 ```
 
+## Lookup Options
+
+### GET `/api/v1/genders`
+
+Public read-only endpoint. Returns active governed gender options from `master_genders` for mobile profile create/update. Flutter must use the returned `id` as `gender_id` in `POST /api/v1/matrimony-profile` and `PUT /api/v1/matrimony-profile`; do not hardcode gender IDs and do not use account/user gender.
+
+Success response: HTTP 200
+
+```json
+[
+  {
+    "id": 1,
+    "key": "male",
+    "label": "Male",
+    "label_mr": "वर"
+  },
+  {
+    "id": 2,
+    "key": "female",
+    "label": "Female",
+    "label_mr": "वधू"
+  }
+]
+```
+
 ## Matrimony Profile
 
 All profile mutation goes through the governed mutation layer. The mobile create path creates a draft profile with `MutationService::createDraftProfileForUser()` and applies submitted profile data with `MutationService::applyManualSnapshot()`.
@@ -121,6 +144,7 @@ Request:
 Rules:
 
 - `full_name`: required string, max 255
+- `gender_id`: required, must exist as an active `master_genders.id`
 - `date_of_birth`: required date
 - `caste`: required string, max 255
 - `highest_education`: required string, max 255
@@ -131,6 +155,7 @@ Governance note:
 - `caste` is accepted as a mobile compatibility input.
 - When it resolves against existing master caste data, the governed write stores `caste_id`.
 - Raw legacy `caste` text is not a governed write target.
+- Matrimony gender source is `matrimony_profiles.gender_id`; `users.gender` is not a runtime fallback for profile matching, visibility, comparison, or display.
 
 Success response: HTTP 200
 
@@ -142,6 +167,7 @@ Success response: HTTP 200
     "id": 10,
     "user_id": 1,
     "full_name": "Candidate Name",
+    "gender_id": 1,
     "date_of_birth": "1998-04-15",
     "highest_education": "B.E.",
     "location_id": 123,
@@ -179,6 +205,7 @@ Success response: HTTP 200
     "id": 10,
     "user_id": 1,
     "full_name": "Candidate Name",
+    "gender_id": 1,
     "date_of_birth": "1998-04-15",
     "highest_education": "B.E.",
     "location_id": 123,
@@ -212,6 +239,7 @@ Request:
 ```json
 {
   "full_name": "Updated Candidate Name",
+  "gender_id": 1,
   "date_of_birth": "1998-04-15",
   "caste": "Maratha",
   "highest_education": "MCA",
@@ -223,6 +251,7 @@ Request:
 Rules:
 
 - `full_name`: sometimes required string, max 255
+- `gender_id`: sometimes required, must exist as an active `master_genders.id`; required when the existing profile has no governed gender
 - `date_of_birth`: sometimes required date
 - `caste`: sometimes required string, max 255
 - `highest_education`: sometimes required string, max 255
@@ -239,6 +268,7 @@ Success response: HTTP 200
     "id": 10,
     "user_id": 1,
     "full_name": "Updated Candidate Name",
+    "gender_id": 1,
     "date_of_birth": "1998-04-15",
     "highest_education": "MCA",
     "location_id": 123,

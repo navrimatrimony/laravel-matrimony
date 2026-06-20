@@ -617,15 +617,10 @@ class OnboardingController extends Controller
             return $profile;
         }
         $manualActivation = \App\Services\Admin\AdminSettingService::isManualProfileActivationRequired();
-        $genderId = null;
-        if (! empty($user->gender)) {
-            $genderId = \App\Models\MasterGender::where('key', $user->gender)->where('is_active', true)->value('id');
-        }
         $profile = MatrimonyProfile::create([
             'user_id' => $user->id,
             'lifecycle_state' => 'draft',
             'full_name' => $user->defaultBootstrapProfileFullName(),
-            'gender_id' => $genderId,
             'is_suspended' => $manualActivation,
         ]);
 

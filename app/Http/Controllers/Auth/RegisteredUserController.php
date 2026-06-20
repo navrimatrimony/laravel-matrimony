@@ -55,8 +55,6 @@ class RegisteredUserController extends Controller
             'mobile' => $mobileDigits,
             'password' => Hash::make($request->password),
             'registering_for' => $request->registering_for,
-            // Legacy NOT NULL column; candidate gender is captured on matrimony_profiles in onboarding.
-            'gender' => '',
         ]);
 
         $referralRecorded = app(ReferralService::class)->recordReferralIfEligible(

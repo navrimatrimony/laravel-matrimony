@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\EducationDegreeSearchController;
+use App\Http\Controllers\Api\GenderLookupController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\LocationSuggestionController as ApiLocationSuggestionController;
 use App\Http\Controllers\Api\MasterEducationController;
@@ -78,6 +79,11 @@ Route::prefix('v1')->group(function () {
             'status' => 'api alive',
         ]);
     });
+
+    /*
+    | Read-only mobile lookup options.
+    */
+    Route::get('/genders', [GenderLookupController::class, 'index']);
 
     require __DIR__.'/api/member.php';
     require __DIR__.'/api/admin.php';

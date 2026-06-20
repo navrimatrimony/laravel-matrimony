@@ -62,7 +62,6 @@ public function register(Request $request)
     // 1️⃣ Validate input
     $request->validate([
         'name' => ['required', 'string', 'max:255'],
-        'gender' => ['required', 'in:male,female'],
         'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users,email'],
         'password' => ['required', Rules\Password::defaults()],
     ]);
@@ -70,7 +69,6 @@ public function register(Request $request)
     // 2️⃣ Create user
     $user = User::create([
         'name' => $request->name,
-        'gender' => $request->gender,
         'email' => $request->email,
         'password' => Hash::make($request->password),
     ]);
@@ -90,7 +88,6 @@ public function register(Request $request)
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
-            'gender' => $user->gender,
         ],
     ], 200);
 }

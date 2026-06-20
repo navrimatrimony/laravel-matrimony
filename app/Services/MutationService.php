@@ -1203,7 +1203,6 @@ class MutationService
     private function createTargetUserForNewIntakeProfile(array $attributes): User
     {
         $name = $this->limitedNullableString($attributes['name'] ?? null, 255) ?: 'Draft Candidate';
-        $gender = $this->limitedNullableString($attributes['gender'] ?? null, 32);
         $email = $this->limitedNullableString($attributes['email'] ?? null, 255);
         $mobile = $this->limitedNullableString($attributes['mobile'] ?? null, 32);
         $registeringFor = $this->limitedNullableString($attributes['registering_for'] ?? null, 64) ?: 'other';
@@ -1214,7 +1213,6 @@ class MutationService
             'mobile' => $mobile,
             'password' => \Illuminate\Support\Facades\Hash::make(\Illuminate\Support\Str::random(40)),
             'registering_for' => $registeringFor,
-            'gender' => $gender,
             'referral_code' => User::generateUniqueReferralCode(),
         ];
 

@@ -24,7 +24,6 @@ class TestAdminRolesSeeder extends Seeder
             [
                 'name' => 'Super Admin Test',
                 'password' => Hash::make(self::ADMIN_SEED_PASSWORD),
-                'gender' => 'Male',
                 'is_admin' => true,
                 'admin_role' => 'super_admin',
             ]
@@ -35,7 +34,6 @@ class TestAdminRolesSeeder extends Seeder
             [
                 'name' => 'Data Admin Test',
                 'password' => Hash::make(self::ADMIN_SEED_PASSWORD),
-                'gender' => 'Male',
                 'is_admin' => true,
                 'admin_role' => 'data_admin',
             ]
@@ -46,7 +44,6 @@ class TestAdminRolesSeeder extends Seeder
             [
                 'name' => 'Auditor Test',
                 'password' => Hash::make(self::ADMIN_SEED_PASSWORD),
-                'gender' => 'Male',
                 'is_admin' => true,
                 'admin_role' => 'auditor',
             ]

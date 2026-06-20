@@ -144,7 +144,7 @@ class SnapshotGeneratorService
     {
         return [
             'full_name' => $profile->full_name,
-            'gender' => $profile->gender_id ?? $profile->gender ?? null,
+            'gender' => $profile->gender_id,
             'date_of_birth' => optional($profile->date_of_birth)?->format('Y-m-d') ?? $profile->date_of_birth,
             'height_cm' => $profile->height_cm,
             'religion' => $profile->religion_id,

@@ -261,7 +261,7 @@ class ProfileShowReadService
         if ($p->profile_photo && $p->photo_approved !== false) {
             return app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($p->profile_photo);
         }
-        $g = $p->gender?->key ?? $p->gender;
+        $g = $p->gender?->key;
         if ($g === 'male') {
             return asset('images/placeholders/male-profile.svg');
         }

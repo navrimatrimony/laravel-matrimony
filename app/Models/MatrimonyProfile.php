@@ -381,7 +381,7 @@ class MatrimonyProfile extends Model
             return app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($file);
         }
 
-        $genderKey = $this->gender?->key ?? $this->gender_id ?? $this->user?->gender ?? null;
+        $genderKey = $this->gender?->key;
         if ($genderKey === 'male') {
             return asset('images/placeholders/male-profile.svg');
         }

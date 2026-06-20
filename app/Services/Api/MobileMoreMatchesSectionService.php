@@ -2,7 +2,6 @@
 
 namespace App\Services\Api;
 
-use App\Models\HiddenProfile;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileView;
 use App\Models\User;
@@ -10,7 +9,6 @@ use App\Services\FeatureUsageService;
 use App\Services\Matching\MatchingService;
 use App\Services\ProfileLifecycleService;
 use App\Services\ProfilePreferenceMatchService;
-use App\Services\ViewTrackingService;
 use App\Services\WhoViewed\WhoViewedRowsService;
 use App\Services\WhoViewed\WhoViewedTeaserPolicy;
 use Illuminate\Database\Eloquent\Builder;
@@ -25,6 +23,7 @@ class MobileMoreMatchesSectionService
 
     public function __construct(
         private readonly MobileProfileDisplayPresenter $presenter,
+        private readonly MobileDiscoveryFilterService $discovery,
         private readonly MatchingService $matchingService,
         private readonly FeatureUsageService $featureUsage,
         private readonly WhoViewedRowsService $whoViewedRows,
@@ -39,7 +38,7 @@ class MobileMoreMatchesSectionService
         $viewerProfile = $viewer->matrimonyProfile;
         $context = $this->viewerContext($viewerProfile, $viewer);
 
-        if (! $viewerProfile instanceof MatrimonyProfile) {
+        if (! $viewerProfile instanceof MatrimonyProfile || ! $this->discovery->viewerCanDiscover($viewer)) {
             return [
                 'success' => true,
                 'viewer_context' => $context,
@@ -68,7 +67,7 @@ class MobileMoreMatchesSectionService
      */
     private function viewerContext(?MatrimonyProfile $viewerProfile, User $viewer): array
     {
-        $viewerGender = $this->genderKey($viewerProfile) ?? $this->genderString($viewer->gender ?? null);
+        $viewerGender = $this->genderKey($viewerProfile);
         $targetGender = match ($viewerGender) {
             'male' => 'female',
             'female' => 'male',
@@ -118,7 +117,7 @@ class MobileMoreMatchesSectionService
      */
     private function lookingForMeSection(MatrimonyProfile $viewerProfile, User $viewer, array $context): array
     {
-        $candidates = $this->candidateQuery($viewerProfile)
+        $candidates = $this->candidateQuery($viewer)
             ->with($this->cardRelations())
             ->limit(self::CANDIDATE_POOL_LIMIT)
             ->get();
@@ -169,7 +168,7 @@ class MobileMoreMatchesSectionService
 
         $views = $this->distinctProfileViews('viewer_profile_id', (int) $viewerProfile->id, 'viewed_profile_id');
         $profileIds = $views->pluck('profile_id')->all();
-        $profiles = $this->profilesByOrderedIds($viewerProfile, $profileIds);
+        $profiles = $this->profilesByOrderedIds($viewer, $profileIds);
 
         $rows = $profiles->map(function (MatrimonyProfile $profile) use ($views): array {
             $meta = $views->firstWhere('profile_id', (int) $profile->id);
@@ -223,6 +222,7 @@ class MobileMoreMatchesSectionService
     private function recentVisitorsSection(MatrimonyProfile $viewerProfile, User $viewer, array $context): array
     {
         $targetGender = $this->genderString($context['target_gender'] ?? null);
+        $excludedProfileIds = $this->discovery->excludedProfileIdsForViewer($viewer);
         $teaserPolicy = WhoViewedTeaserPolicy::normalized();
         $canSee = $this->canSeeRecentVisitors($viewer);
         if (! $canSee) {
@@ -231,6 +231,7 @@ class MobileMoreMatchesSectionService
                 $teaserPolicy,
                 self::SECTION_LIMIT,
                 $targetGender,
+                $excludedProfileIds,
             );
 
             return $this->recentVisitorsPayload($context, [], $whoViewed, [
@@ -261,6 +262,7 @@ class MobileMoreMatchesSectionService
                 $teaserPolicy,
                 self::SECTION_LIMIT,
                 $targetGender,
+                $excludedProfileIds,
             );
 
             return $this->recentVisitorsPayload($context, [], $whoViewed, [
@@ -275,7 +277,7 @@ class MobileMoreMatchesSectionService
         }
 
         $whoViewed = $hasFullAccess
-            ? $this->whoViewedRows->fullRows($viewerProfile, null, self::SECTION_LIMIT, $targetGender)
+            ? $this->whoViewedRows->fullRows($viewerProfile, null, self::SECTION_LIMIT, $targetGender, $excludedProfileIds)
             : $this->whoViewedRows->partialRows(
                 $viewerProfile,
                 $previewLimit,
@@ -283,6 +285,7 @@ class MobileMoreMatchesSectionService
                 $previewWindow['since'] ?? null,
                 self::SECTION_LIMIT,
                 $targetGender,
+                $excludedProfileIds,
             );
         $profileRows = $this->profileRowsFromWhoViewedRows($viewerProfile, $viewer, $whoViewed['rows']);
         $teaserRows = $this->teasersFromWhoViewedRows($whoViewed['rows']);
@@ -306,7 +309,7 @@ class MobileMoreMatchesSectionService
     private function youMayLikeSection(MatrimonyProfile $viewerProfile, User $viewer, array $context): array
     {
         $dateKey = now()->toDateString();
-        $profiles = $this->candidateQuery($viewerProfile)
+        $profiles = $this->candidateQuery($viewer)
             ->with($this->cardRelations())
             ->limit(80)
             ->get()
@@ -329,47 +332,11 @@ class MobileMoreMatchesSectionService
     /**
      * @return Builder<MatrimonyProfile>
      */
-    private function candidateQuery(MatrimonyProfile $viewerProfile): Builder
+    private function candidateQuery(User $viewer): Builder
     {
-        $query = MatrimonyProfile::query()
-            ->whereMemberAccountsOnly()
-            ->whereKeyNot($viewerProfile->id)
-            ->where('lifecycle_state', 'active')
-            ->where('is_suspended', false)
-            ->whereNonShowcase();
-
-        $targetGender = $this->oppositeGenderKey($viewerProfile);
-        if ($targetGender !== null) {
-            $query->whereHas('gender', static fn (Builder $gender): Builder => $gender->where('key', $targetGender));
-        }
-
-        $excluded = $this->excludedProfileIds($viewerProfile);
-        if ($excluded !== []) {
-            $query->whereNotIn('id', $excluded);
-        }
-
-        return $query->orderByDesc('updated_at');
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function excludedProfileIds(MatrimonyProfile $viewerProfile): array
-    {
-        $ids = ViewTrackingService::getBlockedProfileIds((int) $viewerProfile->id)
-            ->map(fn ($id): int => (int) $id)
-            ->all();
-
-        if (Schema::hasTable('hidden_profiles')) {
-            $hidden = HiddenProfile::query()
-                ->where('owner_profile_id', $viewerProfile->id)
-                ->pluck('hidden_profile_id')
-                ->map(fn ($id): int => (int) $id)
-                ->all();
-            $ids = array_merge($ids, $hidden);
-        }
-
-        return array_values(array_unique(array_filter($ids)));
+        return $this->discovery
+            ->applyCandidateQuery(MatrimonyProfile::query(), $viewer)
+            ->orderByDesc('updated_at');
     }
 
     /**
@@ -435,14 +402,14 @@ class MobileMoreMatchesSectionService
      * @param  list<int>  $profileIds
      * @return Collection<int, MatrimonyProfile>
      */
-    private function profilesByOrderedIds(MatrimonyProfile $viewerProfile, array $profileIds): Collection
+    private function profilesByOrderedIds(User $viewer, array $profileIds): Collection
     {
         $profileIds = array_values(array_unique(array_map('intval', $profileIds)));
         if ($profileIds === []) {
             return collect();
         }
 
-        $profiles = $this->candidateQuery($viewerProfile)
+        $profiles = $this->candidateQuery($viewer)
             ->whereIn('id', $profileIds)
             ->with($this->cardRelations())
             ->get()
@@ -464,7 +431,12 @@ class MobileMoreMatchesSectionService
      */
     private function sectionFromRows(string $key, array $context, Collection $rows, User $viewer, array $extra = []): array
     {
-        $profiles = $rows->mapWithKeys(function (array $row): array {
+        $profiles = $rows->filter(function (array $row) use ($viewer): bool {
+            $profile = $row['profile'] ?? null;
+
+            return $profile instanceof MatrimonyProfile
+                && $this->discovery->isAllowedTarget($viewer, $profile);
+        })->mapWithKeys(function (array $row): array {
             $profile = $row['profile'] ?? null;
 
             return $profile instanceof MatrimonyProfile ? [(int) $profile->id => $row] : [];
@@ -518,6 +490,7 @@ class MobileMoreMatchesSectionService
 
         return $profiles
             ->filter(fn (MatrimonyProfile $profile): bool => ProfileLifecycleService::isVisibleToOthers($profile))
+            ->filter(fn (MatrimonyProfile $profile): bool => ! ($viewer instanceof User) || $this->discovery->isAllowedTarget($viewer, $profile))
             ->unique(fn (MatrimonyProfile $profile): int => (int) $profile->id)
             ->take(self::SECTION_LIMIT)
             ->map(function (MatrimonyProfile $profile) use ($viewer, $metaById): array {
@@ -551,7 +524,7 @@ class MobileMoreMatchesSectionService
             ->values()
             ->all();
 
-        $profiles = $this->profilesByOrderedIds($viewerProfile, $profileIds)
+        $profiles = $this->profilesByOrderedIds($viewer, $profileIds)
             ->keyBy(fn (MatrimonyProfile $profile): int => (int) $profile->id);
 
         $rows = [];
@@ -723,22 +696,13 @@ class MobileMoreMatchesSectionService
         };
     }
 
-    private function oppositeGenderKey(MatrimonyProfile $profile): ?string
-    {
-        return match ($this->genderKey($profile)) {
-            'male' => 'female',
-            'female' => 'male',
-            default => null,
-        };
-    }
-
     private function genderKey(?MatrimonyProfile $profile): ?string
     {
         if (! $profile) {
             return null;
         }
 
-        return $this->genderString($profile->gender?->key ?? $profile->gender?->label ?? $profile->user?->gender ?? null);
+        return $this->genderString($profile->gender?->key ?? $profile->gender?->label ?? null);
     }
 
     private function genderString(mixed $gender): ?string

@@ -30,8 +30,6 @@ class UserFactory extends Factory
             'mobile' => fake()->unique()->numerify('##########'),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
-            // Account-level gender (legacy column); not collected at registration. Required on SQLite tests where gender is still NOT NULL.
-            'gender' => 'male',
             'is_admin' => false,
         ];
     }
