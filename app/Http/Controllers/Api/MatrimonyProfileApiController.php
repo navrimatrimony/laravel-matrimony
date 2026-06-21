@@ -25,6 +25,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
@@ -259,8 +260,8 @@ class MatrimonyProfileApiController extends Controller
             ],
             'mother_extra_info' => ['nullable', 'string', 'max:1000'],
             'family_type_id' => ['nullable', 'integer', Rule::exists('master_family_types', 'id')->where('is_active', true)],
-            'family_status' => ['nullable', 'string', 'max:255'],
-            'family_values' => ['nullable', 'string', 'max:255'],
+            'family_status' => ['nullable', 'string', Rule::in($this->translatedOptionKeys('components.family.status_options'))],
+            'family_values' => ['nullable', 'string', Rule::in($this->translatedOptionKeys('components.family.values_options'))],
             'has_siblings' => ['nullable', 'boolean'],
             'other_relatives_text' => ['nullable', 'string', 'max:4000'],
             'property_details' => ['nullable', 'string', 'max:4000'],
@@ -278,7 +279,7 @@ class MatrimonyProfileApiController extends Controller
             'kul' => ['nullable', 'string', 'max:255'],
             'gotra' => ['nullable', 'string', 'max:255'],
             'navras_name' => ['nullable', 'string', 'max:255'],
-            'birth_weekday' => ['nullable', 'string', 'max:32'],
+            'birth_weekday' => ['nullable', 'string', Rule::in($this->birthWeekdayValues())],
             'narrative_about_me' => ['nullable', 'string', 'max:5000'],
         ];
 
@@ -339,6 +340,32 @@ class MatrimonyProfileApiController extends Controller
         });
 
         $validator->validate();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function translatedOptionKeys(string $translationKey): array
+    {
+        $options = Lang::get($translationKey, [], 'en');
+
+        return is_array($options) ? array_values(array_map('strval', array_keys($options))) : [];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function birthWeekdayValues(): array
+    {
+        $weekdays = Lang::get('components.horoscope.weekdays', [], 'en');
+        if (! is_array($weekdays)) {
+            return [];
+        }
+
+        return collect(array_keys($weekdays))
+            ->map(fn (string $key): string => ucfirst($key))
+            ->values()
+            ->all();
     }
 
     private function normalizeMobileEducationCareerInputs(Request $request): void

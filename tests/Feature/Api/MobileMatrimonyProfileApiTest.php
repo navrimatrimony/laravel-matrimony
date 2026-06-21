@@ -766,6 +766,12 @@ test('MobileProfile GET api v1 profile remaining options returns family and horo
             'family_types' => [
                 '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
             ],
+            'family_statuses' => [
+                '*' => ['key', 'label', 'label_en', 'label_mr'],
+            ],
+            'family_values' => [
+                '*' => ['key', 'label', 'label_en', 'label_mr'],
+            ],
             'occupation_categories',
             'occupations',
             'custom_occupations',
@@ -784,12 +790,35 @@ test('MobileProfile GET api v1 profile remaining options returns family and horo
             ],
             'vashyas',
             'rashi_lords',
+            'birth_weekdays' => [
+                '*' => ['key', 'label', 'label_en', 'label_mr'],
+            ],
         ]);
 
     expect(collect($response->json('family_types'))->pluck('id')->all())->toContain($options['family_type_id']);
+    expect(collect($response->json('family_statuses'))->pluck('key')->all())->toBe([
+        'simple',
+        'middle_class',
+        'upper_middle_class',
+        'affluent',
+    ]);
+    expect(collect($response->json('family_values'))->pluck('key')->all())->toBe([
+        'traditional',
+        'moderate',
+        'modern',
+    ]);
     expect(collect($response->json('rashis'))->pluck('id')->all())->toContain($options['rashi_id']);
     expect(collect($response->json('nakshatras'))->pluck('id')->all())->toContain($options['nakshatra_id']);
     expect(collect($response->json('mangal_dosh_types'))->pluck('id')->all())->toContain($options['mangal_dosh_type_id']);
+    expect(collect($response->json('birth_weekdays'))->pluck('key')->all())->toBe([
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+        'Sunday',
+    ]);
     mobileApiProfileAssertIdBefore(collect($response->json('family_types'))->pluck('id')->all(), $familyFirst, $familySecond);
     mobileApiProfileAssertIdBefore(collect($response->json('varnas'))->pluck('id')->all(), $varnaSecond, $varnaFirst);
 });
@@ -1327,8 +1356,8 @@ test('MobileProfile PUT api v1 matrimony-profile accepts remaining edit all scal
         'mother_occupation_master_id' => $motherOccupation->id,
         'mother_extra_info' => 'Works in education',
         'family_type_id' => $options['family_type_id'],
-        'family_status' => 'Middle class',
-        'family_values' => 'Traditional',
+        'family_status' => 'middle_class',
+        'family_values' => 'traditional',
         'has_siblings' => true,
         'other_relatives_text' => 'Relatives are settled in Pune.',
         'property_details' => 'Own house and farm land.',
@@ -1360,8 +1389,8 @@ test('MobileProfile PUT api v1 matrimony-profile accepts remaining edit all scal
         ->assertJsonPath('profile.mother_occupation_master_id', $motherOccupation->id)
         ->assertJsonPath('profile.mother_occupation_master_label', $motherOccupation->name)
         ->assertJsonPath('profile.family_type_id', $options['family_type_id'])
-        ->assertJsonPath('profile.family_status', 'Middle class')
-        ->assertJsonPath('profile.family_values', 'Traditional')
+        ->assertJsonPath('profile.family_status', 'middle_class')
+        ->assertJsonPath('profile.family_values', 'traditional')
         ->assertJsonPath('profile.has_siblings', true)
         ->assertJsonPath('profile.other_relatives_text', 'Relatives are settled in Pune.')
         ->assertJsonPath('profile.property_details', 'Own house and farm land.')
@@ -1394,8 +1423,8 @@ test('MobileProfile PUT api v1 matrimony-profile accepts remaining edit all scal
     expect($profile->mother_name)->toBe('Mother Person');
     expect((int) $profile->mother_occupation_master_id)->toBe((int) $motherOccupation->id);
     expect((int) $profile->family_type_id)->toBe((int) $options['family_type_id']);
-    expect($profile->family_status)->toBe('Middle class');
-    expect($profile->family_values)->toBe('Traditional');
+    expect($profile->family_status)->toBe('middle_class');
+    expect($profile->family_values)->toBe('traditional');
     expect((bool) $profile->has_siblings)->toBeTrue();
     expect($profile->other_relatives_text)->toBe('Relatives are settled in Pune.');
     expect($profile->property_details)->toBe('Own house and farm land.');

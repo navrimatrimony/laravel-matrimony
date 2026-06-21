@@ -247,6 +247,8 @@ Requires bearer token. Returns read-only governed options for APK Edit All Famil
 Sources:
 
 - `family_types`: `master_family_types` via `App\Models\MasterFamilyType`
+- `family_statuses`: `components.family.status_options` translation array, in website source order
+- `family_values`: `components.family.values_options` translation array, in website source order
 - `occupation_categories`: `master_occupation_categories` via `App\Models\OccupationCategory`
 - `occupations`: `master_occupations` via `App\Models\OccupationMaster`
 - `custom_occupations`: logged-in user's `master_occupation_custom` rows via `App\Models\OccupationCustom`
@@ -259,6 +261,7 @@ Sources:
 - `varnas`: `master_varnas`
 - `vashyas`: `master_vashyas`
 - `rashi_lords`: `master_rashi_lords`
+- `birth_weekdays`: `components.horoscope.weekdays` translation array, matching the website Monday-to-Sunday dropdown order
 
 Success response: HTTP 200
 
@@ -266,6 +269,13 @@ Success response: HTTP 200
 {
   "family_types": [
     { "id": 1, "key": "joint", "label": "Joint", "label_en": "Joint", "label_mr": "संयुक्त कुटुंब" }
+  ],
+  "family_statuses": [
+    { "key": "simple", "label": "Simple", "label_en": "Simple", "label_mr": "साधे" },
+    { "key": "middle_class", "label": "Middle Class", "label_en": "Middle Class", "label_mr": "मध्यम वर्ग" }
+  ],
+  "family_values": [
+    { "key": "traditional", "label": "Traditional", "label_en": "Traditional", "label_mr": "परंपरागत" }
   ],
   "occupations": [
     { "id": 10, "label": "Teacher", "label_en": "Teacher", "label_mr": null, "category_id": 1, "category_label": "Education", "category_label_mr": null }
@@ -283,7 +293,10 @@ Success response: HTTP 200
   "mangal_dosh_types": [],
   "varnas": [],
   "vashyas": [],
-  "rashi_lords": []
+  "rashi_lords": [],
+  "birth_weekdays": [
+    { "key": "Monday", "label": "Monday", "label_en": "Monday", "label_mr": "सोमवार" }
+  ]
 }
 ```
 
@@ -332,8 +345,8 @@ Request:
   "mother_occupation_master_id": 11,
   "mother_extra_info": "Homemaker",
   "family_type_id": 1,
-  "family_status": "Middle class",
-  "family_values": "Traditional",
+  "family_status": "middle_class",
+  "family_values": "traditional",
   "has_siblings": true,
   "other_relatives_text": "Relatives settled in Pune",
   "property_details": "Own house",
@@ -390,14 +403,15 @@ Rules:
 - `father_occupation_custom_id`, `mother_occupation_custom_id`: nullable, must exist in the logged-in user's `master_occupation_custom.id`; cannot be sent together with the matching master occupation ID
 - `father_extra_info`, `mother_extra_info`: nullable string, max 1000
 - `family_type_id`: nullable, must exist as an active `master_family_types.id`
-- `family_status`, `family_values`: nullable string, max 255
+- `family_status`: nullable string, must be one of the website `components.family.status_options` keys
+- `family_values`: nullable string, must be one of the website `components.family.values_options` keys
 - `has_siblings`: nullable boolean
 - `other_relatives_text`, `property_details`: nullable string, max 4000
 - `rashi_id`, `nakshatra_id`, `gan_id`, `nadi_id`, `yoni_id`, `mangal_dosh_type_id`: nullable active master IDs
 - `varna_id`, `vashya_id`, `rashi_lord_id`: nullable active Ashtakoota master IDs
 - `charan`: nullable integer, min 1, max 4
 - `devak`, `kul`, `gotra`, `navras_name`: nullable string, max 255
-- `birth_weekday`: nullable string, max 32
+- `birth_weekday`: nullable string, must be one of the website weekday dropdown values: `Monday`, `Tuesday`, `Wednesday`, `Thursday`, `Friday`, `Saturday`, `Sunday`
 - `narrative_about_me`: nullable string, max 5000
 
 Governance note:
@@ -471,8 +485,8 @@ Success response: HTTP 200
     "mother_extra_info": "Homemaker",
     "family_type_id": 1,
     "family_type_label": "Joint",
-    "family_status": "Middle class",
-    "family_values": "Traditional",
+    "family_status": "middle_class",
+    "family_values": "traditional",
     "has_siblings": true,
     "other_relatives_text": "Relatives settled in Pune",
     "property_details": "Own house",

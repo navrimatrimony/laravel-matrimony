@@ -97,6 +97,8 @@ class ProfileSetupLookupController extends Controller
     {
         return response()->json([
             'family_types' => $this->masterOptions(MasterFamilyType::class, 'master_family_types', ['id']),
+            'family_statuses' => $this->translationOptions('components.family.status_options'),
+            'family_values' => $this->translationOptions('components.family.values_options'),
             'occupation_categories' => $this->occupationCategoryOptions(),
             'occupations' => $this->occupationOptions(),
             'custom_occupations' => $this->customOccupationOptions((int) $request->user()->id),
@@ -109,6 +111,7 @@ class ProfileSetupLookupController extends Controller
             'varnas' => $this->tableOptions('master_varnas', ['label', 'id']),
             'vashyas' => $this->tableOptions('master_vashyas', ['label', 'id']),
             'rashi_lords' => $this->tableOptions('master_rashi_lords', ['label', 'id']),
+            'birth_weekdays' => $this->birthWeekdayOptions(),
         ]);
     }
 
@@ -251,6 +254,48 @@ class ProfileSetupLookupController extends Controller
                 'key' => $key,
                 'label' => $english[$key] ?? Str::headline(str_replace('_', ' ', $key)),
                 'label_en' => $english[$key] ?? Str::headline(str_replace('_', ' ', $key)),
+                'label_mr' => $marathi[$key] ?? null,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array<string, string|null>>
+     */
+    private function translationOptions(string $translationKey): array
+    {
+        $english = Lang::get($translationKey, [], 'en');
+        $marathi = Lang::get($translationKey, [], 'mr');
+        $english = is_array($english) ? $english : [];
+        $marathi = is_array($marathi) ? $marathi : [];
+
+        return collect($english)
+            ->map(fn (string $label, string $key): array => [
+                'key' => $key,
+                'label' => $label,
+                'label_en' => $label,
+                'label_mr' => $marathi[$key] ?? null,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array<string, string|null>>
+     */
+    private function birthWeekdayOptions(): array
+    {
+        $english = Lang::get('components.horoscope.weekdays', [], 'en');
+        $marathi = Lang::get('components.horoscope.weekdays', [], 'mr');
+        $english = is_array($english) ? $english : [];
+        $marathi = is_array($marathi) ? $marathi : [];
+
+        return collect($english)
+            ->map(fn (string $label, string $key): array => [
+                'key' => Str::ucfirst($key),
+                'label' => $label,
+                'label_en' => $label,
                 'label_mr' => $marathi[$key] ?? null,
             ])
             ->values()
