@@ -349,8 +349,9 @@ class MatrimonyProfileApiController extends Controller
         // Phase-5B: All updates via MutationService (source=manual, profile_change_history)
         $snapshot = $this->buildMobileProfileSnapshotFromApi($request);
         if (! empty($snapshot['core'])) {
-            app(MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
             $changedFields = $this->lockKeysForMobileSnapshot($snapshot['core']);
+            ProfileFieldLockService::removeActorOwnedLocks($profile, $changedFields, $user);
+            app(MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
             if (! empty($changedFields)) {
                 ProfileFieldLockService::applyLocks($profile, $changedFields, 'CORE', $user);
             }

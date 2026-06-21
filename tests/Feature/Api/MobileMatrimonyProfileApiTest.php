@@ -894,6 +894,126 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
         ->exists())->toBeTrue();
 });
 
+test('MobileProfile PUT api v1 matrimony-profile can update fields after prior mobile locks', function () {
+    mobileApiProfileTestSeedCurrentAddressType();
+    $user = User::factory()->create(['name' => 'Repeat Edit Account']);
+    $profile = app(MutationService::class)->createDraftProfileForUser($user);
+    $firstLocation = mobileApiProfileTestLeafLocation();
+    $secondLocation = mobileApiProfileTestLeafLocation();
+    $firstBirthCity = mobileApiProfileTestLeafLocation();
+    $secondBirthCity = mobileApiProfileTestLeafLocation();
+    [$firstReligion, $firstCaste, $firstSubCaste] = mobileApiProfileTestCommunity();
+    [$secondReligion, $secondCaste, $secondSubCaste] = mobileApiProfileTestCommunity();
+    $gender = mobileApiProfileTestGender('female');
+    $firstPhase1A = mobileApiProfileTestPhase1AOptions();
+    $secondPhase1A = mobileApiProfileTestPhase1AOptions();
+    $firstDegree = mobileApiProfileTestEducationDegree('B.A.', 20);
+    $secondDegree = mobileApiProfileTestEducationDegree('M.B.A.', 30);
+    $firstOccupation = mobileApiProfileTestOccupationMaster('Teacher');
+    $secondOccupation = mobileApiProfileTestOccupationMaster('Business Analyst');
+    Sanctum::actingAs($user);
+
+    $this->putJson('/api/v1/matrimony-profile', [
+        'full_name' => 'First Mobile Edit',
+        'gender_id' => $gender->id,
+        'date_of_birth' => '1997-03-20',
+        'birth_time' => '08:30',
+        'birth_city_id' => $firstBirthCity->id,
+        'birth_place_text' => 'First Birth Place',
+        'caste' => $firstCaste->label,
+        'highest_education' => 'First education',
+        'education_slots' => json_encode([['t' => 'd', 'id' => $firstDegree->id]], JSON_THROW_ON_ERROR),
+        'location_id' => $firstLocation->id,
+        'religion_id' => $firstReligion->id,
+        'caste_id' => $firstCaste->id,
+        'sub_caste_id' => $firstSubCaste->id,
+        'mother_tongue_id' => $firstPhase1A['mother_tongue_id'],
+        'height_cm' => 160,
+        'weight_kg' => 50,
+        'complexion_id' => $firstPhase1A['complexion_id'],
+        'blood_group_id' => $firstPhase1A['blood_group_id'],
+        'physical_build_id' => $firstPhase1A['physical_build_id'],
+        'spectacles_lens' => 'spectacles',
+        'physical_condition' => 'none',
+        'occupation_master_id' => $firstOccupation->id,
+        'company_name' => 'First Company',
+        'work_location_text' => 'First Work Location',
+    ])->assertOk();
+
+    expect(DB::table('profile_field_locks')
+        ->where('profile_id', $profile->id)
+        ->whereIn('field_key', ['full_name', 'location_id', 'height_cm', 'occupation_master_id'])
+        ->count())->toBeGreaterThanOrEqual(4);
+
+    $response = $this->putJson('/api/v1/matrimony-profile', [
+        'full_name' => 'Second Mobile Edit',
+        'gender_id' => $gender->id,
+        'date_of_birth' => '1998-04-21',
+        'birth_time' => '22:45',
+        'birth_city_id' => $secondBirthCity->id,
+        'birth_place_text' => 'Second Birth Place',
+        'caste' => $secondCaste->label,
+        'highest_education' => 'Second education',
+        'education_slots' => json_encode([['t' => 'd', 'id' => $secondDegree->id]], JSON_THROW_ON_ERROR),
+        'location_id' => $secondLocation->id,
+        'religion_id' => $secondReligion->id,
+        'caste_id' => $secondCaste->id,
+        'sub_caste_id' => $secondSubCaste->id,
+        'mother_tongue_id' => $secondPhase1A['mother_tongue_id'],
+        'height_cm' => 172,
+        'weight_kg' => 66,
+        'complexion_id' => $secondPhase1A['complexion_id'],
+        'blood_group_id' => $secondPhase1A['blood_group_id'],
+        'physical_build_id' => $secondPhase1A['physical_build_id'],
+        'spectacles_lens' => 'both',
+        'physical_condition' => 'prefer_not_to_say',
+        'occupation_master_id' => $secondOccupation->id,
+        'company_name' => 'Second Company',
+        'work_location_text' => 'Second Work Location',
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('profile.full_name', 'Second Mobile Edit')
+        ->assertJsonPath('profile.location_id', $secondLocation->id)
+        ->assertJsonPath('profile.birth_city_id', $secondBirthCity->id)
+        ->assertJsonPath('profile.birth_place_text', 'Second Birth Place')
+        ->assertJsonPath('profile.mother_tongue_id', $secondPhase1A['mother_tongue_id'])
+        ->assertJsonPath('profile.height_cm', 172)
+        ->assertJsonPath('profile.weight_kg', 66)
+        ->assertJsonPath('profile.complexion_id', $secondPhase1A['complexion_id'])
+        ->assertJsonPath('profile.blood_group_id', $secondPhase1A['blood_group_id'])
+        ->assertJsonPath('profile.physical_build_id', $secondPhase1A['physical_build_id'])
+        ->assertJsonPath('profile.spectacles_lens', 'both')
+        ->assertJsonPath('profile.physical_condition', 'prefer_not_to_say')
+        ->assertJsonPath('profile.occupation_master_id', $secondOccupation->id)
+        ->assertJsonPath('profile.company_name', 'Second Company')
+        ->assertJsonPath('profile.work_location_text', 'Second Work Location');
+
+    $profile->refresh();
+
+    expect($profile->full_name)->toBe('Second Mobile Edit');
+    expect(substr((string) $profile->date_of_birth, 0, 10))->toBe('1998-04-21');
+    expect((int) $profile->location_id)->toBe((int) $secondLocation->id);
+    expect((int) $profile->birth_city_id)->toBe((int) $secondBirthCity->id);
+    expect($profile->birth_place_text)->toBe('Second Birth Place');
+    expect((int) $profile->religion_id)->toBe((int) $secondReligion->id);
+    expect((int) $profile->caste_id)->toBe((int) $secondCaste->id);
+    expect((int) $profile->sub_caste_id)->toBe((int) $secondSubCaste->id);
+    expect($profile->highest_education)->toContain($secondDegree->code);
+    expect((int) $profile->mother_tongue_id)->toBe((int) $secondPhase1A['mother_tongue_id']);
+    expect((int) $profile->height_cm)->toBe(172);
+    expect((int) $profile->weight_kg)->toBe(66);
+    expect((int) $profile->complexion_id)->toBe((int) $secondPhase1A['complexion_id']);
+    expect((int) $profile->blood_group_id)->toBe((int) $secondPhase1A['blood_group_id']);
+    expect((int) $profile->physical_build_id)->toBe((int) $secondPhase1A['physical_build_id']);
+    expect($profile->spectacles_lens)->toBe('both');
+    expect($profile->physical_condition)->toBe('prefer_not_to_say');
+    expect((int) $profile->occupation_master_id)->toBe((int) $secondOccupation->id);
+    expect($profile->company_name)->toBe('Second Company');
+    expect($profile->work_location_text)->toBe('Second Work Location');
+});
+
 test('MobileProfile PUT api v1 matrimony-profile accepts education career fields through MutationService', function () {
     mobileApiProfileTestSeedCurrentAddressType();
     $user = User::factory()->create(['name' => 'Education Career Account']);

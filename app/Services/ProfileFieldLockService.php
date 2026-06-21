@@ -66,6 +66,26 @@ class ProfileFieldLockService
     }
 
     /**
+     * Remove locks that were created by the same actor for an explicit edit pass.
+     * Admin/other-actor locks stay intact and continue to protect governed fields.
+     */
+    public static function removeActorOwnedLocks(MatrimonyProfile $profile, array $fields, $actor): int
+    {
+        $actorId = $actor && is_object($actor) && isset($actor->id) ? (int) $actor->id : null;
+        $fields = array_values(array_unique(array_filter($fields, fn ($field): bool => is_string($field) && $field !== '')));
+
+        if ($actorId === null || $fields === []) {
+            return 0;
+        }
+
+        return DB::table('profile_field_locks')
+            ->where('profile_id', $profile->id)
+            ->where('locked_by', $actorId)
+            ->whereIn('field_key', $fields)
+            ->delete();
+    }
+
+    /**
      * Day-7: Remove lock from a specific field (admin override with reason).
      */
     public static function removeLock(MatrimonyProfile $profile, string $fieldKey): bool
