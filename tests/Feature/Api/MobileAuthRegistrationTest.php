@@ -3,6 +3,7 @@
 use App\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Mailer\Exception\TransportException;
 
@@ -51,4 +52,59 @@ test('ApiAuthRegister returns token when registered event notification fails', f
                 && str_contains((string) ($context['message'] ?? ''), '[redacted-email]')
                 && ! str_contains((string) ($context['message'] ?? ''), 'navrimatrimony@gmail.com');
         });
+});
+
+test('ApiAuthLogin accepts mobile email username and legacy email payload', function (string $loginKey, string $loginValue) {
+    User::factory()->create([
+        'name' => 'MobileLoginUser',
+        'email' => 'mobile-login@example.test',
+        'mobile' => '9876543201',
+        'password' => Hash::make('password'),
+    ]);
+
+    $response = $this->postJson('/api/v1/login', [
+        $loginKey => $loginValue,
+        'password' => 'password',
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJson([
+            'success' => true,
+            'message' => 'Login successful',
+            'user' => [
+                'email' => 'mobile-login@example.test',
+            ],
+        ])
+        ->assertJsonStructure([
+            'token',
+            'user' => ['id', 'email'],
+        ]);
+
+    expect($response->json('token'))->toBeString()->not->toBeEmpty();
+})->with([
+    'mobile login field' => ['login', '9876543201'],
+    'email login field' => ['login', 'mobile-login@example.test'],
+    'username login field' => ['login', 'MobileLoginUser'],
+    'legacy email payload' => ['email', 'mobile-login@example.test'],
+]);
+
+test('ApiAuthLogin rejects invalid mobile api credentials', function () {
+    User::factory()->create([
+        'email' => 'mobile-login-fail@example.test',
+        'mobile' => '9876543202',
+        'password' => Hash::make('password'),
+    ]);
+
+    $response = $this->postJson('/api/v1/login', [
+        'login' => '9876543202',
+        'password' => 'wrong-password',
+    ]);
+
+    $response
+        ->assertUnauthorized()
+        ->assertJson([
+            'success' => false,
+            'message' => 'Invalid credentials',
+        ]);
 });

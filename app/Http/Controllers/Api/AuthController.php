@@ -4,13 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules;
+use App\Support\MobileNumber;
+use Illuminate\Support\Str;
 use Throwable;
 
 
@@ -21,29 +22,29 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
-        // 1) Validate input (minimum required)
-        $credentials = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required'],
+        // 1) Validate input. `email` stays accepted for older APK builds.
+        $validated = $request->validate([
+            'login' => ['nullable', 'string', 'max:191', 'required_without:email'],
+            'email' => ['nullable', 'string', 'max:191', 'required_without:login'],
+            'password' => ['required', 'string'],
         ]);
 
-    
+        $login = trim((string) ($validated['login'] ?? $validated['email'] ?? ''));
+        $password = (string) $validated['password'];
 
-        // 2) Attempt login using web guard credentials
-        if (!Auth::attempt($credentials)) {
+        // 2) Resolve the same login inputs as the web login screen: mobile, email, or username.
+        $user = $this->resolveMobileApiLoginUser($login, $password);
+        if (! $user) {
             return response()->json([
                 'success' => false,
                 'message' => 'Invalid credentials',
             ], 401);
         }
 
-        // 3) Authenticated user
-        $user = $request->user();
-
-        // 4) Create Sanctum token for mobile
+        // 3) Create Sanctum token for mobile
         $token = $user->createToken('mobile-app')->plainTextToken;
 
-        // 5) JSON success response (NO redirect)
+        // 4) JSON success response (NO redirect)
         return response()->json([
             'success' => true,
             'message' => 'Login successful',
@@ -53,6 +54,69 @@ class AuthController extends Controller
                 'email' => $user->email,
             ],
         ]);
+    }
+
+    private function resolveMobileApiLoginUser(string $login, string $password): ?User
+    {
+        if ($login === '') {
+            return null;
+        }
+
+        $mobileDigits = MobileNumber::normalize($login);
+        if ($mobileDigits !== null) {
+            $users = User::query()
+                ->where('mobile', $mobileDigits)
+                ->orderByDesc('mobile_verified_at')
+                ->orderByDesc('id')
+                ->get();
+
+            foreach ($users as $candidate) {
+                if (Hash::check($password, $candidate->password)) {
+                    return $candidate;
+                }
+            }
+
+            return null;
+        }
+
+        if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
+            $candidate = User::query()
+                ->whereRaw('LOWER(email) = ?', [Str::lower($login)])
+                ->first();
+
+            return $candidate && Hash::check($password, $candidate->password)
+                ? $candidate
+                : null;
+        }
+
+        $normalized = Str::lower($login);
+        if ($normalized !== '' && ! str_contains($login, '@')) {
+            $byLocalPart = User::query()
+                ->whereNotNull('email')
+                ->whereRaw('LOWER(email) LIKE ?', [$normalized.'@%'])
+                ->limit(5)
+                ->get();
+
+            if ($byLocalPart->count() === 1) {
+                $candidate = $byLocalPart->first();
+                if ($candidate && Hash::check($password, $candidate->password)) {
+                    return $candidate;
+                }
+            }
+        }
+
+        $candidates = User::query()
+            ->whereRaw('LOWER(name) = ?', [$normalized])
+            ->limit(5)
+            ->get();
+
+        foreach ($candidates as $candidate) {
+            if (Hash::check($password, $candidate->password)) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
     /**
  * Mobile API Register (JSON + Sanctum Token)
