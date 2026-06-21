@@ -24,6 +24,8 @@ use Illuminate\Support\Str;
 
 class ProfileSetupLookupController extends Controller
 {
+    private const MARITAL_STATUS_KEYS = ['never_married', 'divorced', 'annulled', 'separated', 'widowed'];
+
     private const SPECTACLES_KEYS = ['no', 'spectacles', 'contact_lens', 'both'];
 
     private const PHYSICAL_CONDITION_KEYS = [
@@ -42,10 +44,10 @@ class ProfileSetupLookupController extends Controller
     public function basicPhysicalOptions(): JsonResponse
     {
         return response()->json([
-            'mother_tongues' => $this->masterOptions(MasterMotherTongue::class, 'master_mother_tongues'),
-            'complexions' => $this->masterOptions(MasterComplexion::class, 'master_complexions'),
-            'blood_groups' => $this->masterOptions(MasterBloodGroup::class, 'master_blood_groups'),
-            'physical_builds' => $this->masterOptions(MasterPhysicalBuild::class, 'master_physical_builds'),
+            'mother_tongues' => $this->masterOptions(MasterMotherTongue::class, 'master_mother_tongues', ['sort_order', 'label', 'id']),
+            'complexions' => $this->masterOptions(MasterComplexion::class, 'master_complexions', ['id']),
+            'blood_groups' => $this->masterOptions(MasterBloodGroup::class, 'master_blood_groups', ['id']),
+            'physical_builds' => $this->masterOptions(MasterPhysicalBuild::class, 'master_physical_builds', ['id']),
             'spectacles_lens' => $this->enumOptions('components.physical.spectacles_options', self::SPECTACLES_KEYS),
             'physical_conditions' => $this->enumOptions('components.physical.condition_options', self::PHYSICAL_CONDITION_KEYS),
         ]);
@@ -72,10 +74,10 @@ class ProfileSetupLookupController extends Controller
     public function maritalLifestyleOptions(): JsonResponse
     {
         return response()->json([
-            'marital_statuses' => $this->masterOptions(MasterMaritalStatus::class, 'master_marital_statuses'),
-            'diets' => $this->masterOptions(MasterDiet::class, 'master_diets'),
-            'smoking_statuses' => $this->masterOptions(MasterSmokingStatus::class, 'master_smoking_statuses'),
-            'drinking_statuses' => $this->masterOptions(MasterDrinkingStatus::class, 'master_drinking_statuses'),
+            'marital_statuses' => $this->maritalStatusOptions(),
+            'diets' => $this->masterOptions(MasterDiet::class, 'master_diets', ['sort_order', 'id']),
+            'smoking_statuses' => $this->masterOptions(MasterSmokingStatus::class, 'master_smoking_statuses', ['sort_order', 'id']),
+            'drinking_statuses' => $this->masterOptions(MasterDrinkingStatus::class, 'master_drinking_statuses', ['sort_order', 'id']),
         ]);
     }
 
@@ -83,11 +85,10 @@ class ProfileSetupLookupController extends Controller
      * @param  class-string<Model>  $modelClass
      * @return array<int, array<string, mixed>>
      */
-    private function masterOptions(string $modelClass, string $table): array
+    private function masterOptions(string $modelClass, string $table, array $orderColumns = ['id']): array
     {
         $hasLabelEn = Schema::hasColumn($table, 'label_en');
         $hasLabelMr = Schema::hasColumn($table, 'label_mr');
-        $hasSortOrder = Schema::hasColumn($table, 'sort_order');
         $columns = ['id', 'key', 'label'];
         if ($hasLabelEn) {
             $columns[] = 'label_en';
@@ -96,11 +97,54 @@ class ProfileSetupLookupController extends Controller
             $columns[] = 'label_mr';
         }
 
-        return $modelClass::query()
+        $query = $modelClass::query()->where('is_active', true);
+        $this->applyOptionOrdering($query, $table, $orderColumns);
+
+        return $this->mapMasterOptionRows($query->get($columns), $hasLabelEn, $hasLabelMr);
+    }
+
+    private function maritalStatusOptions(): array
+    {
+        $hasLabelEn = Schema::hasColumn('master_marital_statuses', 'label_en');
+        $hasLabelMr = Schema::hasColumn('master_marital_statuses', 'label_mr');
+        $columns = ['id', 'key', 'label'];
+        if ($hasLabelEn) {
+            $columns[] = 'label_en';
+        }
+        if ($hasLabelMr) {
+            $columns[] = 'label_mr';
+        }
+
+        $rows = MasterMaritalStatus::query()
             ->where('is_active', true)
-            ->when($hasSortOrder, fn ($query) => $query->orderBy('sort_order'))
-            ->orderBy('label')
-            ->get($columns)
+            ->whereIn('key', self::MARITAL_STATUS_KEYS)
+            ->get($columns);
+
+        if ($rows->isEmpty()) {
+            $query = MasterMaritalStatus::query()->where('is_active', true);
+            $this->applyOptionOrdering($query, 'master_marital_statuses', ['id']);
+            $rows = $query->get($columns);
+        } else {
+            $rows = $rows
+                ->sortBy(fn (MasterMaritalStatus $row): int => array_search($row->key, self::MARITAL_STATUS_KEYS, true) ?: 0)
+                ->values();
+        }
+
+        return $this->mapMasterOptionRows($rows, $hasLabelEn, $hasLabelMr);
+    }
+
+    private function applyOptionOrdering($query, string $table, array $orderColumns): void
+    {
+        foreach ($orderColumns as $column) {
+            if ($column === 'id' || Schema::hasColumn($table, $column)) {
+                $query->orderBy($column);
+            }
+        }
+    }
+
+    private function mapMasterOptionRows($rows, bool $hasLabelEn, bool $hasLabelMr): array
+    {
+        return $rows
             ->map(fn (Model $row): array => [
                 'id' => (int) $row->getAttribute('id'),
                 'key' => $row->getAttribute('key'),

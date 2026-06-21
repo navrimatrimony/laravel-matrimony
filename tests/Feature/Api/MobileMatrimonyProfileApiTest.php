@@ -212,7 +212,7 @@ function mobileApiProfileTestGender(string $key): MasterGender
     );
 }
 
-function mobileApiProfileTestMasterOption(string $table, string $keyPrefix, string $labelPrefix): int
+function mobileApiProfileTestMasterOption(string $table, string $keyPrefix, string $labelPrefix, array $overrides = []): int
 {
     $suffix = substr(strtolower(str_replace('.', '', uniqid('', true))), -6);
     $maxKeyLength = $table === 'master_blood_groups' ? 8 : 32;
@@ -234,8 +234,41 @@ function mobileApiProfileTestMasterOption(string $table, string $keyPrefix, stri
     if (Schema::hasColumn($table, 'sort_order')) {
         $data['sort_order'] = 10;
     }
+    $data = array_merge($data, $overrides);
 
     return (int) DB::table($table)->insertGetId($data);
+}
+
+function mobileApiProfileTestKnownMaritalStatus(string $key, string $label): int
+{
+    $data = [
+        'label' => $label,
+        'is_active' => true,
+        'updated_at' => now(),
+    ];
+    if (Schema::hasColumn('master_marital_statuses', 'label_en')) {
+        $data['label_en'] = $label;
+    }
+    if (Schema::hasColumn('master_marital_statuses', 'label_mr')) {
+        $data['label_mr'] = $label;
+    }
+
+    DB::table('master_marital_statuses')->updateOrInsert(
+        ['key' => $key],
+        array_merge($data, ['created_at' => now()])
+    );
+
+    return (int) DB::table('master_marital_statuses')->where('key', $key)->value('id');
+}
+
+function mobileApiProfileAssertIdBefore(array $ids, int $firstId, int $secondId): void
+{
+    $firstIndex = array_search($firstId, $ids, true);
+    $secondIndex = array_search($secondId, $ids, true);
+
+    expect($firstIndex)->not->toBeFalse()
+        ->and($secondIndex)->not->toBeFalse()
+        ->and($firstIndex)->toBeLessThan($secondIndex);
 }
 
 function mobileApiProfileTestPhase1AOptions(): array
@@ -251,19 +284,19 @@ function mobileApiProfileTestPhase1AOptions(): array
 function mobileApiProfileTestMaritalLifestyleOptions(): array
 {
     return [
-        'marital_status_id' => mobileApiProfileTestMasterOption('master_marital_statuses', 'never-married', 'Never Married'),
+        'marital_status_id' => mobileApiProfileTestKnownMaritalStatus('never_married', 'Never Married'),
         'diet_id' => mobileApiProfileTestMasterOption('master_diets', 'vegetarian', 'Vegetarian'),
         'smoking_status_id' => mobileApiProfileTestMasterOption('master_smoking_statuses', 'non-smoker', 'Non-smoker'),
         'drinking_status_id' => mobileApiProfileTestMasterOption('master_drinking_statuses', 'non-drinker', 'Non-drinker'),
     ];
 }
 
-function mobileApiProfileTestOccupationMaster(string $name = 'Software Engineer'): OccupationMaster
+function mobileApiProfileTestOccupationMaster(string $name = 'Software Engineer', int $sortOrder = 10): OccupationMaster
 {
     $suffix = strtolower(str_replace('.', '-', uniqid('mobile-api-occ-', true)));
     $categoryData = [
         'name' => 'Technology '.$suffix,
-        'sort_order' => 10,
+        'sort_order' => $sortOrder,
     ];
     if (Schema::hasColumn('master_occupation_categories', 'name_mr')) {
         $categoryData['name_mr'] = 'तंत्रज्ञान';
@@ -282,7 +315,7 @@ function mobileApiProfileTestOccupationMaster(string $name = 'Software Engineer'
         $occupationData['name_mr'] = 'सॉफ्टवेअर अभियंता';
     }
     if (Schema::hasColumn('master_occupations', 'sort_order')) {
-        $occupationData['sort_order'] = 10;
+        $occupationData['sort_order'] = $sortOrder;
     }
 
     return OccupationMaster::create($occupationData);
@@ -537,6 +570,10 @@ test('MobileProfile GET api v1 profile basic physical options returns active gov
     $user = User::factory()->create(['name' => 'Lookup Account']);
     Sanctum::actingAs($user);
     $options = mobileApiProfileTestPhase1AOptions();
+    $motherTongueFirst = mobileApiProfileTestMasterOption('master_mother_tongues', 'zsource', 'Zulu Source First', ['sort_order' => 20]);
+    $motherTongueSecond = mobileApiProfileTestMasterOption('master_mother_tongues', 'asource', 'Alpha Source Second', ['sort_order' => 40]);
+    $complexionFirst = mobileApiProfileTestMasterOption('master_complexions', 'zsource', 'Zulu Source First');
+    $complexionSecond = mobileApiProfileTestMasterOption('master_complexions', 'asource', 'Alpha Source Second');
     $inactiveKey = 'inactive'.substr(strtolower(str_replace('.', '', uniqid('', true))), -8);
     $inactiveId = (int) DB::table('master_complexions')->insertGetId([
         'key' => $inactiveKey,
@@ -574,6 +611,8 @@ test('MobileProfile GET api v1 profile basic physical options returns active gov
     expect(collect($response->json('mother_tongues'))->pluck('id')->all())->toContain($options['mother_tongue_id']);
     expect(collect($response->json('complexions'))->pluck('id')->all())->toContain($options['complexion_id']);
     expect(collect($response->json('complexions'))->pluck('id')->all())->not->toContain($inactiveId);
+    mobileApiProfileAssertIdBefore(collect($response->json('mother_tongues'))->pluck('id')->all(), $motherTongueFirst, $motherTongueSecond);
+    mobileApiProfileAssertIdBefore(collect($response->json('complexions'))->pluck('id')->all(), $complexionFirst, $complexionSecond);
     expect(collect($response->json('spectacles_lens'))->pluck('key')->all())->toContain('contact_lens');
     expect(collect($response->json('physical_conditions'))->pluck('key')->all())->toContain('prefer_not_to_say');
 });
@@ -583,6 +622,10 @@ test('MobileProfile GET api v1 profile education career options returns governed
     Sanctum::actingAs($user);
     $degree = mobileApiProfileTestEducationDegree('M.B.A.', 25);
     $occupation = mobileApiProfileTestOccupationMaster('Product Manager');
+    $degreeFirst = mobileApiProfileTestEducationDegree('Z.Source', 101);
+    $degreeSecond = mobileApiProfileTestEducationDegree('A.Source', 202);
+    $occupationFirst = mobileApiProfileTestOccupationMaster('Zulu Source Occupation', 101);
+    $occupationSecond = mobileApiProfileTestOccupationMaster('Alpha Source Occupation', 202);
     $custom = OccupationCustom::create([
         'raw_name' => 'Family Business',
         'normalized_name' => 'family business',
@@ -611,6 +654,8 @@ test('MobileProfile GET api v1 profile education career options returns governed
 
     expect(collect($response->json('education_degrees'))->pluck('id')->all())->toContain($degree->id);
     expect(collect($response->json('occupations'))->pluck('id')->all())->toContain($occupation->id);
+    mobileApiProfileAssertIdBefore(collect($response->json('education_degrees'))->pluck('id')->all(), $degreeFirst->id, $degreeSecond->id);
+    mobileApiProfileAssertIdBefore(collect($response->json('occupations'))->pluck('id')->all(), $occupationFirst->id, $occupationSecond->id);
     expect(collect($response->json('custom_occupations'))->pluck('id')->all())->toContain($custom->id);
 });
 
@@ -618,6 +663,10 @@ test('MobileProfile GET api v1 profile marital lifestyle options returns governe
     $user = User::factory()->create(['name' => 'Marital Lifestyle Lookup Account']);
     Sanctum::actingAs($user);
     $options = mobileApiProfileTestMaritalLifestyleOptions();
+    $neverMarriedId = mobileApiProfileTestKnownMaritalStatus('never_married', 'Zulu Never Married');
+    $divorcedId = mobileApiProfileTestKnownMaritalStatus('divorced', 'Alpha Divorced');
+    $dietFirst = mobileApiProfileTestMasterOption('master_diets', 'zdiet', 'Zulu Source Diet', ['sort_order' => 101]);
+    $dietSecond = mobileApiProfileTestMasterOption('master_diets', 'adiet', 'Alpha Source Diet', ['sort_order' => 202]);
     $inactiveId = (int) DB::table('master_diets')->insertGetId([
         'key' => 'inactive'.substr(strtolower(str_replace('.', '', uniqid('', true))), -8),
         'label' => 'Inactive Mobile Diet',
@@ -649,6 +698,8 @@ test('MobileProfile GET api v1 profile marital lifestyle options returns governe
     expect(collect($response->json('marital_statuses'))->pluck('id')->all())->toContain($options['marital_status_id']);
     expect(collect($response->json('diets'))->pluck('id')->all())->toContain($options['diet_id']);
     expect(collect($response->json('diets'))->pluck('id')->all())->not->toContain($inactiveId);
+    mobileApiProfileAssertIdBefore(collect($response->json('marital_statuses'))->pluck('id')->all(), $neverMarriedId, $divorcedId);
+    mobileApiProfileAssertIdBefore(collect($response->json('diets'))->pluck('id')->all(), $dietFirst, $dietSecond);
     expect(collect($response->json('smoking_statuses'))->pluck('id')->all())->toContain($options['smoking_status_id']);
     expect(collect($response->json('drinking_statuses'))->pluck('id')->all())->toContain($options['drinking_status_id']);
 });
