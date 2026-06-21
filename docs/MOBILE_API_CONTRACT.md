@@ -121,6 +121,35 @@ Success response: HTTP 200
 ]
 ```
 
+### GET `/api/v1/profile/basic-physical-options`
+
+Requires bearer token. Returns read-only governed options for the mobile Basic + Physical profile setup section. Master options come from existing Laravel master tables; fixed enum options come from the same translation-backed web wizard options.
+
+Success response: HTTP 200
+
+```json
+{
+  "mother_tongues": [
+    { "id": 1, "key": "marathi", "label": "Marathi", "label_en": "Marathi", "label_mr": "मराठी" }
+  ],
+  "complexions": [
+    { "id": 1, "key": "fair", "label": "Fair", "label_en": "Fair", "label_mr": "गोरा" }
+  ],
+  "blood_groups": [
+    { "id": 1, "key": "A+", "label": "A+", "label_en": "A+", "label_mr": null }
+  ],
+  "physical_builds": [
+    { "id": 1, "key": "average", "label": "Average", "label_en": "Average", "label_mr": "मध्यम" }
+  ],
+  "spectacles_lens": [
+    { "key": "no", "label": "No", "label_en": "No", "label_mr": "नाही" }
+  ],
+  "physical_conditions": [
+    { "key": "none", "label": "None", "label_en": "None", "label_mr": "नाही" }
+  ]
+}
+```
+
 ## Matrimony Profile
 
 All profile mutation goes through the governed mutation layer. The mobile create path creates a draft profile with `MutationService::createDraftProfileForUser()` and applies submitted profile data with `MutationService::applyManualSnapshot()`.
@@ -134,10 +163,22 @@ Request:
 ```json
 {
   "full_name": "Candidate Name",
+  "gender_id": 1,
   "date_of_birth": "1998-04-15",
+  "birth_time": "10:30",
+  "birth_city_id": 456,
+  "birth_place_text": "Pune",
   "caste": "Maratha",
   "highest_education": "B.E.",
-  "location_id": 123
+  "location_id": 123,
+  "mother_tongue_id": 1,
+  "height_cm": 168,
+  "weight_kg": 58,
+  "complexion_id": 1,
+  "blood_group_id": 1,
+  "physical_build_id": 1,
+  "spectacles_lens": "contact_lens",
+  "physical_condition": "none"
 }
 ```
 
@@ -146,9 +187,20 @@ Rules:
 - `full_name`: required string, max 255
 - `gender_id`: required, must exist as an active `master_genders.id`
 - `date_of_birth`: required date
+- `birth_time`: nullable string, max 20
+- `birth_city_id`: nullable, must exist in `addresses.id`
+- `birth_place_text`: nullable string, max 255
 - `caste`: required string, max 255
 - `highest_education`: required string, max 255
 - `location_id`: required, must exist in `addresses.id`
+- `mother_tongue_id`: nullable, must exist as an active `master_mother_tongues.id`
+- `height_cm`: nullable integer, min 50, max 250
+- `weight_kg`: nullable integer, min 20, max 250
+- `complexion_id`: nullable, must exist as an active `master_complexions.id`
+- `blood_group_id`: nullable, must exist as an active `master_blood_groups.id`
+- `physical_build_id`: nullable, must exist as an active `master_physical_builds.id`
+- `spectacles_lens`: nullable, one of `no`, `spectacles`, `contact_lens`, `both`
+- `physical_condition`: nullable, one of `none`, `physically_challenged`, `hearing_condition`, `vision_condition`, `other`, `prefer_not_to_say`
 
 Governance note:
 
@@ -169,6 +221,10 @@ Success response: HTTP 200
     "full_name": "Candidate Name",
     "gender_id": 1,
     "date_of_birth": "1998-04-15",
+    "birth_time": "10:30",
+    "birth_city_id": 456,
+    "birth_place_text": "Pune",
+    "birth_place_label": "Pune, Maharashtra",
     "highest_education": "B.E.",
     "location_id": 123,
     "caste_id": 5,
@@ -177,6 +233,18 @@ Success response: HTTP 200
     "state_id": 2,
     "district_id": 3,
     "taluka_id": 4,
+    "mother_tongue_id": 1,
+    "mother_tongue_label": "Marathi",
+    "height_cm": 168,
+    "weight_kg": 58,
+    "complexion_id": 1,
+    "complexion_label": "Fair",
+    "blood_group_id": 1,
+    "blood_group_label": "A+",
+    "physical_build_id": 1,
+    "physical_build_label": "Average",
+    "spectacles_lens": "contact_lens",
+    "physical_condition": "none",
     "profile_photo": null,
     "partner_preferences": null
   }
@@ -207,6 +275,10 @@ Success response: HTTP 200
     "full_name": "Candidate Name",
     "gender_id": 1,
     "date_of_birth": "1998-04-15",
+    "birth_time": "10:30",
+    "birth_city_id": 456,
+    "birth_place_text": "Pune",
+    "birth_place_label": "Pune, Maharashtra",
     "highest_education": "B.E.",
     "location_id": 123,
     "caste_id": 5,
@@ -215,6 +287,18 @@ Success response: HTTP 200
     "state_id": 2,
     "district_id": 3,
     "taluka_id": 4,
+    "mother_tongue_id": 1,
+    "mother_tongue_label": "Marathi",
+    "height_cm": 168,
+    "weight_kg": 58,
+    "complexion_id": 1,
+    "complexion_label": "Fair",
+    "blood_group_id": 1,
+    "blood_group_label": "A+",
+    "physical_build_id": 1,
+    "physical_build_label": "Average",
+    "spectacles_lens": "contact_lens",
+    "physical_condition": "none",
     "profile_photo": null,
     "partner_preferences": null
   }
@@ -241,10 +325,21 @@ Request:
   "full_name": "Updated Candidate Name",
   "gender_id": 1,
   "date_of_birth": "1998-04-15",
+  "birth_time": "10:30",
+  "birth_city_id": 456,
+  "birth_place_text": "Pune",
   "caste": "Maratha",
   "highest_education": "MCA",
   "location_id": 123,
-  "address_line": "Optional address line"
+  "address_line": "Optional address line",
+  "mother_tongue_id": 1,
+  "height_cm": 168,
+  "weight_kg": 58,
+  "complexion_id": 1,
+  "blood_group_id": 1,
+  "physical_build_id": 1,
+  "spectacles_lens": "contact_lens",
+  "physical_condition": "none"
 }
 ```
 
@@ -253,10 +348,21 @@ Rules:
 - `full_name`: sometimes required string, max 255
 - `gender_id`: sometimes required, must exist as an active `master_genders.id`; required when the existing profile has no governed gender
 - `date_of_birth`: sometimes required date
+- `birth_time`: nullable string, max 20
+- `birth_city_id`: nullable, must exist in `addresses.id`
+- `birth_place_text`: nullable string, max 255
 - `caste`: sometimes required string, max 255
 - `highest_education`: sometimes required string, max 255
 - `location_id`: sometimes required, must exist in `addresses.id`
 - `address_line`: nullable string, max 255
+- `mother_tongue_id`: nullable, must exist as an active `master_mother_tongues.id`
+- `height_cm`: nullable integer, min 50, max 250
+- `weight_kg`: nullable integer, min 20, max 250
+- `complexion_id`: nullable, must exist as an active `master_complexions.id`
+- `blood_group_id`: nullable, must exist as an active `master_blood_groups.id`
+- `physical_build_id`: nullable, must exist as an active `master_physical_builds.id`
+- `spectacles_lens`: nullable, one of `no`, `spectacles`, `contact_lens`, `both`
+- `physical_condition`: nullable, one of `none`, `physically_challenged`, `hearing_condition`, `vision_condition`, `other`, `prefer_not_to_say`
 
 Success response: HTTP 200
 
@@ -270,6 +376,10 @@ Success response: HTTP 200
     "full_name": "Updated Candidate Name",
     "gender_id": 1,
     "date_of_birth": "1998-04-15",
+    "birth_time": "10:30",
+    "birth_city_id": 456,
+    "birth_place_text": "Pune",
+    "birth_place_label": "Pune, Maharashtra",
     "highest_education": "MCA",
     "location_id": 123,
     "caste_id": 5,
@@ -278,6 +388,18 @@ Success response: HTTP 200
     "state_id": 2,
     "district_id": 3,
     "taluka_id": 4,
+    "mother_tongue_id": 1,
+    "mother_tongue_label": "Marathi",
+    "height_cm": 168,
+    "weight_kg": 58,
+    "complexion_id": 1,
+    "complexion_label": "Fair",
+    "blood_group_id": 1,
+    "blood_group_label": "A+",
+    "physical_build_id": 1,
+    "physical_build_label": "Average",
+    "spectacles_lens": "contact_lens",
+    "physical_condition": "none",
     "profile_photo": null,
     "partner_preferences": null
   }

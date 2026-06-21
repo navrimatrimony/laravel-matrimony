@@ -61,11 +61,11 @@ class MutationService
     /** Fallback CORE keys when registry has no CORE rows. Phase-5: *_id for master lookups. address_line so intake address shows in wizard. */
     private const FALLBACK_CORE_KEYS = [
         'full_name', 'gender_id', 'date_of_birth', 'birth_time', 'marital_status_id', 'has_children', 'has_siblings', 'highest_education',
-        'location', 'location_id', 'religion_id', 'caste_id', 'sub_caste_id', 'mother_tongue_id', 'height_cm', 'profile_photo',
+        'location', 'location_id', 'religion_id', 'caste_id', 'sub_caste_id', 'mother_tongue_id', 'height_cm', 'weight_kg', 'profile_photo',
         'complexion_id', 'physical_build_id', 'blood_group_id', 'diet_id', 'smoking_status_id', 'drinking_status_id', 'family_type_id', 'income_currency_id',
         'address_line', 'annual_income', 'family_income', 'income_private', 'family_income_private',
         'property_details',
-        'birth_place_text', 'work_location_text',
+        'birth_city_id', 'birth_place_text', 'work_location_text', 'spectacles_lens', 'physical_condition',
         'occupation_master_id', 'occupation_custom_id',
         'father_name', 'father_occupation', 'father_occupation_master_id', 'father_occupation_custom_id', 'father_extra_info', 'father_contact_1', 'father_contact_2',
         'mother_name', 'mother_occupation', 'mother_occupation_master_id', 'mother_occupation_custom_id', 'mother_extra_info', 'mother_contact_1', 'mother_contact_2',

@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ExtendedFieldApiController;
 use App\Http\Controllers\Api\FieldRegistryApiController;
 use App\Http\Controllers\Api\InterestApiController;
 use App\Http\Controllers\Api\MatrimonyProfileApiController;
+use App\Http\Controllers\Api\ProfileSetupLookupController;
 use App\Http\Controllers\Api\ProfileActionApiController;
 use App\Http\Controllers\Api\ProfileFieldLockApiController;
 use App\Http\Controllers\Api\ReligionLookupController;
@@ -74,4 +75,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/castes', [CasteLookupController::class, 'getCastes']); // GET ?religion_id=
     Route::get('/sub-castes', [CasteLookupController::class, 'getSubCastes']); // GET ?caste_id=&q=
     Route::post('/sub-castes', [CasteLookupController::class, 'createSubCaste']);
+    Route::get('/profile/basic-physical-options', [ProfileSetupLookupController::class, 'basicPhysicalOptions']);
 });

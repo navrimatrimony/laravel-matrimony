@@ -29,6 +29,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Throwable;
 
 class MobileProfileDisplayPresenter
@@ -60,6 +61,10 @@ class MobileProfileDisplayPresenter
             'subCaste',
             'maritalStatus',
             'motherTongue',
+            'birthCity',
+            'complexion',
+            'bloodGroup',
+            'physicalBuild',
             'diet',
             'familyType',
             'incomeCurrency',
@@ -876,12 +881,18 @@ class MobileProfileDisplayPresenter
             $this->item('Profile ID', (string) $profile->id, 'id'),
             $this->item('Age', $ageLabel, 'age'),
             $this->item('Height', $heightLabel, 'height'),
+            $this->item('Weight', $profile->weight_kg !== null ? $profile->weight_kg.' kg' : null, 'height'),
             $isOwnProfile ? $this->item('Birth Date', $this->dateLabel($profile->date_of_birth), 'calendar') : null,
             $this->item('Marital Status', $this->labelFrom($profile->maritalStatus), 'heart'),
             $this->item('Lives in', $locationLabel, 'location'),
             $this->item('Religion', $this->labelFrom($profile->religion), 'community'),
             $this->item('Mother Tongue', $this->labelFrom($profile->motherTongue), 'language'),
             $this->item('Community', $communityLabel, 'community'),
+            $this->item('Complexion', $this->labelFrom($profile->complexion), 'profile'),
+            $this->item('Blood Group', $this->labelFrom($profile->bloodGroup), 'profile'),
+            $this->item('Physical Build', $this->labelFrom($profile->physicalBuild), 'profile'),
+            $this->item('Spectacles / Lens', $this->translatedOptionLabel('components.physical.spectacles_options', $profile->spectacles_lens), 'profile'),
+            $this->item('Physical Condition', $this->translatedOptionLabel('components.physical.condition_options', $profile->physical_condition), 'profile'),
             $this->item('Diet', $this->labelFrom($profile->diet), 'diet'),
         ];
 
@@ -1310,6 +1321,22 @@ class MobileProfileDisplayPresenter
         }
 
         return $this->cleanDisplayValue($value);
+    }
+
+    private function translatedOptionLabel(string $baseKey, mixed $value): ?string
+    {
+        $key = $this->cleanString($value);
+        if ($key === null) {
+            return null;
+        }
+
+        $translationKey = $baseKey.'.'.$key;
+        $label = __($translationKey);
+        if ($label !== $translationKey) {
+            return $this->cleanString($label);
+        }
+
+        return Str::headline(str_replace('_', ' ', $key));
     }
 
     private function cleanDisplayValue(mixed $value): ?string

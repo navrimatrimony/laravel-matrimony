@@ -209,6 +209,42 @@ function mobileApiProfileTestGender(string $key): MasterGender
     );
 }
 
+function mobileApiProfileTestMasterOption(string $table, string $keyPrefix, string $labelPrefix): int
+{
+    $suffix = substr(strtolower(str_replace('.', '', uniqid('', true))), -6);
+    $maxKeyLength = $table === 'master_blood_groups' ? 8 : 32;
+    $base = preg_replace('/[^a-z0-9]/', '', strtolower($keyPrefix)) ?: 'm';
+    $key = substr($base, 0, max(1, $maxKeyLength - strlen($suffix))).$suffix;
+    $data = [
+        'key' => $key,
+        'label' => $labelPrefix.' '.$suffix,
+        'is_active' => true,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ];
+    if (Schema::hasColumn($table, 'label_en')) {
+        $data['label_en'] = $labelPrefix.' '.$suffix;
+    }
+    if (Schema::hasColumn($table, 'label_mr')) {
+        $data['label_mr'] = 'चाचणी '.$labelPrefix;
+    }
+    if (Schema::hasColumn($table, 'sort_order')) {
+        $data['sort_order'] = 10;
+    }
+
+    return (int) DB::table($table)->insertGetId($data);
+}
+
+function mobileApiProfileTestPhase1AOptions(): array
+{
+    return [
+        'mother_tongue_id' => mobileApiProfileTestMasterOption('master_mother_tongues', 'marathi', 'Marathi'),
+        'complexion_id' => mobileApiProfileTestMasterOption('master_complexions', 'fair', 'Fair'),
+        'blood_group_id' => mobileApiProfileTestMasterOption('master_blood_groups', 'a-positive', 'A+'),
+        'physical_build_id' => mobileApiProfileTestMasterOption('master_physical_builds', 'average', 'Average'),
+    ];
+}
+
 function mobileApiProfileTestSeedCurrentAddressType(): void
 {
     $values = [
@@ -454,24 +490,82 @@ test('MobileProfile GET api v1 genders returns active governed gender options', 
     expect(collect($payload)->pluck('id')->all())->not->toContain($inactive->id);
 });
 
+test('MobileProfile GET api v1 profile basic physical options returns active governed lookups', function () {
+    $user = User::factory()->create(['name' => 'Lookup Account']);
+    Sanctum::actingAs($user);
+    $options = mobileApiProfileTestPhase1AOptions();
+    $inactiveKey = 'inactive'.substr(strtolower(str_replace('.', '', uniqid('', true))), -8);
+    $inactiveId = (int) DB::table('master_complexions')->insertGetId([
+        'key' => $inactiveKey,
+        'label' => 'Inactive Mobile Complexion',
+        'is_active' => false,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $response = $this->getJson('/api/v1/profile/basic-physical-options');
+
+    $response
+        ->assertOk()
+        ->assertJsonStructure([
+            'mother_tongues' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+            'complexions' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+            'blood_groups' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+            'physical_builds' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+            'spectacles_lens' => [
+                '*' => ['key', 'label', 'label_en', 'label_mr'],
+            ],
+            'physical_conditions' => [
+                '*' => ['key', 'label', 'label_en', 'label_mr'],
+            ],
+        ]);
+
+    expect(collect($response->json('mother_tongues'))->pluck('id')->all())->toContain($options['mother_tongue_id']);
+    expect(collect($response->json('complexions'))->pluck('id')->all())->toContain($options['complexion_id']);
+    expect(collect($response->json('complexions'))->pluck('id')->all())->not->toContain($inactiveId);
+    expect(collect($response->json('spectacles_lens'))->pluck('key')->all())->toContain('contact_lens');
+    expect(collect($response->json('physical_conditions'))->pluck('key')->all())->toContain('prefer_not_to_say');
+});
+
 test('MobileProfile POST api v1 matrimony-profile accepts canonical community ids', function () {
     mobileApiProfileTestSeedCurrentAddressType();
     $user = User::factory()->create(['name' => 'Canonical Account']);
     $location = mobileApiProfileTestLeafLocation();
+    $birthCity = mobileApiProfileTestLeafLocation();
     [$religion, $caste, $subCaste] = mobileApiProfileTestCommunity();
     $gender = mobileApiProfileTestGender('female');
+    $phase1A = mobileApiProfileTestPhase1AOptions();
     Sanctum::actingAs($user);
 
     $response = $this->postJson('/api/v1/matrimony-profile', [
         'full_name' => 'Canonical Mobile Candidate',
         'gender_id' => $gender->id,
         'date_of_birth' => '1998-04-15',
+        'birth_time' => '10:30',
+        'birth_city_id' => $birthCity->id,
+        'birth_place_text' => 'Pune',
         'caste' => $caste->label,
         'highest_education' => 'B.E.',
         'location_id' => $location->id,
         'religion_id' => $religion->id,
         'caste_id' => $caste->id,
         'sub_caste_id' => $subCaste->id,
+        'mother_tongue_id' => $phase1A['mother_tongue_id'],
+        'height_cm' => 168,
+        'weight_kg' => 58,
+        'complexion_id' => $phase1A['complexion_id'],
+        'blood_group_id' => $phase1A['blood_group_id'],
+        'physical_build_id' => $phase1A['physical_build_id'],
+        'spectacles_lens' => 'contact_lens',
+        'physical_condition' => 'none',
     ]);
 
     $response
@@ -489,10 +583,26 @@ test('MobileProfile POST api v1 matrimony-profile accepts canonical community id
                 'sub_caste_id' => $subCaste->id,
                 'sub_caste_label' => $subCaste->fresh()->display_label,
                 'location_id' => $location->id,
+                'birth_time' => '10:30',
+                'birth_city_id' => $birthCity->id,
+                'birth_place_text' => 'Pune',
+                'mother_tongue_id' => $phase1A['mother_tongue_id'],
+                'height_cm' => 168,
+                'weight_kg' => 58,
+                'complexion_id' => $phase1A['complexion_id'],
+                'blood_group_id' => $phase1A['blood_group_id'],
+                'physical_build_id' => $phase1A['physical_build_id'],
+                'spectacles_lens' => 'contact_lens',
+                'physical_condition' => 'none',
             ],
         ]);
 
     expect($response->json('profile.location_label'))->toContain('Wakad');
+    expect($response->json('profile.birth_place_label'))->toContain('Wakad');
+    expect($response->json('profile.mother_tongue_label'))->toBeString();
+    expect($response->json('profile.complexion_label'))->toBeString();
+    expect($response->json('profile.blood_group_label'))->toBeString();
+    expect($response->json('profile.physical_build_label'))->toBeString();
 
     $profile = MatrimonyProfile::where('user_id', $user->id)->firstOrFail();
 
@@ -500,6 +610,17 @@ test('MobileProfile POST api v1 matrimony-profile accepts canonical community id
     expect((int) $profile->religion_id)->toBe((int) $religion->id);
     expect((int) $profile->caste_id)->toBe((int) $caste->id);
     expect((int) $profile->sub_caste_id)->toBe((int) $subCaste->id);
+    expect($profile->birth_time)->toBe('10:30');
+    expect((int) $profile->birth_city_id)->toBe((int) $birthCity->id);
+    expect($profile->birth_place_text)->toBe('Pune');
+    expect((int) $profile->mother_tongue_id)->toBe((int) $phase1A['mother_tongue_id']);
+    expect((int) $profile->height_cm)->toBe(168);
+    expect((int) $profile->weight_kg)->toBe(58);
+    expect((int) $profile->complexion_id)->toBe((int) $phase1A['complexion_id']);
+    expect((int) $profile->blood_group_id)->toBe((int) $phase1A['blood_group_id']);
+    expect((int) $profile->physical_build_id)->toBe((int) $phase1A['physical_build_id']);
+    expect($profile->spectacles_lens)->toBe('contact_lens');
+    expect($profile->physical_condition)->toBe('none');
 });
 
 test('MobileProfile POST api v1 matrimony-profile requires governed gender id', function () {
@@ -628,17 +749,30 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
     $user = User::factory()->create(['name' => 'Existing Account']);
     $profile = app(MutationService::class)->createDraftProfileForUser($user);
     $location = mobileApiProfileTestLeafLocation();
+    $birthCity = mobileApiProfileTestLeafLocation();
     $caste = mobileApiProfileTestCaste();
     $gender = mobileApiProfileTestGender('female');
+    $phase1A = mobileApiProfileTestPhase1AOptions();
     Sanctum::actingAs($user);
 
     $response = $this->putJson('/api/v1/matrimony-profile', [
         'full_name' => 'Updated Mobile Candidate',
         'gender_id' => $gender->id,
         'date_of_birth' => '1997-03-20',
+        'birth_time' => '22:15',
+        'birth_city_id' => $birthCity->id,
+        'birth_place_text' => 'Mumbai',
         'caste' => 'Maratha',
         'highest_education' => 'MCA',
         'location_id' => $location->id,
+        'mother_tongue_id' => $phase1A['mother_tongue_id'],
+        'height_cm' => 172,
+        'weight_kg' => 61,
+        'complexion_id' => $phase1A['complexion_id'],
+        'blood_group_id' => $phase1A['blood_group_id'],
+        'physical_build_id' => $phase1A['physical_build_id'],
+        'spectacles_lens' => 'spectacles',
+        'physical_condition' => 'prefer_not_to_say',
     ]);
 
     $response
@@ -652,6 +786,17 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
                 'highest_education' => 'MCA',
                 'caste_id' => $caste->id,
                 'location_id' => $location->id,
+                'birth_time' => '22:15',
+                'birth_city_id' => $birthCity->id,
+                'birth_place_text' => 'Mumbai',
+                'mother_tongue_id' => $phase1A['mother_tongue_id'],
+                'height_cm' => 172,
+                'weight_kg' => 61,
+                'complexion_id' => $phase1A['complexion_id'],
+                'blood_group_id' => $phase1A['blood_group_id'],
+                'physical_build_id' => $phase1A['physical_build_id'],
+                'spectacles_lens' => 'spectacles',
+                'physical_condition' => 'prefer_not_to_say',
             ],
         ]);
 
@@ -663,6 +808,17 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
     expect($profile->highest_education)->toBe('MCA');
     expect((int) $profile->location_id)->toBe((int) $location->id);
     expect((int) $profile->caste_id)->toBe((int) $caste->id);
+    expect($profile->birth_time)->toBe('22:15');
+    expect((int) $profile->birth_city_id)->toBe((int) $birthCity->id);
+    expect($profile->birth_place_text)->toBe('Mumbai');
+    expect((int) $profile->mother_tongue_id)->toBe((int) $phase1A['mother_tongue_id']);
+    expect((int) $profile->height_cm)->toBe(172);
+    expect((int) $profile->weight_kg)->toBe(61);
+    expect((int) $profile->complexion_id)->toBe((int) $phase1A['complexion_id']);
+    expect((int) $profile->blood_group_id)->toBe((int) $phase1A['blood_group_id']);
+    expect((int) $profile->physical_build_id)->toBe((int) $phase1A['physical_build_id']);
+    expect($profile->spectacles_lens)->toBe('spectacles');
+    expect($profile->physical_condition)->toBe('prefer_not_to_say');
     expect(DB::table('profile_field_locks')
         ->where('profile_id', $profile->id)
         ->where('field_key', 'caste_id')
@@ -673,20 +829,33 @@ test('MobileProfile GET api v1 matrimony profile returns clean display payload b
     mobileApiProfileTestSeedCurrentAddressType();
     $user = User::factory()->create(['name' => 'Display Account']);
     $location = mobileApiProfileTestLeafLocation();
+    $birthCity = mobileApiProfileTestLeafLocation();
     [$religion, $caste, $subCaste] = mobileApiProfileTestCommunity();
     $gender = mobileApiProfileTestGender('female');
+    $phase1A = mobileApiProfileTestPhase1AOptions();
     Sanctum::actingAs($user);
 
     $create = $this->postJson('/api/v1/matrimony-profile', [
         'full_name' => 'Display Mobile Candidate',
         'gender_id' => $gender->id,
         'date_of_birth' => '1995-01-05',
+        'birth_time' => '09:45',
+        'birth_city_id' => $birthCity->id,
+        'birth_place_text' => 'Nashik',
         'caste' => $caste->label,
         'highest_education' => 'B.A., B.Com.',
         'location_id' => $location->id,
         'religion_id' => $religion->id,
         'caste_id' => $caste->id,
         'sub_caste_id' => $subCaste->id,
+        'mother_tongue_id' => $phase1A['mother_tongue_id'],
+        'height_cm' => 165,
+        'weight_kg' => 55,
+        'complexion_id' => $phase1A['complexion_id'],
+        'blood_group_id' => $phase1A['blood_group_id'],
+        'physical_build_id' => $phase1A['physical_build_id'],
+        'spectacles_lens' => 'both',
+        'physical_condition' => 'hearing_condition',
     ]);
     $create->assertOk();
 
@@ -698,6 +867,15 @@ test('MobileProfile GET api v1 matrimony profile returns clean display payload b
         ->assertJsonPath('success', true)
         ->assertJsonPath('profile.id', $profile->id)
         ->assertJsonPath('profile.location_id', $location->id)
+        ->assertJsonPath('profile.birth_city_id', $birthCity->id)
+        ->assertJsonPath('profile.mother_tongue_id', $phase1A['mother_tongue_id'])
+        ->assertJsonPath('profile.height_cm', 165)
+        ->assertJsonPath('profile.weight_kg', 55)
+        ->assertJsonPath('profile.complexion_id', $phase1A['complexion_id'])
+        ->assertJsonPath('profile.blood_group_id', $phase1A['blood_group_id'])
+        ->assertJsonPath('profile.physical_build_id', $phase1A['physical_build_id'])
+        ->assertJsonPath('profile.spectacles_lens', 'both')
+        ->assertJsonPath('profile.physical_condition', 'hearing_condition')
         ->assertJsonPath('display.version', 1)
         ->assertJsonStructure([
             'profile',
@@ -715,6 +893,15 @@ test('MobileProfile GET api v1 matrimony profile returns clean display payload b
     $display = $response->json('display');
     expect($display['hero'])->toBeArray();
     expect($display['sections'])->toBeArray()->not->toBeEmpty();
+    expect($response->json('profile.birth_place_label'))->toContain('Wakad');
+    expect($response->json('profile.mother_tongue_label'))->toBeString();
+    expect($response->json('profile.complexion_label'))->toBeString();
+    expect($response->json('profile.blood_group_label'))->toBeString();
+    expect($response->json('profile.physical_build_label'))->toBeString();
+    $basicItems = collect($display['sections'])->firstWhere('key', 'basic')['items'] ?? [];
+    expect(collect($basicItems)->pluck('label')->all())->toContain('Mother Tongue');
+    expect(collect($basicItems)->pluck('label')->all())->toContain('Complexion');
+    expect(collect($basicItems)->pluck('label')->all())->toContain('Physical Build');
 
     foreach ($display['sections'] as $section) {
         expect($section['items'])->toBeArray()->not->toBeEmpty();

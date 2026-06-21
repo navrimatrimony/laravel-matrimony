@@ -38,6 +38,9 @@ class MatrimonyProfileApiController extends Controller
             'full_name',
             'gender_id',
             'date_of_birth',
+            'birth_time',
+            'birth_city_id',
+            'birth_place_text',
             'caste',
             'highest_education',
             'location_id',
@@ -45,6 +48,14 @@ class MatrimonyProfileApiController extends Controller
             'religion_id',
             'caste_id',
             'sub_caste_id',
+            'mother_tongue_id',
+            'height_cm',
+            'weight_kg',
+            'complexion_id',
+            'blood_group_id',
+            'physical_build_id',
+            'spectacles_lens',
+            'physical_condition',
         ];
         foreach ($coreFields as $key) {
             if (! $request->has($key)) {
@@ -66,7 +77,18 @@ class MatrimonyProfileApiController extends Controller
             }
         }
 
-        return ['core' => $core];
+        $snapshot = ['core' => $core];
+
+        if ($request->has('birth_city_id')) {
+            $snapshot['birth_place'] = [
+                'city_id' => $request->input('birth_city_id') ? (int) $request->input('birth_city_id') : null,
+                'taluka_id' => null,
+                'district_id' => null,
+                'state_id' => null,
+            ];
+        }
+
+        return $snapshot;
     }
 
     private function validateMobileProfileRequest(Request $request, bool $creating): void
@@ -85,6 +107,17 @@ class MatrimonyProfileApiController extends Controller
             'religion_id' => ['nullable', 'integer', 'exists:master_religions,id'],
             'caste_id' => ['nullable', 'integer', 'exists:master_castes,id'],
             'sub_caste_id' => ['nullable', 'integer', 'exists:master_sub_castes,id'],
+            'birth_time' => ['nullable', 'string', 'max:20'],
+            'birth_city_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            'birth_place_text' => ['nullable', 'string', 'max:255'],
+            'mother_tongue_id' => ['nullable', 'integer', Rule::exists('master_mother_tongues', 'id')->where('is_active', true)],
+            'height_cm' => ['nullable', 'integer', 'min:50', 'max:250'],
+            'weight_kg' => ['nullable', 'integer', 'min:20', 'max:250'],
+            'complexion_id' => ['nullable', 'integer', Rule::exists('master_complexions', 'id')->where('is_active', true)],
+            'blood_group_id' => ['nullable', 'integer', Rule::exists('master_blood_groups', 'id')->where('is_active', true)],
+            'physical_build_id' => ['nullable', 'integer', Rule::exists('master_physical_builds', 'id')->where('is_active', true)],
+            'spectacles_lens' => ['nullable', 'string', 'max:50', Rule::in(['no', 'spectacles', 'contact_lens', 'both'])],
+            'physical_condition' => ['nullable', 'string', 'max:50', Rule::in(['none', 'physically_challenged', 'hearing_condition', 'vision_condition', 'other', 'prefer_not_to_say'])],
         ];
 
         if (! $creating) {
@@ -676,7 +709,20 @@ class MatrimonyProfileApiController extends Controller
      */
     private function buildGovernanceParityProfilePayload(MatrimonyProfile $profile): array
     {
-        $profile->loadMissing(['user', 'gender', 'horoscope', 'preferenceCriteria', 'religion', 'caste', 'subCaste']);
+        $profile->loadMissing([
+            'user',
+            'gender',
+            'horoscope',
+            'preferenceCriteria',
+            'religion',
+            'caste',
+            'subCaste',
+            'birthCity',
+            'motherTongue',
+            'complexion',
+            'bloodGroup',
+            'physicalBuild',
+        ]);
 
         $hints = $profile->residenceLocationHierarchyHints();
         $geo = $profile->residenceGeoAddressIds();
@@ -685,6 +731,10 @@ class MatrimonyProfileApiController extends Controller
 
         $criteria = $profile->preferenceCriteria;
         $partnerPreferences = $criteria !== null ? $criteria->toArray() : null;
+        $birthPlaceLabel = trim($profile->birthLocationDisplayLine());
+        if ($birthPlaceLabel === '') {
+            $birthPlaceLabel = trim((string) ($profile->birth_place_text ?? ''));
+        }
 
         $base = $profile->toArray();
         $parity = [
@@ -698,18 +748,30 @@ class MatrimonyProfileApiController extends Controller
             'district_id' => $geo['district_id'],
             'taluka_id' => $hints['taluka_id'] !== '' ? (int) $hints['taluka_id'] : null,
             'height_cm' => $profile->height_cm,
+            'weight_kg' => $profile->weight_kg,
+            'birth_time' => $profile->birth_time,
+            'birth_city_id' => $profile->birth_city_id,
+            'birth_place_text' => $profile->birth_place_text,
+            'birth_place_label' => $birthPlaceLabel !== '' ? $birthPlaceLabel : null,
             'religion_id' => $profile->religion_id,
             'religion_label' => $profile->getRelation('religion')?->display_label,
             'caste_label' => $profile->getRelation('caste')?->display_label,
             'sub_caste_label' => $profile->getRelation('subCaste')?->display_label,
             'location_label' => $locationLabel !== '' ? $locationLabel : null,
             'mother_tongue_id' => $profile->mother_tongue_id,
+            'mother_tongue_label' => $this->masterLookupLabel($profile->getRelation('motherTongue')),
             'marital_status_id' => $profile->marital_status_id,
             'occupation_title' => $profile->occupation_title,
             'annual_income' => $profile->annual_income,
             'family_type_id' => $profile->family_type_id,
             'complexion_id' => $profile->complexion_id,
+            'complexion_label' => $this->masterLookupLabel($profile->getRelation('complexion')),
             'blood_group_id' => $profile->blood_group_id,
+            'blood_group_label' => $this->masterLookupLabel($profile->getRelation('bloodGroup')),
+            'physical_build_id' => $profile->physical_build_id,
+            'physical_build_label' => $this->masterLookupLabel($profile->getRelation('physicalBuild')),
+            'spectacles_lens' => $profile->spectacles_lens,
+            'physical_condition' => $profile->physical_condition,
             'profession_id' => $profile->profession_id,
             'income_range_id' => $profile->income_range_id,
             'nakshatra_id' => $horoscope ? $horoscope->nakshatra_id : null,
@@ -725,6 +787,22 @@ class MatrimonyProfileApiController extends Controller
         }
 
         return $profileData;
+    }
+
+    private function masterLookupLabel(mixed $row): ?string
+    {
+        if (! $row) {
+            return null;
+        }
+
+        foreach (['display_label', 'label_mr', 'label_en', 'label', 'name', 'key'] as $key) {
+            $value = trim((string) ($row->getAttribute($key) ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
     }
 
 }
