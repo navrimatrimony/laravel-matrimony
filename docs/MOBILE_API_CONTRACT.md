@@ -240,6 +240,53 @@ Success response: HTTP 200
 }
 ```
 
+### GET `/api/v1/profile/remaining-profile-options`
+
+Requires bearer token. Returns read-only governed options for APK Edit All Family + Horoscope fields. These options reuse existing website wizard master sources and preserve the same source ordering.
+
+Sources:
+
+- `family_types`: `master_family_types` via `App\Models\MasterFamilyType`
+- `occupation_categories`: `master_occupation_categories` via `App\Models\OccupationCategory`
+- `occupations`: `master_occupations` via `App\Models\OccupationMaster`
+- `custom_occupations`: logged-in user's `master_occupation_custom` rows via `App\Models\OccupationCustom`
+- `rashis`: `master_rashis`
+- `nakshatras`: `master_nakshatras`
+- `gans`: `master_gans`
+- `nadis`: `master_nadis`
+- `yonis`: `master_yonis`
+- `mangal_dosh_types`: `master_mangal_dosh_types`
+- `varnas`: `master_varnas`
+- `vashyas`: `master_vashyas`
+- `rashi_lords`: `master_rashi_lords`
+
+Success response: HTTP 200
+
+```json
+{
+  "family_types": [
+    { "id": 1, "key": "joint", "label": "Joint", "label_en": "Joint", "label_mr": "संयुक्त कुटुंब" }
+  ],
+  "occupations": [
+    { "id": 10, "label": "Teacher", "label_en": "Teacher", "label_mr": null, "category_id": 1, "category_label": "Education", "category_label_mr": null }
+  ],
+  "custom_occupations": [],
+  "rashis": [
+    { "id": 1, "key": "mesha", "label": "Mesha (Aries)", "label_en": "Mesha (Aries)", "label_mr": "मेष" }
+  ],
+  "nakshatras": [
+    { "id": 1, "key": "ashwini", "label": "Ashwini", "label_en": "Ashwini", "label_mr": "अश्विनी" }
+  ],
+  "gans": [],
+  "nadis": [],
+  "yonis": [],
+  "mangal_dosh_types": [],
+  "varnas": [],
+  "vashyas": [],
+  "rashi_lords": []
+}
+```
+
 ## Matrimony Profile
 
 All profile mutation goes through the governed mutation layer. The mobile create path creates a draft profile with `MutationService::createDraftProfileForUser()` and applies submitted profile data with `MutationService::applyManualSnapshot()`.
@@ -277,7 +324,35 @@ Request:
   "drinking_status_id": 1,
   "occupation_master_id": 10,
   "company_name": "Navri Tech",
-  "work_location_text": "Pune, Maharashtra"
+  "work_location_text": "Pune, Maharashtra",
+  "father_name": "Father Name",
+  "father_occupation_master_id": 10,
+  "father_extra_info": "Runs a business",
+  "mother_name": "Mother Name",
+  "mother_occupation_master_id": 11,
+  "mother_extra_info": "Homemaker",
+  "family_type_id": 1,
+  "family_status": "Middle class",
+  "family_values": "Traditional",
+  "has_siblings": true,
+  "other_relatives_text": "Relatives settled in Pune",
+  "property_details": "Own house",
+  "rashi_id": 1,
+  "nakshatra_id": 1,
+  "charan": 2,
+  "gan_id": 1,
+  "nadi_id": 1,
+  "yoni_id": 1,
+  "varna_id": 1,
+  "vashya_id": 1,
+  "rashi_lord_id": 1,
+  "mangal_dosh_type_id": 1,
+  "devak": "Devak",
+  "kul": "Kul",
+  "gotra": "Gotra",
+  "navras_name": "Navras",
+  "birth_weekday": "Monday",
+  "narrative_about_me": "Short profile introduction."
 }
 ```
 
@@ -310,6 +385,20 @@ Rules:
 - `occupation_custom_id`: nullable, must exist in `master_occupation_custom.id` for the logged-in user; cannot be sent together with `occupation_master_id`
 - `company_name`: nullable string, max 255
 - `work_location_text`: nullable string, max 255
+- `father_name`, `father_occupation`, `mother_name`, `mother_occupation`: nullable string, max 255
+- `father_occupation_master_id`, `mother_occupation_master_id`: nullable, must exist in `master_occupations.id`
+- `father_occupation_custom_id`, `mother_occupation_custom_id`: nullable, must exist in the logged-in user's `master_occupation_custom.id`; cannot be sent together with the matching master occupation ID
+- `father_extra_info`, `mother_extra_info`: nullable string, max 1000
+- `family_type_id`: nullable, must exist as an active `master_family_types.id`
+- `family_status`, `family_values`: nullable string, max 255
+- `has_siblings`: nullable boolean
+- `other_relatives_text`, `property_details`: nullable string, max 4000
+- `rashi_id`, `nakshatra_id`, `gan_id`, `nadi_id`, `yoni_id`, `mangal_dosh_type_id`: nullable active master IDs
+- `varna_id`, `vashya_id`, `rashi_lord_id`: nullable active Ashtakoota master IDs
+- `charan`: nullable integer, min 1, max 4
+- `devak`, `kul`, `gotra`, `navras_name`: nullable string, max 255
+- `birth_weekday`: nullable string, max 32
+- `narrative_about_me`: nullable string, max 5000
 
 Governance note:
 
@@ -317,6 +406,8 @@ Governance note:
 - When it resolves against existing master caste data, the governed write stores `caste_id`.
 - Raw legacy `caste` text is not a governed write target.
 - Matrimony gender source is `matrimony_profiles.gender_id`; `users.gender` is not a runtime fallback for profile matching, visibility, comparison, or display.
+- Parent contact numbers, sibling contact numbers, relative contact numbers, contact unlock/payment fields, and partner expectations are intentionally not accepted in this mobile contract.
+- Sibling and relative repeaters are intentionally deferred until a row-preserving, privacy-safe mobile contract is added.
 
 Success response: HTTP 200
 
@@ -370,6 +461,46 @@ Success response: HTTP 200
     "company_name": "Navri Tech",
     "work_location_text": "Pune, Maharashtra",
     "work_location_label": "Pune, Maharashtra",
+    "father_name": "Father Name",
+    "father_occupation_master_id": 10,
+    "father_occupation_master_label": "Business",
+    "father_extra_info": "Runs a business",
+    "mother_name": "Mother Name",
+    "mother_occupation_master_id": 11,
+    "mother_occupation_master_label": "Homemaker",
+    "mother_extra_info": "Homemaker",
+    "family_type_id": 1,
+    "family_type_label": "Joint",
+    "family_status": "Middle class",
+    "family_values": "Traditional",
+    "has_siblings": true,
+    "other_relatives_text": "Relatives settled in Pune",
+    "property_details": "Own house",
+    "rashi_id": 1,
+    "rashi_label": "Mesha (Aries)",
+    "nakshatra_id": 1,
+    "nakshatra_label": "Ashwini",
+    "charan": 2,
+    "gan_id": 1,
+    "gan_label": "Dev",
+    "nadi_id": 1,
+    "nadi_label": "Adi",
+    "yoni_id": 1,
+    "yoni_label": "Ashwa",
+    "varna_id": 1,
+    "varna_label": "Brahmin",
+    "vashya_id": 1,
+    "vashya_label": "Manav",
+    "rashi_lord_id": 1,
+    "rashi_lord_label": "Sun",
+    "mangal_dosh_type_id": 1,
+    "mangal_dosh_type_label": "No",
+    "devak": "Devak",
+    "kul": "Kul",
+    "gotra": "Gotra",
+    "navras_name": "Navras",
+    "birth_weekday": "Monday",
+    "narrative_about_me": "Short profile introduction.",
     "profile_photo": null,
     "partner_preferences": null
   }
@@ -482,7 +613,11 @@ Request:
   "drinking_status_id": 1,
   "occupation_master_id": 10,
   "company_name": "Navri Tech",
-  "work_location_text": "Pune, Maharashtra"
+  "work_location_text": "Pune, Maharashtra",
+  "family_type_id": 1,
+  "property_details": "Own house",
+  "rashi_id": 1,
+  "narrative_about_me": "Short profile introduction."
 }
 ```
 
@@ -516,6 +651,8 @@ Rules:
 - `occupation_custom_id`: nullable, must exist in `master_occupation_custom.id` for the logged-in user; cannot be sent together with `occupation_master_id`
 - `company_name`: nullable string, max 255
 - `work_location_text`: nullable string, max 255
+- Family, property, horoscope, and `narrative_about_me` rules are the same as `POST /api/v1/matrimony-profile`.
+- Parent/sibling/relative contact fields and partner expectations are not accepted by this mobile update contract.
 
 Success response: HTTP 200
 

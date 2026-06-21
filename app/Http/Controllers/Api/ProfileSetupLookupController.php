@@ -8,6 +8,13 @@ use App\Models\MasterBloodGroup;
 use App\Models\MasterComplexion;
 use App\Models\MasterDiet;
 use App\Models\MasterDrinkingStatus;
+use App\Models\MasterFamilyType;
+use App\Models\MasterGan;
+use App\Models\MasterMangalDoshType;
+use App\Models\MasterNadi;
+use App\Models\MasterNakshatra;
+use App\Models\MasterRashi;
+use App\Models\MasterYoni;
 use App\Models\MasterMaritalStatus;
 use App\Models\MasterMotherTongue;
 use App\Models\MasterPhysicalBuild;
@@ -18,6 +25,7 @@ use App\Models\OccupationMaster;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -78,6 +86,29 @@ class ProfileSetupLookupController extends Controller
             'diets' => $this->masterOptions(MasterDiet::class, 'master_diets', ['sort_order', 'id']),
             'smoking_statuses' => $this->masterOptions(MasterSmokingStatus::class, 'master_smoking_statuses', ['sort_order', 'id']),
             'drinking_statuses' => $this->masterOptions(MasterDrinkingStatus::class, 'master_drinking_statuses', ['sort_order', 'id']),
+        ]);
+    }
+
+    /**
+     * GET /api/v1/profile/remaining-profile-options
+     * Read-only mobile options for APK Edit All family + horoscope fields.
+     */
+    public function remainingProfileOptions(Request $request): JsonResponse
+    {
+        return response()->json([
+            'family_types' => $this->masterOptions(MasterFamilyType::class, 'master_family_types', ['id']),
+            'occupation_categories' => $this->occupationCategoryOptions(),
+            'occupations' => $this->occupationOptions(),
+            'custom_occupations' => $this->customOccupationOptions((int) $request->user()->id),
+            'rashis' => $this->masterOptions(MasterRashi::class, 'master_rashis', ['id']),
+            'nakshatras' => $this->masterOptions(MasterNakshatra::class, 'master_nakshatras', ['id']),
+            'gans' => $this->masterOptions(MasterGan::class, 'master_gans', ['id']),
+            'nadis' => $this->masterOptions(MasterNadi::class, 'master_nadis', ['id']),
+            'yonis' => $this->masterOptions(MasterYoni::class, 'master_yonis', ['id']),
+            'mangal_dosh_types' => $this->masterOptions(MasterMangalDoshType::class, 'master_mangal_dosh_types', ['id']),
+            'varnas' => $this->tableOptions('master_varnas', ['label', 'id']),
+            'vashyas' => $this->tableOptions('master_vashyas', ['label', 'id']),
+            'rashi_lords' => $this->tableOptions('master_rashi_lords', ['label', 'id']),
         ]);
     }
 
@@ -153,6 +184,52 @@ class ProfileSetupLookupController extends Controller
                     ? ($row->getAttribute('label_en') ?: $row->getAttribute('label'))
                     : $row->getAttribute('label'),
                 'label_mr' => $hasLabelMr ? ($row->getAttribute('label_mr') ?: null) : null,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function tableOptions(string $table, array $orderColumns = ['id']): array
+    {
+        if (! Schema::hasTable($table)) {
+            return [];
+        }
+
+        $hasKey = Schema::hasColumn($table, 'key');
+        $hasLabel = Schema::hasColumn($table, 'label');
+        $hasLabelEn = Schema::hasColumn($table, 'label_en');
+        $hasLabelMr = Schema::hasColumn($table, 'label_mr');
+        $columns = ['id'];
+        if ($hasKey) {
+            $columns[] = 'key';
+        }
+        if ($hasLabel) {
+            $columns[] = 'label';
+        }
+        if ($hasLabelEn) {
+            $columns[] = 'label_en';
+        }
+        if ($hasLabelMr) {
+            $columns[] = 'label_mr';
+        }
+
+        $query = DB::table($table);
+        if (Schema::hasColumn($table, 'is_active')) {
+            $query->where('is_active', true);
+        }
+        $this->applyOptionOrdering($query, $table, $orderColumns);
+
+        return $query
+            ->get($columns)
+            ->map(fn (object $row): array => [
+                'id' => (int) $row->id,
+                'key' => $hasKey ? ($row->key ?? null) : null,
+                'label' => $hasLabel ? ($row->label ?? null) : null,
+                'label_en' => $hasLabelEn ? (($row->label_en ?? null) ?: ($row->label ?? null)) : ($row->label ?? null),
+                'label_mr' => $hasLabelMr ? (($row->label_mr ?? null) ?: null) : null,
             ])
             ->values()
             ->all();

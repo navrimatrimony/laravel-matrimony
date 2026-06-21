@@ -24,6 +24,7 @@ use App\Services\ViewTrackingService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
@@ -34,7 +35,7 @@ class MatrimonyProfileApiController extends Controller
     /**
      * Phase-5B: Build snapshot from API request (same structure as manual). Only keys present in request.
      */
-    private function buildMobileProfileSnapshotFromApi(Request $request): array
+    private function buildMobileProfileSnapshotFromApi(Request $request, ?MatrimonyProfile $profile = null): array
     {
         $this->normalizeMobileEducationCareerInputs($request);
 
@@ -70,6 +71,22 @@ class MatrimonyProfileApiController extends Controller
             'occupation_custom_id',
             'company_name',
             'work_location_text',
+            'father_name',
+            'father_occupation',
+            'father_occupation_master_id',
+            'father_occupation_custom_id',
+            'father_extra_info',
+            'mother_name',
+            'mother_occupation',
+            'mother_occupation_master_id',
+            'mother_occupation_custom_id',
+            'mother_extra_info',
+            'family_type_id',
+            'family_status',
+            'family_values',
+            'has_siblings',
+            'other_relatives_text',
+            'property_details',
         ];
         foreach ($coreFields as $key) {
             if (! $request->has($key)) {
@@ -102,7 +119,82 @@ class MatrimonyProfileApiController extends Controller
             ];
         }
 
+        $horoscope = $this->mobileHoroscopeSnapshotFromApi($request);
+        if ($horoscope !== []) {
+            $snapshot['horoscope'] = [$horoscope];
+        }
+
+        if ($request->has('narrative_about_me')) {
+            $existing = $profile instanceof MatrimonyProfile && Schema::hasTable('profile_extended_attributes')
+                ? DB::table('profile_extended_attributes')->where('profile_id', $profile->id)->first()
+                : null;
+            $snapshot['extended_narrative'] = [[
+                'narrative_about_me' => trim((string) $request->input('narrative_about_me')),
+                'narrative_expectations' => $existing?->narrative_expectations,
+                'additional_notes' => $existing?->additional_notes,
+            ]];
+        }
+
         return $snapshot;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mobileHoroscopeSnapshotFromApi(Request $request): array
+    {
+        $fields = [
+            'rashi_id',
+            'nakshatra_id',
+            'charan',
+            'gan_id',
+            'nadi_id',
+            'yoni_id',
+            'varna_id',
+            'vashya_id',
+            'rashi_lord_id',
+            'mangal_dosh_type_id',
+            'devak',
+            'kul',
+            'gotra',
+            'navras_name',
+            'birth_weekday',
+        ];
+
+        $hasAny = collect($fields)->contains(fn (string $field): bool => $request->has($field));
+        if (! $hasAny) {
+            return [];
+        }
+
+        $intFields = [
+            'rashi_id',
+            'nakshatra_id',
+            'charan',
+            'gan_id',
+            'nadi_id',
+            'yoni_id',
+            'varna_id',
+            'vashya_id',
+            'rashi_lord_id',
+            'mangal_dosh_type_id',
+        ];
+
+        $row = [];
+        foreach ($fields as $field) {
+            if (! $request->has($field)) {
+                continue;
+            }
+            $value = $request->input($field);
+            if ($value === '') {
+                $row[$field] = null;
+                continue;
+            }
+            $row[$field] = in_array($field, $intFields, true)
+                ? ($value !== null ? (int) $value : null)
+                : trim((string) $value);
+        }
+
+        return $row;
     }
 
     private function validateMobileProfileRequest(Request $request, bool $creating): void
@@ -148,6 +240,46 @@ class MatrimonyProfileApiController extends Controller
             ],
             'company_name' => ['nullable', 'string', 'max:255'],
             'work_location_text' => ['nullable', 'string', 'max:255'],
+            'father_name' => ['nullable', 'string', 'max:255'],
+            'father_occupation' => ['nullable', 'string', 'max:255'],
+            'father_occupation_master_id' => ['nullable', 'integer', Rule::exists('master_occupations', 'id')],
+            'father_occupation_custom_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('master_occupation_custom', 'id')->where(fn ($query) => $query->where('user_id', $request->user()?->id ?? 0)),
+            ],
+            'father_extra_info' => ['nullable', 'string', 'max:1000'],
+            'mother_name' => ['nullable', 'string', 'max:255'],
+            'mother_occupation' => ['nullable', 'string', 'max:255'],
+            'mother_occupation_master_id' => ['nullable', 'integer', Rule::exists('master_occupations', 'id')],
+            'mother_occupation_custom_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('master_occupation_custom', 'id')->where(fn ($query) => $query->where('user_id', $request->user()?->id ?? 0)),
+            ],
+            'mother_extra_info' => ['nullable', 'string', 'max:1000'],
+            'family_type_id' => ['nullable', 'integer', Rule::exists('master_family_types', 'id')->where('is_active', true)],
+            'family_status' => ['nullable', 'string', 'max:255'],
+            'family_values' => ['nullable', 'string', 'max:255'],
+            'has_siblings' => ['nullable', 'boolean'],
+            'other_relatives_text' => ['nullable', 'string', 'max:4000'],
+            'property_details' => ['nullable', 'string', 'max:4000'],
+            'rashi_id' => ['nullable', 'integer', Rule::exists('master_rashis', 'id')->where('is_active', true)],
+            'nakshatra_id' => ['nullable', 'integer', Rule::exists('master_nakshatras', 'id')->where('is_active', true)],
+            'charan' => ['nullable', 'integer', 'min:1', 'max:4'],
+            'gan_id' => ['nullable', 'integer', Rule::exists('master_gans', 'id')->where('is_active', true)],
+            'nadi_id' => ['nullable', 'integer', Rule::exists('master_nadis', 'id')->where('is_active', true)],
+            'yoni_id' => ['nullable', 'integer', Rule::exists('master_yonis', 'id')->where('is_active', true)],
+            'varna_id' => ['nullable', 'integer', Rule::exists('master_varnas', 'id')->where('is_active', true)],
+            'vashya_id' => ['nullable', 'integer', Rule::exists('master_vashyas', 'id')->where('is_active', true)],
+            'rashi_lord_id' => ['nullable', 'integer', Rule::exists('master_rashi_lords', 'id')->where('is_active', true)],
+            'mangal_dosh_type_id' => ['nullable', 'integer', Rule::exists('master_mangal_dosh_types', 'id')->where('is_active', true)],
+            'devak' => ['nullable', 'string', 'max:255'],
+            'kul' => ['nullable', 'string', 'max:255'],
+            'gotra' => ['nullable', 'string', 'max:255'],
+            'navras_name' => ['nullable', 'string', 'max:255'],
+            'birth_weekday' => ['nullable', 'string', 'max:32'],
+            'narrative_about_me' => ['nullable', 'string', 'max:5000'],
         ];
 
         if (! $creating) {
@@ -161,6 +293,10 @@ class MatrimonyProfileApiController extends Controller
             $subCasteId = $request->input('sub_caste_id');
             $occupationMasterId = $request->input('occupation_master_id');
             $occupationCustomId = $request->input('occupation_custom_id');
+            $fatherOccupationMasterId = $request->input('father_occupation_master_id');
+            $fatherOccupationCustomId = $request->input('father_occupation_custom_id');
+            $motherOccupationMasterId = $request->input('mother_occupation_master_id');
+            $motherOccupationCustomId = $request->input('mother_occupation_custom_id');
 
             if ($religionId !== null && $religionId !== '' && $casteId !== null && $casteId !== '') {
                 $casteReligionId = Caste::query()->whereKey((int) $casteId)->value('religion_id');
@@ -178,6 +314,14 @@ class MatrimonyProfileApiController extends Controller
 
             if ($occupationMasterId !== null && $occupationMasterId !== '' && $occupationCustomId !== null && $occupationCustomId !== '') {
                 $validator->errors()->add('occupation_custom_id', 'Select either a listed occupation or a custom occupation, not both.');
+            }
+
+            if ($fatherOccupationMasterId !== null && $fatherOccupationMasterId !== '' && $fatherOccupationCustomId !== null && $fatherOccupationCustomId !== '') {
+                $validator->errors()->add('father_occupation_custom_id', 'Select either a listed father occupation or a custom father occupation, not both.');
+            }
+
+            if ($motherOccupationMasterId !== null && $motherOccupationMasterId !== '' && $motherOccupationCustomId !== null && $motherOccupationCustomId !== '') {
+                $validator->errors()->add('mother_occupation_custom_id', 'Select either a listed mother occupation or a custom mother occupation, not both.');
             }
 
             if ($request->has('education_slots') && $request->filled('education_slots')) {
@@ -206,6 +350,12 @@ class MatrimonyProfileApiController extends Controller
         if (Schema::hasColumn('matrimony_profiles', 'occupation_master_id')
             && ($request->filled('occupation_master_id') || $request->filled('occupation_custom_id'))) {
             app(OccupationService::class)->mergeOccupationIntoRequest($request);
+        }
+
+        if (Schema::hasColumn('matrimony_profiles', 'father_occupation_master_id')
+            && ($request->filled('father_occupation_master_id') || $request->filled('father_occupation_custom_id')
+                || $request->filled('mother_occupation_master_id') || $request->filled('mother_occupation_custom_id'))) {
+            app(OccupationService::class)->mergeParentOccupationTextIntoRequest($request);
         }
     }
 
@@ -282,7 +432,7 @@ class MatrimonyProfileApiController extends Controller
 
         $mutation = app(MutationService::class);
         $profile = $mutation->createDraftProfileForUser($user);
-        $snapshot = $this->buildMobileProfileSnapshotFromApi($request);
+        $snapshot = $this->buildMobileProfileSnapshotFromApi($request, $profile);
         $mutation->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
 
         $profileData = $this->buildGovernanceParityProfilePayload($profile->fresh(['user', 'horoscope', 'preferenceCriteria']));
@@ -357,8 +507,8 @@ class MatrimonyProfileApiController extends Controller
         }
 
         // Phase-5B: All updates via MutationService (source=manual, profile_change_history)
-        $snapshot = $this->buildMobileProfileSnapshotFromApi($request);
-        if (! empty($snapshot['core'])) {
+        $snapshot = $this->buildMobileProfileSnapshotFromApi($request, $profile);
+        if ($this->mobileSnapshotHasWritableData($snapshot)) {
             $changedFields = $this->lockKeysForMobileSnapshot($snapshot['core']);
             ProfileFieldLockService::removeActorOwnedLocks($profile, $changedFields, $user);
             app(MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
@@ -374,6 +524,17 @@ class MatrimonyProfileApiController extends Controller
             'message' => 'Matrimony profile updated',
             'profile' => $profileData,
         ]);
+    }
+
+    private function mobileSnapshotHasWritableData(array $snapshot): bool
+    {
+        foreach ($snapshot as $value) {
+            if (is_array($value) && $value !== []) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -830,6 +991,17 @@ class MatrimonyProfileApiController extends Controller
             'drinkingStatus',
             'occupationMaster.category',
             'occupationCustom',
+            'familyType',
+            'fatherOccupationMaster',
+            'fatherOccupationCustom',
+            'motherOccupationMaster',
+            'motherOccupationCustom',
+            'horoscope.rashi',
+            'horoscope.nakshatra',
+            'horoscope.gan',
+            'horoscope.nadi',
+            'horoscope.yoni',
+            'horoscope.mangalDoshType',
         ]);
 
         $hints = $profile->residenceLocationHierarchyHints();
@@ -895,20 +1067,113 @@ class MatrimonyProfileApiController extends Controller
             'company_name' => $profile->company_name,
             'work_location_text' => $profile->work_location_text,
             'work_location_label' => trim($profile->workLocationDisplayLine()) ?: null,
+            'father_name' => $profile->father_name,
+            'father_occupation' => $profile->father_occupation,
+            'father_occupation_master_id' => $profile->father_occupation_master_id,
+            'father_occupation_master_label' => $this->masterLookupLabel($profile->getRelation('fatherOccupationMaster')),
+            'father_occupation_custom_id' => $profile->father_occupation_custom_id,
+            'father_occupation_custom_label' => $this->masterLookupLabel($profile->getRelation('fatherOccupationCustom')),
+            'father_extra_info' => $profile->father_extra_info,
+            'mother_name' => $profile->mother_name,
+            'mother_occupation' => $profile->mother_occupation,
+            'mother_occupation_master_id' => $profile->mother_occupation_master_id,
+            'mother_occupation_master_label' => $this->masterLookupLabel($profile->getRelation('motherOccupationMaster')),
+            'mother_occupation_custom_id' => $profile->mother_occupation_custom_id,
+            'mother_occupation_custom_label' => $this->masterLookupLabel($profile->getRelation('motherOccupationCustom')),
+            'mother_extra_info' => $profile->mother_extra_info,
+            'family_type_id' => $profile->family_type_id,
+            'family_type_label' => $this->masterLookupLabel($profile->getRelation('familyType')),
+            'family_status' => $profile->family_status,
+            'family_values' => $profile->family_values,
+            'has_siblings' => $profile->has_siblings,
+            'other_relatives_text' => $profile->other_relatives_text,
+            'property_details' => $profile->property_details,
             'income_range_id' => $profile->income_range_id,
             'nakshatra_id' => $horoscope ? $horoscope->nakshatra_id : null,
+            'nakshatra_label' => $this->masterLookupLabel($horoscope?->nakshatra),
             'rashi_id' => $horoscope ? $horoscope->rashi_id : null,
+            'rashi_label' => $this->masterLookupLabel($horoscope?->rashi),
+            'charan' => $horoscope ? $horoscope->charan : null,
+            'gan_id' => $horoscope ? $horoscope->gan_id : null,
+            'gan_label' => $this->masterLookupLabel($horoscope?->gan),
+            'nadi_id' => $horoscope ? $horoscope->nadi_id : null,
+            'nadi_label' => $this->masterLookupLabel($horoscope?->nadi),
+            'yoni_id' => $horoscope ? $horoscope->yoni_id : null,
+            'yoni_label' => $this->masterLookupLabel($horoscope?->yoni),
+            'varna_id' => $horoscope ? $horoscope->varna_id : null,
+            'varna_label' => $this->masterTableLookupLabel('master_varnas', $horoscope?->varna_id),
+            'vashya_id' => $horoscope ? $horoscope->vashya_id : null,
+            'vashya_label' => $this->masterTableLookupLabel('master_vashyas', $horoscope?->vashya_id),
+            'rashi_lord_id' => $horoscope ? $horoscope->rashi_lord_id : null,
+            'rashi_lord_label' => $this->masterTableLookupLabel('master_rashi_lords', $horoscope?->rashi_lord_id),
             'mangal_dosh_type_id' => $horoscope ? $horoscope->mangal_dosh_type_id : null,
+            'mangal_dosh_type_label' => $this->masterLookupLabel($horoscope?->mangalDoshType),
+            'devak' => $horoscope ? $horoscope->devak : null,
+            'kul' => $horoscope ? $horoscope->kul : null,
+            'gotra' => $horoscope ? $horoscope->gotra : null,
+            'navras_name' => $horoscope ? $horoscope->navras_name : null,
+            'birth_weekday' => $horoscope ? $horoscope->birth_weekday : null,
+            'narrative_about_me' => $this->profileNarrativeAboutMe($profile),
             'partner_preferences' => $partnerPreferences,
         ];
 
         $profileData = array_merge($base, $parity);
+        foreach ([
+            'user',
+            'contact_number',
+            'primary_contact_number',
+            'father_contact_1',
+            'father_contact_2',
+            'father_contact_3',
+            'mother_contact_1',
+            'mother_contact_2',
+            'mother_contact_3',
+        ] as $privateKey) {
+            unset($profileData[$privateKey]);
+        }
 
         if ($profile->photo_approved === false || ! $profile->profile_photo) {
             $profileData['profile_photo'] = null;
         }
 
         return $profileData;
+    }
+
+    private function profileNarrativeAboutMe(MatrimonyProfile $profile): ?string
+    {
+        if (! Schema::hasTable('profile_extended_attributes')) {
+            return null;
+        }
+
+        $value = DB::table('profile_extended_attributes')
+            ->where('profile_id', $profile->id)
+            ->value('narrative_about_me');
+        $value = trim((string) ($value ?? ''));
+
+        return $value !== '' ? $value : null;
+    }
+
+    private function masterTableLookupLabel(string $table, mixed $id): ?string
+    {
+        if ($id === null || $id === '' || ! Schema::hasTable($table)) {
+            return null;
+        }
+
+        $row = DB::table($table)->where('id', (int) $id)->first();
+        if (! $row) {
+            return null;
+        }
+
+        foreach (['display_label', 'label_mr', 'label_en', 'label', 'name', 'raw_name', 'key'] as $key) {
+            if (property_exists($row, $key)) {
+                $value = trim((string) ($row->{$key} ?? ''));
+                if ($value !== '') {
+                    return $value;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function masterLookupLabel(mixed $row): ?string

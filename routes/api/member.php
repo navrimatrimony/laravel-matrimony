@@ -78,4 +78,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile/basic-physical-options', [ProfileSetupLookupController::class, 'basicPhysicalOptions']);
     Route::get('/profile/education-career-options', [ProfileSetupLookupController::class, 'educationCareerOptions']);
     Route::get('/profile/marital-lifestyle-options', [ProfileSetupLookupController::class, 'maritalLifestyleOptions']);
+    Route::get('/profile/remaining-profile-options', [ProfileSetupLookupController::class, 'remainingProfileOptions']);
 });

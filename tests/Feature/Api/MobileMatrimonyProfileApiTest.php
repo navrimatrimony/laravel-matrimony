@@ -261,6 +261,31 @@ function mobileApiProfileTestKnownMaritalStatus(string $key, string $label): int
     return (int) DB::table('master_marital_statuses')->where('key', $key)->value('id');
 }
 
+function mobileApiProfileTestKnownMasterOption(string $table, string $key, string $label, array $overrides = []): int
+{
+    $data = [
+        'label' => $label,
+        'is_active' => true,
+        'updated_at' => now(),
+    ];
+    if (Schema::hasColumn($table, 'label_en')) {
+        $data['label_en'] = $label;
+    }
+    if (Schema::hasColumn($table, 'label_mr')) {
+        $data['label_mr'] = $label;
+    }
+    if (Schema::hasColumn($table, 'sort_order')) {
+        $data['sort_order'] = 10;
+    }
+
+    DB::table($table)->updateOrInsert(
+        ['key' => $key],
+        array_merge($data, ['created_at' => now()], $overrides)
+    );
+
+    return (int) DB::table($table)->where('key', $key)->value('id');
+}
+
 function mobileApiProfileAssertIdBefore(array $ids, int $firstId, int $secondId): void
 {
     $firstIndex = array_search($firstId, $ids, true);
@@ -288,6 +313,26 @@ function mobileApiProfileTestMaritalLifestyleOptions(): array
         'diet_id' => mobileApiProfileTestMasterOption('master_diets', 'vegetarian', 'Vegetarian'),
         'smoking_status_id' => mobileApiProfileTestMasterOption('master_smoking_statuses', 'non-smoker', 'Non-smoker'),
         'drinking_status_id' => mobileApiProfileTestMasterOption('master_drinking_statuses', 'non-drinker', 'Non-drinker'),
+    ];
+}
+
+function mobileApiProfileTestPhase4AOptions(): array
+{
+    $nakshatraOverrides = Schema::hasColumn('master_nakshatras', 'nakshatra_number')
+        ? ['nakshatra_number' => random_int(100, 999)]
+        : [];
+
+    return [
+        'family_type_id' => mobileApiProfileTestMasterOption('master_family_types', 'joint', 'Joint Family'),
+        'rashi_id' => mobileApiProfileTestKnownMasterOption('master_rashis', 'mesha', 'Mesha'),
+        'nakshatra_id' => mobileApiProfileTestKnownMasterOption('master_nakshatras', 'ashwini', 'Ashwini', $nakshatraOverrides),
+        'gan_id' => mobileApiProfileTestKnownMasterOption('master_gans', 'deva', 'Deva'),
+        'nadi_id' => mobileApiProfileTestKnownMasterOption('master_nadis', 'adi', 'Adi Nadi'),
+        'yoni_id' => mobileApiProfileTestKnownMasterOption('master_yonis', 'horse', 'Horse'),
+        'varna_id' => mobileApiProfileTestKnownMasterOption('master_varnas', 'brahmin', 'Brahmin'),
+        'vashya_id' => mobileApiProfileTestKnownMasterOption('master_vashyas', 'manav', 'Manav'),
+        'rashi_lord_id' => mobileApiProfileTestKnownMasterOption('master_rashi_lords', 'sun', 'Sun'),
+        'mangal_dosh_type_id' => mobileApiProfileTestKnownMasterOption('master_mangal_dosh_types', 'none', 'No Mangal Dosh'),
     ];
 }
 
@@ -702,6 +747,51 @@ test('MobileProfile GET api v1 profile marital lifestyle options returns governe
     mobileApiProfileAssertIdBefore(collect($response->json('diets'))->pluck('id')->all(), $dietFirst, $dietSecond);
     expect(collect($response->json('smoking_statuses'))->pluck('id')->all())->toContain($options['smoking_status_id']);
     expect(collect($response->json('drinking_statuses'))->pluck('id')->all())->toContain($options['drinking_status_id']);
+});
+
+test('MobileProfile GET api v1 profile remaining options returns family and horoscope lookups', function () {
+    $user = User::factory()->create(['name' => 'Remaining Lookup Account']);
+    Sanctum::actingAs($user);
+    $options = mobileApiProfileTestPhase4AOptions();
+    $familyFirst = mobileApiProfileTestMasterOption('master_family_types', 'zfamily', 'Zulu Source Family');
+    $familySecond = mobileApiProfileTestMasterOption('master_family_types', 'afamily', 'Alpha Source Family');
+    $varnaFirst = mobileApiProfileTestMasterOption('master_varnas', 'zvarna', 'Zulu Source Varna');
+    $varnaSecond = mobileApiProfileTestMasterOption('master_varnas', 'avarna', 'Alpha Source Varna');
+
+    $response = $this->getJson('/api/v1/profile/remaining-profile-options');
+
+    $response
+        ->assertOk()
+        ->assertJsonStructure([
+            'family_types' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+            'occupation_categories',
+            'occupations',
+            'custom_occupations',
+            'rashis' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+            'nakshatras' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+            'gans',
+            'nadis',
+            'yonis',
+            'mangal_dosh_types',
+            'varnas' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+            'vashyas',
+            'rashi_lords',
+        ]);
+
+    expect(collect($response->json('family_types'))->pluck('id')->all())->toContain($options['family_type_id']);
+    expect(collect($response->json('rashis'))->pluck('id')->all())->toContain($options['rashi_id']);
+    expect(collect($response->json('nakshatras'))->pluck('id')->all())->toContain($options['nakshatra_id']);
+    expect(collect($response->json('mangal_dosh_types'))->pluck('id')->all())->toContain($options['mangal_dosh_type_id']);
+    mobileApiProfileAssertIdBefore(collect($response->json('family_types'))->pluck('id')->all(), $familyFirst, $familySecond);
+    mobileApiProfileAssertIdBefore(collect($response->json('varnas'))->pluck('id')->all(), $varnaSecond, $varnaFirst);
 });
 
 test('MobileProfile POST api v1 matrimony-profile accepts canonical community ids', function () {
@@ -1211,6 +1301,130 @@ test('MobileProfile PUT api v1 matrimony-profile accepts education career fields
     expect($profile->work_location_text)->toBe('Pune, Maharashtra');
 });
 
+test('MobileProfile PUT api v1 matrimony-profile accepts remaining edit all scalar fields through MutationService', function () {
+    mobileApiProfileTestSeedCurrentAddressType();
+    $user = User::factory()->create(['name' => 'Remaining Edit Account']);
+    $profile = app(MutationService::class)->createDraftProfileForUser($user);
+    $location = mobileApiProfileTestLeafLocation();
+    $caste = mobileApiProfileTestCaste();
+    $gender = mobileApiProfileTestGender('female');
+    $options = mobileApiProfileTestPhase4AOptions();
+    $fatherOccupation = mobileApiProfileTestOccupationMaster('Father Business');
+    $motherOccupation = mobileApiProfileTestOccupationMaster('Mother Teacher');
+    Sanctum::actingAs($user);
+
+    $response = $this->putJson('/api/v1/matrimony-profile', [
+        'full_name' => 'Remaining Updated Candidate',
+        'gender_id' => $gender->id,
+        'date_of_birth' => '1997-03-20',
+        'caste' => 'Maratha',
+        'highest_education' => 'B.Com.',
+        'location_id' => $location->id,
+        'father_name' => 'Father Person',
+        'father_occupation_master_id' => $fatherOccupation->id,
+        'father_extra_info' => 'Runs a family business',
+        'mother_name' => 'Mother Person',
+        'mother_occupation_master_id' => $motherOccupation->id,
+        'mother_extra_info' => 'Works in education',
+        'family_type_id' => $options['family_type_id'],
+        'family_status' => 'Middle class',
+        'family_values' => 'Traditional',
+        'has_siblings' => true,
+        'other_relatives_text' => 'Relatives are settled in Pune.',
+        'property_details' => 'Own house and farm land.',
+        'rashi_id' => $options['rashi_id'],
+        'nakshatra_id' => $options['nakshatra_id'],
+        'charan' => 2,
+        'gan_id' => $options['gan_id'],
+        'nadi_id' => $options['nadi_id'],
+        'yoni_id' => $options['yoni_id'],
+        'varna_id' => $options['varna_id'],
+        'vashya_id' => $options['vashya_id'],
+        'rashi_lord_id' => $options['rashi_lord_id'],
+        'mangal_dosh_type_id' => $options['mangal_dosh_type_id'],
+        'devak' => 'Audumbar',
+        'kul' => 'Kuldaivat',
+        'gotra' => 'Kashyap',
+        'navras_name' => 'Navras Name',
+        'birth_weekday' => 'Monday',
+        'narrative_about_me' => 'I value family, education, and mutual respect.',
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('profile.father_name', 'Father Person')
+        ->assertJsonPath('profile.father_occupation_master_id', $fatherOccupation->id)
+        ->assertJsonPath('profile.father_occupation_master_label', $fatherOccupation->name)
+        ->assertJsonPath('profile.mother_name', 'Mother Person')
+        ->assertJsonPath('profile.mother_occupation_master_id', $motherOccupation->id)
+        ->assertJsonPath('profile.mother_occupation_master_label', $motherOccupation->name)
+        ->assertJsonPath('profile.family_type_id', $options['family_type_id'])
+        ->assertJsonPath('profile.family_status', 'Middle class')
+        ->assertJsonPath('profile.family_values', 'Traditional')
+        ->assertJsonPath('profile.has_siblings', true)
+        ->assertJsonPath('profile.other_relatives_text', 'Relatives are settled in Pune.')
+        ->assertJsonPath('profile.property_details', 'Own house and farm land.')
+        ->assertJsonPath('profile.rashi_id', $options['rashi_id'])
+        ->assertJsonPath('profile.nakshatra_id', $options['nakshatra_id'])
+        ->assertJsonPath('profile.charan', 2)
+        ->assertJsonPath('profile.gan_id', $options['gan_id'])
+        ->assertJsonPath('profile.nadi_id', $options['nadi_id'])
+        ->assertJsonPath('profile.yoni_id', $options['yoni_id'])
+        ->assertJsonPath('profile.varna_id', $options['varna_id'])
+        ->assertJsonPath('profile.vashya_id', $options['vashya_id'])
+        ->assertJsonPath('profile.rashi_lord_id', $options['rashi_lord_id'])
+        ->assertJsonPath('profile.mangal_dosh_type_id', $options['mangal_dosh_type_id'])
+        ->assertJsonPath('profile.devak', 'Audumbar')
+        ->assertJsonPath('profile.kul', 'Kuldaivat')
+        ->assertJsonPath('profile.gotra', 'Kashyap')
+        ->assertJsonPath('profile.navras_name', 'Navras Name')
+        ->assertJsonPath('profile.birth_weekday', 'Monday')
+        ->assertJsonPath('profile.narrative_about_me', 'I value family, education, and mutual respect.');
+
+    $profile->refresh();
+    $horoscope = DB::table('profile_horoscope_data')->where('profile_id', $profile->id)->first();
+    $extended = DB::table('profile_extended_attributes')->where('profile_id', $profile->id)->first();
+
+    expect((int) $profile->gender_id)->toBe((int) $gender->id);
+    expect((int) $profile->caste_id)->toBe((int) $caste->id);
+    expect((int) $profile->location_id)->toBe((int) $location->id);
+    expect($profile->father_name)->toBe('Father Person');
+    expect((int) $profile->father_occupation_master_id)->toBe((int) $fatherOccupation->id);
+    expect($profile->mother_name)->toBe('Mother Person');
+    expect((int) $profile->mother_occupation_master_id)->toBe((int) $motherOccupation->id);
+    expect((int) $profile->family_type_id)->toBe((int) $options['family_type_id']);
+    expect($profile->family_status)->toBe('Middle class');
+    expect($profile->family_values)->toBe('Traditional');
+    expect((bool) $profile->has_siblings)->toBeTrue();
+    expect($profile->other_relatives_text)->toBe('Relatives are settled in Pune.');
+    expect($profile->property_details)->toBe('Own house and farm land.');
+    expect((int) $horoscope->rashi_id)->toBe((int) $options['rashi_id']);
+    expect((int) $horoscope->nakshatra_id)->toBe((int) $options['nakshatra_id']);
+    expect((int) $horoscope->charan)->toBe(2);
+    expect((int) $horoscope->gan_id)->toBe((int) $options['gan_id']);
+    expect((int) $horoscope->nadi_id)->toBe((int) $options['nadi_id']);
+    expect((int) $horoscope->yoni_id)->toBe((int) $options['yoni_id']);
+    expect((int) $horoscope->varna_id)->toBe((int) $options['varna_id']);
+    expect((int) $horoscope->vashya_id)->toBe((int) $options['vashya_id']);
+    expect((int) $horoscope->rashi_lord_id)->toBe((int) $options['rashi_lord_id']);
+    expect((int) $horoscope->mangal_dosh_type_id)->toBe((int) $options['mangal_dosh_type_id']);
+    expect($horoscope->devak)->toBe('Audumbar');
+    expect($horoscope->kul)->toBe('Kuldaivat');
+    expect($horoscope->gotra)->toBe('Kashyap');
+    expect($horoscope->navras_name)->toBe('Navras Name');
+    expect($horoscope->birth_weekday)->toBe('Monday');
+    expect($extended->narrative_about_me)->toBe('I value family, education, and mutual respect.');
+    expect($response->json('profile'))->not->toHaveKeys([
+        'father_contact_1',
+        'father_contact_2',
+        'father_contact_3',
+        'mother_contact_1',
+        'mother_contact_2',
+        'mother_contact_3',
+    ]);
+});
+
 test('MobileProfile PUT api v1 matrimony-profile rejects invalid education career ids', function () {
     $user = User::factory()->create(['name' => 'Invalid Career Account']);
     app(MutationService::class)->createDraftProfileForUser($user);
@@ -1239,6 +1453,35 @@ test('MobileProfile PUT api v1 matrimony-profile rejects invalid marital lifesty
     Sanctum::actingAs($user);
 
     foreach (['marital_status_id', 'diet_id', 'smoking_status_id', 'drinking_status_id'] as $field) {
+        $this->putJson('/api/v1/matrimony-profile', [
+            'gender_id' => $gender->id,
+            $field => 999999999,
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors([$field]);
+    }
+});
+
+test('MobileProfile PUT api v1 matrimony-profile rejects invalid remaining edit all ids', function () {
+    $user = User::factory()->create(['name' => 'Invalid Remaining Account']);
+    app(MutationService::class)->createDraftProfileForUser($user);
+    $gender = mobileApiProfileTestGender('female');
+    Sanctum::actingAs($user);
+
+    foreach ([
+        'family_type_id',
+        'father_occupation_master_id',
+        'mother_occupation_master_id',
+        'rashi_id',
+        'nakshatra_id',
+        'gan_id',
+        'nadi_id',
+        'yoni_id',
+        'varna_id',
+        'vashya_id',
+        'rashi_lord_id',
+        'mangal_dosh_type_id',
+    ] as $field) {
         $this->putJson('/api/v1/matrimony-profile', [
             'gender_id' => $gender->id,
             $field => 999999999,

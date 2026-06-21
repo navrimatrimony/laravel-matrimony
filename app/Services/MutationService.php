@@ -2149,22 +2149,28 @@ class MutationService
         $mapped = $row;
         $engine = app(\App\Services\ControlledOptions\ControlledOptionEngine::class);
         $fieldMap = [
-            'rashi' => ['col' => 'rashi_id', 'field_key' => 'horoscope.rashi'],
-            'nakshatra' => ['col' => 'nakshatra_id', 'field_key' => 'horoscope.nakshatra'],
-            'gan' => ['col' => 'gan_id', 'field_key' => 'horoscope.gan'],
-            'nadi' => ['col' => 'nadi_id', 'field_key' => 'horoscope.nadi'],
-            'mangal_dosh_type' => ['col' => 'mangal_dosh_type_id', 'field_key' => 'horoscope.mangal_dosh_type'],
-            'yoni' => ['col' => 'yoni_id', 'field_key' => 'horoscope.yoni'],
+            'rashi' => ['col' => 'rashi_id', 'field_key' => 'horoscope.rashi', 'table' => 'master_rashis'],
+            'nakshatra' => ['col' => 'nakshatra_id', 'field_key' => 'horoscope.nakshatra', 'table' => 'master_nakshatras'],
+            'gan' => ['col' => 'gan_id', 'field_key' => 'horoscope.gan', 'table' => 'master_gans'],
+            'nadi' => ['col' => 'nadi_id', 'field_key' => 'horoscope.nadi', 'table' => 'master_nadis'],
+            'mangal_dosh_type' => ['col' => 'mangal_dosh_type_id', 'field_key' => 'horoscope.mangal_dosh_type', 'table' => 'master_mangal_dosh_types'],
+            'yoni' => ['col' => 'yoni_id', 'field_key' => 'horoscope.yoni', 'table' => 'master_yonis'],
+            'varna' => ['col' => 'varna_id', 'field_key' => null, 'table' => 'master_varnas'],
+            'vashya' => ['col' => 'vashya_id', 'field_key' => null, 'table' => 'master_vashyas'],
+            'rashi_lord' => ['col' => 'rashi_lord_id', 'field_key' => null, 'table' => 'master_rashi_lords'],
         ];
         foreach ($fieldMap as $strKey => $meta) {
             $idCol = $meta['col'];
             $fieldKey = $meta['field_key'];
+            $table = $meta['table'];
             $val = $mapped[$idCol] ?? $mapped[$strKey] ?? null;
-            if ($val !== null && ! is_numeric($val)) {
+            if ($val === '') {
+                $mapped[$idCol] = null;
+            } elseif ($val !== null && is_numeric($val)) {
+                $mapped[$idCol] = $engine->resolveActiveMasterId($table, $val);
+            } elseif ($val !== null && $fieldKey !== null) {
                 $res = $engine->resolveKey($fieldKey, (string) $val);
                 $mapped[$idCol] = $res['matched'] ? $res['id'] : null;
-            } elseif (isset($mapped[$idCol]) && is_numeric($mapped[$idCol])) {
-                $mapped[$idCol] = $engine->resolveId($fieldKey, $mapped[$idCol]);
             }
             unset($mapped[$strKey]);
         }
