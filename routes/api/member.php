@@ -76,4 +76,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/sub-castes', [CasteLookupController::class, 'getSubCastes']); // GET ?caste_id=&q=
     Route::post('/sub-castes', [CasteLookupController::class, 'createSubCaste']);
     Route::get('/profile/basic-physical-options', [ProfileSetupLookupController::class, 'basicPhysicalOptions']);
+    Route::get('/profile/education-career-options', [ProfileSetupLookupController::class, 'educationCareerOptions']);
 });

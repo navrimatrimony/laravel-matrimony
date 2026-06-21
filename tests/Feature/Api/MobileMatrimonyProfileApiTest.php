@@ -9,6 +9,9 @@ use App\Models\Interest;
 use App\Models\Location;
 use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
+use App\Models\OccupationCategory;
+use App\Models\OccupationCustom;
+use App\Models\OccupationMaster;
 use App\Models\ProfilePhoto;
 use App\Models\ProfileView;
 use App\Models\Religion;
@@ -243,6 +246,36 @@ function mobileApiProfileTestPhase1AOptions(): array
         'blood_group_id' => mobileApiProfileTestMasterOption('master_blood_groups', 'a-positive', 'A+'),
         'physical_build_id' => mobileApiProfileTestMasterOption('master_physical_builds', 'average', 'Average'),
     ];
+}
+
+function mobileApiProfileTestOccupationMaster(string $name = 'Software Engineer'): OccupationMaster
+{
+    $suffix = strtolower(str_replace('.', '-', uniqid('mobile-api-occ-', true)));
+    $categoryData = [
+        'name' => 'Technology '.$suffix,
+        'sort_order' => 10,
+    ];
+    if (Schema::hasColumn('master_occupation_categories', 'name_mr')) {
+        $categoryData['name_mr'] = 'तंत्रज्ञान';
+    }
+    if (Schema::hasColumn('master_occupation_categories', 'legacy_working_with_type_id')) {
+        $categoryData['legacy_working_with_type_id'] = null;
+    }
+    $category = OccupationCategory::create($categoryData);
+
+    $occupationData = [
+        'name' => $name.' '.$suffix,
+        'normalized_name' => mb_strtolower($name.' '.$suffix),
+        'category_id' => $category->id,
+    ];
+    if (Schema::hasColumn('master_occupations', 'name_mr')) {
+        $occupationData['name_mr'] = 'सॉफ्टवेअर अभियंता';
+    }
+    if (Schema::hasColumn('master_occupations', 'sort_order')) {
+        $occupationData['sort_order'] = 10;
+    }
+
+    return OccupationMaster::create($occupationData);
 }
 
 function mobileApiProfileTestSeedCurrentAddressType(): void
@@ -535,6 +568,42 @@ test('MobileProfile GET api v1 profile basic physical options returns active gov
     expect(collect($response->json('physical_conditions'))->pluck('key')->all())->toContain('prefer_not_to_say');
 });
 
+test('MobileProfile GET api v1 profile education career options returns governed lookups', function () {
+    $user = User::factory()->create(['name' => 'Education Career Lookup Account']);
+    Sanctum::actingAs($user);
+    $degree = mobileApiProfileTestEducationDegree('M.B.A.', 25);
+    $occupation = mobileApiProfileTestOccupationMaster('Product Manager');
+    $custom = OccupationCustom::create([
+        'raw_name' => 'Family Business',
+        'normalized_name' => 'family business',
+        'user_id' => $user->id,
+        'status' => 'pending',
+    ]);
+
+    $response = $this->getJson('/api/v1/profile/education-career-options');
+
+    $response
+        ->assertOk()
+        ->assertJsonStructure([
+            'education_degrees' => [
+                '*' => ['id', 'code', 'label', 'label_en', 'label_mr', 'full_form', 'category_id', 'category_label', 'category_label_mr'],
+            ],
+            'occupation_categories' => [
+                '*' => ['id', 'label', 'label_en', 'label_mr', 'legacy_working_with_type_id'],
+            ],
+            'occupations' => [
+                '*' => ['id', 'label', 'label_en', 'label_mr', 'category_id', 'category_label', 'category_label_mr'],
+            ],
+            'custom_occupations' => [
+                '*' => ['id', 'label', 'label_en', 'label_mr', 'status'],
+            ],
+        ]);
+
+    expect(collect($response->json('education_degrees'))->pluck('id')->all())->toContain($degree->id);
+    expect(collect($response->json('occupations'))->pluck('id')->all())->toContain($occupation->id);
+    expect(collect($response->json('custom_occupations'))->pluck('id')->all())->toContain($custom->id);
+});
+
 test('MobileProfile POST api v1 matrimony-profile accepts canonical community ids', function () {
     mobileApiProfileTestSeedCurrentAddressType();
     $user = User::factory()->create(['name' => 'Canonical Account']);
@@ -823,6 +892,69 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
         ->where('profile_id', $profile->id)
         ->where('field_key', 'caste_id')
         ->exists())->toBeTrue();
+});
+
+test('MobileProfile PUT api v1 matrimony-profile accepts education career fields through MutationService', function () {
+    mobileApiProfileTestSeedCurrentAddressType();
+    $user = User::factory()->create(['name' => 'Education Career Account']);
+    $profile = app(MutationService::class)->createDraftProfileForUser($user);
+    $location = mobileApiProfileTestLeafLocation();
+    $caste = mobileApiProfileTestCaste();
+    $gender = mobileApiProfileTestGender('female');
+    $degree = mobileApiProfileTestEducationDegree('M.B.A.', 30);
+    $occupation = mobileApiProfileTestOccupationMaster('Business Analyst');
+    Sanctum::actingAs($user);
+
+    $response = $this->putJson('/api/v1/matrimony-profile', [
+        'full_name' => 'Career Updated Candidate',
+        'gender_id' => $gender->id,
+        'date_of_birth' => '1997-03-20',
+        'caste' => 'Maratha',
+        'education_slots' => json_encode([['t' => 'd', 'id' => $degree->id]], JSON_THROW_ON_ERROR),
+        'location_id' => $location->id,
+        'occupation_master_id' => $occupation->id,
+        'company_name' => 'Navri Tech',
+        'work_location_text' => 'Pune, Maharashtra',
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('profile.occupation_master_id', $occupation->id)
+        ->assertJsonPath('profile.occupation_master_label', $occupation->name)
+        ->assertJsonPath('profile.company_name', 'Navri Tech')
+        ->assertJsonPath('profile.work_location_text', 'Pune, Maharashtra');
+
+    $profile->refresh();
+
+    expect((int) $profile->gender_id)->toBe((int) $gender->id);
+    expect((int) $profile->caste_id)->toBe((int) $caste->id);
+    expect($profile->highest_education)->toContain($degree->code);
+    expect((int) $profile->location_id)->toBe((int) $location->id);
+    expect((int) $profile->occupation_master_id)->toBe((int) $occupation->id);
+    expect($profile->company_name)->toBe('Navri Tech');
+    expect($profile->work_location_text)->toBe('Pune, Maharashtra');
+});
+
+test('MobileProfile PUT api v1 matrimony-profile rejects invalid education career ids', function () {
+    $user = User::factory()->create(['name' => 'Invalid Career Account']);
+    app(MutationService::class)->createDraftProfileForUser($user);
+    $gender = mobileApiProfileTestGender('female');
+    Sanctum::actingAs($user);
+
+    $this->putJson('/api/v1/matrimony-profile', [
+        'gender_id' => $gender->id,
+        'occupation_master_id' => 999999999,
+    ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['occupation_master_id']);
+
+    $this->putJson('/api/v1/matrimony-profile', [
+        'gender_id' => $gender->id,
+        'education_slots' => json_encode([['t' => 'd', 'id' => 999999999]], JSON_THROW_ON_ERROR),
+    ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['education_slots']);
 });
 
 test('MobileProfile GET api v1 matrimony profile returns clean display payload beside profile', function () {

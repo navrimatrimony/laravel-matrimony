@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Exceptions\QuotaPolicySourceViolation;
 use App\Http\Controllers\Controller;
 use App\Models\Caste;
+use App\Models\EducationDegree;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Models\SubCaste;
@@ -12,8 +13,10 @@ use App\Models\User;
 use App\Services\Api\MobileDiscoveryFilterService;
 use App\Services\Api\MobileMoreMatchesSectionService;
 use App\Services\Api\MobileProfileDisplayPresenter;
+use App\Services\EducationService;
 use App\Services\Matching\MatchingService;
 use App\Services\MutationService;
+use App\Services\OccupationService;
 use App\Services\Parsing\IntakeControlledFieldNormalizer;
 use App\Services\ProfileFieldLockService;
 use App\Services\ProfileRotationService;
@@ -33,6 +36,8 @@ class MatrimonyProfileApiController extends Controller
      */
     private function buildMobileProfileSnapshotFromApi(Request $request): array
     {
+        $this->normalizeMobileEducationCareerInputs($request);
+
         $core = [];
         $coreFields = [
             'full_name',
@@ -56,6 +61,10 @@ class MatrimonyProfileApiController extends Controller
             'physical_build_id',
             'spectacles_lens',
             'physical_condition',
+            'occupation_master_id',
+            'occupation_custom_id',
+            'company_name',
+            'work_location_text',
         ];
         foreach ($coreFields as $key) {
             if (! $request->has($key)) {
@@ -93,6 +102,8 @@ class MatrimonyProfileApiController extends Controller
 
     private function validateMobileProfileRequest(Request $request, bool $creating): void
     {
+        $this->normalizeMobileEducationCareerInputs($request);
+
         $rules = [
             'full_name' => [$creating ? 'required' : 'sometimes', 'required', 'string', 'max:255'],
             'gender_id' => [
@@ -118,6 +129,15 @@ class MatrimonyProfileApiController extends Controller
             'physical_build_id' => ['nullable', 'integer', Rule::exists('master_physical_builds', 'id')->where('is_active', true)],
             'spectacles_lens' => ['nullable', 'string', 'max:50', Rule::in(['no', 'spectacles', 'contact_lens', 'both'])],
             'physical_condition' => ['nullable', 'string', 'max:50', Rule::in(['none', 'physically_challenged', 'hearing_condition', 'vision_condition', 'other', 'prefer_not_to_say'])],
+            'education_slots' => ['nullable', 'string', 'max:8192'],
+            'occupation_master_id' => ['nullable', 'integer', Rule::exists('master_occupations', 'id')],
+            'occupation_custom_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('master_occupation_custom', 'id')->where(fn ($query) => $query->where('user_id', $request->user()?->id ?? 0)),
+            ],
+            'company_name' => ['nullable', 'string', 'max:255'],
+            'work_location_text' => ['nullable', 'string', 'max:255'],
         ];
 
         if (! $creating) {
@@ -129,6 +149,8 @@ class MatrimonyProfileApiController extends Controller
             $religionId = $request->input('religion_id');
             $casteId = $request->input('caste_id');
             $subCasteId = $request->input('sub_caste_id');
+            $occupationMasterId = $request->input('occupation_master_id');
+            $occupationCustomId = $request->input('occupation_custom_id');
 
             if ($religionId !== null && $religionId !== '' && $casteId !== null && $casteId !== '') {
                 $casteReligionId = Caste::query()->whereKey((int) $casteId)->value('religion_id');
@@ -143,9 +165,78 @@ class MatrimonyProfileApiController extends Controller
                     $validator->errors()->add('sub_caste_id', 'The selected sub-caste does not belong to the selected caste.');
                 }
             }
+
+            if ($occupationMasterId !== null && $occupationMasterId !== '' && $occupationCustomId !== null && $occupationCustomId !== '') {
+                $validator->errors()->add('occupation_custom_id', 'Select either a listed occupation or a custom occupation, not both.');
+            }
+
+            if ($request->has('education_slots') && $request->filled('education_slots')) {
+                $degreeIds = $this->mobileEducationSlotDegreeIds($request->input('education_slots'));
+                if ($degreeIds === null) {
+                    $validator->errors()->add('education_slots', 'The education slots field must be valid JSON.');
+                } elseif ($degreeIds !== []) {
+                    $found = EducationDegree::query()->whereIn('id', $degreeIds)->pluck('id')->map(fn ($id) => (int) $id)->all();
+                    $missing = array_diff($degreeIds, $found);
+                    if ($missing !== []) {
+                        $validator->errors()->add('education_slots', 'The selected education degree is invalid.');
+                    }
+                }
+            }
         });
 
         $validator->validate();
+    }
+
+    private function normalizeMobileEducationCareerInputs(Request $request): void
+    {
+        if ($request->has('education_slots')) {
+            app(EducationService::class)->mergeMultiselectEducationIntoRequest($request);
+        }
+
+        if (Schema::hasColumn('matrimony_profiles', 'occupation_master_id')
+            && ($request->filled('occupation_master_id') || $request->filled('occupation_custom_id'))) {
+            app(OccupationService::class)->mergeOccupationIntoRequest($request);
+        }
+    }
+
+    /**
+     * @return array<int, int>|null Null means malformed payload.
+     */
+    private function mobileEducationSlotDegreeIds(mixed $slotsRaw): ?array
+    {
+        if ($slotsRaw === null || $slotsRaw === '') {
+            return [];
+        }
+
+        if (is_string($slotsRaw)) {
+            $decoded = json_decode($slotsRaw, true);
+            if (! is_array($decoded)) {
+                return null;
+            }
+            $slotsRaw = $decoded;
+        }
+
+        if (! is_array($slotsRaw)) {
+            return null;
+        }
+
+        $ids = [];
+        foreach ($slotsRaw as $slot) {
+            if (! is_array($slot)) {
+                return null;
+            }
+            $type = $slot['t'] ?? $slot['type'] ?? null;
+            $type = $type === 'degree' ? 'd' : $type;
+            if ($type !== 'd') {
+                continue;
+            }
+            $id = (int) ($slot['id'] ?? 0);
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+
+        return array_values(array_unique($ids));
     }
 
     /**
@@ -722,6 +813,8 @@ class MatrimonyProfileApiController extends Controller
             'complexion',
             'bloodGroup',
             'physicalBuild',
+            'occupationMaster.category',
+            'occupationCustom',
         ]);
 
         $hints = $profile->residenceLocationHierarchyHints();
@@ -772,7 +865,13 @@ class MatrimonyProfileApiController extends Controller
             'physical_build_label' => $this->masterLookupLabel($profile->getRelation('physicalBuild')),
             'spectacles_lens' => $profile->spectacles_lens,
             'physical_condition' => $profile->physical_condition,
-            'profession_id' => $profile->profession_id,
+            'occupation_master_id' => $profile->occupation_master_id,
+            'occupation_master_label' => $this->masterLookupLabel($profile->getRelation('occupationMaster')),
+            'occupation_custom_id' => $profile->occupation_custom_id,
+            'occupation_custom_label' => $this->masterLookupLabel($profile->getRelation('occupationCustom')),
+            'company_name' => $profile->company_name,
+            'work_location_text' => $profile->work_location_text,
+            'work_location_label' => trim($profile->workLocationDisplayLine()) ?: null,
             'income_range_id' => $profile->income_range_id,
             'nakshatra_id' => $horoscope ? $horoscope->nakshatra_id : null,
             'rashi_id' => $horoscope ? $horoscope->rashi_id : null,
@@ -795,7 +894,7 @@ class MatrimonyProfileApiController extends Controller
             return null;
         }
 
-        foreach (['display_label', 'label_mr', 'label_en', 'label', 'name', 'key'] as $key) {
+        foreach (['display_label', 'label_mr', 'label_en', 'label', 'name', 'raw_name', 'key'] as $key) {
             $value = trim((string) ($row->getAttribute($key) ?? ''));
             if ($value !== '') {
                 return $value;

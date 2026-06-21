@@ -65,7 +65,7 @@ class MutationService
         'complexion_id', 'physical_build_id', 'blood_group_id', 'diet_id', 'smoking_status_id', 'drinking_status_id', 'family_type_id', 'income_currency_id',
         'address_line', 'annual_income', 'family_income', 'income_private', 'family_income_private',
         'property_details',
-        'birth_city_id', 'birth_place_text', 'work_location_text', 'spectacles_lens', 'physical_condition',
+        'birth_city_id', 'birth_place_text', 'company_name', 'work_location_text', 'spectacles_lens', 'physical_condition',
         'occupation_master_id', 'occupation_custom_id',
         'father_name', 'father_occupation', 'father_occupation_master_id', 'father_occupation_custom_id', 'father_extra_info', 'father_contact_1', 'father_contact_2',
         'mother_name', 'mother_occupation', 'mother_occupation_master_id', 'mother_occupation_custom_id', 'mother_extra_info', 'mother_contact_1', 'mother_contact_2',
@@ -97,6 +97,7 @@ class MutationService
         'address_line',
         'work_city_id',
         'work_state_id',
+        'work_location_text',
     ];
 
     /** Lifecycle states that block manual edit (PART-5). */

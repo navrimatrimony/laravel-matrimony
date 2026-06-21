@@ -150,6 +150,66 @@ Success response: HTTP 200
 }
 ```
 
+### GET `/api/v1/profile/education-career-options`
+
+Requires bearer token. Returns read-only governed options for APK Edit All Education + Career fields.
+
+Sources:
+
+- `education_degrees`: `master_education` via `App\Models\EducationDegree`
+- `occupation_categories`: `master_occupation_categories` via `App\Models\OccupationCategory`
+- `occupations`: `master_occupations` via `App\Models\OccupationMaster`
+- `custom_occupations`: logged-in user's `master_occupation_custom` rows via `App\Models\OccupationCustom`
+
+Success response: HTTP 200
+
+```json
+{
+  "education_degrees": [
+    {
+      "id": 1,
+      "code": "B.E.",
+      "label": "B.E.",
+      "label_en": "B.E.",
+      "label_mr": null,
+      "full_form": "Bachelor of Engineering",
+      "category_id": 1,
+      "category_label": "Engineering",
+      "category_label_mr": null
+    }
+  ],
+  "occupation_categories": [
+    {
+      "id": 1,
+      "label": "Technology",
+      "label_en": "Technology",
+      "label_mr": null,
+      "legacy_working_with_type_id": null
+    }
+  ],
+  "occupations": [
+    {
+      "id": 10,
+      "label": "Software Engineer",
+      "label_en": "Software Engineer",
+      "label_mr": null,
+      "category_id": 1,
+      "category_label": "Technology",
+      "category_label_mr": null
+    }
+  ],
+  "custom_occupations": [
+    {
+      "id": 50,
+      "label": "Family Business",
+      "label_en": "Family Business",
+      "label_mr": null,
+      "status": "pending"
+    }
+  ]
+}
+```
+
 ## Matrimony Profile
 
 All profile mutation goes through the governed mutation layer. The mobile create path creates a draft profile with `MutationService::createDraftProfileForUser()` and applies submitted profile data with `MutationService::applyManualSnapshot()`.
@@ -170,6 +230,7 @@ Request:
   "birth_place_text": "Pune",
   "caste": "Maratha",
   "highest_education": "B.E.",
+  "education_slots": "[{\"t\":\"d\",\"id\":1}]",
   "location_id": 123,
   "mother_tongue_id": 1,
   "height_cm": 168,
@@ -178,7 +239,10 @@ Request:
   "blood_group_id": 1,
   "physical_build_id": 1,
   "spectacles_lens": "contact_lens",
-  "physical_condition": "none"
+  "physical_condition": "none",
+  "occupation_master_id": 10,
+  "company_name": "Navri Tech",
+  "work_location_text": "Pune, Maharashtra"
 }
 ```
 
@@ -192,6 +256,7 @@ Rules:
 - `birth_place_text`: nullable string, max 255
 - `caste`: required string, max 255
 - `highest_education`: required string, max 255
+- `education_slots`: nullable JSON string, max 8192; selected degree IDs must exist in `master_education.id`; when supplied, Laravel resolves it into `highest_education`
 - `location_id`: required, must exist in `addresses.id`
 - `mother_tongue_id`: nullable, must exist as an active `master_mother_tongues.id`
 - `height_cm`: nullable integer, min 50, max 250
@@ -201,6 +266,10 @@ Rules:
 - `physical_build_id`: nullable, must exist as an active `master_physical_builds.id`
 - `spectacles_lens`: nullable, one of `no`, `spectacles`, `contact_lens`, `both`
 - `physical_condition`: nullable, one of `none`, `physically_challenged`, `hearing_condition`, `vision_condition`, `other`, `prefer_not_to_say`
+- `occupation_master_id`: nullable, must exist in `master_occupations.id`
+- `occupation_custom_id`: nullable, must exist in `master_occupation_custom.id` for the logged-in user; cannot be sent together with `occupation_master_id`
+- `company_name`: nullable string, max 255
+- `work_location_text`: nullable string, max 255
 
 Governance note:
 
@@ -245,6 +314,13 @@ Success response: HTTP 200
     "physical_build_label": "Average",
     "spectacles_lens": "contact_lens",
     "physical_condition": "none",
+    "occupation_master_id": 10,
+    "occupation_master_label": "Software Engineer",
+    "occupation_custom_id": null,
+    "occupation_custom_label": null,
+    "company_name": "Navri Tech",
+    "work_location_text": "Pune, Maharashtra",
+    "work_location_label": "Pune, Maharashtra",
     "profile_photo": null,
     "partner_preferences": null
   }
@@ -330,6 +406,7 @@ Request:
   "birth_place_text": "Pune",
   "caste": "Maratha",
   "highest_education": "MCA",
+  "education_slots": "[{\"t\":\"d\",\"id\":1}]",
   "location_id": 123,
   "address_line": "Optional address line",
   "mother_tongue_id": 1,
@@ -339,7 +416,10 @@ Request:
   "blood_group_id": 1,
   "physical_build_id": 1,
   "spectacles_lens": "contact_lens",
-  "physical_condition": "none"
+  "physical_condition": "none",
+  "occupation_master_id": 10,
+  "company_name": "Navri Tech",
+  "work_location_text": "Pune, Maharashtra"
 }
 ```
 
@@ -353,6 +433,7 @@ Rules:
 - `birth_place_text`: nullable string, max 255
 - `caste`: sometimes required string, max 255
 - `highest_education`: sometimes required string, max 255
+- `education_slots`: nullable JSON string, max 8192; selected degree IDs must exist in `master_education.id`; when supplied, Laravel resolves it into `highest_education`
 - `location_id`: sometimes required, must exist in `addresses.id`
 - `address_line`: nullable string, max 255
 - `mother_tongue_id`: nullable, must exist as an active `master_mother_tongues.id`
@@ -363,6 +444,10 @@ Rules:
 - `physical_build_id`: nullable, must exist as an active `master_physical_builds.id`
 - `spectacles_lens`: nullable, one of `no`, `spectacles`, `contact_lens`, `both`
 - `physical_condition`: nullable, one of `none`, `physically_challenged`, `hearing_condition`, `vision_condition`, `other`, `prefer_not_to_say`
+- `occupation_master_id`: nullable, must exist in `master_occupations.id`
+- `occupation_custom_id`: nullable, must exist in `master_occupation_custom.id` for the logged-in user; cannot be sent together with `occupation_master_id`
+- `company_name`: nullable string, max 255
+- `work_location_text`: nullable string, max 255
 
 Success response: HTTP 200
 
@@ -400,6 +485,13 @@ Success response: HTTP 200
     "physical_build_label": "Average",
     "spectacles_lens": "contact_lens",
     "physical_condition": "none",
+    "occupation_master_id": 10,
+    "occupation_master_label": "Software Engineer",
+    "occupation_custom_id": null,
+    "occupation_custom_label": null,
+    "company_name": "Navri Tech",
+    "work_location_text": "Pune, Maharashtra",
+    "work_location_label": "Pune, Maharashtra",
     "profile_photo": null,
     "partner_preferences": null
   }
