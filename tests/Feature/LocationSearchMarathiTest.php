@@ -120,3 +120,75 @@ test('location multi-word search matches village plus ancestor district token', 
     $response->assertOk();
     $response->assertJsonFragment(['id' => $village->id]);
 });
+
+test('location search prefers requested state while keeping all india results', function () {
+    $suffix = str_replace('.', '_', uniqid('pref_', true));
+    $maharashtra = Location::query()->where('hierarchy', 'state')->where('name', 'Maharashtra')->firstOrFail();
+    $gujarat = Location::query()->where('hierarchy', 'state')->where('name', 'Gujarat')->firstOrFail();
+
+    $maharashtraDistrict = Location::query()->create([
+        'name' => 'Preferred Sangli '.$suffix,
+        'slug' => 'preferred-sangli-'.$suffix,
+        'hierarchy' => 'district',
+        'parent_id' => $maharashtra->id,
+        'is_active' => true,
+    ]);
+    $maharashtraTaluka = Location::query()->create([
+        'name' => 'Preferred Vita '.$suffix,
+        'slug' => 'preferred-vita-'.$suffix,
+        'hierarchy' => 'taluka',
+        'parent_id' => $maharashtraDistrict->id,
+        'is_active' => true,
+    ]);
+    $maharashtraTown = Location::query()->create([
+        'name' => 'Shared Preferred Town '.$suffix,
+        'slug' => 'shared-preferred-town-mh-'.$suffix,
+        'hierarchy' => 'village',
+        'tag' => 'city',
+        'parent_id' => $maharashtraTaluka->id,
+        'is_active' => true,
+    ]);
+
+    $gujaratDistrict = Location::query()->create([
+        'name' => 'Preferred Ahmedabad '.$suffix,
+        'slug' => 'preferred-ahmedabad-'.$suffix,
+        'hierarchy' => 'district',
+        'parent_id' => $gujarat->id,
+        'is_active' => true,
+    ]);
+    $gujaratTaluka = Location::query()->create([
+        'name' => 'Preferred Daskroi '.$suffix,
+        'slug' => 'preferred-daskroi-'.$suffix,
+        'hierarchy' => 'taluka',
+        'parent_id' => $gujaratDistrict->id,
+        'is_active' => true,
+    ]);
+    $gujaratTown = Location::query()->create([
+        'name' => 'Shared Preferred Town '.$suffix,
+        'slug' => 'shared-preferred-town-gj-'.$suffix,
+        'hierarchy' => 'village',
+        'tag' => 'city',
+        'parent_id' => $gujaratTaluka->id,
+        'is_active' => true,
+    ]);
+
+    $response = $this->getJson('/api/location/search?q='.rawurlencode('Shared Preferred Town '.$suffix).'&preferred_state_id='.$maharashtra->id.'&limit=10');
+
+    $response->assertOk();
+    $ids = array_column($response->json(), 'id');
+
+    expect($ids)->toContain($maharashtraTown->id)
+        ->and($ids)->toContain($gujaratTown->id)
+        ->and($ids[0])->toBe($maharashtraTown->id);
+
+    $response->assertJsonPath('0.preferred_state', true);
+    $response->assertJsonPath('0.state_id', $maharashtra->id);
+
+    $defaultResponse = $this->getJson('/api/location/search?q='.rawurlencode('Shared Preferred Town '.$suffix).'&limit=10');
+    $defaultResponse->assertOk();
+    $defaultIds = array_column($defaultResponse->json(), 'id');
+
+    expect($defaultIds)->toContain($maharashtraTown->id)
+        ->and($defaultIds)->toContain($gujaratTown->id)
+        ->and($defaultIds[0])->toBe($maharashtraTown->id);
+});

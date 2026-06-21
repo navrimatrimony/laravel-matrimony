@@ -19,15 +19,26 @@ class LocationController extends Controller
         $this->applyLocaleFromApiRequest($request);
 
         $q = trim((string) $request->input('q', ''));
-        if ($q === '') {
+        if (mb_strlen($q, 'UTF-8') < 2) {
             return response()->json([]);
         }
 
-        $results = $locationService->search($q);
-        $results = array_slice($results, 0, 25);
+        $limit = max(1, min(50, (int) $request->integer('limit', 20)));
+        $preferredStateId = $request->integer('preferred_state_id') > 0
+            ? (int) $request->integer('preferred_state_id')
+            : null;
+        $preferredStateName = trim((string) $request->input('preferred_state_name', 'Maharashtra'));
+
+        $results = $locationService->search($q, [
+            'limit' => $limit,
+            'preferred_state_id' => $preferredStateId,
+            'preferred_state_name' => $preferredStateName,
+        ]);
 
         $payload = array_map(static function (array $row): array {
             $id = (int) ($row['id'] ?? 0);
+            $stateId = isset($row['state_id']) ? (int) $row['state_id'] : null;
+
             return [
                 'id' => $id,
                 'location_id' => $id,
@@ -35,6 +46,8 @@ class LocationController extends Controller
                 'name' => (string) ($row['name'] ?? ''),
                 'hierarchy' => (string) ($row['hierarchy'] ?? ''),
                 'display_label' => (string) ($row['display_label'] ?? ''),
+                'state_id' => $stateId,
+                'preferred_state' => (bool) ($row['preferred_state'] ?? false),
             ];
         }, $results);
 

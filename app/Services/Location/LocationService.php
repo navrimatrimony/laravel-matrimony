@@ -163,18 +163,20 @@ class LocationService
      * results are filtered so **every** token appears somewhere in the leaf + ancestor names (Marathi + English),
      * then ranked so the intended village/town surfaces near the top.
      *
-     * @return array<int, array{id:int,name:string,hierarchy:string,display_label:string}>
+     * @return array<int, array{id:int,name:string,hierarchy:string,display_label:string,state_id:int|null,preferred_state:bool}>
      */
-    public function search(string $query): array
+    public function search(string $query, array $options = []): array
     {
         $normalized = $this->normalizeInput($query);
-        if ($normalized === '') {
+        if (mb_strlen($normalized, 'UTF-8') < 2) {
             return [];
         }
 
+        $limit = $this->searchResultLimit($options['limit'] ?? null);
+        $preferredStateId = $this->resolvePreferredStateId($options);
         $tokens = $this->distinctSearchTokens($normalized);
         if (count($tokens) >= 2) {
-            return $this->searchMultiToken($tokens);
+            return $this->searchMultiToken($tokens, $limit, $preferredStateId);
         }
 
         $like = '%'.$normalized.'%';
@@ -239,26 +241,19 @@ class LocationService
                 END"
             )
             ->orderBy('name')
-            ->limit(25)
+            ->limit(max(25, min(100, $limit * 4)))
             ->get();
 
         $this->hydrateParentChain($locations);
 
-        return $locations->map(function (Location $location): array {
-            return [
-                'id' => (int) $location->id,
-                'name' => (string) $location->name,
-                'hierarchy' => (string) $location->hierarchy,
-                'display_label' => $this->getDisplayLabel($location),
-            ];
-        })->values()->all();
+        return $this->formatSearchResults($locations, $limit, $preferredStateId);
     }
 
     /**
      * @param  list<string>  $tokens  Lowercase tokens, length ≥ 2, de-duplicated.
-     * @return array<int, array{id:int,name:string,hierarchy:string,display_label:string}>
+     * @return array<int, array{id:int,name:string,hierarchy:string,display_label:string,state_id:int|null,preferred_state:bool}>
      */
-    private function searchMultiToken(array $tokens): array
+    private function searchMultiToken(array $tokens, int $limit, ?int $preferredStateId): array
     {
         $geo = Location::geoTable();
         $primary = $tokens[0];
@@ -316,14 +311,123 @@ class LocationService
             return $this->compareMultiTokenSearchRank($a, $b, $tokens);
         })->values();
 
-        return $sorted->take(25)->map(function (Location $location): array {
+        return $this->formatSearchResults($sorted, $limit, $preferredStateId);
+    }
+
+    private function searchResultLimit(mixed $limit): int
+    {
+        $value = (int) ($limit ?? 20);
+        if ($value <= 0) {
+            $value = 20;
+        }
+
+        return max(1, min(50, $value));
+    }
+
+    private function resolvePreferredStateId(array $options): ?int
+    {
+        $stateId = (int) ($options['preferred_state_id'] ?? 0);
+        if ($stateId > 0) {
+            $state = Location::query()
+                ->whereKey($stateId)
+                ->where('hierarchy', 'state')
+                ->where('is_active', true)
+                ->first();
+            if ($state !== null) {
+                return (int) $state->id;
+            }
+        }
+
+        $stateName = trim((string) ($options['preferred_state_name'] ?? ''));
+        if ($stateName === '') {
+            return null;
+        }
+
+        $normalized = $this->normalizeInput($stateName);
+        $slug = str_replace(' ', '-', $normalized);
+        $geo = Location::geoTable();
+
+        $query = Location::query()
+            ->where('hierarchy', 'state')
+            ->where('is_active', true)
+            ->where(function ($q) use ($normalized, $slug, $geo): void {
+                $q->whereRaw('LOWER(TRIM(name)) = ?', [$normalized])
+                    ->orWhereRaw('LOWER(TRIM(slug)) = ?', [$slug]);
+                if (Schema::hasColumn($geo, 'name_en')) {
+                    $q->orWhereRaw('LOWER(TRIM(name_en)) = ?', [$normalized]);
+                }
+                if (Schema::hasColumn($geo, 'name_mr')) {
+                    $q->orWhereRaw('LOWER(TRIM(name_mr)) = ?', [$normalized]);
+                }
+            });
+
+        $state = $query->first();
+
+        return $state !== null ? (int) $state->id : null;
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, Location>  $locations
+     * @return array<int, array{id:int,name:string,hierarchy:string,display_label:string,state_id:int|null,preferred_state:bool}>
+     */
+    private function formatSearchResults($locations, int $limit, ?int $preferredStateId): array
+    {
+        $ranked = $locations
+            ->values()
+            ->map(fn (Location $location, int $index): array => [
+                'location' => $location,
+                'index' => $index,
+                'preferred' => $this->isInPreferredState($location, $preferredStateId),
+            ])
+            ->sort(function (array $a, array $b): int {
+                $preferred = ((bool) $b['preferred'] <=> (bool) $a['preferred']);
+                if ($preferred !== 0) {
+                    return $preferred;
+                }
+
+                return ((int) $a['index']) <=> ((int) $b['index']);
+            });
+
+        return $ranked->take($limit)->map(function (array $row) use ($preferredStateId): array {
+            /** @var Location $location */
+            $location = $row['location'];
+            $stateId = $this->stateIdForLocation($location);
+
             return [
                 'id' => (int) $location->id,
                 'name' => (string) $location->name,
                 'hierarchy' => (string) $location->hierarchy,
                 'display_label' => $this->getDisplayLabel($location),
+                'state_id' => $stateId,
+                'preferred_state' => $preferredStateId !== null && $stateId === $preferredStateId,
             ];
-        })->all();
+        })->values()->all();
+    }
+
+    private function isInPreferredState(Location $location, ?int $preferredStateId): bool
+    {
+        return $preferredStateId !== null && $this->stateIdForLocation($location) === $preferredStateId;
+    }
+
+    private function stateIdForLocation(Location $location): ?int
+    {
+        if (strtolower((string) ($location->hierarchy ?? '')) === 'state') {
+            return (int) $location->id;
+        }
+
+        $current = $location->parent;
+        $guard = 0;
+        while ($current !== null && $guard++ < 28) {
+            if (strtolower((string) ($current->hierarchy ?? '')) === 'state') {
+                return (int) $current->id;
+            }
+            if (! $current->relationLoaded('parent')) {
+                $current->load('parent');
+            }
+            $current = $current->parent;
+        }
+
+        return null;
     }
 
     /**
