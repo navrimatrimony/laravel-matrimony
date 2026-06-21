@@ -66,6 +66,8 @@ class MobileProfileDisplayPresenter
             'bloodGroup',
             'physicalBuild',
             'diet',
+            'smokingStatus',
+            'drinkingStatus',
             'familyType',
             'incomeCurrency',
             'familyIncomeCurrency',
@@ -894,6 +896,8 @@ class MobileProfileDisplayPresenter
             $this->item('Spectacles / Lens', $this->translatedOptionLabel('components.physical.spectacles_options', $profile->spectacles_lens), 'profile'),
             $this->item('Physical Condition', $this->translatedOptionLabel('components.physical.condition_options', $profile->physical_condition), 'profile'),
             $this->item('Diet', $this->labelFrom($profile->diet), 'diet'),
+            $this->item('Smoking', $this->labelFrom($profile->smokingStatus), 'profile'),
+            $this->item('Drinking', $this->labelFrom($profile->drinkingStatus), 'profile'),
         ];
 
         return $this->section('basic', 'Basic Details', $items);

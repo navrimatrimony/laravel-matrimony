@@ -6,8 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\EducationDegree;
 use App\Models\MasterBloodGroup;
 use App\Models\MasterComplexion;
+use App\Models\MasterDiet;
+use App\Models\MasterDrinkingStatus;
+use App\Models\MasterMaritalStatus;
 use App\Models\MasterMotherTongue;
 use App\Models\MasterPhysicalBuild;
+use App\Models\MasterSmokingStatus;
 use App\Models\OccupationCategory;
 use App\Models\OccupationCustom;
 use App\Models\OccupationMaster;
@@ -58,6 +62,20 @@ class ProfileSetupLookupController extends Controller
             'occupation_categories' => $this->occupationCategoryOptions(),
             'occupations' => $this->occupationOptions(),
             'custom_occupations' => $this->customOccupationOptions((int) $request->user()->id),
+        ]);
+    }
+
+    /**
+     * GET /api/v1/profile/marital-lifestyle-options
+     * Read-only mobile options for APK Edit All Marital + Lifestyle fields.
+     */
+    public function maritalLifestyleOptions(): JsonResponse
+    {
+        return response()->json([
+            'marital_statuses' => $this->masterOptions(MasterMaritalStatus::class, 'master_marital_statuses'),
+            'diets' => $this->masterOptions(MasterDiet::class, 'master_diets'),
+            'smoking_statuses' => $this->masterOptions(MasterSmokingStatus::class, 'master_smoking_statuses'),
+            'drinking_statuses' => $this->masterOptions(MasterDrinkingStatus::class, 'master_drinking_statuses'),
         ]);
     }
 

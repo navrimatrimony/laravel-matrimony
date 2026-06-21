@@ -219,6 +219,7 @@ class MatrimonyProfile extends Model
     ];
 
     protected $casts = [
+        'has_children' => 'boolean',
         'is_suspended' => 'boolean',
         'photo_approved' => 'boolean',
         'photo_rejected_at' => 'datetime',

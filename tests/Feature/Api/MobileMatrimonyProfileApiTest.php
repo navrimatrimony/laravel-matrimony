@@ -248,6 +248,16 @@ function mobileApiProfileTestPhase1AOptions(): array
     ];
 }
 
+function mobileApiProfileTestMaritalLifestyleOptions(): array
+{
+    return [
+        'marital_status_id' => mobileApiProfileTestMasterOption('master_marital_statuses', 'never-married', 'Never Married'),
+        'diet_id' => mobileApiProfileTestMasterOption('master_diets', 'vegetarian', 'Vegetarian'),
+        'smoking_status_id' => mobileApiProfileTestMasterOption('master_smoking_statuses', 'non-smoker', 'Non-smoker'),
+        'drinking_status_id' => mobileApiProfileTestMasterOption('master_drinking_statuses', 'non-drinker', 'Non-drinker'),
+    ];
+}
+
 function mobileApiProfileTestOccupationMaster(string $name = 'Software Engineer'): OccupationMaster
 {
     $suffix = strtolower(str_replace('.', '-', uniqid('mobile-api-occ-', true)));
@@ -604,6 +614,45 @@ test('MobileProfile GET api v1 profile education career options returns governed
     expect(collect($response->json('custom_occupations'))->pluck('id')->all())->toContain($custom->id);
 });
 
+test('MobileProfile GET api v1 profile marital lifestyle options returns governed lookups', function () {
+    $user = User::factory()->create(['name' => 'Marital Lifestyle Lookup Account']);
+    Sanctum::actingAs($user);
+    $options = mobileApiProfileTestMaritalLifestyleOptions();
+    $inactiveId = (int) DB::table('master_diets')->insertGetId([
+        'key' => 'inactive'.substr(strtolower(str_replace('.', '', uniqid('', true))), -8),
+        'label' => 'Inactive Mobile Diet',
+        'is_active' => false,
+        'sort_order' => 10,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $response = $this->getJson('/api/v1/profile/marital-lifestyle-options');
+
+    $response
+        ->assertOk()
+        ->assertJsonStructure([
+            'marital_statuses' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+            'diets' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+            'smoking_statuses' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+            'drinking_statuses' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+        ]);
+
+    expect(collect($response->json('marital_statuses'))->pluck('id')->all())->toContain($options['marital_status_id']);
+    expect(collect($response->json('diets'))->pluck('id')->all())->toContain($options['diet_id']);
+    expect(collect($response->json('diets'))->pluck('id')->all())->not->toContain($inactiveId);
+    expect(collect($response->json('smoking_statuses'))->pluck('id')->all())->toContain($options['smoking_status_id']);
+    expect(collect($response->json('drinking_statuses'))->pluck('id')->all())->toContain($options['drinking_status_id']);
+});
+
 test('MobileProfile POST api v1 matrimony-profile accepts canonical community ids', function () {
     mobileApiProfileTestSeedCurrentAddressType();
     $user = User::factory()->create(['name' => 'Canonical Account']);
@@ -612,6 +661,7 @@ test('MobileProfile POST api v1 matrimony-profile accepts canonical community id
     [$religion, $caste, $subCaste] = mobileApiProfileTestCommunity();
     $gender = mobileApiProfileTestGender('female');
     $phase1A = mobileApiProfileTestPhase1AOptions();
+    $phase3A = mobileApiProfileTestMaritalLifestyleOptions();
     Sanctum::actingAs($user);
 
     $response = $this->postJson('/api/v1/matrimony-profile', [
@@ -628,6 +678,8 @@ test('MobileProfile POST api v1 matrimony-profile accepts canonical community id
         'caste_id' => $caste->id,
         'sub_caste_id' => $subCaste->id,
         'mother_tongue_id' => $phase1A['mother_tongue_id'],
+        'marital_status_id' => $phase3A['marital_status_id'],
+        'has_children' => false,
         'height_cm' => 168,
         'weight_kg' => 58,
         'complexion_id' => $phase1A['complexion_id'],
@@ -635,6 +687,9 @@ test('MobileProfile POST api v1 matrimony-profile accepts canonical community id
         'physical_build_id' => $phase1A['physical_build_id'],
         'spectacles_lens' => 'contact_lens',
         'physical_condition' => 'none',
+        'diet_id' => $phase3A['diet_id'],
+        'smoking_status_id' => $phase3A['smoking_status_id'],
+        'drinking_status_id' => $phase3A['drinking_status_id'],
     ]);
 
     $response
@@ -663,6 +718,10 @@ test('MobileProfile POST api v1 matrimony-profile accepts canonical community id
                 'physical_build_id' => $phase1A['physical_build_id'],
                 'spectacles_lens' => 'contact_lens',
                 'physical_condition' => 'none',
+                'marital_status_id' => $phase3A['marital_status_id'],
+                'diet_id' => $phase3A['diet_id'],
+                'smoking_status_id' => $phase3A['smoking_status_id'],
+                'drinking_status_id' => $phase3A['drinking_status_id'],
             ],
         ]);
 
@@ -672,6 +731,10 @@ test('MobileProfile POST api v1 matrimony-profile accepts canonical community id
     expect($response->json('profile.complexion_label'))->toBeString();
     expect($response->json('profile.blood_group_label'))->toBeString();
     expect($response->json('profile.physical_build_label'))->toBeString();
+    expect($response->json('profile.marital_status_label'))->toBeString();
+    expect($response->json('profile.diet_label'))->toBeString();
+    expect($response->json('profile.smoking_status_label'))->toBeString();
+    expect($response->json('profile.drinking_status_label'))->toBeString();
 
     $profile = MatrimonyProfile::where('user_id', $user->id)->firstOrFail();
 
@@ -690,6 +753,11 @@ test('MobileProfile POST api v1 matrimony-profile accepts canonical community id
     expect((int) $profile->physical_build_id)->toBe((int) $phase1A['physical_build_id']);
     expect($profile->spectacles_lens)->toBe('contact_lens');
     expect($profile->physical_condition)->toBe('none');
+    expect((int) $profile->marital_status_id)->toBe((int) $phase3A['marital_status_id']);
+    expect((bool) $profile->has_children)->toBeFalse();
+    expect((int) $profile->diet_id)->toBe((int) $phase3A['diet_id']);
+    expect((int) $profile->smoking_status_id)->toBe((int) $phase3A['smoking_status_id']);
+    expect((int) $profile->drinking_status_id)->toBe((int) $phase3A['drinking_status_id']);
 });
 
 test('MobileProfile POST api v1 matrimony-profile requires governed gender id', function () {
@@ -822,6 +890,7 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
     $caste = mobileApiProfileTestCaste();
     $gender = mobileApiProfileTestGender('female');
     $phase1A = mobileApiProfileTestPhase1AOptions();
+    $phase3A = mobileApiProfileTestMaritalLifestyleOptions();
     Sanctum::actingAs($user);
 
     $response = $this->putJson('/api/v1/matrimony-profile', [
@@ -835,6 +904,8 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
         'highest_education' => 'MCA',
         'location_id' => $location->id,
         'mother_tongue_id' => $phase1A['mother_tongue_id'],
+        'marital_status_id' => $phase3A['marital_status_id'],
+        'has_children' => true,
         'height_cm' => 172,
         'weight_kg' => 61,
         'complexion_id' => $phase1A['complexion_id'],
@@ -842,6 +913,9 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
         'physical_build_id' => $phase1A['physical_build_id'],
         'spectacles_lens' => 'spectacles',
         'physical_condition' => 'prefer_not_to_say',
+        'diet_id' => $phase3A['diet_id'],
+        'smoking_status_id' => $phase3A['smoking_status_id'],
+        'drinking_status_id' => $phase3A['drinking_status_id'],
     ]);
 
     $response
@@ -859,6 +933,7 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
                 'birth_city_id' => $birthCity->id,
                 'birth_place_text' => 'Mumbai',
                 'mother_tongue_id' => $phase1A['mother_tongue_id'],
+                'marital_status_id' => $phase3A['marital_status_id'],
                 'height_cm' => 172,
                 'weight_kg' => 61,
                 'complexion_id' => $phase1A['complexion_id'],
@@ -866,6 +941,9 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
                 'physical_build_id' => $phase1A['physical_build_id'],
                 'spectacles_lens' => 'spectacles',
                 'physical_condition' => 'prefer_not_to_say',
+                'diet_id' => $phase3A['diet_id'],
+                'smoking_status_id' => $phase3A['smoking_status_id'],
+                'drinking_status_id' => $phase3A['drinking_status_id'],
             ],
         ]);
 
@@ -881,6 +959,8 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
     expect((int) $profile->birth_city_id)->toBe((int) $birthCity->id);
     expect($profile->birth_place_text)->toBe('Mumbai');
     expect((int) $profile->mother_tongue_id)->toBe((int) $phase1A['mother_tongue_id']);
+    expect((int) $profile->marital_status_id)->toBe((int) $phase3A['marital_status_id']);
+    expect((bool) $profile->has_children)->toBeTrue();
     expect((int) $profile->height_cm)->toBe(172);
     expect((int) $profile->weight_kg)->toBe(61);
     expect((int) $profile->complexion_id)->toBe((int) $phase1A['complexion_id']);
@@ -888,6 +968,9 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
     expect((int) $profile->physical_build_id)->toBe((int) $phase1A['physical_build_id']);
     expect($profile->spectacles_lens)->toBe('spectacles');
     expect($profile->physical_condition)->toBe('prefer_not_to_say');
+    expect((int) $profile->diet_id)->toBe((int) $phase3A['diet_id']);
+    expect((int) $profile->smoking_status_id)->toBe((int) $phase3A['smoking_status_id']);
+    expect((int) $profile->drinking_status_id)->toBe((int) $phase3A['drinking_status_id']);
     expect(DB::table('profile_field_locks')
         ->where('profile_id', $profile->id)
         ->where('field_key', 'caste_id')
@@ -907,6 +990,8 @@ test('MobileProfile PUT api v1 matrimony-profile can update fields after prior m
     $gender = mobileApiProfileTestGender('female');
     $firstPhase1A = mobileApiProfileTestPhase1AOptions();
     $secondPhase1A = mobileApiProfileTestPhase1AOptions();
+    $firstPhase3A = mobileApiProfileTestMaritalLifestyleOptions();
+    $secondPhase3A = mobileApiProfileTestMaritalLifestyleOptions();
     $firstDegree = mobileApiProfileTestEducationDegree('B.A.', 20);
     $secondDegree = mobileApiProfileTestEducationDegree('M.B.A.', 30);
     $firstOccupation = mobileApiProfileTestOccupationMaster('Teacher');
@@ -928,6 +1013,8 @@ test('MobileProfile PUT api v1 matrimony-profile can update fields after prior m
         'caste_id' => $firstCaste->id,
         'sub_caste_id' => $firstSubCaste->id,
         'mother_tongue_id' => $firstPhase1A['mother_tongue_id'],
+        'marital_status_id' => $firstPhase3A['marital_status_id'],
+        'has_children' => false,
         'height_cm' => 160,
         'weight_kg' => 50,
         'complexion_id' => $firstPhase1A['complexion_id'],
@@ -935,6 +1022,9 @@ test('MobileProfile PUT api v1 matrimony-profile can update fields after prior m
         'physical_build_id' => $firstPhase1A['physical_build_id'],
         'spectacles_lens' => 'spectacles',
         'physical_condition' => 'none',
+        'diet_id' => $firstPhase3A['diet_id'],
+        'smoking_status_id' => $firstPhase3A['smoking_status_id'],
+        'drinking_status_id' => $firstPhase3A['drinking_status_id'],
         'occupation_master_id' => $firstOccupation->id,
         'company_name' => 'First Company',
         'work_location_text' => 'First Work Location',
@@ -960,6 +1050,8 @@ test('MobileProfile PUT api v1 matrimony-profile can update fields after prior m
         'caste_id' => $secondCaste->id,
         'sub_caste_id' => $secondSubCaste->id,
         'mother_tongue_id' => $secondPhase1A['mother_tongue_id'],
+        'marital_status_id' => $secondPhase3A['marital_status_id'],
+        'has_children' => true,
         'height_cm' => 172,
         'weight_kg' => 66,
         'complexion_id' => $secondPhase1A['complexion_id'],
@@ -967,6 +1059,9 @@ test('MobileProfile PUT api v1 matrimony-profile can update fields after prior m
         'physical_build_id' => $secondPhase1A['physical_build_id'],
         'spectacles_lens' => 'both',
         'physical_condition' => 'prefer_not_to_say',
+        'diet_id' => $secondPhase3A['diet_id'],
+        'smoking_status_id' => $secondPhase3A['smoking_status_id'],
+        'drinking_status_id' => $secondPhase3A['drinking_status_id'],
         'occupation_master_id' => $secondOccupation->id,
         'company_name' => 'Second Company',
         'work_location_text' => 'Second Work Location',
@@ -979,6 +1074,7 @@ test('MobileProfile PUT api v1 matrimony-profile can update fields after prior m
         ->assertJsonPath('profile.birth_city_id', $secondBirthCity->id)
         ->assertJsonPath('profile.birth_place_text', 'Second Birth Place')
         ->assertJsonPath('profile.mother_tongue_id', $secondPhase1A['mother_tongue_id'])
+        ->assertJsonPath('profile.marital_status_id', $secondPhase3A['marital_status_id'])
         ->assertJsonPath('profile.height_cm', 172)
         ->assertJsonPath('profile.weight_kg', 66)
         ->assertJsonPath('profile.complexion_id', $secondPhase1A['complexion_id'])
@@ -986,6 +1082,9 @@ test('MobileProfile PUT api v1 matrimony-profile can update fields after prior m
         ->assertJsonPath('profile.physical_build_id', $secondPhase1A['physical_build_id'])
         ->assertJsonPath('profile.spectacles_lens', 'both')
         ->assertJsonPath('profile.physical_condition', 'prefer_not_to_say')
+        ->assertJsonPath('profile.diet_id', $secondPhase3A['diet_id'])
+        ->assertJsonPath('profile.smoking_status_id', $secondPhase3A['smoking_status_id'])
+        ->assertJsonPath('profile.drinking_status_id', $secondPhase3A['drinking_status_id'])
         ->assertJsonPath('profile.occupation_master_id', $secondOccupation->id)
         ->assertJsonPath('profile.company_name', 'Second Company')
         ->assertJsonPath('profile.work_location_text', 'Second Work Location');
@@ -1002,6 +1101,8 @@ test('MobileProfile PUT api v1 matrimony-profile can update fields after prior m
     expect((int) $profile->sub_caste_id)->toBe((int) $secondSubCaste->id);
     expect($profile->highest_education)->toContain($secondDegree->code);
     expect((int) $profile->mother_tongue_id)->toBe((int) $secondPhase1A['mother_tongue_id']);
+    expect((int) $profile->marital_status_id)->toBe((int) $secondPhase3A['marital_status_id']);
+    expect((bool) $profile->has_children)->toBeTrue();
     expect((int) $profile->height_cm)->toBe(172);
     expect((int) $profile->weight_kg)->toBe(66);
     expect((int) $profile->complexion_id)->toBe((int) $secondPhase1A['complexion_id']);
@@ -1009,6 +1110,9 @@ test('MobileProfile PUT api v1 matrimony-profile can update fields after prior m
     expect((int) $profile->physical_build_id)->toBe((int) $secondPhase1A['physical_build_id']);
     expect($profile->spectacles_lens)->toBe('both');
     expect($profile->physical_condition)->toBe('prefer_not_to_say');
+    expect((int) $profile->diet_id)->toBe((int) $secondPhase3A['diet_id']);
+    expect((int) $profile->smoking_status_id)->toBe((int) $secondPhase3A['smoking_status_id']);
+    expect((int) $profile->drinking_status_id)->toBe((int) $secondPhase3A['drinking_status_id']);
     expect((int) $profile->occupation_master_id)->toBe((int) $secondOccupation->id);
     expect($profile->company_name)->toBe('Second Company');
     expect($profile->work_location_text)->toBe('Second Work Location');
@@ -1075,6 +1179,22 @@ test('MobileProfile PUT api v1 matrimony-profile rejects invalid education caree
     ])
         ->assertStatus(422)
         ->assertJsonValidationErrors(['education_slots']);
+});
+
+test('MobileProfile PUT api v1 matrimony-profile rejects invalid marital lifestyle ids', function () {
+    $user = User::factory()->create(['name' => 'Invalid Marital Lifestyle Account']);
+    app(MutationService::class)->createDraftProfileForUser($user);
+    $gender = mobileApiProfileTestGender('female');
+    Sanctum::actingAs($user);
+
+    foreach (['marital_status_id', 'diet_id', 'smoking_status_id', 'drinking_status_id'] as $field) {
+        $this->putJson('/api/v1/matrimony-profile', [
+            'gender_id' => $gender->id,
+            $field => 999999999,
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors([$field]);
+    }
 });
 
 test('MobileProfile GET api v1 matrimony profile returns clean display payload beside profile', function () {

@@ -210,6 +210,36 @@ Success response: HTTP 200
 }
 ```
 
+### GET `/api/v1/profile/marital-lifestyle-options`
+
+Requires bearer token. Returns read-only governed options for APK Edit All Marital + Lifestyle fields.
+
+Sources:
+
+- `marital_statuses`: `master_marital_statuses` via `App\Models\MasterMaritalStatus`
+- `diets`: `master_diets` via `App\Models\MasterDiet`
+- `smoking_statuses`: `master_smoking_statuses` via `App\Models\MasterSmokingStatus`
+- `drinking_statuses`: `master_drinking_statuses` via `App\Models\MasterDrinkingStatus`
+
+Success response: HTTP 200
+
+```json
+{
+  "marital_statuses": [
+    { "id": 1, "key": "never_married", "label": "Never Married", "label_en": "Never Married", "label_mr": null }
+  ],
+  "diets": [
+    { "id": 1, "key": "vegetarian", "label": "Vegetarian", "label_en": "Vegetarian", "label_mr": null }
+  ],
+  "smoking_statuses": [
+    { "id": 1, "key": "non_smoker", "label": "Non-smoker", "label_en": "Non-smoker", "label_mr": null }
+  ],
+  "drinking_statuses": [
+    { "id": 1, "key": "non_drinker", "label": "Non-drinker", "label_en": "Non-drinker", "label_mr": null }
+  ]
+}
+```
+
 ## Matrimony Profile
 
 All profile mutation goes through the governed mutation layer. The mobile create path creates a draft profile with `MutationService::createDraftProfileForUser()` and applies submitted profile data with `MutationService::applyManualSnapshot()`.
@@ -233,6 +263,8 @@ Request:
   "education_slots": "[{\"t\":\"d\",\"id\":1}]",
   "location_id": 123,
   "mother_tongue_id": 1,
+  "marital_status_id": 1,
+  "has_children": false,
   "height_cm": 168,
   "weight_kg": 58,
   "complexion_id": 1,
@@ -240,6 +272,9 @@ Request:
   "physical_build_id": 1,
   "spectacles_lens": "contact_lens",
   "physical_condition": "none",
+  "diet_id": 1,
+  "smoking_status_id": 1,
+  "drinking_status_id": 1,
   "occupation_master_id": 10,
   "company_name": "Navri Tech",
   "work_location_text": "Pune, Maharashtra"
@@ -259,6 +294,8 @@ Rules:
 - `education_slots`: nullable JSON string, max 8192; selected degree IDs must exist in `master_education.id`; when supplied, Laravel resolves it into `highest_education`
 - `location_id`: required, must exist in `addresses.id`
 - `mother_tongue_id`: nullable, must exist as an active `master_mother_tongues.id`
+- `marital_status_id`: nullable, must exist as an active `master_marital_statuses.id`
+- `has_children`: nullable boolean
 - `height_cm`: nullable integer, min 50, max 250
 - `weight_kg`: nullable integer, min 20, max 250
 - `complexion_id`: nullable, must exist as an active `master_complexions.id`
@@ -266,6 +303,9 @@ Rules:
 - `physical_build_id`: nullable, must exist as an active `master_physical_builds.id`
 - `spectacles_lens`: nullable, one of `no`, `spectacles`, `contact_lens`, `both`
 - `physical_condition`: nullable, one of `none`, `physically_challenged`, `hearing_condition`, `vision_condition`, `other`, `prefer_not_to_say`
+- `diet_id`: nullable, must exist as an active `master_diets.id`
+- `smoking_status_id`: nullable, must exist as an active `master_smoking_statuses.id`
+- `drinking_status_id`: nullable, must exist as an active `master_drinking_statuses.id`
 - `occupation_master_id`: nullable, must exist in `master_occupations.id`
 - `occupation_custom_id`: nullable, must exist in `master_occupation_custom.id` for the logged-in user; cannot be sent together with `occupation_master_id`
 - `company_name`: nullable string, max 255
@@ -304,6 +344,9 @@ Success response: HTTP 200
     "taluka_id": 4,
     "mother_tongue_id": 1,
     "mother_tongue_label": "Marathi",
+    "marital_status_id": 1,
+    "marital_status_label": "Never Married",
+    "has_children": false,
     "height_cm": 168,
     "weight_kg": 58,
     "complexion_id": 1,
@@ -314,6 +357,12 @@ Success response: HTTP 200
     "physical_build_label": "Average",
     "spectacles_lens": "contact_lens",
     "physical_condition": "none",
+    "diet_id": 1,
+    "diet_label": "Vegetarian",
+    "smoking_status_id": 1,
+    "smoking_status_label": "Non-smoker",
+    "drinking_status_id": 1,
+    "drinking_status_label": "Non-drinker",
     "occupation_master_id": 10,
     "occupation_master_label": "Software Engineer",
     "occupation_custom_id": null,
@@ -365,6 +414,9 @@ Success response: HTTP 200
     "taluka_id": 4,
     "mother_tongue_id": 1,
     "mother_tongue_label": "Marathi",
+    "marital_status_id": 1,
+    "marital_status_label": "Never Married",
+    "has_children": false,
     "height_cm": 168,
     "weight_kg": 58,
     "complexion_id": 1,
@@ -375,6 +427,12 @@ Success response: HTTP 200
     "physical_build_label": "Average",
     "spectacles_lens": "contact_lens",
     "physical_condition": "none",
+    "diet_id": 1,
+    "diet_label": "Vegetarian",
+    "smoking_status_id": 1,
+    "smoking_status_label": "Non-smoker",
+    "drinking_status_id": 1,
+    "drinking_status_label": "Non-drinker",
     "profile_photo": null,
     "partner_preferences": null
   }
@@ -410,6 +468,8 @@ Request:
   "location_id": 123,
   "address_line": "Optional address line",
   "mother_tongue_id": 1,
+  "marital_status_id": 1,
+  "has_children": false,
   "height_cm": 168,
   "weight_kg": 58,
   "complexion_id": 1,
@@ -417,6 +477,9 @@ Request:
   "physical_build_id": 1,
   "spectacles_lens": "contact_lens",
   "physical_condition": "none",
+  "diet_id": 1,
+  "smoking_status_id": 1,
+  "drinking_status_id": 1,
   "occupation_master_id": 10,
   "company_name": "Navri Tech",
   "work_location_text": "Pune, Maharashtra"
@@ -437,6 +500,8 @@ Rules:
 - `location_id`: sometimes required, must exist in `addresses.id`
 - `address_line`: nullable string, max 255
 - `mother_tongue_id`: nullable, must exist as an active `master_mother_tongues.id`
+- `marital_status_id`: nullable, must exist as an active `master_marital_statuses.id`
+- `has_children`: nullable boolean
 - `height_cm`: nullable integer, min 50, max 250
 - `weight_kg`: nullable integer, min 20, max 250
 - `complexion_id`: nullable, must exist as an active `master_complexions.id`
@@ -444,6 +509,9 @@ Rules:
 - `physical_build_id`: nullable, must exist as an active `master_physical_builds.id`
 - `spectacles_lens`: nullable, one of `no`, `spectacles`, `contact_lens`, `both`
 - `physical_condition`: nullable, one of `none`, `physically_challenged`, `hearing_condition`, `vision_condition`, `other`, `prefer_not_to_say`
+- `diet_id`: nullable, must exist as an active `master_diets.id`
+- `smoking_status_id`: nullable, must exist as an active `master_smoking_statuses.id`
+- `drinking_status_id`: nullable, must exist as an active `master_drinking_statuses.id`
 - `occupation_master_id`: nullable, must exist in `master_occupations.id`
 - `occupation_custom_id`: nullable, must exist in `master_occupation_custom.id` for the logged-in user; cannot be sent together with `occupation_master_id`
 - `company_name`: nullable string, max 255
@@ -475,6 +543,9 @@ Success response: HTTP 200
     "taluka_id": 4,
     "mother_tongue_id": 1,
     "mother_tongue_label": "Marathi",
+    "marital_status_id": 1,
+    "marital_status_label": "Never Married",
+    "has_children": false,
     "height_cm": 168,
     "weight_kg": 58,
     "complexion_id": 1,
@@ -485,6 +556,12 @@ Success response: HTTP 200
     "physical_build_label": "Average",
     "spectacles_lens": "contact_lens",
     "physical_condition": "none",
+    "diet_id": 1,
+    "diet_label": "Vegetarian",
+    "smoking_status_id": 1,
+    "smoking_status_label": "Non-smoker",
+    "drinking_status_id": 1,
+    "drinking_status_label": "Non-drinker",
     "occupation_master_id": 10,
     "occupation_master_label": "Software Engineer",
     "occupation_custom_id": null,
