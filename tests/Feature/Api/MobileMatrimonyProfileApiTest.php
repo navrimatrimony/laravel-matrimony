@@ -926,6 +926,34 @@ test('MobileProfile GET api v1 profile partner preference options returns govern
     expect(collect($response->json('preferred_profile_managed_by'))->pluck('key')->all())->toBe(['', 'self', 'parent_guardian', 'sibling', 'relative', 'friend', 'other']);
 });
 
+test('MobileProfile GET api v1 matrimony-profile returns read only partner preference suggestions', function () {
+    $user = User::factory()->create(['name' => 'Partner Preference Suggestion Account']);
+    $options = mobileApiProfileTestMaritalLifestyleOptions();
+    $profile = mobileApiCreateValidActionProfile($user, 'Partner Suggestion Candidate', 'female', null, [
+        'date_of_birth' => now()->subYears(31)->subDay()->toDateString(),
+        'height_cm' => 160,
+        'marital_status_id' => $options['marital_status_id'],
+        'diet_id' => $options['diet_id'],
+    ]);
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson('/api/v1/matrimony-profile');
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('profile.preferred_age_min', null)
+        ->assertJsonPath('profile.partner_preference_suggestions.preferred_age_min', 31)
+        ->assertJsonPath('profile.partner_preference_suggestions.preferred_age_max', 36)
+        ->assertJsonPath('profile.partner_preference_suggestions.preferred_height_min_cm', 160)
+        ->assertJsonPath('profile.partner_preference_suggestions.preferred_height_max_cm', 170)
+        ->assertJsonPath('profile.partner_preference_suggestions.preferred_marital_status_ids', [$options['marital_status_id']])
+        ->assertJsonPath('profile.partner_preference_suggestions.preferred_diet_ids', [$options['diet_id']]);
+
+    $this->assertDatabaseMissing('profile_preference_criteria', [
+        'profile_id' => $profile->id,
+    ]);
+});
+
 test('MobileProfile POST api v1 matrimony-profile accepts canonical community ids', function () {
     mobileApiProfileTestSeedCurrentAddressType();
     $user = User::factory()->create(['name' => 'Canonical Account']);

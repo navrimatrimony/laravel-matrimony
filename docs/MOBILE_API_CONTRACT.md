@@ -605,10 +605,23 @@ Success response: HTTP 200
     "preferred_diet_ids": [1, 3],
     "preferred_diet_labels": ["Vegetarian", "Jain"],
     "profile_photo": null,
-    "partner_preferences": null
+    "partner_preferences": null,
+    "partner_preference_suggestions": {
+      "preferred_age_min": 24,
+      "preferred_age_max": 31,
+      "preferred_height_min_cm": 150,
+      "preferred_height_max_cm": 180,
+      "preferred_marital_status_ids": [1],
+      "preferred_diet_ids": [1]
+    }
   }
 }
 ```
+
+`partner_preference_suggestions` is read-only. It is computed from the existing
+profile by `PartnerPreferenceSuggestionService` and is intended only for mobile
+Edit All UI defaults. It never writes to `profile_preference_criteria` unless the
+user explicitly saves the Partner Preferences section.
 
 Already exists response: HTTP 409
 

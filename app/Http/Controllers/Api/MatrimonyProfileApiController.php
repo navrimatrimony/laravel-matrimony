@@ -17,6 +17,7 @@ use App\Services\EducationService;
 use App\Services\Matching\MatchingService;
 use App\Services\MutationService;
 use App\Services\OccupationService;
+use App\Services\PartnerPreferenceSuggestionService;
 use App\Services\PartnerPreferenceSnapshotBuilder;
 use App\Services\Parsing\IntakeControlledFieldNormalizer;
 use App\Services\ProfileFieldLockService;
@@ -1121,6 +1122,7 @@ class MatrimonyProfileApiController extends Controller
 
         $criteria = $profile->preferenceCriteria;
         $partnerPreferences = $criteria !== null ? $criteria->toArray() : null;
+        $partnerPreferenceSuggestions = PartnerPreferenceSuggestionService::suggestForProfile($profile);
         $preferredMaritalStatusIds = $this->partnerPreferencePivotIds('profile_preferred_marital_statuses', 'marital_status_id', (int) $profile->id);
         if ($preferredMaritalStatusIds === [] && $criteria?->preferred_marital_status_id !== null) {
             $preferredMaritalStatusIds = [(int) $criteria->preferred_marital_status_id];
@@ -1248,6 +1250,7 @@ class MatrimonyProfileApiController extends Controller
             'preferred_diet_ids' => $preferredDietIds,
             'preferred_diet_labels' => $this->masterTableLabelsByIds('master_diets', $preferredDietIds),
             'partner_preferences' => $partnerPreferences,
+            'partner_preference_suggestions' => $partnerPreferenceSuggestions,
         ];
 
         $profileData = array_merge($base, $parity);
