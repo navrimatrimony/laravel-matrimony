@@ -2,7 +2,6 @@
 
 namespace App\Services\Showcase;
 
-use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfilePhoto;
 use App\Models\User;
@@ -111,14 +110,11 @@ class ShowcaseProfileFactory
         }
 
         $email = $this->allocateUniqueLoginEmailForShowcase($fullName);
-        $userGender = $this->genderKeyFromProfileGenderId((int) ($attrs['gender_id'] ?? 0));
-
         $user = User::firstOrCreate(
             ['email' => $email],
             [
                 'name' => $fullName,
                 'password' => bcrypt(Str::random(32)),
-                'gender' => $userGender,
             ]
         );
         if ($user->matrimonyProfile) {
@@ -130,7 +126,6 @@ class ShowcaseProfileFactory
 
         $user->forceFill([
             'name' => $fullName,
-            'gender' => $userGender,
         ])->save();
 
         $attrs['user_id'] = $user->id;
@@ -211,18 +206,6 @@ class ShowcaseProfileFactory
         return 'member.'.Str::lower(Str::random(16)).'@system.local';
     }
 
-    private function genderKeyFromProfileGenderId(int $genderId): string
-    {
-        if ($genderId <= 0) {
-            return 'other';
-        }
-
-        $key = MasterGender::query()->where('id', $genderId)->value('key');
-        $key = $key !== null ? (string) $key : '';
-
-        return in_array($key, ['male', 'female'], true) ? $key : 'other';
-    }
-
     private function syncShowcasePrimaryPhotoRow(MatrimonyProfile $profile): void
     {
         if (! Schema::hasTable('profile_photos')) {
@@ -290,7 +273,6 @@ class ShowcaseProfileFactory
 
         $user->forceFill([
             'name' => $name,
-            'gender' => $this->genderKeyFromProfileGenderId((int) ($profile->gender_id ?? 0)),
         ])->save();
     }
 
