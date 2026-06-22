@@ -262,6 +262,8 @@ Sources:
 - `vashyas`: `master_vashyas`
 - `rashi_lords`: `master_rashi_lords`
 - `birth_weekdays`: `components.horoscope.weekdays` translation array, matching the website Monday-to-Sunday dropdown order
+- `horoscope_rules`: `HoroscopeRuleService::getRulesForFrontend()` dependency metadata used by the website horoscope engine
+- `rashi_ashtakoota`: `HoroscopeRuleService::getRashiAshtakootaForFrontend()` rashi-based Varna/Vashya/Rashi Lord metadata used by the website horoscope engine
 
 Success response: HTTP 200
 
@@ -296,7 +298,31 @@ Success response: HTTP 200
   "rashi_lords": [],
   "birth_weekdays": [
     { "key": "Monday", "label": "Monday", "label_en": "Monday", "label_mr": "सोमवार" }
-  ]
+  ],
+  "horoscope_rules": {
+    "rashi_rules": [
+      { "nakshatra_id": 1, "charan": 1, "rashi_id": 1 }
+    ],
+    "nakshatra_attributes": [
+      { "nakshatra_id": 1, "gan_id": 1, "nadi_id": 1, "yoni_id": 1 }
+    ],
+    "distinct_rashi_ids_by_nakshatra": {
+      "1": [1]
+    },
+    "nakshatra_ids_by_rashi": {
+      "1": [1]
+    }
+  },
+  "rashi_ashtakoota": {
+    "1": {
+      "varna_id": 1,
+      "vashya_id": 1,
+      "rashi_lord_id": 1,
+      "varna": "Brahmin",
+      "vashya": "Chatushpada",
+      "rashi_lord": "Mars"
+    }
+  }
 }
 ```
 

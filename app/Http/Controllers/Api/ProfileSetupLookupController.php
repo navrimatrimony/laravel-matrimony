@@ -22,6 +22,7 @@ use App\Models\MasterSmokingStatus;
 use App\Models\OccupationCategory;
 use App\Models\OccupationCustom;
 use App\Models\OccupationMaster;
+use App\Services\HoroscopeRuleService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -93,7 +94,7 @@ class ProfileSetupLookupController extends Controller
      * GET /api/v1/profile/remaining-profile-options
      * Read-only mobile options for APK Edit All family + horoscope fields.
      */
-    public function remainingProfileOptions(Request $request): JsonResponse
+    public function remainingProfileOptions(Request $request, HoroscopeRuleService $horoscopeRuleService): JsonResponse
     {
         return response()->json([
             'family_types' => $this->masterOptions(MasterFamilyType::class, 'master_family_types', ['id']),
@@ -112,6 +113,8 @@ class ProfileSetupLookupController extends Controller
             'vashyas' => $this->tableOptions('master_vashyas', ['label', 'id']),
             'rashi_lords' => $this->tableOptions('master_rashi_lords', ['label', 'id']),
             'birth_weekdays' => $this->birthWeekdayOptions(),
+            'horoscope_rules' => $horoscopeRuleService->getRulesForFrontend(),
+            'rashi_ashtakoota' => $horoscopeRuleService->getRashiAshtakootaForFrontend(),
         ]);
     }
 

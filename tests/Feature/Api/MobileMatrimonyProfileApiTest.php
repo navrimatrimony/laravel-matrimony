@@ -757,6 +757,28 @@ test('MobileProfile GET api v1 profile remaining options returns family and horo
     $familySecond = mobileApiProfileTestMasterOption('master_family_types', 'afamily', 'Alpha Source Family');
     $varnaFirst = mobileApiProfileTestMasterOption('master_varnas', 'zvarna', 'Zulu Source Varna');
     $varnaSecond = mobileApiProfileTestMasterOption('master_varnas', 'avarna', 'Alpha Source Varna');
+    DB::table('master_nakshatra_pada_rashi_rules')->updateOrInsert(
+        ['nakshatra_id' => $options['nakshatra_id'], 'charan' => 1],
+        ['rashi_id' => $options['rashi_id'], 'is_active' => true, 'updated_at' => now()]
+    );
+    DB::table('master_nakshatra_attributes')->updateOrInsert(
+        ['nakshatra_id' => $options['nakshatra_id']],
+        [
+            'gan_id' => $options['gan_id'],
+            'nadi_id' => $options['nadi_id'],
+            'yoni_id' => $options['yoni_id'],
+            'is_active' => true,
+            'updated_at' => now(),
+        ]
+    );
+    DB::table('master_rashis')
+        ->where('id', $options['rashi_id'])
+        ->update([
+            'varna_id' => $options['varna_id'],
+            'vashya_id' => $options['vashya_id'],
+            'rashi_lord_id' => $options['rashi_lord_id'],
+            'updated_at' => now(),
+        ]);
 
     $response = $this->getJson('/api/v1/profile/remaining-profile-options');
 
@@ -793,6 +815,13 @@ test('MobileProfile GET api v1 profile remaining options returns family and horo
             'birth_weekdays' => [
                 '*' => ['key', 'label', 'label_en', 'label_mr'],
             ],
+            'horoscope_rules' => [
+                'rashi_rules',
+                'nakshatra_attributes',
+                'distinct_rashi_ids_by_nakshatra',
+                'nakshatra_ids_by_rashi',
+            ],
+            'rashi_ashtakoota',
         ]);
 
     expect(collect($response->json('family_types'))->pluck('id')->all())->toContain($options['family_type_id']);
@@ -821,6 +850,20 @@ test('MobileProfile GET api v1 profile remaining options returns family and horo
     ]);
     mobileApiProfileAssertIdBefore(collect($response->json('family_types'))->pluck('id')->all(), $familyFirst, $familySecond);
     mobileApiProfileAssertIdBefore(collect($response->json('varnas'))->pluck('id')->all(), $varnaSecond, $varnaFirst);
+    expect($response->json("horoscope_rules.rashi_rules"))->toContain([
+        'nakshatra_id' => $options['nakshatra_id'],
+        'charan' => 1,
+        'rashi_id' => $options['rashi_id'],
+    ]);
+    expect($response->json("horoscope_rules.nakshatra_attributes"))->toContain([
+        'nakshatra_id' => $options['nakshatra_id'],
+        'gan_id' => $options['gan_id'],
+        'nadi_id' => $options['nadi_id'],
+        'yoni_id' => $options['yoni_id'],
+    ]);
+    expect($response->json("rashi_ashtakoota.{$options['rashi_id']}.varna_id"))->toBe($options['varna_id']);
+    expect($response->json("rashi_ashtakoota.{$options['rashi_id']}.vashya_id"))->toBe($options['vashya_id']);
+    expect($response->json("rashi_ashtakoota.{$options['rashi_id']}.rashi_lord_id"))->toBe($options['rashi_lord_id']);
 });
 
 test('MobileProfile POST api v1 matrimony-profile accepts canonical community ids', function () {
