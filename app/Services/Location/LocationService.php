@@ -5,6 +5,7 @@ namespace App\Services\Location;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Services\Profile\ProfileCanonicalResidenceService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
@@ -663,6 +664,43 @@ class LocationService
             $candidateLocationId = (int) $candidate->id;
             if (! isset($distanceByLocation[$candidateLocationId]) || $distance < $distanceByLocation[$candidateLocationId]) {
                 $distanceByLocation[$candidateLocationId] = $distance;
+            }
+        }
+
+        $geo = Location::geoTable();
+        $centroidRows = DB::table($geo.' as village')
+            ->join($geo.' as taluka', 'taluka.id', '=', 'village.parent_id')
+            ->selectRaw('taluka.id as id, AVG(village.lat) as lat, AVG(village.lng) as lng')
+            ->where('village.hierarchy', 'village')
+            ->where('village.is_active', true)
+            ->where('taluka.hierarchy', 'taluka')
+            ->where('taluka.is_active', true)
+            ->whereNotNull('village.lat')
+            ->whereNotNull('village.lng')
+            ->whereBetween('village.lat', [$minLat, $maxLat])
+            ->whereBetween('village.lng', [$minLng, $maxLng])
+            ->groupBy('taluka.id')
+            ->get();
+
+        foreach ($centroidRows as $row) {
+            $talukaId = (int) ($row->id ?? 0);
+            if ($talukaId <= 0 || $row->lat === null || $row->lng === null) {
+                continue;
+            }
+
+            $distance = $this->haversineDistanceKm(
+                $lat,
+                $lng,
+                (float) $row->lat,
+                (float) $row->lng
+            );
+
+            if ($distance > $radiusKm) {
+                continue;
+            }
+
+            if (! isset($distanceByLocation[$talukaId]) || $distance < $distanceByLocation[$talukaId]) {
+                $distanceByLocation[$talukaId] = $distance;
             }
         }
 

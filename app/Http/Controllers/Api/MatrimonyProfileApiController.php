@@ -46,6 +46,10 @@ class MatrimonyProfileApiController extends Controller
         'willing_to_relocate',
         'preferred_marital_status_ids',
         'preferred_diet_ids',
+        'preferred_country_ids',
+        'preferred_state_ids',
+        'preferred_district_ids',
+        'preferred_taluka_ids',
     ];
 
     /**
@@ -211,6 +215,16 @@ class MatrimonyProfileApiController extends Controller
         }
         if ($this->requestInputKeyExists($request, 'preferred_diet_ids')) {
             $snapshot['preferred_diet_ids'] = $row['preferred_diet_ids'] ?? [];
+        }
+        foreach ([
+            'preferred_country_ids',
+            'preferred_state_ids',
+            'preferred_district_ids',
+            'preferred_taluka_ids',
+        ] as $key) {
+            if ($this->requestInputKeyExists($request, $key)) {
+                $snapshot[$key] = $row[$key] ?? [];
+            }
         }
 
         return $snapshot;
@@ -1128,6 +1142,10 @@ class MatrimonyProfileApiController extends Controller
             $preferredMaritalStatusIds = [(int) $criteria->preferred_marital_status_id];
         }
         $preferredDietIds = $this->partnerPreferencePivotIds('profile_preferred_diets', 'diet_id', (int) $profile->id);
+        $preferredCountryIds = $this->partnerPreferencePivotIds('profile_preferred_countries', 'country_id', (int) $profile->id);
+        $preferredStateIds = $this->partnerPreferencePivotIds('profile_preferred_states', 'state_id', (int) $profile->id);
+        $preferredDistrictIds = $this->partnerPreferencePivotIds('profile_preferred_districts', 'district_id', (int) $profile->id);
+        $preferredTalukaIds = $this->partnerPreferencePivotIds('profile_preferred_talukas', 'taluka_id', (int) $profile->id);
         $birthPlaceLabel = trim($profile->birthLocationDisplayLine());
         if ($birthPlaceLabel === '') {
             $birthPlaceLabel = trim((string) ($profile->birth_place_text ?? ''));
@@ -1249,6 +1267,10 @@ class MatrimonyProfileApiController extends Controller
             'preferred_marital_status_labels' => $this->masterTableLabelsByIds('master_marital_statuses', $preferredMaritalStatusIds),
             'preferred_diet_ids' => $preferredDietIds,
             'preferred_diet_labels' => $this->masterTableLabelsByIds('master_diets', $preferredDietIds),
+            'preferred_country_ids' => $preferredCountryIds,
+            'preferred_state_ids' => $preferredStateIds,
+            'preferred_district_ids' => $preferredDistrictIds,
+            'preferred_taluka_ids' => $preferredTalukaIds,
             'partner_preferences' => $partnerPreferences,
             'partner_preference_suggestions' => $partnerPreferenceSuggestions,
         ];

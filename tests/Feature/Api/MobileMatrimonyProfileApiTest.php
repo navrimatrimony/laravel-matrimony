@@ -1043,9 +1043,10 @@ test('MobileProfile partner preference suggestions can use child village centroi
     $state = mobileApiProfileTestLocationNode('state', 'Maharashtra', $country);
     $district = mobileApiProfileTestLocationNode('district', 'Sangli', $state);
     $ownTaluka = mobileApiProfileTestLocationNode('taluka', 'Khanapur', $district);
-    $nearTaluka = mobileApiProfileTestLocationNode('taluka', 'Tasgaon', $district, ['lat' => 17.2850, 'lng' => 74.1900]);
+    $nearTaluka = mobileApiProfileTestLocationNode('taluka', 'Tasgaon', $district);
     $leaf = mobileApiProfileTestLocationNode('village', 'Vita', $ownTaluka);
     mobileApiProfileTestLocationNode('village', 'Taluka Center', $ownTaluka, ['lat' => 17.2800, 'lng' => 74.1800]);
+    mobileApiProfileTestLocationNode('village', 'Nearby Taluka Center', $nearTaluka, ['lat' => 17.2850, 'lng' => 74.1900]);
     $user = User::factory()->create(['name' => 'Centroid Nearby Taluka Account']);
     mobileApiCreateValidActionProfile($user, 'Centroid Nearby Taluka Candidate', 'female', $leaf);
     Sanctum::actingAs($user);
@@ -1720,6 +1721,11 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
         $options['diet_id'],
         $options['second_diet_id'],
     ])->sort()->values()->all();
+    $locationChain = mobileApiProfileTestLocationChain();
+    $expectedCountryIds = [(int) $locationChain['country']->id];
+    $expectedStateIds = [(int) $locationChain['state']->id];
+    $expectedDistrictIds = [(int) $locationChain['district']->id];
+    $expectedTalukaIds = [(int) $locationChain['taluka']->id];
 
     $response = $this->putJson('/api/v1/matrimony-profile', [
         'preferred_age_min' => 24,
@@ -1738,6 +1744,10 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
             $options['diet_id'],
             $options['second_diet_id'],
         ],
+        'preferred_country_ids' => $expectedCountryIds,
+        'preferred_state_ids' => $expectedStateIds,
+        'preferred_district_ids' => $expectedDistrictIds,
+        'preferred_taluka_ids' => $expectedTalukaIds,
         'narrative_expectations' => 'Looking for a thoughtful partner.',
     ]);
 
@@ -1754,6 +1764,10 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
         ->assertJsonPath('profile.willing_to_relocate', true)
         ->assertJsonPath('profile.preferred_marital_status_ids', $expectedMaritalIds)
         ->assertJsonPath('profile.preferred_diet_ids', $expectedDietIds)
+        ->assertJsonPath('profile.preferred_country_ids', $expectedCountryIds)
+        ->assertJsonPath('profile.preferred_state_ids', $expectedStateIds)
+        ->assertJsonPath('profile.preferred_district_ids', $expectedDistrictIds)
+        ->assertJsonPath('profile.preferred_taluka_ids', $expectedTalukaIds)
         ->assertJsonPath('profile.narrative_about_me', 'Existing about me text.')
         ->assertJsonPath('profile.narrative_expectations', 'Looking for a thoughtful partner.');
 
@@ -1773,6 +1787,34 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
         ->map(fn ($id) => (int) $id)
         ->values()
         ->all();
+    $countryIds = DB::table('profile_preferred_countries')
+        ->where('profile_id', $profile->id)
+        ->orderBy('country_id')
+        ->pluck('country_id')
+        ->map(fn ($id) => (int) $id)
+        ->values()
+        ->all();
+    $stateIds = DB::table('profile_preferred_states')
+        ->where('profile_id', $profile->id)
+        ->orderBy('state_id')
+        ->pluck('state_id')
+        ->map(fn ($id) => (int) $id)
+        ->values()
+        ->all();
+    $districtIds = DB::table('profile_preferred_districts')
+        ->where('profile_id', $profile->id)
+        ->orderBy('district_id')
+        ->pluck('district_id')
+        ->map(fn ($id) => (int) $id)
+        ->values()
+        ->all();
+    $talukaIds = DB::table('profile_preferred_talukas')
+        ->where('profile_id', $profile->id)
+        ->orderBy('taluka_id')
+        ->pluck('taluka_id')
+        ->map(fn ($id) => (int) $id)
+        ->values()
+        ->all();
 
     expect((int) $criteria->preferred_age_min)->toBe(24);
     expect((int) $criteria->preferred_age_max)->toBe(31);
@@ -1784,6 +1826,10 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
     expect((bool) $criteria->willing_to_relocate)->toBeTrue();
     expect($maritalIds)->toBe($expectedMaritalIds);
     expect($dietIds)->toBe($expectedDietIds);
+    expect($countryIds)->toBe($expectedCountryIds);
+    expect($stateIds)->toBe($expectedStateIds);
+    expect($districtIds)->toBe($expectedDistrictIds);
+    expect($talukaIds)->toBe($expectedTalukaIds);
     expect($extended->narrative_about_me)->toBe('Existing about me text.');
     expect($extended->narrative_expectations)->toBe('Looking for a thoughtful partner.');
     expect($extended->additional_notes)->toBe('Keep this note.');

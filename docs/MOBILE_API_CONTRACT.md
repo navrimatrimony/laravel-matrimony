@@ -650,9 +650,10 @@ Edit All UI defaults. It never writes to `profile_preference_criteria` unless th
 user explicitly saves the Partner Preferences section. Location suggestions include
 the member's own taluka first, then nearby talukas from the `addresses` latitude /
 longitude data using a bounded distance query. Nearby talukas may cross district or
-state borders. If reliable coordinates are unavailable, the response falls back to
-the existing residence district chain and does not use pincode as a fake nearby
-signal.
+state borders. When taluka rows do not have their own coordinates, the backend may
+derive a taluka centroid from child village coordinates inside the bounded search
+box. If reliable coordinates are unavailable, the response falls back to the
+existing residence district chain and does not use pincode as a fake nearby signal.
 
 Already exists response: HTTP 409
 
