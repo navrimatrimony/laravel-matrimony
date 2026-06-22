@@ -617,6 +617,100 @@ class LocationService
     }
 
     /**
+     * Nearby taluka rows from a coordinate. This is intentionally narrower than
+     * {@see getNearbyLocations()} so profile preference defaults do not scan every
+     * geocoded address row in PHP.
+     *
+     * @return array<int, array{id:int,name:string,hierarchy:string,label:string,district_id:int|null,state_id:int|null,country_id:int|null,distance_km:float}>
+     */
+    public function nearbyTalukasByCoordinate(float $lat, float $lng, int $radiusKm = 75, int $limit = 12): array
+    {
+        $radiusKm = max(1, min(250, $radiusKm));
+        $limit = max(1, min(50, $limit));
+
+        $latDelta = $radiusKm / 111.045;
+        $cosLat = cos(deg2rad($lat));
+        $lngDelta = abs($cosLat) < 0.01 ? 180.0 : $radiusKm / (111.045 * abs($cosLat));
+
+        $minLat = max(-90.0, $lat - $latDelta);
+        $maxLat = min(90.0, $lat + $latDelta);
+        $minLng = max(-180.0, $lng - $lngDelta);
+        $maxLng = min(180.0, $lng + $lngDelta);
+
+        $candidates = Location::query()
+            ->select(['id', 'lat', 'lng'])
+            ->where('hierarchy', 'taluka')
+            ->where('is_active', true)
+            ->whereNotNull('lat')
+            ->whereNotNull('lng')
+            ->whereBetween('lat', [$minLat, $maxLat])
+            ->whereBetween('lng', [$minLng, $maxLng])
+            ->get();
+
+        $distanceByLocation = [];
+        foreach ($candidates as $candidate) {
+            $distance = $this->haversineDistanceKm(
+                $lat,
+                $lng,
+                (float) $candidate->lat,
+                (float) $candidate->lng
+            );
+
+            if ($distance > $radiusKm) {
+                continue;
+            }
+
+            $candidateLocationId = (int) $candidate->id;
+            if (! isset($distanceByLocation[$candidateLocationId]) || $distance < $distanceByLocation[$candidateLocationId]) {
+                $distanceByLocation[$candidateLocationId] = $distance;
+            }
+        }
+
+        if ($distanceByLocation === []) {
+            return [];
+        }
+
+        asort($distanceByLocation, SORT_NUMERIC);
+        $distanceByLocation = array_slice($distanceByLocation, 0, $limit, true);
+
+        $locations = Location::query()
+            ->with('parent')
+            ->whereIn('id', array_keys($distanceByLocation))
+            ->where('hierarchy', 'taluka')
+            ->where('is_active', true)
+            ->get();
+
+        $this->hydrateParentChain($locations);
+
+        return $locations
+            ->map(function (Location $location) use ($distanceByLocation): ?array {
+                $distance = $distanceByLocation[(int) $location->id] ?? null;
+                if ($distance === null) {
+                    return null;
+                }
+
+                $district = $this->getAncestorByType($location, 'district');
+                $state = $this->getAncestorByType($location, 'state');
+                $country = $this->getAncestorByType($location, 'country');
+
+                return [
+                    'id' => (int) $location->id,
+                    'name' => (string) $location->name,
+                    'hierarchy' => (string) $location->hierarchy,
+                    'label' => $this->getDisplayLabel($location),
+                    'district_id' => $district !== null ? (int) $district->id : null,
+                    'state_id' => $state !== null ? (int) $state->id : null,
+                    'country_id' => $country !== null ? (int) $country->id : null,
+                    'distance_km' => round((float) $distance, 2),
+                ];
+            })
+            ->filter()
+            ->sortBy('distance_km')
+            ->values()
+            ->all();
+    }
+
+    /**
      * @return array<int, array{profile_id:int,name:string,location_id:int,location_label:string,distance_km:float}>
      */
     public function getNearbyProfiles(int $locationId, int $radiusKm = 10, ?string $hierarchy = null): array

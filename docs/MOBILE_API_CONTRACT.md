@@ -611,6 +611,32 @@ Success response: HTTP 200
       "preferred_age_max": 31,
       "preferred_height_min_cm": 150,
       "preferred_height_max_cm": 180,
+      "preferred_country_ids": [1],
+      "preferred_state_ids": [12, 13],
+      "preferred_district_ids": [101, 202],
+      "preferred_taluka_ids": [1001, 2002],
+      "preferred_location_suggestions": [
+        {
+          "id": 1001,
+          "type": "taluka",
+          "label": "Khanapur, Sangli",
+          "district_id": 101,
+          "state_id": 12,
+          "country_id": 1,
+          "distance_km": 0,
+          "source": "own_taluka"
+        },
+        {
+          "id": 2002,
+          "type": "taluka",
+          "label": "Athani, Belagavi",
+          "district_id": 202,
+          "state_id": 13,
+          "country_id": 1,
+          "distance_km": 18.42,
+          "source": "nearby_taluka"
+        }
+      ],
       "preferred_marital_status_ids": [1],
       "preferred_diet_ids": [1]
     }
@@ -621,7 +647,12 @@ Success response: HTTP 200
 `partner_preference_suggestions` is read-only. It is computed from the existing
 profile by `PartnerPreferenceSuggestionService` and is intended only for mobile
 Edit All UI defaults. It never writes to `profile_preference_criteria` unless the
-user explicitly saves the Partner Preferences section.
+user explicitly saves the Partner Preferences section. Location suggestions include
+the member's own taluka first, then nearby talukas from the `addresses` latitude /
+longitude data using a bounded distance query. Nearby talukas may cross district or
+state borders. If reliable coordinates are unavailable, the response falls back to
+the existing residence district chain and does not use pincode as a fake nearby
+signal.
 
 Already exists response: HTTP 409
 

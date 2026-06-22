@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Models\District;
+use App\Models\Location;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
+use App\Services\Location\LocationService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -13,6 +15,10 @@ use Illuminate\Support\Facades\DB;
  */
 class PartnerPreferenceSuggestionService
 {
+    private const NEARBY_TALUKA_RADIUS_KM = 75;
+
+    private const NEARBY_TALUKA_LIMIT = 12;
+
     /** Canonical centimetres for a 4-inch span (4 × 2.54, rounded). */
     public static function fourInchesCm(): int
     {
@@ -176,6 +182,91 @@ class PartnerPreferenceSuggestionService
     }
 
     /**
+     * Default partner location pivots from own taluka + geographically nearby talukas.
+     * Cross-district and cross-state talukas are allowed. If reliable coordinates are
+     * unavailable, the method falls back to the existing district-only defaults and
+     * does not fake nearby matches from pincode or state.
+     *
+     * @return array{
+     *   preferred_country_ids: array<int, int>,
+     *   preferred_state_ids: array<int, int>,
+     *   preferred_district_ids: array<int, int>,
+     *   preferred_taluka_ids: array<int, int>,
+     *   preferred_location_suggestions: array<int, array{id:int,type:string,label:string,district_id:int|null,state_id:int|null,country_id:int|null,distance_km:float,source:string}>
+     * }
+     */
+    public static function defaultLocationPivotsFromNearbyTalukas(MatrimonyProfile $profile): array
+    {
+        $fallback = self::defaultLocationPivotsFromOwnDistrict($profile);
+        $fallback['preferred_location_suggestions'] = [];
+
+        $leaf = self::residenceLocation($profile);
+        if ($leaf === null) {
+            return $fallback;
+        }
+
+        $locationService = app(LocationService::class);
+        $locationService->ensureAncestorsLoaded($leaf);
+        $hierarchy = $locationService->fillHierarchyGaps($leaf, $locationService->getFullHierarchy($leaf));
+        $ownTaluka = self::ownTalukaFromLocation($leaf, $hierarchy);
+        if ($ownTaluka === null) {
+            return $fallback;
+        }
+
+        $locationService->ensureAncestorsLoaded($ownTaluka);
+        $suggestions = [];
+        $ownRow = self::talukaSuggestionRow($ownTaluka, 0.0, 'own_taluka', $locationService);
+        if ($ownRow !== null) {
+            $suggestions[(int) $ownRow['id']] = $ownRow;
+        }
+
+        $coordinate = self::nearbyTalukaSourceCoordinate($ownTaluka, $leaf);
+        if ($coordinate !== null) {
+            $nearbyRows = $locationService->nearbyTalukasByCoordinate(
+                (float) $coordinate['lat'],
+                (float) $coordinate['lng'],
+                self::NEARBY_TALUKA_RADIUS_KM,
+                self::NEARBY_TALUKA_LIMIT
+            );
+            foreach ($nearbyRows as $nearbyRow) {
+                $id = (int) ($nearbyRow['id'] ?? 0);
+                if ($id <= 0 || isset($suggestions[$id])) {
+                    continue;
+                }
+
+                $suggestions[$id] = [
+                    'id' => $id,
+                    'type' => 'taluka',
+                    'label' => (string) ($nearbyRow['label'] ?? ''),
+                    'district_id' => self::nullablePositiveInt($nearbyRow['district_id'] ?? null),
+                    'state_id' => self::nullablePositiveInt($nearbyRow['state_id'] ?? null),
+                    'country_id' => self::nullablePositiveInt($nearbyRow['country_id'] ?? null),
+                    'distance_km' => round((float) ($nearbyRow['distance_km'] ?? 0), 2),
+                    'source' => 'nearby_taluka',
+                ];
+
+                if (count($suggestions) >= self::NEARBY_TALUKA_LIMIT) {
+                    break;
+                }
+            }
+        }
+
+        if ($suggestions === []) {
+            return $fallback;
+        }
+
+        $suggestions = array_values($suggestions);
+
+        return [
+            'preferred_country_ids' => self::uniqueIntList(array_column($suggestions, 'country_id')),
+            'preferred_state_ids' => self::uniqueIntList(array_column($suggestions, 'state_id')),
+            'preferred_district_ids' => self::uniqueIntList(array_column($suggestions, 'district_id')),
+            'preferred_taluka_ids' => self::uniqueIntList(array_column($suggestions, 'id')),
+            'preferred_location_suggestions' => $suggestions,
+        ];
+    }
+
+    /**
      * Default partner diet pivot IDs from member's own diet_id (single id in pivot). Not persisted here.
      *
      * @return array<int, int>
@@ -200,7 +291,7 @@ class PartnerPreferenceSuggestionService
      */
     public static function suggestForProfile(MatrimonyProfile $profile): array
     {
-        $location = self::defaultLocationPivotsFromOwnDistrict($profile);
+        $location = self::defaultLocationPivotsFromNearbyTalukas($profile);
 
         $out = [
             'preferred_age_min' => null,
@@ -216,6 +307,7 @@ class PartnerPreferenceSuggestionService
             'preferred_state_ids' => $location['preferred_state_ids'],
             'preferred_district_ids' => $location['preferred_district_ids'],
             'preferred_taluka_ids' => $location['preferred_taluka_ids'],
+            'preferred_location_suggestions' => $location['preferred_location_suggestions'] ?? [],
             'preferred_education_degree_ids' => [],
             'preferred_occupation_master_ids' => [],
             'preferred_diet_ids' => self::defaultPreferredDietIds($profile),
@@ -265,6 +357,127 @@ class PartnerPreferenceSuggestionService
         $out['preferred_marital_status_ids'] = $mid !== null ? [(int) $mid] : [];
 
         return $out;
+    }
+
+    private static function residenceLocation(MatrimonyProfile $profile): ?Location
+    {
+        $locationId = (int) ($profile->location_id ?? 0);
+        if ($locationId <= 0) {
+            return null;
+        }
+
+        return Location::query()->whereKey($locationId)->first();
+    }
+
+    /**
+     * @param  array<string, Location|null>  $hierarchy
+     */
+    private static function ownTalukaFromLocation(Location $leaf, array $hierarchy): ?Location
+    {
+        if (strtolower((string) ($leaf->hierarchy ?? '')) === 'taluka') {
+            return $leaf;
+        }
+
+        return $hierarchy['taluka'] ?? null;
+    }
+
+    /**
+     * @return array{id:int,type:string,label:string,district_id:int|null,state_id:int|null,country_id:int|null,distance_km:float,source:string}|null
+     */
+    private static function talukaSuggestionRow(
+        Location $taluka,
+        float $distanceKm,
+        string $source,
+        LocationService $locationService
+    ): ?array {
+        $district = $locationService->getAncestorByType($taluka, 'district');
+        $state = $locationService->getAncestorByType($taluka, 'state');
+        $country = $locationService->getAncestorByType($taluka, 'country');
+
+        if ($district === null || $state === null || $country === null) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $taluka->id,
+            'type' => 'taluka',
+            'label' => $locationService->getDisplayLabel($taluka),
+            'district_id' => (int) $district->id,
+            'state_id' => (int) $state->id,
+            'country_id' => (int) $country->id,
+            'distance_km' => round($distanceKm, 2),
+            'source' => $source,
+        ];
+    }
+
+    /**
+     * @return array{lat: float, lng: float}|null
+     */
+    private static function nearbyTalukaSourceCoordinate(Location $ownTaluka, Location $leaf): ?array
+    {
+        if (self::locationHasCoordinate($ownTaluka)) {
+            return ['lat' => (float) $ownTaluka->lat, 'lng' => (float) $ownTaluka->lng];
+        }
+
+        if (self::locationHasCoordinate($leaf)) {
+            return ['lat' => (float) $leaf->lat, 'lng' => (float) $leaf->lng];
+        }
+
+        return self::childVillageCentroidForTaluka($ownTaluka);
+    }
+
+    private static function locationHasCoordinate(Location $location): bool
+    {
+        return $location->lat !== null && $location->lng !== null;
+    }
+
+    /**
+     * @return array{lat: float, lng: float}|null
+     */
+    private static function childVillageCentroidForTaluka(Location $taluka): ?array
+    {
+        $row = Location::query()
+            ->where('parent_id', (int) $taluka->id)
+            ->where('hierarchy', 'village')
+            ->where('is_active', true)
+            ->whereNotNull('lat')
+            ->whereNotNull('lng')
+            ->selectRaw('AVG(lat) as lat, AVG(lng) as lng')
+            ->first();
+
+        if ($row === null || $row->lat === null || $row->lng === null) {
+            return null;
+        }
+
+        return ['lat' => (float) $row->lat, 'lng' => (float) $row->lng];
+    }
+
+    private static function nullablePositiveInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        $id = (int) $value;
+
+        return $id > 0 ? $id : null;
+    }
+
+    /**
+     * @param  array<int, mixed>  $values
+     * @return array<int, int>
+     */
+    private static function uniqueIntList(array $values): array
+    {
+        $out = [];
+        foreach ($values as $value) {
+            $id = self::nullablePositiveInt($value);
+            if ($id === null) {
+                continue;
+            }
+            $out[$id] = $id;
+        }
+
+        return array_values($out);
     }
 
     /**

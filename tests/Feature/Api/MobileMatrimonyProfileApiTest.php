@@ -954,6 +954,109 @@ test('MobileProfile GET api v1 matrimony-profile returns read only partner prefe
     ]);
 });
 
+test('MobileProfile partner preference suggestions include own and nearby talukas across district and state', function () {
+    $country = mobileApiProfileTestLocationNode('country', 'India');
+    $maharashtra = mobileApiProfileTestLocationNode('state', 'Maharashtra', $country);
+    $karnataka = mobileApiProfileTestLocationNode('state', 'Karnataka', $country);
+    $sangli = mobileApiProfileTestLocationNode('district', 'Sangli', $maharashtra);
+    $kolhapur = mobileApiProfileTestLocationNode('district', 'Kolhapur', $maharashtra);
+    $belagavi = mobileApiProfileTestLocationNode('district', 'Belagavi', $karnataka);
+    $ownTaluka = mobileApiProfileTestLocationNode('taluka', 'Khanapur', $sangli, ['lat' => 17.2800, 'lng' => 74.1800]);
+    $nearTaluka = mobileApiProfileTestLocationNode('taluka', 'Hatkanangale', $kolhapur, ['lat' => 17.2900, 'lng' => 74.1950]);
+    $crossStateTaluka = mobileApiProfileTestLocationNode('taluka', 'Athani', $belagavi, ['lat' => 17.3000, 'lng' => 74.2050]);
+    $farSameDistrictTaluka = mobileApiProfileTestLocationNode('taluka', 'Jat', $sangli, ['lat' => 17.5500, 'lng' => 74.5500]);
+    $leaf = mobileApiProfileTestLocationNode('village', 'Vita', $ownTaluka);
+    $user = User::factory()->create(['name' => 'Nearby Taluka Suggestion Account']);
+    mobileApiCreateValidActionProfile($user, 'Nearby Taluka Suggestion Candidate', 'female', $leaf);
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson('/api/v1/matrimony-profile');
+
+    $suggestions = $response->json('profile.partner_preference_suggestions');
+    $talukaIds = $suggestions['preferred_taluka_ids'] ?? [];
+    $locationSuggestionIds = collect($suggestions['preferred_location_suggestions'] ?? [])->pluck('id')->all();
+
+    expect($talukaIds[0] ?? null)->toBe($ownTaluka->id);
+    expect($talukaIds)
+        ->toContain($nearTaluka->id)
+        ->toContain($crossStateTaluka->id)
+        ->toContain($farSameDistrictTaluka->id);
+    expect($suggestions['preferred_state_ids'] ?? [])
+        ->toContain($maharashtra->id)
+        ->toContain($karnataka->id);
+    expect($suggestions['preferred_district_ids'] ?? [])
+        ->toContain($sangli->id)
+        ->toContain($kolhapur->id)
+        ->toContain($belagavi->id);
+    expect($locationSuggestionIds[0] ?? null)->toBe($ownTaluka->id);
+    expect(array_search($crossStateTaluka->id, $talukaIds, true))
+        ->toBeLessThan(array_search($farSameDistrictTaluka->id, $talukaIds, true));
+});
+
+test('MobileProfile partner preference suggestions limit nearby taluka payload size', function () {
+    $country = mobileApiProfileTestLocationNode('country', 'India');
+    $state = mobileApiProfileTestLocationNode('state', 'Maharashtra', $country);
+    $district = mobileApiProfileTestLocationNode('district', 'Pune', $state);
+    $ownTaluka = mobileApiProfileTestLocationNode('taluka', 'Haveli', $district, ['lat' => 18.5200, 'lng' => 73.8500]);
+    $leaf = mobileApiProfileTestLocationNode('village', 'Wakad', $ownTaluka);
+    for ($i = 1; $i <= 20; $i++) {
+        mobileApiProfileTestLocationNode('taluka', 'Nearby '.$i, $district, [
+            'lat' => 18.5200 + ($i * 0.001),
+            'lng' => 73.8500 + ($i * 0.001),
+        ]);
+    }
+    $user = User::factory()->create(['name' => 'Nearby Taluka Limit Account']);
+    mobileApiCreateValidActionProfile($user, 'Nearby Taluka Limit Candidate', 'female', $leaf);
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson('/api/v1/matrimony-profile');
+
+    $suggestions = $response->json('profile.partner_preference_suggestions');
+    expect($suggestions['preferred_taluka_ids'][0] ?? null)->toBe($ownTaluka->id);
+    expect($suggestions['preferred_taluka_ids'] ?? [])->toHaveCount(12);
+    expect($suggestions['preferred_location_suggestions'] ?? [])->toHaveCount(12);
+});
+
+test('MobileProfile partner preference suggestions do not fake nearby talukas without lat lng', function () {
+    $country = mobileApiProfileTestLocationNode('country', 'India');
+    $state = mobileApiProfileTestLocationNode('state', 'Maharashtra', $country);
+    $ownDistrict = mobileApiProfileTestLocationNode('district', 'Pune', $state, ['pincode' => '411001']);
+    $otherDistrict = mobileApiProfileTestLocationNode('district', 'Raigad', $state, ['pincode' => '411001']);
+    $ownTaluka = mobileApiProfileTestLocationNode('taluka', 'Haveli', $ownDistrict, ['pincode' => '411057']);
+    $otherTaluka = mobileApiProfileTestLocationNode('taluka', 'Panvel', $otherDistrict, ['lat' => 18.9900, 'lng' => 73.1100]);
+    $leaf = mobileApiProfileTestLocationNode('village', 'Wakad', $ownTaluka, ['pincode' => '411057']);
+    $user = User::factory()->create(['name' => 'No Fake Nearby Taluka Account']);
+    mobileApiCreateValidActionProfile($user, 'No Fake Nearby Taluka Candidate', 'female', $leaf);
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson('/api/v1/matrimony-profile');
+
+    $suggestions = $response->json('profile.partner_preference_suggestions');
+    expect($suggestions['preferred_taluka_ids'] ?? [])->toContain($ownTaluka->id);
+    expect($suggestions['preferred_taluka_ids'] ?? [])->not->toContain($otherTaluka->id);
+    expect(collect($suggestions['preferred_location_suggestions'] ?? [])->pluck('id')->all())
+        ->not->toContain($otherTaluka->id);
+});
+
+test('MobileProfile partner preference suggestions can use child village centroid for nearby talukas', function () {
+    $country = mobileApiProfileTestLocationNode('country', 'India');
+    $state = mobileApiProfileTestLocationNode('state', 'Maharashtra', $country);
+    $district = mobileApiProfileTestLocationNode('district', 'Sangli', $state);
+    $ownTaluka = mobileApiProfileTestLocationNode('taluka', 'Khanapur', $district);
+    $nearTaluka = mobileApiProfileTestLocationNode('taluka', 'Tasgaon', $district, ['lat' => 17.2850, 'lng' => 74.1900]);
+    $leaf = mobileApiProfileTestLocationNode('village', 'Vita', $ownTaluka);
+    mobileApiProfileTestLocationNode('village', 'Taluka Center', $ownTaluka, ['lat' => 17.2800, 'lng' => 74.1800]);
+    $user = User::factory()->create(['name' => 'Centroid Nearby Taluka Account']);
+    mobileApiCreateValidActionProfile($user, 'Centroid Nearby Taluka Candidate', 'female', $leaf);
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson('/api/v1/matrimony-profile');
+
+    $suggestions = $response->json('profile.partner_preference_suggestions');
+    expect($suggestions['preferred_taluka_ids'][0] ?? null)->toBe($ownTaluka->id);
+    expect($suggestions['preferred_taluka_ids'] ?? [])->toContain($nearTaluka->id);
+});
+
 test('MobileProfile POST api v1 matrimony-profile accepts canonical community ids', function () {
     mobileApiProfileTestSeedCurrentAddressType();
     $user = User::factory()->create(['name' => 'Canonical Account']);
