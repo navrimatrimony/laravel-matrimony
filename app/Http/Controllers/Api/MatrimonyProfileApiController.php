@@ -17,6 +17,7 @@ use App\Services\EducationService;
 use App\Services\Matching\MatchingService;
 use App\Services\MutationService;
 use App\Services\OccupationService;
+use App\Services\PartnerPreferenceSnapshotBuilder;
 use App\Services\Parsing\IntakeControlledFieldNormalizer;
 use App\Services\ProfileFieldLockService;
 use App\Services\ProfileRotationService;
@@ -33,6 +34,19 @@ use Illuminate\Validation\Rule;
 
 class MatrimonyProfileApiController extends Controller
 {
+    private const MOBILE_PARTNER_PREFERENCE_INPUT_KEYS = [
+        'preferred_age_min',
+        'preferred_age_max',
+        'preferred_height_min_cm',
+        'preferred_height_max_cm',
+        'marriage_type_preference_id',
+        'partner_profile_with_children',
+        'preferred_profile_managed_by',
+        'willing_to_relocate',
+        'preferred_marital_status_ids',
+        'preferred_diet_ids',
+    ];
+
     /**
      * Phase-5B: Build snapshot from API request (same structure as manual). Only keys present in request.
      */
@@ -125,18 +139,85 @@ class MatrimonyProfileApiController extends Controller
             $snapshot['horoscope'] = [$horoscope];
         }
 
-        if ($request->has('narrative_about_me')) {
+        if ($this->mobilePartnerPreferenceInputPresent($request)) {
+            $snapshot['preferences'] = [$this->mobilePartnerPreferenceSnapshotFromApi($request)];
+        }
+
+        if ($this->requestInputKeyExists($request, 'narrative_about_me') || $this->requestInputKeyExists($request, 'narrative_expectations')) {
             $existing = $profile instanceof MatrimonyProfile && Schema::hasTable('profile_extended_attributes')
                 ? DB::table('profile_extended_attributes')->where('profile_id', $profile->id)->first()
                 : null;
             $snapshot['extended_narrative'] = [[
-                'narrative_about_me' => trim((string) $request->input('narrative_about_me')),
-                'narrative_expectations' => $existing?->narrative_expectations,
+                'narrative_about_me' => $this->requestInputKeyExists($request, 'narrative_about_me')
+                    ? trim((string) $request->input('narrative_about_me'))
+                    : $existing?->narrative_about_me,
+                'narrative_expectations' => $this->requestInputKeyExists($request, 'narrative_expectations')
+                    ? trim((string) $request->input('narrative_expectations'))
+                    : $existing?->narrative_expectations,
                 'additional_notes' => $existing?->additional_notes,
             ]];
         }
 
         return $snapshot;
+    }
+
+    private function mobilePartnerPreferenceInputPresent(Request $request): bool
+    {
+        foreach (self::MOBILE_PARTNER_PREFERENCE_INPUT_KEYS as $key) {
+            if ($this->requestInputKeyExists($request, $key)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mobilePartnerPreferenceSnapshotFromApi(Request $request): array
+    {
+        $subset = [];
+        foreach (self::MOBILE_PARTNER_PREFERENCE_INPUT_KEYS as $key) {
+            if ($this->requestInputKeyExists($request, $key)) {
+                $subset[$key] = $request->input($key);
+            }
+        }
+
+        $preferenceRequest = Request::create('/api/v1/matrimony-profile/mobile-partner-preferences', 'POST', $subset);
+        $preferenceRequest->setUserResolver(fn () => $request->user());
+
+        $row = PartnerPreferenceSnapshotBuilder::validateAndBuildRow($preferenceRequest);
+
+        $snapshot = [];
+        foreach ([
+            'preferred_age_min',
+            'preferred_age_max',
+            'preferred_height_min_cm',
+            'preferred_height_max_cm',
+            'willing_to_relocate',
+            'marriage_type_preference_id',
+            'partner_profile_with_children',
+            'preferred_profile_managed_by',
+        ] as $key) {
+            if ($this->requestInputKeyExists($request, $key)) {
+                $snapshot[$key] = $row[$key] ?? null;
+            }
+        }
+        if ($this->requestInputKeyExists($request, 'preferred_marital_status_ids')) {
+            $snapshot['preferred_marital_status_id'] = $row['preferred_marital_status_id'] ?? null;
+            $snapshot['preferred_marital_status_ids'] = $row['preferred_marital_status_ids'] ?? [];
+        }
+        if ($this->requestInputKeyExists($request, 'preferred_diet_ids')) {
+            $snapshot['preferred_diet_ids'] = $row['preferred_diet_ids'] ?? [];
+        }
+
+        return $snapshot;
+    }
+
+    private function requestInputKeyExists(Request $request, string $key): bool
+    {
+        return array_key_exists($key, $request->all());
     }
 
     /**
@@ -281,6 +362,7 @@ class MatrimonyProfileApiController extends Controller
             'navras_name' => ['nullable', 'string', 'max:255'],
             'birth_weekday' => ['nullable', 'string', Rule::in($this->birthWeekdayValues())],
             'narrative_about_me' => ['nullable', 'string', 'max:5000'],
+            'narrative_expectations' => ['nullable', 'string', 'max:5000'],
         ];
 
         if (! $creating) {
@@ -1003,7 +1085,8 @@ class MatrimonyProfileApiController extends Controller
             'user',
             'gender',
             'horoscope',
-            'preferenceCriteria',
+            'preferenceCriteria.preferredMaritalStatus',
+            'preferenceCriteria.marriageTypePreference',
             'religion',
             'caste',
             'subCaste',
@@ -1038,6 +1121,11 @@ class MatrimonyProfileApiController extends Controller
 
         $criteria = $profile->preferenceCriteria;
         $partnerPreferences = $criteria !== null ? $criteria->toArray() : null;
+        $preferredMaritalStatusIds = $this->partnerPreferencePivotIds('profile_preferred_marital_statuses', 'marital_status_id', (int) $profile->id);
+        if ($preferredMaritalStatusIds === [] && $criteria?->preferred_marital_status_id !== null) {
+            $preferredMaritalStatusIds = [(int) $criteria->preferred_marital_status_id];
+        }
+        $preferredDietIds = $this->partnerPreferencePivotIds('profile_preferred_diets', 'diet_id', (int) $profile->id);
         $birthPlaceLabel = trim($profile->birthLocationDisplayLine());
         if ($birthPlaceLabel === '') {
             $birthPlaceLabel = trim((string) ($profile->birth_place_text ?? ''));
@@ -1141,6 +1229,24 @@ class MatrimonyProfileApiController extends Controller
             'navras_name' => $horoscope ? $horoscope->navras_name : null,
             'birth_weekday' => $horoscope ? $horoscope->birth_weekday : null,
             'narrative_about_me' => $this->profileNarrativeAboutMe($profile),
+            'narrative_expectations' => $this->profileNarrativeExpectations($profile),
+            'preferred_age_min' => $criteria?->preferred_age_min,
+            'preferred_age_max' => $criteria?->preferred_age_max,
+            'preferred_height_min_cm' => $criteria?->preferred_height_min_cm,
+            'preferred_height_max_cm' => $criteria?->preferred_height_max_cm,
+            'marriage_type_preference_id' => $criteria?->marriage_type_preference_id,
+            'marriage_type_preference_label' => $this->masterLookupLabel($criteria?->marriageTypePreference),
+            'partner_profile_with_children' => $criteria?->partner_profile_with_children,
+            'partner_profile_with_children_label' => $this->partnerProfileWithChildrenLabel($criteria?->partner_profile_with_children),
+            'preferred_profile_managed_by' => $criteria?->preferred_profile_managed_by,
+            'preferred_profile_managed_by_label' => $this->preferredProfileManagedByLabel($criteria?->preferred_profile_managed_by),
+            'willing_to_relocate' => $criteria?->willing_to_relocate,
+            'preferred_marital_status_id' => $criteria?->preferred_marital_status_id,
+            'preferred_marital_status_label' => $this->masterLookupLabel($criteria?->preferredMaritalStatus),
+            'preferred_marital_status_ids' => $preferredMaritalStatusIds,
+            'preferred_marital_status_labels' => $this->masterTableLabelsByIds('master_marital_statuses', $preferredMaritalStatusIds),
+            'preferred_diet_ids' => $preferredDietIds,
+            'preferred_diet_labels' => $this->masterTableLabelsByIds('master_diets', $preferredDietIds),
             'partner_preferences' => $partnerPreferences,
         ];
 
@@ -1178,6 +1284,78 @@ class MatrimonyProfileApiController extends Controller
         $value = trim((string) ($value ?? ''));
 
         return $value !== '' ? $value : null;
+    }
+
+    private function profileNarrativeExpectations(MatrimonyProfile $profile): ?string
+    {
+        if (! Schema::hasTable('profile_extended_attributes')) {
+            return null;
+        }
+
+        $value = DB::table('profile_extended_attributes')
+            ->where('profile_id', $profile->id)
+            ->value('narrative_expectations');
+        $value = trim((string) ($value ?? ''));
+
+        return $value !== '' ? $value : null;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function partnerPreferencePivotIds(string $table, string $column, int $profileId): array
+    {
+        if (! Schema::hasTable($table)) {
+            return [];
+        }
+
+        return DB::table($table)
+            ->where('profile_id', $profileId)
+            ->orderBy($column)
+            ->pluck($column)
+            ->map(fn ($id): int => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, int>  $ids
+     * @return array<int, string>
+     */
+    private function masterTableLabelsByIds(string $table, array $ids): array
+    {
+        $labels = [];
+        foreach ($ids as $id) {
+            $label = $this->masterTableLookupLabel($table, $id);
+            if ($label !== null) {
+                $labels[] = $label;
+            }
+        }
+
+        return $labels;
+    }
+
+    private function partnerProfileWithChildrenLabel(?string $value): ?string
+    {
+        return match ($value) {
+            'no' => __('wizard.partner_children_no'),
+            'yes_if_live_separate' => __('wizard.partner_children_yes_if_live_separate'),
+            'yes' => __('wizard.partner_children_yes'),
+            default => null,
+        };
+    }
+
+    private function preferredProfileManagedByLabel(?string $value): ?string
+    {
+        return match ($value) {
+            'self' => __('onboarding.registering_for_self'),
+            'parent_guardian' => __('onboarding.registering_for_parent_guardian'),
+            'sibling' => __('onboarding.registering_for_sibling'),
+            'relative' => __('onboarding.registering_for_relative'),
+            'friend' => __('onboarding.registering_for_friend'),
+            'other' => __('onboarding.registering_for_other'),
+            default => null,
+        };
     }
 
     private function masterTableLookupLabel(string $table, mixed $id): ?string

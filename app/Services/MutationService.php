@@ -2281,6 +2281,9 @@ class MutationService
             if (! Schema::hasTable($table)) {
                 continue;
             }
+            if (! array_key_exists($key, $proposed)) {
+                continue;
+            }
             $ids = $proposed[$key] ?? [];
             if (! is_array($ids)) {
                 $ids = [];

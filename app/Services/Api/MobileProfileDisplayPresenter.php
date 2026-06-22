@@ -949,12 +949,18 @@ class MobileProfileDisplayPresenter
     private function partnerPreferenceSection(MatrimonyProfile $profile): ?array
     {
         $criteria = $profile->preferenceCriteria;
+        $preferredMaritalStatusLabels = $this->partnerPreferencePivotLabels($profile, 'profile_preferred_marital_statuses', 'marital_status_id', 'master_marital_statuses');
+        $preferredDietLabels = $this->partnerPreferencePivotLabels($profile, 'profile_preferred_diets', 'diet_id', 'master_diets');
+        $expectations = $this->extendedNarrativeExpectations($profile);
         if ($criteria === null) {
             $items = [
                 $this->item('Preferred Religions', $this->collectionLabels($profile->preferredReligions), 'community'),
                 $this->item('Preferred Castes', $this->collectionLabels($profile->preferredCastes), 'community'),
                 $this->item('Preferred Education', $this->collectionLabels($profile->preferredEducationDegrees), 'education'),
                 $this->item('Preferred Occupation', $this->collectionLabels($profile->preferredOccupationMasters), 'work'),
+                $this->item('Preferred Marital Status', $preferredMaritalStatusLabels, 'heart'),
+                $this->item('Preferred Diet', $preferredDietLabels, 'lifestyle'),
+                $this->item('Expectations', $expectations, 'heart'),
             ];
 
             return $this->section('partner_preferences', 'Partner Preferences', $items);
@@ -968,12 +974,14 @@ class MobileProfileDisplayPresenter
             $this->item('Preferred Education', $this->collectionLabels($profile->preferredEducationDegrees) ?? $criteria->preferred_education, 'education'),
             $this->item('Preferred Occupation', $this->collectionLabels($profile->preferredOccupationMasters), 'work'),
             $this->item('Preferred City', $this->labelFrom($criteria->settledCity), 'location'),
-            $this->item('Preferred Marital Status', $this->labelFrom($criteria->preferredMaritalStatus), 'heart'),
+            $this->item('Preferred Marital Status', $preferredMaritalStatusLabels ?? $this->labelFrom($criteria->preferredMaritalStatus), 'heart'),
             $this->item('Marriage Type Preference', $this->labelFrom($criteria->marriageTypePreference), 'heart'),
             $this->item('Willing to Relocate', $criteria->willing_to_relocate === null ? null : ($criteria->willing_to_relocate ? 'Yes' : 'No'), 'location'),
             $this->item('Profile Managed By', $this->managedByLabel($criteria->preferred_profile_managed_by), 'profile'),
             $this->item('Partner with Children', $this->withChildrenLabel($criteria->partner_profile_with_children), 'family'),
+            $this->item('Preferred Diet', $preferredDietLabels, 'lifestyle'),
             $this->item('Income Preference', $this->rangeLabel($criteria->preferred_income_min, $criteria->preferred_income_max), 'income'),
+            $this->item('Expectations', $expectations, 'heart'),
         ];
 
         return $this->section('partner_preferences', 'Partner Preferences', $items);
@@ -1679,6 +1687,61 @@ class MobileProfileDisplayPresenter
         }
 
         return $this->joinLabels($labels);
+    }
+
+    private function partnerPreferencePivotLabels(MatrimonyProfile $profile, string $pivotTable, string $pivotColumn, string $masterTable): ?string
+    {
+        if (! Schema::hasTable($pivotTable) || ! Schema::hasTable($masterTable)) {
+            return null;
+        }
+
+        $ids = DB::table($pivotTable)
+            ->where('profile_id', $profile->id)
+            ->orderBy($pivotColumn)
+            ->pluck($pivotColumn)
+            ->map(fn ($id): int => (int) $id)
+            ->values()
+            ->all();
+
+        if ($ids === []) {
+            return null;
+        }
+
+        $rows = DB::table($masterTable)
+            ->whereIn('id', $ids)
+            ->get()
+            ->keyBy('id');
+        $labels = [];
+        foreach ($ids as $id) {
+            $row = $rows->get($id);
+            if ($row === null) {
+                continue;
+            }
+            foreach (self::LABEL_KEYS as $key) {
+                if (property_exists($row, $key)) {
+                    $value = $this->cleanString($row->{$key} ?? null);
+                    if ($value !== null) {
+                        $labels[] = $value;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return $this->joinLabels($labels);
+    }
+
+    private function extendedNarrativeExpectations(MatrimonyProfile $profile): ?string
+    {
+        if (! Schema::hasTable('profile_extended_attributes')) {
+            return null;
+        }
+
+        $value = DB::table('profile_extended_attributes')
+            ->where('profile_id', $profile->id)
+            ->value('narrative_expectations');
+
+        return $this->cleanString($value);
     }
 
     private function joinLabels(array $values, string $separator = ', '): ?string

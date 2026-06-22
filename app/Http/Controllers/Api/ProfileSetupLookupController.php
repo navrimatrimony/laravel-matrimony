@@ -11,6 +11,7 @@ use App\Models\MasterDrinkingStatus;
 use App\Models\MasterFamilyType;
 use App\Models\MasterGan;
 use App\Models\MasterMangalDoshType;
+use App\Models\MasterMarriageTypePreference;
 use App\Models\MasterNadi;
 use App\Models\MasterNakshatra;
 use App\Models\MasterRashi;
@@ -45,6 +46,10 @@ class ProfileSetupLookupController extends Controller
         'other',
         'prefer_not_to_say',
     ];
+
+    private const PARTNER_PROFILE_WITH_CHILDREN_KEYS = ['no', 'yes_if_live_separate', 'yes'];
+
+    private const PREFERRED_PROFILE_MANAGED_BY_KEYS = ['', 'self', 'parent_guardian', 'sibling', 'relative', 'friend', 'other'];
 
     /**
      * GET /api/v1/profile/basic-physical-options
@@ -115,6 +120,21 @@ class ProfileSetupLookupController extends Controller
             'birth_weekdays' => $this->birthWeekdayOptions(),
             'horoscope_rules' => $horoscopeRuleService->getRulesForFrontend(),
             'rashi_ashtakoota' => $horoscopeRuleService->getRashiAshtakootaForFrontend(),
+        ]);
+    }
+
+    /**
+     * GET /api/v1/profile/partner-preference-options
+     * Read-only mobile options for APK Edit All simple Partner Preferences fields.
+     */
+    public function partnerPreferenceOptions(): JsonResponse
+    {
+        return response()->json([
+            'marriage_type_preferences' => $this->masterOptions(MasterMarriageTypePreference::class, 'master_marriage_type_preferences', ['sort_order', 'id']),
+            'marital_statuses' => $this->masterOptions(MasterMaritalStatus::class, 'master_marital_statuses', ['label', 'id']),
+            'diets' => $this->masterOptions(MasterDiet::class, 'master_diets', ['sort_order', 'id']),
+            'partner_profile_with_children' => $this->partnerProfileWithChildrenOptions(),
+            'preferred_profile_managed_by' => $this->preferredProfileManagedByOptions(),
         ]);
     }
 
@@ -303,6 +323,60 @@ class ProfileSetupLookupController extends Controller
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * @return array<int, array<string, string|null>>
+     */
+    private function partnerProfileWithChildrenOptions(): array
+    {
+        $labels = [
+            'no' => 'wizard.partner_children_no',
+            'yes_if_live_separate' => 'wizard.partner_children_yes_if_live_separate',
+            'yes' => 'wizard.partner_children_yes',
+        ];
+
+        return collect(self::PARTNER_PROFILE_WITH_CHILDREN_KEYS)
+            ->map(fn (string $key): array => $this->translatedKeyOption($key, $labels[$key]))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array<string, string|null>>
+     */
+    private function preferredProfileManagedByOptions(): array
+    {
+        $labels = [
+            '' => 'wizard.partner_pref_managed_by_any',
+            'self' => 'onboarding.registering_for_self',
+            'parent_guardian' => 'onboarding.registering_for_parent_guardian',
+            'sibling' => 'onboarding.registering_for_sibling',
+            'relative' => 'onboarding.registering_for_relative',
+            'friend' => 'onboarding.registering_for_friend',
+            'other' => 'onboarding.registering_for_other',
+        ];
+
+        return collect(self::PREFERRED_PROFILE_MANAGED_BY_KEYS)
+            ->map(fn (string $key): array => $this->translatedKeyOption($key, $labels[$key]))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<string, string|null>
+     */
+    private function translatedKeyOption(string $key, string $translationKey): array
+    {
+        $labelEn = __($translationKey, [], 'en');
+        $labelMr = __($translationKey, [], 'mr');
+
+        return [
+            'key' => $key,
+            'label' => $labelEn,
+            'label_en' => $labelEn,
+            'label_mr' => $labelMr !== $translationKey ? $labelMr : null,
+        ];
     }
 
     /**

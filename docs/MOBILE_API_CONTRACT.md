@@ -326,6 +326,43 @@ Success response: HTTP 200
 }
 ```
 
+### GET `/api/v1/profile/partner-preference-options`
+
+Requires bearer token. Returns read-only governed options for APK Edit All simple Partner Preferences / Expectations fields. These options reuse existing website wizard sources and preserve source order.
+
+Sources:
+
+- `marriage_type_preferences`: `master_marriage_type_preferences` via `App\Models\MasterMarriageTypePreference`, ordered by `sort_order`, then `id`
+- `marital_statuses`: `master_marital_statuses`, ordered by website partner-preference source order (`label`, then `id`)
+- `diets`: `master_diets` via `App\Models\MasterDiet`, ordered by `sort_order`, then `id`
+- `partner_profile_with_children`: website enum options `no`, `yes_if_live_separate`, `yes`
+- `preferred_profile_managed_by`: website enum options `any`, `self`, `parent_guardian`, `sibling`, `relative`, `friend`, `other`
+
+Success response: HTTP 200
+
+```json
+{
+  "marriage_type_preferences": [
+    { "id": 1, "key": "arranged", "label": "Arranged", "label_en": "Arranged", "label_mr": null }
+  ],
+  "marital_statuses": [
+    { "id": 2, "key": "divorced", "label": "Divorced", "label_en": "Divorced", "label_mr": null }
+  ],
+  "diets": [
+    { "id": 1, "key": "vegetarian", "label": "Vegetarian", "label_en": "Vegetarian", "label_mr": null }
+  ],
+  "partner_profile_with_children": [
+    { "key": "no", "label": "No", "label_en": "No", "label_mr": "नाही" },
+    { "key": "yes_if_live_separate", "label": "Yes, if living separately", "label_en": "Yes, if living separately", "label_mr": null },
+    { "key": "yes", "label": "Yes", "label_en": "Yes", "label_mr": null }
+  ],
+  "preferred_profile_managed_by": [
+    { "key": "", "label": "Any", "label_en": "Any", "label_mr": null },
+    { "key": "self", "label": "Self", "label_en": "Self", "label_mr": null }
+  ]
+}
+```
+
 ## Matrimony Profile
 
 All profile mutation goes through the governed mutation layer. The mobile create path creates a draft profile with `MutationService::createDraftProfileForUser()` and applies submitted profile data with `MutationService::applyManualSnapshot()`.
@@ -439,6 +476,15 @@ Rules:
 - `devak`, `kul`, `gotra`, `navras_name`: nullable string, max 255
 - `birth_weekday`: nullable string, must be one of the website weekday dropdown values: `Monday`, `Tuesday`, `Wednesday`, `Thursday`, `Friday`, `Saturday`, `Sunday`
 - `narrative_about_me`: nullable string, max 5000
+- `preferred_age_min`, `preferred_age_max`: nullable integers, 18-80; min must be less than or equal to max
+- `preferred_height_min_cm`, `preferred_height_max_cm`: nullable integers; min must be less than or equal to max
+- `marriage_type_preference_id`: nullable, must exist as an active `master_marriage_type_preferences.id`
+- `partner_profile_with_children`: nullable, one of `no`, `yes_if_live_separate`, `yes`
+- `preferred_profile_managed_by`: nullable, one of `self`, `parent_guardian`, `sibling`, `relative`, `friend`, `other`
+- `willing_to_relocate`: nullable boolean
+- `preferred_marital_status_ids`: nullable array of active `master_marital_statuses.id`
+- `preferred_diet_ids`: nullable array of active `master_diets.id`
+- `narrative_expectations`: nullable string, max 5000
 
 Governance note:
 
@@ -446,7 +492,8 @@ Governance note:
 - When it resolves against existing master caste data, the governed write stores `caste_id`.
 - Raw legacy `caste` text is not a governed write target.
 - Matrimony gender source is `matrimony_profiles.gender_id`; `users.gender` is not a runtime fallback for profile matching, visibility, comparison, or display.
-- Parent contact numbers, sibling contact numbers, relative contact numbers, contact unlock/payment fields, and partner expectations are intentionally not accepted in this mobile contract.
+- Phase 5B1 accepts only simple partner expectations listed above through the governed preference snapshot path.
+- Parent contact numbers, sibling contact numbers, relative contact numbers, contact unlock/payment fields, complex partner preference location/community/education/occupation/income fields, and preference repeaters are intentionally not accepted in this mobile contract.
 - Sibling and relative repeaters are intentionally deferred until a row-preserving, privacy-safe mobile contract is added.
 
 Success response: HTTP 200
@@ -541,6 +588,22 @@ Success response: HTTP 200
     "navras_name": "Navras",
     "birth_weekday": "Monday",
     "narrative_about_me": "Short profile introduction.",
+    "narrative_expectations": "Looking for a thoughtful partner.",
+    "preferred_age_min": 24,
+    "preferred_age_max": 31,
+    "preferred_height_min_cm": 150,
+    "preferred_height_max_cm": 180,
+    "marriage_type_preference_id": 1,
+    "marriage_type_preference_label": "Arranged",
+    "partner_profile_with_children": "yes_if_live_separate",
+    "partner_profile_with_children_label": "Yes, if living separately",
+    "preferred_profile_managed_by": "parent_guardian",
+    "preferred_profile_managed_by_label": "Parent / Guardian",
+    "willing_to_relocate": true,
+    "preferred_marital_status_ids": [2, 5],
+    "preferred_marital_status_labels": ["Divorced", "Widowed"],
+    "preferred_diet_ids": [1, 3],
+    "preferred_diet_labels": ["Vegetarian", "Jain"],
     "profile_photo": null,
     "partner_preferences": null
   }
@@ -657,7 +720,18 @@ Request:
   "family_type_id": 1,
   "property_details": "Own house",
   "rashi_id": 1,
-  "narrative_about_me": "Short profile introduction."
+  "narrative_about_me": "Short profile introduction.",
+  "preferred_age_min": 24,
+  "preferred_age_max": 31,
+  "preferred_height_min_cm": 150,
+  "preferred_height_max_cm": 180,
+  "marriage_type_preference_id": 1,
+  "partner_profile_with_children": "yes_if_live_separate",
+  "preferred_profile_managed_by": "parent_guardian",
+  "willing_to_relocate": true,
+  "preferred_marital_status_ids": [2, 5],
+  "preferred_diet_ids": [1, 3],
+  "narrative_expectations": "Looking for a thoughtful partner."
 }
 ```
 
@@ -692,7 +766,8 @@ Rules:
 - `company_name`: nullable string, max 255
 - `work_location_text`: nullable string, max 255
 - Family, property, horoscope, and `narrative_about_me` rules are the same as `POST /api/v1/matrimony-profile`.
-- Parent/sibling/relative contact fields and partner expectations are not accepted by this mobile update contract.
+- Simple Phase 5B1 partner preferences and `narrative_expectations` follow the same rules as `POST /api/v1/matrimony-profile`.
+- Parent/sibling/relative contact fields and complex partner expectation fields are not accepted by this mobile update contract.
 
 Success response: HTTP 200
 

@@ -336,6 +336,17 @@ function mobileApiProfileTestPhase4AOptions(): array
     ];
 }
 
+function mobileApiProfileTestPartnerPreferenceOptions(): array
+{
+    return [
+        'marriage_type_preference_id' => mobileApiProfileTestKnownMasterOption('master_marriage_type_preferences', 'arranged', 'Arranged', ['sort_order' => 10]),
+        'marital_status_id' => mobileApiProfileTestKnownMaritalStatus('divorced', 'Divorced'),
+        'second_marital_status_id' => mobileApiProfileTestKnownMaritalStatus('widowed', 'Widowed'),
+        'diet_id' => mobileApiProfileTestMasterOption('master_diets', 'vegetarian', 'Vegetarian', ['sort_order' => 10]),
+        'second_diet_id' => mobileApiProfileTestMasterOption('master_diets', 'jain', 'Jain', ['sort_order' => 20]),
+    ];
+}
+
 function mobileApiProfileTestOccupationMaster(string $name = 'Software Engineer', int $sortOrder = 10): OccupationMaster
 {
     $suffix = strtolower(str_replace('.', '-', uniqid('mobile-api-occ-', true)));
@@ -864,6 +875,55 @@ test('MobileProfile GET api v1 profile remaining options returns family and horo
     expect($response->json("rashi_ashtakoota.{$options['rashi_id']}.varna_id"))->toBe($options['varna_id']);
     expect($response->json("rashi_ashtakoota.{$options['rashi_id']}.vashya_id"))->toBe($options['vashya_id']);
     expect($response->json("rashi_ashtakoota.{$options['rashi_id']}.rashi_lord_id"))->toBe($options['rashi_lord_id']);
+});
+
+test('MobileProfile GET api v1 profile partner preference options returns governed source options', function () {
+    $user = User::factory()->create(['name' => 'Partner Preference Lookup Account']);
+    Sanctum::actingAs($user);
+
+    $marriageFirst = mobileApiProfileTestKnownMasterOption('master_marriage_type_preferences', 'phase5b1-arranged', 'Arranged', ['sort_order' => 101]);
+    $marriageSecond = mobileApiProfileTestKnownMasterOption('master_marriage_type_preferences', 'phase5b1-love', 'Love Marriage', ['sort_order' => 202]);
+    $divorcedId = mobileApiProfileTestKnownMaritalStatus('divorced', 'Divorced');
+    $widowedId = mobileApiProfileTestKnownMaritalStatus('widowed', 'Widowed');
+    $dietFirst = mobileApiProfileTestMasterOption('master_diets', 'phase5b1-vegetarian', 'Vegetarian', ['sort_order' => 101]);
+    $dietSecond = mobileApiProfileTestMasterOption('master_diets', 'phase5b1-jain', 'Jain', ['sort_order' => 202]);
+    $inactiveDietId = (int) DB::table('master_diets')->insertGetId([
+        'key' => 'inactive'.substr(strtolower(str_replace('.', '', uniqid('', true))), -8),
+        'label' => 'Inactive Partner Diet',
+        'is_active' => false,
+        'sort_order' => 1,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $response = $this->getJson('/api/v1/profile/partner-preference-options');
+
+    $response
+        ->assertOk()
+        ->assertJsonStructure([
+            'marriage_type_preferences' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+            'marital_statuses' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+            'diets' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+            'partner_profile_with_children' => [
+                '*' => ['key', 'label', 'label_en', 'label_mr'],
+            ],
+            'preferred_profile_managed_by' => [
+                '*' => ['key', 'label', 'label_en', 'label_mr'],
+            ],
+        ]);
+
+    mobileApiProfileAssertIdBefore(collect($response->json('marriage_type_preferences'))->pluck('id')->all(), $marriageFirst, $marriageSecond);
+    mobileApiProfileAssertIdBefore(collect($response->json('marital_statuses'))->pluck('id')->all(), $divorcedId, $widowedId);
+    mobileApiProfileAssertIdBefore(collect($response->json('diets'))->pluck('id')->all(), $dietFirst, $dietSecond);
+    expect(collect($response->json('diets'))->pluck('id')->all())->not->toContain($inactiveDietId);
+    expect(collect($response->json('partner_profile_with_children'))->pluck('key')->all())->toBe(['no', 'yes_if_live_separate', 'yes']);
+    expect(collect($response->json('preferred_profile_managed_by'))->pluck('key')->all())->toBe(['', 'self', 'parent_guardian', 'sibling', 'relative', 'friend', 'other']);
 });
 
 test('MobileProfile POST api v1 matrimony-profile accepts canonical community ids', function () {
@@ -1497,6 +1557,114 @@ test('MobileProfile PUT api v1 matrimony-profile accepts remaining edit all scal
     ]);
 });
 
+test('MobileProfile PUT api v1 matrimony-profile persists simple partner preferences through governed path', function () {
+    $user = User::factory()->create(['name' => 'Partner Preference Edit Account']);
+    $profile = mobileApiCreateValidActionProfile($user, 'Partner Preference Candidate', 'female');
+    $options = mobileApiProfileTestPartnerPreferenceOptions();
+    Sanctum::actingAs($user);
+
+    DB::table('profile_extended_attributes')->insert([
+        'profile_id' => $profile->id,
+        'narrative_about_me' => 'Existing about me text.',
+        'narrative_expectations' => 'Old expectations.',
+        'additional_notes' => 'Keep this note.',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    if (Schema::hasTable('profile_preferred_religions') && $profile->religion_id) {
+        DB::table('profile_preferred_religions')->insert([
+            'profile_id' => $profile->id,
+            'religion_id' => $profile->religion_id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    $expectedMaritalIds = collect([
+        $options['marital_status_id'],
+        $options['second_marital_status_id'],
+    ])->sort()->values()->all();
+    $expectedDietIds = collect([
+        $options['diet_id'],
+        $options['second_diet_id'],
+    ])->sort()->values()->all();
+
+    $response = $this->putJson('/api/v1/matrimony-profile', [
+        'preferred_age_min' => 24,
+        'preferred_age_max' => 31,
+        'preferred_height_min_cm' => 150,
+        'preferred_height_max_cm' => 180,
+        'marriage_type_preference_id' => $options['marriage_type_preference_id'],
+        'partner_profile_with_children' => 'yes_if_live_separate',
+        'preferred_profile_managed_by' => 'parent_guardian',
+        'willing_to_relocate' => true,
+        'preferred_marital_status_ids' => [
+            $options['marital_status_id'],
+            $options['second_marital_status_id'],
+        ],
+        'preferred_diet_ids' => [
+            $options['diet_id'],
+            $options['second_diet_id'],
+        ],
+        'narrative_expectations' => 'Looking for a thoughtful partner.',
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('profile.preferred_age_min', 24)
+        ->assertJsonPath('profile.preferred_age_max', 31)
+        ->assertJsonPath('profile.preferred_height_min_cm', 150)
+        ->assertJsonPath('profile.preferred_height_max_cm', 180)
+        ->assertJsonPath('profile.marriage_type_preference_id', $options['marriage_type_preference_id'])
+        ->assertJsonPath('profile.partner_profile_with_children', 'yes_if_live_separate')
+        ->assertJsonPath('profile.preferred_profile_managed_by', 'parent_guardian')
+        ->assertJsonPath('profile.willing_to_relocate', true)
+        ->assertJsonPath('profile.preferred_marital_status_ids', $expectedMaritalIds)
+        ->assertJsonPath('profile.preferred_diet_ids', $expectedDietIds)
+        ->assertJsonPath('profile.narrative_about_me', 'Existing about me text.')
+        ->assertJsonPath('profile.narrative_expectations', 'Looking for a thoughtful partner.');
+
+    $criteria = DB::table('profile_preference_criteria')->where('profile_id', $profile->id)->first();
+    $extended = DB::table('profile_extended_attributes')->where('profile_id', $profile->id)->first();
+    $maritalIds = DB::table('profile_preferred_marital_statuses')
+        ->where('profile_id', $profile->id)
+        ->orderBy('marital_status_id')
+        ->pluck('marital_status_id')
+        ->map(fn ($id) => (int) $id)
+        ->values()
+        ->all();
+    $dietIds = DB::table('profile_preferred_diets')
+        ->where('profile_id', $profile->id)
+        ->orderBy('diet_id')
+        ->pluck('diet_id')
+        ->map(fn ($id) => (int) $id)
+        ->values()
+        ->all();
+
+    expect((int) $criteria->preferred_age_min)->toBe(24);
+    expect((int) $criteria->preferred_age_max)->toBe(31);
+    expect((int) $criteria->preferred_height_min_cm)->toBe(150);
+    expect((int) $criteria->preferred_height_max_cm)->toBe(180);
+    expect((int) $criteria->marriage_type_preference_id)->toBe((int) $options['marriage_type_preference_id']);
+    expect($criteria->partner_profile_with_children)->toBe('yes_if_live_separate');
+    expect($criteria->preferred_profile_managed_by)->toBe('parent_guardian');
+    expect((bool) $criteria->willing_to_relocate)->toBeTrue();
+    expect($maritalIds)->toBe($expectedMaritalIds);
+    expect($dietIds)->toBe($expectedDietIds);
+    expect($extended->narrative_about_me)->toBe('Existing about me text.');
+    expect($extended->narrative_expectations)->toBe('Looking for a thoughtful partner.');
+    expect($extended->additional_notes)->toBe('Keep this note.');
+
+    if (Schema::hasTable('profile_preferred_religions') && $profile->religion_id) {
+        $this->assertDatabaseHas('profile_preferred_religions', [
+            'profile_id' => $profile->id,
+            'religion_id' => $profile->religion_id,
+        ]);
+    }
+});
+
 test('MobileProfile PUT api v1 matrimony-profile rejects invalid education career ids', function () {
     $user = User::factory()->create(['name' => 'Invalid Career Account']);
     app(MutationService::class)->createDraftProfileForUser($user);
@@ -1561,6 +1729,41 @@ test('MobileProfile PUT api v1 matrimony-profile rejects invalid remaining edit 
             ->assertStatus(422)
             ->assertJsonValidationErrors([$field]);
     }
+});
+
+test('MobileProfile PUT api v1 matrimony-profile rejects invalid partner preference ids and ranges', function () {
+    $user = User::factory()->create(['name' => 'Invalid Partner Preference Account']);
+    mobileApiCreateValidActionProfile($user, 'Invalid Partner Preference Candidate', 'female');
+    Sanctum::actingAs($user);
+
+    foreach ([
+        'marriage_type_preference_id',
+        'preferred_marital_status_ids',
+        'preferred_diet_ids',
+    ] as $field) {
+        $payload = match ($field) {
+            'preferred_marital_status_ids', 'preferred_diet_ids' => [$field => [999999999]],
+            default => [$field => 999999999],
+        };
+
+        $this->putJson('/api/v1/matrimony-profile', $payload)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors([$field === 'preferred_marital_status_ids' ? 'preferred_marital_status_ids.0' : ($field === 'preferred_diet_ids' ? 'preferred_diet_ids.0' : $field)]);
+    }
+
+    $this->putJson('/api/v1/matrimony-profile', [
+        'preferred_age_min' => 35,
+        'preferred_age_max' => 24,
+    ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['preferred_age_min']);
+
+    $this->putJson('/api/v1/matrimony-profile', [
+        'preferred_height_min_cm' => 180,
+        'preferred_height_max_cm' => 150,
+    ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['preferred_height_min_cm']);
 });
 
 test('MobileProfile GET api v1 matrimony profile returns clean display payload beside profile', function () {
