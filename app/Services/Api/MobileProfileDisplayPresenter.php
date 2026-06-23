@@ -888,6 +888,7 @@ class MobileProfileDisplayPresenter
             $isOwnProfile ? $this->item('Birth Date', $this->dateLabel($profile->date_of_birth), 'calendar') : null,
             $this->item('Marital Status', $this->labelFrom($profile->maritalStatus), 'heart'),
             $this->item('Lives in', $locationLabel, 'location'),
+            $isOwnProfile ? $this->item('Address Line', $profile->address_line, 'location') : null,
             $this->item('Religion', $this->labelFrom($profile->religion), 'community'),
             $this->item('Mother Tongue', $this->labelFrom($profile->motherTongue), 'language'),
             $this->item('Community', $communityLabel, 'community'),

@@ -1419,6 +1419,43 @@ test('MobileProfile PUT api v1 matrimony-profile accepts mobile core fields thro
         ->exists())->toBeTrue();
 });
 
+test('MobileProfile PUT api v1 matrimony-profile persists address line in own profile payload and display', function () {
+    mobileApiProfileTestSeedCurrentAddressType();
+    $user = User::factory()->create(['name' => 'Address Line Account']);
+    app(MutationService::class)->createDraftProfileForUser($user);
+    $location = mobileApiProfileTestLeafLocation();
+    $caste = mobileApiProfileTestCaste();
+    $gender = mobileApiProfileTestGender('female');
+    Sanctum::actingAs($user);
+
+    $response = $this->putJson('/api/v1/matrimony-profile', [
+        'full_name' => 'Address Line Candidate',
+        'gender_id' => $gender->id,
+        'date_of_birth' => '1997-03-20',
+        'caste' => $caste->label,
+        'highest_education' => 'MCA',
+        'location_id' => $location->id,
+        'address_line' => 'Test address line',
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('profile.address_line', 'Test address line');
+
+    $getResponse = $this->getJson('/api/v1/matrimony-profile');
+
+    $getResponse
+        ->assertOk()
+        ->assertJsonPath('profile.address_line', 'Test address line');
+
+    $basicSection = collect($getResponse->json('display.sections') ?? [])
+        ->firstWhere('key', 'basic');
+    $addressLineItem = collect($basicSection['items'] ?? [])
+        ->firstWhere('label', 'Address Line');
+
+    expect($addressLineItem['value'] ?? null)->toBe('Test address line');
+});
+
 test('MobileProfile PUT api v1 matrimony-profile can update fields after prior mobile locks', function () {
     mobileApiProfileTestSeedCurrentAddressType();
     $user = User::factory()->create(['name' => 'Repeat Edit Account']);

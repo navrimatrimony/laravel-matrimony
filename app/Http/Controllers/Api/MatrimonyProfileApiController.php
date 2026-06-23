@@ -1118,6 +1118,9 @@ class MatrimonyProfileApiController extends Controller
         // PIR-006: Null-safe when user relation is missing
         // Phase-4 Day-8: Use hierarchical location fields
         $profileData = $this->buildGovernanceParityProfilePayload($profile);
+        if ((int) ($viewerProfile?->id ?? 0) !== (int) $profile->id) {
+            unset($profileData['address_line']);
+        }
 
         return response()->json([
             'success' => true,
@@ -1240,6 +1243,7 @@ class MatrimonyProfileApiController extends Controller
             'caste_id' => $profile->caste_id,
             'sub_caste_id' => $profile->sub_caste_id,
             'location_id' => $profile->location_id,
+            'address_line' => $profile->address_line,
             'country_id' => $geo['country_id'],
             'state_id' => $geo['state_id'],
             'district_id' => $geo['district_id'],

@@ -540,6 +540,7 @@ Success response: HTTP 200
     "birth_place_label": "Pune, Maharashtra",
     "highest_education": "B.E.",
     "location_id": 123,
+    "address_line": "Optional address line",
     "caste_id": 5,
     "gender": "male",
     "country_id": 1,
@@ -723,6 +724,7 @@ Success response: HTTP 200
     "birth_place_label": "Pune, Maharashtra",
     "highest_education": "B.E.",
     "location_id": 123,
+    "address_line": "Optional address line",
     "caste_id": 5,
     "gender": "male",
     "country_id": 1,
@@ -838,6 +840,7 @@ Rules:
 - `education_slots`: nullable JSON string, max 8192; selected degree IDs must exist in `master_education.id`; when supplied, Laravel resolves it into `highest_education`
 - `location_id`: sometimes required, must exist in `addresses.id`
 - `address_line`: nullable string, max 255
+- `address_line` is returned in the authenticated owner's own profile payload and own Basic Details display section. Other-profile profile/display responses must not expose exact address lines.
 - `mother_tongue_id`: nullable, must exist as an active `master_mother_tongues.id`
 - `marital_status_id`: nullable, must exist as an active `master_marital_statuses.id`
 - `has_children`: nullable boolean
@@ -877,6 +880,7 @@ Success response: HTTP 200
     "birth_place_label": "Pune, Maharashtra",
     "highest_education": "MCA",
     "location_id": 123,
+    "address_line": "Optional address line",
     "caste_id": 5,
     "gender": "male",
     "country_id": 1,
