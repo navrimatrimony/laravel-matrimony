@@ -63,7 +63,7 @@ class MutationService
         'full_name', 'gender_id', 'date_of_birth', 'birth_time', 'marital_status_id', 'has_children', 'has_siblings', 'highest_education',
         'location', 'location_id', 'religion_id', 'caste_id', 'sub_caste_id', 'mother_tongue_id', 'height_cm', 'weight_kg', 'profile_photo',
         'complexion_id', 'physical_build_id', 'blood_group_id', 'diet_id', 'smoking_status_id', 'drinking_status_id', 'family_type_id', 'income_currency_id',
-        'address_line', 'annual_income', 'family_income', 'income_private', 'family_income_private',
+        'address_line', 'annual_income', 'income_period', 'income_value_type', 'income_amount', 'income_min_amount', 'income_max_amount', 'income_normalized_annual_amount', 'family_income', 'family_income_period', 'family_income_value_type', 'family_income_amount', 'family_income_min_amount', 'family_income_max_amount', 'family_income_currency_id', 'family_income_private', 'family_income_normalized_annual_amount', 'income_private',
         'property_details',
         'birth_city_id', 'birth_place_text', 'company_name', 'work_location_text', 'spectacles_lens', 'physical_condition',
         'occupation_master_id', 'occupation_custom_id',
@@ -747,6 +747,10 @@ class MutationService
                     }
                 }
                 // Honour nested income.private / family_income.private when present.
+                $incomePrivacyExplicit = array_key_exists('income_private', $proposedCore)
+                    || (isset($proposedCore['income']) && is_array($proposedCore['income']) && array_key_exists('private', $proposedCore['income']));
+                $familyIncomePrivacyExplicit = array_key_exists('family_income_private', $proposedCore)
+                    || (isset($proposedCore['family_income']) && is_array($proposedCore['family_income']) && array_key_exists('private', $proposedCore['family_income']));
                 if (isset($proposedCore['income']) && is_array($proposedCore['income']) && array_key_exists('private', $proposedCore['income'])) {
                     $proposedCore['income_private'] = (bool) $proposedCore['income']['private'];
                 }
@@ -754,10 +758,10 @@ class MutationService
                     $proposedCore['family_income_private'] = (bool) $proposedCore['family_income']['private'];
                 }
                 // When intake has an amount, show it in wizard (do not leave income_private true).
-                if (isset($proposedCore['annual_income']) && is_numeric($proposedCore['annual_income']) && (float) $proposedCore['annual_income'] > 0) {
+                if (! $incomePrivacyExplicit && isset($proposedCore['annual_income']) && is_numeric($proposedCore['annual_income']) && (float) $proposedCore['annual_income'] > 0) {
                     $proposedCore['income_private'] = false;
                 }
-                if (isset($proposedCore['family_income']) && is_numeric($proposedCore['family_income']) && (float) $proposedCore['family_income'] > 0) {
+                if (! $familyIncomePrivacyExplicit && isset($proposedCore['family_income']) && is_numeric($proposedCore['family_income']) && (float) $proposedCore['family_income'] > 0) {
                     $proposedCore['family_income_private'] = false;
                 }
 

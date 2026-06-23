@@ -11,6 +11,7 @@ use App\Models\MasterDiet;
 use App\Models\MasterDrinkingStatus;
 use App\Models\MasterFamilyType;
 use App\Models\MasterGan;
+use App\Models\MasterIncomeCurrency;
 use App\Models\MasterMangalDoshType;
 use App\Models\MasterMarriageTypePreference;
 use App\Models\MasterNadi;
@@ -80,6 +81,7 @@ class ProfileSetupLookupController extends Controller
             'occupation_categories' => $this->occupationCategoryOptions(),
             'occupations' => $this->occupationOptions(),
             'custom_occupations' => $this->customOccupationOptions((int) $request->user()->id),
+            'currencies' => $this->incomeCurrencyOptions(),
         ]);
     }
 
@@ -110,6 +112,7 @@ class ProfileSetupLookupController extends Controller
             'occupation_categories' => $this->occupationCategoryOptions(),
             'occupations' => $this->occupationOptions(),
             'custom_occupations' => $this->customOccupationOptions((int) $request->user()->id),
+            'currencies' => $this->incomeCurrencyOptions(),
             'rashis' => $this->masterOptions(MasterRashi::class, 'master_rashis', ['id']),
             'nakshatras' => $this->masterOptions(MasterNakshatra::class, 'master_nakshatras', ['id']),
             'gans' => $this->masterOptions(MasterGan::class, 'master_gans', ['id']),
@@ -335,6 +338,40 @@ class ProfileSetupLookupController extends Controller
                 'label_en' => $hasLabelEn ? (($row->label_en ?? null) ?: ($row->label ?? null)) : ($row->label ?? null),
                 'label_mr' => $hasLabelMr ? (($row->label_mr ?? null) ?: null) : null,
             ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function incomeCurrencyOptions(): array
+    {
+        if (! Schema::hasTable('master_income_currencies')) {
+            return [];
+        }
+
+        return MasterIncomeCurrency::query()
+            ->where('is_active', true)
+            ->orderByDesc('is_default')
+            ->orderBy('code')
+            ->orderBy('id')
+            ->get(['id', 'code', 'symbol', 'is_default'])
+            ->map(function (MasterIncomeCurrency $currency): array {
+                $symbol = $currency->displaySymbol();
+                $label = trim($symbol.' '.($currency->code ?? ''));
+
+                return [
+                    'id' => (int) $currency->id,
+                    'key' => $currency->code,
+                    'code' => $currency->code,
+                    'symbol' => $symbol,
+                    'label' => $label !== '' ? $label : $currency->code,
+                    'label_en' => $label !== '' ? $label : $currency->code,
+                    'label_mr' => null,
+                    'is_default' => (bool) $currency->is_default,
+                ];
+            })
             ->values()
             ->all();
     }

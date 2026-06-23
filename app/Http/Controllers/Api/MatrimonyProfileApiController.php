@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Caste;
 use App\Models\EducationDegree;
 use App\Models\Location;
+use App\Models\MasterIncomeCurrency;
 use App\Models\MatrimonyProfile;
 use App\Models\SubCaste;
 use App\Models\User;
@@ -14,6 +15,7 @@ use App\Services\Api\MobileDiscoveryFilterService;
 use App\Services\Api\MobileMoreMatchesSectionService;
 use App\Services\Api\MobileProfileDisplayPresenter;
 use App\Services\EducationService;
+use App\Services\IncomeEngineService;
 use App\Services\Matching\MatchingService;
 use App\Services\MutationService;
 use App\Services\OccupationService;
@@ -59,6 +61,10 @@ class MatrimonyProfileApiController extends Controller
         'preferred_taluka_ids',
     ];
 
+    private const MOBILE_INCOME_PERIODS = ['annual', 'monthly', 'weekly', 'daily'];
+
+    private const MOBILE_INCOME_VALUE_TYPES = ['exact', 'approximate', 'range', 'undisclosed'];
+
     /**
      * Phase-5B: Build snapshot from API request (same structure as manual). Only keys present in request.
      */
@@ -98,6 +104,14 @@ class MatrimonyProfileApiController extends Controller
             'occupation_custom_id',
             'company_name',
             'work_location_text',
+            'annual_income',
+            'income_period',
+            'income_value_type',
+            'income_amount',
+            'income_min_amount',
+            'income_max_amount',
+            'income_currency_id',
+            'income_private',
             'father_name',
             'father_occupation',
             'father_occupation_master_id',
@@ -111,6 +125,14 @@ class MatrimonyProfileApiController extends Controller
             'family_type_id',
             'family_status',
             'family_values',
+            'family_income',
+            'family_income_period',
+            'family_income_value_type',
+            'family_income_amount',
+            'family_income_min_amount',
+            'family_income_max_amount',
+            'family_income_currency_id',
+            'family_income_private',
             'has_siblings',
             'other_relatives_text',
             'property_details',
@@ -132,6 +154,12 @@ class MatrimonyProfileApiController extends Controller
                 if (array_key_exists($key, $normalizedCore)) {
                     $core[$key] = $normalizedCore[$key];
                 }
+            }
+        }
+
+        foreach (['income', 'family_income'] as $prefix) {
+            if ($this->mobileIncomeInputPresent($request, $prefix)) {
+                $core = array_merge($core, $this->mobileIncomeEngineCoreFromApi($request, $prefix));
             }
         }
 
@@ -254,6 +282,79 @@ class MatrimonyProfileApiController extends Controller
         return array_key_exists($key, $request->all());
     }
 
+    private function mobileIncomeInputPresent(Request $request, string $prefix): bool
+    {
+        $fields = [
+            $prefix.'_period',
+            $prefix.'_value_type',
+            $prefix.'_amount',
+            $prefix.'_min_amount',
+            $prefix.'_max_amount',
+            $prefix.'_currency_id',
+            $prefix.'_private',
+        ];
+
+        if ($prefix === 'income') {
+            $fields[] = 'annual_income';
+        } else {
+            $fields[] = 'family_income';
+        }
+
+        foreach ($fields as $field) {
+            if ($this->requestInputKeyExists($request, $field)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mobileIncomeEngineCoreFromApi(Request $request, string $prefix): array
+    {
+        $period = $request->input($prefix.'_period') ?: 'annual';
+        $valueType = $request->input($prefix.'_value_type');
+        $amount = $request->filled($prefix.'_amount') ? (float) $request->input($prefix.'_amount') : null;
+        $minAmount = $request->filled($prefix.'_min_amount') ? (float) $request->input($prefix.'_min_amount') : null;
+        $maxAmount = $request->filled($prefix.'_max_amount') ? (float) $request->input($prefix.'_max_amount') : null;
+        $defaultInr = MasterIncomeCurrency::query()->where('code', 'INR')->value('id');
+        $currencyId = $request->filled($prefix.'_currency_id')
+            ? (int) $request->input($prefix.'_currency_id')
+            : ($defaultInr ? (int) $defaultInr : null);
+        $normalized = app(IncomeEngineService::class)->normalizeToAnnual(
+            $valueType,
+            $period,
+            $amount,
+            $minAmount,
+            $maxAmount
+        );
+
+        $core = [
+            $prefix.'_period' => $period,
+            $prefix.'_value_type' => $valueType,
+            $prefix.'_amount' => $amount,
+            $prefix.'_min_amount' => $minAmount,
+            $prefix.'_max_amount' => $maxAmount,
+            $prefix.'_currency_id' => $currencyId,
+            $prefix.'_private' => $request->boolean($prefix.'_private'),
+            $prefix.'_normalized_annual_amount' => $normalized,
+        ];
+
+        if ($prefix === 'income') {
+            $core['annual_income'] = $request->filled('annual_income')
+                ? (float) $request->input('annual_income')
+                : $normalized;
+        } else {
+            $core['family_income'] = $request->filled('family_income')
+                ? (float) $request->input('family_income')
+                : $normalized;
+        }
+
+        return $core;
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -356,6 +457,14 @@ class MatrimonyProfileApiController extends Controller
             ],
             'company_name' => ['nullable', 'string', 'max:255'],
             'work_location_text' => ['nullable', 'string', 'max:255'],
+            'annual_income' => ['nullable', 'numeric', 'min:0'],
+            'income_period' => ['nullable', Rule::in(self::MOBILE_INCOME_PERIODS)],
+            'income_value_type' => ['nullable', Rule::in(self::MOBILE_INCOME_VALUE_TYPES)],
+            'income_amount' => ['nullable', 'numeric', 'min:0'],
+            'income_min_amount' => ['nullable', 'numeric', 'min:0'],
+            'income_max_amount' => ['nullable', 'numeric', 'min:0', 'gte:income_min_amount'],
+            'income_currency_id' => ['nullable', 'integer', Rule::exists('master_income_currencies', 'id')->where('is_active', true)],
+            'income_private' => ['nullable', 'boolean'],
             'father_name' => ['nullable', 'string', 'max:255'],
             'father_occupation' => ['nullable', 'string', 'max:255'],
             'father_occupation_master_id' => ['nullable', 'integer', Rule::exists('master_occupations', 'id')],
@@ -377,6 +486,14 @@ class MatrimonyProfileApiController extends Controller
             'family_type_id' => ['nullable', 'integer', Rule::exists('master_family_types', 'id')->where('is_active', true)],
             'family_status' => ['nullable', 'string', Rule::in($this->translatedOptionKeys('components.family.status_options'))],
             'family_values' => ['nullable', 'string', Rule::in($this->translatedOptionKeys('components.family.values_options'))],
+            'family_income' => ['nullable', 'numeric', 'min:0'],
+            'family_income_period' => ['nullable', Rule::in(self::MOBILE_INCOME_PERIODS)],
+            'family_income_value_type' => ['nullable', Rule::in(self::MOBILE_INCOME_VALUE_TYPES)],
+            'family_income_amount' => ['nullable', 'numeric', 'min:0'],
+            'family_income_min_amount' => ['nullable', 'numeric', 'min:0'],
+            'family_income_max_amount' => ['nullable', 'numeric', 'min:0', 'gte:family_income_min_amount'],
+            'family_income_currency_id' => ['nullable', 'integer', Rule::exists('master_income_currencies', 'id')->where('is_active', true)],
+            'family_income_private' => ['nullable', 'boolean'],
             'has_siblings' => ['nullable', 'boolean'],
             'other_relatives_text' => ['nullable', 'string', 'max:4000'],
             'property_details' => ['nullable', 'string', 'max:4000'],
@@ -399,6 +516,17 @@ class MatrimonyProfileApiController extends Controller
             'narrative_expectations' => ['nullable', 'string', 'max:5000'],
             'preferred_intercaste' => ['nullable', 'boolean'],
         ];
+
+        foreach (['income', 'family_income'] as $prefix) {
+            $valueType = $request->input($prefix.'_value_type');
+            if (in_array($valueType, ['exact', 'approximate'], true)) {
+                $rules[$prefix.'_amount'] = ['required', 'numeric', 'min:0'];
+            }
+            if ($valueType === 'range') {
+                $rules[$prefix.'_min_amount'] = ['required', 'numeric', 'min:0'];
+                $rules[$prefix.'_max_amount'] = ['required', 'numeric', 'min:0', 'gte:'.$prefix.'_min_amount'];
+            }
+        }
 
         if (! $creating) {
             $rules['address_line'] = ['nullable', 'string', 'max:255'];
@@ -724,6 +852,8 @@ class MatrimonyProfileApiController extends Controller
             'fatherOccupationCustom',
             'motherOccupationMaster',
             'motherOccupationCustom',
+            'incomeCurrency',
+            'familyIncomeCurrency',
         ];
 
         $fresh = $profile->fresh($relations);
@@ -1120,6 +1250,13 @@ class MatrimonyProfileApiController extends Controller
         $profileData = $this->buildGovernanceParityProfilePayload($profile);
         if ((int) ($viewerProfile?->id ?? 0) !== (int) $profile->id) {
             unset($profileData['address_line']);
+            if ((bool) ($profile->income_private ?? false)) {
+                $this->forgetIncomePayloadKeys($profileData, 'income');
+                unset($profileData['annual_income']);
+            }
+            if ((bool) ($profile->family_income_private ?? false)) {
+                $this->forgetIncomePayloadKeys($profileData, 'family_income');
+            }
         }
 
         return response()->json([
@@ -1201,6 +1338,8 @@ class MatrimonyProfileApiController extends Controller
             'fatherOccupationCustom',
             'motherOccupationMaster',
             'motherOccupationCustom',
+            'incomeCurrency',
+            'familyIncomeCurrency',
             'horoscope.rashi',
             'horoscope.nakshatra',
             'horoscope.gan',
@@ -1235,6 +1374,8 @@ class MatrimonyProfileApiController extends Controller
         if ($birthPlaceLabel === '') {
             $birthPlaceLabel = trim((string) ($profile->birth_place_text ?? ''));
         }
+        $incomeCurrency = $profile->incomeCurrency;
+        $familyIncomeCurrency = $profile->familyIncomeCurrency ?? $incomeCurrency;
 
         $base = $profile->toArray();
         $parity = [
@@ -1266,6 +1407,17 @@ class MatrimonyProfileApiController extends Controller
             'has_children' => $profile->has_children,
             'occupation_title' => $profile->occupation_title,
             'annual_income' => $profile->annual_income,
+            'income_period' => $profile->income_period,
+            'income_value_type' => $profile->income_value_type,
+            'income_amount' => $profile->income_amount,
+            'income_min_amount' => $profile->income_min_amount,
+            'income_max_amount' => $profile->income_max_amount,
+            'income_currency_id' => $profile->income_currency_id,
+            'income_currency_code' => $incomeCurrency?->code,
+            'income_currency_symbol' => $incomeCurrency?->displaySymbol(),
+            'income_currency_label' => $this->incomeCurrencyDisplayLabel($incomeCurrency),
+            'income_private' => (bool) ($profile->income_private ?? false),
+            'income_display_label' => $this->mobileIncomeDisplayLabel($profile, 'income', $incomeCurrency),
             'family_type_id' => $profile->family_type_id,
             'complexion_id' => $profile->complexion_id,
             'complexion_label' => $this->masterLookupLabel($profile->getRelation('complexion')),
@@ -1306,6 +1458,18 @@ class MatrimonyProfileApiController extends Controller
             'family_type_label' => $this->masterLookupLabel($profile->getRelation('familyType')),
             'family_status' => $profile->family_status,
             'family_values' => $profile->family_values,
+            'family_income' => $profile->family_income,
+            'family_income_period' => $profile->family_income_period,
+            'family_income_value_type' => $profile->family_income_value_type,
+            'family_income_amount' => $profile->family_income_amount,
+            'family_income_min_amount' => $profile->family_income_min_amount,
+            'family_income_max_amount' => $profile->family_income_max_amount,
+            'family_income_currency_id' => $profile->family_income_currency_id,
+            'family_income_currency_code' => $familyIncomeCurrency?->code,
+            'family_income_currency_symbol' => $familyIncomeCurrency?->displaySymbol(),
+            'family_income_currency_label' => $this->incomeCurrencyDisplayLabel($familyIncomeCurrency),
+            'family_income_private' => (bool) ($profile->family_income_private ?? false),
+            'family_income_display_label' => $this->mobileIncomeDisplayLabel($profile, 'family_income', $familyIncomeCurrency),
             'has_siblings' => $profile->has_siblings,
             'other_relatives_text' => $profile->other_relatives_text,
             'property_details' => $profile->property_details,
@@ -1507,6 +1671,47 @@ class MatrimonyProfileApiController extends Controller
         $float = (float) $value;
 
         return floor($float) === $float ? (int) $float : $float;
+    }
+
+    private function incomeCurrencyDisplayLabel(?MasterIncomeCurrency $currency): ?string
+    {
+        if (! $currency) {
+            return null;
+        }
+
+        return trim($currency->displaySymbol().' '.($currency->code ?? '')) ?: null;
+    }
+
+    private function mobileIncomeDisplayLabel(MatrimonyProfile $profile, string $prefix, ?MasterIncomeCurrency $currency): ?string
+    {
+        $display = app(IncomeEngineService::class)->formatForDisplay($profile->toArray(), $prefix, $currency);
+        $display = trim($display);
+
+        return $display !== '' && strcasecmp($display, 'Not disclosed') !== 0 ? $display : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $profileData
+     */
+    private function forgetIncomePayloadKeys(array &$profileData, string $prefix): void
+    {
+        unset($profileData[$prefix]);
+
+        foreach ([
+            $prefix.'_period',
+            $prefix.'_value_type',
+            $prefix.'_amount',
+            $prefix.'_min_amount',
+            $prefix.'_max_amount',
+            $prefix.'_currency_id',
+            $prefix.'_currency_code',
+            $prefix.'_currency_symbol',
+            $prefix.'_currency_label',
+            $prefix.'_display_label',
+            $prefix.'_normalized_annual_amount',
+        ] as $key) {
+            unset($profileData[$key]);
+        }
     }
 
     private function masterTableLookupLabel(string $table, mixed $id): ?string

@@ -160,6 +160,7 @@ Sources:
 - `occupation_categories`: `master_occupation_categories` via `App\Models\OccupationCategory`
 - `occupations`: `master_occupations` via `App\Models\OccupationMaster`
 - `custom_occupations`: logged-in user's `master_occupation_custom` rows via `App\Models\OccupationCustom`
+- `currencies`: active `master_income_currencies` rows for income-engine currency selection
 
 Success response: HTTP 200
 
@@ -205,6 +206,18 @@ Success response: HTTP 200
       "label_en": "Family Business",
       "label_mr": null,
       "status": "pending"
+    }
+  ],
+  "currencies": [
+    {
+      "id": 1,
+      "key": "INR",
+      "code": "INR",
+      "symbol": "₹",
+      "label": "₹ INR",
+      "label_en": "₹ INR",
+      "label_mr": null,
+      "is_default": true
     }
   ]
 }
@@ -252,6 +265,7 @@ Sources:
 - `occupation_categories`: `master_occupation_categories` via `App\Models\OccupationCategory`
 - `occupations`: `master_occupations` via `App\Models\OccupationMaster`
 - `custom_occupations`: logged-in user's `master_occupation_custom` rows via `App\Models\OccupationCustom`
+- `currencies`: active `master_income_currencies` rows for family income-engine currency selection
 - `rashis`: `master_rashis`
 - `nakshatras`: `master_nakshatras`
 - `gans`: `master_gans`
@@ -283,6 +297,9 @@ Success response: HTTP 200
     { "id": 10, "label": "Teacher", "label_en": "Teacher", "label_mr": null, "category_id": 1, "category_label": "Education", "category_label_mr": null }
   ],
   "custom_occupations": [],
+  "currencies": [
+    { "id": 1, "key": "INR", "code": "INR", "symbol": "₹", "label": "₹ INR", "label_en": "₹ INR", "label_mr": null, "is_default": true }
+  ],
   "rashis": [
     { "id": 1, "key": "mesha", "label": "Mesha (Aries)", "label_en": "Mesha (Aries)", "label_mr": "मेष" }
   ],
@@ -575,6 +592,16 @@ Success response: HTTP 200
     "company_name": "Navri Tech",
     "work_location_text": "Pune, Maharashtra",
     "work_location_label": "Pune, Maharashtra",
+    "annual_income": 1200000,
+    "income_period": "annual",
+    "income_value_type": "exact",
+    "income_amount": 1200000,
+    "income_min_amount": null,
+    "income_max_amount": null,
+    "income_currency_id": 1,
+    "income_currency_label": "₹ INR",
+    "income_private": false,
+    "income_display_label": "₹12.0 L annually",
     "father_name": "Father Name",
     "father_occupation_master_id": 10,
     "father_occupation_master_label": "Business",
@@ -587,6 +614,16 @@ Success response: HTTP 200
     "family_type_label": "Joint",
     "family_status": "middle_class",
     "family_values": "traditional",
+    "family_income": 1500000,
+    "family_income_period": "monthly",
+    "family_income_value_type": "range",
+    "family_income_amount": null,
+    "family_income_min_amount": 100000,
+    "family_income_max_amount": 150000,
+    "family_income_currency_id": 1,
+    "family_income_currency_label": "₹ INR",
+    "family_income_private": false,
+    "family_income_display_label": "₹1.0 L – ₹1.5 L monthly",
     "has_siblings": true,
     "other_relatives_text": "Relatives settled in Pune",
     "property_details": "Own house",
@@ -752,6 +789,26 @@ Success response: HTTP 200
     "smoking_status_label": "Non-smoker",
     "drinking_status_id": 1,
     "drinking_status_label": "Non-drinker",
+    "annual_income": 1200000,
+    "income_period": "annual",
+    "income_value_type": "exact",
+    "income_amount": 1200000,
+    "income_min_amount": null,
+    "income_max_amount": null,
+    "income_currency_id": 1,
+    "income_currency_label": "₹ INR",
+    "income_private": false,
+    "income_display_label": "₹12.0 L annually",
+    "family_income": 1500000,
+    "family_income_period": "monthly",
+    "family_income_value_type": "range",
+    "family_income_amount": null,
+    "family_income_min_amount": 100000,
+    "family_income_max_amount": 150000,
+    "family_income_currency_id": 1,
+    "family_income_currency_label": "₹ INR",
+    "family_income_private": false,
+    "family_income_display_label": "₹1.0 L – ₹1.5 L monthly",
     "profile_photo": null,
     "partner_preferences": null
   }
@@ -802,7 +859,18 @@ Request:
   "occupation_master_id": 10,
   "company_name": "Navri Tech",
   "work_location_text": "Pune, Maharashtra",
+  "income_period": "annual",
+  "income_value_type": "exact",
+  "income_amount": 1200000,
+  "income_currency_id": 1,
+  "income_private": false,
   "family_type_id": 1,
+  "family_income_period": "monthly",
+  "family_income_value_type": "range",
+  "family_income_min_amount": 100000,
+  "family_income_max_amount": 150000,
+  "family_income_currency_id": 1,
+  "family_income_private": false,
   "property_details": "Own house",
   "rashi_id": 1,
   "narrative_about_me": "Short profile introduction.",
@@ -858,7 +926,10 @@ Rules:
 - `occupation_custom_id`: nullable, must exist in `master_occupation_custom.id` for the logged-in user; cannot be sent together with `occupation_master_id`
 - `company_name`: nullable string, max 255
 - `work_location_text`: nullable string, max 255
+- Personal income engine keys: `annual_income`, `income_amount`, `income_min_amount`, and `income_max_amount` are nullable numeric values, min 0; `income_period` is one of `annual`, `monthly`, `weekly`, `daily`; `income_value_type` is one of `exact`, `approximate`, `range`, `undisclosed`; `income_currency_id` must exist as an active `master_income_currencies.id`; `income_private` is nullable boolean. `exact`/`approximate` require `income_amount`; `range` requires `income_min_amount` and `income_max_amount`.
 - Family, property, horoscope, and `narrative_about_me` rules are the same as `POST /api/v1/matrimony-profile`.
+- Family income engine keys mirror personal income: `family_income`, `family_income_amount`, `family_income_min_amount`, `family_income_max_amount`, `family_income_period`, `family_income_value_type`, `family_income_currency_id`, and `family_income_private`.
+- Private income flags preserve the values for the owner's edit payload but display sections must not expose exact personal/family income amounts when the corresponding private flag is true.
 - Phase 5B1 + 5D partner preferences and `narrative_expectations` follow the same rules as `POST /api/v1/matrimony-profile`.
 - Parent/sibling/relative contact fields and partner preference repeaters are not accepted by this mobile update contract.
 
@@ -915,6 +986,26 @@ Success response: HTTP 200
     "company_name": "Navri Tech",
     "work_location_text": "Pune, Maharashtra",
     "work_location_label": "Pune, Maharashtra",
+    "annual_income": 1200000,
+    "income_period": "annual",
+    "income_value_type": "exact",
+    "income_amount": 1200000,
+    "income_min_amount": null,
+    "income_max_amount": null,
+    "income_currency_id": 1,
+    "income_currency_label": "₹ INR",
+    "income_private": false,
+    "income_display_label": "₹12.0 L annually",
+    "family_income": 1500000,
+    "family_income_period": "monthly",
+    "family_income_value_type": "range",
+    "family_income_amount": null,
+    "family_income_min_amount": 100000,
+    "family_income_max_amount": 150000,
+    "family_income_currency_id": 1,
+    "family_income_currency_label": "₹ INR",
+    "family_income_private": false,
+    "family_income_display_label": "₹1.0 L – ₹1.5 L monthly",
     "profile_photo": null,
     "partner_preferences": null
   }

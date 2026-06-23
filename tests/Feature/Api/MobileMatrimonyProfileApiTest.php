@@ -8,6 +8,7 @@ use App\Models\HiddenProfile;
 use App\Models\Interest;
 use App\Models\Location;
 use App\Models\MasterGender;
+use App\Models\MasterIncomeCurrency;
 use App\Models\MatrimonyProfile;
 use App\Models\OccupationCategory;
 use App\Models\OccupationCustom;
@@ -1454,6 +1455,100 @@ test('MobileProfile PUT api v1 matrimony-profile persists address line in own pr
         ->firstWhere('label', 'Address Line');
 
     expect($addressLineItem['value'] ?? null)->toBe('Test address line');
+});
+
+test('MobileProfile PUT api v1 matrimony-profile persists income engine fields and respects display privacy', function () {
+    mobileApiProfileTestSeedCurrentAddressType();
+    $user = User::factory()->create(['name' => 'Income Account']);
+    app(MutationService::class)->createDraftProfileForUser($user);
+    $location = mobileApiProfileTestLeafLocation();
+    $caste = mobileApiProfileTestCaste();
+    $gender = mobileApiProfileTestGender('female');
+    $currency = MasterIncomeCurrency::query()->updateOrCreate(
+        ['code' => 'INR'],
+        ['symbol' => 'INR', 'is_default' => true, 'is_active' => true]
+    );
+    Sanctum::actingAs($user);
+
+    $response = $this->putJson('/api/v1/matrimony-profile', [
+        'full_name' => 'Income Candidate',
+        'gender_id' => $gender->id,
+        'date_of_birth' => '1997-03-20',
+        'caste' => $caste->label,
+        'highest_education' => 'MCA',
+        'location_id' => $location->id,
+        'income_period' => 'annual',
+        'income_value_type' => 'exact',
+        'income_amount' => 1200000,
+        'income_currency_id' => $currency->id,
+        'income_private' => false,
+        'family_income_period' => 'monthly',
+        'family_income_value_type' => 'range',
+        'family_income_min_amount' => 100000,
+        'family_income_max_amount' => 150000,
+        'family_income_currency_id' => $currency->id,
+        'family_income_private' => false,
+    ]);
+
+    $response->assertOk();
+    expect((float) $response->json('profile.income_amount'))->toBe(1200000.0);
+    expect($response->json('profile.income_value_type'))->toBe('exact');
+    expect((int) $response->json('profile.income_currency_id'))->toBe((int) $currency->id);
+    expect($response->json('profile.income_private'))->toBeFalse();
+    expect((float) $response->json('profile.family_income_min_amount'))->toBe(100000.0);
+    expect((float) $response->json('profile.family_income_max_amount'))->toBe(150000.0);
+    expect($response->json('profile.family_income_value_type'))->toBe('range');
+    expect($response->json('profile.family_income_private'))->toBeFalse();
+
+    $getResponse = $this->getJson('/api/v1/matrimony-profile');
+    $getResponse->assertOk();
+    expect((float) $getResponse->json('profile.income_amount'))->toBe(1200000.0);
+    expect((float) $getResponse->json('profile.family_income_min_amount'))->toBe(100000.0);
+
+    $careerSection = collect($getResponse->json('display.sections') ?? [])
+        ->firstWhere('key', 'career_education');
+    $annualIncomeItem = collect($careerSection['items'] ?? [])
+        ->firstWhere('label', 'Annual Income');
+    $familySection = collect($getResponse->json('display.sections') ?? [])
+        ->firstWhere('key', 'family');
+    $familyIncomeItem = collect($familySection['items'] ?? [])
+        ->firstWhere('label', 'Family Income');
+
+    expect($annualIncomeItem['value'] ?? null)->not->toBeNull();
+    expect($annualIncomeItem['value'] ?? null)->not->toBe('Hidden');
+    expect($familyIncomeItem['value'] ?? null)->not->toBeNull();
+    expect($familyIncomeItem['value'] ?? null)->not->toBe('Hidden');
+
+    $privateResponse = $this->putJson('/api/v1/matrimony-profile', [
+        'income_period' => 'annual',
+        'income_value_type' => 'exact',
+        'income_amount' => 1200000,
+        'income_currency_id' => $currency->id,
+        'income_private' => true,
+        'family_income_period' => 'monthly',
+        'family_income_value_type' => 'range',
+        'family_income_min_amount' => 100000,
+        'family_income_max_amount' => 150000,
+        'family_income_currency_id' => $currency->id,
+        'family_income_private' => true,
+    ]);
+    $privateResponse->assertOk();
+    expect($privateResponse->json('profile.income_private'))->toBeTrue();
+    expect($privateResponse->json('profile.family_income_private'))->toBeTrue();
+
+    $privateGetResponse = $this->getJson('/api/v1/matrimony-profile');
+    $privateGetResponse->assertOk();
+    $privateCareerSection = collect($privateGetResponse->json('display.sections') ?? [])
+        ->firstWhere('key', 'career_education');
+    $privateAnnualIncomeItem = collect($privateCareerSection['items'] ?? [])
+        ->firstWhere('label', 'Annual Income');
+    $privateFamilySection = collect($privateGetResponse->json('display.sections') ?? [])
+        ->firstWhere('key', 'family');
+    $privateFamilyIncomeItem = collect($privateFamilySection['items'] ?? [])
+        ->firstWhere('label', 'Family Income');
+
+    expect($privateAnnualIncomeItem['value'] ?? null)->toBe('Hidden');
+    expect($privateFamilyIncomeItem['value'] ?? null)->toBe('Hidden');
 });
 
 test('MobileProfile PUT api v1 matrimony-profile can update fields after prior mobile locks', function () {
