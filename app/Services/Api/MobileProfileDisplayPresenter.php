@@ -21,6 +21,7 @@ use App\Services\Location\LocationService;
 use App\Services\PartnerPreferenceSuggestionService;
 use App\Services\ProfilePreferenceMatchService;
 use App\Services\ProfileLifecycleService;
+use App\Services\ProfilePartnerCommunityFlagService;
 use App\Services\SiteIdentityService;
 use App\Services\ViewTrackingService;
 use App\Support\HeightDisplay;
@@ -951,11 +952,13 @@ class MobileProfileDisplayPresenter
         $criteria = $profile->preferenceCriteria;
         $preferredMaritalStatusLabels = $this->partnerPreferencePivotLabels($profile, 'profile_preferred_marital_statuses', 'marital_status_id', 'master_marital_statuses');
         $preferredDietLabels = $this->partnerPreferencePivotLabels($profile, 'profile_preferred_diets', 'diet_id', 'master_diets');
+        $intercasteLabel = ProfilePartnerCommunityFlagService::interestedInIntercaste((int) $profile->id) ? 'Open to intercaste' : null;
         $expectations = $this->extendedNarrativeExpectations($profile);
         if ($criteria === null) {
             $items = [
                 $this->item('Preferred Religions', $this->collectionLabels($profile->preferredReligions), 'community'),
                 $this->item('Preferred Castes', $this->collectionLabels($profile->preferredCastes), 'community'),
+                $this->item('Intercaste', $intercasteLabel, 'community'),
                 $this->item('Preferred Education', $this->collectionLabels($profile->preferredEducationDegrees), 'education'),
                 $this->item('Preferred Occupation', $this->collectionLabels($profile->preferredOccupationMasters), 'work'),
                 $this->item('Preferred Marital Status', $preferredMaritalStatusLabels, 'heart'),
@@ -971,6 +974,7 @@ class MobileProfileDisplayPresenter
             $this->item('Height Preference', $this->heightRangeLabel($criteria->preferred_height_min_cm, $criteria->preferred_height_max_cm), 'height'),
             $this->item('Preferred Religions', $this->collectionLabels($profile->preferredReligions), 'community'),
             $this->item('Preferred Castes', $this->collectionLabels($profile->preferredCastes), 'community'),
+            $this->item('Intercaste', $intercasteLabel, 'community'),
             $this->item('Preferred Education', $this->collectionLabels($profile->preferredEducationDegrees) ?? $criteria->preferred_education, 'education'),
             $this->item('Preferred Occupation', $this->collectionLabels($profile->preferredOccupationMasters), 'work'),
             $this->item('Preferred City', $this->labelFrom($criteria->settledCity), 'location'),

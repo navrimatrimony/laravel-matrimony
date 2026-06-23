@@ -21,6 +21,7 @@ use App\Services\PartnerPreferenceSuggestionService;
 use App\Services\PartnerPreferenceSnapshotBuilder;
 use App\Services\Parsing\IntakeControlledFieldNormalizer;
 use App\Services\ProfileFieldLockService;
+use App\Services\ProfilePartnerCommunityFlagService;
 use App\Services\ProfileRotationService;
 use App\Services\ViewTrackingService;
 use Illuminate\Database\Eloquent\Builder;
@@ -40,10 +41,16 @@ class MatrimonyProfileApiController extends Controller
         'preferred_age_max',
         'preferred_height_min_cm',
         'preferred_height_max_cm',
+        'preferred_income_min',
+        'preferred_income_max',
         'marriage_type_preference_id',
         'partner_profile_with_children',
         'preferred_profile_managed_by',
         'willing_to_relocate',
+        'preferred_religion_ids',
+        'preferred_caste_ids',
+        'preferred_education_degree_ids',
+        'preferred_occupation_master_ids',
         'preferred_marital_status_ids',
         'preferred_diet_ids',
         'preferred_country_ids',
@@ -200,6 +207,8 @@ class MatrimonyProfileApiController extends Controller
             'preferred_age_max',
             'preferred_height_min_cm',
             'preferred_height_max_cm',
+            'preferred_income_min',
+            'preferred_income_max',
             'willing_to_relocate',
             'marriage_type_preference_id',
             'partner_profile_with_children',
@@ -215,6 +224,16 @@ class MatrimonyProfileApiController extends Controller
         }
         if ($this->requestInputKeyExists($request, 'preferred_diet_ids')) {
             $snapshot['preferred_diet_ids'] = $row['preferred_diet_ids'] ?? [];
+        }
+        foreach ([
+            'preferred_religion_ids',
+            'preferred_caste_ids',
+            'preferred_education_degree_ids',
+            'preferred_occupation_master_ids',
+        ] as $key) {
+            if ($this->requestInputKeyExists($request, $key)) {
+                $snapshot[$key] = $row[$key] ?? [];
+            }
         }
         foreach ([
             'preferred_country_ids',
@@ -378,6 +397,7 @@ class MatrimonyProfileApiController extends Controller
             'birth_weekday' => ['nullable', 'string', Rule::in($this->birthWeekdayValues())],
             'narrative_about_me' => ['nullable', 'string', 'max:5000'],
             'narrative_expectations' => ['nullable', 'string', 'max:5000'],
+            'preferred_intercaste' => ['nullable', 'boolean'],
         ];
 
         if (! $creating) {
@@ -558,8 +578,9 @@ class MatrimonyProfileApiController extends Controller
         $profile = $mutation->createDraftProfileForUser($user);
         $snapshot = $this->buildMobileProfileSnapshotFromApi($request, $profile);
         $mutation->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
+        $this->syncMobilePartnerCommunityFlags($profile, $request);
 
-        $profileData = $this->buildGovernanceParityProfilePayload($profile->fresh(['user', 'horoscope', 'preferenceCriteria']));
+        $profileData = $this->buildGovernanceParityProfilePayload($this->freshMobileProfileResponseModel($profile));
 
         return response()->json([
             'success' => true,
@@ -640,8 +661,9 @@ class MatrimonyProfileApiController extends Controller
                 ProfileFieldLockService::applyLocks($profile, $changedFields, 'CORE', $user);
             }
         }
+        $this->syncMobilePartnerCommunityFlags($profile, $request);
 
-        $profileData = $this->buildGovernanceParityProfilePayload($profile->fresh(['user', 'horoscope', 'preferenceCriteria']));
+        $profileData = $this->buildGovernanceParityProfilePayload($this->freshMobileProfileResponseModel($profile));
 
         return response()->json([
             'success' => true,
@@ -659,6 +681,61 @@ class MatrimonyProfileApiController extends Controller
         }
 
         return false;
+    }
+
+    private function syncMobilePartnerCommunityFlags(MatrimonyProfile $profile, Request $request): void
+    {
+        if (! $this->requestInputKeyExists($request, 'preferred_intercaste')) {
+            return;
+        }
+
+        ProfilePartnerCommunityFlagService::syncIntercasteIntentFromRequest((int) $profile->id, $request);
+    }
+
+    private function freshMobileProfileResponseModel(MatrimonyProfile $profile): MatrimonyProfile
+    {
+        $relations = [
+            'user',
+            'gender',
+            'horoscope.rashi',
+            'horoscope.nakshatra',
+            'horoscope.gan',
+            'horoscope.nadi',
+            'horoscope.yoni',
+            'horoscope.mangalDoshType',
+            'preferenceCriteria.preferredMaritalStatus',
+            'preferenceCriteria.marriageTypePreference',
+            'religion',
+            'caste',
+            'subCaste',
+            'birthCity',
+            'motherTongue',
+            'maritalStatus',
+            'complexion',
+            'bloodGroup',
+            'physicalBuild',
+            'diet',
+            'smokingStatus',
+            'drinkingStatus',
+            'occupationMaster.category',
+            'occupationCustom',
+            'familyType',
+            'fatherOccupationMaster',
+            'fatherOccupationCustom',
+            'motherOccupationMaster',
+            'motherOccupationCustom',
+        ];
+
+        $fresh = $profile->fresh($relations);
+        if ($fresh instanceof MatrimonyProfile) {
+            return $fresh;
+        }
+
+        $profile->unsetRelations();
+        $profile->refresh();
+        $profile->load($relations);
+
+        return $profile;
     }
 
     /**
@@ -1146,6 +1223,11 @@ class MatrimonyProfileApiController extends Controller
         $preferredStateIds = $this->partnerPreferencePivotIds('profile_preferred_states', 'state_id', (int) $profile->id);
         $preferredDistrictIds = $this->partnerPreferencePivotIds('profile_preferred_districts', 'district_id', (int) $profile->id);
         $preferredTalukaIds = $this->partnerPreferencePivotIds('profile_preferred_talukas', 'taluka_id', (int) $profile->id);
+        $preferredReligionIds = $this->partnerPreferencePivotIds('profile_preferred_religions', 'religion_id', (int) $profile->id);
+        $preferredCasteIds = $this->partnerPreferencePivotIds('profile_preferred_castes', 'caste_id', (int) $profile->id);
+        $preferredEducationDegreeIds = $this->partnerPreferencePivotIds('profile_preferred_education_degrees', 'education_degree_id', (int) $profile->id);
+        $preferredOccupationMasterIds = $this->partnerPreferencePivotIds('profile_preferred_occupation_master', 'occupation_master_id', (int) $profile->id);
+        $preferredIntercaste = ProfilePartnerCommunityFlagService::interestedInIntercaste((int) $profile->id);
         $birthPlaceLabel = trim($profile->birthLocationDisplayLine());
         if ($birthPlaceLabel === '') {
             $birthPlaceLabel = trim((string) ($profile->birth_place_text ?? ''));
@@ -1254,6 +1336,9 @@ class MatrimonyProfileApiController extends Controller
             'preferred_age_max' => $criteria?->preferred_age_max,
             'preferred_height_min_cm' => $criteria?->preferred_height_min_cm,
             'preferred_height_max_cm' => $criteria?->preferred_height_max_cm,
+            'preferred_income_min' => $this->numericPreferenceValue($criteria?->preferred_income_min),
+            'preferred_income_max' => $this->numericPreferenceValue($criteria?->preferred_income_max),
+            'preferred_income_label' => $this->incomePreferenceLabel($criteria?->preferred_income_min, $criteria?->preferred_income_max),
             'marriage_type_preference_id' => $criteria?->marriage_type_preference_id,
             'marriage_type_preference_label' => $this->masterLookupLabel($criteria?->marriageTypePreference),
             'partner_profile_with_children' => $criteria?->partner_profile_with_children,
@@ -1267,6 +1352,15 @@ class MatrimonyProfileApiController extends Controller
             'preferred_marital_status_labels' => $this->masterTableLabelsByIds('master_marital_statuses', $preferredMaritalStatusIds),
             'preferred_diet_ids' => $preferredDietIds,
             'preferred_diet_labels' => $this->masterTableLabelsByIds('master_diets', $preferredDietIds),
+            'preferred_religion_ids' => $preferredReligionIds,
+            'preferred_religion_labels' => $this->masterTableLabelsByIds('master_religions', $preferredReligionIds),
+            'preferred_caste_ids' => $preferredCasteIds,
+            'preferred_caste_labels' => $this->masterTableLabelsByIds('master_castes', $preferredCasteIds),
+            'preferred_intercaste' => $preferredIntercaste,
+            'preferred_education_degree_ids' => $preferredEducationDegreeIds,
+            'preferred_education_degree_labels' => $this->masterTableLabelsByIds('master_education', $preferredEducationDegreeIds),
+            'preferred_occupation_master_ids' => $preferredOccupationMasterIds,
+            'preferred_occupation_master_labels' => $this->masterTableLabelsByIds('master_occupations', $preferredOccupationMasterIds),
             'preferred_country_ids' => $preferredCountryIds,
             'preferred_state_ids' => $preferredStateIds,
             'preferred_district_ids' => $preferredDistrictIds,
@@ -1383,6 +1477,34 @@ class MatrimonyProfileApiController extends Controller
         };
     }
 
+    private function incomePreferenceLabel(mixed $min, mixed $max): ?string
+    {
+        if ($min === null && $max === null) {
+            return null;
+        }
+
+        $format = static function (mixed $value): string {
+            if ($value === null || $value === '') {
+                return 'Any';
+            }
+
+            return '₹'.number_format((float) $value, 0);
+        };
+
+        return $format($min).' - '.$format($max);
+    }
+
+    private function numericPreferenceValue(mixed $value): int|float|null
+    {
+        if ($value === null || $value === '' || ! is_numeric($value)) {
+            return null;
+        }
+
+        $float = (float) $value;
+
+        return floor($float) === $float ? (int) $float : $float;
+    }
+
     private function masterTableLookupLabel(string $table, mixed $id): ?string
     {
         if ($id === null || $id === '' || ! Schema::hasTable($table)) {
@@ -1394,7 +1516,7 @@ class MatrimonyProfileApiController extends Controller
             return null;
         }
 
-        foreach (['display_label', 'label_mr', 'label_en', 'label', 'name', 'raw_name', 'key'] as $key) {
+        foreach (['display_label', 'label_mr', 'label_en', 'label', 'name', 'name_mr', 'code', 'code_mr', 'full_form', 'raw_name', 'key'] as $key) {
             if (property_exists($row, $key)) {
                 $value = trim((string) ($row->{$key} ?? ''));
                 if ($value !== '') {
@@ -1412,7 +1534,7 @@ class MatrimonyProfileApiController extends Controller
             return null;
         }
 
-        foreach (['display_label', 'label_mr', 'label_en', 'label', 'name', 'raw_name', 'key'] as $key) {
+        foreach (['display_label', 'label_mr', 'label_en', 'label', 'name', 'name_mr', 'code', 'code_mr', 'full_form', 'raw_name', 'key'] as $key) {
             $value = trim((string) ($row->getAttribute($key) ?? ''));
             if ($value !== '') {
                 return $value;

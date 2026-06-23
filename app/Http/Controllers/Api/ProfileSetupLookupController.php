@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Caste;
 use App\Models\EducationDegree;
 use App\Models\MasterBloodGroup;
 use App\Models\MasterComplexion;
@@ -23,6 +24,7 @@ use App\Models\MasterSmokingStatus;
 use App\Models\OccupationCategory;
 use App\Models\OccupationCustom;
 use App\Models\OccupationMaster;
+use App\Models\Religion;
 use App\Services\HoroscopeRuleService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
@@ -133,6 +135,11 @@ class ProfileSetupLookupController extends Controller
             'marriage_type_preferences' => $this->masterOptions(MasterMarriageTypePreference::class, 'master_marriage_type_preferences', ['sort_order', 'id']),
             'marital_statuses' => $this->masterOptions(MasterMaritalStatus::class, 'master_marital_statuses', ['label', 'id']),
             'diets' => $this->masterOptions(MasterDiet::class, 'master_diets', ['sort_order', 'id']),
+            'religions' => $this->religionOptions(),
+            'castes' => $this->casteOptions(),
+            'education_degrees' => $this->educationDegreeOptions(),
+            'occupation_categories' => $this->occupationCategoryOptions(),
+            'occupations' => $this->occupationOptions(),
             'partner_profile_with_children' => $this->partnerProfileWithChildrenOptions(),
             'preferred_profile_managed_by' => $this->preferredProfileManagedByOptions(),
         ]);
@@ -188,6 +195,77 @@ class ProfileSetupLookupController extends Controller
         }
 
         return $this->mapMasterOptionRows($rows, $hasLabelEn, $hasLabelMr);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function religionOptions(): array
+    {
+        if (! Schema::hasTable('master_religions')) {
+            return [];
+        }
+
+        $hasLabelEn = Schema::hasColumn('master_religions', 'label_en');
+        $hasLabelMr = Schema::hasColumn('master_religions', 'label_mr');
+        $columns = ['id', 'key', 'label'];
+        if ($hasLabelEn) {
+            $columns[] = 'label_en';
+        }
+        if ($hasLabelMr) {
+            $columns[] = 'label_mr';
+        }
+
+        return Religion::query()
+            ->where('is_active', true)
+            ->orderBy('label')
+            ->orderBy('id')
+            ->get($columns)
+            ->map(fn (Religion $religion): array => [
+                'id' => (int) $religion->id,
+                'key' => $religion->key,
+                'label' => $religion->label,
+                'label_en' => $hasLabelEn ? ($religion->label_en ?: $religion->label) : $religion->label,
+                'label_mr' => $hasLabelMr ? ($religion->label_mr ?: null) : null,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function casteOptions(): array
+    {
+        if (! Schema::hasTable('master_castes')) {
+            return [];
+        }
+
+        $hasLabelEn = Schema::hasColumn('master_castes', 'label_en');
+        $hasLabelMr = Schema::hasColumn('master_castes', 'label_mr');
+        $columns = ['id', 'religion_id', 'key', 'label'];
+        if ($hasLabelEn) {
+            $columns[] = 'label_en';
+        }
+        if ($hasLabelMr) {
+            $columns[] = 'label_mr';
+        }
+
+        return Caste::query()
+            ->where('is_active', true)
+            ->orderBy('label')
+            ->orderBy('id')
+            ->get($columns)
+            ->map(fn (Caste $caste): array => [
+                'id' => (int) $caste->id,
+                'religion_id' => $caste->religion_id ? (int) $caste->religion_id : null,
+                'key' => $caste->key,
+                'label' => $caste->label,
+                'label_en' => $hasLabelEn ? ($caste->label_en ?: $caste->label) : $caste->label,
+                'label_mr' => $hasLabelMr ? ($caste->label_mr ?: null) : null,
+            ])
+            ->values()
+            ->all();
     }
 
     private function applyOptionOrdering($query, string $table, array $orderColumns): void

@@ -23,6 +23,7 @@ use App\Services\ContactAccessService;
 use App\Services\FeatureUsageService;
 use App\Services\Gunamilan\GunamilanService;
 use App\Services\MutationService;
+use App\Services\ProfilePartnerCommunityFlagService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
@@ -338,12 +339,19 @@ function mobileApiProfileTestPhase4AOptions(): array
 
 function mobileApiProfileTestPartnerPreferenceOptions(): array
 {
+    $educationDegree = mobileApiProfileTestEducationDegree('M.C.A.', 101);
+    $occupationMaster = mobileApiProfileTestOccupationMaster('Data Analyst', 101);
+
     return [
         'marriage_type_preference_id' => mobileApiProfileTestKnownMasterOption('master_marriage_type_preferences', 'arranged', 'Arranged', ['sort_order' => 10]),
         'marital_status_id' => mobileApiProfileTestKnownMaritalStatus('divorced', 'Divorced'),
         'second_marital_status_id' => mobileApiProfileTestKnownMaritalStatus('widowed', 'Widowed'),
         'diet_id' => mobileApiProfileTestMasterOption('master_diets', 'vegetarian', 'Vegetarian', ['sort_order' => 10]),
         'second_diet_id' => mobileApiProfileTestMasterOption('master_diets', 'jain', 'Jain', ['sort_order' => 20]),
+        'education_degree_id' => (int) $educationDegree->id,
+        'education_degree_label' => $educationDegree->code,
+        'occupation_master_id' => (int) $occupationMaster->id,
+        'occupation_master_label' => $occupationMaster->name,
     ];
 }
 
@@ -887,6 +895,11 @@ test('MobileProfile GET api v1 profile partner preference options returns govern
     $widowedId = mobileApiProfileTestKnownMaritalStatus('widowed', 'Widowed');
     $dietFirst = mobileApiProfileTestMasterOption('master_diets', 'phase5b1-vegetarian', 'Vegetarian', ['sort_order' => 101]);
     $dietSecond = mobileApiProfileTestMasterOption('master_diets', 'phase5b1-jain', 'Jain', ['sort_order' => 202]);
+    $educationFirst = mobileApiProfileTestEducationDegree('P5D-B.A.', 101);
+    $educationSecond = mobileApiProfileTestEducationDegree('P5D-M.A.', 202);
+    $occupationFirst = mobileApiProfileTestOccupationMaster('P5D Analyst', 101);
+    $occupationSecond = mobileApiProfileTestOccupationMaster('P5D Architect', 202);
+    [$religion, $caste] = mobileApiProfileTestCommunity();
     $inactiveDietId = (int) DB::table('master_diets')->insertGetId([
         'key' => 'inactive'.substr(strtolower(str_replace('.', '', uniqid('', true))), -8),
         'label' => 'Inactive Partner Diet',
@@ -910,6 +923,21 @@ test('MobileProfile GET api v1 profile partner preference options returns govern
             'diets' => [
                 '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
             ],
+            'religions' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+            'castes' => [
+                '*' => ['id', 'religion_id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
+            'education_degrees' => [
+                '*' => ['id', 'code', 'label', 'label_en', 'label_mr', 'full_form', 'category_id', 'category_label', 'category_label_mr'],
+            ],
+            'occupation_categories' => [
+                '*' => ['id', 'label', 'label_en', 'label_mr', 'legacy_working_with_type_id'],
+            ],
+            'occupations' => [
+                '*' => ['id', 'label', 'label_en', 'label_mr', 'category_id', 'category_label', 'category_label_mr'],
+            ],
             'partner_profile_with_children' => [
                 '*' => ['key', 'label', 'label_en', 'label_mr'],
             ],
@@ -921,7 +949,11 @@ test('MobileProfile GET api v1 profile partner preference options returns govern
     mobileApiProfileAssertIdBefore(collect($response->json('marriage_type_preferences'))->pluck('id')->all(), $marriageFirst, $marriageSecond);
     mobileApiProfileAssertIdBefore(collect($response->json('marital_statuses'))->pluck('id')->all(), $divorcedId, $widowedId);
     mobileApiProfileAssertIdBefore(collect($response->json('diets'))->pluck('id')->all(), $dietFirst, $dietSecond);
+    mobileApiProfileAssertIdBefore(collect($response->json('education_degrees'))->pluck('id')->all(), (int) $educationFirst->id, (int) $educationSecond->id);
+    mobileApiProfileAssertIdBefore(collect($response->json('occupations'))->pluck('id')->all(), (int) $occupationFirst->id, (int) $occupationSecond->id);
     expect(collect($response->json('diets'))->pluck('id')->all())->not->toContain($inactiveDietId);
+    expect(collect($response->json('religions'))->pluck('id')->all())->toContain((int) $religion->id);
+    expect(collect($response->json('castes'))->firstWhere('id', (int) $caste->id)['religion_id'] ?? null)->toBe((int) $religion->id);
     expect(collect($response->json('partner_profile_with_children'))->pluck('key')->all())->toBe(['no', 'yes_if_live_separate', 'yes']);
     expect(collect($response->json('preferred_profile_managed_by'))->pluck('key')->all())->toBe(['', 'self', 'parent_guardian', 'sibling', 'relative', 'friend', 'other']);
 });
@@ -1721,6 +1753,10 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
         $options['diet_id'],
         $options['second_diet_id'],
     ])->sort()->values()->all();
+    $expectedReligionIds = collect([$profile->religion_id])->sort()->values()->map(fn ($id) => (int) $id)->all();
+    $expectedCasteIds = collect([$profile->caste_id])->sort()->values()->map(fn ($id) => (int) $id)->all();
+    $expectedEducationDegreeIds = [$options['education_degree_id']];
+    $expectedOccupationMasterIds = [$options['occupation_master_id']];
     $locationChain = mobileApiProfileTestLocationChain();
     $expectedCountryIds = [(int) $locationChain['country']->id];
     $expectedStateIds = [(int) $locationChain['state']->id];
@@ -1732,10 +1768,17 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
         'preferred_age_max' => 31,
         'preferred_height_min_cm' => 150,
         'preferred_height_max_cm' => 180,
+        'preferred_income_min' => 700000,
+        'preferred_income_max' => 1200000,
         'marriage_type_preference_id' => $options['marriage_type_preference_id'],
         'partner_profile_with_children' => 'yes_if_live_separate',
         'preferred_profile_managed_by' => 'parent_guardian',
         'willing_to_relocate' => true,
+        'preferred_religion_ids' => $expectedReligionIds,
+        'preferred_caste_ids' => $expectedCasteIds,
+        'preferred_intercaste' => true,
+        'preferred_education_degree_ids' => $expectedEducationDegreeIds,
+        'preferred_occupation_master_ids' => $expectedOccupationMasterIds,
         'preferred_marital_status_ids' => [
             $options['marital_status_id'],
             $options['second_marital_status_id'],
@@ -1758,10 +1801,17 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
         ->assertJsonPath('profile.preferred_age_max', 31)
         ->assertJsonPath('profile.preferred_height_min_cm', 150)
         ->assertJsonPath('profile.preferred_height_max_cm', 180)
+        ->assertJsonPath('profile.preferred_income_min', 700000)
+        ->assertJsonPath('profile.preferred_income_max', 1200000)
         ->assertJsonPath('profile.marriage_type_preference_id', $options['marriage_type_preference_id'])
         ->assertJsonPath('profile.partner_profile_with_children', 'yes_if_live_separate')
         ->assertJsonPath('profile.preferred_profile_managed_by', 'parent_guardian')
         ->assertJsonPath('profile.willing_to_relocate', true)
+        ->assertJsonPath('profile.preferred_religion_ids', $expectedReligionIds)
+        ->assertJsonPath('profile.preferred_caste_ids', $expectedCasteIds)
+        ->assertJsonPath('profile.preferred_intercaste', true)
+        ->assertJsonPath('profile.preferred_education_degree_ids', $expectedEducationDegreeIds)
+        ->assertJsonPath('profile.preferred_occupation_master_ids', $expectedOccupationMasterIds)
         ->assertJsonPath('profile.preferred_marital_status_ids', $expectedMaritalIds)
         ->assertJsonPath('profile.preferred_diet_ids', $expectedDietIds)
         ->assertJsonPath('profile.preferred_country_ids', $expectedCountryIds)
@@ -1784,6 +1834,34 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
         ->where('profile_id', $profile->id)
         ->orderBy('diet_id')
         ->pluck('diet_id')
+        ->map(fn ($id) => (int) $id)
+        ->values()
+        ->all();
+    $religionIds = DB::table('profile_preferred_religions')
+        ->where('profile_id', $profile->id)
+        ->orderBy('religion_id')
+        ->pluck('religion_id')
+        ->map(fn ($id) => (int) $id)
+        ->values()
+        ->all();
+    $casteIds = DB::table('profile_preferred_castes')
+        ->where('profile_id', $profile->id)
+        ->orderBy('caste_id')
+        ->pluck('caste_id')
+        ->map(fn ($id) => (int) $id)
+        ->values()
+        ->all();
+    $educationDegreeIds = DB::table('profile_preferred_education_degrees')
+        ->where('profile_id', $profile->id)
+        ->orderBy('education_degree_id')
+        ->pluck('education_degree_id')
+        ->map(fn ($id) => (int) $id)
+        ->values()
+        ->all();
+    $occupationMasterIds = DB::table('profile_preferred_occupation_master')
+        ->where('profile_id', $profile->id)
+        ->orderBy('occupation_master_id')
+        ->pluck('occupation_master_id')
         ->map(fn ($id) => (int) $id)
         ->values()
         ->all();
@@ -1820,12 +1898,19 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
     expect((int) $criteria->preferred_age_max)->toBe(31);
     expect((int) $criteria->preferred_height_min_cm)->toBe(150);
     expect((int) $criteria->preferred_height_max_cm)->toBe(180);
+    expect((int) $criteria->preferred_income_min)->toBe(700000);
+    expect((int) $criteria->preferred_income_max)->toBe(1200000);
     expect((int) $criteria->marriage_type_preference_id)->toBe((int) $options['marriage_type_preference_id']);
     expect($criteria->partner_profile_with_children)->toBe('yes_if_live_separate');
     expect($criteria->preferred_profile_managed_by)->toBe('parent_guardian');
     expect((bool) $criteria->willing_to_relocate)->toBeTrue();
     expect($maritalIds)->toBe($expectedMaritalIds);
     expect($dietIds)->toBe($expectedDietIds);
+    expect($religionIds)->toBe($expectedReligionIds);
+    expect($casteIds)->toBe($expectedCasteIds);
+    expect($educationDegreeIds)->toBe($expectedEducationDegreeIds);
+    expect($occupationMasterIds)->toBe($expectedOccupationMasterIds);
+    expect(ProfilePartnerCommunityFlagService::interestedInIntercaste((int) $profile->id))->toBeTrue();
     expect($countryIds)->toBe($expectedCountryIds);
     expect($stateIds)->toBe($expectedStateIds);
     expect($districtIds)->toBe($expectedDistrictIds);
@@ -1840,6 +1925,20 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
             'religion_id' => $profile->religion_id,
         ]);
     }
+
+    $display = $this->getJson('/api/v1/matrimony-profile')->assertOk();
+    $display
+        ->assertJsonPath('profile.preferred_religion_ids', $expectedReligionIds)
+        ->assertJsonPath('profile.preferred_caste_ids', $expectedCasteIds)
+        ->assertJsonPath('profile.preferred_education_degree_ids', $expectedEducationDegreeIds)
+        ->assertJsonPath('profile.preferred_occupation_master_ids', $expectedOccupationMasterIds)
+        ->assertJsonPath('profile.preferred_intercaste', true);
+    $partnerPreferenceItems = collect(collect($display->json('display.sections'))
+        ->firstWhere('key', 'partner_preferences')['items'] ?? []);
+    expect($partnerPreferenceItems->contains(
+        fn (array $item): bool => ($item['label'] ?? null) === 'Intercaste'
+            && ($item['value'] ?? null) === 'Open to intercaste'
+    ))->toBeTrue();
 });
 
 test('MobileProfile PUT api v1 matrimony-profile rejects invalid education career ids', function () {
@@ -1915,17 +2014,36 @@ test('MobileProfile PUT api v1 matrimony-profile rejects invalid partner prefere
 
     foreach ([
         'marriage_type_preference_id',
+        'preferred_religion_ids',
+        'preferred_caste_ids',
+        'preferred_education_degree_ids',
+        'preferred_occupation_master_ids',
         'preferred_marital_status_ids',
         'preferred_diet_ids',
     ] as $field) {
         $payload = match ($field) {
-            'preferred_marital_status_ids', 'preferred_diet_ids' => [$field => [999999999]],
+            'preferred_religion_ids',
+            'preferred_caste_ids',
+            'preferred_education_degree_ids',
+            'preferred_occupation_master_ids',
+            'preferred_marital_status_ids',
+            'preferred_diet_ids' => [$field => [999999999]],
             default => [$field => 999999999],
+        };
+
+        $expectedError = match ($field) {
+            'preferred_religion_ids',
+            'preferred_caste_ids',
+            'preferred_education_degree_ids',
+            'preferred_occupation_master_ids',
+            'preferred_marital_status_ids',
+            'preferred_diet_ids' => $field.'.0',
+            default => $field,
         };
 
         $this->putJson('/api/v1/matrimony-profile', $payload)
             ->assertStatus(422)
-            ->assertJsonValidationErrors([$field === 'preferred_marital_status_ids' ? 'preferred_marital_status_ids.0' : ($field === 'preferred_diet_ids' ? 'preferred_diet_ids.0' : $field)]);
+            ->assertJsonValidationErrors([$expectedError]);
     }
 
     $this->putJson('/api/v1/matrimony-profile', [
@@ -1941,6 +2059,28 @@ test('MobileProfile PUT api v1 matrimony-profile rejects invalid partner prefere
     ])
         ->assertStatus(422)
         ->assertJsonValidationErrors(['preferred_height_min_cm']);
+
+    $this->putJson('/api/v1/matrimony-profile', [
+        'preferred_income_min' => 1200000,
+        'preferred_income_max' => 700000,
+    ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['preferred_income_min']);
+
+    $this->putJson('/api/v1/matrimony-profile', [
+        'preferred_intercaste' => 'not-a-boolean',
+    ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['preferred_intercaste']);
+
+    [$religionA] = mobileApiProfileTestCommunity();
+    [, $casteB] = mobileApiProfileTestCommunity();
+    $this->putJson('/api/v1/matrimony-profile', [
+        'preferred_religion_ids' => [(int) $religionA->id],
+        'preferred_caste_ids' => [(int) $casteB->id],
+    ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['preferred_caste_ids']);
 });
 
 test('MobileProfile GET api v1 matrimony profile returns clean display payload beside profile', function () {

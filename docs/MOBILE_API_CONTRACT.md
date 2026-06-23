@@ -335,6 +335,11 @@ Sources:
 - `marriage_type_preferences`: `master_marriage_type_preferences` via `App\Models\MasterMarriageTypePreference`, ordered by `sort_order`, then `id`
 - `marital_statuses`: `master_marital_statuses`, ordered by website partner-preference source order (`label`, then `id`)
 - `diets`: `master_diets` via `App\Models\MasterDiet`, ordered by `sort_order`, then `id`
+- `religions`: `master_religions`, ordered by website source order (`label`, then `id`)
+- `castes`: `master_castes`, ordered by website source order (`label`, then `id`), includes `religion_id`
+- `education_degrees`: `master_education` via `App\Models\EducationDegree`, ordered by `sort_order`, then `code`
+- `occupation_categories`: `master_occupation_categories`, ordered by `sort_order`, then `name`
+- `occupations`: `master_occupations`, ordered by `sort_order`, then `name`
 - `partner_profile_with_children`: website enum options `no`, `yes_if_live_separate`, `yes`
 - `preferred_profile_managed_by`: website enum options `any`, `self`, `parent_guardian`, `sibling`, `relative`, `friend`, `other`
 
@@ -350,6 +355,21 @@ Success response: HTTP 200
   ],
   "diets": [
     { "id": 1, "key": "vegetarian", "label": "Vegetarian", "label_en": "Vegetarian", "label_mr": null }
+  ],
+  "religions": [
+    { "id": 4, "key": "hindu", "label": "Hindu", "label_en": "Hindu", "label_mr": "हिंदू" }
+  ],
+  "castes": [
+    { "id": 412, "religion_id": 4, "key": "maratha", "label": "Maratha", "label_en": "Maratha", "label_mr": "मराठा" }
+  ],
+  "education_degrees": [
+    { "id": 1, "code": "B.A.", "label": "B.A.", "label_en": "B.A.", "label_mr": null, "full_form": "Bachelor of Arts", "category_id": 1 }
+  ],
+  "occupation_categories": [
+    { "id": 1, "label": "Technology", "label_en": "Technology", "label_mr": null, "legacy_working_with_type_id": null }
+  ],
+  "occupations": [
+    { "id": 10, "label": "Software Engineer", "label_en": "Software Engineer", "label_mr": null, "category_id": 1 }
   ],
   "partner_profile_with_children": [
     { "key": "no", "label": "No", "label_en": "No", "label_mr": "नाही" },
@@ -478,10 +498,16 @@ Rules:
 - `narrative_about_me`: nullable string, max 5000
 - `preferred_age_min`, `preferred_age_max`: nullable integers, 18-80; min must be less than or equal to max
 - `preferred_height_min_cm`, `preferred_height_max_cm`: nullable integers; min must be less than or equal to max
+- `preferred_income_min`, `preferred_income_max`: nullable numeric values; min must be less than or equal to max
 - `marriage_type_preference_id`: nullable, must exist as an active `master_marriage_type_preferences.id`
 - `partner_profile_with_children`: nullable, one of `no`, `yes_if_live_separate`, `yes`
 - `preferred_profile_managed_by`: nullable, one of `self`, `parent_guardian`, `sibling`, `relative`, `friend`, `other`
 - `willing_to_relocate`: nullable boolean
+- `preferred_religion_ids`: nullable array of active `master_religions.id`
+- `preferred_caste_ids`: nullable array of active `master_castes.id`; selected castes must belong to selected preferred religions
+- `preferred_intercaste`: nullable boolean; saved to `profile_partner_community_flags.interested_in_intercaste`
+- `preferred_education_degree_ids`: nullable array of `master_education.id`
+- `preferred_occupation_master_ids`: nullable array of `master_occupations.id`
 - `preferred_marital_status_ids`: nullable array of active `master_marital_statuses.id`
 - `preferred_diet_ids`: nullable array of active `master_diets.id`
 - `narrative_expectations`: nullable string, max 5000
@@ -492,8 +518,8 @@ Governance note:
 - When it resolves against existing master caste data, the governed write stores `caste_id`.
 - Raw legacy `caste` text is not a governed write target.
 - Matrimony gender source is `matrimony_profiles.gender_id`; `users.gender` is not a runtime fallback for profile matching, visibility, comparison, or display.
-- Phase 5B1 accepts only simple partner expectations listed above through the governed preference snapshot path.
-- Parent contact numbers, sibling contact numbers, relative contact numbers, contact unlock/payment fields, complex partner preference location/community/education/occupation/income fields, and preference repeaters are intentionally not accepted in this mobile contract.
+- Phase 5B1 + 5D partner expectations listed above flow through the governed partner preference snapshot path, except `preferred_intercaste`, which reuses the existing website community flag service.
+- Parent contact numbers, sibling contact numbers, relative contact numbers, contact unlock/payment fields, and preference repeaters are intentionally not accepted in this mobile contract.
 - Sibling and relative repeaters are intentionally deferred until a row-preserving, privacy-safe mobile contract is added.
 
 Success response: HTTP 200
@@ -593,6 +619,9 @@ Success response: HTTP 200
     "preferred_age_max": 31,
     "preferred_height_min_cm": 150,
     "preferred_height_max_cm": 180,
+    "preferred_income_min": 700000,
+    "preferred_income_max": 1200000,
+    "preferred_income_label": "₹700,000 - ₹1,200,000",
     "marriage_type_preference_id": 1,
     "marriage_type_preference_label": "Arranged",
     "partner_profile_with_children": "yes_if_live_separate",
@@ -600,6 +629,15 @@ Success response: HTTP 200
     "preferred_profile_managed_by": "parent_guardian",
     "preferred_profile_managed_by_label": "Parent / Guardian",
     "willing_to_relocate": true,
+    "preferred_religion_ids": [4],
+    "preferred_religion_labels": ["Hindu"],
+    "preferred_caste_ids": [412],
+    "preferred_caste_labels": ["Maratha"],
+    "preferred_intercaste": true,
+    "preferred_education_degree_ids": [1],
+    "preferred_education_degree_labels": ["B.A."],
+    "preferred_occupation_master_ids": [10],
+    "preferred_occupation_master_labels": ["Software Engineer"],
     "preferred_marital_status_ids": [2, 5],
     "preferred_marital_status_labels": ["Divorced", "Widowed"],
     "preferred_diet_ids": [1, 3],
@@ -770,10 +808,17 @@ Request:
   "preferred_age_max": 31,
   "preferred_height_min_cm": 150,
   "preferred_height_max_cm": 180,
+  "preferred_income_min": 700000,
+  "preferred_income_max": 1200000,
   "marriage_type_preference_id": 1,
   "partner_profile_with_children": "yes_if_live_separate",
   "preferred_profile_managed_by": "parent_guardian",
   "willing_to_relocate": true,
+  "preferred_religion_ids": [4],
+  "preferred_caste_ids": [412],
+  "preferred_intercaste": true,
+  "preferred_education_degree_ids": [1],
+  "preferred_occupation_master_ids": [10],
   "preferred_marital_status_ids": [2, 5],
   "preferred_diet_ids": [1, 3],
   "narrative_expectations": "Looking for a thoughtful partner."
@@ -811,8 +856,8 @@ Rules:
 - `company_name`: nullable string, max 255
 - `work_location_text`: nullable string, max 255
 - Family, property, horoscope, and `narrative_about_me` rules are the same as `POST /api/v1/matrimony-profile`.
-- Simple Phase 5B1 partner preferences and `narrative_expectations` follow the same rules as `POST /api/v1/matrimony-profile`.
-- Parent/sibling/relative contact fields and complex partner expectation fields are not accepted by this mobile update contract.
+- Phase 5B1 + 5D partner preferences and `narrative_expectations` follow the same rules as `POST /api/v1/matrimony-profile`.
+- Parent/sibling/relative contact fields and partner preference repeaters are not accepted by this mobile update contract.
 
 Success response: HTTP 200
 
