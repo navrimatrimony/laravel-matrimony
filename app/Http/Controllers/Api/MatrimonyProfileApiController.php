@@ -65,6 +65,10 @@ class MatrimonyProfileApiController extends Controller
 
     private const MOBILE_INCOME_VALUE_TYPES = ['exact', 'approximate', 'range', 'undisclosed'];
 
+    private const MOBILE_SIBLING_RELATION_TYPES = ['brother', 'sister', 'brother_wife', 'sister_husband'];
+
+    private const MOBILE_SIBLING_MARITAL_STATUSES = ['unmarried', 'married'];
+
     /**
      * Phase-5B: Build snapshot from API request (same structure as manual). Only keys present in request.
      */
@@ -183,6 +187,10 @@ class MatrimonyProfileApiController extends Controller
             $snapshot['preferences'] = [$this->mobilePartnerPreferenceSnapshotFromApi($request)];
         }
 
+        if ($request->has('siblings')) {
+            $snapshot['siblings'] = $this->mobileSiblingsSnapshotFromApi($request);
+        }
+
         if ($this->requestInputKeyExists($request, 'narrative_about_me') || $this->requestInputKeyExists($request, 'narrative_expectations')) {
             $existing = $profile instanceof MatrimonyProfile && Schema::hasTable('profile_extended_attributes')
                 ? DB::table('profile_extended_attributes')->where('profile_id', $profile->id)->first()
@@ -199,6 +207,62 @@ class MatrimonyProfileApiController extends Controller
         }
 
         return $snapshot;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function mobileSiblingsSnapshotFromApi(Request $request): array
+    {
+        $rows = $request->input('siblings', []);
+        if (! is_array($rows)) {
+            return [];
+        }
+
+        $siblings = [];
+        foreach (array_values($rows) as $idx => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $relationType = $row['relation_type'] ?? null;
+            $name = trim((string) ($row['name'] ?? ''));
+            $occupation = trim((string) ($row['occupation'] ?? ''));
+            $addressLine = trim((string) ($row['address_line'] ?? ''));
+            $notes = trim((string) ($row['notes'] ?? ''));
+            $cityId = $row['city_id'] ?? null;
+            $hasMeaningfulData = in_array($relationType, self::MOBILE_SIBLING_RELATION_TYPES, true)
+                || $name !== ''
+                || $occupation !== ''
+                || $addressLine !== ''
+                || $notes !== ''
+                || ($cityId !== null && $cityId !== '');
+
+            if (! $hasMeaningfulData) {
+                continue;
+            }
+
+            $sibling = [
+                'relation_type' => $relationType,
+                'name' => $name !== '' ? $name : null,
+                'marital_status' => $row['marital_status'] ?? null,
+                'occupation' => $occupation !== '' ? $occupation : null,
+                'occupation_master_id' => $row['occupation_master_id'] ?? null,
+                'occupation_custom_id' => $row['occupation_custom_id'] ?? null,
+                'city_id' => ($cityId !== null && $cityId !== '') ? (int) $cityId : null,
+                'address_line' => $addressLine !== '' ? $addressLine : null,
+                'notes' => $notes !== '' ? $notes : null,
+                'sort_order' => isset($row['sort_order']) && $row['sort_order'] !== '' ? (int) $row['sort_order'] : $idx,
+            ];
+
+            if (! empty($row['id'])) {
+                $sibling['id'] = (int) $row['id'];
+            }
+
+            $siblings[] = $sibling;
+        }
+
+        return $siblings;
     }
 
     private function mobilePartnerPreferenceInputPresent(Request $request): bool
@@ -495,6 +559,26 @@ class MatrimonyProfileApiController extends Controller
             'family_income_currency_id' => ['nullable', 'integer', Rule::exists('master_income_currencies', 'id')->where('is_active', true)],
             'family_income_private' => ['nullable', 'boolean'],
             'has_siblings' => ['nullable', 'boolean'],
+            'siblings' => ['nullable', 'array', 'max:20'],
+            'siblings.*' => ['array'],
+            'siblings.*.id' => ['nullable', 'integer'],
+            'siblings.*.relation_type' => ['nullable', Rule::in(self::MOBILE_SIBLING_RELATION_TYPES)],
+            'siblings.*.name' => ['nullable', 'string', 'max:255'],
+            'siblings.*.marital_status' => ['nullable', Rule::in(self::MOBILE_SIBLING_MARITAL_STATUSES)],
+            'siblings.*.occupation' => ['nullable', 'string', 'max:255'],
+            'siblings.*.occupation_master_id' => ['nullable', 'integer', Rule::exists('master_occupations', 'id')],
+            'siblings.*.occupation_custom_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('master_occupation_custom', 'id')->where(fn ($query) => $query->where('user_id', $request->user()?->id ?? 0)),
+            ],
+            'siblings.*.city_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            'siblings.*.address_line' => ['nullable', 'string', 'max:255'],
+            'siblings.*.notes' => ['nullable', 'string', 'max:1000'],
+            'siblings.*.sort_order' => ['nullable', 'integer', 'min:0'],
+            'siblings.*.contact_number' => ['prohibited'],
+            'siblings.*.contact_number_2' => ['prohibited'],
+            'siblings.*.contact_number_3' => ['prohibited'],
             'other_relatives_text' => ['nullable', 'string', 'max:4000'],
             'property_details' => ['nullable', 'string', 'max:4000'],
             'rashi_id' => ['nullable', 'integer', Rule::exists('master_rashis', 'id')->where('is_active', true)],
@@ -543,6 +627,7 @@ class MatrimonyProfileApiController extends Controller
             $fatherOccupationCustomId = $request->input('father_occupation_custom_id');
             $motherOccupationMasterId = $request->input('mother_occupation_master_id');
             $motherOccupationCustomId = $request->input('mother_occupation_custom_id');
+            $siblings = $request->input('siblings', []);
 
             if ($religionId !== null && $religionId !== '' && $casteId !== null && $casteId !== '') {
                 $casteReligionId = Caste::query()->whereKey((int) $casteId)->value('religion_id');
@@ -568,6 +653,19 @@ class MatrimonyProfileApiController extends Controller
 
             if ($motherOccupationMasterId !== null && $motherOccupationMasterId !== '' && $motherOccupationCustomId !== null && $motherOccupationCustomId !== '') {
                 $validator->errors()->add('mother_occupation_custom_id', 'Select either a listed mother occupation or a custom mother occupation, not both.');
+            }
+
+            if (is_array($siblings)) {
+                foreach ($siblings as $index => $sibling) {
+                    if (! is_array($sibling)) {
+                        continue;
+                    }
+                    $siblingOccupationMasterId = $sibling['occupation_master_id'] ?? null;
+                    $siblingOccupationCustomId = $sibling['occupation_custom_id'] ?? null;
+                    if ($siblingOccupationMasterId !== null && $siblingOccupationMasterId !== '' && $siblingOccupationCustomId !== null && $siblingOccupationCustomId !== '') {
+                        $validator->errors()->add('siblings.'.$index.'.occupation_custom_id', 'Select either a listed sibling occupation or a custom sibling occupation, not both.');
+                    }
+                }
             }
 
             if ($request->has('education_slots') && $request->filled('education_slots')) {
@@ -854,6 +952,9 @@ class MatrimonyProfileApiController extends Controller
             'motherOccupationCustom',
             'incomeCurrency',
             'familyIncomeCurrency',
+            'siblings.city',
+            'siblings.occupationMaster',
+            'siblings.occupationCustom',
         ];
 
         $fresh = $profile->fresh($relations);
@@ -1340,6 +1441,9 @@ class MatrimonyProfileApiController extends Controller
             'motherOccupationCustom',
             'incomeCurrency',
             'familyIncomeCurrency',
+            'siblings.city',
+            'siblings.occupationMaster',
+            'siblings.occupationCustom',
             'horoscope.rashi',
             'horoscope.nakshatra',
             'horoscope.gan',
@@ -1376,6 +1480,7 @@ class MatrimonyProfileApiController extends Controller
         }
         $incomeCurrency = $profile->incomeCurrency;
         $familyIncomeCurrency = $profile->familyIncomeCurrency ?? $incomeCurrency;
+        $siblings = $this->mobileSiblingRows($profile);
 
         $base = $profile->toArray();
         $parity = [
@@ -1471,6 +1576,7 @@ class MatrimonyProfileApiController extends Controller
             'family_income_private' => (bool) ($profile->family_income_private ?? false),
             'family_income_display_label' => $this->mobileIncomeDisplayLabel($profile, 'family_income', $familyIncomeCurrency),
             'has_siblings' => $profile->has_siblings,
+            'siblings' => $siblings,
             'other_relatives_text' => $profile->other_relatives_text,
             'property_details' => $profile->property_details,
             'income_range_id' => $profile->income_range_id,
@@ -1557,6 +1663,63 @@ class MatrimonyProfileApiController extends Controller
         }
 
         return $profileData;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function mobileSiblingRows(MatrimonyProfile $profile): array
+    {
+        $profile->loadMissing([
+            'siblings.city',
+            'siblings.occupationMaster',
+            'siblings.occupationCustom',
+        ]);
+
+        return $profile->siblings
+            ->sortBy(fn ($sibling): string => sprintf('%010d-%010d', (int) ($sibling->sort_order ?? 0), (int) ($sibling->id ?? 0)))
+            ->values()
+            ->map(function ($sibling): array {
+                return [
+                    'id' => $sibling->id !== null ? (int) $sibling->id : null,
+                    'relation_type' => $sibling->relation_type,
+                    'relation_type_label' => $this->siblingRelationTypeLabel($sibling->relation_type),
+                    'name' => $sibling->name,
+                    'marital_status' => $sibling->marital_status,
+                    'marital_status_label' => $this->siblingMaritalStatusLabel($sibling->marital_status),
+                    'occupation' => $sibling->occupation,
+                    'occupation_master_id' => $sibling->occupation_master_id !== null ? (int) $sibling->occupation_master_id : null,
+                    'occupation_master_label' => $this->masterLookupLabel($sibling->occupationMaster),
+                    'occupation_custom_id' => $sibling->occupation_custom_id !== null ? (int) $sibling->occupation_custom_id : null,
+                    'occupation_custom_label' => $this->masterLookupLabel($sibling->occupationCustom),
+                    'city_id' => $sibling->city_id !== null ? (int) $sibling->city_id : null,
+                    'city_label' => $this->masterLookupLabel($sibling->city),
+                    'address_line' => $sibling->address_line,
+                    'notes' => $sibling->notes,
+                    'sort_order' => $sibling->sort_order !== null ? (int) $sibling->sort_order : 0,
+                ];
+            })
+            ->all();
+    }
+
+    private function siblingRelationTypeLabel(?string $value): ?string
+    {
+        return match ($value) {
+            'brother' => 'Brother',
+            'sister' => 'Sister',
+            'brother_wife' => "Brother's wife",
+            'sister_husband' => "Sister's husband",
+            default => null,
+        };
+    }
+
+    private function siblingMaritalStatusLabel(?string $value): ?string
+    {
+        return match ($value) {
+            'married' => 'Married',
+            'unmarried' => 'Unmarried',
+            default => null,
+        };
     }
 
     private function profileNarrativeAboutMe(MatrimonyProfile $profile): ?string

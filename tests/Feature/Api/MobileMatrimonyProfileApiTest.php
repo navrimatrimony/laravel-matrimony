@@ -1551,6 +1551,126 @@ test('MobileProfile PUT api v1 matrimony-profile persists income engine fields a
     expect($privateFamilyIncomeItem['value'] ?? null)->toBe('Hidden');
 });
 
+test('MobileProfile PUT api v1 matrimony-profile persists and syncs siblings through governed snapshot', function () {
+    mobileApiProfileTestSeedCurrentAddressType();
+    $user = User::factory()->create(['name' => 'Sibling Account']);
+    $profile = app(MutationService::class)->createDraftProfileForUser($user);
+    $location = mobileApiProfileTestLeafLocation();
+    $caste = mobileApiProfileTestCaste();
+    $gender = mobileApiProfileTestGender('female');
+    Sanctum::actingAs($user);
+
+    $response = $this->putJson('/api/v1/matrimony-profile', [
+        'full_name' => 'Sibling Candidate',
+        'gender_id' => $gender->id,
+        'date_of_birth' => '1997-03-20',
+        'caste' => $caste->label,
+        'highest_education' => 'MCA',
+        'location_id' => $location->id,
+        'has_siblings' => true,
+        'siblings' => [
+            [
+                'relation_type' => 'brother',
+                'name' => 'Test Brother',
+                'marital_status' => 'unmarried',
+                'occupation' => 'Engineer',
+                'address_line' => 'Pune sibling address',
+                'notes' => 'Elder sibling',
+                'sort_order' => 0,
+            ],
+            [
+                'relation_type' => 'sister',
+                'name' => 'Test Sister',
+                'marital_status' => 'married',
+                'occupation' => 'Teacher',
+                'address_line' => 'Mumbai sibling address',
+                'notes' => 'Younger sibling',
+                'sort_order' => 1,
+            ],
+        ],
+    ]);
+
+    $response->assertOk();
+    expect($response->json('profile.has_siblings'))->toBeTrue();
+    expect($response->json('profile.siblings'))->toHaveCount(2);
+    expect($response->json('profile.siblings.0.relation_type'))->toBe('brother');
+    expect($response->json('profile.siblings.0.name'))->toBe('Test Brother');
+    expect($response->json('profile.siblings.0.address_line'))->toBe('Pune sibling address');
+    expect(array_key_exists('contact_number', $response->json('profile.siblings.0')))->toBeFalse();
+
+    $getResponse = $this->getJson('/api/v1/matrimony-profile');
+    $getResponse->assertOk();
+    expect($getResponse->json('profile.siblings'))->toHaveCount(2);
+
+    $familySection = collect($getResponse->json('display.sections') ?? [])
+        ->firstWhere('key', 'family');
+    $siblingsItem = collect($familySection['items'] ?? [])
+        ->firstWhere('label', 'Siblings');
+    expect($siblingsItem['value'] ?? null)->toContain('Brother');
+    expect($siblingsItem['value'] ?? null)->toContain('Sister');
+
+    $firstSiblingId = (int) $response->json('profile.siblings.0.id');
+    $updateResponse = $this->putJson('/api/v1/matrimony-profile', [
+        'has_siblings' => true,
+        'siblings' => [
+            [
+                'id' => $firstSiblingId,
+                'relation_type' => 'brother',
+                'name' => 'Updated Brother',
+                'marital_status' => 'married',
+                'occupation' => 'Business',
+                'address_line' => 'Updated sibling address',
+                'notes' => 'Updated notes',
+                'sort_order' => 0,
+            ],
+        ],
+    ]);
+
+    $updateResponse->assertOk();
+    expect($updateResponse->json('profile.siblings'))->toHaveCount(1);
+    expect($updateResponse->json('profile.siblings.0.id'))->toBe($firstSiblingId);
+    expect($updateResponse->json('profile.siblings.0.name'))->toBe('Updated Brother');
+    expect($updateResponse->json('profile.siblings.0.marital_status'))->toBe('married');
+
+    $activeSiblingQuery = DB::table('profile_siblings')->where('profile_id', $profile->id);
+    if (Schema::hasColumn('profile_siblings', 'deleted_at')) {
+        $activeSiblingQuery->whereNull('deleted_at');
+    }
+    expect($activeSiblingQuery->count())->toBe(1);
+
+    $finalGetResponse = $this->getJson('/api/v1/matrimony-profile');
+    $finalGetResponse->assertOk();
+    expect($finalGetResponse->json('profile.siblings'))->toHaveCount(1);
+    expect($finalGetResponse->json('profile.siblings.0.name'))->toBe('Updated Brother');
+});
+
+test('MobileProfile detail response does not expose sibling contact numbers to other profiles', function () {
+    [$viewerUser, $viewerProfile, $targetUser, $targetProfile] = mobileApiProfileActionPair();
+    unset($viewerProfile, $targetUser);
+
+    DB::table('profile_siblings')->insert([
+        'profile_id' => $targetProfile->id,
+        'relation_type' => 'brother',
+        'name' => 'Private Contact Brother',
+        'marital_status' => 'unmarried',
+        'occupation' => 'Engineer',
+        'contact_number' => '9876543210',
+        'sort_order' => 0,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $response->assertOk();
+    expect($response->json('profile.siblings'))->toHaveCount(1);
+    expect(array_key_exists('contact_number', $response->json('profile.siblings.0')))->toBeFalse();
+    expect(array_key_exists('contact_number_2', $response->json('profile.siblings.0')))->toBeFalse();
+    expect(array_key_exists('contact_number_3', $response->json('profile.siblings.0')))->toBeFalse();
+});
+
 test('MobileProfile PUT api v1 matrimony-profile can update fields after prior mobile locks', function () {
     mobileApiProfileTestSeedCurrentAddressType();
     $user = User::factory()->create(['name' => 'Repeat Edit Account']);
