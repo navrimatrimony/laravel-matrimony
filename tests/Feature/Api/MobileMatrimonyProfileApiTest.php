@@ -26,6 +26,7 @@ use App\Services\MutationService;
 use App\Services\ProfilePartnerCommunityFlagService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 
 function mobileApiProfileTestLeafLocation(): Location
@@ -2326,6 +2327,21 @@ test('MobileProfile GET api v1 matrimony profiles shows only opposite gender mem
     $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Gender Rule Viewer', 'male');
     $femaleUser = User::factory()->create(['name' => 'Visible Female Member']);
     $femaleProfile = mobileApiCreateValidActionProfile($femaleUser, 'Visible Female Member', 'female');
+    $showcaseUser = User::factory()->create([
+        'name' => 'Visible Showcase Female',
+        'email' => 'visible-showcase-'.strtolower(Str::random(8)).'@system.local',
+    ]);
+    $showcaseProfile = mobileApiCreateValidActionProfile($showcaseUser, 'Visible Showcase Female', 'female');
+    $showcaseProfile->forceFill(['is_showcase' => true])->saveQuietly();
+    $draftShowcaseUser = User::factory()->create([
+        'name' => 'Draft Showcase Female',
+        'email' => 'draft-showcase-'.strtolower(Str::random(8)).'@system.local',
+    ]);
+    $draftShowcaseProfile = mobileApiCreateValidActionProfile($draftShowcaseUser, 'Draft Showcase Female', 'female');
+    $draftShowcaseProfile->forceFill([
+        'is_showcase' => true,
+        'lifecycle_state' => 'draft',
+    ])->saveQuietly();
     $missingGenderUser = User::factory()->create(['name' => 'Hidden Missing Gender Female']);
     $missingGenderProfile = MatrimonyProfile::factory()->create([
         'user_id' => $missingGenderUser->id,
@@ -2350,10 +2366,29 @@ test('MobileProfile GET api v1 matrimony profiles shows only opposite gender mem
     $response->assertOk();
     $ids = collect($response->json('profiles'))->pluck('id')->all();
     expect($ids)->toContain($femaleProfile->id);
+    expect($ids)->toContain($showcaseProfile->id);
     expect($ids)->not->toContain($viewerProfile->id);
+    expect($ids)->not->toContain($draftShowcaseProfile->id);
     expect($ids)->not->toContain($missingGenderProfile->id);
     expect($ids)->not->toContain($maleProfile->id);
     expect($ids)->not->toContain($adminProfile->id);
+});
+
+test('MobileProfile GET api v1 profile detail allows active opposite-gender showcase profile', function () {
+    $viewerUser = User::factory()->create(['name' => 'Showcase Detail Viewer']);
+    mobileApiCreateValidActionProfile($viewerUser, 'Showcase Detail Viewer', 'male');
+    $showcaseUser = User::factory()->create([
+        'name' => 'Showcase Detail Target',
+        'email' => 'showcase-detail-'.strtolower(Str::random(8)).'@system.local',
+    ]);
+    $showcaseProfile = mobileApiCreateValidActionProfile($showcaseUser, 'Showcase Detail Target', 'female');
+    $showcaseProfile->forceFill(['is_showcase' => true])->saveQuietly();
+    Sanctum::actingAs($viewerUser);
+
+    $this->getJson('/api/v1/matrimony-profiles/'.$showcaseProfile->id)
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('profile.id', $showcaseProfile->id);
 });
 
 test('MobileProfile GET api v1 matrimony profiles shows male profiles for female viewer', function () {

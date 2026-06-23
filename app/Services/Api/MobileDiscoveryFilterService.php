@@ -27,8 +27,7 @@ class MobileDiscoveryFilterService
                 $q->where('lifecycle_state', 'active')->orWhereNull('lifecycle_state');
             })
             ->where('is_suspended', false)
-            ->whereMemberAccountsOnly()
-            ->whereNonShowcase();
+            ->whereMemberAccountsOnly();
 
         if (! $viewerProfile || $targetGender === null) {
             return $query->whereRaw('1 = 0');
@@ -69,9 +68,6 @@ class MobileDiscoveryFilterService
 
         $targetUser = $target->user;
         if (! $targetUser || $targetUser->isAnyAdmin()) {
-            return false;
-        }
-        if ($target->isShowcaseProfile()) {
             return false;
         }
         if (! ProfileLifecycleService::isVisibleToOthers($target)) {

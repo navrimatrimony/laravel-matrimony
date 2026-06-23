@@ -971,7 +971,7 @@ Feed behavior is backend-owned:
 - `feed=my_matches`: preference-backed match ordering from `MatchingService::TAB_PERFECT`
 - `feed=nearby`: location/proximity match ordering from `MatchingService::TAB_NEAR`
 
-All feeds still use the same mobile discovery eligibility rule: no own profile, no same-gender profile, no hidden/blocked/suspended/showcase/admin candidates, and no phone/email/WhatsApp/contact data in list rows.
+All feeds still use the same mobile discovery eligibility rule: no own profile, no same-gender profile, no hidden/blocked/suspended/admin candidates, and no phone/email/WhatsApp/contact data in list rows. Active showcase profiles are eligible for mobile discovery with the same gender, lifecycle, block, hide, and visibility rules as regular profiles.
 
 Success response: HTTP 200
 
