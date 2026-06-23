@@ -406,10 +406,12 @@ class MatrimonyProfile extends Model
                 }
 
                 $path = ltrim((string) $photo->file_path, '/');
+                $path = \App\Services\Image\ProfilePhotoUrlService::normalizeMatrimonyPhotoPath($path);
                 if (
                     $photo->effectiveApprovedStatus() === 'approved'
-                    && $path !== ''
+                    && $path !== null
                     && ! \App\Services\Image\ProfilePhotoUrlService::isPendingPlaceholder($path)
+                    && \App\Services\Image\ProfilePhotoUrlService::storedFileExistsForRelativePath($path)
                 ) {
                     return true;
                 }
@@ -419,18 +421,23 @@ class MatrimonyProfile extends Model
                 ->where('profile_id', $this->id)
                 ->effectivelyApproved()
                 ->get(['file_path']) as $photo) {
-                $path = ltrim((string) $photo->file_path, '/');
-                if ($path !== '' && ! \App\Services\Image\ProfilePhotoUrlService::isPendingPlaceholder($path)) {
+                $path = \App\Services\Image\ProfilePhotoUrlService::normalizeMatrimonyPhotoPath((string) $photo->file_path);
+                if (
+                    $path !== null
+                    && ! \App\Services\Image\ProfilePhotoUrlService::isPendingPlaceholder($path)
+                    && \App\Services\Image\ProfilePhotoUrlService::storedFileExistsForRelativePath($path)
+                ) {
                     return true;
                 }
             }
         }
 
-        $legacy = ltrim((string) ($this->profile_photo ?? ''), '/');
+        $legacy = \App\Services\Image\ProfilePhotoUrlService::normalizeMatrimonyPhotoPath((string) ($this->profile_photo ?? ''));
 
-        return $legacy !== ''
+        return $legacy !== null
             && $this->photo_approved !== false
-            && ! \App\Services\Image\ProfilePhotoUrlService::isPendingPlaceholder($legacy);
+            && ! \App\Services\Image\ProfilePhotoUrlService::isPendingPlaceholder($legacy)
+            && \App\Services\Image\ProfilePhotoUrlService::storedFileExistsForRelativePath($legacy);
     }
 
     public function getIsShowcaseAttribute(): bool

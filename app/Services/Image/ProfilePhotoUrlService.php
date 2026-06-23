@@ -9,6 +9,32 @@ use Illuminate\Support\Facades\Storage;
 
 class ProfilePhotoUrlService
 {
+    public static function normalizeMatrimonyPhotoPath(?string $path): ?string
+    {
+        $path = str_replace('\\', '/', ltrim((string) $path, '/'));
+        if ($path === '' || str_contains($path, '..')) {
+            return null;
+        }
+        if (preg_match('/^https?:\/\//i', $path) === 1) {
+            return $path;
+        }
+
+        foreach ([
+            'app/public/',
+            'public/',
+            'storage/matrimony_photos/',
+            'uploads/matrimony_photos/',
+            'matrimony_photos/',
+        ] as $prefix) {
+            if (str_starts_with($path, $prefix)) {
+                $path = substr($path, strlen($prefix));
+                break;
+            }
+        }
+
+        return $path !== '' && ! str_contains($path, '..') ? $path : null;
+    }
+
     /**
      * Primary upload stores `pending/uuid.jpg` in DB before the queue job writes the real file — no public file yet.
      */
@@ -45,8 +71,8 @@ class ProfilePhotoUrlService
      */
     public static function resolveStoredPublicAbsolutePath(string $filename): ?string
     {
-        $filename = ltrim($filename, '/');
-        if ($filename === '' || str_contains($filename, '..')) {
+        $filename = self::normalizeMatrimonyPhotoPath($filename);
+        if ($filename === null || preg_match('/^https?:\/\//i', $filename) === 1) {
             return null;
         }
         $publicAbs = storage_path('app/public/matrimony_photos/'.$filename);
@@ -115,8 +141,8 @@ class ProfilePhotoUrlService
      */
     public static function storedFileExistsForRelativePath(string $relativePath): bool
     {
-        $relativePath = ltrim($relativePath, '/');
-        if ($relativePath === '' || str_contains($relativePath, '..')) {
+        $relativePath = self::normalizeMatrimonyPhotoPath($relativePath);
+        if ($relativePath === null || preg_match('/^https?:\/\//i', $relativePath) === 1) {
             return false;
         }
         if (self::isPendingPlaceholder($relativePath)) {
@@ -133,7 +159,10 @@ class ProfilePhotoUrlService
      */
     public function publicUrl(string $filename, ?MatrimonyProfile $profile = null): string
     {
-        $filename = ltrim($filename, '/');
+        $filename = self::normalizeMatrimonyPhotoPath($filename) ?? '';
+        if (preg_match('/^https?:\/\//i', $filename) === 1) {
+            return $filename;
+        }
 
         if ($profile !== null && self::isPendingPlaceholder($filename)) {
             $fallback = self::primaryNonPendingGalleryRelativePath($profile);

@@ -26,6 +26,7 @@ use App\Services\MutationService;
 use App\Services\ProfilePartnerCommunityFlagService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 
@@ -453,9 +454,12 @@ function mobileApiCreateValidActionProfile(
 
 function mobileApiAttachProfilePhoto(MatrimonyProfile $profile, string $status = 'approved'): void
 {
+    $fileName = 'mobile-feed-'.$profile->id.'-'.$status.'.webp';
+    Storage::disk('public')->put('matrimony_photos/'.$fileName, 'fake-webp-bytes');
+
     ProfilePhoto::query()->create([
         'profile_id' => $profile->id,
-        'file_path' => 'matrimony_photos/mobile-feed-'.$profile->id.'-'.$status.'.webp',
+        'file_path' => $fileName,
         'is_primary' => true,
         'sort_order' => 0,
         'uploaded_via' => 'test',
@@ -2307,6 +2311,33 @@ test('MobileProfile feed new does not treat rejected photos as photo-first', fun
     expect($ids)->toContain($approvedProfile->id)
         ->and($ids)->toContain($rejectedProfile->id)
         ->and(array_search($approvedProfile->id, $ids, true))->toBeLessThan(array_search($rejectedProfile->id, $ids, true));
+});
+
+test('MobileProfile feed new does not count approved photo rows with missing files', function () {
+    $viewerUser = User::factory()->create(['name' => 'Missing File Photo Viewer']);
+    mobileApiCreateValidActionProfile($viewerUser, 'Missing File Photo Viewer', 'male');
+    $targetUser = User::factory()->create(['name' => 'Missing File Photo Target']);
+    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Missing File Photo Target', 'female');
+
+    ProfilePhoto::query()->create([
+        'profile_id' => $targetProfile->id,
+        'file_path' => 'missing-mobile-feed-'.$targetProfile->id.'-'.Str::random(8).'.webp',
+        'is_primary' => true,
+        'sort_order' => 0,
+        'uploaded_via' => 'test',
+        'approved_status' => 'approved',
+        'watermark_detected' => false,
+    ]);
+
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles?feed=new');
+
+    $response->assertOk();
+    $row = collect($response->json('profiles'))->firstWhere('id', $targetProfile->id);
+    expect($row)->toBeArray()
+        ->and($row['display']['card']['photo_count'])->toBe(0)
+        ->and($row['display']['card']['primary_photo_url'])->toBeNull();
 });
 
 test('MobileProfile feed tabs use backend matching feeds', function () {

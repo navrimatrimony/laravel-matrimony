@@ -1587,8 +1587,11 @@ class MobileProfileDisplayPresenter
             $profile->photos
                 ->filter(fn (ProfilePhoto $photo): bool => $photo->effectiveApprovedStatus() === 'approved')
                 ->each(function (ProfilePhoto $photo) use ($profile, &$urls): void {
-                    $path = ltrim((string) $photo->file_path, '/');
-                    if ($path === '' || ProfilePhotoUrlService::isPendingPlaceholder($path)) {
+                    $path = ProfilePhotoUrlService::normalizeMatrimonyPhotoPath((string) $photo->file_path);
+                    if ($path === null || ProfilePhotoUrlService::isPendingPlaceholder($path)) {
+                        return;
+                    }
+                    if (! ProfilePhotoUrlService::storedFileExistsForRelativePath($path)) {
                         return;
                     }
                     $urls[] = app(ProfilePhotoUrlService::class)->publicUrl($path, $profile);
@@ -1600,16 +1603,24 @@ class MobileProfileDisplayPresenter
                 ->ordered()
                 ->get(['file_path'])
                 ->each(function (ProfilePhoto $photo) use ($profile, &$urls): void {
-                    $path = ltrim((string) $photo->file_path, '/');
-                    if ($path === '' || ProfilePhotoUrlService::isPendingPlaceholder($path)) {
+                    $path = ProfilePhotoUrlService::normalizeMatrimonyPhotoPath((string) $photo->file_path);
+                    if ($path === null || ProfilePhotoUrlService::isPendingPlaceholder($path)) {
+                        return;
+                    }
+                    if (! ProfilePhotoUrlService::storedFileExistsForRelativePath($path)) {
                         return;
                     }
                     $urls[] = app(ProfilePhotoUrlService::class)->publicUrl($path, $profile);
                 });
         }
 
-        $legacy = ltrim((string) ($profile->profile_photo ?? ''), '/');
-        if ($legacy !== '' && $profile->photo_approved !== false && ! ProfilePhotoUrlService::isPendingPlaceholder($legacy)) {
+        $legacy = ProfilePhotoUrlService::normalizeMatrimonyPhotoPath((string) ($profile->profile_photo ?? ''));
+        if (
+            $legacy !== null
+            && $profile->photo_approved !== false
+            && ! ProfilePhotoUrlService::isPendingPlaceholder($legacy)
+            && ProfilePhotoUrlService::storedFileExistsForRelativePath($legacy)
+        ) {
             $urls[] = app(ProfilePhotoUrlService::class)->publicUrl($legacy, $profile);
         }
 
