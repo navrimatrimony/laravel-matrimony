@@ -397,6 +397,283 @@ Response:
 }
 ```
 
+## Smart Onboarding Phase 3
+
+Phase 3 is Laravel-backend-only support for mobile SmartPickerPanel lookups, pending master/location suggestions, and partner preference auto-draft generation. All endpoints below require Sanctum auth and are intended for users who already passed the OTP-first account flow.
+
+Non-goals:
+
+- no Flutter SmartPicker implementation in this phase
+- no biodata/OCR
+- no mother tongue, horoscope, astrology, or family type in registration onboarding
+- no stored `matrimony_profiles.is_searchable` column
+- no long partner preference onboarding form
+
+Common lookup request query:
+
+- `q`: nullable string
+- `page`: nullable integer, default `1`
+- `limit`: nullable integer, default `20`, max `50`
+- `locale`: nullable string; falls back to authenticated user `preferred_locale`, then `en`
+- `include_popular`: nullable boolean, default `true`
+
+Common lookup response:
+
+```json
+{
+  "success": true,
+  "locale": "mr",
+  "results": [],
+  "popular": [],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "has_more": false,
+    "total": null
+  }
+}
+```
+
+Option item shape:
+
+```json
+{
+  "id": 1,
+  "key": "optional-key",
+  "label": "Resolved localized label",
+  "translation_missing": false,
+  "popular": false,
+  "meta": {}
+}
+```
+
+Localization rules:
+
+- API resolves `label` for requested locale.
+- Marathi missing translations fall back to English/base label.
+- `translation_missing=true` when requested Marathi fallback uses English/base label.
+- Flutter can render `label` directly and should not need to choose between `name_en/name_mr`.
+
+### GET `/api/v1/onboarding/lookups/bootstrap`
+
+Returns small registration config: `profile_for_whom`, gender options, marital statuses, children rules, height options, lifestyle lookups, age policy, and onboarding steps.
+
+`profile_for_whom` values are: `self`, `son`, `daughter`, `brother`, `sister`, `relative`, `friend`. Each row includes `gender_mode` (`male`, `female`, or `ask`).
+
+Bootstrap intentionally excludes mother tongue, horoscope, astrology, and family type.
+
+### GET `/api/v1/onboarding/lookups/religions`
+
+Returns active religion options.
+
+### GET `/api/v1/onboarding/lookups/castes`
+
+Requires `religion_id`. Returns active castes under that religion only.
+
+### GET `/api/v1/onboarding/lookups/sub-castes`
+
+Requires `caste_id`. Returns approved active sub-castes under that caste only.
+
+### GET `/api/v1/onboarding/lookups/locations`
+
+Query:
+
+- `q`: string, minimum practical search length is 2
+- `preferred_state_id`: nullable state row id from `addresses`
+- `type`: nullable `village`, `city`, or `suburb`
+
+Location item shape:
+
+```json
+{
+  "id": 123,
+  "location_id": 123,
+  "label": "Tasgaon, Tasgaon, Sangli 416312",
+  "display_hierarchy": "Tasgaon, Tasgaon, Sangli 416312",
+  "type": "village",
+  "tag": "rural",
+  "is_final_node": true,
+  "status": "approved",
+  "pincode": "416312",
+  "state_id": 1,
+  "district_id": 2,
+  "taluka_id": 3,
+  "city_id": null,
+  "parent": {
+    "state": {"id": 1, "label": "Maharashtra"},
+    "district": {"id": 2, "label": "Sangli"},
+    "taluka": {"id": 3, "label": "Tasgaon"},
+    "city": null
+  }
+}
+```
+
+Display follows Laravel hierarchy:
+
+- Rural: village, taluka, district, state, pincode
+- City: city + district/state
+- Suburb/area: suburb/area + parent city + district/state
+
+Selectable final nodes are active `addresses` rows with `hierarchy=village` and `tag` in `city`, `suburban`, or `rural`. State/district/taluka rows are not final profile-save locations.
+
+### POST `/api/v1/onboarding/location-suggestions`
+
+Creates a pending location request only. It never inserts an approved master location.
+
+Request:
+
+```json
+{
+  "type": "village",
+  "name": "Location name",
+  "state_id": 1,
+  "district_id": 2,
+  "taluka_id": 3,
+  "city_id": null,
+  "pincode": "416312",
+  "notes": "optional"
+}
+```
+
+Hierarchy validation:
+
+- `state_id` and `district_id` are required.
+- `taluka_id` is required for `village`.
+- `city_id` is required for `suburb`.
+- Requests stay pending and cannot make a profile searchable.
+
+### GET `/api/v1/onboarding/lookups/education`
+
+Returns backend-driven education degree objects. `category_id` is optional. Category labels come from `master_education_categories`; Flutter must not hardcode categories.
+
+Item `meta` includes:
+
+```json
+{
+  "category_id": 5,
+  "category_label": "Engineering",
+  "level_rank": 4000,
+  "level_rank_source": "category_sort_order",
+  "requires_specialization": false,
+  "requires_college": false
+}
+```
+
+If a real `level_rank` column exists in a deployment it can be used; otherwise Phase 3 derives deterministic rank from category/degree sort order.
+
+### POST `/api/v1/onboarding/education-suggestions`
+
+Creates a pending master suggestion only. It does not create an approved `master_education` row and does not allow profile save-step to persist arbitrary education text.
+
+### GET `/api/v1/onboarding/lookups/working-with`
+
+Returns active `working_with_types` options.
+
+### GET `/api/v1/onboarding/lookups/occupations`
+
+Query:
+
+- `working_with_id`: nullable; filters occupation categories linked through `legacy_working_with_type_id`
+- `category_id`: nullable
+- common lookup query params
+
+Item `meta` includes `category_id`, `category_label`, `working_with_id`, and `working_with_label`. Category labels come from `master_occupation_categories`; Flutter must not hardcode categories.
+
+### POST `/api/v1/onboarding/occupation-suggestions`
+
+Creates a pending master suggestion only. It does not create an approved `master_occupations` row and does not let profile save-step persist arbitrary occupation text as master data.
+
+### GET `/api/v1/onboarding/lookups/income-options`
+
+Returns the backend-supported income engine contract for personal and family income:
+
+```json
+{
+  "success": true,
+  "currency": "INR",
+  "currency_id": 1,
+  "currency_symbol": "₹",
+  "periods": [
+    {"key": "monthly", "label": "Monthly"},
+    {"key": "annual", "label": "Annual"}
+  ],
+  "value_types": [
+    {"key": "exact", "label": "Exact"},
+    {"key": "approximate", "label": "Approximate income"},
+    {"key": "range", "label": "Range"},
+    {"key": "undisclosed", "label": "Undisclosed"}
+  ],
+  "ranges": [],
+  "privacy_default": "private"
+}
+```
+
+### GET `/api/v1/onboarding/lookups/diet`
+### GET `/api/v1/onboarding/lookups/smoking`
+### GET `/api/v1/onboarding/lookups/drinking`
+
+Separate lightweight lifestyle lookup endpoints. The same data is also included in bootstrap.
+
+### GET `/api/v1/onboarding/preferences/auto-draft/preview`
+
+Requires an existing profile. Generates a read-only partner preference draft from profile data and onboarding draft toggles. Does not persist.
+
+Response:
+
+```json
+{
+  "success": true,
+  "profile_id": 1,
+  "source": "auto_from_registration",
+  "can_persist": true,
+  "missing_fields": [],
+  "strictness": {
+    "religion": "must_match",
+    "caste": "preferred"
+  },
+  "preferences": {}
+}
+```
+
+Strictness rules:
+
+- `must_match` is used only for explicit onboarding toggles such as same religion / caste / sub-caste required.
+- Inferred age, height, location, education, occupation, income, marital status, and diet defaults are `preferred` or `open`.
+- Existing schema has no persisted `preferred_gender` or `preferred_sub_caste` column; those are represented only in metadata/strictness when relevant.
+
+### POST `/api/v1/onboarding/preferences/auto-draft`
+
+Persists the generated preferences through `MutationService::applyManualSnapshot()` using the existing governed `preferences` snapshot path. Also writes `partner_preference_metadata`.
+
+Request:
+
+```json
+{
+  "force_regenerate": false
+}
+```
+
+Overwrite policy:
+
+- no existing preferences: generate and persist
+- existing auto-generated preferences: require `force_regenerate=true` to rebuild
+- existing manual/user-edited preferences: return HTTP 409 and do not overwrite
+
+Metadata:
+
+- `source = auto_from_registration`
+- `generated_from = onboarding`
+- `strictness_json` stores per-field strictness
+- generated preferences remain editable later through existing preference edit mechanisms
+
+Partner preference missing does not block activation/searchability in Phase 3.
+
+### GET `/api/v1/onboarding/preferences/auto-draft/status`
+
+Returns whether an auto-draft exists for the authenticated user's profile.
+
+`GET /api/v1/onboarding/status` also includes a non-blocking `preferences` summary with the same source/generated status.
+
 ### POST `/api/v1/register`
 
 Legacy password registration endpoint kept for backward compatibility. New mobile onboarding should use the OTP-first flow above.

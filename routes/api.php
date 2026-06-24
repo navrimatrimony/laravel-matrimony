@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\MobileOnboardingController;
 use App\Http\Controllers\Api\MobileOtpController;
 use App\Http\Controllers\Api\ModerationConfigController;
 use App\Http\Controllers\Api\NearbyProfileController;
+use App\Http\Controllers\Api\OnboardingLookupController;
+use App\Http\Controllers\Api\OnboardingPreferenceAutoDraftController;
 use App\Http\Controllers\Internal\LocationHierarchyController;
 use App\Http\Controllers\Internal\LocationSearchController;
 use App\Http\Controllers\Internal\LocationSuggestionController as InternalLocationSuggestionController;
@@ -81,6 +83,24 @@ Route::prefix('v1')->group(function () {
         Route::patch('/onboarding/draft/{step}', [MobileOnboardingController::class, 'saveDraftStep']);
         Route::post('/onboarding/profile/save-step', [MobileOnboardingController::class, 'saveProfileStep']);
         Route::get('/onboarding/activation-checklist', [MobileOnboardingController::class, 'activationChecklist']);
+        Route::get('/onboarding/lookups/bootstrap', [OnboardingLookupController::class, 'bootstrap']);
+        Route::get('/onboarding/lookups/religions', [OnboardingLookupController::class, 'religions']);
+        Route::get('/onboarding/lookups/castes', [OnboardingLookupController::class, 'castes']);
+        Route::get('/onboarding/lookups/sub-castes', [OnboardingLookupController::class, 'subCastes']);
+        Route::get('/onboarding/lookups/locations', [OnboardingLookupController::class, 'locations']);
+        Route::post('/onboarding/location-suggestions', [OnboardingLookupController::class, 'storeLocationSuggestion']);
+        Route::get('/onboarding/lookups/education', [OnboardingLookupController::class, 'education']);
+        Route::post('/onboarding/education-suggestions', [OnboardingLookupController::class, 'storeEducationSuggestion']);
+        Route::get('/onboarding/lookups/working-with', [OnboardingLookupController::class, 'workingWith']);
+        Route::get('/onboarding/lookups/occupations', [OnboardingLookupController::class, 'occupations']);
+        Route::post('/onboarding/occupation-suggestions', [OnboardingLookupController::class, 'storeOccupationSuggestion']);
+        Route::get('/onboarding/lookups/income-options', [OnboardingLookupController::class, 'incomeOptions']);
+        Route::get('/onboarding/lookups/diet', [OnboardingLookupController::class, 'diet']);
+        Route::get('/onboarding/lookups/smoking', [OnboardingLookupController::class, 'smoking']);
+        Route::get('/onboarding/lookups/drinking', [OnboardingLookupController::class, 'drinking']);
+        Route::get('/onboarding/preferences/auto-draft/preview', [OnboardingPreferenceAutoDraftController::class, 'preview']);
+        Route::post('/onboarding/preferences/auto-draft', [OnboardingPreferenceAutoDraftController::class, 'store']);
+        Route::get('/onboarding/preferences/auto-draft/status', [OnboardingPreferenceAutoDraftController::class, 'status']);
     });
 
     /*

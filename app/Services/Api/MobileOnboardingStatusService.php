@@ -7,6 +7,7 @@ use App\Models\MobileOnboardingDraft;
 use App\Models\User;
 use App\Services\Onboarding\ActivationChecklistService;
 use App\Services\Onboarding\MobileOnboardingDraftService;
+use App\Services\Onboarding\RegistrationPartnerPreferenceService;
 
 class MobileOnboardingStatusService
 {
@@ -14,6 +15,7 @@ class MobileOnboardingStatusService
         private readonly MobileOnboardingDraftService $draftService,
         private readonly ActivationChecklistService $checklistService,
         private readonly MobileOtpService $otpService,
+        private readonly RegistrationPartnerPreferenceService $preferenceService,
     ) {}
 
     public function build(User $user, ?MobileOnboardingDraft $draft = null): array
@@ -37,6 +39,7 @@ class MobileOnboardingStatusService
             'next_step' => $nextStep,
             'account_state' => $this->otpService->accountStateFor($user),
             'activation_checklist' => $items,
+            'preferences' => $this->preferenceService->statusForProfile($profile),
         ];
     }
 
