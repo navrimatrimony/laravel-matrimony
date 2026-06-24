@@ -483,6 +483,16 @@ Request:
       "notes": "Paternal side"
     }
   ],
+  "alliance_networks": [
+    {
+      "surname": "Jadhav",
+      "city_id": 123,
+      "state_id": 2,
+      "district_id": 3,
+      "taluka_id": 4,
+      "notes": "Pune network"
+    }
+  ],
   "other_relatives_text": "Relatives settled in Pune",
   "property_details": "Own house",
   "rashi_id": 1,
@@ -517,21 +527,25 @@ Rules:
 - `education_slots`: nullable JSON string, max 8192; selected degree IDs must exist in `master_education.id`; when supplied, Laravel resolves it into `highest_education`
 - `location_id`: required, must exist in `addresses.id`
 - `mother_tongue_id`: nullable, must exist as an active `master_mother_tongues.id`
-- `marital_status_id`: nullable, must exist as an active `master_marital_statuses.id`
-- `has_children`: nullable boolean
-- `marriages`: nullable array, max 10 rows. Each row may include `id`, `marital_status_id`, `marriage_year`, `separation_year`, `divorce_year`, `spouse_death_year`, `divorce_status`, `remarriage_reason`, and `notes`.
+- `marital_status_id`: nullable, must exist as an active `master_marital_statuses.id`. Supported marital status keys are `never_married`, `divorced`, `annulled`, `separated`, and `widowed`.
+- `has_children`: nullable boolean. It is effective only for `divorced`, `annulled`, `separated`, and `widowed`; when status is `never_married`, the API forces it to `false`.
+- `marriages`: nullable array, but mobile treats it as Laravel `marital_engine` status details, not as a user-facing multi-row repeater. At most one effective row is accepted: the row with the highest submitted `id`, otherwise the last non-empty submitted row. The backend preserves the latest saved marriage row id when possible.
 - `marriages.*.marital_status_id`: nullable, must exist as an active `master_marital_statuses.id`; omit it to use the top-level `marital_status_id`.
-- `marriages.*.marriage_year`, `marriages.*.separation_year`, `marriages.*.divorce_year`, `marriages.*.spouse_death_year`: nullable integer years, min 1901, max current year; separation/divorce/spouse-death years must be greater than or equal to `marriage_year` when both are present.
+- `marriages.*.marriage_year`: nullable integer year, min 1901, max current year.
+- For `divorced` and `annulled`, mobile accepts `marriage_year`, `divorce_year`, and `divorce_status`; `separation_year` and `spouse_death_year` are ignored/returned as `null`.
+- For `separated`, mobile accepts `marriage_year`, `separation_year`, and `divorce_status` as legal status; `divorce_year` and `spouse_death_year` are ignored/returned as `null`.
+- For `widowed`, mobile accepts `marriage_year` and `spouse_death_year`; `divorce_year`, `separation_year`, and `divorce_status` are ignored/returned as `null`.
+- `marriages.*.divorce_year`, `marriages.*.separation_year`, `marriages.*.spouse_death_year`: nullable integer years, min 1901, max current year; relevant years must be greater than or equal to `marriage_year` when both are present.
 - `marriages.*.divorce_status`: nullable, one of `pending`, `finalized`, `mutual`, `contested`
-- `marriages.*.remarriage_reason`, `marriages.*.notes`: nullable string, max 1000
-- `marriages.*.contact_number`, `marriages.*.contact_number_2`, `marriages.*.contact_number_3`, `marriages.*.phone_number`, and `marriages.*.mobile_number` are not accepted. Send `marriages: []` when a never-married status should clear marriage history rows. Omitting `marriages` preserves existing marriage rows.
+- `marriages.*.remarriage_reason` and `marriages.*.notes` are ignored by mobile because Laravel `marital_engine` does not expose those fields.
+- `marriages.*.contact_number`, `marriages.*.contact_number_2`, `marriages.*.contact_number_3`, `marriages.*.phone_number`, and `marriages.*.mobile_number` are not accepted. Sending `marital_status_id` for `never_married` clears marriage detail rows and child rows.
 - `children`: nullable array, max 20 rows. Each row may include `id`, `child_name`, `gender`, `age`, `child_living_with_id`, and `sort_order`.
 - `children.*.gender`: required when the child row has any other data; one of `male`, `female`, `other`, `prefer_not_say`
 - `children.*.age`: required when the child row has any other data; integer, min 1, max 120
 - `children.*.child_living_with_id`: nullable, must exist as an active `master_child_living_with.id`
 - `children.*.child_name`: nullable string, max 255
 - `children.*.sort_order`: nullable integer, min 0
-- `children.*.contact_number`, `children.*.contact_number_2`, `children.*.contact_number_3`, `children.*.phone_number`, and `children.*.mobile_number` are not accepted. Send `children: []` with `has_children: false` to clear child rows. Omitting `children` preserves existing child rows.
+- `children.*.contact_number`, `children.*.contact_number_2`, `children.*.contact_number_3`, `children.*.phone_number`, and `children.*.mobile_number` are not accepted. Children are effective only for `divorced`, `annulled`, `separated`, or `widowed` with `has_children=true`; otherwise submitted children are ignored/cleared.
 - `height_cm`: nullable integer, min 50, max 250
 - `weight_kg`: nullable integer, min 20, max 250
 - `complexion_id`: nullable, must exist as an active `master_complexions.id`
@@ -572,6 +586,12 @@ Rules:
 - `relatives.*.name`, `relatives.*.occupation`, `relatives.*.address_line`: nullable string, max 255
 - `relatives.*.notes`: nullable string, max 1000
 - `relatives.*.contact_number`, `relatives.*.contact_number_2`, `relatives.*.contact_number_3`, and `relatives.*.is_primary_contact` are not accepted by the mobile contract. Send `relatives: []` to clear relative rows. Omitting `relatives` preserves existing relative rows.
+- `alliance_networks`: nullable array, max 20 rows. Each row may include `id`, `surname`, `city_id`, `state_id`, `district_id`, `taluka_id`, and `notes`.
+- `alliance_networks.*.surname`: nullable string, max 255, but required when that row has any location or note data because `profile_alliance_networks.surname` is required.
+- `alliance_networks.*.city_id`, `alliance_networks.*.state_id`, `alliance_networks.*.district_id`, `alliance_networks.*.taluka_id`: nullable, must exist in `addresses.id`
+- `alliance_networks.*.notes`: nullable string, max 1000
+- `alliance_networks.*.contact_number`, `alliance_networks.*.contact_number_2`, `alliance_networks.*.contact_number_3`, `alliance_networks.*.phone_number`, `alliance_networks.*.mobile_number`, and `alliance_networks.*.primary_contact_number` are not accepted by the mobile contract. Send `alliance_networks: []` to clear alliance network rows. Omitting `alliance_networks` preserves existing alliance network rows.
+- Own profile GET/PUT responses include `alliance_networks.*.notes` for editing. Other-profile detail responses remove `notes` and any contact-like alliance row keys.
 - `other_relatives_text`, `property_details`: nullable string, max 4000
 - `rashi_id`, `nakshatra_id`, `gan_id`, `nadi_id`, `yoni_id`, `mangal_dosh_type_id`: nullable active master IDs
 - `varna_id`, `vashya_id`, `rashi_lord_id`: nullable active Ashtakoota master IDs
@@ -633,10 +653,10 @@ Success response: HTTP 200
     "taluka_id": 4,
     "mother_tongue_id": 1,
     "mother_tongue_label": "Marathi",
-    "marital_status_id": 1,
-    "marital_status_key": "never_married",
-    "marital_status_label": "Never Married",
-    "has_children": false,
+    "marital_status_id": 2,
+    "marital_status_key": "divorced",
+    "marital_status_label": "Divorced",
+    "has_children": true,
     "marriages": [
       {
         "id": 300,
@@ -649,7 +669,7 @@ Success response: HTTP 200
         "divorce_status": "finalized",
         "divorce_status_label": "Finalized",
         "remarriage_reason": null,
-        "notes": "Optional note"
+        "notes": null
       }
     ],
     "children": [
@@ -758,6 +778,21 @@ Success response: HTTP 200
         "taluka_id": null,
         "address_line": "Pune",
         "notes": "Paternal side"
+      }
+    ],
+    "alliance_networks": [
+      {
+        "id": 250,
+        "surname": "Jadhav",
+        "city_id": 123,
+        "city_label": "Pune",
+        "state_id": 2,
+        "state_label": "Maharashtra",
+        "district_id": 3,
+        "district_label": "Pune",
+        "taluka_id": 4,
+        "taluka_label": "Haveli",
+        "notes": "Pune network"
       }
     ],
     "other_relatives_text": "Relatives settled in Pune",
@@ -1090,7 +1125,8 @@ Rules:
 - Private income flags preserve the values for the owner's edit payload but display sections must not expose exact personal/family income amounts when the corresponding private flag is true.
 - Relatives rules mirror `POST /api/v1/matrimony-profile`. Mobile accepts only safe relative row fields and never accepts or returns relative contact numbers.
 - Sibling rows follow the same `siblings` shape as create. The mobile update contract does not accept sibling contact fields. Sending `siblings` performs governed row sync for that repeater; omitting `siblings` preserves existing sibling rows.
-- Marriage history and child rows follow the same `marriages` and `children` shapes as create. Sending either array performs governed full row sync for that repeater; omitting an array preserves existing rows. Use `marriages: []` for never-married clearing and `children: []` with `has_children: false` for child-row clearing.
+- Marriage details and child rows follow the same conditional `marital_engine` rules as create. Sending `marital_status_id=never_married` forces `has_children=false` and clears marriage/child rows. For `divorced`, `annulled`, `separated`, and `widowed`, `marriages` is one effective status-detail row, while `children` syncs only when `has_children=true`; use `has_children=false` or `children: []` to clear child rows.
+- Alliance network rows follow the same `alliance_networks` shape as create. Sending `alliance_networks` performs governed full row sync for that repeater; omitting `alliance_networks` preserves existing alliance network rows.
 - Phase 5B1 + 5D partner preferences and `narrative_expectations` follow the same rules as `POST /api/v1/matrimony-profile`.
 - Parent/sibling/relative contact fields and partner preference repeaters are not accepted by this mobile update contract.
 

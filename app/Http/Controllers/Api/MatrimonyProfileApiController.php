@@ -71,6 +71,8 @@ class MatrimonyProfileApiController extends Controller
 
     private const MOBILE_MARRIAGE_DIVORCE_STATUSES = ['pending', 'finalized', 'mutual', 'contested'];
 
+    private const MOBILE_MARRIAGE_DETAIL_STATUS_KEYS = ['divorced', 'annulled', 'separated', 'widowed'];
+
     private const MOBILE_CHILD_GENDERS = ['male', 'female', 'other', 'prefer_not_say'];
 
     private const MOBILE_RELATIVE_RELATION_LABELS = [
@@ -189,6 +191,12 @@ class MatrimonyProfileApiController extends Controller
             }
         }
 
+        $maritalStatusKey = $this->mobileMaritalStatusKeyForRequest($request, $profile);
+        $marriageDetailsAllowed = $this->mobileMarriageDetailsAllowed($maritalStatusKey);
+        if ($maritalStatusKey === 'never_married') {
+            $core['has_children'] = false;
+        }
+
         $snapshot = ['core' => $core];
 
         if ($request->has('birth_city_id')) {
@@ -217,13 +225,38 @@ class MatrimonyProfileApiController extends Controller
             $snapshot['relatives'] = $this->mobileRelativesSnapshotFromApi($request);
         }
 
-        if ($request->has('marriages')) {
-            $snapshot['marriages'] = $this->mobileMarriagesSnapshotFromApi($request);
+        if ($request->has('alliance_networks')) {
+            $snapshot['alliance_networks'] = $this->mobileAllianceNetworksSnapshotFromApi($request);
         }
 
-        if ($request->has('children')) {
-            $snapshot['children'] = $this->mobileChildrenSnapshotFromApi($request);
+        if ($maritalStatusKey === 'never_married') {
+            if ($request->hasAny(['marital_status_id', 'marriages'])) {
+                $snapshot['marriages'] = [];
+            }
+            if ($request->hasAny(['marital_status_id', 'has_children', 'children'])) {
+                $snapshot['children'] = [];
+            }
+        } elseif ($marriageDetailsAllowed) {
+            if ($request->hasAny(['marital_status_id', 'marriages'])) {
+                $snapshot['marriages'] = $this->mobileMarriagesSnapshotFromApi($request, $profile, $maritalStatusKey);
+            }
+
+            if ($this->mobileBooleanInput($request, 'has_children', $profile?->has_children) === true) {
+                if ($request->has('children')) {
+                    $snapshot['children'] = $this->mobileChildrenSnapshotFromApi($request);
+                }
+            } elseif ($request->hasAny(['marital_status_id', 'has_children', 'children'])) {
+                $snapshot['children'] = [];
+            }
+        } else {
+            if ($request->has('marriages')) {
+                $snapshot['marriages'] = [];
+            }
+            if ($request->has('children')) {
+                $snapshot['children'] = [];
+            }
         }
+
 
         if ($this->requestInputKeyExists($request, 'narrative_about_me') || $this->requestInputKeyExists($request, 'narrative_expectations')) {
             $existing = $profile instanceof MatrimonyProfile && Schema::hasTable('profile_extended_attributes')
@@ -368,47 +401,195 @@ class MatrimonyProfileApiController extends Controller
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function mobileMarriagesSnapshotFromApi(Request $request): array
+    private function mobileAllianceNetworksSnapshotFromApi(Request $request): array
     {
-        $rows = $request->input('marriages', []);
+        $rows = $request->input('alliance_networks', []);
         if (! is_array($rows)) {
             return [];
         }
 
+        $allianceNetworks = [];
+        foreach (array_values($rows) as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $surname = trim((string) ($row['surname'] ?? ''));
+            $notes = trim((string) ($row['notes'] ?? ''));
+            $cityId = $row['city_id'] ?? null;
+            $stateId = $row['state_id'] ?? null;
+            $districtId = $row['district_id'] ?? null;
+            $talukaId = $row['taluka_id'] ?? null;
+
+            $hasMeaningfulData = $surname !== ''
+                || $notes !== ''
+                || ($cityId !== null && $cityId !== '')
+                || ($stateId !== null && $stateId !== '')
+                || ($districtId !== null && $districtId !== '')
+                || ($talukaId !== null && $talukaId !== '');
+
+            if (! $hasMeaningfulData) {
+                continue;
+            }
+
+            $allianceNetwork = [
+                'surname' => $surname,
+                'city_id' => ($cityId !== null && $cityId !== '') ? (int) $cityId : null,
+                'taluka_id' => ($talukaId !== null && $talukaId !== '') ? (int) $talukaId : null,
+                'district_id' => ($districtId !== null && $districtId !== '') ? (int) $districtId : null,
+                'state_id' => ($stateId !== null && $stateId !== '') ? (int) $stateId : null,
+                'notes' => $notes !== '' ? $notes : null,
+            ];
+
+            if (! empty($row['id'])) {
+                $allianceNetwork['id'] = (int) $row['id'];
+            }
+
+            $allianceNetworks[] = $allianceNetwork;
+        }
+
+        return $allianceNetworks;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function mobileMarriagesSnapshotFromApi(Request $request, ?MatrimonyProfile $profile, ?string $statusKey): array
+    {
+        $rows = $request->input('marriages', []);
+        if (! is_array($rows)) {
+            $rows = [];
+        }
+
+        if (! $this->mobileMarriageDetailsAllowed($statusKey)) {
+            return [];
+        }
+
+        $row = $this->mobileEffectiveMarriageInputRow($rows);
         $topLevelMaritalStatusId = $request->input('marital_status_id');
-        $marriages = [];
+        $maritalStatusId = $row['marital_status_id'] ?? $topLevelMaritalStatusId ?? $profile?->marital_status_id;
+        $latestMarriageId = $this->mobileLatestMarriageRowId($profile);
+        $marriageId = ! empty($row['id']) ? (int) $row['id'] : $latestMarriageId;
+
+        return [$this->mobileSanitizedMarriageRowForStatus($row, $statusKey, $maritalStatusId, $marriageId)];
+    }
+
+    private function mobileMarriageDetailsAllowed(?string $statusKey): bool
+    {
+        return in_array($statusKey, self::MOBILE_MARRIAGE_DETAIL_STATUS_KEYS, true);
+    }
+
+    private function mobileMaritalStatusKeyForRequest(Request $request, ?MatrimonyProfile $profile = null): ?string
+    {
+        $statusId = $request->input('marital_status_id');
+        if ($statusId !== null && $statusId !== '') {
+            return $this->mobileMaritalStatusKeyById((int) $statusId);
+        }
+
+        $profile?->loadMissing('maritalStatus');
+
+        return $profile?->maritalStatus?->key;
+    }
+
+    private function mobileMaritalStatusKeyById(int $statusId): ?string
+    {
+        if ($statusId <= 0 || ! Schema::hasTable('master_marital_statuses')) {
+            return null;
+        }
+
+        $key = DB::table('master_marital_statuses')->where('id', $statusId)->value('key');
+
+        return is_string($key) && trim($key) !== '' ? trim($key) : null;
+    }
+
+    private function mobileBooleanInput(Request $request, string $key, mixed $fallback = null): ?bool
+    {
+        $value = $request->has($key) ? $request->input($key) : $fallback;
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_numeric($value)) {
+            return (int) $value === 1;
+        }
+
+        $normalized = strtolower(trim((string) $value));
+        if (in_array($normalized, ['1', 'true', 'yes', 'y'], true)) {
+            return true;
+        }
+        if (in_array($normalized, ['0', 'false', 'no', 'n'], true)) {
+            return false;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<int, mixed>  $rows
+     * @return array<string, mixed>
+     */
+    private function mobileEffectiveMarriageInputRow(array $rows): array
+    {
+        $latestWithId = null;
+        $latestId = -1;
+        $lastMeaningful = null;
 
         foreach (array_values($rows) as $row) {
             if (! is_array($row)) {
                 continue;
             }
 
-            $hasAnyMarriageValue = false;
-            foreach (['marriage_year', 'separation_year', 'divorce_year', 'spouse_death_year', 'divorce_status', 'remarriage_reason', 'notes'] as $field) {
+            $hasAnyValue = false;
+            foreach (['id', 'marital_status_id', 'marriage_year', 'separation_year', 'divorce_year', 'spouse_death_year', 'divorce_status'] as $field) {
                 if (($row[$field] ?? null) !== null && trim((string) $row[$field]) !== '') {
-                    $hasAnyMarriageValue = true;
+                    $hasAnyValue = true;
                     break;
                 }
             }
-            if (! $hasAnyMarriageValue) {
+            if (! $hasAnyValue) {
                 continue;
             }
 
-            $maritalStatusId = $row['marital_status_id'] ?? $topLevelMaritalStatusId;
-            $marriages[] = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'marital_status_id' => ! empty($maritalStatusId) ? (int) $maritalStatusId : null,
-                'marriage_year' => $this->nullableIntFromRow($row, 'marriage_year'),
-                'separation_year' => $this->nullableIntFromRow($row, 'separation_year'),
-                'divorce_year' => $this->nullableIntFromRow($row, 'divorce_year'),
-                'spouse_death_year' => $this->nullableIntFromRow($row, 'spouse_death_year'),
-                'divorce_status' => $this->nullableStringFromRow($row, 'divorce_status'),
-                'remarriage_reason' => $this->nullableStringFromRow($row, 'remarriage_reason'),
-                'notes' => $this->nullableStringFromRow($row, 'notes'),
-            ];
+            $lastMeaningful = $row;
+            if (! empty($row['id']) && (int) $row['id'] > $latestId) {
+                $latestId = (int) $row['id'];
+                $latestWithId = $row;
+            }
         }
 
-        return $marriages;
+        return is_array($latestWithId) ? $latestWithId : (is_array($lastMeaningful) ? $lastMeaningful : []);
+    }
+
+    private function mobileLatestMarriageRowId(?MatrimonyProfile $profile): ?int
+    {
+        if (! $profile instanceof MatrimonyProfile || ! $profile->exists) {
+            return null;
+        }
+
+        $id = $profile->marriages()->orderByDesc('id')->value('id');
+
+        return $id !== null ? (int) $id : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function mobileSanitizedMarriageRowForStatus(array $row, ?string $statusKey, mixed $maritalStatusId, ?int $marriageId): array
+    {
+        return [
+            'id' => $marriageId,
+            'marital_status_id' => ! empty($maritalStatusId) ? (int) $maritalStatusId : null,
+            'marriage_year' => $this->nullableIntFromRow($row, 'marriage_year'),
+            'separation_year' => $statusKey === 'separated' ? $this->nullableIntFromRow($row, 'separation_year') : null,
+            'divorce_year' => in_array($statusKey, ['divorced', 'annulled'], true) ? $this->nullableIntFromRow($row, 'divorce_year') : null,
+            'spouse_death_year' => $statusKey === 'widowed' ? $this->nullableIntFromRow($row, 'spouse_death_year') : null,
+            'divorce_status' => in_array($statusKey, ['divorced', 'annulled', 'separated'], true) ? $this->nullableStringFromRow($row, 'divorce_status') : null,
+            'remarriage_reason' => null,
+            'notes' => null,
+        ];
     }
 
     /**
@@ -837,6 +1018,21 @@ class MatrimonyProfileApiController extends Controller
             'relatives.*.contact_number_2' => ['prohibited'],
             'relatives.*.contact_number_3' => ['prohibited'],
             'relatives.*.is_primary_contact' => ['prohibited'],
+            'alliance_networks' => ['nullable', 'array', 'max:20'],
+            'alliance_networks.*' => ['array'],
+            'alliance_networks.*.id' => ['nullable', 'integer'],
+            'alliance_networks.*.surname' => ['nullable', 'string', 'max:255'],
+            'alliance_networks.*.city_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            'alliance_networks.*.state_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            'alliance_networks.*.district_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            'alliance_networks.*.taluka_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            'alliance_networks.*.notes' => ['nullable', 'string', 'max:1000'],
+            'alliance_networks.*.contact_number' => ['prohibited'],
+            'alliance_networks.*.contact_number_2' => ['prohibited'],
+            'alliance_networks.*.contact_number_3' => ['prohibited'],
+            'alliance_networks.*.phone_number' => ['prohibited'],
+            'alliance_networks.*.mobile_number' => ['prohibited'],
+            'alliance_networks.*.primary_contact_number' => ['prohibited'],
             'other_relatives_text' => ['nullable', 'string', 'max:4000'],
             'property_details' => ['nullable', 'string', 'max:4000'],
             'rashi_id' => ['nullable', 'integer', Rule::exists('master_rashis', 'id')->where('is_active', true)],
@@ -887,8 +1083,14 @@ class MatrimonyProfileApiController extends Controller
             $motherOccupationCustomId = $request->input('mother_occupation_custom_id');
             $siblings = $request->input('siblings', []);
             $relatives = $request->input('relatives', []);
+            $allianceNetworks = $request->input('alliance_networks', []);
             $marriages = $request->input('marriages', []);
             $children = $request->input('children', []);
+            $selectedMaritalStatusKey = null;
+            $selectedMaritalStatusId = $request->input('marital_status_id');
+            if ($selectedMaritalStatusId !== null && $selectedMaritalStatusId !== '') {
+                $selectedMaritalStatusKey = $this->mobileMaritalStatusKeyById((int) $selectedMaritalStatusId);
+            }
 
             if ($religionId !== null && $religionId !== '' && $casteId !== null && $casteId !== '') {
                 $casteReligionId = Caste::query()->whereKey((int) $casteId)->value('religion_id');
@@ -957,6 +1159,25 @@ class MatrimonyProfileApiController extends Controller
                 }
             }
 
+            if (is_array($allianceNetworks)) {
+                foreach ($allianceNetworks as $index => $allianceNetwork) {
+                    if (! is_array($allianceNetwork)) {
+                        continue;
+                    }
+
+                    $surname = trim((string) ($allianceNetwork['surname'] ?? ''));
+                    $hasAllianceNetworkData = trim((string) ($allianceNetwork['notes'] ?? '')) !== ''
+                        || (($allianceNetwork['city_id'] ?? null) !== null && ($allianceNetwork['city_id'] ?? '') !== '')
+                        || (($allianceNetwork['state_id'] ?? null) !== null && ($allianceNetwork['state_id'] ?? '') !== '')
+                        || (($allianceNetwork['district_id'] ?? null) !== null && ($allianceNetwork['district_id'] ?? '') !== '')
+                        || (($allianceNetwork['taluka_id'] ?? null) !== null && ($allianceNetwork['taluka_id'] ?? '') !== '');
+
+                    if ($hasAllianceNetworkData && $surname === '') {
+                        $validator->errors()->add('alliance_networks.'.$index.'.surname', 'Enter alliance network surname.');
+                    }
+                }
+            }
+
             if (is_array($marriages)) {
                 foreach ($marriages as $index => $marriage) {
                     if (! is_array($marriage)) {
@@ -973,7 +1194,10 @@ class MatrimonyProfileApiController extends Controller
                 }
             }
 
-            if (is_array($children)) {
+            $shouldValidateChildren = $selectedMaritalStatusKey !== 'never_married'
+                && $this->mobileBooleanInput($request, 'has_children', null) !== false;
+
+            if ($shouldValidateChildren && is_array($children)) {
                 foreach ($children as $index => $child) {
                     if (! is_array($child)) {
                         continue;
@@ -1300,6 +1524,10 @@ class MatrimonyProfileApiController extends Controller
             'relatives.city',
             'relatives.occupationMaster',
             'relatives.occupationCustom',
+            'allianceNetworks.city',
+            'allianceNetworks.state',
+            'allianceNetworks.district',
+            'allianceNetworks.taluka',
         ];
 
         $fresh = $profile->fresh($relations);
@@ -1696,6 +1924,7 @@ class MatrimonyProfileApiController extends Controller
         $profileData = $this->buildGovernanceParityProfilePayload($profile);
         if ((int) ($viewerProfile?->id ?? 0) !== (int) $profile->id) {
             unset($profileData['address_line']);
+            $this->sanitizeAllianceNetworkRowsForOtherProfile($profileData);
             if ((bool) ($profile->income_private ?? false)) {
                 $this->forgetIncomePayloadKeys($profileData, 'income');
                 unset($profileData['annual_income']);
@@ -1794,6 +2023,10 @@ class MatrimonyProfileApiController extends Controller
             'relatives.city',
             'relatives.occupationMaster',
             'relatives.occupationCustom',
+            'allianceNetworks.city',
+            'allianceNetworks.state',
+            'allianceNetworks.district',
+            'allianceNetworks.taluka',
             'horoscope.rashi',
             'horoscope.nakshatra',
             'horoscope.gan',
@@ -1830,10 +2063,15 @@ class MatrimonyProfileApiController extends Controller
         }
         $incomeCurrency = $profile->incomeCurrency;
         $familyIncomeCurrency = $profile->familyIncomeCurrency ?? $incomeCurrency;
-        $marriages = $this->mobileMarriageRows($profile);
-        $children = $this->mobileChildRows($profile);
+        $maritalStatusKey = $profile->maritalStatus?->key;
+        $hasChildren = $maritalStatusKey === 'never_married' ? false : $profile->has_children;
+        $marriages = $this->mobileMarriageRows($profile, $maritalStatusKey);
+        $children = $this->mobileMarriageDetailsAllowed($maritalStatusKey) && (bool) $hasChildren
+            ? $this->mobileChildRows($profile)
+            : [];
         $siblings = $this->mobileSiblingRows($profile);
         $relatives = $this->mobileRelativeRows($profile);
+        $allianceNetworks = $this->mobileAllianceNetworkRows($profile);
 
         $base = $profile->toArray();
         $parity = [
@@ -1863,7 +2101,7 @@ class MatrimonyProfileApiController extends Controller
             'marital_status_id' => $profile->marital_status_id,
             'marital_status_key' => $profile->maritalStatus?->key,
             'marital_status_label' => $this->masterLookupLabel($profile->getRelation('maritalStatus')),
-            'has_children' => $profile->has_children,
+            'has_children' => $hasChildren,
             'marriages' => $marriages,
             'children' => $children,
             'occupation_title' => $profile->occupation_title,
@@ -1934,6 +2172,7 @@ class MatrimonyProfileApiController extends Controller
             'has_siblings' => $profile->has_siblings,
             'siblings' => $siblings,
             'relatives' => $relatives,
+            'alliance_networks' => $allianceNetworks,
             'other_relatives_text' => $profile->other_relatives_text,
             'property_details' => $profile->property_details,
             'income_range_id' => $profile->income_range_id,
@@ -2025,26 +2264,31 @@ class MatrimonyProfileApiController extends Controller
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function mobileMarriageRows(MatrimonyProfile $profile): array
+    private function mobileMarriageRows(MatrimonyProfile $profile, ?string $statusKey): array
     {
+        if (! $this->mobileMarriageDetailsAllowed($statusKey)) {
+            return [];
+        }
+
         $profile->loadMissing('marriages.maritalStatus');
 
         return $profile->marriages
-            ->sortBy(fn ($marriage): int => (int) ($marriage->id ?? 0))
+            ->sortByDesc(fn ($marriage): int => (int) ($marriage->id ?? 0))
+            ->take(1)
             ->values()
-            ->map(function ($marriage): array {
+            ->map(function ($marriage) use ($statusKey): array {
                 return [
                     'id' => $marriage->id !== null ? (int) $marriage->id : null,
                     'marital_status_id' => $marriage->marital_status_id !== null ? (int) $marriage->marital_status_id : null,
                     'marital_status_label' => $this->masterLookupLabel($marriage->maritalStatus),
                     'marriage_year' => $marriage->marriage_year !== null ? (int) $marriage->marriage_year : null,
-                    'separation_year' => $marriage->separation_year !== null ? (int) $marriage->separation_year : null,
-                    'divorce_year' => $marriage->divorce_year !== null ? (int) $marriage->divorce_year : null,
-                    'spouse_death_year' => $marriage->spouse_death_year !== null ? (int) $marriage->spouse_death_year : null,
-                    'divorce_status' => $marriage->divorce_status,
-                    'divorce_status_label' => $this->mobileMarriageDivorceStatusLabel($marriage->divorce_status),
-                    'remarriage_reason' => $marriage->remarriage_reason,
-                    'notes' => $marriage->notes,
+                    'separation_year' => $statusKey === 'separated' && $marriage->separation_year !== null ? (int) $marriage->separation_year : null,
+                    'divorce_year' => in_array($statusKey, ['divorced', 'annulled'], true) && $marriage->divorce_year !== null ? (int) $marriage->divorce_year : null,
+                    'spouse_death_year' => $statusKey === 'widowed' && $marriage->spouse_death_year !== null ? (int) $marriage->spouse_death_year : null,
+                    'divorce_status' => in_array($statusKey, ['divorced', 'annulled', 'separated'], true) ? $marriage->divorce_status : null,
+                    'divorce_status_label' => in_array($statusKey, ['divorced', 'annulled', 'separated'], true) ? $this->mobileMarriageDivorceStatusLabel($marriage->divorce_status) : null,
+                    'remarriage_reason' => null,
+                    'notes' => null,
                 ];
             })
             ->all();
@@ -2144,6 +2388,39 @@ class MatrimonyProfileApiController extends Controller
                     'taluka_id' => $relative->taluka_id !== null ? (int) $relative->taluka_id : null,
                     'address_line' => $relative->address_line,
                     'notes' => $relative->notes,
+                ];
+            })
+            ->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function mobileAllianceNetworkRows(MatrimonyProfile $profile): array
+    {
+        $profile->loadMissing([
+            'allianceNetworks.city',
+            'allianceNetworks.state',
+            'allianceNetworks.district',
+            'allianceNetworks.taluka',
+        ]);
+
+        return $profile->allianceNetworks
+            ->sortBy(fn ($allianceNetwork): int => (int) ($allianceNetwork->id ?? 0))
+            ->values()
+            ->map(function ($allianceNetwork): array {
+                return [
+                    'id' => $allianceNetwork->id !== null ? (int) $allianceNetwork->id : null,
+                    'surname' => $allianceNetwork->surname,
+                    'city_id' => $allianceNetwork->city_id !== null ? (int) $allianceNetwork->city_id : null,
+                    'city_label' => $this->masterLookupLabel($allianceNetwork->city),
+                    'state_id' => $allianceNetwork->state_id !== null ? (int) $allianceNetwork->state_id : null,
+                    'state_label' => $this->masterLookupLabel($allianceNetwork->state),
+                    'district_id' => $allianceNetwork->district_id !== null ? (int) $allianceNetwork->district_id : null,
+                    'district_label' => $this->masterLookupLabel($allianceNetwork->district),
+                    'taluka_id' => $allianceNetwork->taluka_id !== null ? (int) $allianceNetwork->taluka_id : null,
+                    'taluka_label' => $this->masterLookupLabel($allianceNetwork->taluka),
+                    'notes' => $allianceNetwork->notes,
                 ];
             })
             ->all();
@@ -2353,6 +2630,28 @@ class MatrimonyProfileApiController extends Controller
         ] as $key) {
             unset($profileData[$key]);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $profileData
+     */
+    private function sanitizeAllianceNetworkRowsForOtherProfile(array &$profileData): void
+    {
+        if (! isset($profileData['alliance_networks']) || ! is_array($profileData['alliance_networks'])) {
+            return;
+        }
+
+        $profileData['alliance_networks'] = array_values(array_map(static function (mixed $row): mixed {
+            if (! is_array($row)) {
+                return $row;
+            }
+
+            foreach (['notes', 'contact_number', 'contact_number_2', 'contact_number_3', 'phone_number', 'mobile_number', 'primary_contact_number'] as $privateKey) {
+                unset($row[$privateKey]);
+            }
+
+            return $row;
+        }, $profileData['alliance_networks']));
     }
 
     private function masterTableLookupLabel(string $table, mixed $id): ?string

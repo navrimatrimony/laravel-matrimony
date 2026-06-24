@@ -2516,7 +2516,7 @@ class MutationService
 
         // Full-replace repeaters: actually hard-delete rows that user removed from the wizard/mobile section.
         // profile_addresses: same when the snapshot is a merged wizard list (every row has address_scope).
-        if (in_array($entityType, ['profile_relatives', 'profile_contacts', 'profile_children', 'profile_marriages'], true)
+        if (in_array($entityType, ['profile_relatives', 'profile_contacts', 'profile_children', 'profile_marriages', 'profile_alliance_networks'], true)
             || ($entityType === 'profile_addresses' && $this->profileAddressesFullReplace && Schema::hasColumn($entityType, 'address_scope'))) {
             $deleteIds = [];
             foreach ($existing as $id => $existingRow) {

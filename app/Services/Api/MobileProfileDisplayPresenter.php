@@ -80,6 +80,10 @@ class MobileProfileDisplayPresenter
             'motherOccupationCustom',
             'siblings',
             'relatives.city',
+            'allianceNetworks.city',
+            'allianceNetworks.state',
+            'allianceNetworks.district',
+            'allianceNetworks.taluka',
             'children.childLivingWith',
             'marriages',
             'horoscope.rashi',
@@ -909,13 +913,16 @@ class MobileProfileDisplayPresenter
 
     private function familySection(MatrimonyProfile $profile): ?array
     {
+        $maritalStatusKey = $profile->maritalStatus?->key;
+        $showMarriageChildren = in_array($maritalStatusKey, ['divorced', 'annulled', 'separated', 'widowed'], true);
         $items = [
             $this->item('Family Type', $this->labelFrom($profile->familyType), 'family'),
             $this->item('Parents Details', $this->parentsDetails($profile), 'parents'),
-            $this->item('Marriage History', $this->marriageHistoryLabel($profile), 'heart'),
-            $this->item('Children', $this->childrenLabel($profile), 'family'),
+            $this->item('Marriage History', $showMarriageChildren ? $this->marriageHistoryLabel($profile, $maritalStatusKey) : null, 'heart'),
+            $this->item('Children', $showMarriageChildren && (bool) $profile->has_children ? $this->childrenLabel($profile) : null, 'family'),
             $this->item('Siblings', $this->siblingsLabel($profile), 'siblings'),
             $this->item('Relatives', $this->relativesLabel($profile), 'relatives'),
+            $this->item('Alliance Network', $this->allianceNetworkLabel($profile), 'relatives'),
             $this->familyIncomeItem($profile),
             $this->item('Property Details', $profile->property_details, 'property'),
             $this->item('Other Relatives', $profile->other_relatives_text, 'relatives'),
@@ -1517,7 +1524,7 @@ class MobileProfileDisplayPresenter
         ]);
     }
 
-    private function marriageHistoryLabel(MatrimonyProfile $profile): ?string
+    private function marriageHistoryLabel(MatrimonyProfile $profile, ?string $statusKey): ?string
     {
         $marriages = $profile->marriages;
         if ($marriages === null || $marriages->isEmpty()) {
@@ -1525,22 +1532,17 @@ class MobileProfileDisplayPresenter
         }
 
         $rows = [];
-        foreach ($marriages->take(3) as $marriage) {
+        foreach ($marriages->sortByDesc('id')->take(1) as $marriage) {
             $row = $this->joinLabels([
                 $marriage->marriage_year !== null ? 'Marriage '.$marriage->marriage_year : null,
-                $marriage->separation_year !== null ? 'Separated '.$marriage->separation_year : null,
-                $marriage->divorce_year !== null ? 'Divorce '.$marriage->divorce_year : null,
-                $marriage->spouse_death_year !== null ? 'Spouse death '.$marriage->spouse_death_year : null,
-                $this->marriageDivorceStatusLabel($marriage->divorce_status),
+                $statusKey === 'separated' && $marriage->separation_year !== null ? 'Separated '.$marriage->separation_year : null,
+                in_array($statusKey, ['divorced', 'annulled'], true) && $marriage->divorce_year !== null ? ($statusKey === 'annulled' ? 'Annulment ' : 'Divorce ').$marriage->divorce_year : null,
+                $statusKey === 'widowed' && $marriage->spouse_death_year !== null ? 'Spouse death '.$marriage->spouse_death_year : null,
+                in_array($statusKey, ['divorced', 'annulled', 'separated'], true) ? $this->marriageDivorceStatusLabel($marriage->divorce_status) : null,
             ], ' - ');
             if ($row !== null) {
                 $rows[] = $row;
             }
-        }
-
-        $remaining = $marriages->count() - count($rows);
-        if ($remaining > 0) {
-            $rows[] = '+'.$remaining.' more';
         }
 
         return $rows !== [] ? implode('; ', $rows) : null;
@@ -1600,6 +1602,39 @@ class MobileProfileDisplayPresenter
         }
 
         $remaining = $relatives->count() - count($rows);
+        if ($remaining > 0) {
+            $rows[] = '+'.$remaining.' more';
+        }
+
+        return $rows !== [] ? implode('; ', $rows) : null;
+    }
+
+    private function allianceNetworkLabel(MatrimonyProfile $profile): ?string
+    {
+        $allianceNetworks = $profile->allianceNetworks;
+        if ($allianceNetworks === null || $allianceNetworks->isEmpty()) {
+            return null;
+        }
+
+        $rows = [];
+        foreach ($allianceNetworks->take(3) as $allianceNetwork) {
+            $location = $this->joinLabels([
+                $this->labelFrom($allianceNetwork->city),
+                $this->labelFrom($allianceNetwork->taluka),
+                $this->labelFrom($allianceNetwork->district),
+                $this->labelFrom($allianceNetwork->state),
+            ]);
+
+            $row = $this->joinLabels([
+                $this->cleanString($allianceNetwork->surname),
+                $location,
+            ], ' - ');
+            if ($row !== null) {
+                $rows[] = $row;
+            }
+        }
+
+        $remaining = $allianceNetworks->count() - count($rows);
         if ($remaining > 0) {
             $rows[] = '+'.$remaining.' more';
         }

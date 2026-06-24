@@ -1757,12 +1757,150 @@ test('MobileProfile PUT api v1 matrimony-profile persists syncs relatives and hi
     expect(array_key_exists('contact_number', $detailResponse->json('profile.relatives.0')))->toBeFalse();
 });
 
-test('MobileProfile PUT api v1 matrimony-profile persists syncs marriage history and children repeaters', function () {
+test('MobileProfile PUT api v1 matrimony-profile persists syncs alliance network rows', function () {
+    [$viewerUser, $viewerProfile, $targetUser, $targetProfile] = mobileApiProfileActionPair();
+    unset($viewerProfile);
+
+    $locationChain = mobileApiProfileTestLocationChain();
+
+    Sanctum::actingAs($targetUser);
+
+    $response = $this->putJson('/api/v1/matrimony-profile', [
+        'alliance_networks' => [
+            [
+                'surname' => 'Jadhav',
+                'city_id' => $locationChain['leaf']->id,
+                'state_id' => $locationChain['state']->id,
+                'district_id' => $locationChain['district']->id,
+                'taluka_id' => $locationChain['taluka']->id,
+                'notes' => 'Pune alliance network',
+            ],
+            [
+                'surname' => 'Patil',
+                'notes' => 'Kolhapur alliance network',
+            ],
+        ],
+    ]);
+
+    $response->assertOk();
+    expect($response->json('profile.alliance_networks'))->toHaveCount(2);
+    expect($response->json('profile.alliance_networks.0.surname'))->toBe('Jadhav');
+    expect($response->json('profile.alliance_networks.0.city_id'))->toBe($locationChain['leaf']->id);
+    expect($response->json('profile.alliance_networks.0.notes'))->toBe('Pune alliance network');
+    expect(array_key_exists('contact_number', $response->json('profile.alliance_networks.0')))->toBeFalse();
+
+    $getResponse = $this->getJson('/api/v1/matrimony-profile');
+    $getResponse->assertOk();
+    expect($getResponse->json('profile.alliance_networks'))->toHaveCount(2);
+
+    $familySection = collect($getResponse->json('display.sections') ?? [])
+        ->firstWhere('key', 'family');
+    $allianceNetworkItem = collect($familySection['items'] ?? [])
+        ->firstWhere('label', 'Alliance Network');
+    expect($allianceNetworkItem['value'] ?? null)->toContain('Jadhav');
+
+    $firstAllianceNetworkId = (int) $response->json('profile.alliance_networks.0.id');
+    $updateResponse = $this->putJson('/api/v1/matrimony-profile', [
+        'alliance_networks' => [
+            [
+                'id' => $firstAllianceNetworkId,
+                'surname' => 'Updated Jadhav',
+                'city_id' => $locationChain['leaf']->id,
+                'state_id' => $locationChain['state']->id,
+                'district_id' => $locationChain['district']->id,
+                'taluka_id' => $locationChain['taluka']->id,
+                'notes' => 'Updated alliance network',
+            ],
+        ],
+    ]);
+
+    $updateResponse->assertOk();
+    expect($updateResponse->json('profile.alliance_networks'))->toHaveCount(1);
+    expect($updateResponse->json('profile.alliance_networks.0.id'))->toBe($firstAllianceNetworkId);
+    expect($updateResponse->json('profile.alliance_networks.0.surname'))->toBe('Updated Jadhav');
+
+    expect(DB::table('profile_alliance_networks')->where('profile_id', $targetProfile->id)->count())->toBe(1);
+
+    $finalGetResponse = $this->getJson('/api/v1/matrimony-profile');
+    $finalGetResponse->assertOk();
+    expect($finalGetResponse->json('profile.alliance_networks'))->toHaveCount(1);
+    expect($finalGetResponse->json('profile.alliance_networks.0.surname'))->toBe('Updated Jadhav');
+
+    Sanctum::actingAs($viewerUser);
+
+    $detailResponse = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+    $detailResponse->assertOk();
+    expect($detailResponse->json('profile.alliance_networks'))->toHaveCount(1);
+    expect(array_key_exists('notes', $detailResponse->json('profile.alliance_networks.0')))->toBeFalse();
+
+    $detailProfileJson = json_encode($detailResponse->json('profile'), JSON_THROW_ON_ERROR);
+    expect($detailProfileJson)->not->toContain('contact_number');
+    expect($detailProfileJson)->not->toContain('phone_number');
+    expect($detailProfileJson)->not->toContain('mobile_number');
+});
+
+test('MobileProfile marriage children marital engine clears details for never married', function () {
+    [$viewerUser, $viewerProfile, $targetUser, $targetProfile] = mobileApiProfileActionPair();
+    unset($viewerUser, $viewerProfile);
+
+    $neverMarriedId = mobileApiProfileTestKnownMaritalStatus('never_married', 'Never Married');
+    $withParentId = mobileApiProfileTestKnownMasterOption('master_child_living_with', 'with_parent', 'With parent');
+
+    Sanctum::actingAs($targetUser);
+
+    $response = $this->putJson('/api/v1/matrimony-profile', [
+        'marital_status_id' => $neverMarriedId,
+        'has_children' => true,
+        'marriages' => [
+            [
+                'marriage_year' => 2010,
+                'divorce_year' => 2015,
+                'divorce_status' => 'finalized',
+            ],
+        ],
+        'children' => [
+            [
+                'gender' => 'male',
+                'age' => 10,
+                'child_living_with_id' => $withParentId,
+                'sort_order' => 0,
+            ],
+        ],
+    ]);
+
+    $response->assertOk();
+    expect($response->json('profile.marital_status_id'))->toBe($neverMarriedId);
+    expect($response->json('profile.marital_status_key'))->toBe('never_married');
+    expect($response->json('profile.has_children'))->toBeFalse();
+    expect($response->json('profile.marriages'))->toHaveCount(0);
+    expect($response->json('profile.children'))->toHaveCount(0);
+
+    expect(DB::table('profile_marriages')->where('profile_id', $targetProfile->id)->count())->toBe(0);
+    expect(DB::table('profile_children')->where('profile_id', $targetProfile->id)->count())->toBe(0);
+
+    $getResponse = $this->getJson('/api/v1/matrimony-profile');
+    $getResponse->assertOk();
+    expect($getResponse->json('profile.has_children'))->toBeFalse();
+    expect($getResponse->json('profile.marriages'))->toHaveCount(0);
+    expect($getResponse->json('profile.children'))->toHaveCount(0);
+
+    $familySection = collect($getResponse->json('display.sections') ?? [])
+        ->firstWhere('key', 'family');
+    $marriageItem = collect($familySection['items'] ?? [])
+        ->firstWhere('label', 'Marriage History');
+    $childrenItem = collect($familySection['items'] ?? [])
+        ->firstWhere('label', 'Children');
+    expect($marriageItem)->toBeNull();
+    expect($childrenItem)->toBeNull();
+});
+
+test('MobileProfile marriage children marital engine uses single latest row and conditional children', function () {
     [$viewerUser, $viewerProfile, $targetUser, $targetProfile] = mobileApiProfileActionPair();
     unset($viewerProfile);
 
     $divorcedId = mobileApiProfileTestKnownMaritalStatus('divorced', 'Divorced');
     $separatedId = mobileApiProfileTestKnownMaritalStatus('separated', 'Separated');
+    $neverMarriedId = mobileApiProfileTestKnownMaritalStatus('never_married', 'Never Married');
     $withParentId = mobileApiProfileTestKnownMasterOption('master_child_living_with', 'with_parent', 'With parent');
     $jointId = mobileApiProfileTestKnownMasterOption('master_child_living_with', 'joint', 'Joint');
 
@@ -1776,13 +1914,14 @@ test('MobileProfile PUT api v1 matrimony-profile persists syncs marriage history
                 'marriage_year' => 2010,
                 'divorce_year' => 2015,
                 'divorce_status' => 'finalized',
-                'notes' => 'First marriage note',
             ],
             [
                 'marriage_year' => 2018,
                 'separation_year' => 2020,
+                'divorce_year' => 2021,
+                'spouse_death_year' => 2022,
                 'divorce_status' => 'pending',
-                'notes' => 'Second marriage note',
+                'notes' => 'Ignored generic repeater note',
             ],
         ],
         'children' => [
@@ -1804,10 +1943,13 @@ test('MobileProfile PUT api v1 matrimony-profile persists syncs marriage history
     $response->assertOk();
     expect($response->json('profile.marital_status_id'))->toBe($divorcedId);
     expect($response->json('profile.has_children'))->toBeTrue();
-    expect($response->json('profile.marriages'))->toHaveCount(2);
-    expect($response->json('profile.marriages.0.marriage_year'))->toBe(2010);
-    expect($response->json('profile.marriages.0.divorce_year'))->toBe(2015);
-    expect($response->json('profile.marriages.0.divorce_status'))->toBe('finalized');
+    expect($response->json('profile.marriages'))->toHaveCount(1);
+    expect($response->json('profile.marriages.0.marriage_year'))->toBe(2018);
+    expect($response->json('profile.marriages.0.divorce_year'))->toBe(2021);
+    expect($response->json('profile.marriages.0.separation_year'))->toBeNull();
+    expect($response->json('profile.marriages.0.spouse_death_year'))->toBeNull();
+    expect($response->json('profile.marriages.0.divorce_status'))->toBe('pending');
+    expect($response->json('profile.marriages.0.notes'))->toBeNull();
     expect(array_key_exists('contact_number', $response->json('profile.marriages.0')))->toBeFalse();
     expect($response->json('profile.children'))->toHaveCount(2);
     expect($response->json('profile.children.0.gender'))->toBe('male');
@@ -1817,7 +1959,7 @@ test('MobileProfile PUT api v1 matrimony-profile persists syncs marriage history
 
     $getResponse = $this->getJson('/api/v1/matrimony-profile');
     $getResponse->assertOk();
-    expect($getResponse->json('profile.marriages'))->toHaveCount(2);
+    expect($getResponse->json('profile.marriages'))->toHaveCount(1);
     expect($getResponse->json('profile.children'))->toHaveCount(2);
 
     $familySection = collect($getResponse->json('display.sections') ?? [])
@@ -1826,7 +1968,7 @@ test('MobileProfile PUT api v1 matrimony-profile persists syncs marriage history
         ->firstWhere('label', 'Marriage History');
     $childrenItem = collect($familySection['items'] ?? [])
         ->firstWhere('label', 'Children');
-    expect($marriageItem['value'] ?? null)->toContain('Marriage 2010');
+    expect($marriageItem['value'] ?? null)->toContain('Marriage 2018');
     expect($childrenItem['value'] ?? null)->toContain('10 years');
 
     $firstMarriageId = (int) $response->json('profile.marriages.0.id');
@@ -1838,8 +1980,9 @@ test('MobileProfile PUT api v1 matrimony-profile persists syncs marriage history
                 'id' => $firstMarriageId,
                 'marriage_year' => 2011,
                 'separation_year' => 2021,
+                'divorce_year' => 2022,
+                'spouse_death_year' => 2023,
                 'divorce_status' => 'pending',
-                'notes' => 'Updated marriage note',
             ],
         ],
         'children' => [],
@@ -1849,6 +1992,9 @@ test('MobileProfile PUT api v1 matrimony-profile persists syncs marriage history
     expect($updateResponse->json('profile.marriages'))->toHaveCount(1);
     expect($updateResponse->json('profile.marriages.0.id'))->toBe($firstMarriageId);
     expect($updateResponse->json('profile.marriages.0.separation_year'))->toBe(2021);
+    expect($updateResponse->json('profile.marriages.0.divorce_year'))->toBeNull();
+    expect($updateResponse->json('profile.marriages.0.spouse_death_year'))->toBeNull();
+    expect($updateResponse->json('profile.marriages.0.divorce_status'))->toBe('pending');
     expect($updateResponse->json('profile.children'))->toHaveCount(0);
 
     expect(DB::table('profile_marriages')->where('profile_id', $targetProfile->id)->count())->toBe(1);
@@ -1859,11 +2005,40 @@ test('MobileProfile PUT api v1 matrimony-profile persists syncs marriage history
     expect($finalGetResponse->json('profile.marriages'))->toHaveCount(1);
     expect($finalGetResponse->json('profile.children'))->toHaveCount(0);
 
+    $neverMarriedResponse = $this->putJson('/api/v1/matrimony-profile', [
+        'marital_status_id' => $neverMarriedId,
+        'has_children' => true,
+        'marriages' => [
+            [
+                'id' => $firstMarriageId,
+                'marriage_year' => 2011,
+                'separation_year' => 2021,
+                'divorce_status' => 'pending',
+            ],
+        ],
+        'children' => [
+            [
+                'gender' => 'male',
+                'age' => 5,
+                'child_living_with_id' => $withParentId,
+            ],
+        ],
+    ]);
+
+    $neverMarriedResponse->assertOk();
+    expect($neverMarriedResponse->json('profile.marital_status_key'))->toBe('never_married');
+    expect($neverMarriedResponse->json('profile.has_children'))->toBeFalse();
+    expect($neverMarriedResponse->json('profile.marriages'))->toHaveCount(0);
+    expect($neverMarriedResponse->json('profile.children'))->toHaveCount(0);
+
+    expect(DB::table('profile_marriages')->where('profile_id', $targetProfile->id)->count())->toBe(0);
+    expect(DB::table('profile_children')->where('profile_id', $targetProfile->id)->count())->toBe(0);
+
     Sanctum::actingAs($viewerUser);
 
     $detailResponse = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
     $detailResponse->assertOk();
-    expect($detailResponse->json('profile.marriages'))->toHaveCount(1);
+    expect($detailResponse->json('profile.marriages'))->toHaveCount(0);
     expect($detailResponse->json('profile.children'))->toHaveCount(0);
 
     $detailProfileJson = json_encode($detailResponse->json('profile'), JSON_THROW_ON_ERROR);
