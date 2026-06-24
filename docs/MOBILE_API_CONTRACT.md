@@ -459,9 +459,13 @@ Request:
   "father_name": "Father Name",
   "father_occupation_master_id": 10,
   "father_extra_info": "Runs a business",
+  "father_contact_1": "9876543210",
+  "father_contact_2": "+91 98765 43211",
   "mother_name": "Mother Name",
   "mother_occupation_master_id": 11,
   "mother_extra_info": "Homemaker",
+  "mother_contact_1": "9876543212",
+  "mother_contact_2": null,
   "parents_addresses": [
     {
       "address_type_key": "permanent",
@@ -591,6 +595,9 @@ Rules:
 - `father_occupation_master_id`, `mother_occupation_master_id`: nullable, must exist in `master_occupations.id`
 - `father_occupation_custom_id`, `mother_occupation_custom_id`: nullable, must exist in the logged-in user's `master_occupation_custom.id`; cannot be sent together with the matching master occupation ID
 - `father_extra_info`, `mother_extra_info`: nullable string, max 1000
+- `father_contact_1`, `father_contact_2`, `mother_contact_1`, `mother_contact_2`: nullable phone strings, max 20 chars, digits/`+`/spaces/`-`/parentheses only. Returned only in authenticated owner's own profile payload.
+- `father_contact_3`, `mother_contact_3`: same rule, only if the deployment still has those DB columns.
+- `father_contact_whatsapp_*` and `mother_contact_whatsapp_*` are not accepted by the mobile API.
 - `parents_addresses`: nullable array, max 10 rows. Rows map to governed snapshot key `addresses` with `address_scope=parents`.
 - `parents_addresses.*.id`: nullable integer existing `profile_addresses.id`
 - `parents_addresses.*.address_type_key`: nullable string, one of `current`, `permanent`, `native`, `work`, `other`; omitted rows default to `permanent`
@@ -656,7 +663,9 @@ Governance note:
 - Raw legacy `caste` text is not a governed write target.
 - Matrimony gender source is `matrimony_profiles.gender_id`; `users.gender` is not a runtime fallback for profile matching, visibility, comparison, or display.
 - Phase 5B1 + 5D partner expectations listed above flow through the governed partner preference snapshot path, except `preferred_intercaste`, which reuses the existing website community flag service.
-- Parent contact numbers, sibling contact numbers, relative contact numbers, contact unlock/payment fields, and preference repeaters are intentionally not accepted in this mobile contract.
+- Parent contact numbers are accepted only for the authenticated owner's edit/read payload: `father_contact_1`, `father_contact_2`, `mother_contact_1`, and `mother_contact_2`. `father_contact_3` and `mother_contact_3` are accepted only on deployments where those DB columns still exist. WhatsApp/contact-preference flags for parent contact fields are not accepted by the mobile API because they are not stored on `matrimony_profiles`.
+- Parent contact values are private. Other-profile detail/list responses and public display sections must not expose them.
+- Sibling contact numbers, relative contact numbers, contact unlock/payment fields, and preference repeaters are intentionally not accepted in this mobile contract.
 - Sibling and relative contact number columns exist in the Laravel web schema but are not accepted or returned by this mobile contract. Other-profile detail/list responses must not expose sibling or relative contact numbers.
 - Relative repeaters are intentionally deferred until a row-preserving, privacy-safe mobile contract is added.
 
@@ -781,10 +790,14 @@ Success response: HTTP 200
     "father_occupation_master_id": 10,
     "father_occupation_master_label": "Business",
     "father_extra_info": "Runs a business",
+    "father_contact_1": "9876543210",
+    "father_contact_2": "+91 98765 43211",
     "mother_name": "Mother Name",
     "mother_occupation_master_id": 11,
     "mother_occupation_master_label": "Homemaker",
     "mother_extra_info": "Homemaker",
+    "mother_contact_1": "9876543212",
+    "mother_contact_2": null,
     "family_type_id": 1,
     "family_type_label": "Joint",
     "family_status": "middle_class",
@@ -1191,7 +1204,7 @@ Rules:
 - Marriage details and child rows follow the same conditional `marital_engine` rules as create. Sending `marital_status_id=never_married` forces `has_children=false` and clears marriage/child rows. For `divorced`, `annulled`, `separated`, and `widowed`, `marriages` is one effective status-detail row, while `children` syncs only when `has_children=true`; use `has_children=false` or `children: []` to clear child rows.
 - Alliance network rows follow the same `alliance_networks` shape as create. Sending `alliance_networks` performs governed full row sync for that repeater; omitting `alliance_networks` preserves existing alliance network rows.
 - Phase 5B1 + 5D partner preferences and `narrative_expectations` follow the same rules as `POST /api/v1/matrimony-profile`.
-- Parent/sibling/relative contact fields and partner preference repeaters are not accepted by this mobile update contract.
+- Parent contact fields follow the same owner-only/privacy rules as create. Sibling/relative contact fields and partner preference repeaters are not accepted by this mobile update contract.
 
 Success response: HTTP 200
 

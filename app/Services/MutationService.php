@@ -67,8 +67,8 @@ class MutationService
         'property_details',
         'birth_city_id', 'birth_place_text', 'company_name', 'work_location_text', 'spectacles_lens', 'physical_condition',
         'occupation_master_id', 'occupation_custom_id',
-        'father_name', 'father_occupation', 'father_occupation_master_id', 'father_occupation_custom_id', 'father_extra_info', 'father_contact_1', 'father_contact_2',
-        'mother_name', 'mother_occupation', 'mother_occupation_master_id', 'mother_occupation_custom_id', 'mother_extra_info', 'mother_contact_1', 'mother_contact_2',
+        'father_name', 'father_occupation', 'father_occupation_master_id', 'father_occupation_custom_id', 'father_extra_info', 'father_contact_1', 'father_contact_2', 'father_contact_3',
+        'mother_name', 'mother_occupation', 'mother_occupation_master_id', 'mother_occupation_custom_id', 'mother_extra_info', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3',
         'other_relatives_text',
         // photo_approved / photo_rejected_at / photo_rejection_reason: NOT snapshot-driven (see ProcessProfilePhoto + ProfilePhotoPendingStateService)
         'is_suspended',

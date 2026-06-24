@@ -167,6 +167,7 @@ class MatrimonyProfileApiController extends Controller
             'other_relatives_text',
             'property_details',
         ];
+        $coreFields = array_values(array_unique(array_merge($coreFields, $this->mobileParentContactFields())));
         foreach ($coreFields as $key) {
             if (! $request->has($key)) {
                 continue;
@@ -1206,6 +1207,13 @@ class MatrimonyProfileApiController extends Controller
             'preferred_intercaste' => ['nullable', 'boolean'],
         ];
 
+        foreach ($this->mobileParentContactFields() as $field) {
+            $rules[$field] = ['nullable', 'string', 'max:20', 'regex:/^[0-9+\-\s()]{7,20}$/'];
+        }
+        foreach ($this->mobileParentContactPreferenceFields() as $field) {
+            $rules[$field] = ['prohibited'];
+        }
+
         foreach (['income', 'family_income'] as $prefix) {
             $valueType = $request->input($prefix.'_value_type');
             if (in_array($valueType, ['exact', 'approximate'], true)) {
@@ -1439,6 +1447,41 @@ class MatrimonyProfileApiController extends Controller
                 || $request->filled('mother_occupation_master_id') || $request->filled('mother_occupation_custom_id'))) {
             app(OccupationService::class)->mergeParentOccupationTextIntoRequest($request);
         }
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function mobileParentContactFields(): array
+    {
+        $known = [
+            'father_contact_1',
+            'father_contact_2',
+            'father_contact_3',
+            'mother_contact_1',
+            'mother_contact_2',
+            'mother_contact_3',
+        ];
+
+        return array_values(array_filter(
+            $known,
+            fn (string $field): bool => Schema::hasColumn('matrimony_profiles', $field)
+        ));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function mobileParentContactPreferenceFields(): array
+    {
+        return [
+            'father_contact_whatsapp_1',
+            'father_contact_whatsapp_2',
+            'father_contact_whatsapp_3',
+            'mother_contact_whatsapp_1',
+            'mother_contact_whatsapp_2',
+            'mother_contact_whatsapp_3',
+        ];
     }
 
     /**
@@ -2076,6 +2119,7 @@ class MatrimonyProfileApiController extends Controller
         if ((int) ($viewerProfile?->id ?? 0) !== (int) $profile->id) {
             unset($profileData['address_line']);
             unset($profileData['self_addresses'], $profileData['parents_addresses']);
+            $this->forgetParentContactPayloadKeys($profileData);
             $this->sanitizeAllianceNetworkRowsForOtherProfile($profileData);
             if ((bool) ($profile->income_private ?? false)) {
                 $this->forgetIncomePayloadKeys($profileData, 'income');
@@ -2302,6 +2346,8 @@ class MatrimonyProfileApiController extends Controller
             'father_occupation_custom_id' => $profile->father_occupation_custom_id,
             'father_occupation_custom_label' => $this->masterLookupLabel($profile->getRelation('fatherOccupationCustom')),
             'father_extra_info' => $profile->father_extra_info,
+            'father_contact_1' => $profile->father_contact_1,
+            'father_contact_2' => $profile->father_contact_2,
             'mother_name' => $profile->mother_name,
             'mother_occupation' => $profile->mother_occupation,
             'mother_occupation_master_id' => $profile->mother_occupation_master_id,
@@ -2309,6 +2355,8 @@ class MatrimonyProfileApiController extends Controller
             'mother_occupation_custom_id' => $profile->mother_occupation_custom_id,
             'mother_occupation_custom_label' => $this->masterLookupLabel($profile->getRelation('motherOccupationCustom')),
             'mother_extra_info' => $profile->mother_extra_info,
+            'mother_contact_1' => $profile->mother_contact_1,
+            'mother_contact_2' => $profile->mother_contact_2,
             'family_type_id' => $profile->family_type_id,
             'family_type_label' => $this->masterLookupLabel($profile->getRelation('familyType')),
             'family_status' => $profile->family_status,
@@ -2396,16 +2444,15 @@ class MatrimonyProfileApiController extends Controller
         ];
 
         $profileData = array_merge($base, $parity);
+        foreach (['father_contact_3', 'mother_contact_3'] as $contactKey) {
+            if (Schema::hasColumn('matrimony_profiles', $contactKey)) {
+                $profileData[$contactKey] = $profile->getAttribute($contactKey);
+            }
+        }
         foreach ([
             'user',
             'contact_number',
             'primary_contact_number',
-            'father_contact_1',
-            'father_contact_2',
-            'father_contact_3',
-            'mother_contact_1',
-            'mother_contact_2',
-            'mother_contact_3',
             'addresses',
         ] as $privateKey) {
             unset($profileData[$privateKey]);
@@ -2844,6 +2891,23 @@ class MatrimonyProfileApiController extends Controller
             $prefix.'_currency_label',
             $prefix.'_display_label',
             $prefix.'_normalized_annual_amount',
+        ] as $key) {
+            unset($profileData[$key]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $profileData
+     */
+    private function forgetParentContactPayloadKeys(array &$profileData): void
+    {
+        foreach ([
+            'father_contact_1',
+            'father_contact_2',
+            'father_contact_3',
+            'mother_contact_1',
+            'mother_contact_2',
+            'mother_contact_3',
         ] as $key) {
             unset($profileData[$key]);
         }
