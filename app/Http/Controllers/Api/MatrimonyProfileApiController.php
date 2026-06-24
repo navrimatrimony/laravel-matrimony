@@ -75,6 +75,8 @@ class MatrimonyProfileApiController extends Controller
 
     private const MOBILE_CHILD_GENDERS = ['male', 'female', 'other', 'prefer_not_say'];
 
+    private const MOBILE_ADDRESS_TYPE_KEYS = ['current', 'permanent', 'native', 'work', 'other'];
+
     private const MOBILE_RELATIVE_RELATION_LABELS = [
         'paternal_grandfather' => 'Paternal Grandfather',
         'paternal_grandmother' => 'Paternal Grandmother',
@@ -227,6 +229,10 @@ class MatrimonyProfileApiController extends Controller
 
         if ($request->has('alliance_networks')) {
             $snapshot['alliance_networks'] = $this->mobileAllianceNetworksSnapshotFromApi($request);
+        }
+
+        if ($request->has('self_addresses') || $request->has('parents_addresses')) {
+            $snapshot['addresses'] = $this->mobileAddressesSnapshotFromApi($request, $profile);
         }
 
         if ($maritalStatusKey === 'never_married') {
@@ -449,6 +455,123 @@ class MatrimonyProfileApiController extends Controller
         }
 
         return $allianceNetworks;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function mobileAddressesSnapshotFromApi(Request $request, ?MatrimonyProfile $profile): array
+    {
+        $hasSelf = $request->has('self_addresses');
+        $hasParents = $request->has('parents_addresses');
+
+        $selfRows = $hasSelf
+            ? $this->mobileAddressRowsSnapshotFromApi($request, 'self_addresses', 'self', 'current')
+            : $this->mobileExistingAddressSnapshotRowsForScope($profile, 'self');
+        $parentsRows = $hasParents
+            ? $this->mobileAddressRowsSnapshotFromApi($request, 'parents_addresses', 'parents', 'permanent')
+            : $this->mobileExistingAddressSnapshotRowsForScope($profile, 'parents');
+
+        return array_values(array_merge($selfRows, $parentsRows));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function mobileAddressRowsSnapshotFromApi(Request $request, string $inputKey, string $scope, string $defaultTypeKey): array
+    {
+        $rows = $request->input($inputKey, []);
+        if (! is_array($rows)) {
+            return [];
+        }
+
+        $out = [];
+        foreach (array_values($rows) as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $id = ! empty($row['id']) ? (int) $row['id'] : null;
+            $addressLine = trim((string) ($row['address_line'] ?? ''));
+            $locationId = $row['location_id'] ?? $row['city_id'] ?? null;
+            $locationId = ($locationId !== null && $locationId !== '') ? (int) $locationId : null;
+            $typeKey = trim((string) ($row['address_type_key'] ?? $row['address_type'] ?? $row['type'] ?? ''));
+            $typeId = $row['address_type_id'] ?? null;
+            $typeId = ($typeId !== null && $typeId !== '') ? (int) $typeId : null;
+
+            $hasMeaningfulData = $id !== null
+                || $addressLine !== ''
+                || $locationId !== null;
+            if (! $hasMeaningfulData) {
+                continue;
+            }
+
+            if ($typeKey === '' && $typeId === null) {
+                $typeKey = $defaultTypeKey;
+            }
+
+            $mapped = [
+                'address_scope' => $scope,
+                'address_line' => $addressLine !== '' ? mb_substr($addressLine, 0, 255) : null,
+                'location_id' => $locationId,
+            ];
+            if ($id !== null) {
+                $mapped['id'] = $id;
+            }
+            if ($typeId !== null) {
+                $mapped['address_type_id'] = $typeId;
+            } else {
+                $mapped['address_type'] = $typeKey;
+            }
+
+            $out[] = $mapped;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function mobileExistingAddressSnapshotRowsForScope(?MatrimonyProfile $profile, string $scope): array
+    {
+        if (! $profile instanceof MatrimonyProfile
+            || ! $profile->exists
+            || ! Schema::hasTable('profile_addresses')
+            || ! Schema::hasTable('master_address_types')
+            || ! Schema::hasColumn('profile_addresses', 'address_scope')) {
+            return [];
+        }
+
+        $locationColumn = Schema::hasColumn('profile_addresses', 'location_id')
+            ? 'location_id'
+            : (Schema::hasColumn('profile_addresses', 'city_id') ? 'city_id' : null);
+        $select = ['pa.id', 'pa.address_line', 'mat.key as address_type_key'];
+        if ($locationColumn !== null) {
+            $select[] = DB::raw('pa.'.$locationColumn.' as location_id');
+        }
+
+        $rows = DB::table('profile_addresses as pa')
+            ->join('master_address_types as mat', 'mat.id', '=', 'pa.address_type_id')
+            ->where('pa.profile_id', $profile->id)
+            ->where('pa.address_scope', $scope)
+            ->orderBy('pa.id')
+            ->select($select)
+            ->get();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $locationId = isset($row->location_id) && $row->location_id !== null ? (int) $row->location_id : null;
+            $out[] = [
+                'id' => (int) $row->id,
+                'address_scope' => $scope,
+                'address_type' => (string) ($row->address_type_key ?? ($scope === 'parents' ? 'permanent' : 'current')),
+                'address_line' => isset($row->address_line) && trim((string) $row->address_line) !== '' ? trim((string) $row->address_line) : null,
+                'location_id' => $locationId,
+            ];
+        }
+
+        return $out;
     }
 
     /**
@@ -996,6 +1119,34 @@ class MatrimonyProfileApiController extends Controller
             'children.*.contact_number_3' => ['prohibited'],
             'children.*.phone_number' => ['prohibited'],
             'children.*.mobile_number' => ['prohibited'],
+            'self_addresses' => ['nullable', 'array', 'max:10'],
+            'self_addresses.*' => ['array'],
+            'self_addresses.*.id' => ['nullable', 'integer'],
+            'self_addresses.*.address_type_id' => ['nullable', 'integer', Rule::exists('master_address_types', 'id')->where('is_active', true)],
+            'self_addresses.*.address_type_key' => ['nullable', 'string', Rule::in(self::MOBILE_ADDRESS_TYPE_KEYS)],
+            'self_addresses.*.address_line' => ['nullable', 'string', 'max:255'],
+            'self_addresses.*.location_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            'self_addresses.*.city_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            'self_addresses.*.contact_number' => ['prohibited'],
+            'self_addresses.*.contact_number_2' => ['prohibited'],
+            'self_addresses.*.contact_number_3' => ['prohibited'],
+            'self_addresses.*.phone_number' => ['prohibited'],
+            'self_addresses.*.mobile_number' => ['prohibited'],
+            'self_addresses.*.primary_contact_number' => ['prohibited'],
+            'parents_addresses' => ['nullable', 'array', 'max:10'],
+            'parents_addresses.*' => ['array'],
+            'parents_addresses.*.id' => ['nullable', 'integer'],
+            'parents_addresses.*.address_type_id' => ['nullable', 'integer', Rule::exists('master_address_types', 'id')->where('is_active', true)],
+            'parents_addresses.*.address_type_key' => ['nullable', 'string', Rule::in(self::MOBILE_ADDRESS_TYPE_KEYS)],
+            'parents_addresses.*.address_line' => ['nullable', 'string', 'max:255'],
+            'parents_addresses.*.location_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            'parents_addresses.*.city_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            'parents_addresses.*.contact_number' => ['prohibited'],
+            'parents_addresses.*.contact_number_2' => ['prohibited'],
+            'parents_addresses.*.contact_number_3' => ['prohibited'],
+            'parents_addresses.*.phone_number' => ['prohibited'],
+            'parents_addresses.*.mobile_number' => ['prohibited'],
+            'parents_addresses.*.primary_contact_number' => ['prohibited'],
             'relatives' => ['nullable', 'array', 'max:20'],
             'relatives.*' => ['array'],
             'relatives.*.id' => ['nullable', 'integer'],
@@ -1924,6 +2075,7 @@ class MatrimonyProfileApiController extends Controller
         $profileData = $this->buildGovernanceParityProfilePayload($profile);
         if ((int) ($viewerProfile?->id ?? 0) !== (int) $profile->id) {
             unset($profileData['address_line']);
+            unset($profileData['self_addresses'], $profileData['parents_addresses']);
             $this->sanitizeAllianceNetworkRowsForOtherProfile($profileData);
             if ((bool) ($profile->income_private ?? false)) {
                 $this->forgetIncomePayloadKeys($profileData, 'income');
@@ -2069,6 +2221,8 @@ class MatrimonyProfileApiController extends Controller
         $children = $this->mobileMarriageDetailsAllowed($maritalStatusKey) && (bool) $hasChildren
             ? $this->mobileChildRows($profile)
             : [];
+        $selfAddresses = $this->mobileAddressRows($profile, 'self');
+        $parentsAddresses = $this->mobileAddressRows($profile, 'parents');
         $siblings = $this->mobileSiblingRows($profile);
         $relatives = $this->mobileRelativeRows($profile);
         $allianceNetworks = $this->mobileAllianceNetworkRows($profile);
@@ -2104,6 +2258,8 @@ class MatrimonyProfileApiController extends Controller
             'has_children' => $hasChildren,
             'marriages' => $marriages,
             'children' => $children,
+            'self_addresses' => $selfAddresses,
+            'parents_addresses' => $parentsAddresses,
             'occupation_title' => $profile->occupation_title,
             'annual_income' => $profile->annual_income,
             'income_period' => $profile->income_period,
@@ -2250,6 +2406,7 @@ class MatrimonyProfileApiController extends Controller
             'mother_contact_1',
             'mother_contact_2',
             'mother_contact_3',
+            'addresses',
         ] as $privateKey) {
             unset($profileData[$privateKey]);
         }
@@ -2259,6 +2416,66 @@ class MatrimonyProfileApiController extends Controller
         }
 
         return $profileData;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function mobileAddressRows(MatrimonyProfile $profile, string $scope): array
+    {
+        if (! Schema::hasTable('profile_addresses')
+            || ! Schema::hasTable('master_address_types')
+            || ! Schema::hasColumn('profile_addresses', 'address_scope')) {
+            return [];
+        }
+
+        $locationColumn = Schema::hasColumn('profile_addresses', 'location_id')
+            ? 'location_id'
+            : (Schema::hasColumn('profile_addresses', 'city_id') ? 'city_id' : null);
+        $select = [
+            'pa.id',
+            'pa.address_scope',
+            'pa.address_type_id',
+            'pa.address_line',
+            'mat.key as address_type_key',
+            'mat.label as address_type_label',
+        ];
+        if ($locationColumn !== null) {
+            $select[] = DB::raw('pa.'.$locationColumn.' as location_id');
+        }
+
+        return DB::table('profile_addresses as pa')
+            ->leftJoin('master_address_types as mat', 'mat.id', '=', 'pa.address_type_id')
+            ->where('pa.profile_id', $profile->id)
+            ->where('pa.address_scope', $scope)
+            ->orderBy('pa.id')
+            ->select($select)
+            ->get()
+            ->map(function ($row) use ($scope): array {
+                $locationId = isset($row->location_id) && $row->location_id !== null ? (int) $row->location_id : null;
+                $locationLabel = $locationId !== null && $locationId > 0
+                    ? trim(MatrimonyProfile::residenceLocationDisplayLineFor((object) ['location_id' => $locationId]))
+                    : '';
+                $typeKey = is_string($row->address_type_key ?? null) && trim($row->address_type_key) !== ''
+                    ? trim($row->address_type_key)
+                    : ($scope === 'parents' ? 'permanent' : 'current');
+                $typeLabel = is_string($row->address_type_label ?? null) && trim($row->address_type_label) !== ''
+                    ? trim($row->address_type_label)
+                    : ucfirst(str_replace('_', ' ', $typeKey));
+
+                return [
+                    'id' => (int) $row->id,
+                    'address_scope' => (string) ($row->address_scope ?? $scope),
+                    'address_type_id' => $row->address_type_id !== null ? (int) $row->address_type_id : null,
+                    'address_type_key' => $typeKey,
+                    'address_type_label' => $typeLabel,
+                    'address_line' => isset($row->address_line) && trim((string) $row->address_line) !== '' ? trim((string) $row->address_line) : null,
+                    'location_id' => $locationId,
+                    'location_label' => $locationLabel !== '' ? $locationLabel : null,
+                    'display' => $locationLabel !== '' ? $locationLabel : null,
+                ];
+            })
+            ->all();
     }
 
     /**

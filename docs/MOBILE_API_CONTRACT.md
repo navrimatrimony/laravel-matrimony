@@ -426,6 +426,18 @@ Request:
   "highest_education": "B.E.",
   "education_slots": "[{\"t\":\"d\",\"id\":1}]",
   "location_id": 123,
+  "self_addresses": [
+    {
+      "address_type_key": "current",
+      "address_line": "Flat 10, Pune",
+      "location_id": 123
+    },
+    {
+      "address_type_key": "native",
+      "address_line": "Native house",
+      "location_id": 124
+    }
+  ],
   "mother_tongue_id": 1,
   "marital_status_id": 1,
   "has_children": false,
@@ -450,6 +462,13 @@ Request:
   "mother_name": "Mother Name",
   "mother_occupation_master_id": 11,
   "mother_extra_info": "Homemaker",
+  "parents_addresses": [
+    {
+      "address_type_key": "permanent",
+      "address_line": "Parents home",
+      "location_id": 125
+    }
+  ],
   "family_type_id": 1,
   "family_status": "middle_class",
   "family_values": "traditional",
@@ -526,6 +545,14 @@ Rules:
 - `highest_education`: required string, max 255
 - `education_slots`: nullable JSON string, max 8192; selected degree IDs must exist in `master_education.id`; when supplied, Laravel resolves it into `highest_education`
 - `location_id`: required, must exist in `addresses.id`
+- `self_addresses`: nullable array, max 10 rows. Rows map to governed snapshot key `addresses` with `address_scope=self`.
+- `self_addresses.*.id`: nullable integer existing `profile_addresses.id`
+- `self_addresses.*.address_type_key`: nullable string, one of `current`, `permanent`, `native`, `work`, `other`; omitted rows default to `current`
+- `self_addresses.*.address_type_id`: nullable active `master_address_types.id`; prefer `address_type_key` for mobile
+- `self_addresses.*.address_line`: nullable string, max 255
+- `self_addresses.*.location_id` or `self_addresses.*.city_id`: nullable, must exist in `addresses.id`
+- `self_addresses.*.contact_number`, `self_addresses.*.contact_number_2`, `self_addresses.*.contact_number_3`, `self_addresses.*.phone_number`, `self_addresses.*.mobile_number`, and `self_addresses.*.primary_contact_number` are not accepted.
+- The `current` self address is the structured SSOT for current residence. Legacy scalar `location_id` and `address_line` are still accepted for backward compatibility and should mirror the current self address when mobile sends structured rows.
 - `mother_tongue_id`: nullable, must exist as an active `master_mother_tongues.id`
 - `marital_status_id`: nullable, must exist as an active `master_marital_statuses.id`. Supported marital status keys are `never_married`, `divorced`, `annulled`, `separated`, and `widowed`.
 - `has_children`: nullable boolean. It is effective only for `divorced`, `annulled`, `separated`, and `widowed`; when status is `never_married`, the API forces it to `false`.
@@ -564,6 +591,13 @@ Rules:
 - `father_occupation_master_id`, `mother_occupation_master_id`: nullable, must exist in `master_occupations.id`
 - `father_occupation_custom_id`, `mother_occupation_custom_id`: nullable, must exist in the logged-in user's `master_occupation_custom.id`; cannot be sent together with the matching master occupation ID
 - `father_extra_info`, `mother_extra_info`: nullable string, max 1000
+- `parents_addresses`: nullable array, max 10 rows. Rows map to governed snapshot key `addresses` with `address_scope=parents`.
+- `parents_addresses.*.id`: nullable integer existing `profile_addresses.id`
+- `parents_addresses.*.address_type_key`: nullable string, one of `current`, `permanent`, `native`, `work`, `other`; omitted rows default to `permanent`
+- `parents_addresses.*.address_type_id`: nullable active `master_address_types.id`; prefer `address_type_key` for mobile
+- `parents_addresses.*.address_line`: nullable string, max 255
+- `parents_addresses.*.location_id` or `parents_addresses.*.city_id`: nullable, must exist in `addresses.id`
+- `parents_addresses.*.contact_number`, `parents_addresses.*.contact_number_2`, `parents_addresses.*.contact_number_3`, `parents_addresses.*.phone_number`, `parents_addresses.*.mobile_number`, and `parents_addresses.*.primary_contact_number` are not accepted.
 - `family_type_id`: nullable, must exist as an active `master_family_types.id`
 - `family_status`: nullable string, must be one of the website `components.family.status_options` keys
 - `family_values`: nullable string, must be one of the website `components.family.values_options` keys
@@ -645,6 +679,19 @@ Success response: HTTP 200
     "highest_education": "B.E.",
     "location_id": 123,
     "address_line": "Optional address line",
+    "self_addresses": [
+      {
+        "id": 200,
+        "address_scope": "self",
+        "address_type_id": 1,
+        "address_type_key": "current",
+        "address_type_label": "Current",
+        "address_line": "Optional address line",
+        "location_id": 123,
+        "location_label": "Pune, Maharashtra",
+        "display": "Pune, Maharashtra"
+      }
+    ],
     "caste_id": 5,
     "gender": "male",
     "country_id": 1,
@@ -653,6 +700,19 @@ Success response: HTTP 200
     "taluka_id": 4,
     "mother_tongue_id": 1,
     "mother_tongue_label": "Marathi",
+    "parents_addresses": [
+      {
+        "id": 201,
+        "address_scope": "parents",
+        "address_type_id": 2,
+        "address_type_key": "permanent",
+        "address_type_label": "Permanent",
+        "address_line": "Parents home",
+        "location_id": 125,
+        "location_label": "Satara, Maharashtra",
+        "display": "Satara, Maharashtra"
+      }
+    ],
     "marital_status_id": 2,
     "marital_status_key": "divorced",
     "marital_status_label": "Divorced",
@@ -1102,6 +1162,9 @@ Rules:
 - `location_id`: sometimes required, must exist in `addresses.id`
 - `address_line`: nullable string, max 255
 - `address_line` is returned in the authenticated owner's own profile payload and own Basic Details display section. Other-profile profile/display responses must not expose exact address lines.
+- `self_addresses`: same row shape as create. Sending `self_addresses` performs governed sync for `address_scope=self` while preserving existing `parents` address rows by merging them into the outgoing `addresses` snapshot. Omitting `self_addresses` preserves existing self address rows.
+- `parents_addresses`: same row shape as create. Sending `parents_addresses` performs governed sync for `address_scope=parents` while preserving existing `self` address rows by merging them into the outgoing `addresses` snapshot. Omitting `parents_addresses` preserves existing parents address rows.
+- Own profile GET/PUT responses include `profile.self_addresses` and `profile.parents_addresses` for editing. Other-profile detail/list responses must not expose `parents_addresses`, structured self address rows, or exact `address_line` values.
 - `mother_tongue_id`: nullable, must exist as an active `master_mother_tongues.id`
 - `marital_status_id`: nullable, must exist as an active `master_marital_statuses.id`
 - `has_children`: nullable boolean

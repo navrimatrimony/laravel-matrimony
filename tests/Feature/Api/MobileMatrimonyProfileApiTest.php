@@ -390,17 +390,22 @@ function mobileApiProfileTestOccupationMaster(string $name = 'Software Engineer'
 
 function mobileApiProfileTestSeedCurrentAddressType(): void
 {
+    mobileApiProfileTestSeedAddressType('current', 'Current');
+}
+
+function mobileApiProfileTestSeedAddressType(string $key, string $label): void
+{
     $values = [
-        'label' => 'Current',
+        'label' => $label,
         'created_at' => now(),
         'updated_at' => now(),
     ];
     if (Schema::hasColumn('master_address_types', 'label_mr')) {
-        $values['label_mr'] = 'Current';
+        $values['label_mr'] = $label;
     }
 
     DB::table('master_address_types')->updateOrInsert(
-        ['key' => 'current'],
+        ['key' => $key],
         $values
     );
     \App\Services\Profile\ProfileCanonicalResidenceService::forgetCachedMasters();
@@ -1455,6 +1460,120 @@ test('MobileProfile PUT api v1 matrimony-profile persists address line in own pr
         ->firstWhere('label', 'Address Line');
 
     expect($addressLineItem['value'] ?? null)->toBe('Test address line');
+});
+
+test('MobileProfile PUT api v1 matrimony-profile syncs structured self and parents addresses by scope', function () {
+    mobileApiProfileTestSeedAddressType('current', 'Current');
+    mobileApiProfileTestSeedAddressType('permanent', 'Permanent');
+    mobileApiProfileTestSeedAddressType('native', 'Native');
+
+    [$viewerUser, $viewerProfile, $targetUser, $targetProfile] = mobileApiProfileActionPair();
+    unset($viewerProfile);
+
+    $selfCurrent = mobileApiProfileTestLeafLocation();
+    $selfNative = mobileApiProfileTestLeafLocation();
+    $parentsPermanent = mobileApiProfileTestLeafLocation();
+    $selfUpdated = mobileApiProfileTestLeafLocation();
+    $parentsUpdated = mobileApiProfileTestLeafLocation();
+
+    Sanctum::actingAs($targetUser);
+
+    $selfResponse = $this->putJson('/api/v1/matrimony-profile', [
+        'self_addresses' => [
+            [
+                'address_type_key' => 'current',
+                'address_line' => 'Self current line',
+                'location_id' => $selfCurrent->id,
+            ],
+            [
+                'address_type_key' => 'native',
+                'address_line' => 'Self native line',
+                'location_id' => $selfNative->id,
+            ],
+        ],
+    ]);
+
+    $selfResponse->assertOk();
+    expect($selfResponse->json('profile.self_addresses'))->toHaveCount(2);
+    expect(collect($selfResponse->json('profile.self_addresses'))->pluck('address_type_key')->all())
+        ->toContain('current', 'native');
+    expect($selfResponse->json('profile.address_line'))->toBe('Self current line');
+    expect(DB::table('profile_addresses')->where('profile_id', $targetProfile->id)->where('address_scope', 'self')->count())->toBe(2);
+
+    $parentsResponse = $this->putJson('/api/v1/matrimony-profile', [
+        'parents_addresses' => [
+            [
+                'address_type_key' => 'permanent',
+                'address_line' => 'Parents permanent line',
+                'location_id' => $parentsPermanent->id,
+            ],
+        ],
+    ]);
+
+    $parentsResponse->assertOk();
+    expect($parentsResponse->json('profile.self_addresses'))->toHaveCount(2);
+    expect($parentsResponse->json('profile.parents_addresses'))->toHaveCount(1);
+    expect($parentsResponse->json('profile.parents_addresses.0.address_line'))->toBe('Parents permanent line');
+
+    $getResponse = $this->getJson('/api/v1/matrimony-profile');
+    $getResponse->assertOk();
+    expect($getResponse->json('profile.self_addresses'))->toHaveCount(2);
+    expect($getResponse->json('profile.parents_addresses'))->toHaveCount(1);
+
+    $currentSelfId = (int) collect($getResponse->json('profile.self_addresses'))
+        ->firstWhere('address_type_key', 'current')['id'];
+    $parentPermanentId = (int) $getResponse->json('profile.parents_addresses.0.id');
+
+    $selfUpdateResponse = $this->putJson('/api/v1/matrimony-profile', [
+        'self_addresses' => [
+            [
+                'id' => $currentSelfId,
+                'address_type_key' => 'current',
+                'address_line' => 'Updated self current line',
+                'location_id' => $selfUpdated->id,
+            ],
+        ],
+    ]);
+
+    $selfUpdateResponse->assertOk();
+    expect($selfUpdateResponse->json('profile.self_addresses'))->toHaveCount(1);
+    expect($selfUpdateResponse->json('profile.self_addresses.0.address_line'))->toBe('Updated self current line');
+    expect($selfUpdateResponse->json('profile.parents_addresses'))->toHaveCount(1);
+    expect($selfUpdateResponse->json('profile.parents_addresses.0.address_line'))->toBe('Parents permanent line');
+    expect(DB::table('profile_addresses')->where('profile_id', $targetProfile->id)->where('address_scope', 'self')->count())->toBe(1);
+    expect(DB::table('profile_addresses')->where('profile_id', $targetProfile->id)->where('address_scope', 'parents')->count())->toBe(1);
+
+    $parentsUpdateResponse = $this->putJson('/api/v1/matrimony-profile', [
+        'parents_addresses' => [
+            [
+                'id' => $parentPermanentId,
+                'address_type_key' => 'permanent',
+                'address_line' => 'Updated parents permanent line',
+                'location_id' => $parentsUpdated->id,
+            ],
+        ],
+    ]);
+
+    $parentsUpdateResponse->assertOk();
+    expect($parentsUpdateResponse->json('profile.self_addresses'))->toHaveCount(1);
+    expect($parentsUpdateResponse->json('profile.self_addresses.0.address_line'))->toBe('Updated self current line');
+    expect($parentsUpdateResponse->json('profile.parents_addresses'))->toHaveCount(1);
+    expect($parentsUpdateResponse->json('profile.parents_addresses.0.address_line'))->toBe('Updated parents permanent line');
+    expect(DB::table('profile_addresses')->where('profile_id', $targetProfile->id)->where('address_scope', 'self')->count())->toBe(1);
+    expect(DB::table('profile_addresses')->where('profile_id', $targetProfile->id)->where('address_scope', 'parents')->count())->toBe(1);
+
+    Sanctum::actingAs($viewerUser);
+
+    $detailResponse = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+    $detailResponse->assertOk();
+    $detailProfile = $detailResponse->json('profile');
+    expect(array_key_exists('address_line', $detailProfile))->toBeFalse();
+    expect(array_key_exists('self_addresses', $detailProfile))->toBeFalse();
+    expect(array_key_exists('parents_addresses', $detailProfile))->toBeFalse();
+
+    $detailProfileJson = json_encode($detailProfile, JSON_THROW_ON_ERROR);
+    expect($detailProfileJson)->not->toContain('Updated self current line');
+    expect($detailProfileJson)->not->toContain('Updated parents permanent line');
 });
 
 test('MobileProfile PUT api v1 matrimony-profile persists income engine fields and respects display privacy', function () {
