@@ -2023,6 +2023,7 @@ class MutationService
         }
         if ($entityType === 'profile_marriages') {
             return [
+                'id' => $row['id'] ?? null,
                 'marital_status_id' => $row['marital_status_id'] ?? null,
                 'marriage_year' => $row['marriage_year'] ?? null,
                 'separation_year' => $row['separation_year'] ?? null,
@@ -2513,9 +2514,9 @@ class MutationService
             );
         }
 
-        // For profile_relatives and profile_contacts: actually hard-delete rows that user removed from the wizard.
+        // Full-replace repeaters: actually hard-delete rows that user removed from the wizard/mobile section.
         // profile_addresses: same when the snapshot is a merged wizard list (every row has address_scope).
-        if (in_array($entityType, ['profile_relatives', 'profile_contacts'], true)
+        if (in_array($entityType, ['profile_relatives', 'profile_contacts', 'profile_children', 'profile_marriages'], true)
             || ($entityType === 'profile_addresses' && $this->profileAddressesFullReplace && Schema::hasColumn($entityType, 'address_scope'))) {
             $deleteIds = [];
             foreach ($existing as $id => $existingRow) {

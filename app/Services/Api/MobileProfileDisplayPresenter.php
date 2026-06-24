@@ -80,7 +80,8 @@ class MobileProfileDisplayPresenter
             'motherOccupationCustom',
             'siblings',
             'relatives.city',
-            'children',
+            'children.childLivingWith',
+            'marriages',
             'horoscope.rashi',
             'horoscope.nakshatra',
             'horoscope.mangalDoshType',
@@ -911,6 +912,8 @@ class MobileProfileDisplayPresenter
         $items = [
             $this->item('Family Type', $this->labelFrom($profile->familyType), 'family'),
             $this->item('Parents Details', $this->parentsDetails($profile), 'parents'),
+            $this->item('Marriage History', $this->marriageHistoryLabel($profile), 'heart'),
+            $this->item('Children', $this->childrenLabel($profile), 'family'),
             $this->item('Siblings', $this->siblingsLabel($profile), 'siblings'),
             $this->item('Relatives', $this->relativesLabel($profile), 'relatives'),
             $this->familyIncomeItem($profile),
@@ -1514,6 +1517,63 @@ class MobileProfileDisplayPresenter
         ]);
     }
 
+    private function marriageHistoryLabel(MatrimonyProfile $profile): ?string
+    {
+        $marriages = $profile->marriages;
+        if ($marriages === null || $marriages->isEmpty()) {
+            return null;
+        }
+
+        $rows = [];
+        foreach ($marriages->take(3) as $marriage) {
+            $row = $this->joinLabels([
+                $marriage->marriage_year !== null ? 'Marriage '.$marriage->marriage_year : null,
+                $marriage->separation_year !== null ? 'Separated '.$marriage->separation_year : null,
+                $marriage->divorce_year !== null ? 'Divorce '.$marriage->divorce_year : null,
+                $marriage->spouse_death_year !== null ? 'Spouse death '.$marriage->spouse_death_year : null,
+                $this->marriageDivorceStatusLabel($marriage->divorce_status),
+            ], ' - ');
+            if ($row !== null) {
+                $rows[] = $row;
+            }
+        }
+
+        $remaining = $marriages->count() - count($rows);
+        if ($remaining > 0) {
+            $rows[] = '+'.$remaining.' more';
+        }
+
+        return $rows !== [] ? implode('; ', $rows) : null;
+    }
+
+    private function childrenLabel(MatrimonyProfile $profile): ?string
+    {
+        $children = $profile->children;
+        if ($children === null || $children->isEmpty()) {
+            return null;
+        }
+
+        $rows = [];
+        foreach ($children->take(3) as $index => $child) {
+            $row = $this->joinLabels([
+                $this->cleanString($child->child_name) ?? 'Child '.($index + 1),
+                $child->age !== null ? $child->age.' years' : null,
+                $this->childGenderLabel($child->gender),
+                $this->labelFrom($child->childLivingWith),
+            ], ' - ');
+            if ($row !== null) {
+                $rows[] = $row;
+            }
+        }
+
+        $remaining = $children->count() - count($rows);
+        if ($remaining > 0) {
+            $rows[] = '+'.$remaining.' more';
+        }
+
+        return $rows !== [] ? implode('; ', $rows) : null;
+    }
+
     private function relativesLabel(MatrimonyProfile $profile): ?string
     {
         $relatives = $profile->relatives;
@@ -1565,6 +1625,28 @@ class MobileProfileDisplayPresenter
             'maternal_aunt' => 'Maternal Aunt',
             'husband_maternal_aunt' => 'Husband of Maternal Aunt',
             'maternal_cousin' => 'Cousin',
+            default => null,
+        };
+    }
+
+    private function marriageDivorceStatusLabel(?string $value): ?string
+    {
+        return match ($value) {
+            'pending' => 'Pending',
+            'finalized' => 'Finalized',
+            'mutual' => 'Mutual',
+            'contested' => 'Contested',
+            default => null,
+        };
+    }
+
+    private function childGenderLabel(?string $value): ?string
+    {
+        return match ($value) {
+            'male' => 'Male',
+            'female' => 'Female',
+            'other' => 'Other',
+            'prefer_not_say' => 'Prefer not to say',
             default => null,
         };
     }

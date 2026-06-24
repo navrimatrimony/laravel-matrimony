@@ -93,6 +93,7 @@ class ProfileSetupLookupController extends Controller
     {
         return response()->json([
             'marital_statuses' => $this->maritalStatusOptions(),
+            'child_living_with' => $this->tableOptions('master_child_living_with', ['id']),
             'diets' => $this->masterOptions(MasterDiet::class, 'master_diets', ['sort_order', 'id']),
             'smoking_statuses' => $this->masterOptions(MasterSmokingStatus::class, 'master_smoking_statuses', ['sort_order', 'id']),
             'drinking_statuses' => $this->masterOptions(MasterDrinkingStatus::class, 'master_drinking_statuses', ['sort_order', 'id']),

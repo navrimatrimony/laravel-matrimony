@@ -230,6 +230,7 @@ Requires bearer token. Returns read-only governed options for APK Edit All Marit
 Sources:
 
 - `marital_statuses`: `master_marital_statuses` via `App\Models\MasterMaritalStatus`
+- `child_living_with`: active `master_child_living_with` rows for children repeater `child_living_with_id`
 - `diets`: `master_diets` via `App\Models\MasterDiet`
 - `smoking_statuses`: `master_smoking_statuses` via `App\Models\MasterSmokingStatus`
 - `drinking_statuses`: `master_drinking_statuses` via `App\Models\MasterDrinkingStatus`
@@ -240,6 +241,9 @@ Success response: HTTP 200
 {
   "marital_statuses": [
     { "id": 1, "key": "never_married", "label": "Never Married", "label_en": "Never Married", "label_mr": null }
+  ],
+  "child_living_with": [
+    { "id": 1, "key": "with_parent", "label": "With parent", "label_en": "With parent", "label_mr": null }
   ],
   "diets": [
     { "id": 1, "key": "vegetarian", "label": "Vegetarian", "label_en": "Vegetarian", "label_mr": null }
@@ -425,6 +429,8 @@ Request:
   "mother_tongue_id": 1,
   "marital_status_id": 1,
   "has_children": false,
+  "marriages": [],
+  "children": [],
   "height_cm": 168,
   "weight_kg": 58,
   "complexion_id": 1,
@@ -513,6 +519,19 @@ Rules:
 - `mother_tongue_id`: nullable, must exist as an active `master_mother_tongues.id`
 - `marital_status_id`: nullable, must exist as an active `master_marital_statuses.id`
 - `has_children`: nullable boolean
+- `marriages`: nullable array, max 10 rows. Each row may include `id`, `marital_status_id`, `marriage_year`, `separation_year`, `divorce_year`, `spouse_death_year`, `divorce_status`, `remarriage_reason`, and `notes`.
+- `marriages.*.marital_status_id`: nullable, must exist as an active `master_marital_statuses.id`; omit it to use the top-level `marital_status_id`.
+- `marriages.*.marriage_year`, `marriages.*.separation_year`, `marriages.*.divorce_year`, `marriages.*.spouse_death_year`: nullable integer years, min 1901, max current year; separation/divorce/spouse-death years must be greater than or equal to `marriage_year` when both are present.
+- `marriages.*.divorce_status`: nullable, one of `pending`, `finalized`, `mutual`, `contested`
+- `marriages.*.remarriage_reason`, `marriages.*.notes`: nullable string, max 1000
+- `marriages.*.contact_number`, `marriages.*.contact_number_2`, `marriages.*.contact_number_3`, `marriages.*.phone_number`, and `marriages.*.mobile_number` are not accepted. Send `marriages: []` when a never-married status should clear marriage history rows. Omitting `marriages` preserves existing marriage rows.
+- `children`: nullable array, max 20 rows. Each row may include `id`, `child_name`, `gender`, `age`, `child_living_with_id`, and `sort_order`.
+- `children.*.gender`: required when the child row has any other data; one of `male`, `female`, `other`, `prefer_not_say`
+- `children.*.age`: required when the child row has any other data; integer, min 1, max 120
+- `children.*.child_living_with_id`: nullable, must exist as an active `master_child_living_with.id`
+- `children.*.child_name`: nullable string, max 255
+- `children.*.sort_order`: nullable integer, min 0
+- `children.*.contact_number`, `children.*.contact_number_2`, `children.*.contact_number_3`, `children.*.phone_number`, and `children.*.mobile_number` are not accepted. Send `children: []` with `has_children: false` to clear child rows. Omitting `children` preserves existing child rows.
 - `height_cm`: nullable integer, min 50, max 250
 - `weight_kg`: nullable integer, min 20, max 250
 - `complexion_id`: nullable, must exist as an active `master_complexions.id`
@@ -615,8 +634,36 @@ Success response: HTTP 200
     "mother_tongue_id": 1,
     "mother_tongue_label": "Marathi",
     "marital_status_id": 1,
+    "marital_status_key": "never_married",
     "marital_status_label": "Never Married",
     "has_children": false,
+    "marriages": [
+      {
+        "id": 300,
+        "marital_status_id": 2,
+        "marital_status_label": "Divorced",
+        "marriage_year": 2010,
+        "separation_year": null,
+        "divorce_year": 2015,
+        "spouse_death_year": null,
+        "divorce_status": "finalized",
+        "divorce_status_label": "Finalized",
+        "remarriage_reason": null,
+        "notes": "Optional note"
+      }
+    ],
+    "children": [
+      {
+        "id": 400,
+        "child_name": null,
+        "gender": "male",
+        "gender_label": "Male",
+        "age": 10,
+        "child_living_with_id": 1,
+        "child_living_with_label": "With parent",
+        "sort_order": 0
+      }
+    ],
     "height_cm": 168,
     "weight_kg": 58,
     "complexion_id": 1,
@@ -1043,6 +1090,7 @@ Rules:
 - Private income flags preserve the values for the owner's edit payload but display sections must not expose exact personal/family income amounts when the corresponding private flag is true.
 - Relatives rules mirror `POST /api/v1/matrimony-profile`. Mobile accepts only safe relative row fields and never accepts or returns relative contact numbers.
 - Sibling rows follow the same `siblings` shape as create. The mobile update contract does not accept sibling contact fields. Sending `siblings` performs governed row sync for that repeater; omitting `siblings` preserves existing sibling rows.
+- Marriage history and child rows follow the same `marriages` and `children` shapes as create. Sending either array performs governed full row sync for that repeater; omitting an array preserves existing rows. Use `marriages: []` for never-married clearing and `children: []` with `has_children: false` for child-row clearing.
 - Phase 5B1 + 5D partner preferences and `narrative_expectations` follow the same rules as `POST /api/v1/matrimony-profile`.
 - Parent/sibling/relative contact fields and partner preference repeaters are not accepted by this mobile update contract.
 
