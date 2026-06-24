@@ -300,9 +300,12 @@ class MobileOnboardingDraftService
                 $data['sub_caste_id'] = null;
                 $data['same_caste_expected'] = null;
                 $data['same_sub_caste_required'] = null;
+                $data['caste_strictness'] = null;
+                $data['sub_caste_strictness'] = null;
             } elseif (array_key_exists('caste_id', $data) && ($existing['caste_id'] ?? null) != $data['caste_id']) {
                 $data['sub_caste_id'] = null;
                 $data['same_sub_caste_required'] = null;
+                $data['sub_caste_strictness'] = null;
             }
         }
 

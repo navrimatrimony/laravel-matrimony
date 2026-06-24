@@ -166,7 +166,8 @@ class MobileOnboardingController extends Controller
             'success' => true,
             'profile_status' => $this->checklistService->profileStatus($profile),
             'is_searchable' => $this->checklistService->isSearchable($user, $profile),
-            'items' => $this->checklistService->items($user, $profile),
+            'pending_location' => $this->checklistService->pendingLocationPayload($draft),
+            'items' => $this->checklistService->items($user, $profile, $draft),
         ]);
     }
 

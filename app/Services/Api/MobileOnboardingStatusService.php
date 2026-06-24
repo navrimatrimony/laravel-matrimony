@@ -23,8 +23,8 @@ class MobileOnboardingStatusService
         $draft ??= $this->draftService->findOrCreateForUser($user);
         $profile = $this->profileFor($user, $draft);
 
-        $profileSummary = $this->checklistService->profileSummary($profile, $user);
-        $items = $this->checklistService->items($user, $profile);
+        $profileSummary = $this->checklistService->profileSummary($profile, $user, $draft);
+        $items = $this->checklistService->items($user, $profile, $draft);
         $nextStep = $this->nextStep($draft, $profile);
 
         return [
@@ -37,6 +37,7 @@ class MobileOnboardingStatusService
             'profile_status' => $this->checklistService->profileStatus($profile),
             'is_searchable' => $this->checklistService->isSearchable($user, $profile),
             'next_step' => $nextStep,
+            'pending_location' => $this->checklistService->pendingLocationPayload($draft),
             'account_state' => $this->otpService->accountStateFor($user),
             'activation_checklist' => $items,
             'preferences' => $this->preferenceService->statusForProfile($profile),

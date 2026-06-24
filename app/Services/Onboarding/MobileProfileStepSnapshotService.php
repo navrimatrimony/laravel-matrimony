@@ -17,6 +17,8 @@ use Illuminate\Validation\ValidationException;
 
 class MobileProfileStepSnapshotService
 {
+    private const STRICTNESS_VALUES = ['open', 'preferred', 'required'];
+
     public const PROFILE_STEPS = [
         'profile_for_whom',
         'basic_info',
@@ -73,6 +75,9 @@ class MobileProfileStepSnapshotService
             'religion_id',
             'caste_id',
             'sub_caste_id',
+            'religion_strictness',
+            'caste_strictness',
+            'sub_caste_strictness',
             'same_religion_expected',
             'same_caste_expected',
             'same_sub_caste_required',
@@ -80,6 +85,10 @@ class MobileProfileStepSnapshotService
         'location' => [
             'location_id',
             'address_line',
+            'pending_location_request_id',
+            'pending_location_label',
+            'pending_location_status',
+            'pending_location_type',
         ],
         'education' => [
             'education_slots',
@@ -124,6 +133,8 @@ class MobileProfileStepSnapshotService
             'family_income_max_amount',
             'family_income_currency_id',
             'family_income_private',
+            'brothers_count',
+            'sisters_count',
         ],
     ];
 
@@ -145,6 +156,9 @@ class MobileProfileStepSnapshotService
         $core = [];
         foreach (self::STEP_FIELDS[$step] ?? [] as $field) {
             if (in_array($field, [
+                'religion_strictness',
+                'caste_strictness',
+                'sub_caste_strictness',
                 'same_religion_expected',
                 'same_caste_expected',
                 'same_sub_caste_required',
@@ -153,6 +167,12 @@ class MobileProfileStepSnapshotService
                 'children_count',
                 'children_living_with',
                 'children_living_with_id',
+                'pending_location_request_id',
+                'pending_location_label',
+                'pending_location_status',
+                'pending_location_type',
+                'brothers_count',
+                'sisters_count',
             ], true)) {
                 continue;
             }
@@ -179,6 +199,8 @@ class MobileProfileStepSnapshotService
             ]);
         }
 
+        $data = $this->normalizeStepDataForValidation($step, $data);
+
         $this->rejectForbiddenKeys($data);
         $this->rejectUnexpectedKeys($step, $data);
 
@@ -187,6 +209,9 @@ class MobileProfileStepSnapshotService
         $validator->after(function ($validator) use ($step, $data): void {
             if ($step === 'religion_caste') {
                 $this->validateReligionCasteDependency($validator, $data);
+            }
+            if ($step === 'location') {
+                $this->validateFinalLocation($validator, $data);
             }
             if ($step === 'education') {
                 $this->validateEducationSlots($validator, $data);
@@ -205,6 +230,11 @@ class MobileProfileStepSnapshotService
     private function rulesFor(string $step, User $user): array
     {
         $locationTable = Location::geoTable();
+        $pendingLocationRequestRules = ['sometimes', 'nullable', 'integer'];
+        if (Schema::hasTable('location_open_place_suggestions')) {
+            $pendingLocationRequestRules[] = Rule::exists('location_open_place_suggestions', 'id');
+        }
+
         $rules = [
             'profile_for_whom' => [
                 'profile_for_whom' => ['required', 'string', Rule::in(MobileOnboardingDraftService::PROFILE_FOR_WHOM_VALUES)],
@@ -225,6 +255,9 @@ class MobileProfileStepSnapshotService
                 'religion_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_religions', 'id')->where('is_active', true)],
                 'caste_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_castes', 'id')->where('is_active', true)],
                 'sub_caste_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_sub_castes', 'id')->where('is_active', true)],
+                'religion_strictness' => ['sometimes', 'nullable', Rule::in(self::STRICTNESS_VALUES)],
+                'caste_strictness' => ['sometimes', 'nullable', Rule::in(self::STRICTNESS_VALUES)],
+                'sub_caste_strictness' => ['sometimes', 'nullable', Rule::in(self::STRICTNESS_VALUES)],
                 'same_religion_expected' => ['sometimes', 'nullable', 'boolean'],
                 'same_caste_expected' => ['sometimes', 'nullable', 'boolean'],
                 'same_sub_caste_required' => ['sometimes', 'nullable', 'boolean'],
@@ -232,6 +265,10 @@ class MobileProfileStepSnapshotService
             'location' => [
                 'location_id' => ['sometimes', 'nullable', 'integer', 'exists:'.$locationTable.',id'],
                 'address_line' => ['sometimes', 'nullable', 'string', 'max:255'],
+                'pending_location_request_id' => $pendingLocationRequestRules,
+                'pending_location_label' => ['sometimes', 'nullable', 'string', 'max:255'],
+                'pending_location_status' => ['sometimes', 'nullable', Rule::in(['pending', 'approved', 'rejected'])],
+                'pending_location_type' => ['sometimes', 'nullable', Rule::in(['village', 'city', 'suburb'])],
             ],
             'education' => [
                 'education_slots' => ['sometimes', 'nullable'],
@@ -292,6 +329,8 @@ class MobileProfileStepSnapshotService
                 'family_income_max_amount' => ['sometimes', 'nullable', 'numeric', 'min:0', 'gte:family_income_min_amount'],
                 'family_income_currency_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_income_currencies', 'id')->where('is_active', true)],
                 'family_income_private' => ['sometimes', 'nullable', 'boolean'],
+                'brothers_count' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:20'],
+                'sisters_count' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:20'],
             ],
         ];
 
@@ -347,6 +386,27 @@ class MobileProfileStepSnapshotService
             if ($subCasteCasteId !== null && (int) $subCasteCasteId !== (int) $casteId) {
                 $validator->errors()->add('sub_caste_id', 'The selected sub-caste does not belong to the selected caste.');
             }
+        }
+    }
+
+    private function validateFinalLocation($validator, array $data): void
+    {
+        $locationId = $data['location_id'] ?? null;
+        if ($locationId === null || $locationId === '') {
+            return;
+        }
+
+        $location = Location::query()->find((int) $locationId);
+        if (! $location instanceof Location) {
+            return;
+        }
+
+        $isFinal = (bool) ($location->is_active ?? false)
+            && (string) $location->hierarchy === 'village'
+            && in_array((string) ($location->tag ?? ''), ['city', 'suburban', 'rural'], true);
+
+        if (! $isFinal) {
+            $validator->errors()->add('location_id', 'Select an active final city, suburb, or village location.');
         }
     }
 
@@ -413,6 +473,70 @@ class MobileProfileStepSnapshotService
             $data['has_children'] = false;
         }
         return $data;
+    }
+
+    private function normalizeStepDataForValidation(string $step, array $data): array
+    {
+        if ($step === 'religion_caste') {
+            $data = $this->normalizeCommunityStrictness($data);
+        }
+
+        if ($step === 'location'
+            && array_key_exists('pending_location_request_id', $data)
+            && ! array_key_exists('pending_location_status', $data)) {
+            $data['pending_location_status'] = $data['pending_location_request_id'] === null ? null : 'pending';
+        }
+
+        return $data;
+    }
+
+    private function normalizeCommunityStrictness(array $data): array
+    {
+        foreach ([
+            ['enum' => 'religion_strictness', 'legacy' => 'same_religion_expected', 'alias' => 'same_religion_required'],
+            ['enum' => 'caste_strictness', 'legacy' => 'same_caste_expected', 'alias' => 'same_caste_required'],
+            ['enum' => 'sub_caste_strictness', 'legacy' => 'same_sub_caste_required', 'alias' => null],
+        ] as $field) {
+            if ($field['alias'] !== null && array_key_exists($field['alias'], $data)) {
+                if (! array_key_exists($field['legacy'], $data)) {
+                    $data[$field['legacy']] = $data[$field['alias']];
+                }
+                unset($data[$field['alias']]);
+            }
+
+            if (array_key_exists($field['enum'], $data)) {
+                $strictness = $this->normalizeStrictnessValue($data[$field['enum']]);
+                if ($strictness !== null) {
+                    $data[$field['enum']] = $strictness;
+                    $data[$field['legacy']] = $strictness === 'required';
+                }
+                continue;
+            }
+
+            if (array_key_exists($field['legacy'], $data)) {
+                $data[$field['enum']] = filter_var($data[$field['legacy']], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)
+                    ? 'required'
+                    : 'open';
+            }
+        }
+
+        return $data;
+    }
+
+    private function normalizeStrictnessValue(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $text = str_replace('-', '_', strtolower(trim((string) $value)));
+
+        return match ($text) {
+            'must_match', 'required' => 'required',
+            'preferred' => 'preferred',
+            'open' => 'open',
+            default => $text,
+        };
     }
 
     private function educationSnapshot(array $data): array

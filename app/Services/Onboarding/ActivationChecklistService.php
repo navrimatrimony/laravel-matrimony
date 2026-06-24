@@ -5,6 +5,7 @@ namespace App\Services\Onboarding;
 use App\Models\ConflictRecord;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
+use App\Models\MobileOnboardingDraft;
 use App\Models\ProfilePhoto;
 use App\Models\User;
 use App\Services\Image\ProfilePhotoUrlService;
@@ -18,7 +19,7 @@ class ActivationChecklistService
     /**
      * @return list<array<string, mixed>>
      */
-    public function items(User $user, ?MatrimonyProfile $profile = null): array
+    public function items(User $user, ?MatrimonyProfile $profile = null, ?MobileOnboardingDraft $draft = null): array
     {
         $profile ??= $user->matrimonyProfile;
 
@@ -28,6 +29,13 @@ class ActivationChecklistService
         $emailVerified = $user->email_verified_at !== null;
         $requiredComplete = $profile instanceof MatrimonyProfile && $this->requiredFieldsComplete($profile);
         $locationValid = $profile instanceof MatrimonyProfile && $this->locationValid($profile);
+        $pendingLocation = $this->pendingLocationPayload($draft);
+        $locationStatus = $locationValid ? 'complete' : ($pendingLocation !== null ? 'pending' : 'missing');
+        $locationMessage = $locationValid
+            ? 'Final active location selected'
+            : ($pendingLocation !== null
+                ? 'Location approval pending; profile will not be searchable until approved'
+                : 'Add an approved final location');
         $photoUploaded = $profile instanceof MatrimonyProfile && $this->photoUploaded($profile);
         $photoApproved = $profile instanceof MatrimonyProfile && $this->photoApproved($profile);
         $governanceClear = ! ($profile instanceof MatrimonyProfile) || $this->governanceClear($profile);
@@ -39,7 +47,7 @@ class ActivationChecklistService
             $this->item('account_details_complete', 'Account details complete', $accountComplete, true, $accountComplete ? 'complete' : 'missing', $accountComplete ? 'Creator name added' : 'Add creator name'),
             $this->item('email_added_optional', 'Email added', $emailPresent && $emailVerified, false, $emailPresent ? ($emailVerified ? 'complete' : 'unverified') : 'optional', $emailPresent ? ($emailVerified ? 'Email verified' : 'Email unverified; optional') : 'Email is optional'),
             $this->item('required_fields_complete', 'Required fields complete', $requiredComplete, true, $requiredComplete ? 'complete' : 'missing', $requiredComplete ? 'Required profile fields complete' : 'Required profile fields are missing'),
-            $this->item('location_valid', 'Location valid', $locationValid, true, $locationValid ? 'complete' : 'missing', $locationValid ? 'Final active location selected' : 'Add an approved final location'),
+            $this->item('location_valid', 'Location valid', $locationValid, true, $locationStatus, $locationMessage),
             $this->item('photo_uploaded', 'Photo uploaded', $photoUploaded, true, $photoUploaded ? 'complete' : 'missing', $photoUploaded ? 'Photo uploaded' : 'Upload profile photo'),
             $this->item('photo_approved', 'Photo approved', $photoApproved, true, $photoApproved ? 'complete' : ($photoUploaded ? 'pending' : 'missing'), $photoApproved ? 'Photo approved' : ($photoUploaded ? 'Photo approval pending' : 'Upload a photo for approval')),
             $this->item('governance_clear', 'Governance clear', $governanceClear, true, $governanceClear ? 'complete' : 'pending', $governanceClear ? 'No pending governance conflict' : 'Governance review pending'),
@@ -64,13 +72,15 @@ class ActivationChecklistService
             && $this->governanceClear($profile);
     }
 
-    public function profileSummary(?MatrimonyProfile $profile, ?User $user = null): ?array
+    public function profileSummary(?MatrimonyProfile $profile, ?User $user = null, ?MobileOnboardingDraft $draft = null): ?array
     {
         if (! $profile instanceof MatrimonyProfile) {
             return null;
         }
 
         $user ??= $profile->user;
+        $locationValid = $this->locationValid($profile);
+        $pendingLocation = $this->pendingLocationPayload($draft);
 
         return [
             'id' => (int) $profile->id,
@@ -79,7 +89,31 @@ class ActivationChecklistService
             'is_searchable' => $user instanceof User ? $this->isSearchable($user, $profile) : false,
             'photo_uploaded' => $this->photoUploaded($profile),
             'photo_approved' => $this->photoApproved($profile),
-            'location_valid' => $this->locationValid($profile),
+            'location_valid' => $locationValid,
+            'location_status' => $locationValid ? 'complete' : ($pendingLocation !== null ? 'pending' : 'missing'),
+            'pending_location' => $pendingLocation,
+        ];
+    }
+
+    public function pendingLocationPayload(?MobileOnboardingDraft $draft): ?array
+    {
+        $data = $draft?->draft_data;
+        $location = is_array($data) ? ($data['location'] ?? []) : [];
+        if (! is_array($location)) {
+            return null;
+        }
+
+        $requestId = $location['pending_location_request_id'] ?? null;
+        $status = trim((string) ($location['pending_location_status'] ?? ''));
+        if (($requestId === null || $requestId === '') && $status !== 'pending') {
+            return null;
+        }
+
+        return [
+            'request_id' => $requestId !== null && $requestId !== '' ? (int) $requestId : null,
+            'label' => $location['pending_location_label'] ?? null,
+            'status' => $status !== '' ? $status : 'pending',
+            'type' => $location['pending_location_type'] ?? null,
         ];
     }
 

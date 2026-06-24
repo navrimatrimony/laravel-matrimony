@@ -252,7 +252,7 @@ class MobileOnboardingPhase3ApiTest extends TestCase
     {
         $user = $this->verifiedAccount();
         Sanctum::actingAs($user);
-        [$religion, $caste] = $this->religionCasteFixture();
+        [$religion, $caste, $subCaste] = $this->religionCasteFixture();
         $genderId = $this->gender('male');
         $maritalStatusId = $this->maritalStatus('never_married');
         $dietId = $this->diet('veg');
@@ -267,6 +267,7 @@ class MobileOnboardingPhase3ApiTest extends TestCase
             'marital_status_id' => $maritalStatusId,
             'religion_id' => $religion->id,
             'caste_id' => $caste->id,
+            'sub_caste_id' => $subCaste->id,
             'location_id' => $location->id,
             'highest_education' => 'B.E.',
             'occupation_master_id' => $occupation->id,
@@ -280,8 +281,9 @@ class MobileOnboardingPhase3ApiTest extends TestCase
             'completed_steps' => ['account', 'profile_for_whom'],
             'draft_data' => [
                 'religion_caste' => [
-                    'same_religion_expected' => true,
-                    'same_caste_expected' => false,
+                    'religion_strictness' => 'required',
+                    'caste_strictness' => 'preferred',
+                    'sub_caste_strictness' => 'open',
                 ],
             ],
             'started_at' => now(),
@@ -290,11 +292,15 @@ class MobileOnboardingPhase3ApiTest extends TestCase
         $preview = $this->getJson('/api/v1/onboarding/preferences/auto-draft/preview')
             ->assertOk();
         $preview->assertJsonPath('source', 'auto_from_registration')
-            ->assertJsonPath('strictness.religion', 'must_match')
-            ->assertJsonPath('strictness.caste', 'open')
+            ->assertJsonPath('strictness.religion', 'required')
+            ->assertJsonPath('strictness.caste', 'preferred')
+            ->assertJsonPath('strictness.sub_caste', 'open')
+            ->assertJsonPath('preference_strictness.religion', 'must_match')
+            ->assertJsonPath('preference_strictness.caste', 'preferred')
+            ->assertJsonPath('preference_strictness.sub_caste', 'open')
             ->assertJsonPath('strictness.education', 'preferred')
             ->assertJsonPath('preferences.preferred_religion_ids.0', $religion->id)
-            ->assertJsonPath('preferences.preferred_caste_ids', [])
+            ->assertJsonPath('preferences.preferred_caste_ids.0', $caste->id)
             ->assertJsonPath('preferences.preferred_education_degree_ids.0', $degree->id)
             ->assertJsonPath('preferences.preferred_occupation_master_ids.0', $occupation->id);
 
@@ -303,7 +309,10 @@ class MobileOnboardingPhase3ApiTest extends TestCase
         ])->assertOk();
         $persist->assertJsonPath('success', true)
             ->assertJsonPath('metadata.source', 'auto_from_registration')
-            ->assertJsonPath('metadata.strictness.religion', 'must_match')
+            ->assertJsonPath('metadata.strictness.religion', 'required')
+            ->assertJsonPath('metadata.strictness.caste', 'preferred')
+            ->assertJsonPath('metadata.strictness.sub_caste', 'open')
+            ->assertJsonPath('preference_strictness.religion', 'must_match')
             ->assertJsonPath('editable', true);
 
         $this->assertDatabaseHas('partner_preference_metadata', [
@@ -315,7 +324,7 @@ class MobileOnboardingPhase3ApiTest extends TestCase
             'profile_id' => $profile->id,
             'religion_id' => $religion->id,
         ]);
-        $this->assertDatabaseMissing('profile_preferred_castes', [
+        $this->assertDatabaseHas('profile_preferred_castes', [
             'profile_id' => $profile->id,
             'caste_id' => $caste->id,
         ]);

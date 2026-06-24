@@ -63,6 +63,7 @@ class RegistrationPartnerPreferenceService
             'can_persist' => true,
             'missing_fields' => $generated['missing_fields'],
             'strictness' => $generated['strictness'],
+            'preference_strictness' => $generated['preference_strictness'],
             'preferences' => $generated['preferences'],
         ];
     }
@@ -123,6 +124,7 @@ class RegistrationPartnerPreferenceService
             'source' => self::SOURCE,
             'preferences' => $validatedRow,
             'metadata' => $this->metadataPayload($metadata),
+            'preference_strictness' => $generated['preference_strictness'],
             'editable' => true,
         ];
     }
@@ -164,7 +166,7 @@ class RegistrationPartnerPreferenceService
     }
 
     /**
-     * @return array{preferences: array<string, mixed>, strictness: array<string, string>, missing_fields: array<int, string>}
+     * @return array{preferences: array<string, mixed>, strictness: array<string, string>, preference_strictness: array<string, string>, missing_fields: array<int, string>}
      */
     private function generate(MatrimonyProfile $profile, ?MobileOnboardingDraft $draft): array
     {
@@ -172,6 +174,7 @@ class RegistrationPartnerPreferenceService
 
         $preferences = PartnerPreferenceSuggestionService::suggestForProfile($profile);
         $strictness = [];
+        $preferenceStrictness = [];
         $missing = [];
 
         if ($profile->date_of_birth === null) {
@@ -188,7 +191,9 @@ class RegistrationPartnerPreferenceService
         $this->applyCommunityPreference(
             $preferences,
             $strictness,
+            $preferenceStrictness,
             $draftReligion,
+            'religion_strictness',
             'same_religion_expected',
             'preferred_religion_ids',
             'religion',
@@ -197,14 +202,23 @@ class RegistrationPartnerPreferenceService
         $this->applyCommunityPreference(
             $preferences,
             $strictness,
+            $preferenceStrictness,
             $draftReligion,
+            'caste_strictness',
             'same_caste_expected',
             'preferred_caste_ids',
             'caste',
             $profile->caste_id ? [(int) $profile->caste_id] : []
         );
 
-        $strictness['sub_caste'] = $this->strictnessFromToggle($draftReligion['same_sub_caste_required'] ?? null, $profile->sub_caste_id !== null);
+        $subCasteStrictness = $this->communityStrictnessEnum(
+            $draftReligion,
+            'sub_caste_strictness',
+            'same_sub_caste_required',
+            $profile->sub_caste_id !== null
+        );
+        $strictness['sub_caste'] = $subCasteStrictness;
+        $preferenceStrictness['sub_caste'] = $this->mappedPreferenceStrictness($subCasteStrictness, $profile->sub_caste_id !== null);
         if ($profile->sub_caste_id === null || $profile->sub_caste_id === '') {
             $missing[] = 'sub_caste_id';
         }
@@ -213,16 +227,20 @@ class RegistrationPartnerPreferenceService
         if ($educationDegree instanceof EducationDegree) {
             $preferences['preferred_education_degree_ids'] = [(int) $educationDegree->id];
             $strictness['education'] = 'preferred';
+            $preferenceStrictness['education'] = 'preferred';
         } else {
             $missing[] = 'education_degree';
             $strictness['education'] = 'open';
+            $preferenceStrictness['education'] = 'open';
         }
 
         if (! empty($profile->occupation_master_id)) {
             $preferences['preferred_occupation_master_ids'] = [(int) $profile->occupation_master_id];
             $strictness['occupation'] = 'preferred';
+            $preferenceStrictness['occupation'] = 'preferred';
         } else {
             $strictness['occupation'] = 'open';
+            $preferenceStrictness['occupation'] = 'open';
         }
 
         $strictness['age'] = ($preferences['preferred_age_min'] ?? null) !== null || ($preferences['preferred_age_max'] ?? null) !== null ? 'preferred' : 'open';
@@ -232,12 +250,16 @@ class RegistrationPartnerPreferenceService
         $strictness['income'] = ($preferences['preferred_income_min'] ?? null) !== null || ($preferences['preferred_income_max'] ?? null) !== null ? 'preferred' : 'open';
         $strictness['diet'] = ($preferences['preferred_diet_ids'] ?? []) !== [] ? 'preferred' : 'open';
         $strictness['gender'] = 'open';
+        foreach (['age', 'height', 'marital_status', 'location', 'income', 'diet', 'gender'] as $key) {
+            $preferenceStrictness[$key] = $strictness[$key];
+        }
 
         unset($preferences['preferred_location_suggestions'], $preferences['preference_preset']);
 
         return [
             'preferences' => $preferences,
             'strictness' => $strictness,
+            'preference_strictness' => $preferenceStrictness,
             'missing_fields' => array_values(array_unique($missing)),
         ];
     }
@@ -261,36 +283,61 @@ class RegistrationPartnerPreferenceService
     private function applyCommunityPreference(
         array &$preferences,
         array &$strictness,
+        array &$preferenceStrictness,
         array $draftData,
+        string $enumKey,
         string $toggleKey,
         string $preferenceKey,
         string $strictnessKey,
         array $profileIds
     ): void {
-        if (array_key_exists($toggleKey, $draftData)) {
-            if ((bool) $draftData[$toggleKey]) {
-                $preferences[$preferenceKey] = $profileIds;
-                $strictness[$strictnessKey] = $profileIds !== [] ? 'must_match' : 'open';
+        $enum = $this->communityStrictnessEnum($draftData, $enumKey, $toggleKey, $profileIds !== []);
+        $strictness[$strictnessKey] = $enum;
+        $preferenceStrictness[$strictnessKey] = $this->mappedPreferenceStrictness($enum, $profileIds !== []);
 
-                return;
-            }
-
+        if ($enum === 'open') {
             $preferences[$preferenceKey] = [];
-            $strictness[$strictnessKey] = 'open';
 
             return;
         }
 
-        $strictness[$strictnessKey] = ($preferences[$preferenceKey] ?? []) !== [] ? 'preferred' : 'open';
+        $preferences[$preferenceKey] = $profileIds;
     }
 
-    private function strictnessFromToggle(mixed $toggle, bool $hasValue): string
+    private function communityStrictnessEnum(array $draftData, string $enumKey, string $legacyToggleKey, bool $hasValue): string
     {
-        if ($toggle === null) {
-            return $hasValue ? 'preferred' : 'open';
+        if (array_key_exists($enumKey, $draftData)) {
+            return $this->normalizeStrictnessEnum($draftData[$enumKey]) ?? ($hasValue ? 'preferred' : 'open');
         }
 
-        return (bool) $toggle && $hasValue ? 'must_match' : 'open';
+        if (array_key_exists($legacyToggleKey, $draftData)) {
+            return (bool) $draftData[$legacyToggleKey] ? 'required' : 'open';
+        }
+
+        return $hasValue ? 'preferred' : 'open';
+    }
+
+    private function normalizeStrictnessEnum(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return match (str_replace('-', '_', strtolower(trim((string) $value)))) {
+            'required', 'must_match' => 'required',
+            'preferred' => 'preferred',
+            'open' => 'open',
+            default => null,
+        };
+    }
+
+    private function mappedPreferenceStrictness(string $strictness, bool $hasValue): string
+    {
+        if ($strictness === 'required') {
+            return $hasValue ? 'must_match' : 'open';
+        }
+
+        return $strictness;
     }
 
     /**

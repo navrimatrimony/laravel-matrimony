@@ -4,8 +4,11 @@ namespace Tests\Feature\Api;
 
 use App\Models\Caste;
 use App\Models\Location;
+use App\Models\LocationOpenPlaceSuggestion;
 use App\Models\MatrimonyProfile;
 use App\Models\MobileOnboardingDraft;
+use App\Models\OccupationCategory;
+use App\Models\OccupationMaster;
 use App\Models\ProfilePhoto;
 use App\Models\Religion;
 use App\Models\SubCaste;
@@ -125,6 +128,9 @@ class MobileOnboardingPhase2ApiTest extends TestCase
                 'religion_id' => $religionOne->id,
                 'caste_id' => $casteOne->id,
                 'sub_caste_id' => $subCasteOne->id,
+                'religion_strictness' => 'required',
+                'caste_strictness' => 'preferred',
+                'sub_caste_strictness' => 'required',
             ],
         ])->assertOk();
 
@@ -141,6 +147,19 @@ class MobileOnboardingPhase2ApiTest extends TestCase
         $draft = MobileOnboardingDraft::query()->where('user_id', $user->id)->firstOrFail();
         $this->assertNull(data_get($draft->draft_data, 'religion_caste.caste_id'));
         $this->assertNull(data_get($draft->draft_data, 'religion_caste.sub_caste_id'));
+        $this->assertSame('required', data_get($draft->draft_data, 'religion_caste.religion_strictness'));
+        $this->assertNull(data_get($draft->draft_data, 'religion_caste.caste_strictness'));
+        $this->assertNull(data_get($draft->draft_data, 'religion_caste.sub_caste_strictness'));
+
+        $this->patchJson('/api/v1/onboarding/draft/religion_caste', [
+            'data' => [
+                'same_religion_required' => true,
+                'same_caste_required' => false,
+            ],
+        ])->assertOk();
+        $draft->refresh();
+        $this->assertSame('required', data_get($draft->draft_data, 'religion_caste.religion_strictness'));
+        $this->assertSame('open', data_get($draft->draft_data, 'religion_caste.caste_strictness'));
 
         $this->patchJson('/api/v1/onboarding/draft/basic_info', [
             'data' => [
@@ -162,6 +181,121 @@ class MobileOnboardingPhase2ApiTest extends TestCase
         ])->assertOk();
         $draft->refresh();
         $this->assertNull(data_get($draft->draft_data, 'career.occupation_master_id'));
+    }
+
+    public function test_pending_location_draft_is_not_profile_location_and_blocks_searchability(): void
+    {
+        $user = $this->verifiedAccount();
+        $profile = MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'location_id' => null,
+            'profile_photo' => 'processed.jpg',
+            'photo_approved' => true,
+        ]);
+        $suggestion = LocationOpenPlaceSuggestion::query()->create([
+            'raw_input' => 'Pending Village',
+            'normalized_input' => 'pending village',
+            'match_type' => 'manual',
+            'status' => 'pending',
+            'usage_count' => 1,
+            'suggested_by' => $user->id,
+        ]);
+        Sanctum::actingAs($user);
+
+        $response = $this->patchJson('/api/v1/onboarding/draft/location', [
+            'data' => [
+                'pending_location_request_id' => $suggestion->id,
+                'pending_location_label' => 'Pending Village',
+                'pending_location_status' => 'pending',
+                'pending_location_type' => 'village',
+            ],
+        ])->assertOk();
+
+        $locationItem = collect($response->json('activation_checklist'))->firstWhere('key', 'location_valid');
+        $this->assertNotNull($locationItem);
+        $this->assertFalse((bool) $locationItem['complete']);
+        $this->assertSame('pending', $locationItem['status']);
+        $this->assertFalse((bool) $this->getJson('/api/v1/onboarding/status')->assertOk()->json('is_searchable'));
+
+        $profile->refresh();
+        $this->assertNull($profile->location_id);
+        $this->assertSame($suggestion->id, $this->getJson('/api/v1/onboarding/status')->json('pending_location.request_id'));
+    }
+
+    public function test_location_profile_save_requires_active_final_node_and_clears_pending_draft(): void
+    {
+        $user = $this->verifiedAccount();
+        Sanctum::actingAs($user);
+        $leaf = $this->locationLeaf(true);
+        $district = Location::query()->findOrFail($leaf->parent_id);
+
+        $this->postJson('/api/v1/onboarding/profile/save-step', [
+            'step' => 'location',
+            'data' => [
+                'location_id' => $district->id,
+            ],
+        ])->assertStatus(422);
+
+        $this->postJson('/api/v1/onboarding/profile/save-step', [
+            'step' => 'location',
+            'data' => [
+                'location_id' => $leaf->id,
+                'pending_location_request_id' => null,
+                'pending_location_label' => null,
+                'pending_location_status' => null,
+                'pending_location_type' => null,
+            ],
+        ])->assertOk();
+
+        $profile = MatrimonyProfile::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertSame($leaf->id, (int) $profile->location_id);
+        $draft = MobileOnboardingDraft::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertNull(data_get($draft->draft_data, 'location.pending_location_request_id'));
+    }
+
+    public function test_family_optional_profile_fields_save_and_sibling_counts_remain_draft_only(): void
+    {
+        $user = $this->verifiedAccount();
+        Sanctum::actingAs($user);
+        $category = OccupationCategory::query()->create([
+            'name' => 'Professional',
+            'sort_order' => 1,
+        ]);
+        $fatherOccupation = OccupationMaster::query()->create([
+            'name' => 'Teacher',
+            'normalized_name' => 'teacher',
+            'category_id' => $category->id,
+            'sort_order' => 1,
+        ]);
+        $motherOccupation = OccupationMaster::query()->create([
+            'name' => 'Doctor',
+            'normalized_name' => 'doctor',
+            'category_id' => $category->id,
+            'sort_order' => 2,
+        ]);
+
+        $this->postJson('/api/v1/onboarding/profile/save-step', [
+            'step' => 'family',
+            'data' => [
+                'father_name' => 'Father Name',
+                'father_occupation_master_id' => $fatherOccupation->id,
+                'mother_name' => 'Mother Name',
+                'mother_occupation_master_id' => $motherOccupation->id,
+                'brothers_count' => 2,
+                'sisters_count' => 1,
+            ],
+        ])->assertOk();
+
+        $profile = MatrimonyProfile::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertSame('Father Name', $profile->father_name);
+        $this->assertSame($fatherOccupation->id, (int) $profile->father_occupation_master_id);
+        $this->assertSame($motherOccupation->id, (int) $profile->mother_occupation_master_id);
+        $this->assertNull($profile->brothers_count);
+        $this->assertNull($profile->sisters_count);
+
+        $draft = MobileOnboardingDraft::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertSame(2, data_get($draft->draft_data, 'family.brothers_count'));
+        $this->assertSame(1, data_get($draft->draft_data, 'family.sisters_count'));
     }
 
     public function test_profile_save_step_uses_mutation_service_and_does_not_duplicate_profile(): void

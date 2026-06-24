@@ -321,10 +321,25 @@ Request:
 
 Server-side dependent clear rules:
 
-- religion changes -> clears caste/sub-caste draft values and related same-caste/sub-caste toggles
-- caste changes -> clears sub-caste draft value and sub-caste required toggle
+- religion changes -> clears caste/sub-caste draft values and related same-caste/sub-caste strictness
+- caste changes -> clears sub-caste draft value and sub-caste strictness
 - never-married marital status -> clears child draft values
 - working-with changes -> clears draft occupation/working-as values
+
+Phase 5C draft alignment:
+
+- `religion_caste` accepts exact strictness enum keys:
+  - `religion_strictness`: `open`, `preferred`, `required`
+  - `caste_strictness`: `open`, `preferred`, `required`
+  - `sub_caste_strictness`: `open`, `preferred`, `required`
+- Backward-compatible booleans `same_religion_required`, `same_caste_required`, `same_sub_caste_required`, `same_religion_expected`, and `same_caste_expected` are normalized internally. Boolean `true` becomes `required`; boolean `false`/`null` becomes `open`.
+- `location` draft may store a pending location request without making it profile-valid:
+  - `pending_location_request_id`
+  - `pending_location_label`
+  - `pending_location_status`: `pending`
+  - `pending_location_type`: `village`, `city`, or `suburb`
+- Pending location draft data must not be saved as `matrimony_profiles.location_id`. Only an approved active final node may be profile-saved as `location_id`.
+- `family` draft accepts optional `brothers_count` and `sisters_count`. These are draft-only in Phase 5C because legacy profile columns are deprecated in favor of the Siblings engine.
 
 ### POST `/api/v1/onboarding/profile/save-step`
 
@@ -349,6 +364,8 @@ Behavior:
 - If the user has no profile and the step is a profile data step, create a draft profile with `MutationService::createDraftProfileForUser()`.
 - Apply writable profile data with `MutationService::applyManualSnapshot()`.
 - Save the same step into `mobile_onboarding_drafts` for resume.
+- Location profile save accepts only active final `addresses` nodes where `hierarchy=village` and `tag` is `city`, `suburban`, or `rural`.
+- Family profile save persists safe parent fields such as father/mother names and occupation IDs through `MutationService`; `brothers_count` and `sisters_count` remain draft-only.
 - Do not send mother tongue, horoscope, astrology, family type, biodata/OCR, partner preference, or arbitrary custom education/occupation text in Phase 2.
 
 Success response:
@@ -396,6 +413,8 @@ Response:
   ]
 }
 ```
+
+If the user has only a pending location request in onboarding draft, `location_valid` remains incomplete and blocking with `status=pending`, and `is_searchable=false`.
 
 ## Smart Onboarding Phase 3
 
@@ -541,6 +560,8 @@ Hierarchy validation:
 - `taluka_id` is required for `village`.
 - `city_id` is required for `suburb`.
 - Requests stay pending and cannot make a profile searchable.
+- Flutter should save the returned pending request into `PATCH /api/v1/onboarding/draft/location` using `pending_location_request_id`, `pending_location_label`, `pending_location_status`, and `pending_location_type`.
+- Pending request resume/status is returned in draft data and as `pending_location` on onboarding status/checklist responses.
 
 ### GET `/api/v1/onboarding/lookups/education`
 
@@ -628,6 +649,10 @@ Response:
   "can_persist": true,
   "missing_fields": [],
   "strictness": {
+    "religion": "required",
+    "caste": "preferred"
+  },
+  "preference_strictness": {
     "religion": "must_match",
     "caste": "preferred"
   },
@@ -637,7 +662,9 @@ Response:
 
 Strictness rules:
 
-- `must_match` is used only for explicit onboarding toggles such as same religion / caste / sub-caste required.
+- `strictness` preserves registration enum values: `required`, `preferred`, or `open`.
+- `preference_strictness` exposes backend matching semantics. `required` maps to `must_match`, `preferred` maps to `preferred`, and `open` maps to `open`.
+- `must_match` is used only when the user explicitly selected `required` for religion, caste, or sub-caste.
 - Inferred age, height, location, education, occupation, income, marital status, and diet defaults are `preferred` or `open`.
 - Existing schema has no persisted `preferred_gender` or `preferred_sub_caste` column; those are represented only in metadata/strictness when relevant.
 
@@ -663,7 +690,7 @@ Metadata:
 
 - `source = auto_from_registration`
 - `generated_from = onboarding`
-- `strictness_json` stores per-field strictness
+- `strictness_json` stores exact registration enum values (`required`, `preferred`, `open`) for religion, caste, and sub-caste when present
 - generated preferences remain editable later through existing preference edit mechanisms
 
 Partner preference missing does not block activation/searchability in Phase 3.
