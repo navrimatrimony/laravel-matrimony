@@ -6,6 +6,8 @@ use App\Http\Controllers\Api\GenderLookupController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\LocationSuggestionController as ApiLocationSuggestionController;
 use App\Http\Controllers\Api\MasterEducationController;
+use App\Http\Controllers\Api\MobileAccountController;
+use App\Http\Controllers\Api\MobileOtpController;
 use App\Http\Controllers\Api\ModerationConfigController;
 use App\Http\Controllers\Api\NearbyProfileController;
 use App\Http\Controllers\Internal\LocationHierarchyController;
@@ -67,6 +69,10 @@ Route::prefix('v1')->group(function () {
 
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/auth/mobile-otp/send', [MobileOtpController::class, 'send']);
+    Route::post('/auth/mobile-otp/verify', [MobileOtpController::class, 'verify']);
+    Route::patch('/account/details', [MobileAccountController::class, 'update'])
+        ->middleware('auth:sanctum');
 
     /*
     |--------------------------------------------------------------------------

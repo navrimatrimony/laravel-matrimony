@@ -71,7 +71,7 @@ class AuthController extends Controller
                 ->get();
 
             foreach ($users as $candidate) {
-                if (Hash::check($password, $candidate->password)) {
+                if (filled($candidate->password) && Hash::check($password, $candidate->password)) {
                     return $candidate;
                 }
             }
@@ -84,7 +84,7 @@ class AuthController extends Controller
                 ->whereRaw('LOWER(email) = ?', [Str::lower($login)])
                 ->first();
 
-            return $candidate && Hash::check($password, $candidate->password)
+            return $candidate && filled($candidate->password) && Hash::check($password, $candidate->password)
                 ? $candidate
                 : null;
         }
@@ -99,7 +99,7 @@ class AuthController extends Controller
 
             if ($byLocalPart->count() === 1) {
                 $candidate = $byLocalPart->first();
-                if ($candidate && Hash::check($password, $candidate->password)) {
+                if ($candidate && filled($candidate->password) && Hash::check($password, $candidate->password)) {
                     return $candidate;
                 }
             }
@@ -111,7 +111,7 @@ class AuthController extends Controller
             ->get();
 
         foreach ($candidates as $candidate) {
-            if (Hash::check($password, $candidate->password)) {
+            if (filled($candidate->password) && Hash::check($password, $candidate->password)) {
                 return $candidate;
             }
         }

@@ -13,9 +13,175 @@ Authorization: Bearer <sanctum_token>
 
 ## Auth
 
+### OTP-first mobile account flow
+
+Phase 1 mobile onboarding uses SMS/mobile OTP first. `users.mobile` is the canonical normalized 10-digit mobile field; there is no separate `mobile_normalized` field in Phase 1. Email and password are optional after OTP verification. Do not create fake email addresses.
+
+WhatsApp alerts are only an opt-in preference in this phase. OTP transport is SMS/mobile OTP, and verifying this flow must not set `whatsapp_verified_at`.
+
+OTP challenges are DB-backed. The backend stores only an OTP hash, never the raw OTP. Local/testing/dev diagnostic responses may include `debug_otp`; production clients must not depend on that key.
+
+### POST `/api/v1/auth/mobile-otp/send`
+
+Creates an SMS OTP challenge for login or registration. The response must not reveal whether the mobile number already belongs to an account.
+
+Request:
+
+```json
+{
+  "mobile": "9876543210",
+  "locale": "mr",
+  "channel": "sms",
+  "purpose": "login_or_register",
+  "terms_accepted": true,
+  "privacy_accepted": true,
+  "terms_version": "2026-06-24",
+  "privacy_version": "2026-06-24",
+  "whatsapp_alerts_opt_in": true
+}
+```
+
+Rules:
+
+- `mobile`: required Indian mobile number; normalized to 10 digits and stored on `users.mobile` only after successful OTP verify.
+- `locale`: nullable, supported values `mr`, `en`.
+- `channel`: nullable, only `sms` is accepted in Phase 1.
+- `purpose`: nullable, only `login_or_register` is accepted in Phase 1.
+- `terms_accepted` and `privacy_accepted`: required accepted values.
+- `terms_version` and `privacy_version`: required strings, max 64.
+- `whatsapp_alerts_opt_in`: nullable boolean; stored as notification preference after successful OTP verify.
+
+Success response: HTTP 200
+
+```json
+{
+  "success": true,
+  "challenge_id": "uuid",
+  "expires_in": 600,
+  "resend_after": 60,
+  "delivery_channel": "sms",
+  "message": "OTP sent"
+}
+```
+
+Cooldown/rate limit response: HTTP 429
+
+```json
+{
+  "success": false,
+  "message": "Please wait before requesting another OTP.",
+  "resend_after": 42
+}
+```
+
+If no SMS provider is configured outside local/testing/dev mode, the endpoint returns HTTP 503.
+
+### POST `/api/v1/auth/mobile-otp/verify`
+
+Verifies the OTP challenge. Existing users with the same normalized mobile are logged in. New mobile numbers create an OTP account shell with `users.mobile`, `mobile_verified_at`, nullable `name`, nullable `email`, and nullable `password`.
+
+Request:
+
+```json
+{
+  "challenge_id": "uuid",
+  "mobile": "9876543210",
+  "otp": "123456"
+}
+```
+
+Rules:
+
+- `challenge_id`: required challenge id returned by send.
+- `mobile`: required; must normalize to the same mobile as the challenge.
+- `otp`: required 6-digit string.
+
+Success response: HTTP 200
+
+```json
+{
+  "success": true,
+  "token": "<plain_text_sanctum_token>",
+  "token_type": "Bearer",
+  "user": {
+    "id": 1,
+    "creator_name": null,
+    "mobile": "9876543210",
+    "mobile_verified_at": "2026-06-24T10:00:00.000000Z",
+    "email": null,
+    "email_verified_at": null,
+    "preferred_locale": "mr"
+  },
+  "account_state": {
+    "is_new_account": true,
+    "has_profile": false,
+    "next_action": "account_details"
+  }
+}
+```
+
+`account_state.next_action` values:
+
+- `account_details`: creator/account name is still missing.
+- `start_onboarding`: account shell is complete and no matrimony profile exists yet.
+- `resume_onboarding`: user already has a matrimony profile.
+
+Invalid/expired OTP response: HTTP 422. Too many OTP attempts response: HTTP 429.
+
+On successful verify, the accepted terms/privacy versions are persisted in `user_consents`.
+
+### PATCH `/api/v1/account/details`
+
+Requires bearer token. Completes or updates account-shell details after OTP verification. This endpoint writes account/user fields only; it must not create or mutate matrimony profile data.
+
+Request:
+
+```json
+{
+  "creator_name": "User Name",
+  "email": "user@example.com",
+  "locale": "mr",
+  "password": "Password value accepted by Laravel password defaults",
+  "password_confirmation": "Password value accepted by Laravel password defaults",
+  "whatsapp_alerts_opt_in": true
+}
+```
+
+Rules:
+
+- `creator_name`: required string, max 255; stored in `users.name`.
+- `email`: nullable email, max 255. If omitted, existing email is preserved. Email conflict is checked only when email is provided.
+- `locale`: nullable, supported values `mr`, `en`; stored in `users.preferred_locale`.
+- `password`: nullable, confirmed, Laravel `Rules\Password::defaults()`.
+- `whatsapp_alerts_opt_in`: nullable boolean notification preference. This does not verify WhatsApp and does not set `whatsapp_verified_at`.
+
+Success response: HTTP 200
+
+```json
+{
+  "success": true,
+  "user": {
+    "id": 1,
+    "creator_name": "User Name",
+    "mobile": "9876543210",
+    "mobile_verified_at": "2026-06-24T10:00:00.000000Z",
+    "email": "user@example.com",
+    "email_verified_at": null,
+    "preferred_locale": "mr"
+  },
+  "account_state": {
+    "is_new_account": false,
+    "has_profile": false,
+    "next_action": "start_onboarding"
+  }
+}
+```
+
+Email conflict response: HTTP 409.
+
 ### POST `/api/v1/register`
 
-Creates an auth user and returns a Sanctum token.
+Legacy password registration endpoint kept for backward compatibility. New mobile onboarding should use the OTP-first flow above.
 
 Request:
 
