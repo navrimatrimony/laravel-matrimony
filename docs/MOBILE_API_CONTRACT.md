@@ -597,6 +597,7 @@ Rules:
 - `father_extra_info`, `mother_extra_info`: nullable string, max 1000
 - `father_contact_1`, `father_contact_2`, `mother_contact_1`, `mother_contact_2`: nullable phone strings, max 20 chars, digits/`+`/spaces/`-`/parentheses only. Returned only in authenticated owner's own profile payload.
 - `father_contact_3`, `mother_contact_3`: same rule, only if the deployment still has those DB columns.
+- `parent_contact_max_slots`: integer capability returned only in authenticated owner's own profile payload. Value is `2` unless a supported parent contact 3 column exists, then `3`.
 - `father_contact_whatsapp_*` and `mother_contact_whatsapp_*` are not accepted by the mobile API.
 - `parents_addresses`: nullable array, max 10 rows. Rows map to governed snapshot key `addresses` with `address_scope=parents`.
 - `parents_addresses.*.id`: nullable integer existing `profile_addresses.id`
@@ -663,7 +664,7 @@ Governance note:
 - Raw legacy `caste` text is not a governed write target.
 - Matrimony gender source is `matrimony_profiles.gender_id`; `users.gender` is not a runtime fallback for profile matching, visibility, comparison, or display.
 - Phase 5B1 + 5D partner expectations listed above flow through the governed partner preference snapshot path, except `preferred_intercaste`, which reuses the existing website community flag service.
-- Parent contact numbers are accepted only for the authenticated owner's edit/read payload: `father_contact_1`, `father_contact_2`, `mother_contact_1`, and `mother_contact_2`. `father_contact_3` and `mother_contact_3` are accepted only on deployments where those DB columns still exist. WhatsApp/contact-preference flags for parent contact fields are not accepted by the mobile API because they are not stored on `matrimony_profiles`.
+- Parent contact numbers are accepted only for the authenticated owner's edit/read payload: `father_contact_1`, `father_contact_2`, `mother_contact_1`, and `mother_contact_2`. `father_contact_3` and `mother_contact_3` are accepted only on deployments where those DB columns still exist. Own profile responses include `parent_contact_max_slots` so mobile can show the correct number of slots. Other-profile detail/list responses must not expose parent contact keys or `parent_contact_max_slots`. WhatsApp/contact-preference flags for parent contact fields are not accepted by the mobile API because they are not stored on `matrimony_profiles`.
 - Parent contact values are private. Other-profile detail/list responses and public display sections must not expose them.
 - Sibling contact numbers, relative contact numbers, contact unlock/payment fields, and preference repeaters are intentionally not accepted in this mobile contract.
 - Sibling and relative contact number columns exist in the Laravel web schema but are not accepted or returned by this mobile contract. Other-profile detail/list responses must not expose sibling or relative contact numbers.
@@ -798,6 +799,7 @@ Success response: HTTP 200
     "mother_extra_info": "Homemaker",
     "mother_contact_1": "9876543212",
     "mother_contact_2": null,
+    "parent_contact_max_slots": 2,
     "family_type_id": 1,
     "family_type_label": "Joint",
     "family_status": "middle_class",
@@ -1177,7 +1179,7 @@ Rules:
 - `address_line` is returned in the authenticated owner's own profile payload and own Basic Details display section. Other-profile profile/display responses must not expose exact address lines.
 - `self_addresses`: same row shape as create. Sending `self_addresses` performs governed sync for `address_scope=self` while preserving existing `parents` address rows by merging them into the outgoing `addresses` snapshot. Omitting `self_addresses` preserves existing self address rows.
 - `parents_addresses`: same row shape as create. Sending `parents_addresses` performs governed sync for `address_scope=parents` while preserving existing `self` address rows by merging them into the outgoing `addresses` snapshot. Omitting `parents_addresses` preserves existing parents address rows.
-- Own profile GET/PUT responses include `profile.self_addresses` and `profile.parents_addresses` for editing. Other-profile detail/list responses must not expose `parents_addresses`, structured self address rows, or exact `address_line` values.
+- Own profile GET/PUT responses include `profile.self_addresses`, `profile.parents_addresses`, and `profile.parent_contact_max_slots` for editing. Other-profile detail/list responses must not expose `parents_addresses`, structured self address rows, exact `address_line` values, parent contact keys, or `parent_contact_max_slots`.
 - `mother_tongue_id`: nullable, must exist as an active `master_mother_tongues.id`
 - `marital_status_id`: nullable, must exist as an active `master_marital_statuses.id`
 - `has_children`: nullable boolean

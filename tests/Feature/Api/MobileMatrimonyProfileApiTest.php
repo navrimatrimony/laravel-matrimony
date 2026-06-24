@@ -1576,6 +1576,110 @@ test('MobileProfile PUT api v1 matrimony-profile syncs structured self and paren
     expect($detailProfileJson)->not->toContain('Updated parents permanent line');
 });
 
+test('MobileProfile PUT api v1 matrimony-profile persists parent contacts for owner only', function () {
+    [$viewerUser, $viewerProfile, $targetUser, $targetProfile] = mobileApiProfileActionPair();
+    unset($viewerProfile);
+
+    Sanctum::actingAs($targetUser);
+
+    $payload = [
+        'father_contact_1' => '9876543210',
+        'father_contact_2' => '+91 98765 43211',
+        'mother_contact_1' => '9876543212',
+        'mother_contact_2' => '9876543213',
+    ];
+
+    if (Schema::hasColumn('matrimony_profiles', 'father_contact_3')) {
+        $payload['father_contact_3'] = '9876543214';
+    }
+    if (Schema::hasColumn('matrimony_profiles', 'mother_contact_3')) {
+        $payload['mother_contact_3'] = '9876543215';
+    }
+
+    $response = $this->putJson('/api/v1/matrimony-profile', $payload);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('profile.father_contact_1', '9876543210')
+        ->assertJsonPath('profile.father_contact_2', '+91 98765 43211')
+        ->assertJsonPath('profile.mother_contact_1', '9876543212')
+        ->assertJsonPath('profile.mother_contact_2', '9876543213')
+        ->assertJsonPath(
+            'profile.parent_contact_max_slots',
+            (Schema::hasColumn('matrimony_profiles', 'father_contact_3') || Schema::hasColumn('matrimony_profiles', 'mother_contact_3')) ? 3 : 2
+        );
+
+    if (array_key_exists('father_contact_3', $payload)) {
+        $response->assertJsonPath('profile.father_contact_3', '9876543214');
+    }
+    if (array_key_exists('mother_contact_3', $payload)) {
+        $response->assertJsonPath('profile.mother_contact_3', '9876543215');
+    }
+
+    $targetProfile->refresh();
+    expect($targetProfile->father_contact_1)->toBe('9876543210');
+    expect($targetProfile->father_contact_2)->toBe('+91 98765 43211');
+    expect($targetProfile->mother_contact_1)->toBe('9876543212');
+    expect($targetProfile->mother_contact_2)->toBe('9876543213');
+    if (array_key_exists('father_contact_3', $payload)) {
+        expect($targetProfile->father_contact_3)->toBe('9876543214');
+    }
+    if (array_key_exists('mother_contact_3', $payload)) {
+        expect($targetProfile->mother_contact_3)->toBe('9876543215');
+    }
+
+    expect(DB::table('matrimony_profiles')
+        ->where('id', $targetProfile->id)
+        ->where('father_contact_1', '9876543210')
+        ->where('father_contact_2', '+91 98765 43211')
+        ->where('mother_contact_1', '9876543212')
+        ->where('mother_contact_2', '9876543213')
+        ->exists())->toBeTrue();
+    if (array_key_exists('father_contact_3', $payload)) {
+        expect(DB::table('matrimony_profiles')
+            ->where('id', $targetProfile->id)
+            ->where('father_contact_3', '9876543214')
+            ->exists())->toBeTrue();
+    }
+    if (array_key_exists('mother_contact_3', $payload)) {
+        expect(DB::table('matrimony_profiles')
+            ->where('id', $targetProfile->id)
+            ->where('mother_contact_3', '9876543215')
+            ->exists())->toBeTrue();
+    }
+
+    $getResponse = $this->getJson('/api/v1/matrimony-profile');
+    $getResponse
+        ->assertOk()
+        ->assertJsonPath('profile.father_contact_1', '9876543210')
+        ->assertJsonPath('profile.father_contact_2', '+91 98765 43211')
+        ->assertJsonPath('profile.mother_contact_1', '9876543212')
+        ->assertJsonPath('profile.mother_contact_2', '9876543213');
+    if (array_key_exists('father_contact_3', $payload)) {
+        $getResponse->assertJsonPath('profile.father_contact_3', '9876543214');
+    }
+    if (array_key_exists('mother_contact_3', $payload)) {
+        $getResponse->assertJsonPath('profile.mother_contact_3', '9876543215');
+    }
+
+    Sanctum::actingAs($viewerUser);
+
+    $detailResponse = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+    $detailResponse->assertOk();
+    $detailProfile = $detailResponse->json('profile');
+    expect(array_key_exists('father_contact_1', $detailProfile))->toBeFalse();
+    expect(array_key_exists('father_contact_2', $detailProfile))->toBeFalse();
+    expect(array_key_exists('father_contact_3', $detailProfile))->toBeFalse();
+    expect(array_key_exists('mother_contact_1', $detailProfile))->toBeFalse();
+    expect(array_key_exists('mother_contact_2', $detailProfile))->toBeFalse();
+    expect(array_key_exists('mother_contact_3', $detailProfile))->toBeFalse();
+    expect(array_key_exists('parent_contact_max_slots', $detailProfile))->toBeFalse();
+
+    $detailProfileJson = json_encode($detailProfile, JSON_THROW_ON_ERROR);
+    expect($detailProfileJson)->not->toContain('9876543210');
+    expect($detailProfileJson)->not->toContain('9876543212');
+});
+
 test('MobileProfile PUT api v1 matrimony-profile persists income engine fields and respects display privacy', function () {
     mobileApiProfileTestSeedCurrentAddressType();
     $user = User::factory()->create(['name' => 'Income Account']);
@@ -2463,14 +2567,6 @@ test('MobileProfile PUT api v1 matrimony-profile accepts remaining edit all scal
     expect($horoscope->navras_name)->toBe('Navras Name');
     expect($horoscope->birth_weekday)->toBe('Monday');
     expect($extended->narrative_about_me)->toBe('I value family, education, and mutual respect.');
-    expect($response->json('profile'))->not->toHaveKeys([
-        'father_contact_1',
-        'father_contact_2',
-        'father_contact_3',
-        'mother_contact_1',
-        'mother_contact_2',
-        'mother_contact_3',
-    ]);
 });
 
 test('MobileProfile PUT api v1 matrimony-profile persists simple partner preferences through governed path', function () {

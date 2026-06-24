@@ -1469,6 +1469,14 @@ class MatrimonyProfileApiController extends Controller
         ));
     }
 
+    private function mobileParentContactMaxSlots(): int
+    {
+        return (
+            Schema::hasColumn('matrimony_profiles', 'father_contact_3')
+            || Schema::hasColumn('matrimony_profiles', 'mother_contact_3')
+        ) ? 3 : 2;
+    }
+
     /**
      * @return array<int, string>
      */
@@ -2444,6 +2452,7 @@ class MatrimonyProfileApiController extends Controller
         ];
 
         $profileData = array_merge($base, $parity);
+        $profileData['parent_contact_max_slots'] = $this->mobileParentContactMaxSlots();
         foreach (['father_contact_3', 'mother_contact_3'] as $contactKey) {
             if (Schema::hasColumn('matrimony_profiles', $contactKey)) {
                 $profileData[$contactKey] = $profile->getAttribute($contactKey);
@@ -2908,6 +2917,7 @@ class MatrimonyProfileApiController extends Controller
             'mother_contact_1',
             'mother_contact_2',
             'mother_contact_3',
+            'parent_contact_max_slots',
         ] as $key) {
             unset($profileData[$key]);
         }
