@@ -462,6 +462,21 @@ Request:
       "sort_order": 0
     }
   ],
+  "relatives": [
+    {
+      "relation_type": "paternal_uncle",
+      "name": "Uncle Name",
+      "occupation": "Engineer",
+      "occupation_master_id": null,
+      "occupation_custom_id": null,
+      "city_id": null,
+      "state_id": null,
+      "district_id": null,
+      "taluka_id": null,
+      "address_line": "Pune",
+      "notes": "Paternal side"
+    }
+  ],
   "other_relatives_text": "Relatives settled in Pune",
   "property_details": "Own house",
   "rashi_id": 1,
@@ -530,6 +545,14 @@ Rules:
 - `siblings.*.notes`: nullable string, max 1000
 - `siblings.*.sort_order`: nullable integer, min 0
 - Send `siblings: []` with `has_siblings: false` to clear sibling rows through the same governed replace behavior used by the Laravel wizard. Omitting `siblings` preserves existing sibling rows.
+- `relatives`: nullable array, max 20 rows. Each row may include `id`, `relation_type`, `name`, `occupation`, `occupation_master_id`, `occupation_custom_id`, `city_id`, `state_id`, `district_id`, `taluka_id`, `address_line`, and `notes`.
+- `relatives.*.relation_type`: nullable but required when the row has other data; one of `paternal_grandfather`, `paternal_grandmother`, `paternal_uncle`, `wife_paternal_uncle`, `paternal_aunt`, `husband_paternal_aunt`, `Cousin`, `maternal_address_ajol`, `maternal_grandfather`, `maternal_grandmother`, `maternal_uncle`, `wife_maternal_uncle`, `maternal_aunt`, `husband_maternal_aunt`, `maternal_cousin`
+- `relatives.*.occupation_master_id`: nullable, must exist in `master_occupations.id`
+- `relatives.*.occupation_custom_id`: nullable, must exist in the logged-in user's `master_occupation_custom.id`; cannot be sent together with `occupation_master_id`
+- `relatives.*.city_id`, `relatives.*.state_id`, `relatives.*.district_id`, `relatives.*.taluka_id`: nullable, must exist in `addresses.id`
+- `relatives.*.name`, `relatives.*.occupation`, `relatives.*.address_line`: nullable string, max 255
+- `relatives.*.notes`: nullable string, max 1000
+- `relatives.*.contact_number`, `relatives.*.contact_number_2`, `relatives.*.contact_number_3`, and `relatives.*.is_primary_contact` are not accepted by the mobile contract. Send `relatives: []` to clear relative rows. Omitting `relatives` preserves existing relative rows.
 - `other_relatives_text`, `property_details`: nullable string, max 4000
 - `rashi_id`, `nakshatra_id`, `gan_id`, `nadi_id`, `yoni_id`, `mangal_dosh_type_id`: nullable active master IDs
 - `varna_id`, `vashya_id`, `rashi_lord_id`: nullable active Ashtakoota master IDs
@@ -561,7 +584,7 @@ Governance note:
 - Matrimony gender source is `matrimony_profiles.gender_id`; `users.gender` is not a runtime fallback for profile matching, visibility, comparison, or display.
 - Phase 5B1 + 5D partner expectations listed above flow through the governed partner preference snapshot path, except `preferred_intercaste`, which reuses the existing website community flag service.
 - Parent contact numbers, sibling contact numbers, relative contact numbers, contact unlock/payment fields, and preference repeaters are intentionally not accepted in this mobile contract.
-- Sibling contact number columns exist in the Laravel web schema but are not accepted or returned by this mobile contract. Other-profile detail/list responses must not expose sibling contact numbers.
+- Sibling and relative contact number columns exist in the Laravel web schema but are not accepted or returned by this mobile contract. Other-profile detail/list responses must not expose sibling or relative contact numbers.
 - Relative repeaters are intentionally deferred until a row-preserving, privacy-safe mobile contract is added.
 
 Success response: HTTP 200
@@ -668,6 +691,26 @@ Success response: HTTP 200
         "address_line": "Pune",
         "notes": "Elder sibling",
         "sort_order": 0
+      }
+    ],
+    "relatives": [
+      {
+        "id": 200,
+        "relation_type": "paternal_uncle",
+        "relation_type_label": "Paternal Uncle",
+        "name": "Uncle Name",
+        "occupation": "Engineer",
+        "occupation_master_id": null,
+        "occupation_master_label": null,
+        "occupation_custom_id": null,
+        "occupation_custom_label": null,
+        "city_id": null,
+        "city_label": null,
+        "state_id": null,
+        "district_id": null,
+        "taluka_id": null,
+        "address_line": "Pune",
+        "notes": "Paternal side"
       }
     ],
     "other_relatives_text": "Relatives settled in Pune",
@@ -929,6 +972,16 @@ Request:
       "sort_order": 0
     }
   ],
+  "relatives": [
+    {
+      "id": 200,
+      "relation_type": "paternal_uncle",
+      "name": "Uncle Name",
+      "occupation": "Engineer",
+      "address_line": "Pune",
+      "notes": "Paternal side"
+    }
+  ],
   "property_details": "Own house",
   "rashi_id": 1,
   "narrative_about_me": "Short profile introduction.",
@@ -988,6 +1041,7 @@ Rules:
 - Family, property, horoscope, and `narrative_about_me` rules are the same as `POST /api/v1/matrimony-profile`.
 - Family income engine keys mirror personal income: `family_income`, `family_income_amount`, `family_income_min_amount`, `family_income_max_amount`, `family_income_period`, `family_income_value_type`, `family_income_currency_id`, and `family_income_private`.
 - Private income flags preserve the values for the owner's edit payload but display sections must not expose exact personal/family income amounts when the corresponding private flag is true.
+- Relatives rules mirror `POST /api/v1/matrimony-profile`. Mobile accepts only safe relative row fields and never accepts or returns relative contact numbers.
 - Sibling rows follow the same `siblings` shape as create. The mobile update contract does not accept sibling contact fields. Sending `siblings` performs governed row sync for that repeater; omitting `siblings` preserves existing sibling rows.
 - Phase 5B1 + 5D partner preferences and `narrative_expectations` follow the same rules as `POST /api/v1/matrimony-profile`.
 - Parent/sibling/relative contact fields and partner preference repeaters are not accepted by this mobile update contract.

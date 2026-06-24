@@ -1671,6 +1671,92 @@ test('MobileProfile detail response does not expose sibling contact numbers to o
     expect(array_key_exists('contact_number_3', $response->json('profile.siblings.0')))->toBeFalse();
 });
 
+test('MobileProfile PUT api v1 matrimony-profile persists syncs relatives and hides contact numbers', function () {
+    [$viewerUser, $viewerProfile, $targetUser, $targetProfile] = mobileApiProfileActionPair();
+    unset($viewerProfile);
+
+    $locationChain = mobileApiProfileTestLocationChain();
+    $occupationMaster = mobileApiProfileTestOccupationMaster('Relative Engineer', 303);
+
+    Sanctum::actingAs($targetUser);
+
+    $response = $this->putJson('/api/v1/matrimony-profile', [
+        'relatives' => [
+            [
+                'relation_type' => 'paternal_uncle',
+                'name' => 'Test Uncle',
+                'occupation' => 'Engineer',
+                'occupation_master_id' => $occupationMaster->id,
+                'city_id' => $locationChain['leaf']->id,
+                'state_id' => $locationChain['state']->id,
+                'district_id' => $locationChain['district']->id,
+                'taluka_id' => $locationChain['taluka']->id,
+                'address_line' => 'Pune relative address',
+                'notes' => 'Paternal side',
+            ],
+            [
+                'relation_type' => 'maternal_aunt',
+                'name' => 'Test Aunt',
+                'occupation' => 'Teacher',
+                'address_line' => 'Mumbai relative address',
+                'notes' => 'Maternal side',
+            ],
+        ],
+    ]);
+
+    $response->assertOk();
+    expect($response->json('profile.relatives'))->toHaveCount(2);
+    expect($response->json('profile.relatives.0.relation_type'))->toBe('paternal_uncle');
+    expect($response->json('profile.relatives.0.name'))->toBe('Test Uncle');
+    expect($response->json('profile.relatives.0.occupation_master_id'))->toBe($occupationMaster->id);
+    expect($response->json('profile.relatives.0.address_line'))->toBe('Pune relative address');
+    expect(array_key_exists('contact_number', $response->json('profile.relatives.0')))->toBeFalse();
+
+    $getResponse = $this->getJson('/api/v1/matrimony-profile');
+    $getResponse->assertOk();
+    expect($getResponse->json('profile.relatives'))->toHaveCount(2);
+
+    $familySection = collect($getResponse->json('display.sections') ?? [])
+        ->firstWhere('key', 'family');
+    $relativesItem = collect($familySection['items'] ?? [])
+        ->firstWhere('label', 'Relatives');
+    expect($relativesItem['value'] ?? null)->toContain('Paternal Uncle');
+    expect($relativesItem['value'] ?? null)->toContain('Test Uncle');
+
+    $firstRelativeId = (int) $response->json('profile.relatives.0.id');
+    $updateResponse = $this->putJson('/api/v1/matrimony-profile', [
+        'relatives' => [
+            [
+                'id' => $firstRelativeId,
+                'relation_type' => 'paternal_uncle',
+                'name' => 'Updated Uncle',
+                'occupation' => 'Business',
+                'address_line' => 'Updated relative address',
+                'notes' => 'Updated notes',
+            ],
+        ],
+    ]);
+
+    $updateResponse->assertOk();
+    expect($updateResponse->json('profile.relatives'))->toHaveCount(1);
+    expect($updateResponse->json('profile.relatives.0.id'))->toBe($firstRelativeId);
+    expect($updateResponse->json('profile.relatives.0.name'))->toBe('Updated Uncle');
+
+    expect(DB::table('profile_relatives')->where('profile_id', $targetProfile->id)->count())->toBe(1);
+
+    DB::table('profile_relatives')
+        ->where('id', $firstRelativeId)
+        ->update(['contact_number' => '9876543210']);
+
+    Sanctum::actingAs($viewerUser);
+
+    $detailResponse = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $detailResponse->assertOk();
+    expect($detailResponse->json('profile.relatives'))->toHaveCount(1);
+    expect(array_key_exists('contact_number', $detailResponse->json('profile.relatives.0')))->toBeFalse();
+});
+
 test('MobileProfile PUT api v1 matrimony-profile can update fields after prior mobile locks', function () {
     mobileApiProfileTestSeedCurrentAddressType();
     $user = User::factory()->create(['name' => 'Repeat Edit Account']);

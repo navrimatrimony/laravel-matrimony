@@ -79,6 +79,7 @@ class MobileProfileDisplayPresenter
             'motherOccupationMaster',
             'motherOccupationCustom',
             'siblings',
+            'relatives.city',
             'children',
             'horoscope.rashi',
             'horoscope.nakshatra',
@@ -911,6 +912,7 @@ class MobileProfileDisplayPresenter
             $this->item('Family Type', $this->labelFrom($profile->familyType), 'family'),
             $this->item('Parents Details', $this->parentsDetails($profile), 'parents'),
             $this->item('Siblings', $this->siblingsLabel($profile), 'siblings'),
+            $this->item('Relatives', $this->relativesLabel($profile), 'relatives'),
             $this->familyIncomeItem($profile),
             $this->item('Property Details', $profile->property_details, 'property'),
             $this->item('Other Relatives', $profile->other_relatives_text, 'relatives'),
@@ -1510,6 +1512,61 @@ class MobileProfileDisplayPresenter
             $sisters > 0 ? $sisters.' Sister'.($sisters === 1 ? '' : 's') : null,
             $others > 0 ? $others.' Sibling'.($others === 1 ? '' : 's') : null,
         ]);
+    }
+
+    private function relativesLabel(MatrimonyProfile $profile): ?string
+    {
+        $relatives = $profile->relatives;
+        if ($relatives === null || $relatives->isEmpty()) {
+            return null;
+        }
+
+        $rows = [];
+        foreach ($relatives->take(3) as $relative) {
+            $relation = $this->relativeRelationTypeLabel($relative->relation_type)
+                ?? $this->cleanString($relative->relation_type);
+            $location = $this->cleanString($relative->address_line)
+                ?? $this->labelFrom($relative->city);
+
+            $row = $this->joinLabels([
+                $relation,
+                $this->cleanString($relative->name),
+                $this->cleanString($relative->occupation),
+                $location,
+            ], ' - ');
+            if ($row !== null) {
+                $rows[] = $row;
+            }
+        }
+
+        $remaining = $relatives->count() - count($rows);
+        if ($remaining > 0) {
+            $rows[] = '+'.$remaining.' more';
+        }
+
+        return $rows !== [] ? implode('; ', $rows) : null;
+    }
+
+    private function relativeRelationTypeLabel(?string $value): ?string
+    {
+        return match ($value) {
+            'paternal_grandfather' => 'Paternal Grandfather',
+            'paternal_grandmother' => 'Paternal Grandmother',
+            'paternal_uncle' => 'Paternal Uncle',
+            'wife_paternal_uncle' => 'Wife of Paternal Uncle',
+            'paternal_aunt' => 'Paternal Aunt',
+            'husband_paternal_aunt' => 'Husband of Paternal Aunt',
+            'Cousin' => 'Cousin',
+            'maternal_address_ajol' => 'Maternal address (Ajol)',
+            'maternal_grandfather' => 'Maternal Grandfather',
+            'maternal_grandmother' => 'Maternal Grandmother',
+            'maternal_uncle' => 'Maternal Uncle',
+            'wife_maternal_uncle' => "Maternal Uncle's wife",
+            'maternal_aunt' => 'Maternal Aunt',
+            'husband_maternal_aunt' => 'Husband of Maternal Aunt',
+            'maternal_cousin' => 'Cousin',
+            default => null,
+        };
     }
 
     private function incomeItem(MatrimonyProfile $profile): ?array

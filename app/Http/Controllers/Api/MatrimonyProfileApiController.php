@@ -69,6 +69,24 @@ class MatrimonyProfileApiController extends Controller
 
     private const MOBILE_SIBLING_MARITAL_STATUSES = ['unmarried', 'married'];
 
+    private const MOBILE_RELATIVE_RELATION_LABELS = [
+        'paternal_grandfather' => 'Paternal Grandfather',
+        'paternal_grandmother' => 'Paternal Grandmother',
+        'paternal_uncle' => 'Paternal Uncle',
+        'wife_paternal_uncle' => 'Wife of Paternal Uncle',
+        'paternal_aunt' => 'Paternal Aunt',
+        'husband_paternal_aunt' => 'Husband of Paternal Aunt',
+        'Cousin' => 'Cousin',
+        'maternal_address_ajol' => 'Maternal address (Ajol)',
+        'maternal_grandfather' => 'Maternal Grandfather',
+        'maternal_grandmother' => 'Maternal Grandmother',
+        'maternal_uncle' => 'Maternal Uncle',
+        'wife_maternal_uncle' => "Maternal Uncle's wife",
+        'maternal_aunt' => 'Maternal Aunt',
+        'husband_maternal_aunt' => 'Husband of Maternal Aunt',
+        'maternal_cousin' => 'Cousin',
+    ];
+
     /**
      * Phase-5B: Build snapshot from API request (same structure as manual). Only keys present in request.
      */
@@ -191,6 +209,10 @@ class MatrimonyProfileApiController extends Controller
             $snapshot['siblings'] = $this->mobileSiblingsSnapshotFromApi($request);
         }
 
+        if ($request->has('relatives')) {
+            $snapshot['relatives'] = $this->mobileRelativesSnapshotFromApi($request);
+        }
+
         if ($this->requestInputKeyExists($request, 'narrative_about_me') || $this->requestInputKeyExists($request, 'narrative_expectations')) {
             $existing = $profile instanceof MatrimonyProfile && Schema::hasTable('profile_extended_attributes')
                 ? DB::table('profile_extended_attributes')->where('profile_id', $profile->id)->first()
@@ -263,6 +285,72 @@ class MatrimonyProfileApiController extends Controller
         }
 
         return $siblings;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function mobileRelativesSnapshotFromApi(Request $request): array
+    {
+        $rows = $request->input('relatives', []);
+        if (! is_array($rows)) {
+            return [];
+        }
+
+        $relatives = [];
+        foreach (array_values($rows) as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $relationType = isset($row['relation_type']) ? trim((string) $row['relation_type']) : null;
+            $relationType = $relationType !== '' ? $relationType : null;
+            $name = trim((string) ($row['name'] ?? ''));
+            $occupation = trim((string) ($row['occupation'] ?? ''));
+            $addressLine = trim((string) ($row['address_line'] ?? ''));
+            $notes = trim((string) ($row['notes'] ?? ''));
+            $cityId = $row['city_id'] ?? null;
+            $stateId = $row['state_id'] ?? null;
+            $districtId = $row['district_id'] ?? null;
+            $talukaId = $row['taluka_id'] ?? null;
+            $isAddressOnly = $relationType === 'maternal_address_ajol';
+
+            $hasMeaningfulData = ($relationType !== null && array_key_exists($relationType, self::MOBILE_RELATIVE_RELATION_LABELS))
+                || $name !== ''
+                || $occupation !== ''
+                || $addressLine !== ''
+                || $notes !== ''
+                || ($cityId !== null && $cityId !== '')
+                || ($stateId !== null && $stateId !== '')
+                || ($districtId !== null && $districtId !== '')
+                || ($talukaId !== null && $talukaId !== '');
+
+            if (! $hasMeaningfulData) {
+                continue;
+            }
+
+            $relative = [
+                'relation_type' => $relationType,
+                'name' => $isAddressOnly ? '' : ($name !== '' ? $name : null),
+                'occupation' => $isAddressOnly ? null : ($occupation !== '' ? $occupation : null),
+                'occupation_master_id' => $isAddressOnly ? null : ($row['occupation_master_id'] ?? null),
+                'occupation_custom_id' => $isAddressOnly ? null : ($row['occupation_custom_id'] ?? null),
+                'city_id' => ($cityId !== null && $cityId !== '') ? (int) $cityId : null,
+                'state_id' => ($stateId !== null && $stateId !== '') ? (int) $stateId : null,
+                'district_id' => ($districtId !== null && $districtId !== '') ? (int) $districtId : null,
+                'taluka_id' => ($talukaId !== null && $talukaId !== '') ? (int) $talukaId : null,
+                'address_line' => $addressLine !== '' ? $addressLine : null,
+                'notes' => $isAddressOnly ? null : ($notes !== '' ? $notes : null),
+            ];
+
+            if (! empty($row['id'])) {
+                $relative['id'] = (int) $row['id'];
+            }
+
+            $relatives[] = $relative;
+        }
+
+        return $relatives;
     }
 
     private function mobilePartnerPreferenceInputPresent(Request $request): bool
@@ -579,6 +667,28 @@ class MatrimonyProfileApiController extends Controller
             'siblings.*.contact_number' => ['prohibited'],
             'siblings.*.contact_number_2' => ['prohibited'],
             'siblings.*.contact_number_3' => ['prohibited'],
+            'relatives' => ['nullable', 'array', 'max:20'],
+            'relatives.*' => ['array'],
+            'relatives.*.id' => ['nullable', 'integer'],
+            'relatives.*.relation_type' => ['nullable', Rule::in(array_keys(self::MOBILE_RELATIVE_RELATION_LABELS))],
+            'relatives.*.name' => ['nullable', 'string', 'max:255'],
+            'relatives.*.occupation' => ['nullable', 'string', 'max:255'],
+            'relatives.*.occupation_master_id' => ['nullable', 'integer', Rule::exists('master_occupations', 'id')],
+            'relatives.*.occupation_custom_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('master_occupation_custom', 'id')->where(fn ($query) => $query->where('user_id', $request->user()?->id ?? 0)),
+            ],
+            'relatives.*.city_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            'relatives.*.state_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            'relatives.*.district_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            'relatives.*.taluka_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            'relatives.*.address_line' => ['nullable', 'string', 'max:255'],
+            'relatives.*.notes' => ['nullable', 'string', 'max:1000'],
+            'relatives.*.contact_number' => ['prohibited'],
+            'relatives.*.contact_number_2' => ['prohibited'],
+            'relatives.*.contact_number_3' => ['prohibited'],
+            'relatives.*.is_primary_contact' => ['prohibited'],
             'other_relatives_text' => ['nullable', 'string', 'max:4000'],
             'property_details' => ['nullable', 'string', 'max:4000'],
             'rashi_id' => ['nullable', 'integer', Rule::exists('master_rashis', 'id')->where('is_active', true)],
@@ -628,6 +738,7 @@ class MatrimonyProfileApiController extends Controller
             $motherOccupationMasterId = $request->input('mother_occupation_master_id');
             $motherOccupationCustomId = $request->input('mother_occupation_custom_id');
             $siblings = $request->input('siblings', []);
+            $relatives = $request->input('relatives', []);
 
             if ($religionId !== null && $religionId !== '' && $casteId !== null && $casteId !== '') {
                 $casteReligionId = Caste::query()->whereKey((int) $casteId)->value('religion_id');
@@ -664,6 +775,34 @@ class MatrimonyProfileApiController extends Controller
                     $siblingOccupationCustomId = $sibling['occupation_custom_id'] ?? null;
                     if ($siblingOccupationMasterId !== null && $siblingOccupationMasterId !== '' && $siblingOccupationCustomId !== null && $siblingOccupationCustomId !== '') {
                         $validator->errors()->add('siblings.'.$index.'.occupation_custom_id', 'Select either a listed sibling occupation or a custom sibling occupation, not both.');
+                    }
+                }
+            }
+
+            if (is_array($relatives)) {
+                foreach ($relatives as $index => $relative) {
+                    if (! is_array($relative)) {
+                        continue;
+                    }
+
+                    $relationType = isset($relative['relation_type']) ? trim((string) $relative['relation_type']) : '';
+                    $hasRelativeData = trim((string) ($relative['name'] ?? '')) !== ''
+                        || trim((string) ($relative['occupation'] ?? '')) !== ''
+                        || trim((string) ($relative['address_line'] ?? '')) !== ''
+                        || trim((string) ($relative['notes'] ?? '')) !== ''
+                        || (($relative['city_id'] ?? null) !== null && ($relative['city_id'] ?? '') !== '')
+                        || (($relative['state_id'] ?? null) !== null && ($relative['state_id'] ?? '') !== '')
+                        || (($relative['district_id'] ?? null) !== null && ($relative['district_id'] ?? '') !== '')
+                        || (($relative['taluka_id'] ?? null) !== null && ($relative['taluka_id'] ?? '') !== '');
+
+                    if ($hasRelativeData && $relationType === '') {
+                        $validator->errors()->add('relatives.'.$index.'.relation_type', 'Select a relative relation type.');
+                    }
+
+                    $relativeOccupationMasterId = $relative['occupation_master_id'] ?? null;
+                    $relativeOccupationCustomId = $relative['occupation_custom_id'] ?? null;
+                    if ($relativeOccupationMasterId !== null && $relativeOccupationMasterId !== '' && $relativeOccupationCustomId !== null && $relativeOccupationCustomId !== '') {
+                        $validator->errors()->add('relatives.'.$index.'.occupation_custom_id', 'Select either a listed relative occupation or a custom relative occupation, not both.');
                     }
                 }
             }
@@ -900,7 +1039,10 @@ class MatrimonyProfileApiController extends Controller
 
     private function mobileSnapshotHasWritableData(array $snapshot): bool
     {
-        foreach ($snapshot as $value) {
+        foreach ($snapshot as $key => $value) {
+            if ($key !== 'core') {
+                return true;
+            }
             if (is_array($value) && $value !== []) {
                 return true;
             }
@@ -955,6 +1097,9 @@ class MatrimonyProfileApiController extends Controller
             'siblings.city',
             'siblings.occupationMaster',
             'siblings.occupationCustom',
+            'relatives.city',
+            'relatives.occupationMaster',
+            'relatives.occupationCustom',
         ];
 
         $fresh = $profile->fresh($relations);
@@ -1444,6 +1589,9 @@ class MatrimonyProfileApiController extends Controller
             'siblings.city',
             'siblings.occupationMaster',
             'siblings.occupationCustom',
+            'relatives.city',
+            'relatives.occupationMaster',
+            'relatives.occupationCustom',
             'horoscope.rashi',
             'horoscope.nakshatra',
             'horoscope.gan',
@@ -1481,6 +1629,7 @@ class MatrimonyProfileApiController extends Controller
         $incomeCurrency = $profile->incomeCurrency;
         $familyIncomeCurrency = $profile->familyIncomeCurrency ?? $incomeCurrency;
         $siblings = $this->mobileSiblingRows($profile);
+        $relatives = $this->mobileRelativeRows($profile);
 
         $base = $profile->toArray();
         $parity = [
@@ -1577,6 +1726,7 @@ class MatrimonyProfileApiController extends Controller
             'family_income_display_label' => $this->mobileIncomeDisplayLabel($profile, 'family_income', $familyIncomeCurrency),
             'has_siblings' => $profile->has_siblings,
             'siblings' => $siblings,
+            'relatives' => $relatives,
             'other_relatives_text' => $profile->other_relatives_text,
             'property_details' => $profile->property_details,
             'income_range_id' => $profile->income_range_id,
@@ -1700,6 +1850,52 @@ class MatrimonyProfileApiController extends Controller
                 ];
             })
             ->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function mobileRelativeRows(MatrimonyProfile $profile): array
+    {
+        $profile->loadMissing([
+            'relatives.city',
+            'relatives.occupationMaster',
+            'relatives.occupationCustom',
+        ]);
+
+        return $profile->relatives
+            ->sortBy(fn ($relative): int => (int) ($relative->id ?? 0))
+            ->values()
+            ->map(function ($relative): array {
+                return [
+                    'id' => $relative->id !== null ? (int) $relative->id : null,
+                    'relation_type' => $relative->relation_type,
+                    'relation_type_label' => $this->relativeRelationTypeLabel($relative->relation_type),
+                    'name' => $relative->name,
+                    'occupation' => $relative->occupation,
+                    'occupation_master_id' => $relative->occupation_master_id !== null ? (int) $relative->occupation_master_id : null,
+                    'occupation_master_label' => $this->masterLookupLabel($relative->occupationMaster),
+                    'occupation_custom_id' => $relative->occupation_custom_id !== null ? (int) $relative->occupation_custom_id : null,
+                    'occupation_custom_label' => $this->masterLookupLabel($relative->occupationCustom),
+                    'city_id' => $relative->city_id !== null ? (int) $relative->city_id : null,
+                    'city_label' => $this->masterLookupLabel($relative->city),
+                    'state_id' => $relative->state_id !== null ? (int) $relative->state_id : null,
+                    'district_id' => $relative->district_id !== null ? (int) $relative->district_id : null,
+                    'taluka_id' => $relative->taluka_id !== null ? (int) $relative->taluka_id : null,
+                    'address_line' => $relative->address_line,
+                    'notes' => $relative->notes,
+                ];
+            })
+            ->all();
+    }
+
+    private function relativeRelationTypeLabel(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return self::MOBILE_RELATIVE_RELATION_LABELS[$value] ?? null;
     }
 
     private function siblingRelationTypeLabel(?string $value): ?string
