@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\LocationSuggestionController as ApiLocationSuggestionController;
 use App\Http\Controllers\Api\MasterEducationController;
 use App\Http\Controllers\Api\MobileAccountController;
+use App\Http\Controllers\Api\MobileOnboardingController;
 use App\Http\Controllers\Api\MobileOtpController;
 use App\Http\Controllers\Api\ModerationConfigController;
 use App\Http\Controllers\Api\NearbyProfileController;
@@ -73,6 +74,14 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/mobile-otp/verify', [MobileOtpController::class, 'verify']);
     Route::patch('/account/details', [MobileAccountController::class, 'update'])
         ->middleware('auth:sanctum');
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/onboarding/start', [MobileOnboardingController::class, 'start']);
+        Route::get('/onboarding/status', [MobileOnboardingController::class, 'status']);
+        Route::get('/onboarding/draft', [MobileOnboardingController::class, 'draft']);
+        Route::patch('/onboarding/draft/{step}', [MobileOnboardingController::class, 'saveDraftStep']);
+        Route::post('/onboarding/profile/save-step', [MobileOnboardingController::class, 'saveProfileStep']);
+        Route::get('/onboarding/activation-checklist', [MobileOnboardingController::class, 'activationChecklist']);
+    });
 
     /*
     |--------------------------------------------------------------------------

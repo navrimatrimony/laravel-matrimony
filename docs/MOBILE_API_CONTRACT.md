@@ -179,6 +179,224 @@ Success response: HTTP 200
 
 Email conflict response: HTTP 409.
 
+## Smart Onboarding Phase 2
+
+Phase 2 is backend-only onboarding draft/resume + status/checklist + governed profile save-step skeleton. Flutter must not decide activation/searchability from local rules; use these backend responses.
+
+Rules:
+
+- One account can have only one candidate matrimony profile. Existing profile means resume/edit that profile; never create a duplicate.
+- `mobile_onboarding_drafts` stores server-side resume metadata only. It is not the authoritative storage for structured matrimony entities.
+- Profile create/update from onboarding must use `MutationService::createDraftProfileForUser()` and `MutationService::applyManualSnapshot()`.
+- Email missing or unverified is optional and non-blocking.
+- `profile_status` is an API alias for the current profile lifecycle state.
+- `is_searchable` is computed by the API. It is not stored in `matrimony_profiles` in Phase 2.
+- Phase 2 does not accept mother tongue, horoscope, astrology, family type, biodata/OCR, or partner preference auto-generation fields.
+- Direct arbitrary education/occupation text is not accepted by onboarding `profile/save-step`; use backend-supported master IDs/options.
+
+Computed `is_searchable` is true only when all of these are true:
+
+- account mobile is verified
+- profile exists
+- profile lifecycle permits public visibility
+- backend required-field policy is complete
+- selected residence location is an active final location node
+- profile photo is uploaded and approved
+- no pending governance conflict / suspended / archived blocker exists
+
+### POST `/api/v1/onboarding/start`
+
+Requires bearer token. Starts or resumes server onboarding draft. Does not create a matrimony profile unless one already exists.
+
+Request:
+
+```json
+{
+  "profile_for_whom": "self"
+}
+```
+
+Allowed `profile_for_whom`: `self`, `son`, `daughter`, `brother`, `sister`, `relative`, `friend`.
+
+The exact mobile value is stored in draft data. Existing `users.registering_for` is mapped for backward compatibility:
+
+- `self` -> `self`
+- `son` / `daughter` -> `parent_guardian`
+- `brother` / `sister` -> `sibling`
+- `relative` -> `relative`
+- `friend` -> `friend`
+
+Success response: HTTP 200
+
+```json
+{
+  "success": true,
+  "draft_id": 1,
+  "profile_id": null,
+  "has_existing_profile": false,
+  "last_completed_step": "profile_for_whom",
+  "current_step": "basic_info",
+  "next_step": "basic_info",
+  "account_state": {},
+  "activation_checklist": [],
+  "profile_status": null,
+  "is_searchable": false
+}
+```
+
+### GET `/api/v1/onboarding/status`
+
+Requires bearer token. Returns combined account, draft, profile summary, checklist, and computed next step.
+
+Success response: HTTP 200
+
+```json
+{
+  "success": true,
+  "account": {
+    "id": 1,
+    "creator_name": "User Name",
+    "mobile": "9876543210",
+    "mobile_verified_at": "2026-06-24T10:00:00.000000Z",
+    "mobile_verified": true,
+    "creator_name_present": true,
+    "email": null,
+    "email_present": false,
+    "email_verified_at": null,
+    "email_verified": false,
+    "preferred_locale": "mr"
+  },
+  "draft": {
+    "id": 1,
+    "current_step": "basic_info",
+    "last_completed_step": "profile_for_whom",
+    "completed_steps": ["account", "profile_for_whom"],
+    "data": {}
+  },
+  "profile": null,
+  "has_profile": false,
+  "has_existing_profile": false,
+  "profile_status": null,
+  "is_searchable": false,
+  "next_step": "basic_info",
+  "account_state": {},
+  "activation_checklist": []
+}
+```
+
+### GET `/api/v1/onboarding/draft`
+
+Requires bearer token. Finds or creates the server draft, and attaches an existing profile when present. It must not create a duplicate profile.
+
+Response shape:
+
+```json
+{
+  "success": true,
+  "draft": {
+    "id": 1,
+    "current_step": "basic_info",
+    "last_completed_step": "profile_for_whom",
+    "completed_steps": ["account", "profile_for_whom"],
+    "data": {}
+  },
+  "profile": null,
+  "activation_checklist": []
+}
+```
+
+### PATCH `/api/v1/onboarding/draft/{step}`
+
+Requires bearer token. Saves server draft data and advances resume metadata.
+
+Allowed `{step}`: `profile_for_whom`, `basic_info`, `religion_caste`, `location`, `education`, `career`, `lifestyle`, `family`, `photo`.
+
+Request:
+
+```json
+{
+  "data": {}
+}
+```
+
+Server-side dependent clear rules:
+
+- religion changes -> clears caste/sub-caste draft values and related same-caste/sub-caste toggles
+- caste changes -> clears sub-caste draft value and sub-caste required toggle
+- never-married marital status -> clears child draft values
+- working-with changes -> clears draft occupation/working-as values
+
+### POST `/api/v1/onboarding/profile/save-step`
+
+Requires bearer token. Persists a supported onboarding step to the actual matrimony profile through the governed mutation path.
+
+Supported Phase 2 steps: `profile_for_whom`, `basic_info`, `religion_caste`, `location`, `education`, `career`, `lifestyle`, `family`.
+
+Request:
+
+```json
+{
+  "step": "basic_info",
+  "data": {
+    "full_name": "Candidate Name"
+  }
+}
+```
+
+Behavior:
+
+- If the user already has a profile, update that profile.
+- If the user has no profile and the step is a profile data step, create a draft profile with `MutationService::createDraftProfileForUser()`.
+- Apply writable profile data with `MutationService::applyManualSnapshot()`.
+- Save the same step into `mobile_onboarding_drafts` for resume.
+- Do not send mother tongue, horoscope, astrology, family type, biodata/OCR, partner preference, or arbitrary custom education/occupation text in Phase 2.
+
+Success response:
+
+```json
+{
+  "success": true,
+  "profile": {
+    "id": 1,
+    "profile_status": "draft",
+    "lifecycle_state": "draft",
+    "is_searchable": false,
+    "photo_uploaded": false,
+    "photo_approved": false,
+    "location_valid": false
+  },
+  "draft": {},
+  "activation_checklist": [],
+  "next_step": "location"
+}
+```
+
+### GET `/api/v1/onboarding/activation-checklist`
+
+Requires bearer token. Returns backend-owned activation/searchability checklist.
+
+Response:
+
+```json
+{
+  "success": true,
+  "profile_status": "draft",
+  "is_searchable": false,
+  "items": [
+    {"key":"mobile_verified","label":"Mobile verified","complete":true,"blocking":true,"status":"complete","message":"Mobile verified"},
+    {"key":"account_details_complete","label":"Account details complete","complete":true,"blocking":true,"status":"complete","message":"Creator name added"},
+    {"key":"email_added_optional","label":"Email added","complete":false,"blocking":false,"status":"optional","message":"Email is optional"},
+    {"key":"required_fields_complete","label":"Required fields complete","complete":false,"blocking":true,"status":"missing","message":"Required profile fields are missing"},
+    {"key":"location_valid","label":"Location valid","complete":false,"blocking":true,"status":"missing","message":"Add an approved final location"},
+    {"key":"photo_uploaded","label":"Photo uploaded","complete":false,"blocking":true,"status":"missing","message":"Upload profile photo"},
+    {"key":"photo_approved","label":"Photo approved","complete":false,"blocking":true,"status":"missing","message":"Upload a photo for approval"},
+    {"key":"governance_clear","label":"Governance clear","complete":true,"blocking":true,"status":"complete","message":"No pending governance conflict"},
+    {"key":"profile_active","label":"Profile active","complete":false,"blocking":false,"status":"draft","message":"Profile is not active yet"},
+    {"key":"profile_searchable","label":"Profile searchable","complete":false,"blocking":false,"status":"not_searchable","message":"Profile is not searchable yet"}
+  ]
+}
+```
+
 ### POST `/api/v1/register`
 
 Legacy password registration endpoint kept for backward compatibility. New mobile onboarding should use the OTP-first flow above.
