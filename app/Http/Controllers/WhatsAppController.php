@@ -23,8 +23,6 @@ class WhatsAppController extends Controller
         $request->validate([
             'phone' => ['required', 'string', 'max:64'],
             'name' => ['nullable', 'string', 'max:255'],
-            'dob' => ['nullable', 'date'],
-            'marital_status' => ['nullable', 'string', 'max:64'],
         ]);
 
         $phone = $request->input('phone');
@@ -41,8 +39,6 @@ class WhatsAppController extends Controller
         $user = User::create([
             'name' => $request->input('name') ?? '',
             'mobile' => $phone,
-            'dob' => $request->input('dob'),
-            'marital_status' => $request->input('marital_status'),
             'password' => '123456',
             'email' => null,
         ]);
