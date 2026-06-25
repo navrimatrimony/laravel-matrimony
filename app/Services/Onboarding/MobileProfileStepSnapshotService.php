@@ -57,7 +57,7 @@ class MobileProfileStepSnapshotService
     ];
 
     private const STEP_FIELDS = [
-        'profile_for_whom' => ['profile_for_whom'],
+        'profile_for_whom' => ['profile_for_whom', 'gender_id', 'mother_tongue_id'],
         'basic_info' => [
             'full_name',
             'gender_id',
@@ -238,6 +238,8 @@ class MobileProfileStepSnapshotService
         $rules = [
             'profile_for_whom' => [
                 'profile_for_whom' => ['required', 'string', Rule::in(MobileOnboardingDraftService::PROFILE_FOR_WHOM_VALUES)],
+                'gender_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_genders', 'id')->where('is_active', true)],
+                'mother_tongue_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_mother_tongues', 'id')->where('is_active', true)],
             ],
             'basic_info' => [
                 'full_name' => ['sometimes', 'nullable', 'string', 'max:255'],

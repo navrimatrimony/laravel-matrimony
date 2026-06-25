@@ -29,6 +29,8 @@ class MobileOnboardingController extends Controller
     {
         $validated = $request->validate([
             'profile_for_whom' => ['required', 'string', Rule::in(MobileOnboardingDraftService::PROFILE_FOR_WHOM_VALUES)],
+            'gender_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_genders', 'id')->where('is_active', true)],
+            'mother_tongue_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_mother_tongues', 'id')->where('is_active', true)],
         ]);
 
         /** @var User $user */
@@ -36,9 +38,17 @@ class MobileOnboardingController extends Controller
         $profileForWhom = (string) $validated['profile_for_whom'];
         $this->persistRegisteringFor($user, $profileForWhom);
 
-        $draft = $this->draftService->saveStep($user->fresh(), 'profile_for_whom', [
+        $draftData = [
             'profile_for_whom' => $profileForWhom,
-        ]);
+        ];
+        if (array_key_exists('gender_id', $validated)) {
+            $draftData['gender_id'] = $validated['gender_id'];
+        }
+        if (array_key_exists('mother_tongue_id', $validated)) {
+            $draftData['mother_tongue_id'] = $validated['mother_tongue_id'];
+        }
+
+        $draft = $this->draftService->saveStep($user->fresh(), 'profile_for_whom', $draftData);
 
         $payload = $this->statusService->build($user->fresh(), $draft);
 
