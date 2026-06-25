@@ -7,6 +7,7 @@ use App\Models\EducationCategory;
 use App\Models\EducationDegree;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
+use App\Models\MasterMotherTongue;
 use App\Models\MobileOnboardingDraft;
 use App\Models\OccupationCategory;
 use App\Models\OccupationMaster;
@@ -24,23 +25,31 @@ class MobileOnboardingPhase3ApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_onboarding_lookup_endpoints_require_authentication(): void
+    public function test_onboarding_lookup_endpoints_except_bootstrap_require_authentication(): void
     {
-        $this->getJson('/api/v1/onboarding/lookups/bootstrap')->assertUnauthorized();
+        $this->getJson('/api/v1/onboarding/lookups/bootstrap')->assertOk();
         $this->getJson('/api/v1/onboarding/lookups/religions')->assertUnauthorized();
         $this->postJson('/api/v1/onboarding/location-suggestions', [])->assertUnauthorized();
         $this->getJson('/api/v1/onboarding/preferences/auto-draft/preview')->assertUnauthorized();
     }
 
-    public function test_bootstrap_returns_profile_for_whom_with_gender_mode(): void
+    public function test_public_bootstrap_returns_profile_for_whom_gender_mode_and_mother_tongues(): void
     {
-        Sanctum::actingAs($this->verifiedAccount());
+        $motherTongue = new MasterMotherTongue();
+        $motherTongue->forceFill([
+            'key' => 'marathi',
+            'label' => 'Marathi',
+            'label_mr' => 'मराठी',
+            'is_active' => true,
+        ])->save();
 
         $response = $this->getJson('/api/v1/onboarding/lookups/bootstrap?locale=mr')->assertOk();
 
         $response->assertJsonPath('success', true)
             ->assertJsonPath('profile_for_whom.0.key', 'self')
             ->assertJsonPath('profile_for_whom.0.gender_mode', 'ask')
+            ->assertJsonPath('mother_tongues.0.key', 'marathi')
+            ->assertJsonPath('mother_tongues.0.label', 'मराठी')
             ->assertJsonPath('children_rules.hide_for_keys.0', 'never_married');
     }
 

@@ -74,6 +74,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/auth/mobile-otp/send', [MobileOtpController::class, 'send']);
     Route::post('/auth/mobile-otp/verify', [MobileOtpController::class, 'verify']);
+    Route::get('/onboarding/lookups/bootstrap', [OnboardingLookupController::class, 'bootstrap']);
     Route::patch('/account/details', [MobileAccountController::class, 'update'])
         ->middleware('auth:sanctum');
     Route::middleware('auth:sanctum')->group(function () {
@@ -83,7 +84,6 @@ Route::prefix('v1')->group(function () {
         Route::patch('/onboarding/draft/{step}', [MobileOnboardingController::class, 'saveDraftStep']);
         Route::post('/onboarding/profile/save-step', [MobileOnboardingController::class, 'saveProfileStep']);
         Route::get('/onboarding/activation-checklist', [MobileOnboardingController::class, 'activationChecklist']);
-        Route::get('/onboarding/lookups/bootstrap', [OnboardingLookupController::class, 'bootstrap']);
         Route::get('/onboarding/lookups/religions', [OnboardingLookupController::class, 'religions']);
         Route::get('/onboarding/lookups/castes', [OnboardingLookupController::class, 'castes']);
         Route::get('/onboarding/lookups/sub-castes', [OnboardingLookupController::class, 'subCastes']);

@@ -13,6 +13,7 @@ use App\Models\MasterDrinkingStatus;
 use App\Models\MasterGender;
 use App\Models\MasterIncomeCurrency;
 use App\Models\MasterMaritalStatus;
+use App\Models\MasterMotherTongue;
 use App\Models\MasterSmokingStatus;
 use App\Models\MobileOnboardingMasterSuggestion;
 use App\Models\OccupationCategory;
@@ -61,6 +62,7 @@ class OnboardingLookupController extends Controller
                 'translation_missing' => false,
             ], self::PROFILE_FOR_WHOM),
             'gender_options' => $this->simpleMasterOptions(MasterGender::class, 'master_genders', $locale, ['label_mr'], ['label'], ['key']),
+            'mother_tongues' => $this->simpleMasterOptions(MasterMotherTongue::class, 'master_mother_tongues', $locale, ['label_mr'], ['label'], ['key']),
             'marital_statuses' => $this->simpleMasterOptions(MasterMaritalStatus::class, 'master_marital_statuses', $locale, ['label_mr'], ['label'], ['key']),
             'children_rules' => [
                 'show_for_keys' => ['divorced', 'annulled', 'separated', 'widowed'],

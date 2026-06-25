@@ -69,6 +69,12 @@ Phase-5 is STRUCTURAL + GOVERNED MUTATION layer only.
 9) Conflict Mandatory on Critical Changes  
 10) All mutations pass through MutationService  
 
+Phase-7A Mobile Onboarding Mother Tongue Addendum:
+- Registration onboarding may collect a single `mother_tongue_id` as part of the mobile `basic_info` step.
+- `mother_tongue_id` must reference one active `master_mother_tongues.id`.
+- Persistence must still flow through the governed mutation layer (`MutationService::createDraftProfileForUser()` / `MutationService::applyManualSnapshot()`); direct `update()` / `save()` profile writes remain prohibited.
+- This addendum does not authorize mother-tongue multi-select, JSON blobs, partner-preference mother-tongue storage, horoscope/astrology/family-type onboarding, biodata/OCR onboarding, or any new backend write path outside governed services.
+
 ============================================================
 3️⃣ FINAL ARCHITECTURE MODEL (FROZEN)
 ============================================================

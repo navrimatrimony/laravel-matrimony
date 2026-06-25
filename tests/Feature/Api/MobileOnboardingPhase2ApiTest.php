@@ -6,6 +6,7 @@ use App\Models\Caste;
 use App\Models\Location;
 use App\Models\LocationOpenPlaceSuggestion;
 use App\Models\MatrimonyProfile;
+use App\Models\MasterMotherTongue;
 use App\Models\MobileOnboardingDraft;
 use App\Models\OccupationCategory;
 use App\Models\OccupationMaster;
@@ -301,6 +302,11 @@ class MobileOnboardingPhase2ApiTest extends TestCase
     public function test_profile_save_step_uses_mutation_service_and_does_not_duplicate_profile(): void
     {
         $user = $this->verifiedAccount();
+        $motherTongue = MasterMotherTongue::query()->create([
+            'key' => 'marathi',
+            'label' => 'Marathi',
+            'is_active' => true,
+        ]);
         Sanctum::actingAs($user);
 
         $mock = Mockery::mock(MutationService::class)->makePartial();
@@ -312,6 +318,7 @@ class MobileOnboardingPhase2ApiTest extends TestCase
             'step' => 'basic_info',
             'data' => [
                 'full_name' => 'Candidate Name',
+                'mother_tongue_id' => $motherTongue->id,
             ],
         ])->assertOk();
 
@@ -320,6 +327,10 @@ class MobileOnboardingPhase2ApiTest extends TestCase
             ->assertJsonPath('profile.is_searchable', false);
 
         $this->assertSame(1, MatrimonyProfile::query()->where('user_id', $user->id)->count());
+        $this->assertDatabaseHas('matrimony_profiles', [
+            'user_id' => $user->id,
+            'mother_tongue_id' => $motherTongue->id,
+        ]);
 
         $this->postJson('/api/v1/onboarding/profile/save-step', [
             'step' => 'basic_info',
@@ -413,13 +424,6 @@ class MobileOnboardingPhase2ApiTest extends TestCase
             'step' => 'career',
             'data' => [
                 'occupation' => 'Arbitrary Occupation',
-            ],
-        ])->assertStatus(422);
-
-        $this->postJson('/api/v1/onboarding/profile/save-step', [
-            'step' => 'basic_info',
-            'data' => [
-                'mother_tongue_id' => 1,
             ],
         ])->assertStatus(422);
     }

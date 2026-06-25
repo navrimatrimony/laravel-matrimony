@@ -32,7 +32,6 @@ class MobileProfileStepSnapshotService
 
     private const FORBIDDEN_PHASE_2_KEYS = [
         'mother_tongue',
-        'mother_tongue_id',
         'family_type',
         'family_type_id',
         'horoscope',
@@ -62,6 +61,7 @@ class MobileProfileStepSnapshotService
         'basic_info' => [
             'full_name',
             'gender_id',
+            'mother_tongue_id',
             'date_of_birth',
             'height_cm',
             'marital_status_id',
@@ -242,6 +242,7 @@ class MobileProfileStepSnapshotService
             'basic_info' => [
                 'full_name' => ['sometimes', 'nullable', 'string', 'max:255'],
                 'gender_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_genders', 'id')->where('is_active', true)],
+                'mother_tongue_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_mother_tongues', 'id')->where('is_active', true)],
                 'date_of_birth' => ['sometimes', 'nullable', 'date'],
                 'height_cm' => ['sometimes', 'nullable', 'integer', 'min:50', 'max:250'],
                 'marital_status_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_marital_statuses', 'id')->where('is_active', true)],

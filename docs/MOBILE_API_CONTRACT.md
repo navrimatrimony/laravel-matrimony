@@ -191,7 +191,7 @@ Rules:
 - Email missing or unverified is optional and non-blocking.
 - `profile_status` is an API alias for the current profile lifecycle state.
 - `is_searchable` is computed by the API. It is not stored in `matrimony_profiles` in Phase 2.
-- Phase 2 does not accept mother tongue, horoscope, astrology, family type, biodata/OCR, or partner preference auto-generation fields.
+- Phase 2 accepts single-value `mother_tongue_id` on `basic_info` only. It does not accept horoscope, astrology, family type, biodata/OCR, or partner preference auto-generation fields.
 - Direct arbitrary education/occupation text is not accepted by onboarding `profile/save-step`; use backend-supported master IDs/options.
 
 Computed `is_searchable` is true only when all of these are true:
@@ -366,7 +366,7 @@ Behavior:
 - Save the same step into `mobile_onboarding_drafts` for resume.
 - Location profile save accepts only active final `addresses` nodes where `hierarchy=village` and `tag` is `city`, `suburban`, or `rural`.
 - Family profile save persists safe parent fields such as father/mother names and occupation IDs through `MutationService`; `brothers_count` and `sisters_count` remain draft-only.
-- Do not send mother tongue, horoscope, astrology, family type, biodata/OCR, partner preference, or arbitrary custom education/occupation text in Phase 2.
+- `basic_info` may send `mother_tongue_id` as a single active `master_mother_tongues.id`. Do not send horoscope, astrology, family type, biodata/OCR, partner preference, or arbitrary custom education/occupation text in Phase 2.
 
 Success response:
 
@@ -418,13 +418,13 @@ If the user has only a pending location request in onboarding draft, `location_v
 
 ## Smart Onboarding Phase 3
 
-Phase 3 is Laravel-backend-only support for mobile SmartPickerPanel lookups, pending master/location suggestions, and partner preference auto-draft generation. All endpoints below require Sanctum auth and are intended for users who already passed the OTP-first account flow.
+Phase 3 is Laravel-backend-only support for mobile SmartPickerPanel lookups, pending master/location suggestions, and partner preference auto-draft generation. Except public read-only bootstrap, endpoints below require Sanctum auth and are intended for users who already passed the OTP-first account flow.
 
 Non-goals:
 
 - no Flutter SmartPicker implementation in this phase
 - no biodata/OCR
-- no mother tongue, horoscope, astrology, or family type in registration onboarding
+- single-value mother tongue is allowed in registration onboarding as `basic_info.mother_tongue_id`; no horoscope, astrology, or family type
 - no stored `matrimony_profiles.is_searchable` column
 - no long partner preference onboarding form
 
@@ -479,7 +479,7 @@ Returns small registration config: `profile_for_whom`, gender options, marital s
 
 `profile_for_whom` values are: `self`, `son`, `daughter`, `brother`, `sister`, `relative`, `friend`. Each row includes `gender_mode` (`male`, `female`, or `ask`).
 
-Bootstrap intentionally excludes mother tongue, horoscope, astrology, and family type.
+Bootstrap intentionally excludes horoscope, astrology, and family type. It includes read-only `mother_tongues` so the pre-OTP profile-for-whom screen can collect one active master value.
 
 ### GET `/api/v1/onboarding/lookups/religions`
 
