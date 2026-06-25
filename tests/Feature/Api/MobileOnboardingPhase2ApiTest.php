@@ -342,6 +342,46 @@ class MobileOnboardingPhase2ApiTest extends TestCase
         $this->assertSame(1, MatrimonyProfile::query()->where('user_id', $user->id)->count());
     }
 
+    public function test_basic_info_profile_save_carries_mother_tongue_from_profile_for_whom_draft(): void
+    {
+        $user = $this->verifiedAccount();
+        $motherTongue = MasterMotherTongue::query()->create([
+            'key' => 'marathi',
+            'label' => 'Marathi',
+            'is_active' => true,
+        ]);
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/onboarding/start', [
+            'profile_for_whom' => 'relative',
+            'mother_tongue_id' => $motherTongue->id,
+        ])->assertOk();
+
+        $this->patchJson('/api/v1/onboarding/draft/basic_info', [
+            'data' => [
+                'full_name' => 'Candidate Name',
+                'date_of_birth' => '1997-05-15',
+                'height_cm' => 165,
+            ],
+        ])->assertOk();
+
+        $draft = MobileOnboardingDraft::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertSame($motherTongue->id, (int) data_get($draft->draft_data, 'profile_for_whom.mother_tongue_id'));
+        $this->assertSame($motherTongue->id, (int) data_get($draft->draft_data, 'basic_info.mother_tongue_id'));
+
+        $this->postJson('/api/v1/onboarding/profile/save-step', [
+            'step' => 'basic_info',
+            'data' => [
+                'full_name' => 'Candidate Name',
+                'date_of_birth' => '1997-05-15',
+                'height_cm' => 165,
+            ],
+        ])->assertOk();
+
+        $profile = MatrimonyProfile::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertSame($motherTongue->id, (int) $profile->mother_tongue_id);
+    }
+
     public function test_activation_checklist_blocks_missing_unapproved_photo_and_invalid_location(): void
     {
         $user = $this->verifiedAccount();

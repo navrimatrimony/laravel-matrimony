@@ -88,6 +88,7 @@ class MobileOnboardingController extends Controller
         $data = $validated['data'];
 
         if (in_array($step, MobileProfileStepSnapshotService::PROFILE_STEPS, true)) {
+            $data = $this->carryProfileForWhomBasicsIntoBasicInfo($user, $step, $data);
             $data = $this->snapshotService->validatedData($step, $data, $user);
             if ($step === 'profile_for_whom' && isset($data['profile_for_whom'])) {
                 $this->persistRegisteringFor($user, (string) $data['profile_for_whom']);
@@ -122,7 +123,8 @@ class MobileOnboardingController extends Controller
         /** @var User $user */
         $user = $request->user();
         $step = (string) $validated['step'];
-        $data = $this->snapshotService->validatedData($step, $validated['data'], $user);
+        $data = $this->carryProfileForWhomBasicsIntoBasicInfo($user, $step, $validated['data']);
+        $data = $this->snapshotService->validatedData($step, $data, $user);
 
         if ($step === 'profile_for_whom') {
             $this->persistRegisteringFor($user, (string) $data['profile_for_whom']);
@@ -190,6 +192,31 @@ class MobileOnboardingController extends Controller
         $user->forceFill([
             'registering_for' => $this->draftService->legacyRegisteringFor($profileForWhom),
         ])->save();
+    }
+
+    private function carryProfileForWhomBasicsIntoBasicInfo(User $user, string $step, array $data): array
+    {
+        if ($step !== 'basic_info') {
+            return $data;
+        }
+
+        $existing = $data['mother_tongue_id'] ?? null;
+        if ($existing !== null && $existing !== '') {
+            return $data;
+        }
+
+        $draft = $this->draftService->getForUser($user);
+        $motherTongueId = $draft instanceof \App\Models\MobileOnboardingDraft
+            ? data_get($draft->draft_data, 'profile_for_whom.mother_tongue_id')
+            : null;
+
+        if ($motherTongueId === null || $motherTongueId === '') {
+            return $data;
+        }
+
+        $data['mother_tongue_id'] = $motherTongueId;
+
+        return $data;
     }
 
     private function snapshotHasWritableData(array $snapshot): bool
