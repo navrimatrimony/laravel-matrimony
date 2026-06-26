@@ -46,6 +46,7 @@ Route::get('/internal/location/states', [LocationHierarchyController::class, 'st
 Route::get('/internal/location/districts', [LocationHierarchyController::class, 'districts']);
 Route::get('/internal/location/talukas', [LocationHierarchyController::class, 'talukas']);
 Route::get('/internal/location/cities', [LocationHierarchyController::class, 'cities']);
+Route::get('/internal/location/children', [LocationHierarchyController::class, 'children']);
 Route::post('/internal/location/suggest', [InternalLocationSuggestionController::class, 'store'])
     ->middleware('auth:sanctum');
 
