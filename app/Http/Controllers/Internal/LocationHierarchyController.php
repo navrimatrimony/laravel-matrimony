@@ -8,6 +8,7 @@ use App\Models\District;
 use App\Models\Location;
 use App\Models\State;
 use App\Models\Taluka;
+use App\Services\Location\LocationFormatterService;
 use App\Support\Validation\AddressHierarchyRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -168,19 +169,21 @@ class LocationHierarchyController extends Controller
         $this->applyActiveFilter($query);
 
         if (mb_strlen($search, 'UTF-8') >= 2) {
-            $like = '%'.addcslashes($search, '%_\\').'%';
-            $pincodeLike = addcslashes($search, '%_\\').'%';
-            $query->where(function ($scope) use ($like, $pincodeLike): void {
-                $scope->where('name', 'like', $like)
-                    ->orWhere('slug', 'like', $like)
-                    ->orWhere('name_en', 'like', $like)
-                    ->orWhere('name_mr', 'like', $like)
-                    ->orWhere('pincode', 'like', $pincodeLike);
+            $prefix = addcslashes($search, '%_\\').'%';
+            $columns = array_values(array_filter(
+                ['name', 'slug', 'name_en', 'name_mr', 'pincode'],
+                fn (string $column): bool => $this->locationHasColumn($column)
+            ));
+            $query->where(function ($scope) use ($prefix, $columns): void {
+                foreach ($columns as $index => $column) {
+                    $method = $index === 0 ? 'where' : 'orWhere';
+                    $scope->{$method}($column, 'like', $prefix);
+                }
             });
         }
 
         $rows = $query
-            ->orderByRaw("CASE WHEN hierarchy = 'taluka' THEN 0 WHEN tag = 'suburban' THEN 1 WHEN tag = 'city' THEN 2 WHEN tag = 'rural' OR (hierarchy = 'village' AND tag IS NULL) THEN 3 ELSE 4 END")
+            ->orderByRaw("CASE WHEN tag = 'city' THEN 0 WHEN tag = 'suburban' THEN 1 WHEN tag = 'rural' THEN 2 ELSE 3 END")
             ->orderBy('name')
             ->orderBy('id')
             ->skip(($page - 1) * $limit)
@@ -243,6 +246,7 @@ class LocationHierarchyController extends Controller
         $tag = $row->tag === null ? null : (string) $row->tag;
         $isFinal = (string) $row->hierarchy === 'village' && ($tag === null || in_array($tag, ['city', 'suburban', 'rural'], true));
         $label = $this->simpleLocationLabel($row);
+        $displayLabel = app(LocationFormatterService::class)->formatForLocation($row);
         [$group, $groupLabel] = $this->locationGroup($row);
         $isActive = $this->locationHasColumn('is_active') ? (bool) $row->is_active : true;
         $childrenQuery = $row->children();
@@ -257,6 +261,8 @@ class LocationHierarchyController extends Controller
             'name_mr' => $row->name_mr,
             'label' => $label,
             'display_name' => $label,
+            'display_label' => $displayLabel,
+            'profile_display_label' => $displayLabel,
             'type' => $type,
             'hierarchy' => (string) $row->hierarchy,
             'tag' => $tag,
@@ -288,24 +294,29 @@ class LocationHierarchyController extends Controller
     }
 
     /**
-     * @return array{0: string, 1: string}
+     * @return array{0: string|null, 1: string|null}
      */
     private function locationGroup(Location $location): array
     {
-        if ((string) $location->hierarchy === 'taluka') {
-            return ['taluka', 'Taluka'];
+        $tag = trim((string) ($location->tag ?? ''));
+        if ($tag === '') {
+            return [null, null];
         }
 
-        if ((string) $location->hierarchy === 'village') {
-            return match ((string) ($location->tag ?? '')) {
-                'suburban' => ['suburban', 'Suburban'],
-                'city' => ['city', 'City'],
-                'rural' => ['village', 'Village / Rural'],
-                default => ['village', 'Village / Rural'],
-            };
-        }
+        return match ($tag) {
+            'city' => ['city', 'City'],
+            'suburban' => ['suburban', 'Suburban'],
+            'rural' => ['rural', 'Rural'],
+            default => [$tag, $this->tagGroupLabel($tag)],
+        };
+    }
 
-        return ['other', 'Other'];
+    private function tagGroupLabel(string $tag): string
+    {
+        return collect(preg_split('/[_\s-]+/', $tag) ?: [])
+            ->filter(fn (string $part): bool => $part !== '')
+            ->map(fn (string $part): string => mb_strtoupper(mb_substr($part, 0, 1)).mb_substr($part, 1))
+            ->implode(' ');
     }
 
     private function mobileLocationType(Location $location): string

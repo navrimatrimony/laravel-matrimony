@@ -44,27 +44,34 @@ final class LocationFormatterService
         }
 
         $this->locationService->ensureAncestorsLoaded($location);
+        $hierarchy = strtolower(trim((string) ($location->hierarchy ?? '')));
 
-        if (($location->hierarchy ?? '') === 'country') {
-            return $location->localizedName();
-        }
-
-        $tag = $this->effectiveTag($location);
-        if ($tag === 'none') {
+        if (in_array($hierarchy, ['country', 'state', 'district'], true)) {
             return $location->localizedName();
         }
 
         $h = $this->enrichHierarchy($location, $this->locationService->getFullHierarchy($location));
         $h = $this->locationService->fillHierarchyGaps($location, $h);
 
-        return match ($tag) {
-            'rural', 'village' => $this->formatRural($location, $h),
-            'suburban' => $this->formatSuburban($location, $h),
-            'taluka' => $this->formatTalukaLine($location, $h),
-            'metro', 'capital', 'city' => $this->formatMetroCapitalCity($location, $h),
-            'town' => $this->formatTown($location, $h),
-            default => $this->formatFallback($location, $h),
-        };
+        if ($hierarchy === 'taluka') {
+            return $this->joinGeoChain([$location, $h['district'] ?? null]) ?: $location->localizedName();
+        }
+
+        if ($hierarchy === 'village') {
+            $tag = strtolower(trim((string) ($location->category ?? '')));
+            if (in_array($tag, ['city', 'suburban'], true)) {
+                return $this->joinGeoChain([$location, $h['district'] ?? null]) ?: $location->localizedName();
+            }
+
+            if ($tag === '' || $tag === 'rural') {
+                return $this->joinGeoChain([$location, $h['taluka'] ?? null, $h['district'] ?? null])
+                    ?: $location->localizedName();
+            }
+
+            return $this->joinGeoChain([$location, $h['district'] ?? null]) ?: $location->localizedName();
+        }
+
+        return $this->formatFallback($location, $h);
     }
 
     private function effectiveTag(Location $location): string

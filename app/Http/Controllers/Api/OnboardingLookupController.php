@@ -21,6 +21,7 @@ use App\Models\OccupationMaster;
 use App\Models\Religion;
 use App\Models\SubCaste;
 use App\Models\WorkingWithType;
+use App\Services\Location\LocationFormatterService;
 use App\Services\Location\LocationOpenPlaceSuggestionService;
 use App\Services\Location\LocationService;
 use App\Services\Onboarding\MobileOnboardingDraftService;
@@ -186,6 +187,8 @@ class OnboardingLookupController extends Controller
             'district_id' => ['required', 'integer', Rule::exists($locationTable, 'id')->where('hierarchy', 'district')->where('is_active', true)],
             'taluka_id' => ['nullable', 'integer', Rule::exists($locationTable, 'id')->where('hierarchy', 'taluka')->where('is_active', true)],
             'city_id' => ['nullable', 'integer', Rule::exists($locationTable, 'id')->where('hierarchy', 'village')->where('tag', 'city')->where('is_active', true)],
+            'parent_id' => ['nullable', 'integer', Rule::exists($locationTable, 'id')->where('is_active', true)],
+            'tag' => ['nullable', 'string', Rule::in(['city', 'suburban', 'rural'])],
             'pincode' => ['nullable', 'string', 'max:16'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
@@ -221,6 +224,7 @@ class OnboardingLookupController extends Controller
                 'pincode' => $validated['pincode'] ?? null,
                 'notes' => $validated['notes'] ?? null,
                 'city_id' => $validated['city_id'] ?? null,
+                'tag' => $validated['tag'] ?? null,
             ], fn ($value): bool => $value !== null && $value !== '');
         }
         if ($suggestionUpdates !== []) {
@@ -233,6 +237,8 @@ class OnboardingLookupController extends Controller
                 'id' => (int) $record->id,
                 'status' => (string) $record->status,
                 'type' => (string) $validated['type'],
+                'tag' => $validated['tag'] ?? null,
+                'parent_id' => $this->suggestedLocationParentId($validated),
                 'label' => (string) $record->raw_input,
             ],
             'message' => 'Location request submitted',
@@ -554,16 +560,20 @@ class OnboardingLookupController extends Controller
         $h = $locationService->fillHierarchyGaps($row, $locationService->getFullHierarchy($row));
         $type = $this->locationType($row);
         $isFinal = (string) $row->hierarchy === 'village' && in_array((string) ($row->tag ?? ''), ['city', 'suburban', 'rural'], true);
-        $label = $locationService->getDisplayLabel($row);
+        $label = $this->simpleLocationLabel($row);
+        $displayLabel = app(LocationFormatterService::class)->formatForLocation($row);
 
         return [
             'id' => (int) $row->id,
             'location_id' => (int) $row->id,
             'key' => $row->slug,
+            'name' => $label,
             'label' => $label,
             'translation_missing' => false,
             'popular' => false,
-            'display_hierarchy' => $label,
+            'display_hierarchy' => $displayLabel,
+            'display_label' => $displayLabel,
+            'profile_display_label' => $displayLabel,
             'type' => $type,
             'tag' => $row->tag,
             'is_final_node' => $isFinal,
@@ -736,6 +746,23 @@ class OnboardingLookupController extends Controller
         ];
     }
 
+    private function simpleLocationLabel(Location $location): string
+    {
+        $label = trim($location->localizedName());
+        if ($label !== '') {
+            return $label;
+        }
+
+        foreach (['name_en', 'name_mr', 'slug'] as $column) {
+            $value = trim((string) $location->{$column});
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return (string) $location->id;
+    }
+
     private function validateSuggestionHierarchy(array $data): void
     {
         $stateId = (int) $data['state_id'];
@@ -748,6 +775,16 @@ class OnboardingLookupController extends Controller
             throw ValidationException::withMessages([
                 'district_id' => ['The selected district must belong to the selected state.'],
             ]);
+        }
+
+        if (isset($data['parent_id']) && $data['parent_id'] !== null && $data['parent_id'] !== '') {
+            $parent = Location::query()->find((int) $data['parent_id']);
+            $expectedParentId = $this->expectedSuggestionParentId($data, (int) $district->id);
+            if (! $parent || (int) $parent->id !== $expectedParentId) {
+                throw ValidationException::withMessages([
+                    'parent_id' => ['The selected parent does not match the selected location hierarchy.'],
+                ]);
+            }
         }
 
         if ($data['type'] === 'village') {
@@ -765,6 +802,11 @@ class OnboardingLookupController extends Controller
         }
 
         if ($data['type'] === 'suburb') {
+            $parentId = isset($data['parent_id']) ? (int) $data['parent_id'] : null;
+            if ($parentId !== null && $parentId === (int) $district->id) {
+                return;
+            }
+
             $cityId = (int) ($data['city_id'] ?? 0);
             $city = Location::query()
                 ->whereKey($cityId)
@@ -779,8 +821,23 @@ class OnboardingLookupController extends Controller
         }
     }
 
+    private function expectedSuggestionParentId(array $data, int $districtId): int
+    {
+        if ($data['type'] === 'village') {
+            return (int) ($data['taluka_id'] ?? 0);
+        }
+        if ($data['type'] === 'suburb') {
+            return (int) ($data['city_id'] ?? $districtId);
+        }
+
+        return $districtId;
+    }
+
     private function suggestedLocationParentId(array $data): ?int
     {
+        if (isset($data['parent_id']) && $data['parent_id'] !== null && $data['parent_id'] !== '') {
+            return (int) $data['parent_id'];
+        }
         if ($data['type'] === 'village') {
             return isset($data['taluka_id']) ? (int) $data['taluka_id'] : null;
         }
