@@ -26,13 +26,18 @@ class ProfileDisplayCopy
             }
         }
 
-        return self::formatResidenceDisplay(
+        $legacyLine = self::formatResidenceDisplay(
             $p->city?->name,
             $p->taluka?->name,
             $p->district?->name,
             $p->state?->name,
             $p->country?->name
         );
+        if ($legacyLine !== '') {
+            return $legacyLine;
+        }
+
+        return trim((string) ($p->address_line ?? ''));
     }
 
     /**
