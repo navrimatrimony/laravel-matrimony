@@ -164,8 +164,36 @@ class LocationHierarchyController extends Controller
 
         $search = trim((string) ($validated['q'] ?? ''));
 
-        $query = Location::query()
-            ->where('parent_id', (int) $parent->id);
+        $query = Location::query();
+        if ((string) $parent->hierarchy === 'district') {
+            $talukaIdQuery = Location::query()
+                ->where('parent_id', (int) $parent->id)
+                ->where('hierarchy', 'taluka');
+            $this->applyActiveFilter($talukaIdQuery);
+            $talukaIds = $talukaIdQuery
+                ->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+
+            $query->where(function ($scope) use ($parent, $talukaIds): void {
+                $scope->where(function ($directTalukas) use ($parent): void {
+                    $directTalukas
+                        ->where('parent_id', (int) $parent->id)
+                        ->where('hierarchy', 'taluka');
+                });
+
+                if ($talukaIds !== []) {
+                    $scope->orWhere(function ($talukaPlaces) use ($talukaIds): void {
+                        $talukaPlaces
+                            ->where('hierarchy', 'village')
+                            ->whereIn('parent_id', $talukaIds)
+                            ->whereIn('tag', ['city', 'suburban']);
+                    });
+                }
+            });
+        } else {
+            $query->where('parent_id', (int) $parent->id);
+        }
         $this->applyActiveFilter($query);
 
         if (mb_strlen($search, 'UTF-8') >= 2) {
@@ -183,7 +211,7 @@ class LocationHierarchyController extends Controller
         }
 
         $rows = $query
-            ->orderByRaw("CASE WHEN tag = 'city' THEN 0 WHEN tag = 'suburban' THEN 1 WHEN tag = 'rural' THEN 2 ELSE 3 END")
+            ->orderByRaw("CASE WHEN hierarchy = 'taluka' THEN 0 WHEN hierarchy = 'village' AND tag = 'city' THEN 1 WHEN hierarchy = 'village' AND tag = 'suburban' THEN 2 WHEN hierarchy = 'village' AND (tag = 'rural' OR tag IS NULL OR tag = '') THEN 3 ELSE 4 END")
             ->orderBy('name')
             ->orderBy('id')
             ->skip(($page - 1) * $limit)
@@ -298,25 +326,22 @@ class LocationHierarchyController extends Controller
      */
     private function locationGroup(Location $location): array
     {
-        $tag = trim((string) ($location->tag ?? ''));
-        if ($tag === '') {
+        $hierarchy = trim((string) ($location->hierarchy ?? ''));
+        if ($hierarchy === 'taluka') {
+            return ['taluka', 'Taluka'];
+        }
+        if ($hierarchy !== 'village') {
             return [null, null];
         }
+
+        $tag = trim((string) ($location->tag ?? ''));
 
         return match ($tag) {
             'city' => ['city', 'City'],
             'suburban' => ['suburban', 'Suburban'],
-            'rural' => ['rural', 'Rural'],
-            default => [$tag, $this->tagGroupLabel($tag)],
+            'rural', '' => ['rural', 'Rural'],
+            default => [null, null],
         };
-    }
-
-    private function tagGroupLabel(string $tag): string
-    {
-        return collect(preg_split('/[_\s-]+/', $tag) ?: [])
-            ->filter(fn (string $part): bool => $part !== '')
-            ->map(fn (string $part): string => mb_strtoupper(mb_substr($part, 0, 1)).mb_substr($part, 1))
-            ->implode(' ');
     }
 
     private function mobileLocationType(Location $location): string
