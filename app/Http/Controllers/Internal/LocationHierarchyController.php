@@ -146,6 +146,7 @@ class LocationHierarchyController extends Controller
             'locale' => ['nullable', 'string', Rule::in(['en', 'mr'])],
             'page' => ['nullable', 'integer', 'min:1'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:200'],
+            'filter' => ['nullable', 'string', Rule::in(['all', 'taluka', 'urban', 'rural'])],
         ]);
 
         if (! empty($validated['locale'])) {
@@ -163,6 +164,7 @@ class LocationHierarchyController extends Controller
         }
 
         $search = trim((string) ($validated['q'] ?? ''));
+        $filter = (string) ($validated['filter'] ?? 'all');
 
         $query = Location::query();
         if ((string) $parent->hierarchy === 'district') {
@@ -175,24 +177,51 @@ class LocationHierarchyController extends Controller
                 ->map(fn ($id): int => (int) $id)
                 ->all();
 
-            $query->where(function ($scope) use ($parent, $talukaIds): void {
-                $scope->where(function ($directTalukas) use ($parent): void {
-                    $directTalukas
-                        ->where('parent_id', (int) $parent->id)
-                        ->where('hierarchy', 'taluka');
-                });
+            $query->where(function ($scope) use ($parent, $talukaIds, $filter): void {
+                $hasClause = false;
 
-                if ($talukaIds !== []) {
-                    $scope->orWhere(function ($talukaPlaces) use ($talukaIds): void {
+                if ($filter === 'all' || $filter === 'taluka') {
+                    $scope->where(function ($directTalukas) use ($parent): void {
+                        $directTalukas
+                            ->where('parent_id', (int) $parent->id)
+                            ->where('hierarchy', 'taluka');
+                    });
+                    $hasClause = true;
+                }
+
+                if (($filter === 'all' || $filter === 'urban') && $talukaIds !== []) {
+                    $method = $hasClause ? 'orWhere' : 'where';
+                    $scope->{$method}(function ($talukaPlaces) use ($talukaIds): void {
                         $talukaPlaces
                             ->where('hierarchy', 'village')
                             ->whereIn('parent_id', $talukaIds)
                             ->whereIn('tag', ['city', 'suburban']);
                     });
+                    $hasClause = true;
+                }
+
+                if (! $hasClause) {
+                    $scope->whereRaw('1 = 0');
                 }
             });
         } else {
             $query->where('parent_id', (int) $parent->id);
+            if ((string) $parent->hierarchy === 'taluka') {
+                if ($filter === 'urban') {
+                    $query
+                        ->where('hierarchy', 'village')
+                        ->whereIn('tag', ['city', 'suburban']);
+                } elseif ($filter === 'rural') {
+                    $query
+                        ->where('hierarchy', 'village')
+                        ->where(function ($scope): void {
+                            $scope
+                                ->where('tag', 'rural')
+                                ->orWhereNull('tag')
+                                ->orWhere('tag', '');
+                        });
+                }
+            }
         }
         $this->applyActiveFilter($query);
 
@@ -328,7 +357,7 @@ class LocationHierarchyController extends Controller
     {
         $hierarchy = trim((string) ($location->hierarchy ?? ''));
         if ($hierarchy === 'taluka') {
-            return ['taluka', 'Taluka'];
+            return ['taluka', $this->groupLabel('Taluka', 'तालुका')];
         }
         if ($hierarchy !== 'village') {
             return [null, null];
@@ -337,11 +366,15 @@ class LocationHierarchyController extends Controller
         $tag = trim((string) ($location->tag ?? ''));
 
         return match ($tag) {
-            'city' => ['city', 'City'],
-            'suburban' => ['suburban', 'Suburban'],
-            'rural', '' => ['rural', 'Rural'],
+            'city', 'suburban' => ['urban', $this->groupLabel('City / Suburban', 'शहर / उपनगर')],
+            'rural', '' => ['rural', $this->groupLabel('Rural', 'ग्रामीण')],
             default => [null, null],
         };
+    }
+
+    private function groupLabel(string $en, string $mr): string
+    {
+        return app()->getLocale() === 'mr' ? $mr : $en;
     }
 
     private function mobileLocationType(Location $location): string
