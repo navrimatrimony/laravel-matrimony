@@ -287,6 +287,26 @@ class PartnerPreferenceSuggestionService
     }
 
     /**
+     * Default partner mother tongue pivot IDs from member's own mother_tongue_id. Not persisted here.
+     *
+     * @return array<int, int>
+     */
+    public static function defaultPreferredMotherTongueIds(MatrimonyProfile $profile): array
+    {
+        $motherTongueId = $profile->mother_tongue_id;
+        if ($motherTongueId === null || $motherTongueId === '') {
+            return [];
+        }
+        $id = (int) $motherTongueId;
+        if ($id < 1) {
+            return [];
+        }
+        $exists = DB::table('master_mother_tongues')->where('id', $id)->where('is_active', true)->exists();
+
+        return $exists ? [$id] : [];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public static function suggestForProfile(MatrimonyProfile $profile): array
@@ -303,6 +323,7 @@ class PartnerPreferenceSuggestionService
             'preferred_city_id' => null,
             'preferred_religion_ids' => [],
             'preferred_caste_ids' => [],
+            'preferred_mother_tongue_ids' => [],
             'preferred_country_ids' => $location['preferred_country_ids'],
             'preferred_state_ids' => $location['preferred_state_ids'],
             'preferred_district_ids' => $location['preferred_district_ids'],
@@ -310,6 +331,7 @@ class PartnerPreferenceSuggestionService
             'preferred_location_suggestions' => $location['preferred_location_suggestions'] ?? [],
             'preferred_education_degree_ids' => [],
             'preferred_occupation_master_ids' => [],
+            'preferred_mother_tongue_ids' => self::defaultPreferredMotherTongueIds($profile),
             'preferred_diet_ids' => self::defaultPreferredDietIds($profile),
             'preferred_marital_status_id' => null,
             'preferred_marital_status_ids' => [],

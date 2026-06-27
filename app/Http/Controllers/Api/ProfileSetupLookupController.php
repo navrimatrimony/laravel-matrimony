@@ -139,6 +139,7 @@ class ProfileSetupLookupController extends Controller
             'marriage_type_preferences' => $this->masterOptions(MasterMarriageTypePreference::class, 'master_marriage_type_preferences', ['sort_order', 'id']),
             'marital_statuses' => $this->masterOptions(MasterMaritalStatus::class, 'master_marital_statuses', ['label', 'id']),
             'diets' => $this->masterOptions(MasterDiet::class, 'master_diets', ['sort_order', 'id']),
+            'mother_tongues' => $this->masterOptions(MasterMotherTongue::class, 'master_mother_tongues', ['sort_order', 'label', 'id']),
             'religions' => $this->religionOptions(),
             'castes' => $this->casteOptions(),
             'education_degrees' => $this->educationDegreeOptions(),

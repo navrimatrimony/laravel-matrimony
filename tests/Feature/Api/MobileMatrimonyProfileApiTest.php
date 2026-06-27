@@ -906,6 +906,8 @@ test('MobileProfile GET api v1 profile partner preference options returns govern
     $widowedId = mobileApiProfileTestKnownMaritalStatus('widowed', 'Widowed');
     $dietFirst = mobileApiProfileTestMasterOption('master_diets', 'phase5b1-vegetarian', 'Vegetarian', ['sort_order' => 101]);
     $dietSecond = mobileApiProfileTestMasterOption('master_diets', 'phase5b1-jain', 'Jain', ['sort_order' => 202]);
+    $motherTongueFirst = mobileApiProfileTestMasterOption('master_mother_tongues', 'phase5b1-marathi', 'Marathi', ['sort_order' => 101]);
+    $motherTongueSecond = mobileApiProfileTestMasterOption('master_mother_tongues', 'phase5b1-hindi', 'Hindi', ['sort_order' => 202]);
     $educationFirst = mobileApiProfileTestEducationDegree('P5D-B.A.', 101);
     $educationSecond = mobileApiProfileTestEducationDegree('P5D-M.A.', 202);
     $occupationFirst = mobileApiProfileTestOccupationMaster('P5D Analyst', 101);
@@ -934,6 +936,9 @@ test('MobileProfile GET api v1 profile partner preference options returns govern
             'diets' => [
                 '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
             ],
+            'mother_tongues' => [
+                '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
+            ],
             'religions' => [
                 '*' => ['id', 'key', 'label', 'label_en', 'label_mr'],
             ],
@@ -960,6 +965,7 @@ test('MobileProfile GET api v1 profile partner preference options returns govern
     mobileApiProfileAssertIdBefore(collect($response->json('marriage_type_preferences'))->pluck('id')->all(), $marriageFirst, $marriageSecond);
     mobileApiProfileAssertIdBefore(collect($response->json('marital_statuses'))->pluck('id')->all(), $divorcedId, $widowedId);
     mobileApiProfileAssertIdBefore(collect($response->json('diets'))->pluck('id')->all(), $dietFirst, $dietSecond);
+    mobileApiProfileAssertIdBefore(collect($response->json('mother_tongues'))->pluck('id')->all(), $motherTongueFirst, $motherTongueSecond);
     mobileApiProfileAssertIdBefore(collect($response->json('education_degrees'))->pluck('id')->all(), (int) $educationFirst->id, (int) $educationSecond->id);
     mobileApiProfileAssertIdBefore(collect($response->json('occupations'))->pluck('id')->all(), (int) $occupationFirst->id, (int) $occupationSecond->id);
     expect(collect($response->json('diets'))->pluck('id')->all())->not->toContain($inactiveDietId);
@@ -972,12 +978,15 @@ test('MobileProfile GET api v1 profile partner preference options returns govern
 test('MobileProfile GET api v1 matrimony-profile returns read only partner preference suggestions', function () {
     $user = User::factory()->create(['name' => 'Partner Preference Suggestion Account']);
     $options = mobileApiProfileTestMaritalLifestyleOptions();
+    $phase1A = mobileApiProfileTestPhase1AOptions();
     $profile = mobileApiCreateValidActionProfile($user, 'Partner Suggestion Candidate', 'female', null, [
         'date_of_birth' => now()->subYears(31)->subDay()->toDateString(),
         'height_cm' => 160,
+        'mother_tongue_id' => $phase1A['mother_tongue_id'],
         'marital_status_id' => $options['marital_status_id'],
         'diet_id' => $options['diet_id'],
     ]);
+    $expectedMotherTongueIds = [$phase1A['mother_tongue_id']];
     Sanctum::actingAs($user);
 
     $response = $this->getJson('/api/v1/matrimony-profile');
@@ -990,6 +999,7 @@ test('MobileProfile GET api v1 matrimony-profile returns read only partner prefe
         ->assertJsonPath('profile.partner_preference_suggestions.preferred_height_min_cm', 160)
         ->assertJsonPath('profile.partner_preference_suggestions.preferred_height_max_cm', 170)
         ->assertJsonPath('profile.partner_preference_suggestions.preferred_marital_status_ids', [$options['marital_status_id']])
+        ->assertJsonPath('profile.partner_preference_suggestions.preferred_mother_tongue_ids', $expectedMotherTongueIds)
         ->assertJsonPath('profile.partner_preference_suggestions.preferred_diet_ids', [$options['diet_id']]);
 
     $this->assertDatabaseMissing('profile_preference_criteria', [
@@ -2603,6 +2613,7 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
     ])->sort()->values()->all();
     $expectedReligionIds = collect([$profile->religion_id])->sort()->values()->map(fn ($id) => (int) $id)->all();
     $expectedCasteIds = collect([$profile->caste_id])->sort()->values()->map(fn ($id) => (int) $id)->all();
+    $expectedMotherTongueIds = [$options['mother_tongue_id']];
     $expectedEducationDegreeIds = [$options['education_degree_id']];
     $expectedOccupationMasterIds = [$options['occupation_master_id']];
     $locationChain = mobileApiProfileTestLocationChain();
@@ -2624,6 +2635,7 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
         'willing_to_relocate' => true,
         'preferred_religion_ids' => $expectedReligionIds,
         'preferred_caste_ids' => $expectedCasteIds,
+        'preferred_mother_tongue_ids' => $expectedMotherTongueIds,
         'preferred_intercaste' => true,
         'preferred_education_degree_ids' => $expectedEducationDegreeIds,
         'preferred_occupation_master_ids' => $expectedOccupationMasterIds,
@@ -2657,6 +2669,7 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
         ->assertJsonPath('profile.willing_to_relocate', true)
         ->assertJsonPath('profile.preferred_religion_ids', $expectedReligionIds)
         ->assertJsonPath('profile.preferred_caste_ids', $expectedCasteIds)
+        ->assertJsonPath('profile.preferred_mother_tongue_ids', $expectedMotherTongueIds)
         ->assertJsonPath('profile.preferred_intercaste', true)
         ->assertJsonPath('profile.preferred_education_degree_ids', $expectedEducationDegreeIds)
         ->assertJsonPath('profile.preferred_occupation_master_ids', $expectedOccupationMasterIds)
@@ -2696,6 +2709,13 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
         ->where('profile_id', $profile->id)
         ->orderBy('caste_id')
         ->pluck('caste_id')
+        ->map(fn ($id) => (int) $id)
+        ->values()
+        ->all();
+    $motherTongueIds = DB::table('profile_preferred_mother_tongues')
+        ->where('profile_id', $profile->id)
+        ->orderBy('mother_tongue_id')
+        ->pluck('mother_tongue_id')
         ->map(fn ($id) => (int) $id)
         ->values()
         ->all();
@@ -2756,6 +2776,7 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
     expect($dietIds)->toBe($expectedDietIds);
     expect($religionIds)->toBe($expectedReligionIds);
     expect($casteIds)->toBe($expectedCasteIds);
+    expect($motherTongueIds)->toBe($expectedMotherTongueIds);
     expect($educationDegreeIds)->toBe($expectedEducationDegreeIds);
     expect($occupationMasterIds)->toBe($expectedOccupationMasterIds);
     expect(ProfilePartnerCommunityFlagService::interestedInIntercaste((int) $profile->id))->toBeTrue();
@@ -2778,6 +2799,7 @@ test('MobileProfile PUT api v1 matrimony-profile persists simple partner prefere
     $display
         ->assertJsonPath('profile.preferred_religion_ids', $expectedReligionIds)
         ->assertJsonPath('profile.preferred_caste_ids', $expectedCasteIds)
+        ->assertJsonPath('profile.preferred_mother_tongue_ids', $expectedMotherTongueIds)
         ->assertJsonPath('profile.preferred_education_degree_ids', $expectedEducationDegreeIds)
         ->assertJsonPath('profile.preferred_occupation_master_ids', $expectedOccupationMasterIds)
         ->assertJsonPath('profile.preferred_intercaste', true);
@@ -2864,6 +2886,7 @@ test('MobileProfile PUT api v1 matrimony-profile rejects invalid partner prefere
         'marriage_type_preference_id',
         'preferred_religion_ids',
         'preferred_caste_ids',
+        'preferred_mother_tongue_ids',
         'preferred_education_degree_ids',
         'preferred_occupation_master_ids',
         'preferred_marital_status_ids',
@@ -2872,6 +2895,7 @@ test('MobileProfile PUT api v1 matrimony-profile rejects invalid partner prefere
         $payload = match ($field) {
             'preferred_religion_ids',
             'preferred_caste_ids',
+            'preferred_mother_tongue_ids',
             'preferred_education_degree_ids',
             'preferred_occupation_master_ids',
             'preferred_marital_status_ids',
@@ -2882,6 +2906,7 @@ test('MobileProfile PUT api v1 matrimony-profile rejects invalid partner prefere
         $expectedError = match ($field) {
             'preferred_religion_ids',
             'preferred_caste_ids',
+            'preferred_mother_tongue_ids',
             'preferred_education_degree_ids',
             'preferred_occupation_master_ids',
             'preferred_marital_status_ids',

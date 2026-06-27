@@ -2273,6 +2273,7 @@ class MutationService
         $pivotConfig = [
             'profile_preferred_religions' => ['preferred_religion_ids', 'religion_id'],
             'profile_preferred_castes' => ['preferred_caste_ids', 'caste_id'],
+            'profile_preferred_mother_tongues' => ['preferred_mother_tongue_ids', 'mother_tongue_id'],
             'profile_preferred_countries' => ['preferred_country_ids', 'country_id'],
             'profile_preferred_states' => ['preferred_state_ids', 'state_id'],
             'profile_preferred_districts' => ['preferred_district_ids', 'district_id'],

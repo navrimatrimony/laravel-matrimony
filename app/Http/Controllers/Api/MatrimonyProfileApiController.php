@@ -51,6 +51,7 @@ class MatrimonyProfileApiController extends Controller
         'willing_to_relocate',
         'preferred_religion_ids',
         'preferred_caste_ids',
+        'preferred_mother_tongue_ids',
         'preferred_education_degree_ids',
         'preferred_occupation_master_ids',
         'preferred_marital_status_ids',
@@ -828,6 +829,7 @@ class MatrimonyProfileApiController extends Controller
         foreach ([
             'preferred_religion_ids',
             'preferred_caste_ids',
+            'preferred_mother_tongue_ids',
             'preferred_education_degree_ids',
             'preferred_occupation_master_ids',
         ] as $key) {
@@ -2258,6 +2260,7 @@ class MatrimonyProfileApiController extends Controller
         $preferredTalukaIds = $this->partnerPreferencePivotIds('profile_preferred_talukas', 'taluka_id', (int) $profile->id);
         $preferredReligionIds = $this->partnerPreferencePivotIds('profile_preferred_religions', 'religion_id', (int) $profile->id);
         $preferredCasteIds = $this->partnerPreferencePivotIds('profile_preferred_castes', 'caste_id', (int) $profile->id);
+        $preferredMotherTongueIds = $this->partnerPreferencePivotIds('profile_preferred_mother_tongues', 'mother_tongue_id', (int) $profile->id);
         $preferredEducationDegreeIds = $this->partnerPreferencePivotIds('profile_preferred_education_degrees', 'education_degree_id', (int) $profile->id);
         $preferredOccupationMasterIds = $this->partnerPreferencePivotIds('profile_preferred_occupation_master', 'occupation_master_id', (int) $profile->id);
         $preferredIntercaste = ProfilePartnerCommunityFlagService::interestedInIntercaste((int) $profile->id);
@@ -2438,6 +2441,8 @@ class MatrimonyProfileApiController extends Controller
             'preferred_religion_labels' => $this->masterTableLabelsByIds('master_religions', $preferredReligionIds),
             'preferred_caste_ids' => $preferredCasteIds,
             'preferred_caste_labels' => $this->masterTableLabelsByIds('master_castes', $preferredCasteIds),
+            'preferred_mother_tongue_ids' => $preferredMotherTongueIds,
+            'preferred_mother_tongue_labels' => $this->masterTableLabelsByIds('master_mother_tongues', $preferredMotherTongueIds),
             'preferred_intercaste' => $preferredIntercaste,
             'preferred_education_degree_ids' => $preferredEducationDegreeIds,
             'preferred_education_degree_labels' => $this->masterTableLabelsByIds('master_education', $preferredEducationDegreeIds),

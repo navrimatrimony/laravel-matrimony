@@ -32,6 +32,7 @@ class PartnerPreferenceSnapshotBuilder
             'preferred_income_max',
             'preferred_religion_ids',
             'preferred_caste_ids',
+            'preferred_mother_tongue_ids',
             'preferred_district_ids',
             'preferred_country_ids',
             'preferred_state_ids',
@@ -73,6 +74,8 @@ class PartnerPreferenceSnapshotBuilder
             'preferred_religion_ids.*' => ['integer', Rule::exists('master_religions', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'preferred_caste_ids' => ['nullable', 'array'],
             'preferred_caste_ids.*' => ['integer', Rule::exists('master_castes', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'preferred_mother_tongue_ids' => ['nullable', 'array'],
+            'preferred_mother_tongue_ids.*' => ['integer', Rule::exists('master_mother_tongues', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'preferred_district_ids' => ['nullable', 'array'],
             'preferred_district_ids.*' => ['integer', AddressHierarchyRules::existsDistrictId()],
             'preferred_country_ids' => ['nullable', 'array'],
@@ -143,6 +146,7 @@ class PartnerPreferenceSnapshotBuilder
         $educationDegreeIds = array_values(array_unique(array_map('intval', array_filter($validated['preferred_education_degree_ids'] ?? []))));
         $occupationMasterIds = array_values(array_unique(array_map('intval', array_filter($validated['preferred_occupation_master_ids'] ?? []))));
 
+        $motherTongueIds = array_values(array_unique(array_map('intval', array_filter($validated['preferred_mother_tongue_ids'] ?? []))));
         $dietIds = array_values(array_unique(array_map('intval', array_filter($validated['preferred_diet_ids'] ?? []))));
 
         $maritalIds = array_values(array_unique(array_map('intval', array_filter($validated['preferred_marital_status_ids'] ?? []))));
@@ -178,6 +182,7 @@ class PartnerPreferenceSnapshotBuilder
             'preferred_marital_status_ids' => $maritalIds,
             'preferred_religion_ids' => $validated['preferred_religion_ids'] ?? [],
             'preferred_caste_ids' => $validated['preferred_caste_ids'] ?? [],
+            'preferred_mother_tongue_ids' => $motherTongueIds,
             'preferred_country_ids' => $countryIds,
             'preferred_state_ids' => $stateIds,
             'preferred_district_ids' => $districtIds,
