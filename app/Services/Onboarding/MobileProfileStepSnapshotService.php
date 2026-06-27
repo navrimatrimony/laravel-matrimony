@@ -110,6 +110,8 @@ class MobileProfileStepSnapshotService
             'diet_id',
             'smoking_status_id',
             'drinking_status_id',
+            'physical_build_id',
+            'spectacles_lens',
         ],
         'family' => [
             'father_name',
@@ -309,6 +311,8 @@ class MobileProfileStepSnapshotService
                 'diet_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_diets', 'id')->where('is_active', true)],
                 'smoking_status_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_smoking_statuses', 'id')->where('is_active', true)],
                 'drinking_status_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_drinking_statuses', 'id')->where('is_active', true)],
+                'physical_build_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_physical_builds', 'id')->where('is_active', true)],
+                'spectacles_lens' => ['sometimes', 'nullable', 'string', 'max:50', Rule::in(['no', 'spectacles', 'contact_lens', 'both'])],
             ],
             'family' => [
                 'father_name' => ['sometimes', 'nullable', 'string', 'max:255'],

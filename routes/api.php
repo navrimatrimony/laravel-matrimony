@@ -99,6 +99,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/onboarding/lookups/diet', [OnboardingLookupController::class, 'diet']);
         Route::get('/onboarding/lookups/smoking', [OnboardingLookupController::class, 'smoking']);
         Route::get('/onboarding/lookups/drinking', [OnboardingLookupController::class, 'drinking']);
+        Route::get('/onboarding/lookups/physical-builds', [OnboardingLookupController::class, 'physicalBuilds']);
+        Route::get('/onboarding/lookups/spectacles-lens', [OnboardingLookupController::class, 'spectaclesLens']);
         Route::get('/onboarding/preferences/auto-draft/preview', [OnboardingPreferenceAutoDraftController::class, 'preview']);
         Route::post('/onboarding/preferences/auto-draft', [OnboardingPreferenceAutoDraftController::class, 'store']);
         Route::get('/onboarding/preferences/auto-draft/status', [OnboardingPreferenceAutoDraftController::class, 'status']);

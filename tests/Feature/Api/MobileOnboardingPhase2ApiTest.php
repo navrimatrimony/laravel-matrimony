@@ -9,6 +9,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\MasterMangalDoshType;
 use App\Models\MasterMotherTongue;
 use App\Models\MasterNakshatra;
+use App\Models\MasterPhysicalBuild;
 use App\Models\MasterRashi;
 use App\Models\MobileOnboardingDraft;
 use App\Models\OccupationCategory;
@@ -300,6 +301,34 @@ class MobileOnboardingPhase2ApiTest extends TestCase
         $draft = MobileOnboardingDraft::query()->where('user_id', $user->id)->firstOrFail();
         $this->assertSame(2, data_get($draft->draft_data, 'family.brothers_count'));
         $this->assertSame(1, data_get($draft->draft_data, 'family.sisters_count'));
+    }
+
+    public function test_lifestyle_profile_fields_save_physical_build_and_spectacles(): void
+    {
+        $user = $this->verifiedAccount();
+        Sanctum::actingAs($user);
+        $physicalBuild = MasterPhysicalBuild::query()->updateOrCreate([
+            'key' => 'average',
+        ], [
+            'label' => 'Average',
+            'is_active' => true,
+        ]);
+
+        $this->postJson('/api/v1/onboarding/profile/save-step', [
+            'step' => 'lifestyle',
+            'data' => [
+                'physical_build_id' => $physicalBuild->id,
+                'spectacles_lens' => 'spectacles',
+            ],
+        ])->assertOk();
+
+        $profile = MatrimonyProfile::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertSame($physicalBuild->id, (int) $profile->physical_build_id);
+        $this->assertSame('spectacles', $profile->spectacles_lens);
+
+        $draft = MobileOnboardingDraft::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertSame($physicalBuild->id, (int) data_get($draft->draft_data, 'lifestyle.physical_build_id'));
+        $this->assertSame('spectacles', data_get($draft->draft_data, 'lifestyle.spectacles_lens'));
     }
 
     public function test_astro_profile_fields_save_to_horoscope_data(): void

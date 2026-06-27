@@ -16,6 +16,7 @@ use App\Models\MasterMangalDoshType;
 use App\Models\MasterMaritalStatus;
 use App\Models\MasterMotherTongue;
 use App\Models\MasterNakshatra;
+use App\Models\MasterPhysicalBuild;
 use App\Models\MasterRashi;
 use App\Models\MasterSmokingStatus;
 use App\Models\MobileOnboardingMasterSuggestion;
@@ -49,6 +50,13 @@ class OnboardingLookupController extends Controller
         ['key' => 'friend', 'label_en' => 'For a friend', 'label_mr' => 'मित्र/मैत्रिणीसाठी', 'gender_mode' => 'ask'],
     ];
 
+    private const SPECTACLES_LENS_OPTIONS = [
+        ['key' => 'no', 'label_en' => 'No', 'label_mr' => 'नाही'],
+        ['key' => 'spectacles', 'label_en' => 'Spectacles', 'label_mr' => 'चष्मा'],
+        ['key' => 'contact_lens', 'label_en' => 'Contact lens', 'label_mr' => 'कॉन्टॅक्ट लेन्स'],
+        ['key' => 'both', 'label_en' => 'Both', 'label_mr' => 'दोन्ही'],
+    ];
+
     public function __construct(private readonly OnboardingLookupOptionFormatter $labels) {}
 
     public function bootstrap(Request $request): JsonResponse
@@ -76,6 +84,8 @@ class OnboardingLookupController extends Controller
             'diet_options' => $this->simpleMasterOptions(MasterDiet::class, 'master_diets', $locale, ['label_mr'], ['label'], ['key']),
             'smoking_options' => $this->simpleMasterOptions(MasterSmokingStatus::class, 'master_smoking_statuses', $locale, ['label_mr'], ['label'], ['key']),
             'drinking_options' => $this->simpleMasterOptions(MasterDrinkingStatus::class, 'master_drinking_statuses', $locale, ['label_mr'], ['label'], ['key']),
+            'physical_build_options' => $this->simpleMasterOptions(MasterPhysicalBuild::class, 'master_physical_builds', $locale, ['label_mr'], ['label'], ['key']),
+            'spectacles_lens_options' => $this->spectaclesLensOptions($locale),
             'mangal_dosh_types' => $this->simpleMasterOptions(MasterMangalDoshType::class, 'master_mangal_dosh_types', $locale, ['label_mr'], ['label'], ['key']),
             'nakshatras' => $this->simpleMasterOptions(MasterNakshatra::class, 'master_nakshatras', $locale, ['label_mr'], ['label'], ['key']),
             'rashis' => $this->simpleMasterOptions(MasterRashi::class, 'master_rashis', $locale, ['label_mr'], ['label'], ['key']),
@@ -402,6 +412,41 @@ class OnboardingLookupController extends Controller
         return $this->simpleLookupList($request, MasterDrinkingStatus::class, 'master_drinking_statuses');
     }
 
+    public function physicalBuilds(Request $request): JsonResponse
+    {
+        return $this->simpleLookupList($request, MasterPhysicalBuild::class, 'master_physical_builds');
+    }
+
+    public function spectaclesLens(Request $request): JsonResponse
+    {
+        $params = $this->listParams($request);
+        $q = mb_strtolower($params['q'], 'UTF-8');
+        $options = collect($this->spectaclesLensOptions($params['locale']))
+            ->filter(function (array $row) use ($q): bool {
+                if ($q === '') {
+                    return true;
+                }
+
+                return str_contains(mb_strtolower((string) $row['key'], 'UTF-8'), $q)
+                    || str_contains(mb_strtolower((string) $row['label'], 'UTF-8'), $q);
+            })
+            ->values()
+            ->all();
+
+        return response()->json([
+            'success' => true,
+            'locale' => $params['locale'],
+            'results' => $options,
+            'popular' => [],
+            'pagination' => [
+                'page' => $params['page'],
+                'limit' => $params['limit'],
+                'total' => count($options),
+                'has_more' => false,
+            ],
+        ]);
+    }
+
     private function listParams(Request $request): array
     {
         $validated = $request->validate([
@@ -700,6 +745,14 @@ class OnboardingLookupController extends Controller
             'label' => $locale === 'mr' ? $mr : $en,
             'translation_missing' => false,
         ];
+    }
+
+    private function spectaclesLensOptions(string $locale): array
+    {
+        return array_map(
+            fn (array $row): array => $this->staticOption($row['key'], $row['label_en'], $row['label_mr'], $locale),
+            self::SPECTACLES_LENS_OPTIONS
+        );
     }
 
     private function incomeRanges(string $locale): array

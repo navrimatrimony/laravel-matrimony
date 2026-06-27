@@ -10,6 +10,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\MasterMangalDoshType;
 use App\Models\MasterMotherTongue;
 use App\Models\MasterNakshatra;
+use App\Models\MasterPhysicalBuild;
 use App\Models\MasterRashi;
 use App\Models\MobileOnboardingDraft;
 use App\Models\OccupationCategory;
@@ -63,6 +64,12 @@ class MobileOnboardingPhase3ApiTest extends TestCase
             'label' => 'Mesha',
             'is_active' => true,
         ]);
+        MasterPhysicalBuild::query()->updateOrCreate([
+            'key' => 'average',
+        ], [
+            'label' => 'Average',
+            'is_active' => true,
+        ]);
 
         $response = $this->getJson('/api/v1/onboarding/lookups/bootstrap?locale=mr')->assertOk();
 
@@ -77,6 +84,8 @@ class MobileOnboardingPhase3ApiTest extends TestCase
         $this->assertSame('none', collect($response->json('mangal_dosh_types'))->firstWhere('key', 'none')['key'] ?? null);
         $this->assertSame('ashwini', collect($response->json('nakshatras'))->firstWhere('key', 'ashwini')['key'] ?? null);
         $this->assertSame('mesha', collect($response->json('rashis'))->firstWhere('key', 'mesha')['key'] ?? null);
+        $this->assertSame('average', collect($response->json('physical_build_options'))->firstWhere('key', 'average')['key'] ?? null);
+        $this->assertSame('spectacles', collect($response->json('spectacles_lens_options'))->firstWhere('key', 'spectacles')['key'] ?? null);
     }
 
     public function test_religion_lookup_returns_localized_label_with_english_fallback_and_pagination(): void
