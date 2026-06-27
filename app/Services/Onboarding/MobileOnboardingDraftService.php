@@ -22,6 +22,7 @@ class MobileOnboardingDraftService
         'career',
         'lifestyle',
         'family',
+        'astro',
         'photo',
         'activation',
     ];
@@ -35,6 +36,7 @@ class MobileOnboardingDraftService
         'career',
         'lifestyle',
         'family',
+        'astro',
         'photo',
     ];
 

@@ -28,6 +28,7 @@ class MobileProfileStepSnapshotService
         'career',
         'lifestyle',
         'family',
+        'astro',
     ];
 
     private const FORBIDDEN_PHASE_2_KEYS = [
@@ -36,16 +37,12 @@ class MobileProfileStepSnapshotService
         'family_type_id',
         'horoscope',
         'astrology',
-        'rashi_id',
-        'nakshatra_id',
-        'charan',
         'gan_id',
         'nadi_id',
         'yoni_id',
         'varna_id',
         'vashya_id',
         'rashi_lord_id',
-        'mangal_dosh_type_id',
         'devak',
         'kul',
         'gotra',
@@ -136,6 +133,12 @@ class MobileProfileStepSnapshotService
             'brothers_count',
             'sisters_count',
         ],
+        'astro' => [
+            'mangal_dosh_type_id',
+            'nakshatra_id',
+            'rashi_id',
+            'charan',
+        ],
     ];
 
     public function __construct(private readonly MobileOnboardingDraftService $draftService) {}
@@ -151,6 +154,10 @@ class MobileProfileStepSnapshotService
 
         if ($step === 'education') {
             return $this->educationSnapshot($data);
+        }
+
+        if ($step === 'astro') {
+            return $this->astroSnapshot($data);
         }
 
         $core = [];
@@ -335,9 +342,31 @@ class MobileProfileStepSnapshotService
                 'brothers_count' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:20'],
                 'sisters_count' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:20'],
             ],
+            'astro' => [
+                'mangal_dosh_type_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_mangal_dosh_types', 'id')->where('is_active', true)],
+                'nakshatra_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_nakshatras', 'id')->where('is_active', true)],
+                'rashi_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_rashis', 'id')->where('is_active', true)],
+                'charan' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:4'],
+            ],
         ];
 
         return $rules[$step] ?? [];
+    }
+
+    private function astroSnapshot(array $data): array
+    {
+        $row = [];
+        foreach (self::STEP_FIELDS['astro'] as $field) {
+            if (array_key_exists($field, $data)) {
+                $row[$field] = $data[$field] === '' ? null : $data[$field];
+            }
+        }
+
+        if ($row === [] || collect($row)->every(fn ($value): bool => $value === null)) {
+            return [];
+        }
+
+        return ['horoscope' => [$row]];
     }
 
     private function rejectForbiddenKeys(array $data): void

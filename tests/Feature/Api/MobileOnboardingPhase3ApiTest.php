@@ -7,7 +7,10 @@ use App\Models\EducationCategory;
 use App\Models\EducationDegree;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
+use App\Models\MasterMangalDoshType;
 use App\Models\MasterMotherTongue;
+use App\Models\MasterNakshatra;
+use App\Models\MasterRashi;
 use App\Models\MobileOnboardingDraft;
 use App\Models\OccupationCategory;
 use App\Models\OccupationMaster;
@@ -42,6 +45,24 @@ class MobileOnboardingPhase3ApiTest extends TestCase
             'label_mr' => 'मराठी',
             'is_active' => true,
         ])->save();
+        MasterMangalDoshType::query()->updateOrCreate([
+            'key' => 'none',
+        ], [
+            'label' => 'No Mangal',
+            'is_active' => true,
+        ]);
+        MasterNakshatra::query()->updateOrCreate([
+            'key' => 'ashwini',
+        ], [
+            'label' => 'Ashwini',
+            'is_active' => true,
+        ]);
+        MasterRashi::query()->updateOrCreate([
+            'key' => 'mesha',
+        ], [
+            'label' => 'Mesha',
+            'is_active' => true,
+        ]);
 
         $response = $this->getJson('/api/v1/onboarding/lookups/bootstrap?locale=mr')->assertOk();
 
@@ -50,7 +71,12 @@ class MobileOnboardingPhase3ApiTest extends TestCase
             ->assertJsonPath('profile_for_whom.0.gender_mode', 'ask')
             ->assertJsonPath('mother_tongues.0.key', 'marathi')
             ->assertJsonPath('mother_tongues.0.label', 'मराठी')
-            ->assertJsonPath('children_rules.hide_for_keys.0', 'never_married');
+            ->assertJsonPath('children_rules.hide_for_keys.0', 'never_married')
+            ->assertJsonPath('charan_options.0.key', '1')
+            ->assertJsonPath('steps.9', 'astro');
+        $this->assertSame('none', collect($response->json('mangal_dosh_types'))->firstWhere('key', 'none')['key'] ?? null);
+        $this->assertSame('ashwini', collect($response->json('nakshatras'))->firstWhere('key', 'ashwini')['key'] ?? null);
+        $this->assertSame('mesha', collect($response->json('rashis'))->firstWhere('key', 'mesha')['key'] ?? null);
     }
 
     public function test_religion_lookup_returns_localized_label_with_english_fallback_and_pagination(): void

@@ -12,8 +12,11 @@ use App\Models\MasterDiet;
 use App\Models\MasterDrinkingStatus;
 use App\Models\MasterGender;
 use App\Models\MasterIncomeCurrency;
+use App\Models\MasterMangalDoshType;
 use App\Models\MasterMaritalStatus;
 use App\Models\MasterMotherTongue;
+use App\Models\MasterNakshatra;
+use App\Models\MasterRashi;
 use App\Models\MasterSmokingStatus;
 use App\Models\MobileOnboardingMasterSuggestion;
 use App\Models\OccupationCategory;
@@ -73,6 +76,15 @@ class OnboardingLookupController extends Controller
             'diet_options' => $this->simpleMasterOptions(MasterDiet::class, 'master_diets', $locale, ['label_mr'], ['label'], ['key']),
             'smoking_options' => $this->simpleMasterOptions(MasterSmokingStatus::class, 'master_smoking_statuses', $locale, ['label_mr'], ['label'], ['key']),
             'drinking_options' => $this->simpleMasterOptions(MasterDrinkingStatus::class, 'master_drinking_statuses', $locale, ['label_mr'], ['label'], ['key']),
+            'mangal_dosh_types' => $this->simpleMasterOptions(MasterMangalDoshType::class, 'master_mangal_dosh_types', $locale, ['label_mr'], ['label'], ['key']),
+            'nakshatras' => $this->simpleMasterOptions(MasterNakshatra::class, 'master_nakshatras', $locale, ['label_mr'], ['label'], ['key']),
+            'rashis' => $this->simpleMasterOptions(MasterRashi::class, 'master_rashis', $locale, ['label_mr'], ['label'], ['key']),
+            'charan_options' => [
+                $this->staticOption('1', '1', '1', $locale),
+                $this->staticOption('2', '2', '2', $locale),
+                $this->staticOption('3', '3', '3', $locale),
+                $this->staticOption('4', '4', '4', $locale),
+            ],
             'age_policy' => [
                 'min_age' => 18,
                 'max_age' => 80,

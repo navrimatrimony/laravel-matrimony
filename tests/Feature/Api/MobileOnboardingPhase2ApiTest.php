@@ -6,7 +6,10 @@ use App\Models\Caste;
 use App\Models\Location;
 use App\Models\LocationOpenPlaceSuggestion;
 use App\Models\MatrimonyProfile;
+use App\Models\MasterMangalDoshType;
 use App\Models\MasterMotherTongue;
+use App\Models\MasterNakshatra;
+use App\Models\MasterRashi;
 use App\Models\MobileOnboardingDraft;
 use App\Models\OccupationCategory;
 use App\Models\OccupationMaster;
@@ -297,6 +300,54 @@ class MobileOnboardingPhase2ApiTest extends TestCase
         $draft = MobileOnboardingDraft::query()->where('user_id', $user->id)->firstOrFail();
         $this->assertSame(2, data_get($draft->draft_data, 'family.brothers_count'));
         $this->assertSame(1, data_get($draft->draft_data, 'family.sisters_count'));
+    }
+
+    public function test_astro_profile_fields_save_to_horoscope_data(): void
+    {
+        $user = $this->verifiedAccount();
+        Sanctum::actingAs($user);
+        $mangal = MasterMangalDoshType::query()->updateOrCreate([
+            'key' => 'none',
+        ], [
+            'label' => 'No Mangal',
+            'is_active' => true,
+        ]);
+        $nakshatra = MasterNakshatra::query()->updateOrCreate([
+            'key' => 'ashwini',
+        ], [
+            'label' => 'Ashwini',
+            'is_active' => true,
+        ]);
+        $rashi = MasterRashi::query()->updateOrCreate([
+            'key' => 'mesha',
+        ], [
+            'label' => 'Mesha',
+            'is_active' => true,
+        ]);
+
+        $this->postJson('/api/v1/onboarding/profile/save-step', [
+            'step' => 'astro',
+            'data' => [
+                'mangal_dosh_type_id' => $mangal->id,
+                'nakshatra_id' => $nakshatra->id,
+                'rashi_id' => $rashi->id,
+                'charan' => 2,
+            ],
+        ])->assertOk();
+
+        $profile = MatrimonyProfile::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertDatabaseHas('profile_horoscope_data', [
+            'profile_id' => $profile->id,
+            'mangal_dosh_type_id' => $mangal->id,
+            'nakshatra_id' => $nakshatra->id,
+            'rashi_id' => $rashi->id,
+            'charan' => 2,
+        ]);
+
+        $draft = MobileOnboardingDraft::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertSame('astro', $draft->last_completed_step);
+        $this->assertSame('photo', $draft->current_step);
+        $this->assertSame($mangal->id, (int) data_get($draft->draft_data, 'astro.mangal_dosh_type_id'));
     }
 
     public function test_profile_save_step_uses_mutation_service_and_does_not_duplicate_profile(): void
