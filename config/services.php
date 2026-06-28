@@ -48,6 +48,10 @@ return [
         'url' => env('VISION_API_URL', 'https://vision.googleapis.com/v1/images:annotate'),
     ],
 
+    'google' => [
+        'client_ids' => array_values(array_filter(array_map('trim', explode(',', (string) env('GOOGLE_CLIENT_IDS', ''))))),
+    ],
+
     'openai' => [
         'key' => env('OPENAI_API_KEY'),
         'url' => env('OPENAI_API_URL', 'https://api.openai.com/v1/chat/completions'),
