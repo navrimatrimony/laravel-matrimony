@@ -126,22 +126,32 @@ class MobilePlanApiController extends Controller
 
         $plan->loadMissing(['features', 'terms', 'quotaPolicies']);
         if (! $this->isMobileBuyablePlan($user, $plan)) {
-            return $this->error('This plan is not available for checkout.', 422);
+            return $this->error('This plan is not available for checkout.', 422, 'plan_not_available');
+        }
+
+        if ($this->payuConfigMissing()) {
+            return $this->error($this->payuConfigMissingMessage(), 422, 'payment_config_missing');
         }
 
         try {
             $prepared = $revenue->prepareCheckout($user, $plan, $planTermId, null);
         } catch (HttpException $exception) {
-            return $this->error($exception->getMessage(), $this->httpStatus($exception));
+            return $this->error($exception->getMessage(), $this->httpStatus($exception), 'checkout_validation_failed');
         } catch (Throwable $exception) {
             report($exception);
 
-            return $this->error(__('subscriptions.subscribe_failed'), 422);
+            return $this->error(__('subscriptions.subscribe_failed'), 422, 'checkout_unavailable');
         }
 
         $resolved = is_array($prepared['resolved'] ?? null) ? $prepared['resolved'] : [];
+        $finalAmount = isset($resolved['final_amount']) ? (float) $resolved['final_amount'] : 0.0;
+        if ($finalAmount <= 0.0) {
+            return $this->error(__('subscriptions.subscribe_failed'), 422, 'checkout_amount_invalid');
+        }
+
         $resolvedPlanTermId = isset($resolved['plan_term_id']) ? (int) $resolved['plan_term_id'] : null;
         $nonce = Str::random(48);
+        $expiresAt = now()->addMinutes(self::CHECKOUT_BRIDGE_TTL_MINUTES);
 
         Cache::put(
             self::CHECKOUT_BRIDGE_CACHE_PREFIX.$nonce,
@@ -151,14 +161,16 @@ class MobilePlanApiController extends Controller
                 'plan_term_id' => $resolvedPlanTermId,
                 'created_at' => now()->toIso8601String(),
             ],
-            now()->addMinutes(self::CHECKOUT_BRIDGE_TTL_MINUTES),
+            $expiresAt,
         );
 
-        $checkoutUrl = URL::temporarySignedRoute(
+        $signedPath = URL::temporarySignedRoute(
             'mobile.plans.checkout.bridge',
-            now()->addMinutes(self::CHECKOUT_BRIDGE_TTL_MINUTES),
+            $expiresAt,
             ['nonce' => $nonce],
+            false,
         );
+        $checkoutUrl = rtrim($request->getSchemeAndHttpHost(), '/').$signedPath;
 
         Log::info('mobile_plan_checkout_link_created', [
             'user_id' => (int) $user->id,
@@ -170,6 +182,7 @@ class MobilePlanApiController extends Controller
             'success' => true,
             'message' => 'Checkout link created. Complete payment in the browser.',
             'checkout_url' => $checkoutUrl,
+            'expires_at' => $expiresAt->toIso8601String(),
             'checkout' => [
                 'method' => 'GET',
                 'opens_external_browser' => true,
@@ -437,11 +450,29 @@ class MobilePlanApiController extends Controller
         return $status >= 400 && $status < 600 ? $status : 422;
     }
 
-    private function error(string $message, int $status): JsonResponse
+    private function payuConfigMissing(): bool
     {
-        return response()->json([
+        return trim((string) config('payu.merchant_key', '')) === ''
+            || trim((string) config('payu.merchant_salt', '')) === ''
+            || trim((string) config('payu.checkout_url', '')) === '';
+    }
+
+    private function payuConfigMissingMessage(): string
+    {
+        return 'Payment gateway is not configured. Please contact support.';
+    }
+
+    private function error(string $message, int $status, ?string $blockedReason = null): JsonResponse
+    {
+        $payload = [
             'success' => false,
             'message' => $message,
-        ], $status);
+        ];
+
+        if ($blockedReason !== null) {
+            $payload['blocked_reason'] = $blockedReason;
+        }
+
+        return response()->json($payload, $status);
     }
 }

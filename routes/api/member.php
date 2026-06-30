@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\ExtendedFieldApiController;
 use App\Http\Controllers\Api\FieldRegistryApiController;
 use App\Http\Controllers\Api\InterestApiController;
 use App\Http\Controllers\Api\MatrimonyProfileApiController;
+use App\Http\Controllers\Api\MobileNotificationApiController;
 use App\Http\Controllers\Api\MobilePlanApiController;
 use App\Http\Controllers\Api\ProfileSetupLookupController;
 use App\Http\Controllers\Api\ProfileActionApiController;
@@ -40,6 +41,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/plans/current', [MobilePlanApiController::class, 'current']); // CURRENT PLAN + CONTACT QUOTA
     Route::get('/plans', [MobilePlanApiController::class, 'index']); // MOBILE PLAN CATALOG
     Route::post('/plans/{plan}/checkout', [MobilePlanApiController::class, 'checkout']); // START WEB CHECKOUT BRIDGE
+    Route::get('/notifications', [MobileNotificationApiController::class, 'index']); // MOBILE NOTIFICATIONS LIST
+    Route::get('/notifications/unread-count', [MobileNotificationApiController::class, 'unreadCount']); // MOBILE NOTIFICATIONS COUNT
+    Route::post('/notifications/{id}/read', [MobileNotificationApiController::class, 'markRead']); // MARK NOTIFICATION READ
+    Route::post('/notifications/read-all', [MobileNotificationApiController::class, 'markAllRead']); // MARK ALL NOTIFICATIONS READ
     Route::post('/matrimony-profiles/{id}/shortlist', [ProfileActionApiController::class, 'shortlist']); // SHORTLIST PROFILE
     Route::delete('/matrimony-profiles/{id}/shortlist', [ProfileActionApiController::class, 'unshortlist']); // REMOVE SHORTLIST
     Route::post('/matrimony-profiles/{id}/hide', [ProfileActionApiController::class, 'hide']); // HIDE PROFILE FROM LISTS

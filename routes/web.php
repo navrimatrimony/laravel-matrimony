@@ -29,7 +29,7 @@ use App\Http\Controllers\SubscriptionController;
 use App\Http\Middleware\EnforceCardOnboarding;
 
 Route::get('/mobile/plans/checkout', MobilePlanCheckoutBridgeController::class)
-    ->middleware(['signed', 'throttle:20,1'])
+    ->middleware(['throttle:20,1'])
     ->name('mobile.plans.checkout.bridge');
 
 Route::middleware('auth')->group(function () {
