@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\InterestApiController;
 use App\Http\Controllers\Api\MatrimonyProfileApiController;
 use App\Http\Controllers\Api\MobileNotificationApiController;
 use App\Http\Controllers\Api\MobilePlanApiController;
+use App\Http\Controllers\Api\MobileProfilePhotoApiController;
 use App\Http\Controllers\Api\MobileSettingsApiController;
 use App\Http\Controllers\Api\ProfileSetupLookupController;
 use App\Http\Controllers\Api\ProfileActionApiController;
@@ -31,6 +32,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/matrimony-profile', [MatrimonyProfileApiController::class, 'show']);  // FETCH
     Route::put('/matrimony-profile', [MatrimonyProfileApiController::class, 'update']); // UPDATE
     Route::post('/matrimony-profile/photo', [MatrimonyProfileApiController::class, 'uploadPhoto']); // PHOTO UPLOAD
+    Route::get('/matrimony-profile/photos', [MobileProfilePhotoApiController::class, 'index']); // PHOTO GALLERY
+    Route::post('/matrimony-profile/photos', [MobileProfilePhotoApiController::class, 'store']); // UPLOAD GALLERY PHOTO
+    Route::post('/matrimony-profile/photos/{photo}/primary', [MobileProfilePhotoApiController::class, 'makePrimary']); // SET PRIMARY PHOTO
+    Route::delete('/matrimony-profile/photos/{photo}', [MobileProfilePhotoApiController::class, 'destroy']); // DELETE PHOTO
+    Route::put('/matrimony-profile/photos/reorder', [MobileProfilePhotoApiController::class, 'reorder']); // REORDER PHOTOS
+    Route::get('/matrimony-profile/verification-status', [MobileProfilePhotoApiController::class, 'verificationStatus']); // PROFILE VERIFICATION STATUS
     Route::get('/matrimony-profiles', [MatrimonyProfileApiController::class, 'index']); // LIST ALL PROFILES
     Route::get('/matrimony-profiles/more-sections', [MatrimonyProfileApiController::class, 'moreSections']); // MOBILE MORE MATCHES SECTIONS
     Route::get('/matrimony-profiles/{id}', [MatrimonyProfileApiController::class, 'showById']); // GET PROFILE BY ID

@@ -14,7 +14,12 @@ class ImageProcessingService
      *
      * Returns a "pending" filename that can be stored in DB immediately.
      */
-    public function enqueueProfilePhotoProcessing(UploadedFile $file, int $profileId): string
+    public function enqueueProfilePhotoProcessing(
+        UploadedFile $file,
+        int $profileId,
+        string $uploadedVia = 'user_web',
+        string $primaryMode = ProcessProfilePhoto::PRIMARY_MODE_REPLACE_PRIMARY_UPDATE_EXISTING,
+    ): string
     {
         Log::info('INSIDE IMAGE PROCESSING SERVICE');
 
@@ -36,7 +41,7 @@ class ImageProcessingService
             'path' => $tmpPath,
         ]);
 
-        $this->dispatchProcessingJob($tmpPath, $profileId, 'user_web', ProcessProfilePhoto::PRIMARY_MODE_REPLACE_PRIMARY_UPDATE_EXISTING);
+        $this->dispatchProcessingJob($tmpPath, $profileId, $uploadedVia, $primaryMode);
 
         // Not publicly served; used only as a placeholder so the UI remains consistent until processing finishes.
         return 'pending/'.$tmpName;
