@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\FieldRegistryApiController;
 use App\Http\Controllers\Api\InterestApiController;
 use App\Http\Controllers\Api\MatrimonyProfileApiController;
 use App\Http\Controllers\Api\MobileBiodataExportApiController;
+use App\Http\Controllers\Api\MobileChatApiController;
 use App\Http\Controllers\Api\MobileNotificationApiController;
 use App\Http\Controllers\Api\MobilePlanApiController;
 use App\Http\Controllers\Api\MobileProfilePhotoApiController;
@@ -57,6 +58,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications/unread-count', [MobileNotificationApiController::class, 'unreadCount']); // MOBILE NOTIFICATIONS COUNT
     Route::post('/notifications/{id}/read', [MobileNotificationApiController::class, 'markRead']); // MARK NOTIFICATION READ
     Route::post('/notifications/read-all', [MobileNotificationApiController::class, 'markAllRead']); // MARK ALL NOTIFICATIONS READ
+    Route::get('/chats', [MobileChatApiController::class, 'index']); // MOBILE CHAT INBOX
+    Route::get('/chats/unread-count', [MobileChatApiController::class, 'unreadCount']); // MOBILE CHAT UNREAD COUNT
+    Route::post('/matrimony-profiles/{id}/chat/start', [MobileChatApiController::class, 'start']); // START MOBILE CHAT
+    Route::get('/chats/{conversation}', [MobileChatApiController::class, 'show']); // MOBILE CHAT THREAD
+    Route::post('/chats/{conversation}/messages', [MobileChatApiController::class, 'sendText']); // SEND MOBILE CHAT TEXT
+    Route::post('/chats/{conversation}/read', [MobileChatApiController::class, 'read']); // MARK MOBILE CHAT READ
     Route::get('/settings', [MobileSettingsApiController::class, 'index']); // MOBILE SETTINGS
     Route::put('/settings/privacy', [MobileSettingsApiController::class, 'updatePrivacy']); // UPDATE PRIVACY SETTINGS
     Route::put('/settings/notifications', [MobileSettingsApiController::class, 'updateNotifications']); // UPDATE NOTIFICATION SETTINGS

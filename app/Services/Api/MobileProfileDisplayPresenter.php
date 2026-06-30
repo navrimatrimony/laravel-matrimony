@@ -19,6 +19,9 @@ use App\Models\User;
 use App\Services\CommunicationPolicyService;
 use App\Services\ContactAccessService;
 use App\Services\ContactRequestService;
+use App\Services\Chat\ChatConversationService;
+use App\Services\Chat\ChatPolicyService;
+use App\Services\Chat\PolicyDecision;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\IncomeEngineService;
 use App\Services\EducationService;
@@ -115,6 +118,7 @@ class MobileProfileDisplayPresenter
         [$photoCount, $primaryPhotoUrl] = $this->visiblePhotoSummary($profile);
         $comparison = $this->comparisonPayload($profile, $viewerProfile);
         $contact = $this->contactPayload($profile, $viewerProfile, $viewer);
+        $chat = $this->chatPayload($profile, $viewerProfile);
         $gunamilan = $this->gunamilanPayload($profile, $viewerProfile);
 
         $sections = array_values(array_filter([
@@ -148,6 +152,7 @@ class MobileProfileDisplayPresenter
             'share' => $this->sharePayload($profile, $age, $communityLabel, $occupationLabel, $locationLabel),
             'comparison' => $comparison,
             'contact' => $contact,
+            'chat' => $chat,
             'gunamilan' => $gunamilan,
         ];
     }
@@ -1732,6 +1737,138 @@ class MobileProfileDisplayPresenter
             'is_shortlisted' => $isShortlisted,
             'is_hidden' => $isHidden,
             'is_blocked' => $isBlocked,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function chatPayload(MatrimonyProfile $profile, ?MatrimonyProfile $viewerProfile): array
+    {
+        if ($viewerProfile === null) {
+            return $this->chatPayloadState(
+                enabled: false,
+                state: 'unavailable',
+                message: 'Login and profile are required to use chat.'
+            );
+        }
+
+        if ((int) $viewerProfile->id === (int) $profile->id) {
+            return $this->chatPayloadState(
+                enabled: false,
+                state: 'unavailable',
+                message: 'Chat is not available on your own profile.',
+                reason: 'same_profile'
+            );
+        }
+
+        try {
+            $conversation = app(ChatConversationService::class)
+                ->findConversationBetweenProfiles((int) $viewerProfile->id, (int) $profile->id);
+            $policy = app(ChatPolicyService::class);
+
+            if ($conversation !== null) {
+                $access = $policy->canAccessMessaging($viewerProfile, $profile);
+                if (! $access->allowed) {
+                    return $this->chatPayloadFromDecision($access);
+                }
+
+                return $this->chatPayloadState(
+                    enabled: true,
+                    state: 'available',
+                    message: 'Chat is available.',
+                    action: [
+                        'label' => 'Chat',
+                        'action' => 'open_chat',
+                        'enabled' => true,
+                    ],
+                    conversationId: (int) $conversation->id,
+                    canSend: $this->chatPolicyPayload($policy->canSendMessage($viewerProfile, $profile, $conversation))
+                );
+            }
+
+            $decision = $policy->canStartConversation($viewerProfile, $profile);
+            if (! $decision->allowed) {
+                return $this->chatPayloadFromDecision($decision);
+            }
+
+            return $this->chatPayloadState(
+                enabled: true,
+                state: 'available',
+                message: 'Chat is available.',
+                action: [
+                    'label' => 'Chat',
+                    'action' => 'start_chat',
+                    'enabled' => true,
+                ],
+                canSend: $this->chatPolicyPayload($decision)
+            );
+        } catch (Throwable) {
+            return $this->chatPayloadState(
+                enabled: false,
+                state: 'unavailable',
+                message: 'Chat is not available right now.'
+            );
+        }
+    }
+
+    private function chatPayloadFromDecision(PolicyDecision $decision): array
+    {
+        return $this->chatPayloadState(
+            enabled: true,
+            state: 'locked',
+            message: $decision->humanMessage !== '' ? $decision->humanMessage : 'Chat is not available.',
+            action: [
+                'label' => 'Chat',
+                'action' => 'chat_locked',
+                'enabled' => false,
+            ],
+            reason: $decision->code,
+            lockedUntil: $decision->lockedUntil,
+            canSend: $this->chatPolicyPayload($decision)
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $action
+     * @param  array<string, mixed>|null  $canSend
+     * @return array<string, mixed>
+     */
+    private function chatPayloadState(
+        bool $enabled,
+        string $state,
+        ?string $message,
+        ?array $action = null,
+        ?int $conversationId = null,
+        ?string $reason = null,
+        ?\DateTimeInterface $lockedUntil = null,
+        ?array $canSend = null,
+    ): array {
+        $state = in_array($state, ['available', 'locked', 'unavailable'], true) ? $state : 'unavailable';
+
+        return [
+            'enabled' => $enabled,
+            'state' => $state,
+            'message' => $message,
+            'action' => $action,
+            'conversation_id' => $conversationId,
+            'reason' => $reason,
+            'locked_until' => $lockedUntil?->format(DATE_ATOM),
+            'can_send' => $canSend,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function chatPolicyPayload(PolicyDecision $decision): array
+    {
+        return [
+            'allowed' => $decision->allowed,
+            'code' => $decision->code,
+            'message' => $this->cleanString($decision->humanMessage),
+            'locked_until' => $decision->lockedUntil?->format(DATE_ATOM),
+            'meta' => $decision->meta,
         ];
     }
 
