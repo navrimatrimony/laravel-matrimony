@@ -24,8 +24,13 @@ require __DIR__.'/web/admin-suchak.php';
 require __DIR__.'/auth.php';
 
 use App\Http\Controllers\PlansController;
+use App\Http\Controllers\MobilePlanCheckoutBridgeController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Middleware\EnforceCardOnboarding;
+
+Route::get('/mobile/plans/checkout', MobilePlanCheckoutBridgeController::class)
+    ->middleware(['signed', 'throttle:20,1'])
+    ->name('mobile.plans.checkout.bridge');
 
 Route::middleware('auth')->group(function () {
     Route::get('/plans', [PlansController::class, 'index'])->name('plans.index');

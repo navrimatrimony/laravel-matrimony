@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\ExtendedFieldApiController;
 use App\Http\Controllers\Api\FieldRegistryApiController;
 use App\Http\Controllers\Api\InterestApiController;
 use App\Http\Controllers\Api\MatrimonyProfileApiController;
+use App\Http\Controllers\Api\MobilePlanApiController;
 use App\Http\Controllers\Api\ProfileSetupLookupController;
 use App\Http\Controllers\Api\ProfileActionApiController;
 use App\Http\Controllers\Api\ProfileFieldLockApiController;
@@ -36,6 +37,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/contact-inbox', [ContactInboxApiController::class, 'index']); // CONTACT REQUEST INBOX
     Route::post('/contact-requests/{id}/approve', [ContactInboxApiController::class, 'approve']); // APPROVE CONTACT REQUEST
     Route::post('/contact-requests/{id}/reject', [ContactInboxApiController::class, 'reject']); // REJECT CONTACT REQUEST
+    Route::get('/plans/current', [MobilePlanApiController::class, 'current']); // CURRENT PLAN + CONTACT QUOTA
+    Route::get('/plans', [MobilePlanApiController::class, 'index']); // MOBILE PLAN CATALOG
+    Route::post('/plans/{plan}/checkout', [MobilePlanApiController::class, 'checkout']); // START WEB CHECKOUT BRIDGE
     Route::post('/matrimony-profiles/{id}/shortlist', [ProfileActionApiController::class, 'shortlist']); // SHORTLIST PROFILE
     Route::delete('/matrimony-profiles/{id}/shortlist', [ProfileActionApiController::class, 'unshortlist']); // REMOVE SHORTLIST
     Route::post('/matrimony-profiles/{id}/hide', [ProfileActionApiController::class, 'hide']); // HIDE PROFILE FROM LISTS
