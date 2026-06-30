@@ -23,10 +23,15 @@ require __DIR__.'/web/admin.php';
 require __DIR__.'/web/admin-suchak.php';
 require __DIR__.'/auth.php';
 
-use App\Http\Controllers\PlansController;
+use App\Http\Controllers\Api\MobileBiodataExportApiController;
 use App\Http\Controllers\MobilePlanCheckoutBridgeController;
+use App\Http\Controllers\PlansController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Middleware\EnforceCardOnboarding;
+
+Route::get('/mobile/biodata/export', [MobileBiodataExportApiController::class, 'download'])
+    ->middleware(['throttle:20,1'])
+    ->name('mobile.biodata.export.download');
 
 Route::get('/mobile/plans/checkout', MobilePlanCheckoutBridgeController::class)
     ->middleware(['throttle:20,1'])

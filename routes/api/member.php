@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\ExtendedFieldApiController;
 use App\Http\Controllers\Api\FieldRegistryApiController;
 use App\Http\Controllers\Api\InterestApiController;
 use App\Http\Controllers\Api\MatrimonyProfileApiController;
+use App\Http\Controllers\Api\MobileBiodataExportApiController;
 use App\Http\Controllers\Api\MobileNotificationApiController;
 use App\Http\Controllers\Api\MobilePlanApiController;
 use App\Http\Controllers\Api\MobileProfilePhotoApiController;
@@ -50,6 +51,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/plans/current', [MobilePlanApiController::class, 'current']); // CURRENT PLAN + CONTACT QUOTA
     Route::get('/plans', [MobilePlanApiController::class, 'index']); // MOBILE PLAN CATALOG
     Route::post('/plans/{plan}/checkout', [MobilePlanApiController::class, 'checkout']); // START WEB CHECKOUT BRIDGE
+    Route::get('/biodata/export-options', [MobileBiodataExportApiController::class, 'options']); // BIODATA EXPORT OPTIONS
+    Route::post('/biodata/export', [MobileBiodataExportApiController::class, 'export']); // CREATE SIGNED BIODATA EXPORT LINK
     Route::get('/notifications', [MobileNotificationApiController::class, 'index']); // MOBILE NOTIFICATIONS LIST
     Route::get('/notifications/unread-count', [MobileNotificationApiController::class, 'unreadCount']); // MOBILE NOTIFICATIONS COUNT
     Route::post('/notifications/{id}/read', [MobileNotificationApiController::class, 'markRead']); // MARK NOTIFICATION READ
