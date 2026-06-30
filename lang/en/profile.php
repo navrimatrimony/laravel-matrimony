@@ -249,7 +249,7 @@ return [
     'biodata_export_parichay_title' => '|| Parichay Patra ||',
     'biodata_export_photo_side_title' => 'Marathi Matrimony Details',
     'biodata_export_generated_on' => 'Generated from saved profile on :date',
-    'biodata_export_brand_footer' => 'This biodata was created through https://navrimilenavryala.com.',
+    'biodata_export_brand_footer' => 'Generated using :site.',
     'biodata_export_blessing' => '| Shubham Bhavatu |',
     'biodata_export_not_disclosed' => 'Not disclosed',
     'biodata_export_marriage_details' => 'Marriage details',

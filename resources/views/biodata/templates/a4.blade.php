@@ -278,5 +278,5 @@
         </main>
         <div class="biodata-export-blessing">{{ __('profile.biodata_export_blessing') }}</div>
     </div>
-    <div class="biodata-export-brand-footer">{{ __('profile.biodata_export_brand_footer') }}</div>
+    @include('biodata.templates.partials.generated-footer', ['class' => 'biodata-export-brand-footer'])
 </div>

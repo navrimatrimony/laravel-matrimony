@@ -225,7 +225,7 @@ return [
     'biodata_export_parichay_title' => '|| परिचय पत्र ||',
     'biodata_export_photo_side_title' => 'मराठी वैवाहिक माहिती',
     'biodata_export_generated_on' => 'सेव्ह केलेल्या प्रोफाइलवरून :date रोजी तयार केले',
-    'biodata_export_brand_footer' => 'हा बायोडाटा https://navrimilenavryala.com मधून तयार केला आहे.',
+    'biodata_export_brand_footer' => 'हा बायोडाटा :site वापरून तयार केला आहे.',
     'biodata_export_blessing' => '| शुभं भवतु |',
     'biodata_export_not_disclosed' => 'उघड केलेले नाही',
     'biodata_export_marriage_details' => 'लग्न तपशील',

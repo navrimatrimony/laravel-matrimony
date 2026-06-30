@@ -291,7 +291,7 @@
                         @endforelse
                     </main>
 
-                    <div class="photo-side-footer">{{ __('profile.biodata_export_brand_footer') }}</div>
+                    @include('biodata.templates.partials.generated-footer', ['class' => 'photo-side-footer'])
                 </td>
             </tr>
         </table>
