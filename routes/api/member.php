@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\InterestApiController;
 use App\Http\Controllers\Api\MatrimonyProfileApiController;
 use App\Http\Controllers\Api\MobileNotificationApiController;
 use App\Http\Controllers\Api\MobilePlanApiController;
+use App\Http\Controllers\Api\MobileSettingsApiController;
 use App\Http\Controllers\Api\ProfileSetupLookupController;
 use App\Http\Controllers\Api\ProfileActionApiController;
 use App\Http\Controllers\Api\ProfileFieldLockApiController;
@@ -45,6 +46,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications/unread-count', [MobileNotificationApiController::class, 'unreadCount']); // MOBILE NOTIFICATIONS COUNT
     Route::post('/notifications/{id}/read', [MobileNotificationApiController::class, 'markRead']); // MARK NOTIFICATION READ
     Route::post('/notifications/read-all', [MobileNotificationApiController::class, 'markAllRead']); // MARK ALL NOTIFICATIONS READ
+    Route::get('/settings', [MobileSettingsApiController::class, 'index']); // MOBILE SETTINGS
+    Route::put('/settings/privacy', [MobileSettingsApiController::class, 'updatePrivacy']); // UPDATE PRIVACY SETTINGS
+    Route::put('/settings/notifications', [MobileSettingsApiController::class, 'updateNotifications']); // UPDATE NOTIFICATION SETTINGS
+    Route::put('/settings/communication', [MobileSettingsApiController::class, 'updateCommunication']); // UPDATE COMMUNICATION SETTINGS
     Route::post('/matrimony-profiles/{id}/shortlist', [ProfileActionApiController::class, 'shortlist']); // SHORTLIST PROFILE
     Route::delete('/matrimony-profiles/{id}/shortlist', [ProfileActionApiController::class, 'unshortlist']); // REMOVE SHORTLIST
     Route::post('/matrimony-profiles/{id}/hide', [ProfileActionApiController::class, 'hide']); // HIDE PROFILE FROM LISTS
