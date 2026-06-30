@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\MatrimonyProfileApiController;
 use App\Http\Controllers\Api\MobileNotificationApiController;
 use App\Http\Controllers\Api\MobilePlanApiController;
 use App\Http\Controllers\Api\MobileProfilePhotoApiController;
+use App\Http\Controllers\Api\MobileProfileListApiController;
 use App\Http\Controllers\Api\MobileSettingsApiController;
 use App\Http\Controllers\Api\ProfileSetupLookupController;
 use App\Http\Controllers\Api\ProfileActionApiController;
@@ -57,9 +58,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/settings/privacy', [MobileSettingsApiController::class, 'updatePrivacy']); // UPDATE PRIVACY SETTINGS
     Route::put('/settings/notifications', [MobileSettingsApiController::class, 'updateNotifications']); // UPDATE NOTIFICATION SETTINGS
     Route::put('/settings/communication', [MobileSettingsApiController::class, 'updateCommunication']); // UPDATE COMMUNICATION SETTINGS
+    Route::get('/profile-lists/shortlisted', [MobileProfileListApiController::class, 'shortlisted']); // MY SHORTLIST
+    Route::get('/profile-lists/blocked', [MobileProfileListApiController::class, 'blocked']); // BLOCKED PROFILES
+    Route::get('/profile-lists/hidden', [MobileProfileListApiController::class, 'hidden']); // HIDDEN PROFILES
     Route::post('/matrimony-profiles/{id}/shortlist', [ProfileActionApiController::class, 'shortlist']); // SHORTLIST PROFILE
     Route::delete('/matrimony-profiles/{id}/shortlist', [ProfileActionApiController::class, 'unshortlist']); // REMOVE SHORTLIST
     Route::post('/matrimony-profiles/{id}/hide', [ProfileActionApiController::class, 'hide']); // HIDE PROFILE FROM LISTS
+    Route::delete('/matrimony-profiles/{id}/hide', [ProfileActionApiController::class, 'unhide']); // UNHIDE PROFILE
     Route::post('/matrimony-profiles/{id}/block', [ProfileActionApiController::class, 'block']); // BLOCK PROFILE
     Route::delete('/matrimony-profiles/{id}/block', [ProfileActionApiController::class, 'unblock']); // UNBLOCK PROFILE
     Route::post('/interests', [InterestApiController::class, 'store']); // SEND INTEREST

@@ -95,6 +95,23 @@ class ProfileActionApiController extends Controller
         return $this->success('Profile hidden.', $owner, $target);
     }
 
+    public function unhide(Request $request, int $id): JsonResponse
+    {
+        $context = $this->actionContext($request, $id, requireVisible: false);
+        if ($context instanceof JsonResponse) {
+            return $context;
+        }
+
+        [$owner, $target] = $context;
+
+        HiddenProfile::query()
+            ->where('owner_profile_id', $owner->id)
+            ->where('hidden_profile_id', $target->id)
+            ->delete();
+
+        return $this->success('Profile unhidden.', $owner, $target);
+    }
+
     public function block(Request $request, int $id): JsonResponse
     {
         $context = $this->actionContext($request, $id, requireVisible: false);
