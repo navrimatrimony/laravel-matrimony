@@ -3,6 +3,8 @@
 use App\Http\Controllers\AbuseReportController;
 use App\Http\Controllers\Api\BiodataIntakeApiController;
 use App\Http\Controllers\Api\CasteLookupController;
+use App\Http\Controllers\Api\ContactActionApiController;
+use App\Http\Controllers\Api\ContactInboxApiController;
 use App\Http\Controllers\Api\ExtendedFieldApiController;
 use App\Http\Controllers\Api\FieldRegistryApiController;
 use App\Http\Controllers\Api\InterestApiController;
@@ -29,6 +31,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/matrimony-profiles', [MatrimonyProfileApiController::class, 'index']); // LIST ALL PROFILES
     Route::get('/matrimony-profiles/more-sections', [MatrimonyProfileApiController::class, 'moreSections']); // MOBILE MORE MATCHES SECTIONS
     Route::get('/matrimony-profiles/{id}', [MatrimonyProfileApiController::class, 'showById']); // GET PROFILE BY ID
+    Route::post('/matrimony-profiles/{id}/contact-reveal', [ContactActionApiController::class, 'reveal']); // REVEAL CONTACT
+    Route::post('/matrimony-profiles/{id}/contact-requests', [ContactInboxApiController::class, 'store']); // REQUEST CONTACT
+    Route::get('/contact-inbox', [ContactInboxApiController::class, 'index']); // CONTACT REQUEST INBOX
+    Route::post('/contact-requests/{id}/approve', [ContactInboxApiController::class, 'approve']); // APPROVE CONTACT REQUEST
+    Route::post('/contact-requests/{id}/reject', [ContactInboxApiController::class, 'reject']); // REJECT CONTACT REQUEST
     Route::post('/matrimony-profiles/{id}/shortlist', [ProfileActionApiController::class, 'shortlist']); // SHORTLIST PROFILE
     Route::delete('/matrimony-profiles/{id}/shortlist', [ProfileActionApiController::class, 'unshortlist']); // REMOVE SHORTLIST
     Route::post('/matrimony-profiles/{id}/hide', [ProfileActionApiController::class, 'hide']); // HIDE PROFILE FROM LISTS

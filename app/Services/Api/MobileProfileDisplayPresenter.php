@@ -3,16 +3,22 @@
 namespace App\Services\Api;
 
 use App\Models\Block;
+use App\Models\ContactGrant;
+use App\Models\ContactRequest;
 use App\Models\EducationDegree;
 use App\Models\HiddenProfile;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Models\Plan;
+use App\Models\ProfileVisibilitySetting;
 use App\Models\ProfilePhoto;
 use App\Models\Shortlist;
+use App\Models\SuchakProfileRepresentation;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\CommunicationPolicyService;
 use App\Services\ContactAccessService;
+use App\Services\ContactRequestService;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\IncomeEngineService;
 use App\Services\EducationService;
@@ -1061,13 +1067,21 @@ class MobileProfileDisplayPresenter
 
         try {
             $profile->loadMissing('user');
+            $contactRequestContext = $this->contactRequestContext($profile, $viewer);
+            if ($this->isSuchakRoutedProfile($profile)) {
+                return $this->contactPayloadState(
+                    enabled: true,
+                    state: 'unavailable',
+                    message: 'Contact for this profile is handled outside the mobile contact request flow.'
+                );
+            }
 
             $contactAccess = app(ContactAccessService::class)->resolveViewerContext(
                 $viewer,
                 $profile,
                 $this->acceptedInterestExists($viewerProfile, $profile),
                 $this->profileVisibilitySettings($profile),
-                null,
+                $contactRequestContext['grant_reveal'],
             );
         } catch (Throwable) {
             return $this->contactPayloadState(
@@ -1077,14 +1091,15 @@ class MobileProfileDisplayPresenter
             );
         }
 
-        return $this->contactPayloadFromAccess($contactAccess);
+        return $this->contactPayloadFromAccess($contactAccess, $contactRequestContext);
     }
 
     /**
      * @param  array<string, mixed>  $contactAccess
+     * @param  array<string, mixed>|null  $contactRequestContext
      * @return array<string, mixed>
      */
-    private function contactPayloadFromAccess(array $contactAccess): array
+    private function contactPayloadFromAccess(array $contactAccess, ?array $contactRequestContext = null): array
     {
         $phone = $this->cleanString($contactAccess['paid_contact_phone'] ?? null);
         $email = $this->cleanString($contactAccess['paid_contact_email'] ?? null);
@@ -1117,9 +1132,16 @@ class MobileProfileDisplayPresenter
                 enabled: true,
                 state: 'unlock_available',
                 message: 'Contact unlock is available for this profile.',
-                primaryCta: $this->contactPrimaryCta('View Contact', 'primary', 'view_contact', false),
+                primaryCta: $this->contactPrimaryCta('View Contact', 'primary', 'view_contact', true),
                 whatsappVisible: $showMediator,
             );
+        }
+
+        if (($contactAccess['show_contact_request_rail'] ?? false) === true) {
+            $requestPayload = $this->contactRequestPayload($contactRequestContext);
+            if ($requestPayload !== null) {
+                return $requestPayload;
+            }
         }
 
         if ($showMediator) {
@@ -1163,6 +1185,8 @@ class MobileProfileDisplayPresenter
         bool $whatsappVisible = false,
         ?string $whatsappMessage = null,
         bool $whatsappEnabled = false,
+        ?array $contactRequest = null,
+        ?array $requestOptions = null,
     ): array {
         $state = in_array($state, [
             'revealed',
@@ -1170,6 +1194,10 @@ class MobileProfileDisplayPresenter
             'unlock_available',
             'upgrade_required',
             'whatsapp_response_available',
+            'contact_request_available',
+            'contact_request_pending',
+            'contact_request_rejected',
+            'contact_request_unavailable',
             'unavailable',
         ], true) ? $state : 'unavailable';
 
@@ -1181,6 +1209,8 @@ class MobileProfileDisplayPresenter
             'phone' => $phone,
             'email' => $email,
             'primary_cta' => $primaryCta,
+            'contact_request' => $contactRequest,
+            'request_options' => $requestOptions,
             'whatsapp_response' => [
                 'visible' => $whatsappVisible,
                 'label' => 'WhatsApp Response',
@@ -1196,7 +1226,7 @@ class MobileProfileDisplayPresenter
     private function contactPrimaryCta(string $label, string $style, string $action, bool $enabled): array
     {
         $style = in_array($style, ['primary', 'secondary', 'disabled'], true) ? $style : 'disabled';
-        $action = in_array($action, ['view_contact', 'upgrade', 'none'], true) ? $action : 'none';
+        $action = in_array($action, ['view_contact', 'send_contact_request', 'upgrade', 'none'], true) ? $action : 'none';
 
         return [
             'label' => $label,
@@ -1204,6 +1234,246 @@ class MobileProfileDisplayPresenter
             'action' => $action,
             'enabled' => $enabled,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function contactRequestContext(MatrimonyProfile $profile, User $viewer): array
+    {
+        $receiver = $profile->user;
+        if (! $receiver instanceof User) {
+            return [
+                'disabled' => true,
+                'state' => 'unavailable',
+                'request' => null,
+                'grant' => null,
+                'cooldown_ends_at' => null,
+                'can_send' => false,
+                'grant_reveal' => null,
+            ];
+        }
+
+        $service = app(ContactRequestService::class);
+        if ($service->isContactRequestDisabled()) {
+            return [
+                'disabled' => true,
+                'state' => 'disabled',
+                'request' => null,
+                'grant' => null,
+                'cooldown_ends_at' => null,
+                'can_send' => false,
+                'grant_reveal' => null,
+            ];
+        }
+
+        $senderState = $service->getSenderState($viewer, $receiver);
+        $senderState['disabled'] = false;
+        $senderState['can_send'] = $service->canSendContactRequest($viewer, $receiver);
+        $senderState['grant_reveal'] = $this->contactGrantReveal($profile, $senderState);
+
+        return $senderState;
+    }
+
+    /**
+     * @param  array<string, mixed>  $contactRequestContext
+     * @return array<string, string>|null
+     */
+    private function contactGrantReveal(MatrimonyProfile $profile, array $contactRequestContext): ?array
+    {
+        $grant = $contactRequestContext['grant'] ?? null;
+        if (! $grant instanceof ContactGrant || ! $grant->isValid()) {
+            return null;
+        }
+
+        $scopes = array_values(array_map('strval', $grant->granted_scopes ?? []));
+        $payload = [];
+
+        if (in_array('phone', $scopes, true) || in_array('whatsapp', $scopes, true)) {
+            $phone = $this->cleanString($profile->primary_contact_number);
+            if ($phone !== null) {
+                $payload['phone'] = $phone;
+            }
+        }
+
+        if (in_array('email', $scopes, true)) {
+            $email = $this->cleanString($profile->user?->email);
+            if ($email !== null && ! Str::endsWith(Str::lower($email), '@system.local')) {
+                $payload['email'] = $email;
+            }
+        }
+
+        return $payload === [] ? null : $payload;
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $contactRequestContext
+     * @return array<string, mixed>|null
+     */
+    private function contactRequestPayload(?array $contactRequestContext): ?array
+    {
+        if ($contactRequestContext === null || ($contactRequestContext['disabled'] ?? false) === true) {
+            return null;
+        }
+
+        $state = $this->cleanString($contactRequestContext['state'] ?? null) ?? 'none';
+        $canSend = ($contactRequestContext['can_send'] ?? false) === true;
+        $request = $contactRequestContext['request'] ?? null;
+        $cooldownEndsAt = $contactRequestContext['cooldown_ends_at'] ?? null;
+        $requestMeta = $this->contactRequestMeta($state, $request, $cooldownEndsAt);
+
+        if (in_array($state, ['none', 'expired', 'cancelled'], true) && $canSend) {
+            $requestOptions = $this->contactRequestOptionsPayload();
+            if (($requestOptions['scopes'] ?? []) === [] || ($requestOptions['reasons'] ?? []) === []) {
+                return null;
+            }
+
+            return $this->contactPayloadState(
+                enabled: true,
+                state: 'contact_request_available',
+                message: 'You can send a contact request for this profile.',
+                primaryCta: $this->contactPrimaryCta('Request Contact', 'primary', 'send_contact_request', true),
+                contactRequest: $requestMeta,
+                requestOptions: $requestOptions,
+            );
+        }
+
+        if ($state === 'pending') {
+            return $this->contactPayloadState(
+                enabled: true,
+                state: 'contact_request_pending',
+                message: 'Your contact request is pending.',
+                primaryCta: $this->contactPrimaryCta('Request Sent', 'disabled', 'none', false),
+                contactRequest: $requestMeta,
+            );
+        }
+
+        if ($state === 'rejected') {
+            $message = 'Your contact request was rejected.';
+            if ($cooldownEndsAt instanceof \DateTimeInterface) {
+                $message .= ' Cooling period ends on '.$cooldownEndsAt->format('M j, Y').'.';
+            }
+
+            return $this->contactPayloadState(
+                enabled: true,
+                state: 'contact_request_rejected',
+                message: $message,
+                contactRequest: $requestMeta,
+            );
+        }
+
+        if (in_array($state, ['revoked', 'accepted'], true)) {
+            return $this->contactPayloadState(
+                enabled: true,
+                state: 'contact_request_unavailable',
+                message: 'Contact request is not available for this profile.',
+                contactRequest: $requestMeta,
+            );
+        }
+
+        return $this->contactPayloadState(
+            enabled: true,
+            state: 'contact_request_unavailable',
+            message: 'Contact request is available only after accepted interest.',
+            contactRequest: $requestMeta,
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function contactRequestMeta(string $state, mixed $request, mixed $cooldownEndsAt): array
+    {
+        return [
+            'state' => $state,
+            'id' => $request instanceof ContactRequest ? $request->id : null,
+            'status' => $request instanceof ContactRequest ? $request->status : null,
+            'expires_at' => $request instanceof ContactRequest ? $this->dateString($request->expires_at) : null,
+            'cooldown_ends_at' => $this->dateString($cooldownEndsAt),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function contactRequestOptionsPayload(): array
+    {
+        return [
+            'reasons' => $this->contactRequestReasonOptions(),
+            'scopes' => $this->contactRequestScopeOptions(),
+            'default_scopes' => [],
+        ];
+    }
+
+    private function contactRequestReasonOptions(): array
+    {
+        $config = CommunicationPolicyService::getConfig();
+
+        return collect($config['request_reasons'] ?? [])
+            ->map(fn ($label, $key): array => [
+                'key' => (string) $key,
+                'label' => (string) $label,
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function contactRequestScopeOptions(): array
+    {
+        $config = CommunicationPolicyService::getConfig();
+        $scopes = array_keys(array_filter($config['allowed_contact_scopes'] ?? []));
+
+        return collect($scopes)
+            ->map(fn (string $key): array => [
+                'key' => $key,
+                'label' => match ($key) {
+                    'email' => 'Email',
+                    'phone' => 'Phone',
+                    'whatsapp' => 'WhatsApp',
+                    default => Str::headline($key),
+                },
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function isSuchakRoutedProfile(MatrimonyProfile $profile): bool
+    {
+        if (! Schema::hasTable('suchak_profile_representations')) {
+            return false;
+        }
+
+        $publiclyRoutableSuchakQuery = SuchakProfileRepresentation::query()
+            ->publiclyRoutable()
+            ->where('matrimony_profile_id', $profile->id);
+
+        if ((clone $publiclyRoutableSuchakQuery)
+            ->whereIn('representation_mode', SuchakProfileRepresentation::SUCHAK_CREATED_MODES)
+            ->exists()) {
+            return true;
+        }
+
+        if (! (clone $publiclyRoutableSuchakQuery)->exists()
+            || ! Schema::hasTable('profile_visibility_settings')
+            || ! Schema::hasColumn('profile_visibility_settings', 'contact_routing_mode')) {
+            return false;
+        }
+
+        $mode = DB::table('profile_visibility_settings')
+            ->where('profile_id', $profile->id)
+            ->value('contact_routing_mode');
+
+        return ProfileVisibilitySetting::normalizeContactRoutingMode(is_string($mode) ? $mode : null)
+            === ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY;
+    }
+
+    private function dateString(mixed $value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format(DATE_ATOM);
+        }
+
+        return $this->cleanString($value);
     }
 
     private function acceptedInterestExists(MatrimonyProfile $viewerProfile, MatrimonyProfile $targetProfile): bool
