@@ -115,6 +115,7 @@ class MobileProfileDisplayPresenter
         [$photoCount, $primaryPhotoUrl] = $this->visiblePhotoSummary($profile);
         $comparison = $this->comparisonPayload($profile, $viewerProfile);
         $contact = $this->contactPayload($profile, $viewerProfile, $viewer);
+        $gunamilan = $this->gunamilanPayload($profile, $viewerProfile);
 
         $sections = array_values(array_filter([
             $this->basicSection($profile, $isOwnProfile, $ageLabel, $heightLabel, $communityLabel, $locationLabel),
@@ -147,6 +148,7 @@ class MobileProfileDisplayPresenter
             'share' => $this->sharePayload($profile, $age, $communityLabel, $occupationLabel, $locationLabel),
             'comparison' => $comparison,
             'contact' => $contact,
+            'gunamilan' => $gunamilan,
         ];
     }
 
@@ -539,6 +541,176 @@ class MobileProfileDisplayPresenter
         $score = $this->formatGunamilanScore((float) $points, $max);
 
         return $this->comparisonRow('gunamilan', 'Gunamilan', $score, 'Compatible', 'match', true);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function gunamilanPayload(MatrimonyProfile $profile, ?MatrimonyProfile $viewerProfile): array
+    {
+        $base = [
+            'available' => false,
+            'status' => 'unavailable',
+            'title' => 'Gunamilan / Horoscope Match',
+            'score' => null,
+            'total_score' => null,
+            'max_score' => 36.0,
+            'summary_label' => null,
+            'message' => 'Horoscope data is incomplete.',
+            'rows' => [],
+            'missing_fields' => [],
+            'disclaimer' => 'Gunamilan is only a compatibility reference. Families should make the final decision after discussion.',
+        ];
+
+        if ($viewerProfile === null) {
+            return array_merge($base, [
+                'message' => 'Create your profile to view horoscope compatibility.',
+            ]);
+        }
+
+        if ((int) $viewerProfile->id === (int) $profile->id) {
+            return array_merge($base, [
+                'message' => 'Gunamilan is shown for another matched profile.',
+            ]);
+        }
+
+        try {
+            $viewerProfile->loadMissing('horoscope');
+            $profile->loadMissing('horoscope');
+            $result = app(GunamilanService::class)->calculate($viewerProfile, $profile);
+        } catch (Throwable) {
+            return $base;
+        }
+
+        $maxScore = is_numeric($result['max_points'] ?? null) ? (float) $result['max_points'] : 36.0;
+        $missingFields = $this->gunamilanMissingFields($result['missing_fields'] ?? []);
+        $viewerMissingHoroscope = $viewerProfile->horoscope === null;
+        $targetMissingHoroscope = $profile->horoscope === null;
+
+        if (($result['available'] ?? false) !== true) {
+            $status = match (true) {
+                $viewerMissingHoroscope => 'missing_viewer_horoscope',
+                $targetMissingHoroscope => 'missing_target_horoscope',
+                default => 'unavailable',
+            };
+
+            return array_merge($base, [
+                'status' => $status,
+                'max_score' => $maxScore,
+                'message' => $this->gunamilanUnavailableMessage($status),
+                'missing_fields' => $missingFields,
+            ]);
+        }
+
+        $totalScore = is_numeric($result['total_points'] ?? null) ? (float) $result['total_points'] : 0.0;
+
+        return array_merge($base, [
+            'available' => true,
+            'status' => 'available',
+            'score' => $totalScore,
+            'total_score' => $totalScore,
+            'max_score' => $maxScore,
+            'summary_label' => $this->formatGunamilanScore($totalScore, $maxScore),
+            'message' => null,
+            'rows' => $this->gunamilanRows($result['sections'] ?? []),
+            'missing_fields' => [],
+        ]);
+    }
+
+    private function gunamilanUnavailableMessage(string $status): string
+    {
+        return match ($status) {
+            'missing_viewer_horoscope' => 'Your horoscope data is incomplete.',
+            'missing_target_horoscope' => 'This profile has incomplete horoscope data.',
+            default => 'Horoscope data is incomplete.',
+        };
+    }
+
+    /**
+     * @param  mixed  $sections
+     * @return array<int, array<string, mixed>>
+     */
+    private function gunamilanRows(mixed $sections): array
+    {
+        if (! is_array($sections)) {
+            return [];
+        }
+
+        $rows = [];
+        foreach ($sections as $section) {
+            if (! is_array($section)) {
+                continue;
+            }
+
+            $label = $this->cleanString($section['label'] ?? null);
+            if ($label === null) {
+                continue;
+            }
+
+            $points = is_numeric($section['points'] ?? null) ? (float) $section['points'] : 0.0;
+            $maxPoints = is_numeric($section['max_points'] ?? null) ? (float) $section['max_points'] : 0.0;
+
+            $rows[] = [
+                'key' => $this->cleanString($section['key'] ?? null),
+                'guna_name' => $label,
+                'label' => $label,
+                'obtained' => $points,
+                'points' => $points,
+                'max' => $maxPoints,
+                'max_points' => $maxPoints,
+                'status' => $this->cleanString($section['status'] ?? null) ?? 'partial',
+                'match_label' => $this->gunamilanRowMatchLabel($section),
+                'note' => $this->cleanString($section['note'] ?? null),
+                'bride_value' => $this->cleanString($section['bride_value'] ?? null),
+                'groom_value' => $this->cleanString($section['groom_value'] ?? null),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<string, mixed>  $section
+     */
+    private function gunamilanRowMatchLabel(array $section): string
+    {
+        $status = $this->cleanString($section['status'] ?? null);
+
+        return match ($status) {
+            'full' => 'Full match',
+            'missing' => 'Missing data',
+            default => 'Partial match',
+        };
+    }
+
+    /**
+     * @param  mixed  $missingFields
+     * @return array<int, array{side: string, label: string}>
+     */
+    private function gunamilanMissingFields(mixed $missingFields): array
+    {
+        if (! is_array($missingFields)) {
+            return [];
+        }
+
+        $rows = [];
+        foreach ($missingFields as $field) {
+            if (! is_array($field)) {
+                continue;
+            }
+
+            $label = $this->cleanString($field['label'] ?? null);
+            if ($label === null) {
+                continue;
+            }
+
+            $rows[] = [
+                'side' => $this->cleanString($field['side'] ?? null) ?? '',
+                'label' => $label,
+            ];
+        }
+
+        return $rows;
     }
 
     private function educationText(MatrimonyProfile $profile): ?string
