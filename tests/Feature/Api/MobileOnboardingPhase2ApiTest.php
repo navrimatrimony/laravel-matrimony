@@ -462,6 +462,54 @@ class MobileOnboardingPhase2ApiTest extends TestCase
         $this->assertSame($motherTongue->id, (int) $profile->mother_tongue_id);
     }
 
+    public function test_existing_residence_less_profile_defers_basic_info_until_location_is_saved(): void
+    {
+        $user = $this->verifiedAccount();
+        $profile = MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'full_name' => 'Old Candidate Name',
+            'lifecycle_state' => 'draft',
+        ]);
+        DB::table('matrimony_profiles')->where('id', $profile->id)->update([
+            'lifecycle_state' => 'active',
+        ]);
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/onboarding/profile/save-step', [
+            'step' => 'basic_info',
+            'data' => [
+                'full_name' => 'Candidate Name',
+                'date_of_birth' => '1997-05-15',
+                'height_cm' => 165,
+            ],
+        ])->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('profile.location_valid', false);
+
+        $profile->refresh();
+        $this->assertSame('Old Candidate Name', $profile->full_name);
+        $this->assertSame('Candidate Name', data_get(
+            MobileOnboardingDraft::query()->where('user_id', $user->id)->firstOrFail()->draft_data,
+            'basic_info.full_name'
+        ));
+
+        $leaf = $this->locationLeaf(true);
+        $this->postJson('/api/v1/onboarding/profile/save-step', [
+            'step' => 'location',
+            'data' => [
+                'location_id' => $leaf->id,
+            ],
+        ])->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('profile.location_valid', true);
+
+        $profile->refresh();
+        $this->assertSame($leaf->id, (int) $profile->location_id);
+        $this->assertSame('Candidate Name', $profile->full_name);
+        $this->assertSame(165, (int) $profile->height_cm);
+        $this->assertSame('1997-05-15', substr((string) $profile->date_of_birth, 0, 10));
+    }
+
     public function test_activation_checklist_blocks_missing_unapproved_photo_and_invalid_location(): void
     {
         $user = $this->verifiedAccount();

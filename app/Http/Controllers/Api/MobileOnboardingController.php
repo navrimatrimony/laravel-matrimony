@@ -147,8 +147,13 @@ class MobileOnboardingController extends Controller
         }
 
         $snapshot = $this->snapshotService->buildSnapshot($step, $data, $user, $profile);
-        if ($this->snapshotHasWritableData($snapshot)) {
+        if ($this->snapshotHasWritableData($snapshot) && $this->shouldApplyProfileStepNow($profile, $step)) {
             $mutationService->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
+            $profile = $profile->fresh() ?? $profile;
+            if ($step === 'location') {
+                $this->applyDeferredProfileStepsAfterLocation($user, $profile, $mutationService);
+                $profile = $profile->fresh() ?? $profile;
+            }
         }
 
         $draft = $this->draftService->saveStep($user, $step, $data);
@@ -233,6 +238,51 @@ class MobileOnboardingController extends Controller
         }
 
         return isset($snapshot['core']) && is_array($snapshot['core']) && $snapshot['core'] !== [];
+    }
+
+    private function shouldApplyProfileStepNow(MatrimonyProfile $profile, string $step): bool
+    {
+        if ($step === 'location') {
+            return true;
+        }
+
+        if (($profile->lifecycle_state ?? 'draft') === 'draft') {
+            return true;
+        }
+
+        return $this->profileHasResidence($profile);
+    }
+
+    private function profileHasResidence(MatrimonyProfile $profile): bool
+    {
+        $locationId = $profile->location_id;
+
+        return $locationId !== null && $locationId !== '' && (int) $locationId > 0;
+    }
+
+    private function applyDeferredProfileStepsAfterLocation(User $user, MatrimonyProfile $profile, MutationService $mutationService): void
+    {
+        if (! $this->profileHasResidence($profile)) {
+            return;
+        }
+
+        $draft = $this->draftService->getForUser($user);
+        $draftData = is_array($draft?->draft_data) ? $draft->draft_data : [];
+
+        foreach (['basic_info', 'religion_caste'] as $deferredStep) {
+            $stepData = $draftData[$deferredStep] ?? null;
+            if (! is_array($stepData) || $stepData === []) {
+                continue;
+            }
+
+            $snapshot = $this->snapshotService->buildSnapshot($deferredStep, $stepData, $user, $profile);
+            if (! $this->snapshotHasWritableData($snapshot)) {
+                continue;
+            }
+
+            $mutationService->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
+            $profile = $profile->fresh() ?? $profile;
+        }
     }
 
     private function validatePhotoDraftData(array $data): void
