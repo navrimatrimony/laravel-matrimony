@@ -235,6 +235,9 @@ class MatrimonyProfileApiController extends Controller
 
         if ($request->has('self_addresses') || $request->has('parents_addresses')) {
             $snapshot['addresses'] = $this->mobileAddressesSnapshotFromApi($request, $profile);
+            if ($request->has('self_addresses')) {
+                $snapshot = $this->mergeMobileCurrentSelfAddressIntoCore($snapshot);
+            }
         }
 
         if ($maritalStatusKey === 'never_married') {
@@ -475,6 +478,58 @@ class MatrimonyProfileApiController extends Controller
             : $this->mobileExistingAddressSnapshotRowsForScope($profile, 'parents');
 
         return array_values(array_merge($selfRows, $parentsRows));
+    }
+
+    /**
+     * Mobile edit sends the structured current address row, while profile-level
+     * residence is still consumed as core.location_id by search, biodata, and
+     * activation gates. Keep both surfaces in sync from the same addresses leaf.
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    private function mergeMobileCurrentSelfAddressIntoCore(array $snapshot): array
+    {
+        $rows = $snapshot['addresses'] ?? [];
+        if (! is_array($rows)) {
+            return $snapshot;
+        }
+
+        $current = null;
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $scope = trim((string) ($row['address_scope'] ?? 'self'));
+            $type = trim((string) ($row['address_type'] ?? $row['address_type_key'] ?? ''));
+            if ($type === '' && $scope === 'self') {
+                $type = 'current';
+            }
+            if ($scope === 'self' && $type === 'current') {
+                $current = $row;
+                break;
+            }
+        }
+
+        if (! is_array($current)) {
+            return $snapshot;
+        }
+
+        if (! isset($snapshot['core']) || ! is_array($snapshot['core'])) {
+            $snapshot['core'] = [];
+        }
+
+        $locationId = $this->positiveIntFromMixed($current['location_id'] ?? $current['city_id'] ?? null);
+        if ($locationId !== null && empty($snapshot['core']['location_id'])) {
+            $snapshot['core']['location_id'] = $locationId;
+        }
+
+        $addressLine = isset($current['address_line']) ? trim((string) $current['address_line']) : '';
+        if ($addressLine !== '' && ! array_key_exists('address_line', $snapshot['core'])) {
+            $snapshot['core']['address_line'] = mb_substr($addressLine, 0, 255);
+        }
+
+        return $snapshot;
     }
 
     /**

@@ -1507,7 +1507,10 @@ test('MobileProfile PUT api v1 matrimony-profile syncs structured self and paren
     expect($selfResponse->json('profile.self_addresses'))->toHaveCount(2);
     expect(collect($selfResponse->json('profile.self_addresses'))->pluck('address_type_key')->all())
         ->toContain('current', 'native');
+    expect((int) $selfResponse->json('profile.location_id'))->toBe((int) $selfCurrent->id);
     expect($selfResponse->json('profile.address_line'))->toBe('Self current line');
+    $targetProfile->refresh();
+    expect((int) $targetProfile->location_id)->toBe((int) $selfCurrent->id);
     expect(DB::table('profile_addresses')->where('profile_id', $targetProfile->id)->where('address_scope', 'self')->count())->toBe(2);
 
     $parentsResponse = $this->putJson('/api/v1/matrimony-profile', [
@@ -1546,10 +1549,13 @@ test('MobileProfile PUT api v1 matrimony-profile syncs structured self and paren
     ]);
 
     $selfUpdateResponse->assertOk();
+    expect((int) $selfUpdateResponse->json('profile.location_id'))->toBe((int) $selfUpdated->id);
     expect($selfUpdateResponse->json('profile.self_addresses'))->toHaveCount(1);
     expect($selfUpdateResponse->json('profile.self_addresses.0.address_line'))->toBe('Updated self current line');
     expect($selfUpdateResponse->json('profile.parents_addresses'))->toHaveCount(1);
     expect($selfUpdateResponse->json('profile.parents_addresses.0.address_line'))->toBe('Parents permanent line');
+    $targetProfile->refresh();
+    expect((int) $targetProfile->location_id)->toBe((int) $selfUpdated->id);
     expect(DB::table('profile_addresses')->where('profile_id', $targetProfile->id)->where('address_scope', 'self')->count())->toBe(1);
     expect(DB::table('profile_addresses')->where('profile_id', $targetProfile->id)->where('address_scope', 'parents')->count())->toBe(1);
 
@@ -1565,6 +1571,7 @@ test('MobileProfile PUT api v1 matrimony-profile syncs structured self and paren
     ]);
 
     $parentsUpdateResponse->assertOk();
+    expect((int) $parentsUpdateResponse->json('profile.location_id'))->toBe((int) $selfUpdated->id);
     expect($parentsUpdateResponse->json('profile.self_addresses'))->toHaveCount(1);
     expect($parentsUpdateResponse->json('profile.self_addresses.0.address_line'))->toBe('Updated self current line');
     expect($parentsUpdateResponse->json('profile.parents_addresses'))->toHaveCount(1);

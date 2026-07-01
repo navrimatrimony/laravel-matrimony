@@ -273,11 +273,14 @@ class MatrimonyProfile extends Model
         return Attribute::make(
             get: function (mixed $value): ?int {
                 if (self::hasColumnCached($this->getTable(), 'location_id')) {
-                    if ($value === null || $value === '') {
-                        return null;
+                    if ($value !== null && $value !== '' && (int) $value > 0) {
+                        return (int) $value;
+                    }
+                    if ($this->exists) {
+                        return ProfileCanonicalResidenceService::locationLeafId((int) $this->id);
                     }
 
-                    return (int) $value;
+                    return null;
                 }
                 if (! $this->exists) {
                     return null;
@@ -309,6 +312,9 @@ class MatrimonyProfile extends Model
                 $raw = null;
                 if (self::hasColumnCached($this->getTable(), 'address_line')) {
                     $raw = $this->attributes['address_line'] ?? null;
+                    if (($raw === null || trim((string) $raw) === '') && $this->exists) {
+                        $raw = ProfileCanonicalResidenceService::addressLineRaw((int) $this->id);
+                    }
                 } elseif ($this->exists) {
                     $raw = ProfileCanonicalResidenceService::addressLineRaw((int) $this->id);
                 }

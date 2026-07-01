@@ -19,6 +19,7 @@ use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class BiodataExportRouteTest extends TestCase
@@ -251,6 +252,23 @@ class BiodataExportRouteTest extends TestCase
 
         $this->assertSame('/matrimony/profile/biodata', $path);
         $this->assertStringNotContainsString('/'.$user->matrimonyProfile->id, $path);
+    }
+
+    public function test_mobile_biodata_options_uses_current_self_address_as_residence(): void
+    {
+        $user = $this->userWithProfileAndSubscription('basic_male');
+        $profile = $user->matrimonyProfile;
+
+        if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
+            DB::table('matrimony_profiles')->where('id', $profile->id)->update(['location_id' => null]);
+        }
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/v1/biodata/export-options');
+
+        $response->assertOk();
+        $this->assertNotContains('Current location is missing.', $response->json('warnings') ?? []);
     }
 
     private function userWithProfileAndSubscription(string $planSlug): User
