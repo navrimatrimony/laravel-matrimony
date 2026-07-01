@@ -101,10 +101,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/matrimony-profile/field-locks', [ProfileFieldLockApiController::class, 'index']); // LIST FIELD LOCKS FOR OWN PROFILE
 
     /*
-    | Phase-4: Biodata Intakes (list + show only)
+    | Phase-4/5: Biodata Intakes (mobile import + review)
     */
-    Route::get('/biodata-intakes', [BiodataIntakeApiController::class, 'index']); // LIST BIODATA INTAKES
-    Route::get('/biodata-intakes/{id}', [BiodataIntakeApiController::class, 'show']); // SHOW BIODATA INTAKE
+    Route::get('/biodata-intakes', [BiodataIntakeApiController::class, 'index']); // LIST MY BIODATA INTAKES
+    Route::post('/biodata-intakes', [BiodataIntakeApiController::class, 'store']); // CREATE FROM MOBILE OCR TEXT
+    Route::get('/biodata-intakes/{id}', [BiodataIntakeApiController::class, 'show']); // SHOW MY BIODATA INTAKE
+    Route::get('/biodata-intakes/{id}/preview', [BiodataIntakeApiController::class, 'preview']); // NORMALIZED REVIEW DRAFT
+    Route::post('/biodata-intakes/{id}/approve', [BiodataIntakeApiController::class, 'approve']); // CONFIRM + GOVERNED APPLY
 
     /*
     | Abuse Reports (User action)
