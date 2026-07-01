@@ -31,6 +31,7 @@ use App\Services\PartnerPreferenceSuggestionService;
 use App\Services\ProfilePreferenceMatchService;
 use App\Services\ProfileLifecycleService;
 use App\Services\ProfilePartnerCommunityFlagService;
+use App\Services\ProfilePhotoAccessService;
 use App\Services\SiteIdentityService;
 use App\Services\ViewTrackingService;
 use App\Support\HeightDisplay;
@@ -116,6 +117,7 @@ class MobileProfileDisplayPresenter
         $occupationLabel = $this->occupationLabel($profile);
         $locationLabel = $this->cleanLocation(ProfileDisplayCopy::profileResidenceDisplayLine($profile));
         [$photoCount, $primaryPhotoUrl] = $this->visiblePhotoSummary($profile);
+        $photoAlbum = $this->photoAlbumPayload($profile, $viewer, $isOwnProfile);
         $comparison = $this->comparisonPayload($profile, $viewerProfile);
         $contact = $this->contactPayload($profile, $viewerProfile, $viewer);
         $chat = $this->chatPayload($profile, $viewerProfile);
@@ -154,6 +156,7 @@ class MobileProfileDisplayPresenter
             'contact' => $contact,
             'chat' => $chat,
             'gunamilan' => $gunamilan,
+            'photo_album' => $photoAlbum,
         ];
     }
 
@@ -2381,6 +2384,90 @@ class MobileProfileDisplayPresenter
         $urls = array_values(array_unique(array_filter($urls)));
 
         return [count($urls), $urls[0] ?? null];
+    }
+
+    /**
+     * @return array{
+     *     slots: list<array{url: string, blur: bool}>,
+     *     message_key: ?string,
+     *     message: ?string,
+     *     tier: string,
+     *     photo_count: int,
+     *     primary_photo_url: ?string,
+     *     has_locked_photos: bool
+     * }
+     */
+    private function photoAlbumPayload(MatrimonyProfile $profile, ?User $viewer, bool $isOwnProfile): array
+    {
+        $presentation = $viewer instanceof User
+            ? app(ProfilePhotoAccessService::class)->buildAlbumPresentation(
+                $viewer,
+                $profile,
+                $isOwnProfile,
+                $this->approvedGalleryPhotoRows($profile)
+            )
+            : [
+                'slots' => [],
+                'message_key' => null,
+                'tier' => 'guest',
+            ];
+
+        $slots = [];
+        $seen = [];
+        foreach (($presentation['slots'] ?? []) as $slot) {
+            if (! is_array($slot)) {
+                continue;
+            }
+
+            $url = trim((string) ($slot['url'] ?? ''));
+            if ($url === '' || isset($seen[$url])) {
+                continue;
+            }
+
+            $seen[$url] = true;
+            $slots[] = [
+                'url' => $url,
+                'blur' => (bool) ($slot['blur'] ?? false),
+            ];
+        }
+
+        $messageKey = is_string($presentation['message_key'] ?? null)
+            ? $presentation['message_key']
+            : null;
+
+        return [
+            'slots' => $slots,
+            'message_key' => $messageKey,
+            'message' => $messageKey !== null ? __($messageKey) : null,
+            'tier' => (string) ($presentation['tier'] ?? 'guest'),
+            'photo_count' => count($slots),
+            'primary_photo_url' => $slots[0]['url'] ?? null,
+            'has_locked_photos' => collect($slots)->contains(fn (array $slot): bool => (bool) $slot['blur']),
+        ];
+    }
+
+    private function approvedGalleryPhotoRows(MatrimonyProfile $profile): \Illuminate\Support\Collection
+    {
+        if (! Schema::hasTable('profile_photos')) {
+            return collect();
+        }
+
+        $query = ProfilePhoto::query()
+            ->where('profile_id', $profile->id)
+            ->effectivelyApproved();
+
+        if (Schema::hasColumn('profile_photos', 'sort_order')) {
+            $query->orderByDesc('is_primary')->orderBy('sort_order')->orderBy('id');
+        } else {
+            $query->orderByDesc('is_primary')->orderByDesc('created_at')->orderBy('id');
+        }
+
+        return $query->get([
+            'id',
+            'profile_id',
+            'file_path',
+            'is_primary',
+        ]);
     }
 
     private function isVerified(MatrimonyProfile $profile): bool

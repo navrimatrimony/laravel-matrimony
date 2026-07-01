@@ -3053,6 +3053,47 @@ test('MobileProfile GET api v1 matrimony profile returns clean display payload b
         ->assertNotFound();
 });
 
+test('MobileProfile detail exposes policy backed approved photo album slots', function () {
+    [$viewerUser, $viewerProfile, , $targetProfile] = mobileApiProfileActionPair();
+    mobileApiAttachProfilePhoto($viewerProfile, 'approved');
+    mobileApiAttachProfilePhoto($targetProfile, 'approved');
+
+    foreach ([
+        ['file' => 'mobile-album-approved-'.$targetProfile->id.'.webp', 'status' => 'approved', 'sort' => 1],
+        ['file' => 'mobile-album-pending-'.$targetProfile->id.'.webp', 'status' => 'pending', 'sort' => 2],
+        ['file' => 'mobile-album-rejected-'.$targetProfile->id.'.webp', 'status' => 'rejected', 'sort' => 3],
+    ] as $row) {
+        Storage::disk('public')->put('matrimony_photos/'.$row['file'], 'fake-webp-bytes');
+        ProfilePhoto::query()->create([
+            'profile_id' => $targetProfile->id,
+            'file_path' => $row['file'],
+            'is_primary' => false,
+            'sort_order' => $row['sort'],
+            'uploaded_via' => 'test',
+            'approved_status' => $row['status'],
+            'watermark_detected' => false,
+        ]);
+    }
+
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('display.photo_album.photo_count', 2)
+        ->assertJsonPath('display.photo_album.message_key', 'profile.photos_upgrade_to_view_all')
+        ->assertJsonPath('display.photo_album.tier', 'free_own_photo')
+        ->assertJsonPath('display.photo_album.slots.0.blur', false)
+        ->assertJsonPath('display.photo_album.slots.1.blur', true);
+
+    $urls = collect($response->json('display.photo_album.slots'))->pluck('url')->implode(' ');
+    expect($urls)->toContain('mobile-album-approved-'.$targetProfile->id.'.webp');
+    expect($urls)->not->toContain('mobile-album-pending-'.$targetProfile->id.'.webp');
+    expect($urls)->not->toContain('mobile-album-rejected-'.$targetProfile->id.'.webp');
+});
+
 test('MobileProfile GET api v1 matrimony profiles includes safe list card display payload', function () {
     [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
     Sanctum::actingAs($viewerUser);
