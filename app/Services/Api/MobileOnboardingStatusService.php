@@ -11,6 +11,16 @@ use App\Services\Onboarding\RegistrationPartnerPreferenceService;
 
 class MobileOnboardingStatusService
 {
+    private const EXISTING_PROFILE_ACCOUNT_SHELL_STEPS = [
+        'profile_for_whom',
+        'basic_info',
+    ];
+
+    private const ACCOUNT_SHELL_COMPLETED_STEPS = [
+        'account',
+        'profile_for_whom',
+    ];
+
     public function __construct(
         private readonly MobileOnboardingDraftService $draftService,
         private readonly ActivationChecklistService $checklistService,
@@ -87,10 +97,29 @@ class MobileOnboardingStatusService
 
     private function nextStep(MobileOnboardingDraft $draft, ?MatrimonyProfile $profile): string
     {
-        if ($profile instanceof MatrimonyProfile && ! $draft->current_step) {
+        if ($profile instanceof MatrimonyProfile && $this->shouldResumeExistingProfileAtActivation($draft)) {
             return 'activation';
         }
 
         return $draft->current_step ?: 'profile_for_whom';
+    }
+
+    private function shouldResumeExistingProfileAtActivation(MobileOnboardingDraft $draft): bool
+    {
+        $currentStep = trim((string) ($draft->current_step ?? ''));
+        if ($currentStep === '') {
+            return true;
+        }
+
+        if (! in_array($currentStep, self::EXISTING_PROFILE_ACCOUNT_SHELL_STEPS, true)) {
+            return false;
+        }
+
+        $completedSteps = array_values(array_filter(
+            array_map('strval', $draft->completed_steps ?? []),
+            fn (string $step): bool => trim($step) !== ''
+        ));
+
+        return empty(array_diff($completedSteps, self::ACCOUNT_SHELL_COMPLETED_STEPS));
     }
 }

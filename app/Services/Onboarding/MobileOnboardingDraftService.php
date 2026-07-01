@@ -71,7 +71,7 @@ class MobileOnboardingDraftService
             if (! $draft) {
                 $draft = new MobileOnboardingDraft([
                     'user_id' => $user->id,
-                    'current_step' => 'profile_for_whom',
+                    'current_step' => $profile instanceof MatrimonyProfile ? 'activation' : 'profile_for_whom',
                     'completed_steps' => [],
                     'draft_data' => [],
                     'started_at' => now(),
@@ -88,7 +88,9 @@ class MobileOnboardingDraftService
 
             $draft->completed_steps = $this->accountAwareCompletedSteps($user, $draft->completed_steps ?? []);
             if (! $draft->current_step) {
-                $draft->current_step = $this->nextStepAfter($draft->last_completed_step) ?? 'profile_for_whom';
+                $draft->current_step = $profile instanceof MatrimonyProfile
+                    ? 'activation'
+                    : ($this->nextStepAfter($draft->last_completed_step) ?? 'profile_for_whom');
             }
             $draft->save();
 

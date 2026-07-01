@@ -86,6 +86,47 @@ class MobileOnboardingPhase2ApiTest extends TestCase
         ]);
     }
 
+    public function test_existing_profile_status_starts_at_activation_when_no_mobile_draft_exists(): void
+    {
+        $user = $this->verifiedAccount();
+        $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/v1/onboarding/status')->assertOk();
+
+        $response->assertJsonPath('has_profile', true)
+            ->assertJsonPath('profile.id', $profile->id)
+            ->assertJsonPath('draft.current_step', 'activation')
+            ->assertJsonPath('next_step', 'activation');
+    }
+
+    public function test_existing_profile_status_ignores_stale_account_shell_draft_step(): void
+    {
+        $user = $this->verifiedAccount();
+        $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
+        MobileOnboardingDraft::query()->create([
+            'user_id' => $user->id,
+            'matrimony_profile_id' => $profile->id,
+            'current_step' => 'basic_info',
+            'last_completed_step' => 'profile_for_whom',
+            'completed_steps' => ['account', 'profile_for_whom'],
+            'draft_data' => [
+                'profile_for_whom' => [
+                    'profile_for_whom' => 'self',
+                ],
+            ],
+            'started_at' => now(),
+        ]);
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/v1/onboarding/status')->assertOk();
+
+        $response->assertJsonPath('has_profile', true)
+            ->assertJsonPath('profile.id', $profile->id)
+            ->assertJsonPath('draft.current_step', 'basic_info')
+            ->assertJsonPath('next_step', 'activation');
+    }
+
     public function test_profile_for_whom_values_are_accepted_and_stored_in_draft(): void
     {
         foreach (['self', 'son', 'daughter', 'brother', 'sister', 'relative', 'friend'] as $value) {
