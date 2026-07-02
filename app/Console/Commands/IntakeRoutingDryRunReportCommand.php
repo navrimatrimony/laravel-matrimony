@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\BiodataIntake;
+use App\Services\Intake\IntakeSmartRoutingPolicy;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
@@ -29,6 +30,11 @@ class IntakeRoutingDryRunReportCommand extends Command
         {--details : Include small safe sample diagnostics per recommended action}';
 
     protected $description = 'Show a read-only summary report for stored smart-routing dry-run data.';
+
+    public function __construct(private readonly IntakeSmartRoutingPolicy $policy)
+    {
+        parent::__construct();
+    }
 
     public function handle(): int
     {
@@ -286,6 +292,11 @@ class IntakeRoutingDryRunReportCommand extends Command
                 'OCR',
                 'Cheap OCR',
                 'Sarvam',
+                'Policy enabled',
+                'Dry run only',
+                'Allowed live',
+                'Blocked reason',
+                'Policy guardrails',
             ], array_map(static fn (array $row): array => [
                 $row['intake_id'],
                 $row['recommended_action'],
@@ -301,6 +312,11 @@ class IntakeRoutingDryRunReportCommand extends Command
                 $row['ocr_attempt_count'] ?? 'n/a',
                 $row['cheap_ocr_attempt_count'] ?? 'n/a',
                 $row['sarvam_attempt_count'] ?? 'n/a',
+                $row['policy_enabled'],
+                $row['policy_dry_run_only'],
+                $row['policy_allowed_live_action'],
+                $row['policy_blocked_reason'],
+                $row['policy_guardrail_summary'],
             ], $rows));
         }
     }
@@ -319,6 +335,7 @@ class IntakeRoutingDryRunReportCommand extends Command
         array $reasonCodes,
     ): array {
         $signals = $this->arrayValue($recommendation['signals'] ?? []);
+        $policyEvaluation = $this->policy->evaluate($recommendation);
 
         return [
             'intake_id' => (int) $intake->id,
@@ -336,6 +353,11 @@ class IntakeRoutingDryRunReportCommand extends Command
             'ocr_attempt_count' => $this->nullableInt($signals['ocr_attempt_count'] ?? null),
             'cheap_ocr_attempt_count' => $this->nullableInt($signals['cheap_ocr_attempt_count'] ?? $telemetry['cheap_ocr_attempt_count'] ?? null),
             'sarvam_attempt_count' => $this->nullableInt($signals['sarvam_attempt_count'] ?? $telemetry['sarvam_attempt_count'] ?? null),
+            'policy_enabled' => $this->yesNo($policyEvaluation['enabled'] ?? null),
+            'policy_dry_run_only' => $this->yesNo($policyEvaluation['dry_run_only'] ?? null),
+            'policy_allowed_live_action' => $this->policyDisplayString($policyEvaluation['allowed_live_action'] ?? null),
+            'policy_blocked_reason' => $this->policyDisplayString($policyEvaluation['blocked_reason'] ?? null),
+            'policy_guardrail_summary' => $this->policyGuardrailSummary($this->arrayValue($policyEvaluation['guardrails'] ?? [])),
         ];
     }
 
@@ -371,6 +393,37 @@ class IntakeRoutingDryRunReportCommand extends Command
         ];
 
         return implode('; ', $parts);
+    }
+
+    /**
+     * @param  array<string, mixed>  $guardrails
+     */
+    private function policyGuardrailSummary(array $guardrails): string
+    {
+        $allowlist = $this->stringList($guardrails['allow_sarvam_skip_actions'] ?? []);
+
+        $parts = [
+            'skip='.$this->yesNo($guardrails['skip_paid_vision_enabled'] ?? null),
+            'reuse='.$this->yesNo($guardrails['reuse_previous_enabled'] ?? null),
+            'min_conf='.($this->numericValue($guardrails['min_confidence'] ?? null) ?? 'n/a'),
+            'confidence='.($this->numericValue($guardrails['confidence'] ?? null) ?? 'n/a'),
+            'eligible='.$this->yesNo($guardrails['duplicate_reuse_eligible'] ?? null),
+            'ref_reviewed='.$this->yesNo($guardrails['duplicate_reference_has_reviewed_snapshot'] ?? null),
+            'allowlist='.($allowlist !== [] ? implode(',', $allowlist) : 'n/a'),
+        ];
+
+        return implode('; ', $parts);
+    }
+
+    private function policyDisplayString(mixed $value): string
+    {
+        if (! is_scalar($value)) {
+            return 'none';
+        }
+
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : 'none';
     }
 
     private function recommendedAction(BiodataIntake $intake): string

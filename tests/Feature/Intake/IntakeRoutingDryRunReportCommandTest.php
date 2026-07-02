@@ -108,6 +108,7 @@ test('details output includes safe signal summary without raw evidence or provid
         'routing_recommendation_json' => routingDryRunReportRecommendation([
             'recommended_action' => 'reuse_previous',
             'reason_codes' => ['duplicate_detected'],
+            'confidence' => 0.95,
             'would_skip_paid_vision' => true,
             'signals' => [
                 'duplicate_signal_source' => 'content_hash',
@@ -159,10 +160,104 @@ test('details output includes safe signal summary without raw evidence or provid
         ->and($output)->toContain('quality=0.82')
         ->and($output)->toContain('cheap=1')
         ->and($output)->toContain('sarvam=0')
+        ->and($output)->toContain('Policy enabled')
+        ->and($output)->toContain('routing_disabled')
+        ->and($output)->toContain('skip=no')
+        ->and($output)->toContain('reuse=no')
+        ->and($output)->toContain('allowlist=reuse_previous')
         ->and($output)->not->toContain('Sensitive OCR text')
         ->and($output)->not->toContain('9876543210')
         ->and($output)->not->toContain('sk-proj-secret')
         ->and($output)->not->toContain('sk-proj-provider-payload');
+});
+
+test('details json shows default disabled policy as blocked for eligible reuse recommendation', function () {
+    createRoutingDryRunReportIntake([
+        'routing_recommendation_json' => routingDryRunReportRecommendation([
+            'recommended_action' => 'reuse_previous',
+            'reason_codes' => ['duplicate_detected'],
+            'confidence' => 0.95,
+            'would_skip_paid_vision' => true,
+            'signals' => [
+                'duplicate_reuse_eligible' => true,
+                'duplicate_reuse_trust' => 'trusted',
+                'duplicate_reference_intake_id' => 345,
+                'duplicate_reference_has_reviewed_snapshot' => true,
+            ],
+        ]),
+    ]);
+
+    $payload = routingDryRunReportJson(['--details' => true]);
+    $row = $payload['details_by_action']['reuse_previous'][0];
+
+    expect($row['policy_enabled'])->toBe('no')
+        ->and($row['policy_dry_run_only'])->toBe('yes')
+        ->and($row['policy_allowed_live_action'])->toBe('none')
+        ->and($row['policy_blocked_reason'])->toBe('routing_disabled')
+        ->and($row['policy_guardrail_summary'])->toContain('skip=no')
+        ->and($row['policy_guardrail_summary'])->toContain('reuse=no')
+        ->and($row['policy_guardrail_summary'])->toContain('eligible=yes')
+        ->and($row['policy_guardrail_summary'])->toContain('ref_reviewed=yes');
+});
+
+test('details json shows allowed live action when policy config flags are explicitly enabled', function () {
+    enableRoutingDryRunReportPolicyConfig();
+
+    createRoutingDryRunReportIntake([
+        'routing_recommendation_json' => routingDryRunReportRecommendation([
+            'recommended_action' => 'reuse_previous',
+            'reason_codes' => ['duplicate_detected'],
+            'confidence' => 0.95,
+            'would_skip_paid_vision' => true,
+            'signals' => [
+                'duplicate_reuse_eligible' => true,
+                'duplicate_reuse_trust' => 'trusted',
+                'duplicate_reference_intake_id' => 456,
+                'duplicate_reference_has_reviewed_snapshot' => true,
+            ],
+        ]),
+    ]);
+
+    $payload = routingDryRunReportJson(['--details' => true]);
+    $row = $payload['details_by_action']['reuse_previous'][0];
+
+    expect($row['policy_enabled'])->toBe('yes')
+        ->and($row['policy_dry_run_only'])->toBe('no')
+        ->and($row['policy_allowed_live_action'])->toBe('reuse_previous')
+        ->and($row['policy_blocked_reason'])->toBe('none')
+        ->and($row['policy_guardrail_summary'])->toContain('skip=yes')
+        ->and($row['policy_guardrail_summary'])->toContain('reuse=yes')
+        ->and($row['policy_guardrail_summary'])->toContain('eligible=yes')
+        ->and($row['policy_guardrail_summary'])->toContain('ref_reviewed=yes');
+});
+
+test('details json keeps weak duplicate blocked when policy config flags are enabled', function () {
+    enableRoutingDryRunReportPolicyConfig();
+
+    createRoutingDryRunReportIntake([
+        'routing_recommendation_json' => routingDryRunReportRecommendation([
+            'recommended_action' => 'reuse_previous',
+            'reason_codes' => ['duplicate_detected'],
+            'confidence' => 0.95,
+            'would_skip_paid_vision' => true,
+            'signals' => [
+                'duplicate_reuse_eligible' => false,
+                'duplicate_reuse_trust' => 'weak',
+                'duplicate_reference_intake_id' => 567,
+                'duplicate_reference_has_reviewed_snapshot' => true,
+            ],
+        ]),
+    ]);
+
+    $payload = routingDryRunReportJson(['--details' => true]);
+    $row = $payload['details_by_action']['reuse_previous'][0];
+
+    expect($row['policy_enabled'])->toBe('yes')
+        ->and($row['policy_dry_run_only'])->toBe('no')
+        ->and($row['policy_allowed_live_action'])->toBe('none')
+        ->and($row['policy_blocked_reason'])->toBe('duplicate_reuse_not_eligible')
+        ->and($row['policy_guardrail_summary'])->toContain('eligible=no')
+        ->and($row['policy_guardrail_summary'])->toContain('ref_reviewed=yes');
 });
 
 test('command does not mutate routing data evidence parse status ocr attempts or profile', function () {
@@ -287,4 +382,17 @@ function routingDryRunReportTelemetry(array $overrides = []): array
         'duration_ms' => null,
         'cost_units' => null,
     ], $overrides);
+}
+
+function enableRoutingDryRunReportPolicyConfig(): void
+{
+    config([
+        'intake.smart_routing.enabled' => true,
+        'intake.smart_routing.dry_run_only' => false,
+        'intake.smart_routing.skip_paid_vision_enabled' => true,
+        'intake.smart_routing.reuse_previous_enabled' => true,
+        'intake.smart_routing.min_confidence' => 0.90,
+        'intake.smart_routing.require_human_reviewed_reference' => true,
+        'intake.smart_routing.allow_sarvam_skip_actions' => ['reuse_previous'],
+    ]);
 }
