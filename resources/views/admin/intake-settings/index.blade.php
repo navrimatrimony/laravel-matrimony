@@ -19,6 +19,24 @@
     <form method="POST" action="{{ route('admin.intake-settings.update') }}" class="space-y-6">
         @csrf
 
+        @php
+            $activeIntakeSettingsTab = in_array(request('tab'), ['general', 'ai_ocr', 'mobile'], true) ? request('tab') : 'general';
+            $tabBase = 'px-3 py-2 text-sm font-semibold border-b-2 transition';
+            $tabActive = 'border-indigo-600 text-indigo-700 dark:text-indigo-300';
+            $tabInactive = 'border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100';
+        @endphp
+
+        <div class="border-b border-gray-200 dark:border-gray-700">
+            <div class="flex flex-wrap gap-2">
+                <button type="button" data-intake-settings-tab="general" class="{{ $tabBase }} {{ $activeIntakeSettingsTab === 'general' ? $tabActive : $tabInactive }}">General</button>
+                <button type="button" data-intake-settings-tab="ai_ocr" class="{{ $tabBase }} {{ $activeIntakeSettingsTab === 'ai_ocr' ? $tabActive : $tabInactive }}">AI &amp; OCR</button>
+                <button type="button" data-intake-settings-tab="mobile" class="{{ $tabBase }} {{ $activeIntakeSettingsTab === 'mobile' ? $tabActive : $tabInactive }}">Mobile / Flutter</button>
+            </div>
+        </div>
+        <input type="hidden" name="return_tab" id="intake-settings-return-tab" value="{{ $activeIntakeSettingsTab }}">
+
+        <div data-intake-settings-panel="general" class="{{ $activeIntakeSettingsTab === 'general' ? 'space-y-6' : 'hidden space-y-6' }}">
+
         <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600 space-y-3">
             <p class="font-semibold text-sm text-gray-800 dark:text-gray-100">Per-user upload limits</p>
             <p class="text-xs text-gray-500 dark:text-gray-400">
@@ -148,7 +166,9 @@
                 </div>
             </div>
         </div>
+        </div>
 
+        <div data-intake-settings-panel="ai_ocr" class="{{ $activeIntakeSettingsTab === 'ai_ocr' ? 'space-y-6' : 'hidden space-y-6' }}">
         <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600 space-y-3">
             <p class="font-semibold text-sm text-gray-800 dark:text-gray-100">AI &amp; OCR behaviour</p>
             <div class="space-y-3 text-sm">
@@ -269,12 +289,77 @@
                 </div>
             </div>
         </div>
+        </div>
+
+        <div data-intake-settings-panel="mobile" class="{{ $activeIntakeSettingsTab === 'mobile' ? 'space-y-6' : 'hidden space-y-6' }}">
+        <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600 space-y-4">
+            <div>
+                <p class="font-semibold text-sm text-gray-800 dark:text-gray-100">Mobile / Flutter biodata source</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Choose whether the Flutter app extracts text on device, or sends the selected biodata image to the Laravel intake pipeline.
+                </p>
+            </div>
+            <div class="space-y-4 text-sm">
+                <label class="flex gap-3 rounded border border-gray-200 bg-white p-3 dark:border-gray-600 dark:bg-gray-800/50">
+                    <input type="radio" name="intake_mobile_biodata_source_mode" value="ml_kit" {{ ($mobileBiodataSourceMode ?? 'ml_kit') === 'ml_kit' ? 'checked' : '' }} class="mt-1 border-gray-300 dark:border-gray-600">
+                    <span>
+                        <span class="block font-medium text-gray-800 dark:text-gray-100">Flutter ML Kit OCR</span>
+                        <span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+                            Current mobile path. Flutter reads Marathi text with ML Kit and sends raw text to Laravel for rules-only parsing.
+                        </span>
+                    </span>
+                </label>
+                <label class="flex gap-3 rounded border border-gray-200 bg-white p-3 dark:border-gray-600 dark:bg-gray-800/50">
+                    <input type="radio" name="intake_mobile_biodata_source_mode" value="laravel_pipeline" {{ ($mobileBiodataSourceMode ?? 'ml_kit') === 'laravel_pipeline' ? 'checked' : '' }} class="mt-1 border-gray-300 dark:border-gray-600">
+                    <span>
+                        <span class="block font-medium text-gray-800 dark:text-gray-100">Laravel intake pipeline</span>
+                        <span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+                            Flutter uploads the selected biodata image. Laravel then uses the active AI/OCR settings above, including Sarvam/OpenAI/Tesseract paths.
+                        </span>
+                    </span>
+                </label>
+                <p class="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-700/60 dark:bg-amber-900/20 dark:text-amber-200">
+                    To compare results, switch this mode and upload the same biodata again from the mobile app. Previous biodata intakes remain available for review.
+                </p>
+            </div>
+        </div>
+        </div>
 
         <div class="pt-2">
             <button type="submit" class="px-5 py-2.5 bg-indigo-600 text-white rounded-md font-semibold text-sm hover:bg-indigo-700">
                 Save settings
             </button>
         </div>
+        <script>
+            (function () {
+                var buttons = document.querySelectorAll('[data-intake-settings-tab]');
+                var panels = document.querySelectorAll('[data-intake-settings-panel]');
+                var returnTab = document.getElementById('intake-settings-return-tab');
+                var activeClasses = ['border-indigo-600', 'text-indigo-700', 'dark:text-indigo-300'];
+                var inactiveClasses = ['border-transparent', 'text-gray-500', 'hover:text-gray-800', 'dark:text-gray-400', 'dark:hover:text-gray-100'];
+
+                function setClasses(button, active) {
+                    activeClasses.forEach(function (className) { button.classList.toggle(className, active); });
+                    inactiveClasses.forEach(function (className) { button.classList.toggle(className, !active); });
+                }
+
+                function activate(tab) {
+                    panels.forEach(function (panel) {
+                        panel.classList.toggle('hidden', panel.getAttribute('data-intake-settings-panel') !== tab);
+                    });
+                    buttons.forEach(function (button) {
+                        setClasses(button, button.getAttribute('data-intake-settings-tab') === tab);
+                    });
+                    if (returnTab) returnTab.value = tab;
+                }
+
+                buttons.forEach(function (button) {
+                    button.addEventListener('click', function () {
+                        activate(button.getAttribute('data-intake-settings-tab') || 'general');
+                    });
+                });
+            })();
+        </script>
     </form>
 </div>
 @endsection

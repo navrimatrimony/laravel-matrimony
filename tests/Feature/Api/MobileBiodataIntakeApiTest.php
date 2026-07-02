@@ -27,7 +27,8 @@ test('mobile biodata intake store creates owner scoped rules only intake from OC
         ->assertCreated()
         ->assertJsonPath('success', true)
         ->assertJsonPath('intake.parse_status', 'pending')
-        ->assertJsonPath('intake.parser_version', 'rules_only');
+        ->assertJsonPath('intake.parser_version', 'rules_only')
+        ->assertJsonPath('intake_settings.mobile_biodata_source_mode', 'ml_kit');
 
     $intakeId = (int) $response->json('intake.id');
     $this->assertDatabaseHas('biodata_intakes', [
@@ -38,6 +39,38 @@ test('mobile biodata intake store creates owner scoped rules only intake from OC
     ]);
 
     Queue::assertPushed(ParseIntakeJob::class);
+});
+
+test('mobile biodata intake laravel pipeline mode keeps active parser for mobile text', function () {
+    Queue::fake();
+    AdminSetting::setValue('intake_mobile_biodata_source_mode', 'laravel_pipeline');
+    AdminSetting::setValue('intake_active_parser', 'hybrid_v1');
+    AdminSetting::setValue('intake_auto_parse_enabled', '0');
+
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $rawText = "नाव : राहुल पाटील\nजन्म तारीख : १२/०४/१९९६\nशिक्षण : B.Com\nमोबाईल : 9876543210";
+
+    $response = $this->postJson('/api/v1/biodata-intakes', [
+        'raw_text' => $rawText,
+        'parse_now' => false,
+    ]);
+
+    $response
+        ->assertCreated()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('intake.parse_status', 'pending')
+        ->assertJsonPath('intake.parser_version', 'hybrid_v1')
+        ->assertJsonPath('intake_settings.mobile_biodata_source_mode', 'laravel_pipeline');
+
+    $this->assertDatabaseHas('biodata_intakes', [
+        'uploaded_by' => $user->id,
+        'raw_ocr_text' => $rawText,
+        'parser_version' => 'hybrid_v1',
+    ]);
+
+    Queue::assertNotPushed(ParseIntakeJob::class);
 });
 
 test('mobile biodata intake list and show are scoped to the authenticated user', function () {

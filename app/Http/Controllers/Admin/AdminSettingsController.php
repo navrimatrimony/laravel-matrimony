@@ -278,12 +278,16 @@ class AdminSettingsController extends Controller
         $retentionDays = (int) AdminSetting::getValue('intake_file_retention_days', '90');
         $keepParsedJson = AdminSetting::getBool('intake_keep_parsed_json_after_purge', true);
         $photoLaterUploadPrimaryPolicy = (string) AdminSetting::getValue('intake_photo_later_upload_primary_policy', 'new_upload_primary');
+        $mobileBiodataSourceMode = (string) AdminSetting::getValue('intake_mobile_biodata_source_mode', 'ml_kit');
         $useNormalizedDraftParser = AdminSetting::getBool(
             'intake_use_normalized_draft_parser',
             (bool) config('intake.use_normalized_draft_parser', false)
         );
         if (! in_array($photoLaterUploadPrimaryPolicy, ['new_upload_primary', 'keep_intake_primary'], true)) {
             $photoLaterUploadPrimaryPolicy = 'new_upload_primary';
+        }
+        if (! in_array($mobileBiodataSourceMode, ['ml_kit', 'laravel_pipeline'], true)) {
+            $mobileBiodataSourceMode = 'ml_kit';
         }
 
         return view('admin.intake-settings.index', [
@@ -311,6 +315,7 @@ class AdminSettingsController extends Controller
             'intakePhotoShowInNormalizedPreview' => AdminSetting::getBool('intake_photo_show_in_normalized_preview', false),
             'intakePhotoApplyAsProfilePhoto' => AdminSetting::getBool('intake_photo_apply_as_profile_photo', false),
             'intakePhotoLaterUploadPrimaryPolicy' => $photoLaterUploadPrimaryPolicy,
+            'mobileBiodataSourceMode' => $mobileBiodataSourceMode,
             'intakeUseNormalizedDraftParser' => $useNormalizedDraftParser,
         ]);
     }
@@ -365,7 +370,9 @@ class AdminSettingsController extends Controller
             'intake_photo_show_in_normalized_preview' => 'nullable|in:0,1',
             'intake_photo_apply_as_profile_photo' => 'nullable|in:0,1',
             'intake_photo_later_upload_primary_policy' => 'required|string|in:new_upload_primary,keep_intake_primary',
+            'intake_mobile_biodata_source_mode' => 'required|string|in:ml_kit,laravel_pipeline',
             'intake_use_normalized_draft_parser' => 'nullable|in:0,1',
+            'return_tab' => 'nullable|string|in:general,ai_ocr,mobile',
         ]);
 
         $daily = (string) $request->input('intake_max_daily_per_user', 5);
@@ -434,7 +441,9 @@ class AdminSettingsController extends Controller
         $photoShowInNormalizedPreview = $request->has('intake_photo_show_in_normalized_preview') ? '1' : '0';
         $photoApplyAsProfilePhoto = $request->has('intake_photo_apply_as_profile_photo') ? '1' : '0';
         $photoLaterUploadPrimaryPolicy = (string) $request->input('intake_photo_later_upload_primary_policy', 'new_upload_primary');
+        $mobileBiodataSourceMode = (string) $request->input('intake_mobile_biodata_source_mode', 'ml_kit');
         $useNormalizedDraftParser = $request->has('intake_use_normalized_draft_parser') ? '1' : '0';
+        $returnTab = $request->filled('return_tab') ? (string) $request->input('return_tab') : '';
 
         AdminSetting::setValue('intake_max_daily_per_user', $daily);
         AdminSetting::setValue('intake_max_monthly_per_user', $monthly);
@@ -466,6 +475,7 @@ class AdminSettingsController extends Controller
         AdminSetting::setValue('intake_photo_show_in_normalized_preview', $photoShowInNormalizedPreview);
         AdminSetting::setValue('intake_photo_apply_as_profile_photo', $photoApplyAsProfilePhoto);
         AdminSetting::setValue('intake_photo_later_upload_primary_policy', $photoLaterUploadPrimaryPolicy);
+        AdminSetting::setValue('intake_mobile_biodata_source_mode', $mobileBiodataSourceMode);
         AdminSetting::setValue('intake_use_normalized_draft_parser', $useNormalizedDraftParser);
 
         AuditLogService::log(
@@ -473,11 +483,13 @@ class AdminSettingsController extends Controller
             'update_intake_settings',
             'AdminSetting',
             null,
-            "intake_max_daily_per_user={$daily}, intake_max_monthly_per_user={$monthly}, intake_max_pdf_mb={$maxPdfMb}, intake_max_pdf_pages={$maxPdfPages}, intake_max_images_per_intake={$maxImagesPerIntake}, intake_global_daily_cap={$globalDailyCap}, intake_auto_parse_enabled={$autoParse}, intake_processing_mode={$processingMode}, intake_primary_ai_provider={$primaryAiProvider}, intake_hybrid_extraction_provider={$hybridExtraction}, intake_hybrid_parser_provider={$hybridParser}, intake_hybrid_ocr_fallback={$hybridOcrFallback}, intake_active_parser={$activeParser}, intake_ai_vision_provider={$aiVisionProvider}, intake_ocr_provider={$ocrProvider}, intake_ocr_language_hint={$ocrLanguage}, intake_parse_retry_limit={$retryLimit}, intake_confidence_high_threshold={$highThreshold}, intake_auto_apply_fields=".implode(',', $autoApplyFiltered).", intake_require_admin_before_attach={$requireAdminBeforeAttach}, intake_file_retention_days={$fileRetentionDays}, intake_keep_parsed_json_after_purge={$keepParsedJson}, intake_photo_crop_enabled={$photoCropEnabled}, intake_photo_show_in_normalized_preview={$photoShowInNormalizedPreview}, intake_photo_apply_as_profile_photo={$photoApplyAsProfilePhoto}, intake_photo_later_upload_primary_policy={$photoLaterUploadPrimaryPolicy}, intake_use_normalized_draft_parser={$useNormalizedDraftParser}",
+            "intake_max_daily_per_user={$daily}, intake_max_monthly_per_user={$monthly}, intake_max_pdf_mb={$maxPdfMb}, intake_max_pdf_pages={$maxPdfPages}, intake_max_images_per_intake={$maxImagesPerIntake}, intake_global_daily_cap={$globalDailyCap}, intake_auto_parse_enabled={$autoParse}, intake_processing_mode={$processingMode}, intake_primary_ai_provider={$primaryAiProvider}, intake_hybrid_extraction_provider={$hybridExtraction}, intake_hybrid_parser_provider={$hybridParser}, intake_hybrid_ocr_fallback={$hybridOcrFallback}, intake_active_parser={$activeParser}, intake_ai_vision_provider={$aiVisionProvider}, intake_ocr_provider={$ocrProvider}, intake_ocr_language_hint={$ocrLanguage}, intake_parse_retry_limit={$retryLimit}, intake_confidence_high_threshold={$highThreshold}, intake_auto_apply_fields=".implode(',', $autoApplyFiltered).", intake_require_admin_before_attach={$requireAdminBeforeAttach}, intake_file_retention_days={$fileRetentionDays}, intake_keep_parsed_json_after_purge={$keepParsedJson}, intake_photo_crop_enabled={$photoCropEnabled}, intake_photo_show_in_normalized_preview={$photoShowInNormalizedPreview}, intake_photo_apply_as_profile_photo={$photoApplyAsProfilePhoto}, intake_photo_later_upload_primary_policy={$photoLaterUploadPrimaryPolicy}, intake_mobile_biodata_source_mode={$mobileBiodataSourceMode}, intake_use_normalized_draft_parser={$useNormalizedDraftParser}",
             false
         );
 
-        return redirect()->route('admin.intake-settings.index')
+        $redirectParameters = $returnTab !== '' ? ['tab' => $returnTab] : [];
+
+        return redirect()->route('admin.intake-settings.index', $redirectParameters)
             ->with('success', 'Intake settings updated.');
     }
 

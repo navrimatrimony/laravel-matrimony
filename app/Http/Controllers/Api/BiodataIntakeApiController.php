@@ -40,23 +40,39 @@ class BiodataIntakeApiController extends Controller
 
     public function store(Request $request, IntakeCreationService $intakeCreation): JsonResponse
     {
+        $mobileMode = $this->mobileBiodataSourceMode();
+        $usesLaravelPipeline = $mobileMode === 'laravel_pipeline';
+
         $validated = $request->validate([
-            'raw_text' => ['required', 'string', 'min:20', 'max:60000'],
+            'raw_text' => $usesLaravelPipeline
+                ? ['nullable', 'string', 'min:20', 'max:60000', 'required_without:file']
+                : ['required', 'string', 'min:20', 'max:60000'],
+            'file' => $usesLaravelPipeline
+                ? ['nullable', 'file', 'max:20480', 'required_without:raw_text']
+                : ['prohibited'],
             'parse_now' => ['nullable', 'boolean'],
         ]);
 
+        $file = $usesLaravelPipeline ? $request->file('file') : null;
+        if (is_array($file)) {
+            $file = null;
+        }
+        $rawText = array_key_exists('raw_text', $validated) ? (string) $validated['raw_text'] : null;
+
         $prepared = $intakeCreation->prepare(
             (int) $request->user()->id,
-            null,
-            $validated['raw_text']
+            $file,
+            $rawText
         );
 
         $intake = $intakeCreation->persistPrepared((int) $request->user()->id, $prepared);
 
-        // Mobile OCR already provides text, so keep this path cost-safe and deterministic.
-        $intake->forceFill([
-            'parser_version' => ParserStrategyResolver::MODE_RULES_ONLY,
-        ])->save();
+        if (! $usesLaravelPipeline) {
+            // Mobile OCR already provides text, so keep this path cost-safe and deterministic.
+            $intake->forceFill([
+                'parser_version' => ParserStrategyResolver::MODE_RULES_ONLY,
+            ])->save();
+        }
 
         if (AdminSetting::getBool('intake_auto_parse_enabled', true)) {
             if ($request->boolean('parse_now', true)) {
@@ -345,7 +361,15 @@ class BiodataIntakeApiController extends Controller
                 'intake_use_normalized_draft_parser',
                 (bool) config('intake.use_normalized_draft_parser', false)
             ),
+            'mobile_biodata_source_mode' => $this->mobileBiodataSourceMode(),
         ];
+    }
+
+    private function mobileBiodataSourceMode(): string
+    {
+        $mode = (string) AdminSetting::getValue('intake_mobile_biodata_source_mode', 'ml_kit');
+
+        return in_array($mode, ['ml_kit', 'laravel_pipeline'], true) ? $mode : 'ml_kit';
     }
 
     private function sourceLabel(BiodataIntake $intake): string

@@ -26,12 +26,13 @@ class IntakeSettingsUiTest extends TestCase
             'intake_confidence_high_threshold' => 0.85,
             'intake_file_retention_days' => 90,
             'intake_photo_later_upload_primary_policy' => 'new_upload_primary',
+            'intake_mobile_biodata_source_mode' => 'ml_kit',
         ], $overrides);
     }
 
     public function test_intake_settings_page_renders_processing_mode_and_end_to_end_provider(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
 
         $this->actingAs($admin)
             ->get(route('admin.intake-settings.index'))
@@ -49,9 +50,22 @@ class IntakeSettingsUiTest extends TestCase
             ->assertSee('Keep biodata-cropped photo primary until manually changed', false);
     }
 
+    public function test_intake_settings_page_renders_mobile_flutter_tab(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.intake-settings.index', ['tab' => 'mobile']))
+            ->assertOk()
+            ->assertSee('Mobile / Flutter', false)
+            ->assertSee('Mobile / Flutter biodata source', false)
+            ->assertSee('Flutter ML Kit OCR', false)
+            ->assertSee('Laravel intake pipeline', false);
+    }
+
     public function test_saving_end_to_end_sarvam_syncs_legacy_keys(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
 
         $this->actingAs($admin)->post(route('admin.intake-settings.update'), $this->baseIntakePayload([
             'intake_processing_mode' => 'end_to_end',
@@ -66,7 +80,7 @@ class IntakeSettingsUiTest extends TestCase
 
     public function test_saving_end_to_end_openai_syncs_legacy_keys(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
 
         $this->actingAs($admin)->post(route('admin.intake-settings.update'), $this->baseIntakePayload([
             'intake_processing_mode' => 'end_to_end',
@@ -79,7 +93,7 @@ class IntakeSettingsUiTest extends TestCase
 
     public function test_saving_hybrid_persists_keys_and_sets_active_parser(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
 
         $this->actingAs($admin)->post(route('admin.intake-settings.update'), $this->baseIntakePayload([
             'intake_processing_mode' => 'hybrid',
@@ -98,7 +112,7 @@ class IntakeSettingsUiTest extends TestCase
 
     public function test_saving_biodata_photo_extraction_settings_persists_enabled_values(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
 
         $this->actingAs($admin)->post(route('admin.intake-settings.update'), $this->baseIntakePayload([
             'intake_processing_mode' => 'end_to_end',
@@ -117,7 +131,7 @@ class IntakeSettingsUiTest extends TestCase
 
     public function test_saving_biodata_photo_extraction_defaults_persists_disabled_checkboxes(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
 
         $this->actingAs($admin)->post(route('admin.intake-settings.update'), $this->baseIntakePayload([
             'intake_processing_mode' => 'end_to_end',
@@ -133,7 +147,7 @@ class IntakeSettingsUiTest extends TestCase
 
     public function test_saving_rules_only_normalized_draft_parser_toggle_persists_setting(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
 
         $this->actingAs($admin)->post(route('admin.intake-settings.update'), $this->baseIntakePayload([
             'intake_processing_mode' => 'end_to_end',
@@ -149,5 +163,19 @@ class IntakeSettingsUiTest extends TestCase
         ]))->assertRedirect(route('admin.intake-settings.index'));
 
         $this->assertSame('0', AdminSetting::getValue('intake_use_normalized_draft_parser'));
+    }
+
+    public function test_saving_mobile_biodata_source_mode_persists_setting(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
+
+        $this->actingAs($admin)->post(route('admin.intake-settings.update'), $this->baseIntakePayload([
+            'intake_processing_mode' => 'end_to_end',
+            'intake_primary_ai_provider' => 'sarvam',
+            'intake_mobile_biodata_source_mode' => 'laravel_pipeline',
+            'return_tab' => 'mobile',
+        ]))->assertRedirect(route('admin.intake-settings.index', ['tab' => 'mobile']));
+
+        $this->assertSame('laravel_pipeline', AdminSetting::getValue('intake_mobile_biodata_source_mode'));
     }
 }
