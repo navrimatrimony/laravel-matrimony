@@ -5,6 +5,7 @@ namespace App\Services\Intake;
 use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
+use App\Models\BiodataIntakeOcrAttempt;
 use App\Services\OcrService;
 use App\Services\Parsing\ParserStrategyResolver;
 use Illuminate\Http\UploadedFile;
@@ -18,6 +19,7 @@ class IntakeCreationService
     public function __construct(
         private readonly OcrService $ocrService,
         private readonly ParserStrategyResolver $parserStrategyResolver,
+        private readonly IntakeOcrAttemptRecorder $ocrAttemptRecorder,
     ) {}
 
     public function createForUser(int $userId, ?UploadedFile $file, ?string $rawText): BiodataIntake
@@ -30,7 +32,7 @@ class IntakeCreationService
     }
 
     /**
-     * @return array{file_path: string|null, original_filename: string|null, raw_ocr_text: string, reused_paid_extraction_text?: bool, reused_from_intake_id?: int}
+     * @return array{file_path: string|null, original_filename: string|null, raw_ocr_text: string, upload_ocr_debug?: array<string, mixed>|null, reused_paid_extraction_text?: bool, reused_from_intake_id?: int}
      */
     public function prepare(?int $userId, ?UploadedFile $file, ?string $rawText): array
     {
@@ -72,11 +74,12 @@ class IntakeCreationService
             'file_path' => $path,
             'original_filename' => $originalName,
             'raw_ocr_text' => (string) $extractedText,
+            'upload_ocr_debug' => $this->ocrService->getLastExtractTextFromPathDebug(),
         ];
     }
 
     /**
-     * @param  array{file_path: string|null, original_filename: string|null, raw_ocr_text: string, reused_paid_extraction_text?: bool, reused_from_intake_id?: int}  $prepared
+     * @param  array{file_path: string|null, original_filename: string|null, raw_ocr_text: string, upload_ocr_debug?: array<string, mixed>|null, reused_paid_extraction_text?: bool, reused_from_intake_id?: int}  $prepared
      */
     public function persistPrepared(int $userId, array $prepared): BiodataIntake
     {
@@ -101,6 +104,8 @@ class IntakeCreationService
                 app(IntakeExtractionReuseResolver::class)
                     ->putCachedParseInputText((int) $intake->id, $rawText, true);
             }
+
+            $this->recordCreateTimeOcrAttempt($intake, $prepared);
 
             return $intake;
         });
@@ -188,6 +193,62 @@ class IntakeCreationService
             }
         }
 
+    }
+
+    /**
+     * @param  array{file_path: string|null, original_filename: string|null, raw_ocr_text: string, upload_ocr_debug?: array<string, mixed>|null, reused_paid_extraction_text?: bool, reused_from_intake_id?: int}  $prepared
+     */
+    private function recordCreateTimeOcrAttempt(BiodataIntake $intake, array $prepared): void
+    {
+        $filePath = trim((string) ($prepared['file_path'] ?? ''));
+        if ($filePath === '') {
+            return;
+        }
+
+        $engine = BiodataIntakeOcrAttempt::ENGINE_LARAVEL_NATIVE_OCR;
+        $source = 'server_upload';
+        $selectedReason = 'upload_time_native_ocr';
+        if (! empty($prepared['reused_from_intake_id'])) {
+            $engine = BiodataIntakeOcrAttempt::ENGINE_REUSED_TRANSCRIPT;
+            $source = 'duplicate_upload_reuse';
+            $selectedReason = ! empty($prepared['reused_paid_extraction_text'])
+                ? 'duplicate_upload_reused_paid_transcript'
+                : 'duplicate_upload_reused_raw_ocr_text';
+        }
+
+        $imageHash = null;
+        $absolutePath = storage_path('app/private/'.$filePath);
+        if (is_file($absolutePath) && is_readable($absolutePath)) {
+            $hash = @hash_file('sha256', $absolutePath);
+            $imageHash = is_string($hash) && $hash !== '' ? $hash : null;
+        }
+
+        $debug = is_array($prepared['upload_ocr_debug'] ?? null) ? $prepared['upload_ocr_debug'] : [];
+        $this->ocrAttemptRecorder->record($intake, [
+            'engine' => $engine,
+            'source' => $source,
+            'created_by_actor_type' => BiodataIntakeOcrAttempt::ACTOR_SYSTEM,
+            'source_surface' => BiodataIntakeOcrAttempt::SURFACE_SERVER,
+            'status' => BiodataIntakeOcrAttempt::STATUS_SUCCESS,
+            'raw_text' => $prepared['raw_ocr_text'],
+            'image_hash' => $imageHash,
+            'layout_meta_json' => array_filter([
+                'original_width' => $debug['original_width'] ?? null,
+                'original_height' => $debug['original_height'] ?? null,
+                'derived_width' => $debug['derived_width'] ?? null,
+                'derived_height' => $debug['derived_height'] ?? null,
+            ], static fn (mixed $value): bool => $value !== null),
+            'engine_meta_json' => array_filter(array_merge($debug, [
+                'reused_from_intake_id' => $prepared['reused_from_intake_id'] ?? null,
+                'reused_paid_extraction_text' => $prepared['reused_paid_extraction_text'] ?? null,
+            ]), static fn (mixed $value): bool => $value !== null),
+            'parser_version' => $intake->parser_version,
+            'preprocessing_version' => is_string($debug['preset_resolved'] ?? null) ? $debug['preset_resolved'] : null,
+            'is_primary' => true,
+            'selected_policy' => IntakeOcrAttemptRecorder::SELECTION_POLICY_VERSION,
+            'selected_reason' => $selectedReason,
+            'selected_by_actor_type' => BiodataIntakeOcrAttempt::ACTOR_SYSTEM,
+        ]);
     }
 
     /**

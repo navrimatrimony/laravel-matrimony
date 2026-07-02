@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Phase-4: Raw biodata storage. Read-only usage for audit and re-verification.
@@ -14,7 +15,9 @@ class BiodataIntake extends Model
 
     /** Phase-4 M3: DRAFT on create; ATTACHED when linked to profile; ARCHIVED admin-only. */
     public const STATUS_DRAFT = 'DRAFT';
+
     public const STATUS_ATTACHED = 'ATTACHED';
+
     public const STATUS_ARCHIVED = 'ARCHIVED';
 
     protected $fillable = [
@@ -83,5 +86,10 @@ class BiodataIntake extends Model
     public function profile()
     {
         return $this->belongsTo(MatrimonyProfile::class, 'matrimony_profile_id');
+    }
+
+    public function ocrAttempts(): HasMany
+    {
+        return $this->hasMany(BiodataIntakeOcrAttempt::class, 'intake_id');
     }
 }

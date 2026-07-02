@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
+use App\Models\BiodataIntakeOcrAttempt;
 use App\Services\Intake\IntakeCreationService;
+use App\Services\Intake\IntakeOcrAttemptRecorder;
 use App\Services\Intake\IntakePreviewNormalizedDraftPresenter;
 use App\Services\Intake\IntakeReviewParseInputTextResolver;
 use App\Services\IntakeApprovalService;
@@ -38,8 +40,11 @@ class BiodataIntakeApiController extends Controller
         ]);
     }
 
-    public function store(Request $request, IntakeCreationService $intakeCreation): JsonResponse
-    {
+    public function store(
+        Request $request,
+        IntakeCreationService $intakeCreation,
+        IntakeOcrAttemptRecorder $ocrAttemptRecorder,
+    ): JsonResponse {
         $mobileMode = $this->mobileBiodataSourceMode();
         $usesLaravelPipeline = $mobileMode === 'laravel_pipeline';
 
@@ -51,6 +56,13 @@ class BiodataIntakeApiController extends Controller
                 ? ['nullable', 'file', 'max:20480', 'required_without:raw_text']
                 : ['prohibited'],
             'parse_now' => ['nullable', 'boolean'],
+            'ml_kit_raw_text' => ['nullable', 'string', 'max:60000'],
+            'ml_kit_lines_json' => ['nullable'],
+            'ml_kit_blocks_json' => ['nullable'],
+            'ml_kit_image_width' => ['nullable', 'integer', 'min:1', 'max:20000'],
+            'ml_kit_image_height' => ['nullable', 'integer', 'min:1', 'max:20000'],
+            'ml_kit_rotation' => ['nullable', 'integer', 'min:0', 'max:359'],
+            'ml_kit_app_version' => ['nullable', 'string', 'max:120'],
         ]);
 
         $file = $usesLaravelPipeline ? $request->file('file') : null;
@@ -66,6 +78,13 @@ class BiodataIntakeApiController extends Controller
         );
 
         $intake = $intakeCreation->persistPrepared((int) $request->user()->id, $prepared);
+
+        $this->recordMobileMlKitEvidence(
+            $request,
+            $intake,
+            $ocrAttemptRecorder,
+            ! $usesLaravelPipeline && trim((string) $rawText) !== ''
+        );
 
         if (! $usesLaravelPipeline) {
             // Mobile OCR already provides text, so keep this path cost-safe and deterministic.
@@ -90,6 +109,67 @@ class BiodataIntakeApiController extends Controller
             'preview' => $intake->parse_status === 'parsed' ? $this->previewPayload($intake) : null,
             'intake_settings' => $this->intakeSettingsPayload(),
         ], 201);
+    }
+
+    private function recordMobileMlKitEvidence(
+        Request $request,
+        BiodataIntake $intake,
+        IntakeOcrAttemptRecorder $ocrAttemptRecorder,
+        bool $selectAsPrimary,
+    ): void {
+        $rawText = trim((string) $request->input('ml_kit_raw_text', ''));
+        if ($rawText === '') {
+            return;
+        }
+
+        $layoutMeta = array_filter([
+            'image_width' => $request->integer('ml_kit_image_width') ?: null,
+            'image_height' => $request->integer('ml_kit_image_height') ?: null,
+            'rotation' => $request->integer('ml_kit_rotation'),
+            'app_version' => trim((string) $request->input('ml_kit_app_version', '')) ?: null,
+        ], static fn (mixed $value): bool => $value !== null && $value !== '');
+
+        $payload = [
+            'engine' => BiodataIntakeOcrAttempt::ENGINE_ML_KIT_FLUTTER,
+            'source' => 'mobile_app',
+            'created_by_user_id' => (int) $request->user()->id,
+            'source_surface' => BiodataIntakeOcrAttempt::SURFACE_MOBILE_APP,
+            'status' => BiodataIntakeOcrAttempt::STATUS_SUCCESS,
+            'raw_text' => $rawText,
+            'raw_lines_json' => $this->decodeEvidenceJson($request->input('ml_kit_lines_json')),
+            'raw_blocks_json' => $this->decodeEvidenceJson($request->input('ml_kit_blocks_json')),
+            'layout_meta_json' => $layoutMeta,
+            'parser_version' => $intake->parser_version,
+        ];
+
+        if ($selectAsPrimary) {
+            $ocrAttemptRecorder->recordOrSelectPrimary($intake, array_merge($payload, [
+                'selected_policy' => IntakeOcrAttemptRecorder::SELECTION_POLICY_VERSION,
+                'selected_reason' => 'mobile_ml_kit_text_selected_as_parse_input',
+                'selected_by_user_id' => (int) $request->user()->id,
+            ]));
+
+            return;
+        }
+
+        $ocrAttemptRecorder->record($intake, $payload);
+    }
+
+    /**
+     * @return array<string, mixed>|list<mixed>|null
+     */
+    private function decodeEvidenceJson(mixed $value): ?array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        $decoded = json_decode($value, true);
+
+        return is_array($decoded) ? $decoded : null;
     }
 
     public function show(Request $request, int $id): JsonResponse

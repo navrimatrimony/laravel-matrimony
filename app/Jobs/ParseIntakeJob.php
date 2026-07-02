@@ -4,8 +4,10 @@ namespace App\Jobs;
 
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
+use App\Models\BiodataIntakeOcrAttempt;
 use App\Services\AiVisionExtractionService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
+use App\Services\Intake\IntakeOcrAttemptRecorder;
 use App\Services\Intake\IntakeParseInputSelectionTrace;
 use App\Services\Intake\IntakePipelineService;
 use App\Services\IntakeManualOcrPreparedService;
@@ -110,11 +112,19 @@ class ParseIntakeJob implements ShouldQueue
         $parser = $resolver->makeParser($canonicalVersion);
         $ocr = app(OcrService::class);
         $qualityEvaluator = app(OcrQualityEvaluator::class);
+        $ocrAttemptRecorder = app(IntakeOcrAttemptRecorder::class);
 
         $resolved = null;
         $raw = '';
         $parseInputDebug = null;
         $reparseEarlyResolved = false;
+        $calledPaidExtract = false;
+        $paidExtractDurationMs = null;
+        $provider = null;
+        $reusedFrom = null;
+        $winnerQuality = null;
+        $qualityGate = null;
+        $meta = [];
 
         $reuseResolver = app(IntakeExtractionReuseResolver::class);
 
@@ -255,6 +265,7 @@ class ParseIntakeJob implements ShouldQueue
             $candidatesSummary = [];
             $winnerQualityPre = null;
             $calledPaidExtract = false;
+            $paidExtractDurationMs = null;
 
             $parseResolved = $reuseResolver->resolvePaidVisionInput(
                 $intake,
@@ -269,7 +280,9 @@ class ParseIntakeJob implements ShouldQueue
             $winnerQualityPre = $parseResolved['winner_quality_score'];
 
             if (! empty($parseResolved['call_paid_api']) && ! $parseInputOnly) {
+                $paidStartedAt = microtime(true);
                 $aiRes = $ai->extractTextForIntake($intake);
+                $paidExtractDurationMs = (int) round((microtime(true) - $paidStartedAt) * 1000);
                 $calledPaidExtract = true;
                 $raw = (string) ($aiRes['text'] ?? '');
                 $extractionReused = false;
@@ -314,7 +327,9 @@ class ParseIntakeJob implements ShouldQueue
                 $reusedSourceIntakeId = null;
                 $textProvenance = null;
                 $identityEvidenceScore = null;
+                $paidStartedAt = microtime(true);
                 $aiRes = $ai->extractTextForIntake($intake);
+                $paidExtractDurationMs = (int) round((microtime(true) - $paidStartedAt) * 1000);
                 $calledPaidExtract = true;
                 $raw = (string) ($aiRes['text'] ?? '');
                 $textProvenance = 'paid_vision_api_response';
@@ -377,6 +392,19 @@ class ParseIntakeJob implements ShouldQueue
                 $textProvenance,
                 $candidatesSummary,
                 $forceFreshPaidExtraction,
+            );
+
+            $this->recordAiVisionOcrAttempt(
+                $ocrAttemptRecorder,
+                $intake,
+                $raw,
+                is_array($meta) ? $meta : [],
+                is_array($qualityGate) ? $qualityGate : null,
+                $winnerQuality,
+                $calledPaidExtract,
+                $reusedFrom,
+                $provider,
+                $paidExtractDurationMs,
             );
 
             if (trim($raw) === '') {
@@ -460,6 +488,14 @@ class ParseIntakeJob implements ShouldQueue
             // parse_input_debug / parse_input_text cached immediately after non-empty AI extraction (before quality gate).
         } elseif (is_array($resolved['ocr_debug'] ?? null)) {
             Cache::put('intake.parse_ocr_debug.'.$intake->id, $resolved['ocr_debug'], now()->addDays(7));
+            $this->recordNativeParseInputOcrAttempt(
+                $ocrAttemptRecorder,
+                $intake,
+                $raw,
+                $resolved,
+                $ocrQuality,
+                $canonicalVersion,
+            );
         }
 
         if (config('app.debug')) {
@@ -583,6 +619,148 @@ class ParseIntakeJob implements ShouldQueue
                 'parsed_json_core_date_of_birth' => $savedCore['date_of_birth'] ?? null,
             ]);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     * @param  array<string, mixed>|null  $qualityGate
+     */
+    private function recordAiVisionOcrAttempt(
+        IntakeOcrAttemptRecorder $recorder,
+        BiodataIntake $intake,
+        string $raw,
+        array $meta,
+        ?array $qualityGate,
+        ?float $qualityScore,
+        bool $calledPaidExtract,
+        ?string $reusedFrom,
+        ?string $provider,
+        ?int $durationMs,
+    ): void {
+        if (! $calledPaidExtract && trim($raw) === '') {
+            return;
+        }
+
+        $resolvedProvider = strtolower(trim((string) ($meta['provider'] ?? $provider ?? '')));
+        $engine = match ($resolvedProvider) {
+            'sarvam' => BiodataIntakeOcrAttempt::ENGINE_SARVAM_AI_VISION,
+            'openai' => BiodataIntakeOcrAttempt::ENGINE_OPENAI_AI_VISION,
+            default => $calledPaidExtract
+                ? BiodataIntakeOcrAttempt::ENGINE_OPENAI_AI_VISION
+                : BiodataIntakeOcrAttempt::ENGINE_REUSED_TRANSCRIPT,
+        };
+
+        if (! $calledPaidExtract) {
+            $engine = BiodataIntakeOcrAttempt::ENGINE_REUSED_TRANSCRIPT;
+        }
+
+        $rawPresent = trim($raw) !== '';
+        $providerOk = ! array_key_exists('ok', $meta) || (bool) $meta['ok'];
+        $qualityOk = $qualityGate === null || (bool) ($qualityGate['ok'] ?? false);
+        $status = $rawPresent && $providerOk
+            ? BiodataIntakeOcrAttempt::STATUS_SUCCESS
+            : BiodataIntakeOcrAttempt::STATUS_FAILED;
+
+        $payload = [
+            'engine' => $engine,
+            'source' => $calledPaidExtract ? 'server_ai_vision' : ($reusedFrom ?: 'ai_vision_reuse'),
+            'created_by_actor_type' => BiodataIntakeOcrAttempt::ACTOR_SYSTEM,
+            'source_surface' => BiodataIntakeOcrAttempt::SURFACE_SERVER,
+            'status' => $status,
+            'raw_text' => $rawPresent ? $raw : null,
+            'quality_score' => $qualityScore,
+            'failure_code' => $status === BiodataIntakeOcrAttempt::STATUS_FAILED
+                ? $this->ocrAttemptFailureCode($meta, $qualityGate)
+                : null,
+            'failure_message' => $status === BiodataIntakeOcrAttempt::STATUS_FAILED
+                ? (string) ($meta['error'] ?? $meta['job_error_message'] ?? $meta['reason'] ?? $qualityGate['reason'] ?? '')
+                : null,
+            'layout_meta_json' => array_filter([
+                'original_image_width' => $meta['original_image_width'] ?? null,
+                'original_image_height' => $meta['original_image_height'] ?? null,
+                'ai_request_image_width' => $meta['ai_request_image_width'] ?? null,
+                'ai_request_image_height' => $meta['ai_request_image_height'] ?? null,
+                'extracted_text_line_count' => $meta['extracted_text_line_count'] ?? null,
+            ], static fn (mixed $value): bool => $value !== null),
+            'engine_meta_json' => array_filter([
+                'provider_meta' => $meta,
+                'quality_gate' => $qualityGate,
+                'reused_from' => $reusedFrom,
+                'called_paid_extract' => $calledPaidExtract,
+            ], static fn (mixed $value): bool => $value !== null),
+            'parser_version' => $intake->parser_version,
+            'duration_ms' => $durationMs,
+            'cost_units' => $calledPaidExtract ? 1 : 0,
+            'provider_request_id' => isset($meta['job_id']) ? (string) $meta['job_id'] : null,
+            'provider_response_id' => isset($meta['job_id']) ? (string) $meta['job_id'] : null,
+            'selected_policy' => IntakeOcrAttemptRecorder::SELECTION_POLICY_VERSION,
+            'selected_reason' => $calledPaidExtract ? 'paid_vision_api_response' : 'reused_ai_vision_transcript',
+            'selected_by_actor_type' => BiodataIntakeOcrAttempt::ACTOR_SYSTEM,
+        ];
+
+        if ($status === BiodataIntakeOcrAttempt::STATUS_SUCCESS && $qualityOk) {
+            $recorder->recordOrSelectPrimary($intake, $payload);
+
+            return;
+        }
+
+        $recorder->record($intake, $payload);
+    }
+
+    /**
+     * @param  array<string, mixed>  $resolved
+     * @param  array<string, mixed>  $ocrQuality
+     */
+    private function recordNativeParseInputOcrAttempt(
+        IntakeOcrAttemptRecorder $recorder,
+        BiodataIntake $intake,
+        string $raw,
+        array $resolved,
+        array $ocrQuality,
+        string $parserVersion,
+    ): void {
+        if (trim($raw) === '') {
+            return;
+        }
+
+        $debug = is_array($resolved['ocr_debug'] ?? null) ? $resolved['ocr_debug'] : [];
+        $sourceType = (string) ($debug['ocr_source_type'] ?? '');
+        $textOnly = trim((string) ($intake->file_path ?? '')) === '';
+
+        $recorder->recordOrSelectPrimary($intake, [
+            'engine' => $textOnly
+                ? BiodataIntakeOcrAttempt::ENGINE_ML_KIT_FLUTTER
+                : BiodataIntakeOcrAttempt::ENGINE_LARAVEL_NATIVE_OCR,
+            'source' => $sourceType !== '' ? $sourceType : ($textOnly ? 'mobile_app' : 'server_parse'),
+            'created_by_actor_type' => BiodataIntakeOcrAttempt::ACTOR_SYSTEM,
+            'source_surface' => BiodataIntakeOcrAttempt::SURFACE_SERVER,
+            'status' => BiodataIntakeOcrAttempt::STATUS_SUCCESS,
+            'raw_text' => $raw,
+            'quality_score' => $ocrQuality['score'] ?? null,
+            'engine_meta_json' => $debug,
+            'parser_version' => $parserVersion,
+            'selected_policy' => IntakeOcrAttemptRecorder::SELECTION_POLICY_VERSION,
+            'selected_reason' => 'parse_job_selected_input',
+            'selected_by_actor_type' => BiodataIntakeOcrAttempt::ACTOR_SYSTEM,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     * @param  array<string, mixed>|null  $qualityGate
+     */
+    private function ocrAttemptFailureCode(array $meta, ?array $qualityGate): string
+    {
+        $reason = strtolower(trim((string) ($meta['reason'] ?? $qualityGate['reason'] ?? '')));
+        if ($reason !== '') {
+            if (str_contains($reason, 'timeout')) {
+                return BiodataIntakeOcrAttempt::FAILURE_PROVIDER_TIMEOUT;
+            }
+
+            return $reason;
+        }
+
+        return BiodataIntakeOcrAttempt::FAILURE_PROVIDER_ERROR;
     }
 
     public function failed(\Throwable $e): void
