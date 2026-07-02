@@ -131,22 +131,16 @@ test('low quality cheap OCR recommends paid vision without changing intake truth
 });
 
 test('trusted exact content hash duplicate is reuse eligible but never copies parsed json', function () {
-    $sourceRaw = "मुलीचे नांव : कु. Source Candidate\nजन्मतारीख : 12/03/1996\nमो 9876543210\nशिक्षण बी.कॉम";
-    $targetRaw = "मुलीचे नांव : कु. Target Candidate\nजन्मतारीख : 12/03/1996\nमो 9876543210\nशिक्षण बी.कॉम";
-    $sourceParsed = [
-        'core' => [
-            'full_name' => 'Source Candidate',
-        ],
-    ];
-    $targetParsed = [
-        'core' => [
-            'full_name' => 'Target Candidate',
-        ],
-    ];
+    $sourceRaw = "मुलीचे नांव : कु. Matched Candidate\nजन्मतारीख : 12/03/1996\nमो 9876543210\nशिक्षण बी.कॉम";
+    $targetRaw = "मुलीचे नांव : कु. Matched Candidate\nजन्मतारीख : 12/03/1996\nमो 9876543210\nशिक्षण बी.कॉम";
+    $sourceParsed = routingAdvisorParsed('Matched Candidate', '1996-03-12', '9876543210', 'B.Com');
+    $targetParsed = routingAdvisorParsed('Matched Candidate', '1996-03-12', '9876543210', 'B.Com');
+    $targetParsed['core']['local_note'] = 'target-owned-parse';
     $source = createRoutingAdvisorIntake([
         'content_hash' => 'same-image-hash',
         'raw_ocr_text' => $sourceRaw,
         'parsed_json' => $sourceParsed,
+        'approval_snapshot_json' => $sourceParsed,
         'parse_status' => 'parsed',
         'quality_summary_json' => [
             'score' => 0.88,
@@ -185,12 +179,97 @@ test('trusted exact content hash duplicate is reuse eligible but never copies pa
         ->and($stored->routing_recommendation_json['signals']['duplicate_reference_quality_score'])->toBe(0.88)
         ->and($stored->routing_recommendation_json['signals']['matched_hash_type'])->toBe('content_hash')
         ->and($stored->routing_recommendation_json['signals']['identity_fingerprint_present'])->toBeTrue()
+        ->and($stored->routing_recommendation_json['signals']['duplicate_field_match_eligible'])->toBeTrue()
+        ->and($stored->routing_recommendation_json['signals']['duplicate_field_match_score'])->toEqual(1.0)
+        ->and($stored->routing_recommendation_json['signals']['duplicate_field_mismatch_codes'])->toBe([])
+        ->and($stored->routing_recommendation_json['signals']['current_reference_name_match'])->toBe('yes')
+        ->and($stored->routing_recommendation_json['signals']['current_reference_dob_match'])->toBe('yes')
+        ->and($stored->routing_recommendation_json['signals']['current_reference_contact_match'])->toBe('yes')
         ->and($stored->routing_recommendation_json['signals']['normalized_text_hash_present'])->toBeFalse()
         ->and($stored->routing_recommendation_json['signals']['image_hash_present'])->toBeFalse()
         ->and($stored->routing_telemetry_json['reuse_candidate_found'])->toBeTrue()
         ->and($stored->raw_ocr_text)->toBe($targetRaw)
         ->and($stored->parsed_json)->toBe($targetParsed)
         ->and($stored->parsed_json)->not->toBe($sourceParsed);
+});
+
+test('reviewed reference with contact mismatch is not reuse eligible', function () {
+    [$stored] = routingAdvisorReviewedDuplicateRecommendation(
+        routingAdvisorParsed('Field Match Candidate', '1996-04-12', '9876543210', 'MCA'),
+        routingAdvisorParsed('Field Match Candidate', '1996-04-12', '9123456780', 'MCA'),
+        'contact-mismatch-hash'
+    );
+
+    expect($stored->routing_recommendation_json['recommended_action'])->toBe('manual_review')
+        ->and($stored->routing_recommendation_json['reason_codes'])->toContain('duplicate_field_mismatch')
+        ->and($stored->routing_recommendation_json['would_skip_paid_vision'])->toBeFalse()
+        ->and($stored->routing_recommendation_json['signals']['duplicate_reuse_eligible'])->toBeFalse()
+        ->and($stored->routing_recommendation_json['signals']['duplicate_reuse_trust'])->toBe('field_mismatch')
+        ->and($stored->routing_recommendation_json['signals']['duplicate_field_match_eligible'])->toBeFalse()
+        ->and($stored->routing_recommendation_json['signals']['duplicate_field_mismatch_codes'])->toContain('contact_mismatch')
+        ->and($stored->routing_recommendation_json['signals']['current_reference_contact_match'])->toBe('no');
+});
+
+test('reviewed reference with dob mismatch is not reuse eligible', function () {
+    [$stored] = routingAdvisorReviewedDuplicateRecommendation(
+        routingAdvisorParsed('Field Match Candidate', '1996-04-12', '9876543210', 'MCA'),
+        routingAdvisorParsed('Field Match Candidate', '1997-04-12', '9876543210', 'MCA'),
+        'dob-mismatch-hash'
+    );
+
+    expect($stored->routing_recommendation_json['recommended_action'])->toBe('manual_review')
+        ->and($stored->routing_recommendation_json['reason_codes'])->toContain('duplicate_field_mismatch')
+        ->and($stored->routing_recommendation_json['signals']['duplicate_field_mismatch_codes'])->toContain('dob_mismatch')
+        ->and($stored->routing_recommendation_json['signals']['current_reference_dob_match'])->toBe('no')
+        ->and($stored->routing_recommendation_json['signals']['duplicate_reuse_eligible'])->toBeFalse();
+});
+
+test('reviewed reference missing dob while current has dob is not reuse eligible', function () {
+    $reference = routingAdvisorParsed('Field Match Candidate', null, '9876543210', 'MCA');
+    unset($reference['core']['date_of_birth']);
+
+    [$stored] = routingAdvisorReviewedDuplicateRecommendation(
+        routingAdvisorParsed('Field Match Candidate', '1996-04-12', '9876543210', 'MCA'),
+        $reference,
+        'missing-dob-hash'
+    );
+
+    expect($stored->routing_recommendation_json['recommended_action'])->toBe('manual_review')
+        ->and($stored->routing_recommendation_json['signals']['duplicate_field_mismatch_codes'])->toContain('reference_missing_dob')
+        ->and($stored->routing_recommendation_json['signals']['current_reference_dob_match'])->toBe('unknown')
+        ->and($stored->routing_recommendation_json['signals']['duplicate_reuse_eligible'])->toBeFalse();
+});
+
+test('reviewed reference missing name while current has name is not reuse eligible', function () {
+    $reference = routingAdvisorParsed(null, '1996-04-12', '9876543210', 'MCA');
+    unset($reference['core']['full_name']);
+
+    [$stored] = routingAdvisorReviewedDuplicateRecommendation(
+        routingAdvisorParsed('Field Match Candidate', '1996-04-12', '9876543210', 'MCA'),
+        $reference,
+        'missing-name-hash'
+    );
+
+    expect($stored->routing_recommendation_json['recommended_action'])->toBe('manual_review')
+        ->and($stored->routing_recommendation_json['signals']['duplicate_field_mismatch_codes'])->toContain('reference_missing_name')
+        ->and($stored->routing_recommendation_json['signals']['current_reference_name_match'])->toBe('unknown')
+        ->and($stored->routing_recommendation_json['signals']['duplicate_reuse_eligible'])->toBeFalse();
+});
+
+test('weak duplicate with only education and address match remains manual review', function () {
+    [$stored] = routingAdvisorReviewedDuplicateRecommendation(
+        routingAdvisorWeakIdentityParsed('MCA', 'Pune'),
+        routingAdvisorWeakIdentityParsed('MCA', 'Pune'),
+        'weak-identity-overlap-hash'
+    );
+
+    expect($stored->routing_recommendation_json['recommended_action'])->toBe('manual_review')
+        ->and($stored->routing_recommendation_json['reason_codes'])->toContain('duplicate_field_mismatch')
+        ->and($stored->routing_recommendation_json['signals']['duplicate_field_match_eligible'])->toBeFalse()
+        ->and($stored->routing_recommendation_json['signals']['duplicate_field_mismatch_codes'])->toContain('insufficient_identity_overlap')
+        ->and($stored->routing_recommendation_json['signals']['duplicate_field_mismatch_codes'])->toContain('only_weak_fields_match')
+        ->and($stored->routing_recommendation_json['signals']['current_reference_core_fields_compared'])->toBe(0)
+        ->and($stored->routing_recommendation_json['signals']['duplicate_reuse_eligible'])->toBeFalse();
 });
 
 test('weak exact content hash duplicate is not reuse eligible', function () {
@@ -376,4 +455,70 @@ function createRoutingAdvisorIntake(array $overrides = []): BiodataIntake
         'approved_by_user' => false,
         'intake_locked' => false,
     ], $overrides));
+}
+
+function routingAdvisorParsed(?string $name, ?string $dateOfBirth, ?string $phone, ?string $education): array
+{
+    return [
+        'core' => array_filter([
+            'full_name' => $name,
+            'date_of_birth' => $dateOfBirth,
+            'primary_contact_number' => $phone,
+            'highest_education' => $education,
+        ], static fn ($value): bool => $value !== null),
+        'contacts' => $phone !== null ? [
+            [
+                'phone_number' => $phone,
+                'is_primary' => true,
+            ],
+        ] : [],
+    ];
+}
+
+function routingAdvisorWeakIdentityParsed(string $education, string $address): array
+{
+    return [
+        'core' => [
+            'highest_education' => $education,
+            'current_address' => $address,
+        ],
+        'education_history' => [
+            ['degree' => $education],
+        ],
+        'addresses' => [
+            ['type' => 'residence', 'address' => $address],
+        ],
+    ];
+}
+
+function routingAdvisorReviewedDuplicateRecommendation(array $currentParsed, array $referenceSnapshot, string $contentHash): array
+{
+    $reference = createRoutingAdvisorIntake([
+        'content_hash' => $contentHash,
+        'raw_ocr_text' => 'Reference duplicate OCR text',
+        'parsed_json' => $referenceSnapshot,
+        'approval_snapshot_json' => $referenceSnapshot,
+        'parse_status' => 'parsed',
+        'quality_summary_json' => [
+            'score' => 0.9,
+            'is_low' => false,
+        ],
+    ]);
+    BiodataIntakeOcrAttempt::create([
+        'intake_id' => $reference->id,
+        'engine' => BiodataIntakeOcrAttempt::ENGINE_LARAVEL_NATIVE_OCR,
+        'source' => 'server_parse',
+        'status' => BiodataIntakeOcrAttempt::STATUS_SUCCESS,
+        'raw_text' => 'Reference duplicate OCR text',
+        'quality_score' => 0.9,
+        'is_primary' => true,
+    ]);
+    $current = createRoutingAdvisorIntake([
+        'content_hash' => $contentHash,
+        'raw_ocr_text' => 'Current duplicate OCR text',
+        'parsed_json' => $currentParsed,
+        'parse_status' => 'parsed',
+    ]);
+
+    return [app(IntakeSmartRoutingAdvisor::class)->storeForIntake($current), $reference];
 }

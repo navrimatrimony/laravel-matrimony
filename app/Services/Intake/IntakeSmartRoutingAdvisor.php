@@ -15,6 +15,7 @@ class IntakeSmartRoutingAdvisor
     public function __construct(
         private readonly IntakeRoutingTelemetryService $telemetry,
         private readonly IntakeBiodataIdentityFingerprint $identityFingerprint,
+        private readonly IntakeDuplicateFieldMatchEvaluator $fieldMatchEvaluator,
     ) {}
 
     /**
@@ -53,6 +54,10 @@ class IntakeSmartRoutingAdvisor
                 $reasonCodes[] = 'duplicate_reuse_eligible';
 
                 return $this->payload('reuse_previous', $reasonCodes, 0.9, true, false, $signals);
+            }
+
+            if (! empty($signals['duplicate_field_mismatch_codes'])) {
+                $reasonCodes[] = 'duplicate_field_mismatch';
             }
 
             $reasonCodes[] = 'duplicate_detected_but_untrusted';
@@ -234,7 +239,7 @@ class IntakeSmartRoutingAdvisor
             'duplicate_reference_locked' => null,
             'duplicate_reference_is_self_or_circular' => false,
             'duplicate_reference_reason' => null,
-        ];
+        ] + $this->fieldMatchEvaluator->emptyEvaluation();
         $reusedAttempt = $attempts->first(
             fn (BiodataIntakeOcrAttempt $attempt): bool => $attempt->engine === BiodataIntakeOcrAttempt::ENGINE_REUSED_TRANSCRIPT
         );
@@ -364,6 +369,7 @@ class IntakeSmartRoutingAdvisor
         $referenceIsSelfOrCircular = $referenceId === $currentId
             || $referenceId > $currentId
             || $this->referencePointsBackToCurrent($reference, $currentId);
+        $fieldMatch = $this->fieldMatchEvaluator->evaluate($intake, $reference);
 
         $signals = [
             'duplicate_reference_has_parsed_json' => $referenceHasParsedJson,
@@ -373,7 +379,7 @@ class IntakeSmartRoutingAdvisor
             'duplicate_reference_quality_score' => $referenceQualityScore,
             'duplicate_reference_locked' => (bool) $reference->intake_locked,
             'duplicate_reference_is_self_or_circular' => $referenceIsSelfOrCircular,
-        ];
+        ] + $fieldMatch;
 
         if ($referenceIsSelfOrCircular) {
             return array_merge($signals, [
@@ -418,40 +424,45 @@ class IntakeSmartRoutingAdvisor
             ], true);
 
         if ($referenceHasReviewedSnapshot) {
-            return array_merge($signals, [
-                'duplicate_reuse_eligible' => true,
-                'duplicate_reuse_trust' => 'trusted',
-                'duplicate_reference_reason' => 'reference_has_reviewed_snapshot',
-            ]);
+            return $this->trustedDuplicateSignals($signals, 'reference_has_reviewed_snapshot');
         }
 
         if ($hasParsedJsonWithStrongOcrEvidence) {
-            return array_merge($signals, [
-                'duplicate_reuse_eligible' => true,
-                'duplicate_reuse_trust' => 'trusted',
-                'duplicate_reference_reason' => 'reference_parsed_with_strong_ocr_evidence',
-            ]);
+            return $this->trustedDuplicateSignals($signals, 'reference_parsed_with_strong_ocr_evidence');
         }
 
         if ($qualityHigh) {
-            return array_merge($signals, [
-                'duplicate_reuse_eligible' => true,
-                'duplicate_reuse_trust' => 'trusted',
-                'duplicate_reference_reason' => 'reference_quality_score_high',
-            ]);
+            return $this->trustedDuplicateSignals($signals, 'reference_quality_score_high');
         }
 
         if ($hasSafeExistingReuseEvidence) {
-            return array_merge($signals, [
-                'duplicate_reuse_eligible' => true,
-                'duplicate_reuse_trust' => 'trusted',
-                'duplicate_reference_reason' => 'safe_existing_reuse_evidence',
-            ]);
+            return $this->trustedDuplicateSignals($signals, 'safe_existing_reuse_evidence');
         }
 
         return array_merge($signals, [
             'duplicate_reuse_trust' => 'weak',
             'duplicate_reference_reason' => 'reference_lacks_trusted_evidence',
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $signals
+     * @return array<string, mixed>
+     */
+    private function trustedDuplicateSignals(array $signals, string $trustedReason): array
+    {
+        if (! empty($signals['duplicate_field_match_eligible'])) {
+            return array_merge($signals, [
+                'duplicate_reuse_eligible' => true,
+                'duplicate_reuse_trust' => 'trusted',
+                'duplicate_reference_reason' => $trustedReason,
+            ]);
+        }
+
+        return array_merge($signals, [
+            'duplicate_reuse_eligible' => false,
+            'duplicate_reuse_trust' => 'field_mismatch',
+            'duplicate_reference_reason' => 'duplicate_field_match_failed',
         ]);
     }
 

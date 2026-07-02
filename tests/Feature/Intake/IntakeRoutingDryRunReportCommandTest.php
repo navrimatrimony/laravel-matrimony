@@ -133,6 +133,9 @@ test('details output includes safe signal summary without raw evidence or provid
                 'identity_fingerprint_present' => true,
                 'normalized_text_hash_present' => true,
                 'image_hash_present' => false,
+                'duplicate_field_match_eligible' => true,
+                'duplicate_field_match_score' => 1.0,
+                'duplicate_field_mismatch_codes' => [],
             ],
         ]),
         'routing_telemetry_json' => routingDryRunReportTelemetry([
@@ -160,6 +163,9 @@ test('details output includes safe signal summary without raw evidence or provid
         ->and($output)->toContain('quality=0.82')
         ->and($output)->toContain('cheap=1')
         ->and($output)->toContain('sarvam=0')
+        ->and($output)->toContain('field_match=yes')
+        ->and($output)->toContain('field_score=1')
+        ->and($output)->toContain('field_mismatches=none')
         ->and($output)->toContain('Policy enabled')
         ->and($output)->toContain('routing_disabled')
         ->and($output)->toContain('skip=no')
@@ -169,6 +175,37 @@ test('details output includes safe signal summary without raw evidence or provid
         ->and($output)->not->toContain('9876543210')
         ->and($output)->not->toContain('sk-proj-secret')
         ->and($output)->not->toContain('sk-proj-provider-payload');
+});
+
+test('details json shows duplicate field mismatch codes', function () {
+    createRoutingDryRunReportIntake([
+        'routing_recommendation_json' => routingDryRunReportRecommendation([
+            'recommended_action' => 'manual_review',
+            'reason_codes' => ['duplicate_detected', 'duplicate_field_mismatch', 'duplicate_detected_but_untrusted'],
+            'confidence' => 0.42,
+            'signals' => [
+                'duplicate_reuse_eligible' => false,
+                'duplicate_reuse_trust' => 'field_mismatch',
+                'duplicate_reference_intake_id' => 321,
+                'duplicate_field_match_eligible' => false,
+                'duplicate_field_match_score' => 0.6667,
+                'duplicate_field_mismatch_codes' => ['contact_mismatch'],
+                'current_reference_contact_match' => 'no',
+                'current_reference_dob_match' => 'yes',
+                'current_reference_name_match' => 'yes',
+                'current_reference_core_fields_compared' => 3,
+            ],
+        ]),
+    ]);
+
+    $payload = routingDryRunReportJson(['--details' => true]);
+    $row = $payload['details_by_action']['manual_review'][0];
+
+    expect($row['duplicate_field_match_eligible'])->toBe('no')
+        ->and($row['duplicate_field_match_score'])->toBe(0.6667)
+        ->and($row['duplicate_field_mismatch_codes'])->toBe(['contact_mismatch'])
+        ->and($row['signal_summary'])->toContain('field_match=no')
+        ->and($row['signal_summary'])->toContain('field_mismatches=contact_mismatch');
 });
 
 test('details json shows default disabled policy as blocked for eligible reuse recommendation', function () {

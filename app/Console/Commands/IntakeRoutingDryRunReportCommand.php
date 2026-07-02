@@ -292,6 +292,9 @@ class IntakeRoutingDryRunReportCommand extends Command
                 'OCR',
                 'Cheap OCR',
                 'Sarvam',
+                'Field match',
+                'Field score',
+                'Mismatch codes',
                 'Policy enabled',
                 'Dry run only',
                 'Allowed live',
@@ -312,6 +315,9 @@ class IntakeRoutingDryRunReportCommand extends Command
                 $row['ocr_attempt_count'] ?? 'n/a',
                 $row['cheap_ocr_attempt_count'] ?? 'n/a',
                 $row['sarvam_attempt_count'] ?? 'n/a',
+                $row['duplicate_field_match_eligible'],
+                $row['duplicate_field_match_score'] ?? 'n/a',
+                implode(',', $row['duplicate_field_mismatch_codes']),
                 $row['policy_enabled'],
                 $row['policy_dry_run_only'],
                 $row['policy_allowed_live_action'],
@@ -353,6 +359,9 @@ class IntakeRoutingDryRunReportCommand extends Command
             'ocr_attempt_count' => $this->nullableInt($signals['ocr_attempt_count'] ?? null),
             'cheap_ocr_attempt_count' => $this->nullableInt($signals['cheap_ocr_attempt_count'] ?? $telemetry['cheap_ocr_attempt_count'] ?? null),
             'sarvam_attempt_count' => $this->nullableInt($signals['sarvam_attempt_count'] ?? $telemetry['sarvam_attempt_count'] ?? null),
+            'duplicate_field_match_eligible' => $this->yesNo($signals['duplicate_field_match_eligible'] ?? null),
+            'duplicate_field_match_score' => $this->numericValue($signals['duplicate_field_match_score'] ?? null),
+            'duplicate_field_mismatch_codes' => $this->stringList($signals['duplicate_field_mismatch_codes'] ?? []),
             'policy_enabled' => $this->yesNo($policyEvaluation['enabled'] ?? null),
             'policy_dry_run_only' => $this->yesNo($policyEvaluation['dry_run_only'] ?? null),
             'policy_allowed_live_action' => $this->policyDisplayString($policyEvaluation['allowed_live_action'] ?? null),
@@ -390,6 +399,11 @@ class IntakeRoutingDryRunReportCommand extends Command
             'id_fp='.$this->yesNo($signals['identity_fingerprint_present'] ?? null),
             'text_hash='.$this->yesNo($signals['normalized_text_hash_present'] ?? null),
             'image_hash='.$this->yesNo($signals['image_hash_present'] ?? null),
+            'field_match='.$this->yesNo($signals['duplicate_field_match_eligible'] ?? null),
+            'field_score='.($this->numericValue($signals['duplicate_field_match_score'] ?? null) ?? 'n/a'),
+            'field_mismatches='.($this->stringList($signals['duplicate_field_mismatch_codes'] ?? []) !== []
+                ? implode(',', $this->stringList($signals['duplicate_field_mismatch_codes'] ?? []))
+                : 'none'),
         ];
 
         return implode('; ', $parts);

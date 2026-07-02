@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\BiodataIntake;
 use App\Models\BiodataIntakeOcrAttempt;
+use App\Services\Intake\IntakeDuplicateFieldMatchEvaluator;
 use App\Services\Intake\IntakeSmartRoutingPolicy;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
@@ -26,8 +27,10 @@ class IntakeRoutingDuplicateCompareCommand extends Command
 
     protected $description = 'Compare a routing dry-run duplicate candidate with its reference intake without mutating data.';
 
-    public function __construct(private readonly IntakeSmartRoutingPolicy $policy)
-    {
+    public function __construct(
+        private readonly IntakeSmartRoutingPolicy $policy,
+        private readonly IntakeDuplicateFieldMatchEvaluator $fieldMatchEvaluator,
+    ) {
         parent::__construct();
     }
 
@@ -59,6 +62,9 @@ class IntakeRoutingDuplicateCompareCommand extends Command
         } elseif (! $reference instanceof BiodataIntake) {
             $message = "Duplicate reference intake {$referenceId} was not found.";
         }
+        $fieldMatch = $reference instanceof BiodataIntake
+            ? $this->fieldMatchEvaluator->evaluate($current, $reference)
+            : $this->fieldMatchEvaluator->emptyEvaluation();
 
         $payload = [
             'success' => true,
@@ -69,7 +75,7 @@ class IntakeRoutingDuplicateCompareCommand extends Command
                 'show_snapshot' => (bool) $this->option('show-snapshot'),
                 'include_locked' => (bool) $this->option('include-locked'),
             ],
-            'routing_decision' => $this->routingDecision($recommendation, $signals, $referenceId),
+            'routing_decision' => $this->routingDecision($recommendation, $signals, $referenceId, $fieldMatch),
             'current_intake' => $this->intakeSummary($current, (bool) $this->option('show-snapshot')),
             'reference_intake' => $reference instanceof BiodataIntake
                 ? $this->intakeSummary($reference, (bool) $this->option('show-snapshot'))
@@ -153,11 +159,17 @@ class IntakeRoutingDuplicateCompareCommand extends Command
     /**
      * @param  array<string, mixed>  $recommendation
      * @param  array<string, mixed>  $signals
+     * @param  array<string, mixed>  $fieldMatch
      * @return array<string, mixed>
      */
-    private function routingDecision(array $recommendation, array $signals, ?int $referenceId): array
+    private function routingDecision(array $recommendation, array $signals, ?int $referenceId, array $fieldMatch): array
     {
         $policyEvaluation = $this->policy->evaluate($recommendation);
+        $mismatchCodes = $this->stringList(
+            $fieldMatch['duplicate_field_mismatch_codes']
+                ?? $signals['duplicate_field_mismatch_codes']
+                ?? []
+        );
 
         return [
             'recommended_action' => $this->summaryString($recommendation['recommended_action'] ?? 'unknown'),
@@ -172,6 +184,13 @@ class IntakeRoutingDuplicateCompareCommand extends Command
             'duplicate_signal_source' => $this->summaryString($signals['duplicate_signal_source'] ?? null),
             'duplicate_match_type' => $this->summaryString($signals['duplicate_match_type'] ?? null),
             'matched_hash_type' => $this->summaryString($signals['matched_hash_type'] ?? null),
+            'duplicate_field_match_eligible' => $this->yesNo($fieldMatch['duplicate_field_match_eligible'] ?? $signals['duplicate_field_match_eligible'] ?? null),
+            'duplicate_field_match_score' => $this->numericValue($fieldMatch['duplicate_field_match_score'] ?? $signals['duplicate_field_match_score'] ?? null),
+            'duplicate_field_mismatch_codes' => $mismatchCodes,
+            'current_reference_contact_match' => $this->summaryString($fieldMatch['current_reference_contact_match'] ?? $signals['current_reference_contact_match'] ?? null),
+            'current_reference_dob_match' => $this->summaryString($fieldMatch['current_reference_dob_match'] ?? $signals['current_reference_dob_match'] ?? null),
+            'current_reference_name_match' => $this->summaryString($fieldMatch['current_reference_name_match'] ?? $signals['current_reference_name_match'] ?? null),
+            'current_reference_core_fields_compared' => $this->nullableInt($fieldMatch['current_reference_core_fields_compared'] ?? $signals['current_reference_core_fields_compared'] ?? null),
             'policy_enabled' => $this->yesNo($policyEvaluation['enabled'] ?? null),
             'policy_dry_run_only' => $this->yesNo($policyEvaluation['dry_run_only'] ?? null),
             'policy_allowed_live_action' => $this->policyDisplayString($policyEvaluation['allowed_live_action'] ?? null),

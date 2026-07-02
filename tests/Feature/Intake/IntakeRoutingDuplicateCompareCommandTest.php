@@ -28,6 +28,12 @@ test('command compares eligible duplicate with reference', function () {
         ->and($output)->toContain('candidate_name')
         ->and($output)->toContain('date_of_birth')
         ->and($output)->toContain('primary_contact')
+        ->and($output)->toContain('duplicate_field_match_eligible')
+        ->and($output)->toContain('duplicate_field_match_score')
+        ->and($output)->toContain('duplicate_field_mismatch_codes')
+        ->and($output)->toContain('current_reference_contact_match')
+        ->and($output)->toContain('current_reference_dob_match')
+        ->and($output)->toContain('current_reference_name_match')
         ->and($output)->toContain('policy_blocked_reason')
         ->and($output)->toContain('routing_disabled');
 });
@@ -130,6 +136,12 @@ test('json option returns valid json', function () {
         ->and($payload['reference_intake']['id'])->toBe($reference->id)
         ->and($payload['routing_decision']['recommended_action'])->toBe('reuse_previous')
         ->and($payload['routing_decision']['policy_blocked_reason'])->toBe('routing_disabled')
+        ->and($payload['routing_decision']['duplicate_field_match_eligible'])->toBe('yes')
+        ->and($payload['routing_decision']['duplicate_field_match_score'])->toEqual(1.0)
+        ->and($payload['routing_decision']['duplicate_field_mismatch_codes'])->toBe([])
+        ->and($payload['routing_decision']['current_reference_contact_match'])->toBe('yes')
+        ->and($payload['routing_decision']['current_reference_dob_match'])->toBe('yes')
+        ->and($payload['routing_decision']['current_reference_name_match'])->toBe('yes')
         ->and($payload['field_comparison'])->not->toBeEmpty()
         ->and($payload['field_comparison'][0])->toHaveKeys(['group', 'field', 'current', 'reference', 'match']);
 });
@@ -179,8 +191,8 @@ function duplicateCompareJson(int $id, array $parameters = []): array
 function createDuplicateComparePair(array $currentOverrides = [], array $referenceOverrides = [], array $recommendationOverrides = []): array
 {
     $reference = createDuplicateCompareIntake(array_merge([
-        'parsed_json' => duplicateCompareParsed('Reference Candidate', '1996-04-12', '9876543210', 'MCA'),
-        'approval_snapshot_json' => duplicateCompareParsed('Reference Candidate', '1996-04-12', '9876543210', 'MCA'),
+        'parsed_json' => duplicateCompareParsed('Duplicate Candidate', '1996-04-12', '9876543210', 'MCA'),
+        'approval_snapshot_json' => duplicateCompareParsed('Duplicate Candidate', '1996-04-12', '9876543210', 'MCA'),
         'approved_by_user' => true,
         'approved_at' => now(),
         'reviewed_by_user_id' => User::factory()->create()->id,
@@ -201,7 +213,7 @@ function createDuplicateComparePair(array $currentOverrides = [], array $referen
 
     $recommendation = duplicateCompareRecommendation($reference->id, $recommendationOverrides);
     $current = createDuplicateCompareIntake(array_merge([
-        'parsed_json' => duplicateCompareParsed('Current Candidate', '1996-04-12', '9876543210', 'MCA'),
+        'parsed_json' => duplicateCompareParsed('Duplicate Candidate', '1996-04-12', '9876543210', 'MCA'),
         'content_hash' => 'same-content-hash',
         'quality_summary_json' => ['score' => 0.91],
         'routing_recommendation_json' => $recommendation,
@@ -299,6 +311,13 @@ function duplicateCompareRecommendation(?int $referenceId, array $overrides = []
             'duplicate_match_type' => 'exact_content_hash',
             'matched_hash_type' => 'content_hash',
             'duplicate_reference_has_reviewed_snapshot' => true,
+            'duplicate_field_match_eligible' => true,
+            'duplicate_field_match_score' => 1.0,
+            'duplicate_field_mismatch_codes' => [],
+            'current_reference_contact_match' => 'yes',
+            'current_reference_dob_match' => 'yes',
+            'current_reference_name_match' => 'yes',
+            'current_reference_core_fields_compared' => 3,
         ] : [],
     ], $overrides);
 }
