@@ -17,6 +17,64 @@ class SuchakBiodataReviewSnapshotTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_authorized_suchak_can_open_review_ui_for_linked_intake(): void
+    {
+        [$user, $account] = $this->verifiedSuchak();
+        $intake = $this->intakeForUser($user);
+        SuchakBiodataIntakeLink::query()->create([
+            'suchak_account_id' => $account->id,
+            'biodata_intake_id' => $intake->id,
+            'source_status' => SuchakBiodataIntakeLink::STATUS_REVIEW_PENDING,
+            'created_by_user_id' => $user->id,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('suchak.intakes.review-snapshot.edit', $intake));
+
+        $response
+            ->assertOk()
+            ->assertSee('Review biodata details')
+            ->assertSee('Parsed Candidate')
+            ->assertSee('name="reviewed_snapshot[core][full_name]"', false)
+            ->assertSee('Save reviewed snapshot');
+    }
+
+    public function test_suchak_review_ui_shows_quality_panel_and_low_confidence_field_marker(): void
+    {
+        [$user, $account] = $this->verifiedSuchak();
+        $intake = $this->intakeForUser($user, [
+            'quality_summary_json' => [
+                'score' => 0.58,
+                'layout_score' => 0.7,
+            ],
+            'failure_codes_json' => [
+                BiodataIntakeOcrAttempt::FAILURE_TEXT_FOUND_MAPPING_FAILED,
+            ],
+            'field_confidence_json' => [
+                'full_name' => [
+                    'score' => 0.4,
+                    'present' => true,
+                    'source_path' => 'core.full_name',
+                    'reason' => 'parsed_value_present',
+                ],
+            ],
+        ]);
+        SuchakBiodataIntakeLink::query()->create([
+            'suchak_account_id' => $account->id,
+            'biodata_intake_id' => $intake->id,
+            'source_status' => SuchakBiodataIntakeLink::STATUS_REVIEW_PENDING,
+            'created_by_user_id' => $user->id,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('suchak.intakes.review-snapshot.edit', $intake));
+
+        $response
+            ->assertOk()
+            ->assertSee('data-testid="suchak-quality-signals-panel"', false)
+            ->assertSee(BiodataIntakeOcrAttempt::FAILURE_TEXT_FOUND_MAPPING_FAILED)
+            ->assertSee('data-testid="suchak-low-confidence-field-core-full-name"', false)
+            ->assertSee('Low confidence 40%');
+    }
+
     public function test_authorized_suchak_can_save_reviewed_snapshot_for_linked_intake_without_mutating_profile_or_evidence(): void
     {
         [$user, $account] = $this->verifiedSuchak();
@@ -110,6 +168,45 @@ class SuchakBiodataReviewSnapshotTest extends TestCase
         $this->assertSame('Profile Before Review', $profile->full_name);
     }
 
+    public function test_authorized_suchak_can_save_reviewed_snapshot_from_review_ui_form(): void
+    {
+        [$user, $account] = $this->verifiedSuchak();
+        $profile = MatrimonyProfile::factory()->create([
+            'full_name' => 'Profile Before Review',
+        ]);
+        $intake = $this->intakeForUser($user, [
+            'matrimony_profile_id' => $profile->id,
+        ]);
+        SuchakBiodataIntakeLink::query()->create([
+            'suchak_account_id' => $account->id,
+            'biodata_intake_id' => $intake->id,
+            'matrimony_profile_id' => $profile->id,
+            'source_status' => SuchakBiodataIntakeLink::STATUS_REVIEW_PENDING,
+            'created_by_user_id' => $user->id,
+        ]);
+
+        $response = $this->actingAs($user)->patch(route('suchak.intakes.review-snapshot.update', $intake), [
+            'reviewed_snapshot' => [
+                'core' => [
+                    'full_name' => 'Form Corrected Candidate',
+                    'date_of_birth' => '1996-05-04',
+                ],
+            ],
+        ]);
+
+        $response->assertRedirect(route('suchak.intakes.review-snapshot.edit', $intake));
+
+        $intake->refresh();
+        $profile->refresh();
+
+        $this->assertSame('Form Corrected Candidate', data_get($intake->approval_snapshot_json, 'core.full_name'));
+        $this->assertSame(IntakeHumanReviewSnapshotService::ACTOR_SUCHAK, $intake->review_actor_type);
+        $this->assertSame(IntakeHumanReviewSnapshotService::SURFACE_WEBSITE, $intake->review_surface);
+        $this->assertSame('Parsed Candidate', data_get($intake->parsed_json, 'core.full_name'));
+        $this->assertSame('Original OCR text', $intake->raw_ocr_text);
+        $this->assertSame('Profile Before Review', $profile->full_name);
+    }
+
     public function test_authorized_suchak_can_save_reviewed_snapshot_for_represented_intake(): void
     {
         [$user, $account] = $this->verifiedSuchak();
@@ -148,6 +245,10 @@ class SuchakBiodataReviewSnapshotTest extends TestCase
             'created_by_user_id' => $ownerUser->id,
         ]);
 
+        $this->actingAs($otherUser)
+            ->get(route('suchak.intakes.review-snapshot.edit', $intake))
+            ->assertForbidden();
+
         $this->actingAs($otherUser)->patchJson(route('suchak.intakes.review-snapshot.update', $intake), [
             'reviewed_snapshot' => [
                 'core' => [
@@ -167,6 +268,10 @@ class SuchakBiodataReviewSnapshotTest extends TestCase
     {
         $owner = User::factory()->create();
         $intake = $this->intakeForUser($owner);
+
+        $this->actingAs($owner)
+            ->get(route('suchak.intakes.review-snapshot.edit', $intake))
+            ->assertForbidden();
 
         $this->actingAs($owner)->patchJson(route('suchak.intakes.review-snapshot.update', $intake), [
             'reviewed_snapshot' => [

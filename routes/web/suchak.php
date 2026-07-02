@@ -113,6 +113,8 @@ Route::middleware('auth')
             ->middleware('throttle:10,1')
             ->name('register.documents.store');
         Route::get('/register/status', [AccountRequestController::class, 'status'])->name('register.status');
+        Route::get('/intakes/{intake}/review-snapshot', [BiodataIntakeReviewSnapshotController::class, 'show'])
+            ->name('intakes.review-snapshot.edit');
     });
 
 Route::middleware(['auth', EnforceCardOnboarding::class])

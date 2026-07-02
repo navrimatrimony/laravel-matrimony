@@ -1553,6 +1553,13 @@
                         <div class="text-sm">
                             <div class="font-medium text-gray-900 dark:text-gray-100">{{ $suchakText::label($link->source_status) }}</div>
                             <div class="text-xs text-gray-500 dark:text-gray-400">Intake #{{ $link->biodata_intake_id }} · {{ $link->created_at?->format('Y-m-d H:i') }}</div>
+                            @if ($link->biodata_intake_id)
+                                <div class="mt-2">
+                                    <a href="{{ route('suchak.intakes.review-snapshot.edit', $link->biodata_intake_id) }}" class="inline-flex rounded-md border border-indigo-300 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 dark:border-indigo-700 dark:text-indigo-200 dark:hover:bg-indigo-950/40">
+                                        Review biodata
+                                    </a>
+                                </div>
+                            @endif
                         </div>
                     @empty
                         <p class="text-sm text-gray-600 dark:text-gray-300">No source links yet.</p>
