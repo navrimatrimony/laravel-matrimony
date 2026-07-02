@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Suchak\AccountRequestController;
 use App\Http\Controllers\Suchak\AccountSettingsController;
+use App\Http\Controllers\Suchak\BiodataIntakeReviewSnapshotController;
 use App\Http\Controllers\Suchak\BiodataExportController;
 use App\Http\Controllers\Suchak\CollaborationController;
 use App\Http\Controllers\Suchak\ConsentController;
@@ -146,6 +147,8 @@ Route::middleware(['auth', EnforceCardOnboarding::class, 'suchak.account'])
             ->name('plans.payu.test-success');
         Route::get('/intakes/create', [IntakeSourceController::class, 'create'])->name('intakes.create');
         Route::post('/intakes', [IntakeSourceController::class, 'store'])->name('intakes.store');
+        Route::patch('/intakes/{intake}/review-snapshot', [BiodataIntakeReviewSnapshotController::class, 'update'])
+            ->name('intakes.review-snapshot.update');
         Route::get('/manual-profiles/create', [ManualProfileController::class, 'create'])->name('manual-profiles.create');
         Route::post('/manual-profiles', [ManualProfileController::class, 'store'])->name('manual-profiles.store');
         Route::get('/search', [CrossSearchController::class, 'index'])->name('search.index');

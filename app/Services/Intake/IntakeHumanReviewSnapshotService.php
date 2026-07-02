@@ -28,6 +28,8 @@ class IntakeHumanReviewSnapshotService
 
     public const POLICY_PHASE2C_PROFILE_USER_REVIEW_V1 = 'phase2c_profile_user_review_v1';
 
+    public const POLICY_PHASE2D_SUCHAK_REVIEW_V1 = 'phase2d_suchak_review_v1';
+
     public const STATUS_REVIEWED = 'reviewed';
 
     public const STATUS_APPROVED = 'approved';
