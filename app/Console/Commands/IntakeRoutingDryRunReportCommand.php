@@ -25,7 +25,8 @@ class IntakeRoutingDryRunReportCommand extends Command
         {--to= : Include intakes created on or before YYYY-MM-DD}
         {--json : Print the summary as JSON}
         {--action= : Filter by recommended_action}
-        {--include-locked : Include locked intakes in the scan}';
+        {--include-locked : Include locked intakes in the scan}
+        {--details : Include small safe sample diagnostics per recommended action}';
 
     protected $description = 'Show a read-only summary report for stored smart-routing dry-run data.';
 
@@ -49,6 +50,7 @@ class IntakeRoutingDryRunReportCommand extends Command
         }
 
         $includeLocked = (bool) $this->option('include-locked');
+        $includeDetails = (bool) $this->option('details');
         $baseQuery = BiodataIntake::query()
             ->select([
                 'id',
@@ -95,7 +97,8 @@ class IntakeRoutingDryRunReportCommand extends Command
             'to' => $this->option('to') ?: null,
             'action' => $action,
             'include_locked' => $includeLocked,
-        ], $lockedCount, $includeLocked ? 0 : $lockedCount);
+            'details' => $includeDetails,
+        ], $lockedCount, $includeLocked ? 0 : $lockedCount, $includeDetails);
 
         if ((bool) $this->option('json')) {
             $this->line(json_encode($report, JSON_UNESCAPED_SLASHES));
@@ -128,11 +131,18 @@ class IntakeRoutingDryRunReportCommand extends Command
      * @param  array<string, mixed>  $filters
      * @return array<string, mixed>
      */
-    private function summarize(Collection $intakes, array $filters, int $lockedCount, int $lockedExcludedCount): array
+    private function summarize(
+        Collection $intakes,
+        array $filters,
+        int $lockedCount,
+        int $lockedExcludedCount,
+        bool $includeDetails,
+    ): array
     {
         $actionCounts = array_fill_keys(self::ACTIONS, 0);
         $reasonCodeCounts = [];
         $sampleIdsByAction = array_fill_keys(self::ACTIONS, []);
+        $detailsByAction = array_fill_keys(self::ACTIONS, []);
         $wouldSkipPaidVisionCount = 0;
         $wouldCallPaidVisionCount = 0;
         $unknownNoSignalCount = 0;
@@ -150,6 +160,10 @@ class IntakeRoutingDryRunReportCommand extends Command
 
             if (count($sampleIdsByAction[$action] ?? []) < 10) {
                 $sampleIdsByAction[$action][] = (int) $intake->id;
+            }
+
+            if ($includeDetails && count($detailsByAction[$action] ?? []) < 10) {
+                $detailsByAction[$action][] = $this->detailRow($intake, $action, $recommendation, $telemetry, $reasonCodes);
             }
 
             foreach ($reasonCodes as $reasonCode) {
@@ -182,7 +196,7 @@ class IntakeRoutingDryRunReportCommand extends Command
 
         arsort($reasonCodeCounts);
 
-        return [
+        $report = [
             'success' => true,
             'filters' => $filters,
             'total_scanned' => $intakes->count(),
@@ -199,6 +213,12 @@ class IntakeRoutingDryRunReportCommand extends Command
                 : null,
             'sample_intake_ids_by_action' => $sampleIdsByAction,
         ];
+
+        if ($includeDetails) {
+            $report['details_by_action'] = $detailsByAction;
+        }
+
+        return $report;
     }
 
     /**
@@ -234,6 +254,100 @@ class IntakeRoutingDryRunReportCommand extends Command
         }
 
         $this->table(['Reason code', 'Count'], $reasonRows ?: [['none', 0]]);
+
+        if (! empty($report['details_by_action']) && is_array($report['details_by_action'])) {
+            $this->renderDetailTables($report['details_by_action']);
+        }
+    }
+
+    /**
+     * @param  array<string, list<array<string, mixed>>>  $detailsByAction
+     */
+    private function renderDetailTables(array $detailsByAction): void
+    {
+        foreach ($detailsByAction as $action => $rows) {
+            if ($rows === []) {
+                continue;
+            }
+
+            $this->line('Details: '.$action);
+            $this->table([
+                'Intake',
+                'Recommended action',
+                'Reason codes',
+                'Signal summary',
+                'Duplicate ref',
+                'Quality',
+                'OCR',
+                'Cheap OCR',
+                'Sarvam',
+            ], array_map(static fn (array $row): array => [
+                $row['intake_id'],
+                $row['recommended_action'],
+                implode(',', $row['reason_codes']),
+                $row['signal_summary'],
+                $row['duplicate_reference_intake_id'] ?? 'n/a',
+                $row['quality_score'] ?? 'n/a',
+                $row['ocr_attempt_count'] ?? 'n/a',
+                $row['cheap_ocr_attempt_count'] ?? 'n/a',
+                $row['sarvam_attempt_count'] ?? 'n/a',
+            ], $rows));
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $recommendation
+     * @param  array<string, mixed>  $telemetry
+     * @param  list<string>  $reasonCodes
+     * @return array<string, mixed>
+     */
+    private function detailRow(
+        BiodataIntake $intake,
+        string $action,
+        array $recommendation,
+        array $telemetry,
+        array $reasonCodes,
+    ): array {
+        $signals = $this->arrayValue($recommendation['signals'] ?? []);
+
+        return [
+            'intake_id' => (int) $intake->id,
+            'recommended_action' => $action,
+            'reason_codes' => $reasonCodes,
+            'signal_summary' => $this->signalSummary($signals, $telemetry),
+            'duplicate_reference_intake_id' => $this->nullableInt($signals['duplicate_reference_intake_id'] ?? null),
+            'quality_score' => $this->numericValue($signals['quality_score'] ?? $telemetry['last_quality_score'] ?? null),
+            'ocr_attempt_count' => $this->nullableInt($signals['ocr_attempt_count'] ?? null),
+            'cheap_ocr_attempt_count' => $this->nullableInt($signals['cheap_ocr_attempt_count'] ?? $telemetry['cheap_ocr_attempt_count'] ?? null),
+            'sarvam_attempt_count' => $this->nullableInt($signals['sarvam_attempt_count'] ?? $telemetry['sarvam_attempt_count'] ?? null),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $signals
+     * @param  array<string, mixed>  $telemetry
+     */
+    private function signalSummary(array $signals, array $telemetry): string
+    {
+        $qualityScore = $this->numericValue($signals['quality_score'] ?? $telemetry['last_quality_score'] ?? null);
+        $parts = [
+            'source='.$this->summaryString($signals['duplicate_signal_source'] ?? null),
+            'match='.$this->summaryString($signals['duplicate_match_type'] ?? null),
+            'ref='.($this->nullableInt($signals['duplicate_reference_intake_id'] ?? null) ?? 'n/a'),
+            'hash='.$this->summaryString($signals['matched_hash_type'] ?? null),
+            'parsed='.$this->yesNo($signals['has_parsed_json'] ?? null),
+            'raw='.$this->yesNo($signals['has_raw_ocr_text'] ?? null),
+            'quality='.($qualityScore !== null ? (string) $qualityScore : 'n/a'),
+            'ocr='.($this->nullableInt($signals['ocr_attempt_count'] ?? null) ?? 'n/a'),
+            'cheap='.($this->nullableInt($signals['cheap_ocr_attempt_count'] ?? $telemetry['cheap_ocr_attempt_count'] ?? null) ?? 'n/a'),
+            'sarvam='.($this->nullableInt($signals['sarvam_attempt_count'] ?? $telemetry['sarvam_attempt_count'] ?? null) ?? 'n/a'),
+            'primary='.$this->yesNo($signals['primary_ocr_attempt_exists'] ?? null),
+            'id_fp='.$this->yesNo($signals['identity_fingerprint_present'] ?? null),
+            'text_hash='.$this->yesNo($signals['normalized_text_hash_present'] ?? null),
+            'image_hash='.$this->yesNo($signals['image_hash_present'] ?? null),
+        ];
+
+        return implode('; ', $parts);
     }
 
     private function recommendedAction(BiodataIntake $intake): string
@@ -339,5 +453,34 @@ class IntakeRoutingDryRunReportCommand extends Command
         }
 
         return (float) $value;
+    }
+
+    private function nullableInt(mixed $value): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        return (int) $value;
+    }
+
+    private function summaryString(mixed $value): string
+    {
+        if (! is_scalar($value)) {
+            return 'n/a';
+        }
+
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : 'n/a';
+    }
+
+    private function yesNo(mixed $value): string
+    {
+        if ($value === null) {
+            return 'n/a';
+        }
+
+        return $this->boolValue($value) ? 'yes' : 'no';
     }
 }

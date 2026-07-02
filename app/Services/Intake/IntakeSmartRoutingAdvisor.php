@@ -4,6 +4,7 @@ namespace App\Services\Intake;
 
 use App\Models\BiodataIntake;
 use App\Models\BiodataIntakeOcrAttempt;
+use Illuminate\Support\Collection;
 
 class IntakeSmartRoutingAdvisor
 {
@@ -13,6 +14,7 @@ class IntakeSmartRoutingAdvisor
 
     public function __construct(
         private readonly IntakeRoutingTelemetryService $telemetry,
+        private readonly IntakeBiodataIdentityFingerprint $identityFingerprint,
     ) {}
 
     /**
@@ -200,18 +202,170 @@ class IntakeSmartRoutingAdvisor
         array $failureCodes,
         array $lowConfidenceKeys,
     ): array {
-        return [
+        $attempts = $this->ocrAttempts($intake);
+        $qualitySummary = is_array($intake->quality_summary_json) ? $intake->quality_summary_json : [];
+        $fieldConfidence = is_array($intake->field_confidence_json) ? $intake->field_confidence_json : [];
+        $duplicateSignals = $this->duplicateSignals($intake, $attempts, $telemetry);
+
+        return array_merge([
             'parse_status' => $intake->parse_status,
             'has_file' => trim((string) ($intake->file_path ?? '')) !== '',
+            'has_parsed_json' => $this->hasNonEmptyArray($intake->parsed_json),
+            'has_raw_ocr_text' => trim((string) ($intake->raw_ocr_text ?? '')) !== '',
+            'has_quality_summary' => $qualitySummary !== [],
+            'has_field_confidence' => $fieldConfidence !== [],
             'quality_score' => $qualityScore,
             'layout_score' => $layoutScore,
             'failure_codes' => $failureCodes,
             'low_confidence_fields' => $lowConfidenceKeys,
+            'ocr_attempt_count' => $attempts->count(),
+            'primary_ocr_attempt_exists' => $attempts->contains(
+                fn (BiodataIntakeOcrAttempt $attempt): bool => (bool) $attempt->is_primary
+            ),
             'cheap_ocr_attempt_count' => $telemetry['cheap_ocr_attempt_count'] ?? 0,
             'sarvam_attempt_count' => $telemetry['sarvam_attempt_count'] ?? 0,
             'failed_provider_count' => $telemetry['failed_provider_count'] ?? 0,
             'reuse_candidate_found' => (bool) ($telemetry['reuse_candidate_found'] ?? false),
+            'identity_fingerprint_present' => $this->identityFingerprintPresent($intake),
+            'normalized_text_hash_present' => $attempts->contains(
+                fn (BiodataIntakeOcrAttempt $attempt): bool => trim((string) ($attempt->normalized_text_hash ?? '')) !== ''
+            ),
+            'image_hash_present' => $attempts->contains(
+                fn (BiodataIntakeOcrAttempt $attempt): bool => trim((string) ($attempt->image_hash ?? '')) !== ''
+            ),
+        ], $duplicateSignals);
+    }
+
+    /**
+     * @param  Collection<int, BiodataIntakeOcrAttempt>  $attempts
+     * @param  array<string, mixed>  $telemetry
+     * @return array<string, mixed>
+     */
+    private function duplicateSignals(BiodataIntake $intake, Collection $attempts, array $telemetry): array
+    {
+        $reusedAttempt = $attempts->first(
+            fn (BiodataIntakeOcrAttempt $attempt): bool => $attempt->engine === BiodataIntakeOcrAttempt::ENGINE_REUSED_TRANSCRIPT
+        );
+        $contentHashPeerId = $this->contentHashPeerId($intake);
+        $matchedHashType = null;
+        $source = null;
+        $matchType = null;
+        $referenceId = null;
+
+        if ($reusedAttempt instanceof BiodataIntakeOcrAttempt) {
+            $source = 'reused_transcript_attempt';
+            $matchType = $this->reusedAttemptMatchType($reusedAttempt);
+            $referenceId = $this->duplicateReferenceFromAttempt($reusedAttempt, (int) $intake->id) ?? $contentHashPeerId;
+            $matchedHashType = $this->matchedHashType($reusedAttempt) ?? ($contentHashPeerId !== null ? 'content_hash' : null);
+        } elseif ($contentHashPeerId !== null) {
+            $source = 'content_hash';
+            $matchType = 'exact_content_hash';
+            $referenceId = $contentHashPeerId;
+            $matchedHashType = 'content_hash';
+        } elseif (! empty($telemetry['reuse_candidate_found'])) {
+            $source = 'telemetry';
+            $matchType = 'reuse_candidate';
+        }
+
+        return [
+            'duplicate_signal_source' => $source,
+            'duplicate_match_type' => $matchType,
+            'duplicate_reference_intake_id' => $referenceId,
+            'matched_hash_type' => $matchedHashType,
         ];
+    }
+
+    private function contentHashPeerId(BiodataIntake $intake): ?int
+    {
+        $contentHash = trim((string) ($intake->content_hash ?? ''));
+        if ($contentHash === '') {
+            return null;
+        }
+
+        $peerId = BiodataIntake::query()
+            ->whereKeyNot($intake->id)
+            ->where('content_hash', $contentHash)
+            ->oldest('id')
+            ->value('id');
+
+        return $peerId !== null ? (int) $peerId : null;
+    }
+
+    private function duplicateReferenceFromAttempt(BiodataIntakeOcrAttempt $attempt, int $currentIntakeId): ?int
+    {
+        $meta = is_array($attempt->engine_meta_json) ? $attempt->engine_meta_json : [];
+        $candidate = $meta['reused_from_intake_id']
+            ?? $meta['reused_source_intake_id']
+            ?? $meta['source_intake_id']
+            ?? null;
+
+        if (! is_numeric($candidate)) {
+            return null;
+        }
+
+        $referenceId = (int) $candidate;
+
+        return $referenceId > 0 && $referenceId !== $currentIntakeId ? $referenceId : null;
+    }
+
+    private function reusedAttemptMatchType(BiodataIntakeOcrAttempt $attempt): string
+    {
+        $meta = is_array($attempt->engine_meta_json) ? $attempt->engine_meta_json : [];
+        $reusedFrom = is_scalar($meta['reused_from'] ?? null) ? trim((string) $meta['reused_from']) : '';
+
+        return $reusedFrom !== '' ? $reusedFrom : 'reused_transcript';
+    }
+
+    private function matchedHashType(BiodataIntakeOcrAttempt $attempt): ?string
+    {
+        if (trim((string) ($attempt->image_hash ?? '')) !== '') {
+            return 'image_hash';
+        }
+
+        if (trim((string) ($attempt->normalized_text_hash ?? '')) !== '') {
+            return 'normalized_text_hash';
+        }
+
+        return null;
+    }
+
+    private function identityFingerprintPresent(BiodataIntake $intake): bool
+    {
+        $rawText = (string) ($intake->raw_ocr_text ?? '');
+        if (trim($rawText) !== '' && $this->identityFingerprint->fingerprintForProvider('openai', $rawText) !== null) {
+            return true;
+        }
+
+        $parseInput = (string) ($intake->last_parse_input_text ?? '');
+
+        return trim($parseInput) !== '' && $this->identityFingerprint->fingerprintForProvider('openai', $parseInput) !== null;
+    }
+
+    private function hasNonEmptyArray(mixed $value): bool
+    {
+        return is_array($value) && $value !== [];
+    }
+
+    /**
+     * @return Collection<int, BiodataIntakeOcrAttempt>
+     */
+    private function ocrAttempts(BiodataIntake $intake): Collection
+    {
+        if ($intake->relationLoaded('ocrAttempts')) {
+            return $intake->ocrAttempts;
+        }
+
+        return $intake->ocrAttempts()
+            ->latest('id')
+            ->get([
+                'id',
+                'intake_id',
+                'engine',
+                'normalized_text_hash',
+                'image_hash',
+                'engine_meta_json',
+                'is_primary',
+            ]);
     }
 
     /**

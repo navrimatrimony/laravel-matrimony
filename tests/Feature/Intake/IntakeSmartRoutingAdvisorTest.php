@@ -131,6 +131,8 @@ test('low quality cheap OCR recommends paid vision without changing intake truth
 });
 
 test('duplicate content signal recommends previous reuse but never copies parsed json', function () {
+    $sourceRaw = "मुलीचे नांव : कु. Source Candidate\nजन्मतारीख : 12/03/1996\nमो 9876543210\nशिक्षण बी.कॉम";
+    $targetRaw = "मुलीचे नांव : कु. Target Candidate\nजन्मतारीख : 12/03/1996\nमो 9876543210\nशिक्षण बी.कॉम";
     $sourceParsed = [
         'core' => [
             'full_name' => 'Source Candidate',
@@ -141,15 +143,15 @@ test('duplicate content signal recommends previous reuse but never copies parsed
             'full_name' => 'Target Candidate',
         ],
     ];
-    createRoutingAdvisorIntake([
+    $source = createRoutingAdvisorIntake([
         'content_hash' => 'same-image-hash',
-        'raw_ocr_text' => 'Source OCR text',
+        'raw_ocr_text' => $sourceRaw,
         'parsed_json' => $sourceParsed,
         'parse_status' => 'parsed',
     ]);
     $target = createRoutingAdvisorIntake([
         'content_hash' => 'same-image-hash',
-        'raw_ocr_text' => 'Target OCR text',
+        'raw_ocr_text' => $targetRaw,
         'parsed_json' => $targetParsed,
         'parse_status' => 'parsed',
     ]);
@@ -158,10 +160,46 @@ test('duplicate content signal recommends previous reuse but never copies parsed
 
     expect($stored->routing_recommendation_json['recommended_action'])->toBe('reuse_previous')
         ->and($stored->routing_recommendation_json['reason_codes'])->toContain('duplicate_detected')
+        ->and($stored->routing_recommendation_json['signals']['duplicate_signal_source'])->toBe('content_hash')
+        ->and($stored->routing_recommendation_json['signals']['duplicate_match_type'])->toBe('exact_content_hash')
+        ->and($stored->routing_recommendation_json['signals']['duplicate_reference_intake_id'])->toBe($source->id)
+        ->and($stored->routing_recommendation_json['signals']['matched_hash_type'])->toBe('content_hash')
+        ->and($stored->routing_recommendation_json['signals']['identity_fingerprint_present'])->toBeTrue()
+        ->and($stored->routing_recommendation_json['signals']['normalized_text_hash_present'])->toBeFalse()
+        ->and($stored->routing_recommendation_json['signals']['image_hash_present'])->toBeFalse()
         ->and($stored->routing_telemetry_json['reuse_candidate_found'])->toBeTrue()
-        ->and($stored->raw_ocr_text)->toBe('Target OCR text')
+        ->and($stored->raw_ocr_text)->toBe($targetRaw)
         ->and($stored->parsed_json)->toBe($targetParsed)
         ->and($stored->parsed_json)->not->toBe($sourceParsed);
+});
+
+test('no signal recommendation explains missing stored signals without mutating intake', function () {
+    $intake = createRoutingAdvisorIntake([
+        'raw_ocr_text' => '',
+        'parsed_json' => [],
+        'parse_status' => 'pending',
+        'quality_summary_json' => null,
+        'failure_codes_json' => [],
+        'field_confidence_json' => null,
+    ]);
+
+    $recommendation = app(IntakeSmartRoutingAdvisor::class)->recommend($intake);
+
+    expect($recommendation['recommended_action'])->toBe('unknown')
+        ->and($recommendation['reason_codes'])->toContain('no_signal')
+        ->and($recommendation['signals']['has_parsed_json'])->toBeFalse()
+        ->and($recommendation['signals']['has_raw_ocr_text'])->toBeFalse()
+        ->and($recommendation['signals']['has_quality_summary'])->toBeFalse()
+        ->and($recommendation['signals']['has_field_confidence'])->toBeFalse()
+        ->and($recommendation['signals']['ocr_attempt_count'])->toBe(0)
+        ->and($recommendation['signals']['primary_ocr_attempt_exists'])->toBeFalse()
+        ->and($recommendation['signals']['cheap_ocr_attempt_count'])->toBe(0)
+        ->and($recommendation['signals']['sarvam_attempt_count'])->toBe(0)
+        ->and($recommendation['signals']['normalized_text_hash_present'])->toBeFalse()
+        ->and($recommendation['signals']['image_hash_present'])->toBeFalse()
+        ->and($intake->fresh()->parse_status)->toBe('pending')
+        ->and($intake->fresh()->parsed_json)->toBe([])
+        ->and($intake->fresh()->raw_ocr_text)->toBe('');
 });
 
 test('provider failure is captured in telemetry and reason codes', function () {

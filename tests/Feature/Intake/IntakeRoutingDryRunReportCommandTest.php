@@ -102,6 +102,53 @@ test('json option returns valid json', function () {
         ->and($payload['total_scanned'])->toBe(1);
 });
 
+test('details output includes safe signal summary without raw evidence or provider secrets', function () {
+    createRoutingDryRunReportIntake([
+        'raw_ocr_text' => 'Sensitive OCR text 9876543210 sk-proj-secret',
+        'routing_recommendation_json' => routingDryRunReportRecommendation([
+            'recommended_action' => 'reuse_previous',
+            'reason_codes' => ['duplicate_detected'],
+            'would_skip_paid_vision' => true,
+            'signals' => [
+                'duplicate_signal_source' => 'content_hash',
+                'duplicate_match_type' => 'exact_content_hash',
+                'duplicate_reference_intake_id' => 123,
+                'matched_hash_type' => 'content_hash',
+                'has_parsed_json' => true,
+                'has_raw_ocr_text' => true,
+                'quality_score' => 0.82,
+                'ocr_attempt_count' => 2,
+                'primary_ocr_attempt_exists' => true,
+                'cheap_ocr_attempt_count' => 1,
+                'sarvam_attempt_count' => 0,
+                'identity_fingerprint_present' => true,
+                'normalized_text_hash_present' => true,
+                'image_hash_present' => false,
+            ],
+        ]),
+        'routing_telemetry_json' => routingDryRunReportTelemetry([
+            'cheap_ocr_attempt_count' => 1,
+            'last_quality_score' => 0.82,
+        ]),
+    ]);
+
+    $exitCode = Artisan::call('intake:routing-dry-run-report', ['--details' => true]);
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(0)
+        ->and($output)->toContain('Details: reuse_previous')
+        ->and($output)->toContain('source=content_hash')
+        ->and($output)->toContain('match=exact_content_hash')
+        ->and($output)->toContain('ref=123')
+        ->and($output)->toContain('hash=content_hash')
+        ->and($output)->toContain('quality=0.82')
+        ->and($output)->toContain('cheap=1')
+        ->and($output)->toContain('sarvam=0')
+        ->and($output)->not->toContain('Sensitive OCR text')
+        ->and($output)->not->toContain('9876543210')
+        ->and($output)->not->toContain('sk-proj-secret');
+});
+
 test('command does not mutate routing data evidence parse status ocr attempts or profile', function () {
     $member = User::factory()->create();
     $profile = MatrimonyProfile::factory()->create([
