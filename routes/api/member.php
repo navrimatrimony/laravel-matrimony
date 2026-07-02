@@ -107,6 +107,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/biodata-intakes', [BiodataIntakeApiController::class, 'store']); // CREATE FROM MOBILE OCR TEXT
     Route::get('/biodata-intakes/{id}', [BiodataIntakeApiController::class, 'show']); // SHOW MY BIODATA INTAKE
     Route::get('/biodata-intakes/{id}/preview', [BiodataIntakeApiController::class, 'preview']); // NORMALIZED REVIEW DRAFT
+    Route::patch('/biodata-intakes/{id}/review-snapshot', [BiodataIntakeApiController::class, 'reviewSnapshot']); // SAVE REVIEWED SNAPSHOT
     Route::post('/biodata-intakes/{id}/approve', [BiodataIntakeApiController::class, 'approve']); // CONFIRM + GOVERNED APPLY
 
     /*
