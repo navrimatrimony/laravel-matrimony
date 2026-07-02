@@ -31,6 +31,7 @@ class IntakeOcrAttemptRecorder
 
     public function __construct(
         private readonly OcrQualityEvaluator $qualityEvaluator,
+        private readonly IntakeQualitySignalService $qualitySignalService,
     ) {}
 
     /**
@@ -154,11 +155,30 @@ class IntakeOcrAttemptRecorder
             $normalizedText = OcrNormalize::normalizeRawTextForParsing($rawText);
         }
 
+        $rawLines = $this->nullableArray($attributes['raw_lines_json'] ?? null);
+        $rawBlocks = $this->nullableArray($attributes['raw_blocks_json'] ?? null);
+        $layoutMeta = $this->nullableArray($attributes['layout_meta_json'] ?? null);
+        $status = (string) ($attributes['status'] ?? BiodataIntakeOcrAttempt::STATUS_SUCCESS);
+
         $qualityScore = $attributes['quality_score'] ?? null;
         if ($qualityScore === null && $rawText !== null && trim($rawText) !== '') {
             $quality = $this->qualityEvaluator->evaluate($rawText);
             $qualityScore = $quality['score'] ?? null;
         }
+
+        $layoutScore = $attributes['layout_score'] ?? $this->qualitySignalService->layoutScore($rawLines, $rawBlocks, $layoutMeta);
+        $fieldScores = $this->nullableArray($attributes['field_scores_json'] ?? null);
+        if ($fieldScores === null && $rawText !== null && trim($rawText) !== '') {
+            $fieldScores = $this->qualitySignalService->fieldScoresFromText($rawText);
+        }
+
+        $failureCode = $attributes['failure_code'] ?? null;
+        if ($failureCode === null && $status === BiodataIntakeOcrAttempt::STATUS_FAILED) {
+            $failureCode = $rawText === null || trim($rawText) === ''
+                ? BiodataIntakeOcrAttempt::FAILURE_EMPTY_TEXT
+                : BiodataIntakeOcrAttempt::FAILURE_UNKNOWN;
+        }
+        $failureCode = $this->qualitySignalService->normalizeFailureCode(is_string($failureCode) ? $failureCode : null);
 
         return [
             'intake_id' => $intake->id,
@@ -167,7 +187,7 @@ class IntakeOcrAttemptRecorder
             'created_by_user_id' => $this->nullableInt($attributes['created_by_user_id'] ?? null),
             'created_by_actor_type' => $this->actorType($attributes['created_by_actor_type'] ?? null),
             'source_surface' => $this->sourceSurface($attributes['source_surface'] ?? null),
-            'status' => (string) ($attributes['status'] ?? BiodataIntakeOcrAttempt::STATUS_SUCCESS),
+            'status' => $status,
             'raw_text' => $rawText,
             'normalized_text' => $normalizedText,
             'text_hash' => $rawText !== null ? hash('sha256', $rawText) : null,
@@ -175,13 +195,13 @@ class IntakeOcrAttemptRecorder
             'image_hash' => $this->nullableString($attributes['image_hash'] ?? null),
             'perceptual_hash' => $this->nullableString($attributes['perceptual_hash'] ?? null),
             'quality_score' => $this->nullableFloat($qualityScore),
-            'layout_score' => $this->nullableFloat($attributes['layout_score'] ?? null),
-            'field_scores_json' => $this->nullableArray($attributes['field_scores_json'] ?? null),
-            'failure_code' => $this->nullableString($attributes['failure_code'] ?? null),
+            'layout_score' => $this->nullableFloat($layoutScore),
+            'field_scores_json' => $fieldScores,
+            'failure_code' => $failureCode,
             'failure_message' => $this->nullableString($attributes['failure_message'] ?? null),
-            'raw_blocks_json' => $this->nullableArray($attributes['raw_blocks_json'] ?? null),
-            'raw_lines_json' => $this->nullableArray($attributes['raw_lines_json'] ?? null),
-            'layout_meta_json' => $this->nullableArray($attributes['layout_meta_json'] ?? null),
+            'raw_blocks_json' => $rawBlocks,
+            'raw_lines_json' => $rawLines,
+            'layout_meta_json' => $layoutMeta,
             'engine_meta_json' => $this->nullableArray($attributes['engine_meta_json'] ?? null),
             'parser_version' => $this->nullableString($attributes['parser_version'] ?? null),
             'prompt_version' => $this->nullableString($attributes['prompt_version'] ?? null),

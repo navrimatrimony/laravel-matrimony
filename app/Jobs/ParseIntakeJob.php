@@ -10,6 +10,7 @@ use App\Services\Intake\IntakeExtractionReuseResolver;
 use App\Services\Intake\IntakeOcrAttemptRecorder;
 use App\Services\Intake\IntakeParseInputSelectionTrace;
 use App\Services\Intake\IntakePipelineService;
+use App\Services\Intake\IntakeQualitySignalService;
 use App\Services\IntakeManualOcrPreparedService;
 use App\Services\Ocr\OcrQualityEvaluator;
 use App\Services\OcrService;
@@ -113,6 +114,7 @@ class ParseIntakeJob implements ShouldQueue
         $ocr = app(OcrService::class);
         $qualityEvaluator = app(OcrQualityEvaluator::class);
         $ocrAttemptRecorder = app(IntakeOcrAttemptRecorder::class);
+        $qualitySignalService = app(IntakeQualitySignalService::class);
 
         $resolved = null;
         $raw = '';
@@ -180,11 +182,11 @@ class ParseIntakeJob implements ShouldQueue
                     Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
                 } else {
                     $reuseResolver->consumeParseInputOnlyFlag((int) $intake->id);
-                    $intake->update([
+                    $intake->update(array_merge([
                         'parse_status' => 'error',
                         'last_error' => 'reparse_no_canonical_or_raw_ocr',
                         'parse_duration_ms' => 0,
-                    ]);
+                    ], $qualitySignalService->intakeSignalAttributes('', null, BiodataIntakeOcrAttempt::FAILURE_EMPTY_TEXT)));
                     Cache::put('intake.parse_input_debug.'.$intake->id, [
                         'parse_input_source' => 'reparse_unavailable',
                         'parse_input_only_job' => true,
@@ -197,11 +199,11 @@ class ParseIntakeJob implements ShouldQueue
             } else {
                 if (trim((string) ($intake->raw_ocr_text ?? '')) === '') {
                     $reuseResolver->consumeParseInputOnlyFlag((int) $intake->id);
-                    $intake->update([
+                    $intake->update(array_merge([
                         'parse_status' => 'error',
                         'last_error' => 'reparse_no_raw_ocr',
                         'parse_duration_ms' => 0,
-                    ]);
+                    ], $qualitySignalService->intakeSignalAttributes('', null, BiodataIntakeOcrAttempt::FAILURE_EMPTY_TEXT)));
                     Cache::put('intake.parse_input_debug.'.$intake->id, [
                         'parse_input_source' => 'reparse_unavailable',
                         'parse_input_only_job' => true,
@@ -305,12 +307,12 @@ class ParseIntakeJob implements ShouldQueue
                     'provider' => $provider,
                     'reason' => 'parse_only_no_extraction_text',
                 ], null, null, null, null, $candidatesSummary, $forceFreshPaidExtraction);
-                $intake->update([
+                $intake->update(array_merge([
                     'parse_status' => 'error',
                     'last_error' => 'parse_only_no_extraction_text',
                     'parse_duration_ms' => 0,
                     'ai_calls_used' => 0,
-                ]);
+                ], $qualitySignalService->intakeSignalAttributes('', null, BiodataIntakeOcrAttempt::FAILURE_EMPTY_TEXT)));
                 Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
 
                 return;
@@ -410,12 +412,13 @@ class ParseIntakeJob implements ShouldQueue
             if (trim($raw) === '') {
                 $parseInputDebug['parse_input_source'] = 'ai_vision_extract_failed';
                 $parseInputDebug['ok'] = false;
-                $intake->update([
+                $failureCode = $this->ocrAttemptFailureCode(is_array($meta) ? $meta : [], is_array($qualityGate) ? $qualityGate : null);
+                $intake->update(array_merge([
                     'parse_status' => 'error',
                     'last_error' => $parseInputDebug['reason'] ? (string) $parseInputDebug['reason'] : 'ai_vision_extract_failed',
                     'parse_duration_ms' => 0,
                     'ai_calls_used' => $calledPaidExtract ? 1 : 0,
-                ]);
+                ], $qualitySignalService->intakeSignalAttributes($raw, null, $failureCode)));
                 Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
 
                 return;
@@ -431,12 +434,13 @@ class ParseIntakeJob implements ShouldQueue
             if (empty($qualityGate['ok'])) {
                 $parseInputDebug['parse_input_source'] = 'ai_vision_text_quality_failed';
                 $parseInputDebug['ok'] = false;
-                $intake->update([
+                $failureCode = $this->ocrAttemptFailureCode(is_array($meta) ? $meta : [], is_array($qualityGate) ? $qualityGate : null);
+                $intake->update(array_merge([
                     'parse_status' => 'error',
                     'last_error' => (string) ($qualityGate['reason'] ?? 'ai_vision_text_unusable'),
                     'parse_duration_ms' => 0,
                     'ai_calls_used' => $calledPaidExtract ? 1 : 0,
-                ]);
+                ], $qualitySignalService->intakeSignalAttributes($raw, null, $failureCode)));
                 Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
 
                 return;
@@ -548,13 +552,16 @@ class ParseIntakeJob implements ShouldQueue
         $durationMs = (int) round((microtime(true) - $start) * 1000);
 
         if ($parsed === null) {
-            $intake->update([
+            $failureCode = trim($raw) === ''
+                ? BiodataIntakeOcrAttempt::FAILURE_EMPTY_TEXT
+                : BiodataIntakeOcrAttempt::FAILURE_TEXT_FOUND_MAPPING_FAILED;
+            $intake->update(array_merge([
                 'parse_status' => 'error',
                 'last_error' => $lastException ? substr($lastException->getMessage(), 0, 255) : 'parse_failed',
                 'parse_duration_ms' => $durationMs,
                 'ai_calls_used' => $aiCalls,
                 'last_parse_input_text' => null,
-            ]);
+            ], $qualitySignalService->intakeSignalAttributes($raw, null, $failureCode, $ocrQuality)));
 
             Log::error('Intake parse failed', [
                 'intake_id' => $intake->id,
@@ -588,7 +595,7 @@ class ParseIntakeJob implements ShouldQueue
             ]);
         }
 
-        $intake->update([
+        $intake->update(array_merge([
             'parsed_json' => $ssot,
             'last_parse_input_text' => $raw,
             'parse_status' => 'parsed',
@@ -596,7 +603,7 @@ class ParseIntakeJob implements ShouldQueue
             'parser_version' => $canonicalVersion,
             'parse_duration_ms' => $durationMs,
             'ai_calls_used' => $aiCalls,
-        ]);
+        ], $qualitySignalService->intakeSignalAttributes($raw, $ssot, null, $ocrQuality)));
 
         Log::info('Intake parsed successfully', [
             'intake_id' => $intake->id,
@@ -719,13 +726,27 @@ class ParseIntakeJob implements ShouldQueue
         array $ocrQuality,
         string $parserVersion,
     ): void {
-        if (trim($raw) === '') {
-            return;
-        }
-
         $debug = is_array($resolved['ocr_debug'] ?? null) ? $resolved['ocr_debug'] : [];
         $sourceType = (string) ($debug['ocr_source_type'] ?? '');
         $textOnly = trim((string) ($intake->file_path ?? '')) === '';
+
+        if (trim($raw) === '') {
+            $recorder->record($intake, [
+                'engine' => $textOnly
+                    ? BiodataIntakeOcrAttempt::ENGINE_ML_KIT_FLUTTER
+                    : BiodataIntakeOcrAttempt::ENGINE_LARAVEL_NATIVE_OCR,
+                'source' => $sourceType !== '' ? $sourceType : ($textOnly ? 'mobile_app' : 'server_parse'),
+                'created_by_actor_type' => BiodataIntakeOcrAttempt::ACTOR_SYSTEM,
+                'source_surface' => BiodataIntakeOcrAttempt::SURFACE_SERVER,
+                'status' => BiodataIntakeOcrAttempt::STATUS_FAILED,
+                'quality_score' => $ocrQuality['score'] ?? null,
+                'failure_code' => BiodataIntakeOcrAttempt::FAILURE_EMPTY_TEXT,
+                'engine_meta_json' => $debug,
+                'parser_version' => $parserVersion,
+            ]);
+
+            return;
+        }
 
         $recorder->recordOrSelectPrimary($intake, [
             'engine' => $textOnly

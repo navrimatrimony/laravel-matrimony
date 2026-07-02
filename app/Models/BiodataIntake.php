@@ -52,6 +52,9 @@ class BiodataIntake extends Model
         'ai_calls_used',
         'fields_auto_filled_count',
         'fields_manually_edited_count',
+        'quality_summary_json',
+        'failure_codes_json',
+        'field_confidence_json',
     ];
 
     protected $casts = [
@@ -59,6 +62,9 @@ class BiodataIntake extends Model
         'intake_locked' => 'boolean',
         'parsed_json' => 'array',
         'approval_snapshot_json' => 'array',
+        'quality_summary_json' => 'array',
+        'failure_codes_json' => 'array',
+        'field_confidence_json' => 'array',
         'parsed_at' => 'datetime',
         'approved_at' => 'datetime',
         'reviewed_at' => 'datetime',

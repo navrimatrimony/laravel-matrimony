@@ -55,6 +55,10 @@ class BiodataIntakeOcrAttempt extends Model
 
     public const FAILURE_PROVIDER_ERROR = 'provider_error';
 
+    public const FAILURE_EMPTY_TEXT = 'empty_text';
+
+    public const FAILURE_UNKNOWN = 'unknown';
+
     protected $table = 'biodata_intake_ocr_attempts';
 
     protected $fillable = [

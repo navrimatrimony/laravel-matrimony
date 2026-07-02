@@ -393,7 +393,7 @@ class BiodataIntakeApiController extends Controller
             'parser_version' => $intake->parser_version,
             'fields_auto_filled_count' => $intake->fields_auto_filled_count,
             'fields_manually_edited_count' => $intake->fields_manually_edited_count,
-        ]);
+        ], $this->qualitySignalsPayload($intake));
     }
 
     private function previewPayload(BiodataIntake $intake): array
@@ -407,6 +407,7 @@ class BiodataIntakeApiController extends Controller
         $isBiodataText = in_array($source, ['parse_snapshot', 'ai_vision_cache', 'ocr_transient'], true);
         $reviewSections = (new PreviewSectionMapper)->map($reviewSnapshot);
         $parsedJsonSections = (new PreviewSectionMapper)->map($parsedSnapshot);
+        $qualitySignals = $this->qualitySignalsPayload($intake);
 
         return [
             'form_contract_version' => 1,
@@ -422,8 +423,23 @@ class BiodataIntakeApiController extends Controller
             'raw_text' => $rawText,
             'source' => $source,
             'provenance' => $resolverPayload['provenance'] ?? null,
+            'quality_summary' => $qualitySignals['quality_summary'],
+            'failure_codes' => $qualitySignals['failure_codes'],
+            'field_confidence' => $qualitySignals['field_confidence'],
             'debug' => $this->debugPayload($intake, $rawText, $source),
             'intake_settings' => $this->intakeSettingsPayload(),
+        ];
+    }
+
+    /**
+     * @return array{quality_summary: ?array, failure_codes: array, field_confidence: array}
+     */
+    private function qualitySignalsPayload(BiodataIntake $intake): array
+    {
+        return [
+            'quality_summary' => is_array($intake->quality_summary_json) ? $intake->quality_summary_json : null,
+            'failure_codes' => is_array($intake->failure_codes_json) ? $intake->failure_codes_json : [],
+            'field_confidence' => is_array($intake->field_confidence_json) ? $intake->field_confidence_json : [],
         ];
     }
 
