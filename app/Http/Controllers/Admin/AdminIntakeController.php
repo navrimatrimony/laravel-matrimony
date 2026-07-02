@@ -387,6 +387,7 @@ class AdminIntakeController extends Controller
         ];
         $adminReviewSnapshotEditor = $this->adminReviewSnapshotEditor($intake);
         $adminQualitySignals = $this->adminQualitySignals($intake);
+        $adminRoutingDryRun = $this->adminRoutingDryRun($intake);
 
         return view('admin.intake.show', compact(
             'intake',
@@ -412,6 +413,7 @@ class AdminIntakeController extends Controller
             'applyReadiness',
             'adminReviewSnapshotEditor',
             'adminQualitySignals',
+            'adminRoutingDryRun',
         ));
     }
 
@@ -912,6 +914,173 @@ class AdminIntakeController extends Controller
             ->replace(['_', '-'], ' ')
             ->title()
             ->toString();
+    }
+
+    /**
+     * @return array{
+     *     has_any: bool,
+     *     recommendation: array{
+     *         recommended_action: ?string,
+     *         reason_codes: list<string>,
+     *         confidence: ?float,
+     *         would_skip_paid_vision: ?bool,
+     *         would_call_paid_vision: ?bool
+     *     },
+     *     signals: list<array{key: string, label: string, value: string}>,
+     *     telemetry: array<string, bool|float|int|string|null>
+     * }
+     */
+    private function adminRoutingDryRun(BiodataIntake $intake): array
+    {
+        $recommendation = is_array($intake->routing_recommendation_json) ? $intake->routing_recommendation_json : [];
+        $telemetry = is_array($intake->routing_telemetry_json) ? $intake->routing_telemetry_json : [];
+        $signals = is_array($recommendation['signals'] ?? null) ? $recommendation['signals'] : [];
+
+        return [
+            'has_any' => $recommendation !== [] || $telemetry !== [],
+            'recommendation' => [
+                'recommended_action' => $this->adminRoutingDryRunString($recommendation['recommended_action'] ?? null),
+                'reason_codes' => $this->adminRoutingDryRunStringList($recommendation['reason_codes'] ?? []),
+                'confidence' => $this->adminRoutingDryRunFloat($recommendation['confidence'] ?? null),
+                'would_skip_paid_vision' => $this->adminRoutingDryRunBool($recommendation['would_skip_paid_vision'] ?? null),
+                'would_call_paid_vision' => $this->adminRoutingDryRunBool($recommendation['would_call_paid_vision'] ?? null),
+            ],
+            'signals' => $this->adminRoutingDryRunSignalRows($signals),
+            'telemetry' => [
+                'sarvam_attempt_count' => $this->adminRoutingDryRunInt($telemetry['sarvam_attempt_count'] ?? null),
+                'cheap_ocr_attempt_count' => $this->adminRoutingDryRunInt($telemetry['cheap_ocr_attempt_count'] ?? null),
+                'failed_provider_count' => $this->adminRoutingDryRunInt($telemetry['failed_provider_count'] ?? null),
+                'reuse_candidate_found' => $this->adminRoutingDryRunBool($telemetry['reuse_candidate_found'] ?? null),
+                'last_provider_failure_code' => $this->adminRoutingDryRunString($telemetry['last_provider_failure_code'] ?? null),
+                'last_quality_score' => $this->adminRoutingDryRunFloat($telemetry['last_quality_score'] ?? null),
+                'last_layout_score' => $this->adminRoutingDryRunFloat($telemetry['last_layout_score'] ?? null),
+                'duration_ms' => $this->adminRoutingDryRunInt($telemetry['duration_ms'] ?? null),
+                'cost_units' => $this->adminRoutingDryRunFloat($telemetry['cost_units'] ?? null),
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $signals
+     * @return list<array{key: string, label: string, value: string}>
+     */
+    private function adminRoutingDryRunSignalRows(array $signals): array
+    {
+        $allowed = [
+            'parse_status' => 'Parse status',
+            'has_file' => 'Has file',
+            'quality_score' => 'Quality score',
+            'layout_score' => 'Layout score',
+            'failure_codes' => 'Failure codes',
+            'low_confidence_fields' => 'Low-confidence fields',
+            'cheap_ocr_attempt_count' => 'Cheap OCR attempts',
+            'sarvam_attempt_count' => 'Sarvam attempts',
+            'failed_provider_count' => 'Provider failures',
+            'reuse_candidate_found' => 'Reuse candidate',
+        ];
+
+        $rows = [];
+        foreach ($allowed as $key => $label) {
+            if (! array_key_exists($key, $signals)) {
+                continue;
+            }
+
+            $display = $this->adminRoutingDryRunDisplayValue($signals[$key]);
+            if ($display === '—') {
+                continue;
+            }
+
+            $rows[] = [
+                'key' => $key,
+                'label' => $label,
+                'value' => $display,
+            ];
+        }
+
+        return $rows;
+    }
+
+    private function adminRoutingDryRunDisplayValue(mixed $value): string
+    {
+        if (is_array($value)) {
+            $items = $this->adminRoutingDryRunStringList($value);
+
+            return $items === [] ? '—' : implode(', ', array_slice($items, 0, 12));
+        }
+        if (is_bool($value)) {
+            return $value ? 'Yes' : 'No';
+        }
+        if (is_float($value)) {
+            return number_format($value, 2);
+        }
+        if (is_int($value)) {
+            return (string) $value;
+        }
+
+        $string = trim((string) $value);
+
+        return $string !== '' ? $string : '—';
+    }
+
+    private function adminRoutingDryRunString(mixed $value): ?string
+    {
+        $string = trim((string) $value);
+
+        return $string !== '' ? $string : null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function adminRoutingDryRunStringList(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            static fn (mixed $item): string => is_scalar($item) ? trim((string) $item) : '',
+            $value
+        ), static fn (string $item): bool => $item !== ''));
+    }
+
+    private function adminRoutingDryRunBool(mixed $value): ?bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if ($value === 0 || $value === 1 || $value === '0' || $value === '1') {
+            return (int) $value === 1;
+        }
+        if (is_string($value)) {
+            $normalized = strtolower(trim($value));
+            if (in_array($normalized, ['true', 'yes'], true)) {
+                return true;
+            }
+            if (in_array($normalized, ['false', 'no'], true)) {
+                return false;
+            }
+        }
+
+        return null;
+    }
+
+    private function adminRoutingDryRunFloat(mixed $value): ?float
+    {
+        if ($value === null || $value === '' || ! is_numeric($value)) {
+            return null;
+        }
+
+        return round((float) $value, 4);
+    }
+
+    private function adminRoutingDryRunInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '' || ! is_numeric($value)) {
+            return null;
+        }
+
+        return (int) $value;
     }
 
     /**

@@ -38,6 +38,23 @@
     $fieldConfidenceByKey = is_array($adminQualitySignals['field_confidence_by_key'] ?? null) ? $adminQualitySignals['field_confidence_by_key'] : [];
     $fieldConfidenceByPath = is_array($adminQualitySignals['field_confidence_by_path'] ?? null) ? $adminQualitySignals['field_confidence_by_path'] : [];
     $lowConfidenceFields = is_array($adminQualitySignals['low_confidence_fields'] ?? null) ? $adminQualitySignals['low_confidence_fields'] : [];
+    $adminRoutingDryRun = is_array($adminRoutingDryRun ?? null) ? $adminRoutingDryRun : ['has_any' => false, 'recommendation' => [], 'signals' => [], 'telemetry' => []];
+    $routingRecommendation = is_array($adminRoutingDryRun['recommendation'] ?? null) ? $adminRoutingDryRun['recommendation'] : [];
+    $routingSignals = is_array($adminRoutingDryRun['signals'] ?? null) ? $adminRoutingDryRun['signals'] : [];
+    $routingTelemetry = is_array($adminRoutingDryRun['telemetry'] ?? null) ? $adminRoutingDryRun['telemetry'] : [];
+    $routingDisplay = static function ($value): string {
+        if (is_bool($value)) {
+            return $value ? 'Yes' : 'No';
+        }
+        if ($value === null || $value === '') {
+            return '—';
+        }
+        if (is_float($value)) {
+            return number_format($value, 2);
+        }
+
+        return trim((string) $value) !== '' ? (string) $value : '—';
+    };
 @endphp
 
 <div class="max-w-6xl mx-auto text-gray-900" x-data="{ tab: 'review' }">
@@ -192,6 +209,93 @@
                                 </div>
                             @else
                                 <div class="mt-1 text-sm text-amber-900">—</div>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            @endif
+
+            @if (! empty($adminRoutingDryRun['has_any']))
+                @php
+                    $routingConfidence = is_numeric($routingRecommendation['confidence'] ?? null) ? (float) $routingRecommendation['confidence'] : null;
+                    $routingConfidenceLabel = $routingConfidence !== null ? number_format($routingConfidence, 2).' ('.((int) round($routingConfidence * 100)).'%)' : '—';
+                    $routingReasonCodes = is_array($routingRecommendation['reason_codes'] ?? null) ? $routingRecommendation['reason_codes'] : [];
+                    $routingTelemetryRows = [
+                        'sarvam_attempt_count' => 'Sarvam attempts',
+                        'cheap_ocr_attempt_count' => 'Cheap OCR attempts',
+                        'failed_provider_count' => 'Provider failures',
+                        'reuse_candidate_found' => 'Reuse candidate',
+                        'last_provider_failure_code' => 'Last provider failure',
+                        'last_quality_score' => 'Last quality score',
+                        'last_layout_score' => 'Last layout score',
+                        'duration_ms' => 'Duration ms',
+                        'cost_units' => 'Cost units',
+                    ];
+                @endphp
+                <div data-testid="routing-dry-run-panel" class="routing-dry-run-panel mb-4 rounded-lg border border-sky-200 bg-sky-50/60 p-3 text-xs text-sky-950">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <h3 class="text-sm font-semibold text-sky-950">Routing dry run</h3>
+                        <span class="inline-flex px-2 py-0.5 rounded-full border border-sky-200 bg-white text-sky-800 font-semibold">Read only</span>
+                    </div>
+
+                    <dl class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                        <div>
+                            <dt class="{{ $label }} text-sky-800">Recommended action</dt>
+                            <dd data-testid="routing-recommended-action" class="routing-recommended-action mt-1 text-sm font-semibold text-sky-950">{{ $routingRecommendation['recommended_action'] ?? '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="{{ $label }} text-sky-800">Confidence</dt>
+                            <dd class="mt-1 text-sm font-semibold text-sky-950">{{ $routingConfidenceLabel }}</dd>
+                        </div>
+                        <div>
+                            <dt class="{{ $label }} text-sky-800">Would skip paid vision</dt>
+                            <dd data-testid="routing-would-skip-paid-vision" class="mt-1 text-sm font-semibold text-sky-950">{{ $routingDisplay($routingRecommendation['would_skip_paid_vision'] ?? null) }}</dd>
+                        </div>
+                        <div>
+                            <dt class="{{ $label }} text-sky-800">Would call paid vision</dt>
+                            <dd data-testid="routing-would-call-paid-vision" class="mt-1 text-sm font-semibold text-sky-950">{{ $routingDisplay($routingRecommendation['would_call_paid_vision'] ?? null) }}</dd>
+                        </div>
+                        <div>
+                            <dt class="{{ $label }} text-sky-800">Reason codes</dt>
+                            <dd data-testid="routing-reason-codes" class="routing-reason-codes mt-1 flex flex-wrap gap-1">
+                                @if ($routingReasonCodes !== [])
+                                    @foreach ($routingReasonCodes as $code)
+                                        <span class="inline-flex px-2 py-0.5 rounded-full border border-sky-200 bg-white text-sky-900 font-semibold">{{ $code }}</span>
+                                    @endforeach
+                                @else
+                                    <span class="text-sm text-sky-900">—</span>
+                                @endif
+                            </dd>
+                        </div>
+                    </dl>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3 pt-3 border-t border-sky-200/80">
+                        <div>
+                            <div class="{{ $label }} text-sky-800 mb-1">Telemetry</div>
+                            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1">
+                                @foreach ($routingTelemetryRows as $routingTelemetryKey => $routingTelemetryLabel)
+                                    @if (array_key_exists($routingTelemetryKey, $routingTelemetry) && $routingTelemetry[$routingTelemetryKey] !== null)
+                                        <div data-testid="routing-telemetry-{{ str_replace('_', '-', $routingTelemetryKey) }}" class="flex items-baseline justify-between gap-2 rounded bg-white/70 px-2 py-1">
+                                            <dt class="text-sky-800">{{ $routingTelemetryLabel }}</dt>
+                                            <dd class="font-semibold text-sky-950">{{ $routingDisplay($routingTelemetry[$routingTelemetryKey]) }}</dd>
+                                        </div>
+                                    @endif
+                                @endforeach
+                            </dl>
+                        </div>
+                        <div>
+                            <div class="{{ $label }} text-sky-800 mb-1">Routing signals</div>
+                            @if ($routingSignals !== [])
+                                <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1">
+                                    @foreach ($routingSignals as $signal)
+                                        <div class="flex items-baseline justify-between gap-2 rounded bg-white/70 px-2 py-1">
+                                            <dt class="text-sky-800">{{ $signal['label'] ?? $signal['key'] ?? 'Signal' }}</dt>
+                                            <dd class="font-semibold text-sky-950 text-right">{{ $signal['value'] ?? '—' }}</dd>
+                                        </div>
+                                    @endforeach
+                                </dl>
+                            @else
+                                <p class="text-sm text-sky-900">—</p>
                             @endif
                         </div>
                     </div>

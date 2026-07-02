@@ -60,6 +60,35 @@ class IntakeAdminHumanReviewSnapshotTest extends TestCase
                     'reason' => 'parsed_value_present',
                 ],
             ],
+            'routing_recommendation_json' => [
+                'mode' => 'dry_run',
+                'recommended_action' => 'cheap_ocr_only',
+                'reason_codes' => [
+                    'high_quality_cheap_ocr',
+                ],
+                'confidence' => 0.91,
+                'would_skip_paid_vision' => true,
+                'would_call_paid_vision' => false,
+                'signals' => [
+                    'parse_status' => 'parsed',
+                    'quality_score' => 0.91,
+                    'cheap_ocr_attempt_count' => 2,
+                    'sarvam_attempt_count' => 0,
+                    'failed_provider_count' => 0,
+                    'reuse_candidate_found' => false,
+                ],
+            ],
+            'routing_telemetry_json' => [
+                'mode' => 'dry_run',
+                'sarvam_attempt_count' => 0,
+                'cheap_ocr_attempt_count' => 2,
+                'failed_provider_count' => 0,
+                'reuse_candidate_found' => false,
+                'last_quality_score' => 0.91,
+                'last_layout_score' => 0.74,
+                'duration_ms' => 345,
+                'cost_units' => 0,
+            ],
             'approved_by_user' => false,
             'intake_locked' => false,
             'snapshot_schema_version' => 1,
@@ -71,7 +100,16 @@ class IntakeAdminHumanReviewSnapshotTest extends TestCase
             ->assertSee('data-testid="quality-signals-panel"', false)
             ->assertSee(BiodataIntakeOcrAttempt::FAILURE_TEXT_FOUND_MAPPING_FAILED)
             ->assertSee('data-testid="low-confidence-field-core-full-name"', false)
-            ->assertSee('Low confidence');
+            ->assertSee('Low confidence')
+            ->assertSee('data-testid="routing-dry-run-panel"', false)
+            ->assertSee('data-testid="routing-recommended-action"', false)
+            ->assertSee('cheap_ocr_only')
+            ->assertSee('data-testid="routing-reason-codes"', false)
+            ->assertSee('high_quality_cheap_ocr')
+            ->assertSee('data-testid="routing-would-skip-paid-vision"', false)
+            ->assertSee('data-testid="routing-would-call-paid-vision"', false)
+            ->assertSee('data-testid="routing-telemetry-cheap-ocr-attempt-count"', false)
+            ->assertSee('Provider failures');
     }
 
     public function test_admin_can_save_reviewed_snapshot_without_mutating_profile_or_evidence(): void
@@ -128,6 +166,28 @@ class IntakeAdminHumanReviewSnapshotTest extends TestCase
                     'reason' => 'parsed_value_present',
                 ],
             ],
+            'routing_recommendation_json' => [
+                'mode' => 'dry_run',
+                'recommended_action' => 'manual_review',
+                'reason_codes' => [
+                    'provider_error',
+                ],
+                'confidence' => 0.68,
+                'would_skip_paid_vision' => false,
+                'would_call_paid_vision' => false,
+                'signals' => [
+                    'parse_status' => 'parsed',
+                    'failed_provider_count' => 1,
+                ],
+            ],
+            'routing_telemetry_json' => [
+                'mode' => 'dry_run',
+                'sarvam_attempt_count' => 1,
+                'cheap_ocr_attempt_count' => 1,
+                'failed_provider_count' => 1,
+                'reuse_candidate_found' => false,
+                'last_provider_failure_code' => BiodataIntakeOcrAttempt::FAILURE_PROVIDER_TIMEOUT,
+            ],
             'approved_by_user' => false,
             'intake_locked' => false,
             'snapshot_schema_version' => 1,
@@ -181,6 +241,8 @@ class IntakeAdminHumanReviewSnapshotTest extends TestCase
         $this->assertSame('Parsed Candidate', data_get($intake->parsed_json, 'core.full_name'));
         $this->assertSame('Original OCR text', $intake->raw_ocr_text);
         $this->assertSame([BiodataIntakeOcrAttempt::FAILURE_LABEL_VALUE_SPLIT], $intake->failure_codes_json);
+        $this->assertSame('manual_review', data_get($intake->routing_recommendation_json, 'recommended_action'));
+        $this->assertSame(BiodataIntakeOcrAttempt::FAILURE_PROVIDER_TIMEOUT, data_get($intake->routing_telemetry_json, 'last_provider_failure_code'));
         $this->assertArrayNotHasKey('unexpected_new_section', $intake->approval_snapshot_json);
         $this->assertFalse((bool) $intake->approved_by_user);
         $this->assertNull($intake->approved_at);
