@@ -13,9 +13,11 @@ use App\Models\User;
 use App\Services\ExtendedFieldService;
 use App\Services\Intake\IntakeCreationService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
+use App\Services\Intake\IntakeHumanReviewSnapshotService;
 use App\Services\Intake\IntakeLocationSuggestionLayerService;
 use App\Services\Intake\IntakePhotoCandidateApplyService;
 use App\Services\Intake\IntakePhotoCandidatePreviewService;
+use App\Services\Intake\IntakePipelineService;
 use App\Services\Intake\IntakePreviewNormalizedDraftPresenter;
 use App\Services\Intake\IntakeReviewParseInputTextResolver;
 use App\Services\IntakeApprovalService;
@@ -46,6 +48,33 @@ use Illuminate\Validation\Rule;
 */
 class AdminIntakeController extends Controller
 {
+    /** @var list<string> */
+    private const ADMIN_REVIEW_SNAPSHOT_KEYS = [
+        'core',
+        'contacts',
+        'birth_place',
+        'native_place',
+        'children',
+        'marriages',
+        'education_history',
+        'career_history',
+        'addresses',
+        'parents_addresses',
+        'self_addresses',
+        'siblings',
+        'relatives',
+        'relatives_parents_family',
+        'relatives_maternal_family',
+        'alliance_networks',
+        'property_summary',
+        'property_assets',
+        'horoscope',
+        'legal_cases',
+        'preferences',
+        'extended_narrative',
+        'other_relatives_text',
+    ];
+
     public function createEntry()
     {
         $users = $this->recentMemberUsers();
@@ -245,7 +274,7 @@ class AdminIntakeController extends Controller
      */
     public function showBiodataIntake(BiodataIntake $intake)
     {
-        $intake->load(['uploadedByUser:id,name,email', 'profile:id,full_name,lifecycle_state,pending_intake_suggestions_json']);
+        $intake->load(['uploadedByUser:id,name,email', 'reviewedByUser:id,name,email', 'profile:id,full_name,lifecycle_state,pending_intake_suggestions_json']);
         $showAdminReextractAction = app(ProviderResolver::class)->parseJobUsesAiVisionExtraction();
         $reviewParse = app(IntakeReviewParseInputTextResolver::class)->resolve($intake);
         $reviewTextSource = (string) ($reviewParse['source'] ?? 'empty');
@@ -356,6 +385,7 @@ class AdminIntakeController extends Controller
                 && $requireAdminBeforeAttach
                 && $snapshotOk,
         ];
+        $adminReviewSnapshotEditor = $this->adminReviewSnapshotEditor($intake);
 
         return view('admin.intake.show', compact(
             'intake',
@@ -379,6 +409,7 @@ class AdminIntakeController extends Controller
             'unresolvedLocationOptions',
             'requireAdminBeforeAttach',
             'applyReadiness',
+            'adminReviewSnapshotEditor',
         ));
     }
 
@@ -486,6 +517,50 @@ class AdminIntakeController extends Controller
         return redirect()
             ->route('admin.biodata-intakes.show', $intake)
             ->with('success', (string) ($result['message'] ?? __('intake.normalized_draft_apply_success')));
+    }
+
+    public function updateReviewedSnapshot(
+        Request $request,
+        BiodataIntake $intake,
+        IntakeHumanReviewSnapshotService $reviewSnapshotService,
+        IntakePipelineService $intakePipeline,
+    ) {
+        if ((bool) $intake->approved_by_user || (bool) $intake->intake_locked) {
+            return redirect()
+                ->route('admin.biodata-intakes.show', $intake)
+                ->with('error', 'Reviewed snapshot cannot be edited after approval or lock.');
+        }
+
+        $validated = $request->validate([
+            'snapshot' => ['required', 'array'],
+        ]);
+
+        $source = $this->adminReviewSnapshotSource($intake);
+        $sourceSnapshot = $source['snapshot'];
+        if ($sourceSnapshot === []) {
+            return redirect()
+                ->route('admin.biodata-intakes.show', $intake)
+                ->with('error', 'No parsed or reviewed snapshot fields are available to save.');
+        }
+
+        $submittedSnapshot = is_array($validated['snapshot'] ?? null) ? $validated['snapshot'] : [];
+        $reviewedSnapshot = $this->mergeAdminReviewSnapshotValues($sourceSnapshot, $submittedSnapshot);
+        $reviewedSnapshot = $intakePipeline->normalizeSnapshotForStorage(
+            $reviewedSnapshot,
+            $request->user() ? (int) $request->user()->id : null,
+        );
+
+        $reviewSnapshotService->saveReviewedSnapshot($intake, $reviewedSnapshot, [
+            'reviewed_by_user_id' => $request->user() ? (int) $request->user()->id : null,
+            'review_actor_type' => IntakeHumanReviewSnapshotService::ACTOR_ADMIN,
+            'review_surface' => IntakeHumanReviewSnapshotService::SURFACE_ADMIN_PANEL,
+            'approval_policy' => IntakeHumanReviewSnapshotService::POLICY_PHASE2A_HUMAN_REVIEW_V1,
+            'approval_status' => IntakeHumanReviewSnapshotService::STATUS_REVIEWED,
+        ]);
+
+        return redirect()
+            ->route('admin.biodata-intakes.show', $intake)
+            ->with('success', 'Reviewed snapshot saved. Profile data was not modified.');
     }
 
     public function parseStatus(BiodataIntake $intake)
@@ -632,6 +707,209 @@ class AdminIntakeController extends Controller
                 'state_id' => $result['state_id'] ?? null,
             ], fn ($v) => $v !== null)
         ));
+    }
+
+    /**
+     * @return array{source: string, snapshot: array<string, mixed>}
+     */
+    private function adminReviewSnapshotSource(BiodataIntake $intake): array
+    {
+        $approvalSnapshot = $intake->approval_snapshot_json;
+        if (is_array($approvalSnapshot) && $approvalSnapshot !== []) {
+            return [
+                'source' => 'approval_snapshot_json',
+                'snapshot' => $this->filterAdminReviewSnapshot($approvalSnapshot),
+            ];
+        }
+
+        $parsedSnapshot = $intake->parsed_json;
+        if (is_array($parsedSnapshot) && $parsedSnapshot !== []) {
+            return [
+                'source' => 'parsed_json',
+                'snapshot' => $this->filterAdminReviewSnapshot($parsedSnapshot),
+            ];
+        }
+
+        return [
+            'source' => 'empty',
+            'snapshot' => [],
+        ];
+    }
+
+    /**
+     * @return array{
+     *     source: string,
+     *     available: bool,
+     *     can_save: bool,
+     *     field_count: int,
+     *     sections: list<array{key: string, label: string, fields: list<array{name: string, old_key: string, label: string, value: string, multiline: bool}>}>
+     * }
+     */
+    private function adminReviewSnapshotEditor(BiodataIntake $intake): array
+    {
+        $source = $this->adminReviewSnapshotSource($intake);
+        $sections = [];
+        $fieldCount = 0;
+
+        foreach ($source['snapshot'] as $sectionKey => $sectionValue) {
+            $fields = $this->adminReviewSnapshotFields($sectionValue, [$sectionKey]);
+            if ($fields === []) {
+                continue;
+            }
+
+            $fieldCount += count($fields);
+            $sections[] = [
+                'key' => (string) $sectionKey,
+                'label' => $this->adminReviewSnapshotLabel((string) $sectionKey),
+                'fields' => $fields,
+            ];
+        }
+
+        return [
+            'source' => $source['source'],
+            'available' => $fieldCount > 0,
+            'can_save' => ! (bool) $intake->approved_by_user && ! (bool) $intake->intake_locked,
+            'field_count' => $fieldCount,
+            'sections' => $sections,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    private function filterAdminReviewSnapshot(array $snapshot): array
+    {
+        $allowed = array_flip(self::ADMIN_REVIEW_SNAPSHOT_KEYS);
+        $filtered = [];
+        foreach ($snapshot as $key => $value) {
+            if (isset($allowed[$key])) {
+                $filtered[$key] = $value;
+            }
+        }
+
+        return $filtered;
+    }
+
+    /**
+     * @param  array<string, mixed>  $base
+     * @param  array<string, mixed>  $submitted
+     * @return array<string, mixed>
+     */
+    private function mergeAdminReviewSnapshotValues(array $base, array $submitted): array
+    {
+        foreach ($submitted as $key => $value) {
+            if (! array_key_exists($key, $base)) {
+                continue;
+            }
+
+            if (is_array($base[$key])) {
+                if (is_array($value)) {
+                    $base[$key] = $this->mergeAdminReviewSnapshotValues($base[$key], $value);
+                }
+
+                continue;
+            }
+
+            $base[$key] = $this->normalizeAdminReviewScalar($value);
+        }
+
+        return $base;
+    }
+
+    /**
+     * @param  list<string|int>  $path
+     * @return list<array{name: string, old_key: string, label: string, value: string, multiline: bool}>
+     */
+    private function adminReviewSnapshotFields(mixed $value, array $path): array
+    {
+        if (is_array($value)) {
+            $fields = [];
+            foreach ($value as $key => $nestedValue) {
+                $fields = array_merge($fields, $this->adminReviewSnapshotFields($nestedValue, array_merge($path, [$key])));
+            }
+
+            return $fields;
+        }
+
+        if (! $this->hasAdminReviewDisplayValue($value)) {
+            return [];
+        }
+
+        $formValue = $this->adminReviewFormValue($value);
+        $leaf = end($path);
+
+        return [[
+            'name' => $this->adminReviewInputName($path),
+            'old_key' => 'snapshot.'.implode('.', array_map('strval', $path)),
+            'label' => $this->adminReviewSnapshotLabel((string) $leaf),
+            'value' => $formValue,
+            'multiline' => str_contains($formValue, "\n") || mb_strlen($formValue) > 90,
+        ]];
+    }
+
+    private function hasAdminReviewDisplayValue(mixed $value): bool
+    {
+        if ($value === null) {
+            return false;
+        }
+        if (is_bool($value) || is_int($value) || is_float($value)) {
+            return true;
+        }
+        if (is_string($value)) {
+            return trim($value) !== '';
+        }
+
+        return false;
+    }
+
+    private function adminReviewFormValue(mixed $value): string
+    {
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        return trim((string) $value);
+    }
+
+    private function normalizeAdminReviewScalar(mixed $value): mixed
+    {
+        if (is_string($value)) {
+            $value = trim($value);
+
+            return $value !== '' ? $value : null;
+        }
+
+        if (is_bool($value) || is_int($value) || is_float($value) || $value === null) {
+            return $value;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<string|int>  $path
+     */
+    private function adminReviewInputName(array $path): string
+    {
+        $name = 'snapshot';
+        foreach ($path as $segment) {
+            $name .= '['.$segment.']';
+        }
+
+        return $name;
+    }
+
+    private function adminReviewSnapshotLabel(string $key): string
+    {
+        if (ctype_digit($key)) {
+            return 'Row '.((int) $key + 1);
+        }
+
+        return Str::of($key)
+            ->replace(['_', '-'], ' ')
+            ->title()
+            ->toString();
     }
 
     /** @var list<string> */

@@ -28,6 +28,10 @@
     $label = 'text-xs font-semibold text-gray-500 uppercase tracking-wide';
     $value = 'text-sm text-gray-900';
     $parseInProgress = (string) ($intake->parse_status ?? '') === 'pending';
+    $adminReviewEditor = is_array($adminReviewSnapshotEditor ?? null) ? $adminReviewSnapshotEditor : ['available' => false, 'can_save' => false, 'field_count' => 0, 'sections' => [], 'source' => 'empty'];
+    $adminReviewSections = is_array($adminReviewEditor['sections'] ?? null) ? $adminReviewEditor['sections'] : [];
+    $adminReviewCanSave = ! empty($adminReviewEditor['can_save']);
+    $reviewerName = $intake->reviewedByUser->name ?? null;
 @endphp
 
 <div class="max-w-6xl mx-auto text-gray-900" x-data="{ tab: 'review' }">
@@ -91,6 +95,9 @@
         @else
             <span class="text-amber-700 text-xs font-medium">Not attached to profile</span>
         @endif
+        @if (! empty($intake->reviewed_at))
+            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border border-sky-200 bg-sky-50 text-sky-800">Reviewed: {{ $intake->approval_status ?? 'reviewed' }}</span>
+        @endif
     </div>
 
     @include('admin.intake.show._tab-nav')
@@ -106,6 +113,81 @@
             'draftCorrectionApplyEnabled' => ! $intake->approved_by_user && ! $intake->intake_locked && ! $parseInProgress,
             'draftCorrectionApplyRoute' => route('admin.biodata-intakes.apply-draft-correction', $intake),
         ])
+
+        <div class="{{ $card }} p-5">
+            <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+                <div>
+                    <h2 class="{{ $cardTitle }} mb-1">Human-reviewed snapshot</h2>
+                    <p class="{{ $cardHint }}">Edit parsed/review fields, then save only the intake approval snapshot.</p>
+                </div>
+                <span class="inline-flex px-2 py-0.5 rounded-full border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-700">
+                    Source: {{ $adminReviewEditor['source'] ?? 'empty' }}
+                </span>
+            </div>
+
+            <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs mb-4">
+                <div><dt class="{{ $label }}">Reviewer</dt><dd class="{{ $value }} mt-0.5">{{ $reviewerName ? $reviewerName.' (#'.$intake->reviewed_by_user_id.')' : ($intake->reviewed_by_user_id ? '#'.$intake->reviewed_by_user_id : '—') }}</dd></div>
+                <div><dt class="{{ $label }}">Actor</dt><dd class="{{ $value }} mt-0.5">{{ $intake->review_actor_type ?? '—' }}</dd></div>
+                <div><dt class="{{ $label }}">Surface</dt><dd class="{{ $value }} mt-0.5">{{ $intake->review_surface ?? '—' }}</dd></div>
+                <div><dt class="{{ $label }}">Reviewed at</dt><dd class="{{ $value }} mt-0.5">{{ $intake->reviewed_at ? $intake->reviewed_at->toDateTimeString() : '—' }}</dd></div>
+                <div><dt class="{{ $label }}">Status</dt><dd class="{{ $value }} mt-0.5">{{ $intake->approval_status ?? '—' }}</dd></div>
+                <div><dt class="{{ $label }}">Policy</dt><dd class="{{ $value }} mt-0.5">{{ $intake->approval_policy ?? '—' }}</dd></div>
+            </dl>
+
+            @if (! empty($adminReviewEditor['available']) && $adminReviewSections !== [])
+                <form method="POST" action="{{ route('admin.biodata-intakes.review-snapshot.update', $intake) }}" class="space-y-4">
+                    @csrf
+                    @method('PATCH')
+
+                    @foreach ($adminReviewSections as $reviewSection)
+                        @php
+                            $reviewFields = is_array($reviewSection['fields'] ?? null) ? $reviewSection['fields'] : [];
+                        @endphp
+                        @if ($reviewFields === [])
+                            @continue
+                        @endif
+                        <details class="rounded-lg border border-gray-200 bg-gray-50/60 overflow-hidden" @if ($loop->first) open @endif>
+                            <summary class="cursor-pointer select-none px-3 py-2 bg-white border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
+                                <span class="text-sm font-semibold text-gray-900">{{ $reviewSection['label'] ?? $reviewSection['key'] ?? 'Section' }}</span>
+                                <span class="text-[11px] font-semibold text-gray-500">{{ count($reviewFields) }} field(s)</span>
+                            </summary>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 p-3">
+                                @foreach ($reviewFields as $field)
+                                    @php
+                                        $fieldName = (string) ($field['name'] ?? '');
+                                        $fieldOldKey = (string) ($field['old_key'] ?? '');
+                                        $fieldValue = old($fieldOldKey, (string) ($field['value'] ?? ''));
+                                        $fieldLabel = (string) ($field['label'] ?? $fieldOldKey);
+                                        $isMultiline = ! empty($field['multiline']);
+                                    @endphp
+                                    <label class="block text-xs">
+                                        <span class="block font-semibold text-gray-700 mb-1">{{ $fieldLabel }}</span>
+                                        @if ($isMultiline)
+                                            <textarea name="{{ $fieldName }}" rows="3" @disabled(! $adminReviewCanSave || $parseInProgress) class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100">{{ $fieldValue }}</textarea>
+                                        @else
+                                            <input type="text" name="{{ $fieldName }}" value="{{ $fieldValue }}" @disabled(! $adminReviewCanSave || $parseInProgress) class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100">
+                                        @endif
+                                    </label>
+                                @endforeach
+                            </div>
+                        </details>
+                    @endforeach
+
+                    <div class="flex flex-wrap items-center gap-3 pt-1">
+                        <button type="submit" @disabled(! $adminReviewCanSave || $parseInProgress) class="inline-flex px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed">Save reviewed snapshot</button>
+                        @if ($parseInProgress)
+                            <span class="text-xs text-amber-700">Parsing is still pending.</span>
+                        @elseif (! $adminReviewCanSave)
+                            <span class="text-xs text-amber-700">Snapshot editing is blocked after approval or lock.</span>
+                        @else
+                            <span class="text-xs text-gray-500">This does not apply data to the profile.</span>
+                        @endif
+                    </div>
+                </form>
+            @else
+                <p class="text-sm text-gray-500">No parsed/review fields are available for admin snapshot editing.</p>
+            @endif
+        </div>
 
         @if (! empty($unresolvedLocationOptions) && is_array($unresolvedLocationOptions))
             <div class="rounded-xl border border-amber-300 bg-amber-50 p-5">
