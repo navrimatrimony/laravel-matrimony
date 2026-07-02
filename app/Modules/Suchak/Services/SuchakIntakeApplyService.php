@@ -10,6 +10,7 @@ use App\Models\SuchakBiodataIntakeLink;
 use App\Models\SuchakCustomerContext;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
+use App\Services\Intake\IntakeHumanReviewSnapshotService;
 use App\Services\IntakeApprovalService;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -72,6 +73,10 @@ class SuchakIntakeApplyService
                 (int) $actor->id,
                 $snapshot,
                 $mutationOptions,
+                [
+                    'review_actor_type' => IntakeHumanReviewSnapshotService::ACTOR_SUCHAK,
+                    'review_surface' => IntakeHumanReviewSnapshotService::SURFACE_WEBSITE,
+                ],
             );
 
             $profileId = isset($result['profile_id']) && $result['profile_id'] !== null

@@ -8,6 +8,7 @@ use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Models\BiodataIntakeOcrAttempt;
 use App\Services\Intake\IntakeCreationService;
+use App\Services\Intake\IntakeHumanReviewSnapshotService;
 use App\Services\Intake\IntakeOcrAttemptRecorder;
 use App\Services\Intake\IntakePreviewNormalizedDraftPresenter;
 use App\Services\Intake\IntakeReviewParseInputTextResolver;
@@ -227,7 +228,12 @@ class BiodataIntakeApiController extends Controller
         $result = $approvalService->approve(
             $intake,
             (int) $request->user()->id,
-            $validated['snapshot']
+            $validated['snapshot'],
+            [],
+            [
+                'review_actor_type' => IntakeHumanReviewSnapshotService::ACTOR_PROFILE_USER,
+                'review_surface' => IntakeHumanReviewSnapshotService::SURFACE_MOBILE_APP,
+            ],
         );
 
         $intake->refresh();

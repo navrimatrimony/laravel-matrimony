@@ -11,6 +11,7 @@ use App\Models\ProfileExtendedField;
 use App\Models\User;
 use App\Services\Core\ConflictPolicy;
 use App\Services\Image\ProfilePhotoUrlService;
+use App\Services\Intake\IntakeHumanReviewSnapshotService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use App\Services\Profile\ProfileTypedSelfAddressService;
 use Illuminate\Support\Facades\DB;
@@ -676,6 +677,9 @@ class MutationService
         $profileUserAttributes = is_array($mutationOptions['new_profile_user_attributes'] ?? null)
             ? $mutationOptions['new_profile_user_attributes']
             : null;
+        $humanReviewContext = is_array($mutationOptions['human_review_context'] ?? null)
+            ? $mutationOptions['human_review_context']
+            : [];
         $duplicateDetectionUserId = array_key_exists('duplicate_detection_user_id', $mutationOptions)
             ? $mutationOptions['duplicate_detection_user_id']
             : $intake->uploaded_by;
@@ -697,7 +701,7 @@ class MutationService
         $this->mutationBatchId = now()->timestamp;
 
         try {
-            DB::transaction(function () use ($intake, $snapshot, $metrics, $snapshotInMemory, $version, $profileUserAttributes, $duplicateDetectionUserId, &$duplicateDetected, &$hadConflicts, &$profileIdForLog, &$createdUserIdForLog, &$blockedByConflictPending, &$alreadyAppliedInTransaction): void {
+            DB::transaction(function () use ($intake, $snapshot, $metrics, $snapshotInMemory, $version, $profileUserAttributes, $humanReviewContext, $duplicateDetectionUserId, &$duplicateDetected, &$hadConflicts, &$profileIdForLog, &$createdUserIdForLog, &$blockedByConflictPending, &$alreadyAppliedInTransaction): void {
                 $intakeId = $intake->id;
                 $intake = BiodataIntake::where('id', $intakeId)->lockForUpdate()->first();
                 if (! $intake) {
@@ -1129,7 +1133,10 @@ class MutationService
                     $updates['intake_status'] = 'applied';
                 }
                 if ($snapshotInMemory) {
-                    $updates['approval_snapshot_json'] = $auditSnapshot;
+                    $updates = array_merge(
+                        $updates,
+                        app(IntakeHumanReviewSnapshotService::class)->attributesForSnapshot($auditSnapshot, $humanReviewContext),
+                    );
                     $updates['approved_by_user'] = true;
                     $updates['approved_at'] = now();
                     $updates['snapshot_schema_version'] = $version;

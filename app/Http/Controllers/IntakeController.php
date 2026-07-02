@@ -11,6 +11,7 @@ use App\Modules\Suchak\Services\SuchakIntakeApplyService;
 use App\Services\EducationService;
 use App\Services\Intake\IntakeCreationService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
+use App\Services\Intake\IntakeHumanReviewSnapshotService;
 use App\Services\Intake\IntakeLocationSuggestionLayerService;
 use App\Services\Intake\IntakePipelineService;
 use App\Services\Intake\IntakePhotoCandidateApplyService;
@@ -1711,7 +1712,16 @@ class IntakeController extends Controller
                     $request->ip(),
                     $request->userAgent(),
                 )
-                : app(IntakeApprovalService::class)->approve($intake, (int) auth()->id(), $snapshot);
+                : app(IntakeApprovalService::class)->approve(
+                    $intake,
+                    (int) auth()->id(),
+                    $snapshot,
+                    [],
+                    [
+                        'review_actor_type' => IntakeHumanReviewSnapshotService::ACTOR_PROFILE_USER,
+                        'review_surface' => IntakeHumanReviewSnapshotService::SURFACE_WEBSITE,
+                    ],
+                );
         } catch (InvalidArgumentException $exception) {
             return redirect()->back()->with('error', $exception->getMessage());
         }

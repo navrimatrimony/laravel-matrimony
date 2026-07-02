@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -37,6 +38,12 @@ class BiodataIntake extends Model
         'approved_by_user',
         'approved_at',
         'approval_snapshot_json',
+        'reviewed_by_user_id',
+        'review_actor_type',
+        'review_surface',
+        'reviewed_at',
+        'approval_policy',
+        'approval_status',
         'snapshot_schema_version',
         'intake_locked',
         'parser_version',
@@ -53,6 +60,8 @@ class BiodataIntake extends Model
         'parsed_json' => 'array',
         'approval_snapshot_json' => 'array',
         'parsed_at' => 'datetime',
+        'approved_at' => 'datetime',
+        'reviewed_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -81,6 +90,11 @@ class BiodataIntake extends Model
     public function uploadedByUser()
     {
         return $this->belongsTo(User::class, 'uploaded_by');
+    }
+
+    public function reviewedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by_user_id');
     }
 
     public function profile()

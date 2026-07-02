@@ -6,6 +6,7 @@ use App\Models\BiodataIntake;
 use App\Models\OcrCorrectionLog;
 use App\Models\OcrCorrectionPattern;
 use App\Models\OcrPatternConflict;
+use App\Services\Intake\IntakeHumanReviewSnapshotService;
 use App\Services\Intake\IntakePipelineService;
 use App\Services\Ocr\OcrNormalize;
 use Illuminate\Support\Facades\DB;
@@ -15,9 +16,16 @@ class IntakeApprovalService
     /**
      * @param  array<string, mixed>|null  $snapshot  Edited snapshot from preview; when null use parsed_json.
      * @param  array<string, mixed>  $mutationOptions  Optional governed apply context passed to MutationService.
+     * @param  array<string, mixed>  $reviewContext  Actor-neutral human review metadata for the approved snapshot.
      * @return array{mutation_success: bool, conflict_detected: bool, profile_id: int|null}
      */
-    public function approve(BiodataIntake $intake, int $userId, ?array $snapshot = null, array $mutationOptions = []): array
+    public function approve(
+        BiodataIntake $intake,
+        int $userId,
+        ?array $snapshot = null,
+        array $mutationOptions = [],
+        array $reviewContext = [],
+    ): array
     {
         if ($intake->intake_locked === true) {
             return [
@@ -44,6 +52,14 @@ class IntakeApprovalService
                 ->applyApprovedIntake($intake->id, null, null, $mutationOptions);
         }
 
+        $reviewSnapshotService = app(IntakeHumanReviewSnapshotService::class);
+        $reviewContext = $reviewSnapshotService->contextWithDefaults($reviewContext, [
+            'reviewed_by_user_id' => $userId,
+            'review_actor_type' => IntakeHumanReviewSnapshotService::ACTOR_PROFILE_USER,
+            'review_surface' => IntakeHumanReviewSnapshotService::SURFACE_WEBSITE,
+            'approval_status' => IntakeHumanReviewSnapshotService::STATUS_APPROVED,
+        ]);
+
         $approvalSnapshot = $snapshot !== null ? $snapshot : $intake->parsed_json;
         if (! is_array($approvalSnapshot)) {
             $approvalSnapshot = [];
@@ -55,7 +71,7 @@ class IntakeApprovalService
         $manualEdits = 0;
         $autoFilled = 0;
 
-        DB::transaction(function () use ($intake, $approvalSnapshot, $userId, $snapshot, &$manualEdits, &$autoFilled): void {
+        DB::transaction(function () use ($intake, $approvalSnapshot, $userId, $snapshot, $reviewSnapshotService, $reviewContext, &$manualEdits, &$autoFilled): void {
             $parsedCore = $intake->parsed_json['core'] ?? [];
             $approvedCore = $approvalSnapshot['core'] ?? [];
 
@@ -96,19 +112,33 @@ class IntakeApprovalService
             // Direct path: when snapshot was passed from controller, do NOT save to intake here.
             // MutationService::applyApprovedIntake will persist snapshot + approved_* in one transaction with profile write.
             if ($snapshot === null) {
-                $intake->approved_by_user = true;
-                $intake->approved_at = now();
-                $intake->approval_snapshot_json = $approvalSnapshot;
-                $intake->snapshot_schema_version = 1;
-                $intake->intake_status = 'approved';
-                $intake->fields_manually_edited_count = $manualEdits;
-                $intake->fields_auto_filled_count = $autoFilled;
-                $intake->save();
+                $intake->forceFill(array_merge(
+                    $reviewSnapshotService->attributesForSnapshot($approvalSnapshot, $reviewContext),
+                    [
+                        'approved_by_user' => true,
+                        'approved_at' => now(),
+                        'snapshot_schema_version' => 1,
+                        'intake_status' => 'approved',
+                        'fields_manually_edited_count' => $manualEdits,
+                        'fields_auto_filled_count' => $autoFilled,
+                    ],
+                ))->save();
             }
         });
 
         $requireAdmin = \App\Models\AdminSetting::getBool('intake_require_admin_before_attach', false);
         if ($requireAdmin) {
+            if ($snapshot !== null) {
+                $reviewSnapshotService->saveReviewedSnapshot($intake, $approvalSnapshot, $reviewContext, [
+                    'approved_by_user' => true,
+                    'approved_at' => now(),
+                    'snapshot_schema_version' => 1,
+                    'intake_status' => 'approved',
+                    'fields_manually_edited_count' => $manualEdits,
+                    'fields_auto_filled_count' => $autoFilled,
+                ]);
+            }
+
             return [
                 'mutation_success' => false,
                 'conflict_detected' => false,
@@ -119,6 +149,9 @@ class IntakeApprovalService
 
         // Direct form→DB path: pass snapshot in memory so MutationService writes profile + intake in one transaction (no save-then-read).
         $metrics = $snapshot !== null ? ['manual_edits' => $manualEdits, 'auto_filled' => $autoFilled] : null;
+        if ($snapshot !== null) {
+            $mutationOptions['human_review_context'] = $reviewContext;
+        }
 
         return app(\App\Services\MutationService::class)
             ->applyApprovedIntake($intake->id, $snapshot !== null ? $approvalSnapshot : null, $metrics, $mutationOptions);
