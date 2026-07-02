@@ -30,7 +30,7 @@ class IntakeCreationService
     }
 
     /**
-     * @return array{file_path: string|null, original_filename: string|null, raw_ocr_text: string}
+     * @return array{file_path: string|null, original_filename: string|null, raw_ocr_text: string, reused_paid_extraction_text?: bool, reused_from_intake_id?: int}
      */
     public function prepare(?int $userId, ?UploadedFile $file, ?string $rawText): array
     {
@@ -49,6 +49,16 @@ class IntakeCreationService
         $this->validateFileLimits($file, $extension, $userId);
 
         $path = $file->store('intakes');
+        $reused = $this->reusableTextFromExactPreviousUpload($userId, $path);
+        if ($reused !== null) {
+            return [
+                'file_path' => $path,
+                'original_filename' => $originalName,
+                'raw_ocr_text' => $reused['text'],
+                'reused_paid_extraction_text' => $reused['paid_text'],
+                'reused_from_intake_id' => $reused['intake_id'],
+            ];
+        }
 
         try {
             $extractedText = $this->ocrService->extractTextFromPath($path, $originalName);
@@ -66,14 +76,14 @@ class IntakeCreationService
     }
 
     /**
-     * @param  array{file_path: string|null, original_filename: string|null, raw_ocr_text: string}  $prepared
+     * @param  array{file_path: string|null, original_filename: string|null, raw_ocr_text: string, reused_paid_extraction_text?: bool, reused_from_intake_id?: int}  $prepared
      */
     public function persistPrepared(int $userId, array $prepared): BiodataIntake
     {
         return DB::transaction(function () use ($userId, $prepared): BiodataIntake {
             $rawText = $prepared['raw_ocr_text'];
 
-            return BiodataIntake::create([
+            $intake = BiodataIntake::create([
                 'uploaded_by' => $userId,
                 'file_path' => $prepared['file_path'],
                 'original_filename' => $prepared['original_filename'],
@@ -86,6 +96,13 @@ class IntakeCreationService
                 'intake_locked' => false,
                 'snapshot_schema_version' => 1,
             ]);
+
+            if (! empty($prepared['reused_paid_extraction_text'])) {
+                app(IntakeExtractionReuseResolver::class)
+                    ->putCachedParseInputText((int) $intake->id, $rawText, true);
+            }
+
+            return $intake;
         });
     }
 
@@ -171,5 +188,85 @@ class IntakeCreationService
             }
         }
 
+    }
+
+    /**
+     * Reuse text only when the uploaded file bytes exactly match a previous
+     * intake owned by the same user. This avoids a second paid extraction while
+     * still creating a new immutable intake row for the new upload.
+     *
+     * @return array{text: string, intake_id: int, paid_text: bool}|null
+     */
+    private function reusableTextFromExactPreviousUpload(?int $userId, string $storagePath): ?array
+    {
+        if ($userId === null || $storagePath === '') {
+            return null;
+        }
+
+        $fullPath = storage_path('app/private/'.$storagePath);
+        if (! is_file($fullPath) || ! is_readable($fullPath)) {
+            return null;
+        }
+
+        $currentHash = @hash_file('sha256', $fullPath);
+        if (! is_string($currentHash) || $currentHash === '') {
+            return null;
+        }
+
+        $limit = max(5, (int) config('intake.paid_extraction_reuse.historical_peer_query_limit', 40));
+        $peers = BiodataIntake::query()
+            ->where('uploaded_by', $userId)
+            ->whereNotNull('file_path')
+            ->where('file_path', '!=', '')
+            ->latest()
+            ->limit($limit)
+            ->get(['id', 'file_path', 'raw_ocr_text', 'last_parse_input_text', 'ai_calls_used']);
+
+        foreach ($peers as $peer) {
+            $peerPath = trim((string) $peer->file_path);
+            if ($peerPath === '') {
+                continue;
+            }
+
+            $peerFullPath = storage_path('app/private/'.$peerPath);
+            if (! is_file($peerFullPath) || ! is_readable($peerFullPath)) {
+                continue;
+            }
+
+            $peerHash = @hash_file('sha256', $peerFullPath);
+            if (! is_string($peerHash) || ! hash_equals($currentHash, $peerHash)) {
+                continue;
+            }
+
+            $paidText = trim((string) $peer->last_parse_input_text);
+            if ((int) $peer->ai_calls_used > 0 && mb_strlen($paidText, 'UTF-8') >= 20) {
+                Log::info('IntakeCreationService: reused paid extraction text for duplicate upload', [
+                    'user_id' => $userId,
+                    'source_intake_id' => (int) $peer->id,
+                ]);
+
+                return [
+                    'text' => $paidText,
+                    'intake_id' => (int) $peer->id,
+                    'paid_text' => true,
+                ];
+            }
+
+            $rawText = trim((string) $peer->raw_ocr_text);
+            if (mb_strlen($rawText, 'UTF-8') >= 20) {
+                Log::info('IntakeCreationService: reused raw OCR text for duplicate upload', [
+                    'user_id' => $userId,
+                    'source_intake_id' => (int) $peer->id,
+                ]);
+
+                return [
+                    'text' => $rawText,
+                    'intake_id' => (int) $peer->id,
+                    'paid_text' => false,
+                ];
+            }
+        }
+
+        return null;
     }
 }

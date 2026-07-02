@@ -385,6 +385,52 @@ class IntakeExtractionReuseResolver
     }
 
     /**
+     * @return list<array{text: string, intake_id: int, identity_evidence_score: float}>
+     */
+    public function loadHistoricalRawOcrPeers(BiodataIntake $current, array $sigCurrent, int $limit): array
+    {
+        if (($sigCurrent['phone'] ?? '') === '') {
+            return [];
+        }
+
+        $rows = BiodataIntake::query()
+            ->where('id', '!=', (int) $current->id)
+            ->where('parse_status', 'parsed')
+            ->whereNotNull('raw_ocr_text')
+            ->where('raw_ocr_text', '!=', '')
+            ->orderByDesc('updated_at')
+            ->limit(max(5, $limit))
+            ->get(['id', 'raw_ocr_text']);
+
+        $out = [];
+        foreach ($rows as $row) {
+            $text = trim((string) $row->raw_ocr_text);
+            if ($text === '' || mb_strlen($text, 'UTF-8') < 60) {
+                continue;
+            }
+
+            $peerSig = $this->fingerprint->extractSignals($text);
+            $ev = $this->fingerprint->identityReuseEvidenceScore($sigCurrent, $peerSig);
+            if ($ev === null) {
+                continue;
+            }
+
+            $norm = trim(OcrNormalize::normalizeRawTextForParsing($text));
+            if ($norm === '') {
+                continue;
+            }
+
+            $out[] = [
+                'text' => $norm,
+                'intake_id' => (int) $row->id,
+                'identity_evidence_score' => $ev,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * @param  list<array{text: string, quality_score: float, source_key: string, text_provenance: string, source_intake_id: int|null, identity_evidence_score: float|null}>  $candidates
      * @return array<string, mixed>|null
      */

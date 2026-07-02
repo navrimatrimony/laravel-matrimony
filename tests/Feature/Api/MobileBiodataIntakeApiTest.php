@@ -4,8 +4,11 @@ use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Models\User;
+use App\Services\OcrService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
@@ -68,6 +71,62 @@ test('mobile biodata intake laravel pipeline mode keeps active parser for mobile
         'uploaded_by' => $user->id,
         'raw_ocr_text' => $rawText,
         'parser_version' => 'hybrid_v1',
+    ]);
+
+    Queue::assertNotPushed(ParseIntakeJob::class);
+});
+
+test('mobile biodata intake file upload reuses exact previous paid transcript', function () {
+    Queue::fake();
+    AdminSetting::setValue('intake_mobile_biodata_source_mode', 'laravel_pipeline');
+    AdminSetting::setValue('intake_active_parser', 'ai_vision_extract_v1');
+    AdminSetting::setValue('intake_auto_parse_enabled', '0');
+
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    $bytes = 'same biodata image bytes for mobile reuse test';
+    $paidTranscript = "मुलीचे नांव : कु. टेस्ट परसे\nजन्मतारीख : 12/03/1996\nमो 9876543210\nSarvam canonical transcript.";
+    Storage::disk('local')->put('intakes/mobile-duplicate-source.jpg', $bytes);
+
+    $source = BiodataIntake::create([
+        'uploaded_by' => $user->id,
+        'file_path' => 'intakes/mobile-duplicate-source.jpg',
+        'original_filename' => 'mobile-duplicate-source.jpg',
+        'raw_ocr_text' => 'weak upload ocr text',
+        'last_parse_input_text' => $paidTranscript,
+        'ai_calls_used' => 1,
+        'intake_status' => 'uploaded',
+        'parse_status' => 'parsed',
+        'parser_version' => 'ai_vision_extract_v1',
+        'snapshot_schema_version' => 1,
+        'approved_by_user' => false,
+        'intake_locked' => false,
+    ]);
+
+    $this->mock(OcrService::class, function ($mock): void {
+        $mock->shouldNotReceive('extractTextFromPath');
+    });
+
+    $response = $this->post('/api/v1/biodata-intakes', [
+        'file' => UploadedFile::fake()->createWithContent('mobile-duplicate-target.jpg', $bytes),
+        'parse_now' => false,
+    ], ['Accept' => 'application/json']);
+
+    $response
+        ->assertCreated()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('intake.parse_status', 'pending')
+        ->assertJsonPath('intake.parser_version', 'ai_vision_extract_v1');
+
+    $newIntakeId = (int) $response->json('intake.id');
+    expect($newIntakeId)->not->toBe((int) $source->id);
+
+    $this->assertDatabaseHas('biodata_intakes', [
+        'id' => $newIntakeId,
+        'uploaded_by' => $user->id,
+        'raw_ocr_text' => $paidTranscript,
+        'parser_version' => 'ai_vision_extract_v1',
     ]);
 
     Queue::assertNotPushed(ParseIntakeJob::class);
