@@ -5,6 +5,7 @@ namespace Tests\Feature\Intake;
 use App\Jobs\ParseIntakeJob;
 use App\Models\BiodataIntake;
 use App\Models\User;
+use App\Services\ExternalAiParsingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -74,5 +75,61 @@ class ParseIntakeJobFailureStateTest extends TestCase
         $this->assertSame('parsed', $intake->parse_status);
         $this->assertNotSame('no_readable_source_file', $intake->last_error);
         $this->assertStringContainsString('aparna qa candidate', (string) $intake->last_parse_input_text);
+    }
+
+    public function test_ai_parser_result_is_saved_instead_of_being_overwritten_by_normalized_draft(): void
+    {
+        config([
+            'intake.testing_active_parser' => 'ai_first_v2',
+            'intake.testing_parse_job_uses_ai_vision' => false,
+        ]);
+
+        $this->mock(ExternalAiParsingService::class, function ($mock): void {
+            $mock->shouldReceive('parseToSsotV2')->once()->andReturn([
+                'core' => [
+                    'full_name' => 'AI Sarvam Candidate',
+                    'date_of_birth' => '1998-03-12',
+                    'highest_education' => 'B.Com',
+                ],
+                'contacts' => [],
+                'children' => [],
+                'education_history' => [],
+                'career_history' => [],
+                'addresses' => [],
+                'siblings' => [],
+                'relatives' => [],
+                'property_summary' => [],
+                'property_assets' => [],
+                'horoscope' => [],
+                'preferences' => [],
+                'extended_narrative' => [],
+                'confidence_map' => [
+                    'full_name' => 0.92,
+                ],
+            ]);
+        });
+
+        $owner = User::factory()->create();
+        $intake = BiodataIntake::query()->create([
+            'uploaded_by' => $owner->id,
+            'file_path' => null,
+            'original_filename' => null,
+            'raw_ocr_text' => "Education: B.Com\nMobile: 9612345678",
+            'parse_status' => 'pending',
+            'intake_status' => 'uploaded',
+            'approved_by_user' => false,
+            'intake_locked' => false,
+            'parser_version' => 'ai_first_v2',
+            'snapshot_schema_version' => 1,
+        ]);
+
+        (new ParseIntakeJob((int) $intake->id))->handle();
+
+        $intake->refresh();
+        $parsed = is_array($intake->parsed_json) ? $intake->parsed_json : [];
+
+        $this->assertSame('parsed', $intake->parse_status);
+        $this->assertSame('AI Sarvam Candidate', $parsed['core']['full_name'] ?? null);
+        $this->assertSame('ai_first_v2', $intake->parser_version);
     }
 }

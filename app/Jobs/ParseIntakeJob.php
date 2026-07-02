@@ -11,8 +11,6 @@ use App\Services\Intake\IntakePipelineService;
 use App\Services\IntakeManualOcrPreparedService;
 use App\Services\Ocr\OcrQualityEvaluator;
 use App\Services\OcrService;
-use App\Services\Parsing\IntakeNormalizedBiodataDraftBuilder;
-use App\Services\Parsing\IntakeNormalizedDraftToParsedJsonMapper;
 use App\Services\Parsing\ParserStrategyResolver;
 use App\Services\Parsing\ProviderResolver;
 use App\Support\IntakeDobTrace;
@@ -109,7 +107,7 @@ class ParseIntakeJob implements ShouldQueue
 
         $retryLimit = (int) AdminSetting::getValue('intake_parse_retry_limit', '3');
 
-        $parser = $resolver->makeParser($mode);
+        $parser = $resolver->makeParser($canonicalVersion);
         $ocr = app(OcrService::class);
         $qualityEvaluator = app(OcrQualityEvaluator::class);
 
@@ -501,7 +499,7 @@ class ParseIntakeJob implements ShouldQueue
                 $suggestedByUserId = ($uploadedBy !== null && (int) $uploadedBy > 0) ? (int) $uploadedBy : null;
                 $parsed = $parser->parse($raw, [
                     'intake_id' => $intake->id,
-                    'parser_mode' => $mode,
+                    'parser_mode' => $canonicalVersion,
                     'suggested_by_user_id' => $suggestedByUserId,
                 ]);
                 $lastException = null;
@@ -530,12 +528,6 @@ class ParseIntakeJob implements ShouldQueue
 
             return;
         }
-
-        $normalizedDraft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($raw, [
-            'intake_id' => $intake->id,
-            'parser_mode' => $mode,
-        ]);
-        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map($normalizedDraft);
 
         $utf8Stats = [];
         $ssot = app(IntakePipelineService::class)->finalizeParsedSnapshotForStorage(
