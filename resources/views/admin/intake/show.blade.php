@@ -32,6 +32,12 @@
     $adminReviewSections = is_array($adminReviewEditor['sections'] ?? null) ? $adminReviewEditor['sections'] : [];
     $adminReviewCanSave = ! empty($adminReviewEditor['can_save']);
     $reviewerName = $intake->reviewedByUser->name ?? null;
+    $adminQualitySignals = is_array($adminQualitySignals ?? null) ? $adminQualitySignals : ['has_any' => false, 'quality_summary' => null, 'failure_codes' => [], 'field_confidence_by_key' => [], 'field_confidence_by_path' => [], 'low_confidence_fields' => [], 'low_confidence_threshold' => 0.65];
+    $qualitySummary = is_array($adminQualitySignals['quality_summary'] ?? null) ? $adminQualitySignals['quality_summary'] : null;
+    $failureCodes = is_array($adminQualitySignals['failure_codes'] ?? null) ? $adminQualitySignals['failure_codes'] : [];
+    $fieldConfidenceByKey = is_array($adminQualitySignals['field_confidence_by_key'] ?? null) ? $adminQualitySignals['field_confidence_by_key'] : [];
+    $fieldConfidenceByPath = is_array($adminQualitySignals['field_confidence_by_path'] ?? null) ? $adminQualitySignals['field_confidence_by_path'] : [];
+    $lowConfidenceFields = is_array($adminQualitySignals['low_confidence_fields'] ?? null) ? $adminQualitySignals['low_confidence_fields'] : [];
 @endphp
 
 <div class="max-w-6xl mx-auto text-gray-900" x-data="{ tab: 'review' }">
@@ -134,6 +140,64 @@
                 <div><dt class="{{ $label }}">Policy</dt><dd class="{{ $value }} mt-0.5">{{ $intake->approval_policy ?? '—' }}</dd></div>
             </dl>
 
+            @if (! empty($adminQualitySignals['has_any']))
+                @php
+                    $qualityScore = is_numeric($qualitySummary['score'] ?? null) ? (float) $qualitySummary['score'] : null;
+                    $qualityPercent = $qualityScore !== null ? (int) round($qualityScore * 100) : null;
+                    $qualityLow = (bool) ($qualitySummary['is_low'] ?? false);
+                    $layoutScore = is_numeric($qualitySummary['layout_score'] ?? null) ? (float) $qualitySummary['layout_score'] : null;
+                @endphp
+                <div data-testid="quality-signals-panel" class="mb-4 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-950">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <h3 class="text-sm font-semibold text-amber-950">Quality signals</h3>
+                        @if ($qualityScore !== null)
+                            <span class="inline-flex px-2 py-0.5 rounded-full border {{ $qualityLow ? 'border-amber-300 bg-amber-100 text-amber-900' : 'border-emerald-200 bg-emerald-50 text-emerald-800' }} font-semibold">
+                                Overall: {{ $qualityPercent }}% {{ $qualityLow ? 'Low' : 'OK' }}
+                            </span>
+                        @endif
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                            <div class="{{ $label }} text-amber-800">Quality</div>
+                            <div class="mt-1 text-sm font-semibold text-amber-950">{{ $qualityScore !== null ? number_format($qualityScore, 2) : '—' }}</div>
+                            @if ($layoutScore !== null)
+                                <div class="mt-1 text-[11px] text-amber-900">Layout: {{ number_format($layoutScore, 2) }}</div>
+                            @endif
+                        </div>
+                        <div>
+                            <div class="{{ $label }} text-amber-800">Failure codes</div>
+                            @if ($failureCodes !== [])
+                                <div class="mt-1 flex flex-wrap gap-1">
+                                    @foreach ($failureCodes as $code)
+                                        <span data-testid="quality-failure-code" class="inline-flex px-2 py-0.5 rounded-full border border-red-200 bg-red-50 text-red-800 font-semibold">{{ $code }}</span>
+                                    @endforeach
+                                </div>
+                            @else
+                                <div class="mt-1 text-sm text-amber-900">—</div>
+                            @endif
+                        </div>
+                        <div>
+                            <div class="{{ $label }} text-amber-800">Low-confidence fields</div>
+                            @if ($lowConfidenceFields !== [])
+                                <div class="mt-1 flex flex-wrap gap-1">
+                                    @foreach ($lowConfidenceFields as $lowField)
+                                        @php
+                                            $lowScore = is_numeric($lowField['score'] ?? null) ? (float) $lowField['score'] : null;
+                                            $lowScoreLabel = $lowScore !== null ? ' '.((int) round($lowScore * 100)).'%' : '';
+                                        @endphp
+                                        <span data-testid="quality-low-confidence-summary" class="inline-flex px-2 py-0.5 rounded-full border border-amber-300 bg-white text-amber-900 font-semibold">
+                                            {{ ($lowField['label'] ?? $lowField['key'] ?? 'Field').$lowScoreLabel }}
+                                        </span>
+                                    @endforeach
+                                </div>
+                            @else
+                                <div class="mt-1 text-sm text-amber-900">—</div>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            @endif
+
             @if (! empty($adminReviewEditor['available']) && $adminReviewSections !== [])
                 <form method="POST" action="{{ route('admin.biodata-intakes.review-snapshot.update', $intake) }}" class="space-y-4">
                     @csrf
@@ -159,13 +223,32 @@
                                         $fieldValue = old($fieldOldKey, (string) ($field['value'] ?? ''));
                                         $fieldLabel = (string) ($field['label'] ?? $fieldOldKey);
                                         $isMultiline = ! empty($field['multiline']);
+                                        $fieldPath = str_starts_with($fieldOldKey, 'snapshot.') ? substr($fieldOldKey, 9) : $fieldOldKey;
+                                        $fieldSegments = array_values(array_filter(explode('.', $fieldPath), static fn (string $segment): bool => ! ctype_digit($segment)));
+                                        $fieldLeaf = $fieldSegments !== [] ? (string) end($fieldSegments) : $fieldPath;
+                                        $confidenceSignal = $fieldConfidenceByPath[$fieldPath] ?? ($fieldConfidenceByKey[$fieldLeaf] ?? null);
+                                        $confidenceSignal = is_array($confidenceSignal) ? $confidenceSignal : null;
+                                        $confidenceScore = is_numeric($confidenceSignal['score'] ?? null) ? (float) $confidenceSignal['score'] : null;
+                                        $confidenceScoreLabel = $confidenceScore !== null ? ' '.((int) round($confidenceScore * 100)).'%' : '';
+                                        $isLowConfidenceField = ! empty($confidenceSignal['is_low']);
+                                        $confidenceTestId = 'low-confidence-field-'.str_replace(['.', '_'], '-', $fieldPath);
+                                        $inputClass = $isLowConfidenceField
+                                            ? 'w-full rounded-lg border-amber-300 bg-amber-50 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 disabled:bg-gray-100'
+                                            : 'w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100';
                                     @endphp
-                                    <label class="block text-xs">
-                                        <span class="block font-semibold text-gray-700 mb-1">{{ $fieldLabel }}</span>
+                                    <label @if ($isLowConfidenceField) data-testid="{{ $confidenceTestId }}" @endif class="block text-xs {{ $isLowConfidenceField ? 'admin-low-confidence-field rounded-lg border border-amber-200 bg-amber-50/40 p-2' : '' }}">
+                                        <span class="flex flex-wrap items-center gap-2 font-semibold text-gray-700 mb-1">
+                                            <span>{{ $fieldLabel }}</span>
+                                            @if ($isLowConfidenceField)
+                                                <span class="inline-flex px-1.5 py-0.5 rounded-full border border-amber-300 bg-white text-[10px] font-bold uppercase tracking-wide text-amber-900">
+                                                    {{ 'Low confidence'.$confidenceScoreLabel }}
+                                                </span>
+                                            @endif
+                                        </span>
                                         @if ($isMultiline)
-                                            <textarea name="{{ $fieldName }}" rows="3" @disabled(! $adminReviewCanSave || $parseInProgress) class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100">{{ $fieldValue }}</textarea>
+                                            <textarea name="{{ $fieldName }}" rows="3" @disabled(! $adminReviewCanSave || $parseInProgress) class="{{ $inputClass }}">{{ $fieldValue }}</textarea>
                                         @else
-                                            <input type="text" name="{{ $fieldName }}" value="{{ $fieldValue }}" @disabled(! $adminReviewCanSave || $parseInProgress) class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100">
+                                            <input type="text" name="{{ $fieldName }}" value="{{ $fieldValue }}" @disabled(! $adminReviewCanSave || $parseInProgress) class="{{ $inputClass }}">
                                         @endif
                                     </label>
                                 @endforeach

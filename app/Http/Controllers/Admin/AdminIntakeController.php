@@ -386,6 +386,7 @@ class AdminIntakeController extends Controller
                 && $snapshotOk,
         ];
         $adminReviewSnapshotEditor = $this->adminReviewSnapshotEditor($intake);
+        $adminQualitySignals = $this->adminQualitySignals($intake);
 
         return view('admin.intake.show', compact(
             'intake',
@@ -410,6 +411,7 @@ class AdminIntakeController extends Controller
             'requireAdminBeforeAttach',
             'applyReadiness',
             'adminReviewSnapshotEditor',
+            'adminQualitySignals',
         ));
     }
 
@@ -910,6 +912,74 @@ class AdminIntakeController extends Controller
             ->replace(['_', '-'], ' ')
             ->title()
             ->toString();
+    }
+
+    /**
+     * @return array{
+     *     has_any: bool,
+     *     quality_summary: ?array,
+     *     failure_codes: list<string>,
+     *     field_confidence: array<string, mixed>,
+     *     field_confidence_by_key: array<string, array<string, mixed>>,
+     *     field_confidence_by_path: array<string, array<string, mixed>>,
+     *     low_confidence_fields: list<array<string, mixed>>,
+     *     low_confidence_keys: list<string>,
+     *     low_confidence_threshold: float
+     * }
+     */
+    private function adminQualitySignals(BiodataIntake $intake): array
+    {
+        $qualitySummary = is_array($intake->quality_summary_json) ? $intake->quality_summary_json : null;
+        $failureCodes = is_array($intake->failure_codes_json)
+            ? array_values(array_filter(array_map(static fn (mixed $code): string => trim((string) $code), $intake->failure_codes_json)))
+            : [];
+        $fieldConfidence = is_array($intake->field_confidence_json) ? $intake->field_confidence_json : [];
+        $threshold = 0.65;
+        $byKey = [];
+        $byPath = [];
+        $lowFields = [];
+
+        foreach ($fieldConfidence as $fieldKey => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $score = isset($row['score']) && is_numeric($row['score']) ? round((float) $row['score'], 3) : null;
+            $present = array_key_exists('present', $row) ? (bool) $row['present'] : null;
+            $status = strtolower(trim((string) ($row['status'] ?? '')));
+            $isLow = ($score !== null && $score < $threshold)
+                || $present === false
+                || in_array($status, ['low', 'missing', 'failed'], true);
+            $signal = [
+                'key' => (string) $fieldKey,
+                'label' => $this->adminReviewSnapshotLabel((string) $fieldKey),
+                'score' => $score,
+                'present' => $present,
+                'source_path' => trim((string) ($row['source_path'] ?? '')) ?: null,
+                'reason' => trim((string) ($row['reason'] ?? $status)) ?: null,
+                'is_low' => $isLow,
+            ];
+
+            if (is_string($signal['source_path']) && $signal['source_path'] !== '') {
+                $byPath[$signal['source_path']] = $signal;
+            }
+            $byKey[(string) $fieldKey] = $signal;
+            if ($isLow) {
+                $lowFields[] = $signal;
+            }
+        }
+
+        return [
+            'has_any' => $qualitySummary !== null || $failureCodes !== [] || $fieldConfidence !== [],
+            'quality_summary' => $qualitySummary,
+            'failure_codes' => $failureCodes,
+            'field_confidence' => $fieldConfidence,
+            'field_confidence_by_key' => $byKey,
+            'field_confidence_by_path' => $byPath,
+            'low_confidence_fields' => $lowFields,
+            'low_confidence_keys' => array_values(array_map(static fn (array $row): string => (string) $row['key'], $lowFields)),
+            'low_confidence_threshold' => $threshold,
+        ];
     }
 
     /** @var list<string> */

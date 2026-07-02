@@ -15,6 +15,65 @@ class IntakeAdminHumanReviewSnapshotTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_admin_show_page_renders_quality_signals_and_low_confidence_marker(): void
+    {
+        $admin = User::factory()->create([
+            'is_admin' => true,
+            'admin_role' => 'super_admin',
+        ]);
+        $member = User::factory()->create([
+            'is_admin' => false,
+            'admin_role' => null,
+        ]);
+
+        $intake = BiodataIntake::create([
+            'uploaded_by' => $member->id,
+            'raw_ocr_text' => 'Original OCR text',
+            'last_parse_input_text' => "नाव : Parsed Candidate\nमोबाईल : 9876543210",
+            'intake_status' => 'uploaded',
+            'parse_status' => 'parsed',
+            'parsed_json' => [
+                'core' => [
+                    'full_name' => 'Parsed Candidate',
+                    'date_of_birth' => '1996-05-04',
+                ],
+            ],
+            'quality_summary_json' => [
+                'score' => 0.42,
+                'is_low' => true,
+                'layout_score' => 0.5,
+            ],
+            'failure_codes_json' => [
+                BiodataIntakeOcrAttempt::FAILURE_TEXT_FOUND_MAPPING_FAILED,
+            ],
+            'field_confidence_json' => [
+                'full_name' => [
+                    'score' => 0.4,
+                    'present' => true,
+                    'source_path' => 'core.full_name',
+                    'reason' => 'parsed_value_present',
+                ],
+                'date_of_birth' => [
+                    'score' => 0.9,
+                    'present' => true,
+                    'source_path' => 'core.date_of_birth',
+                    'reason' => 'parsed_value_present',
+                ],
+            ],
+            'approved_by_user' => false,
+            'intake_locked' => false,
+            'snapshot_schema_version' => 1,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.biodata-intakes.show', $intake))
+            ->assertOk()
+            ->assertSee('data-testid="quality-signals-panel"', false)
+            ->assertSee(BiodataIntakeOcrAttempt::FAILURE_TEXT_FOUND_MAPPING_FAILED)
+            ->assertSee('data-testid="low-confidence-field-core-full-name"', false)
+            ->assertSee('Low confidence');
+    }
+
     public function test_admin_can_save_reviewed_snapshot_without_mutating_profile_or_evidence(): void
     {
         $admin = User::factory()->create([
@@ -54,6 +113,21 @@ class IntakeAdminHumanReviewSnapshotTest extends TestCase
             'intake_status' => 'uploaded',
             'parse_status' => 'parsed',
             'parsed_json' => $parsed,
+            'quality_summary_json' => [
+                'score' => 0.58,
+                'is_low' => false,
+            ],
+            'failure_codes_json' => [
+                BiodataIntakeOcrAttempt::FAILURE_LABEL_VALUE_SPLIT,
+            ],
+            'field_confidence_json' => [
+                'full_name' => [
+                    'score' => 0.4,
+                    'present' => true,
+                    'source_path' => 'core.full_name',
+                    'reason' => 'parsed_value_present',
+                ],
+            ],
             'approved_by_user' => false,
             'intake_locked' => false,
             'snapshot_schema_version' => 1,
@@ -106,6 +180,7 @@ class IntakeAdminHumanReviewSnapshotTest extends TestCase
 
         $this->assertSame('Parsed Candidate', data_get($intake->parsed_json, 'core.full_name'));
         $this->assertSame('Original OCR text', $intake->raw_ocr_text);
+        $this->assertSame([BiodataIntakeOcrAttempt::FAILURE_LABEL_VALUE_SPLIT], $intake->failure_codes_json);
         $this->assertArrayNotHasKey('unexpected_new_section', $intake->approval_snapshot_json);
         $this->assertFalse((bool) $intake->approved_by_user);
         $this->assertNull($intake->approved_at);
