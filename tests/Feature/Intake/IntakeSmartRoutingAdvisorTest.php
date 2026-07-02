@@ -130,7 +130,7 @@ test('low quality cheap OCR recommends paid vision without changing intake truth
         ->and($stored->parse_status)->toBe('parsed');
 });
 
-test('duplicate content signal recommends previous reuse but never copies parsed json', function () {
+test('trusted exact content hash duplicate is reuse eligible but never copies parsed json', function () {
     $sourceRaw = "मुलीचे नांव : कु. Source Candidate\nजन्मतारीख : 12/03/1996\nमो 9876543210\nशिक्षण बी.कॉम";
     $targetRaw = "मुलीचे नांव : कु. Target Candidate\nजन्मतारीख : 12/03/1996\nमो 9876543210\nशिक्षण बी.कॉम";
     $sourceParsed = [
@@ -148,6 +148,19 @@ test('duplicate content signal recommends previous reuse but never copies parsed
         'raw_ocr_text' => $sourceRaw,
         'parsed_json' => $sourceParsed,
         'parse_status' => 'parsed',
+        'quality_summary_json' => [
+            'score' => 0.88,
+            'is_low' => false,
+        ],
+    ]);
+    BiodataIntakeOcrAttempt::create([
+        'intake_id' => $source->id,
+        'engine' => BiodataIntakeOcrAttempt::ENGINE_LARAVEL_NATIVE_OCR,
+        'source' => 'server_parse',
+        'status' => BiodataIntakeOcrAttempt::STATUS_SUCCESS,
+        'raw_text' => 'Source Candidate',
+        'quality_score' => 0.88,
+        'is_primary' => true,
     ]);
     $target = createRoutingAdvisorIntake([
         'content_hash' => 'same-image-hash',
@@ -160,9 +173,16 @@ test('duplicate content signal recommends previous reuse but never copies parsed
 
     expect($stored->routing_recommendation_json['recommended_action'])->toBe('reuse_previous')
         ->and($stored->routing_recommendation_json['reason_codes'])->toContain('duplicate_detected')
+        ->and($stored->routing_recommendation_json['reason_codes'])->toContain('duplicate_reuse_eligible')
+        ->and($stored->routing_recommendation_json['would_skip_paid_vision'])->toBeTrue()
         ->and($stored->routing_recommendation_json['signals']['duplicate_signal_source'])->toBe('content_hash')
         ->and($stored->routing_recommendation_json['signals']['duplicate_match_type'])->toBe('exact_content_hash')
         ->and($stored->routing_recommendation_json['signals']['duplicate_reference_intake_id'])->toBe($source->id)
+        ->and($stored->routing_recommendation_json['signals']['duplicate_reuse_eligible'])->toBeTrue()
+        ->and($stored->routing_recommendation_json['signals']['duplicate_reuse_trust'])->toBe('trusted')
+        ->and($stored->routing_recommendation_json['signals']['duplicate_reference_has_parsed_json'])->toBeTrue()
+        ->and($stored->routing_recommendation_json['signals']['duplicate_reference_has_primary_ocr_attempt'])->toBeTrue()
+        ->and($stored->routing_recommendation_json['signals']['duplicate_reference_quality_score'])->toBe(0.88)
         ->and($stored->routing_recommendation_json['signals']['matched_hash_type'])->toBe('content_hash')
         ->and($stored->routing_recommendation_json['signals']['identity_fingerprint_present'])->toBeTrue()
         ->and($stored->routing_recommendation_json['signals']['normalized_text_hash_present'])->toBeFalse()
@@ -173,10 +193,113 @@ test('duplicate content signal recommends previous reuse but never copies parsed
         ->and($stored->parsed_json)->not->toBe($sourceParsed);
 });
 
-test('no signal recommendation explains missing stored signals without mutating intake', function () {
+test('weak exact content hash duplicate is not reuse eligible', function () {
+    $source = createRoutingAdvisorIntake([
+        'content_hash' => 'weak-same-image-hash',
+        'raw_ocr_text' => 'Weak source OCR text',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Weak Source',
+            ],
+        ],
+        'parse_status' => 'parsed',
+    ]);
+    $targetParsed = [
+        'core' => [
+            'full_name' => 'Weak Target',
+        ],
+    ];
+    $target = createRoutingAdvisorIntake([
+        'content_hash' => 'weak-same-image-hash',
+        'raw_ocr_text' => 'Weak target OCR text',
+        'parsed_json' => $targetParsed,
+        'parse_status' => 'parsed',
+    ]);
+
+    $stored = app(IntakeSmartRoutingAdvisor::class)->storeForIntake($target);
+
+    expect($stored->routing_recommendation_json['recommended_action'])->toBe('manual_review')
+        ->and($stored->routing_recommendation_json['reason_codes'])->toContain('duplicate_detected')
+        ->and($stored->routing_recommendation_json['reason_codes'])->toContain('duplicate_detected_but_untrusted')
+        ->and($stored->routing_recommendation_json['would_skip_paid_vision'])->toBeFalse()
+        ->and($stored->routing_recommendation_json['signals']['duplicate_reference_intake_id'])->toBe($source->id)
+        ->and($stored->routing_recommendation_json['signals']['duplicate_reuse_eligible'])->toBeFalse()
+        ->and($stored->routing_recommendation_json['signals']['duplicate_reuse_trust'])->toBe('weak')
+        ->and($stored->routing_recommendation_json['signals']['duplicate_reference_reason'])->toBe('reference_lacks_trusted_evidence')
+        ->and($stored->parsed_json)->toBe($targetParsed);
+});
+
+test('self duplicate reference is classified circular and does not skip paid vision', function () {
     $intake = createRoutingAdvisorIntake([
-        'raw_ocr_text' => '',
-        'parsed_json' => [],
+        'raw_ocr_text' => 'Self reference OCR text',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Self Reference',
+            ],
+        ],
+        'parse_status' => 'parsed',
+    ]);
+    BiodataIntakeOcrAttempt::create([
+        'intake_id' => $intake->id,
+        'engine' => BiodataIntakeOcrAttempt::ENGINE_REUSED_TRANSCRIPT,
+        'source' => 'ai_vision_reuse',
+        'status' => BiodataIntakeOcrAttempt::STATUS_SUCCESS,
+        'engine_meta_json' => [
+            'reused_from' => 'identity_fingerprint_cache',
+            'source_intake_id' => $intake->id,
+        ],
+    ]);
+
+    $recommendation = app(IntakeSmartRoutingAdvisor::class)->recommend($intake);
+
+    expect($recommendation['recommended_action'])->toBe('manual_review')
+        ->and($recommendation['reason_codes'])->toContain('duplicate_detected_but_untrusted')
+        ->and($recommendation['would_skip_paid_vision'])->toBeFalse()
+        ->and($recommendation['signals']['duplicate_reference_intake_id'])->toBe($intake->id)
+        ->and($recommendation['signals']['duplicate_reuse_trust'])->toBe('circular')
+        ->and($recommendation['signals']['duplicate_reference_is_self_or_circular'])->toBeTrue()
+        ->and($recommendation['signals']['duplicate_reference_reason'])->toBe('self_reference');
+});
+
+test('missing duplicate reference is not reuse eligible', function () {
+    $intake = createRoutingAdvisorIntake([
+        'raw_ocr_text' => 'Missing reference OCR text',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Missing Reference',
+            ],
+        ],
+        'parse_status' => 'parsed',
+    ]);
+    BiodataIntakeOcrAttempt::create([
+        'intake_id' => $intake->id,
+        'engine' => BiodataIntakeOcrAttempt::ENGINE_REUSED_TRANSCRIPT,
+        'source' => 'ai_vision_reuse',
+        'status' => BiodataIntakeOcrAttempt::STATUS_SUCCESS,
+        'engine_meta_json' => [
+            'reused_from' => 'historical_paid_transcript',
+            'source_intake_id' => 999999,
+        ],
+    ]);
+
+    $recommendation = app(IntakeSmartRoutingAdvisor::class)->recommend($intake);
+
+    expect($recommendation['recommended_action'])->toBe('manual_review')
+        ->and($recommendation['would_skip_paid_vision'])->toBeFalse()
+        ->and($recommendation['signals']['duplicate_reuse_eligible'])->toBeFalse()
+        ->and($recommendation['signals']['duplicate_reuse_trust'])->toBe('missing_reference')
+        ->and($recommendation['signals']['duplicate_reference_reason'])->toBe('reference_intake_missing');
+});
+
+test('legacy parsed raw no signal recommendation explains missing stored signals without mutating intake', function () {
+    $parsed = [
+        'core' => [
+            'full_name' => 'Legacy Parsed',
+        ],
+    ];
+    $intake = createRoutingAdvisorIntake([
+        'raw_ocr_text' => 'Legacy OCR text without quality attempts or hashes',
+        'parsed_json' => $parsed,
         'parse_status' => 'pending',
         'quality_summary_json' => null,
         'failure_codes_json' => [],
@@ -187,8 +310,11 @@ test('no signal recommendation explains missing stored signals without mutating 
 
     expect($recommendation['recommended_action'])->toBe('unknown')
         ->and($recommendation['reason_codes'])->toContain('no_signal')
-        ->and($recommendation['signals']['has_parsed_json'])->toBeFalse()
-        ->and($recommendation['signals']['has_raw_ocr_text'])->toBeFalse()
+        ->and($recommendation['reason_codes'])->toContain('legacy_intake_missing_quality_signals')
+        ->and($recommendation['reason_codes'])->toContain('legacy_intake_missing_ocr_attempts')
+        ->and($recommendation['reason_codes'])->toContain('legacy_intake_missing_hashes')
+        ->and($recommendation['signals']['has_parsed_json'])->toBeTrue()
+        ->and($recommendation['signals']['has_raw_ocr_text'])->toBeTrue()
         ->and($recommendation['signals']['has_quality_summary'])->toBeFalse()
         ->and($recommendation['signals']['has_field_confidence'])->toBeFalse()
         ->and($recommendation['signals']['ocr_attempt_count'])->toBe(0)
@@ -198,8 +324,8 @@ test('no signal recommendation explains missing stored signals without mutating 
         ->and($recommendation['signals']['normalized_text_hash_present'])->toBeFalse()
         ->and($recommendation['signals']['image_hash_present'])->toBeFalse()
         ->and($intake->fresh()->parse_status)->toBe('pending')
-        ->and($intake->fresh()->parsed_json)->toBe([])
-        ->and($intake->fresh()->raw_ocr_text)->toBe('');
+        ->and($intake->fresh()->parsed_json)->toBe($parsed)
+        ->and($intake->fresh()->raw_ocr_text)->toBe('Legacy OCR text without quality attempts or hashes');
 });
 
 test('provider failure is captured in telemetry and reason codes', function () {

@@ -36,19 +36,28 @@ class IntakeSmartRoutingAdvisor
             BiodataIntakeOcrAttempt::FAILURE_PROVIDER_ERROR,
             BiodataIntakeOcrAttempt::FAILURE_PROVIDER_TIMEOUT,
         ]);
+        $signals = $this->signals(
+            $intake,
+            $telemetry,
+            $qualityScore,
+            $layoutScore,
+            $failureCodes,
+            $lowConfidenceKeys,
+        );
 
         $reasonCodes = [];
-        if (! empty($telemetry['reuse_candidate_found'])) {
+        if (! empty($signals['duplicate_detected'])) {
             $reasonCodes[] = 'duplicate_detected';
 
-            return $this->payload('reuse_previous', $reasonCodes, 0.9, true, false, $this->signals(
-                $intake,
-                $telemetry,
-                $qualityScore,
-                $layoutScore,
-                $failureCodes,
-                $lowConfidenceKeys,
-            ));
+            if (! empty($signals['duplicate_reuse_eligible'])) {
+                $reasonCodes[] = 'duplicate_reuse_eligible';
+
+                return $this->payload('reuse_previous', $reasonCodes, 0.9, true, false, $signals);
+            }
+
+            $reasonCodes[] = 'duplicate_detected_but_untrusted';
+
+            return $this->payload('manual_review', $reasonCodes, 0.42, false, false, $signals);
         }
 
         if ($providerFailureSignaled) {
@@ -83,14 +92,7 @@ class IntakeSmartRoutingAdvisor
         if ($hasCheapOcr && $qualityIsHigh && $failureCodes === [] && $lowConfidenceKeys === []) {
             $reasonCodes[] = 'high_quality_cheap_ocr';
 
-            return $this->payload('cheap_ocr_only', array_values(array_unique($reasonCodes)), min(0.95, $qualityScore), true, false, $this->signals(
-                $intake,
-                $telemetry,
-                $qualityScore,
-                $layoutScore,
-                $failureCodes,
-                $lowConfidenceKeys,
-            ));
+            return $this->payload('cheap_ocr_only', array_values(array_unique($reasonCodes)), min(0.95, $qualityScore), true, false, $signals);
         }
 
         if ($qualityIsLow) {
@@ -100,25 +102,11 @@ class IntakeSmartRoutingAdvisor
         if (in_array('empty_text', $reasonCodes, true)) {
             $action = $hasFile && ! $providerFailureSignaled ? 'call_sarvam' : 'manual_review';
 
-            return $this->payload($action, array_values(array_unique($reasonCodes)), 0.72, false, $action === 'call_sarvam', $this->signals(
-                $intake,
-                $telemetry,
-                $qualityScore,
-                $layoutScore,
-                $failureCodes,
-                $lowConfidenceKeys,
-            ));
+            return $this->payload($action, array_values(array_unique($reasonCodes)), 0.72, false, $action === 'call_sarvam', $signals);
         }
 
         if ($providerFailureSignaled) {
-            return $this->payload('manual_review', array_values(array_unique($reasonCodes)), 0.68, false, false, $this->signals(
-                $intake,
-                $telemetry,
-                $qualityScore,
-                $layoutScore,
-                $failureCodes,
-                $lowConfidenceKeys,
-            ));
+            return $this->payload('manual_review', array_values(array_unique($reasonCodes)), 0.68, false, false, $signals);
         }
 
         if (array_intersect($reasonCodes, [
@@ -127,24 +115,10 @@ class IntakeSmartRoutingAdvisor
             'field_confidence_low',
             'low_quality_cheap_ocr',
         ]) !== []) {
-            return $this->payload('call_sarvam', array_values(array_unique($reasonCodes)), 0.7, false, true, $this->signals(
-                $intake,
-                $telemetry,
-                $qualityScore,
-                $layoutScore,
-                $failureCodes,
-                $lowConfidenceKeys,
-            ));
+            return $this->payload('call_sarvam', array_values(array_unique($reasonCodes)), 0.7, false, true, $signals);
         }
 
-        return $this->payload('unknown', ['no_signal'], 0.0, false, false, $this->signals(
-            $intake,
-            $telemetry,
-            $qualityScore,
-            $layoutScore,
-            $failureCodes,
-            $lowConfidenceKeys,
-        ));
+        return $this->payload('unknown', $this->noSignalReasonCodes($signals), 0.0, false, false, $signals);
     }
 
     public function storeForIntake(BiodataIntake $intake): BiodataIntake
@@ -226,6 +200,7 @@ class IntakeSmartRoutingAdvisor
             'sarvam_attempt_count' => $telemetry['sarvam_attempt_count'] ?? 0,
             'failed_provider_count' => $telemetry['failed_provider_count'] ?? 0,
             'reuse_candidate_found' => (bool) ($telemetry['reuse_candidate_found'] ?? false),
+            'content_hash_present' => trim((string) ($intake->content_hash ?? '')) !== '',
             'identity_fingerprint_present' => $this->identityFingerprintPresent($intake),
             'normalized_text_hash_present' => $attempts->contains(
                 fn (BiodataIntakeOcrAttempt $attempt): bool => trim((string) ($attempt->normalized_text_hash ?? '')) !== ''
@@ -243,6 +218,23 @@ class IntakeSmartRoutingAdvisor
      */
     private function duplicateSignals(BiodataIntake $intake, Collection $attempts, array $telemetry): array
     {
+        $base = [
+            'duplicate_detected' => false,
+            'duplicate_reuse_eligible' => false,
+            'duplicate_reuse_trust' => 'unknown',
+            'duplicate_signal_source' => null,
+            'duplicate_match_type' => null,
+            'duplicate_reference_intake_id' => null,
+            'matched_hash_type' => null,
+            'duplicate_reference_has_parsed_json' => false,
+            'duplicate_reference_has_reviewed_snapshot' => false,
+            'duplicate_reference_has_primary_ocr_attempt' => false,
+            'duplicate_reference_has_sarvam_attempt' => false,
+            'duplicate_reference_quality_score' => null,
+            'duplicate_reference_locked' => null,
+            'duplicate_reference_is_self_or_circular' => false,
+            'duplicate_reference_reason' => null,
+        ];
         $reusedAttempt = $attempts->first(
             fn (BiodataIntakeOcrAttempt $attempt): bool => $attempt->engine === BiodataIntakeOcrAttempt::ENGINE_REUSED_TRANSCRIPT
         );
@@ -267,12 +259,25 @@ class IntakeSmartRoutingAdvisor
             $matchType = 'reuse_candidate';
         }
 
-        return [
+        if ($source === null) {
+            return $base;
+        }
+
+        $trustSignals = $this->duplicateReferenceTrustSignals(
+            $intake,
+            $referenceId,
+            $source,
+            $matchType,
+            $reusedAttempt,
+        );
+
+        return array_merge($base, [
+            'duplicate_detected' => true,
             'duplicate_signal_source' => $source,
             'duplicate_match_type' => $matchType,
             'duplicate_reference_intake_id' => $referenceId,
             'matched_hash_type' => $matchedHashType,
-        ];
+        ], $trustSignals);
     }
 
     private function contentHashPeerId(BiodataIntake $intake): ?int
@@ -282,13 +287,201 @@ class IntakeSmartRoutingAdvisor
             return null;
         }
 
-        $peerId = BiodataIntake::query()
+        $baseQuery = BiodataIntake::query()
             ->whereKeyNot($intake->id)
-            ->where('content_hash', $contentHash)
-            ->oldest('id')
+            ->where('content_hash', $contentHash);
+
+        $peerId = (clone $baseQuery)
+            ->where('id', '<', (int) $intake->id)
+            ->latest('id')
             ->value('id');
 
+        if ($peerId === null) {
+            $peerId = (clone $baseQuery)
+                ->oldest('id')
+                ->value('id');
+        }
+
         return $peerId !== null ? (int) $peerId : null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function duplicateReferenceTrustSignals(
+        BiodataIntake $intake,
+        ?int $referenceId,
+        ?string $source,
+        ?string $matchType,
+        ?BiodataIntakeOcrAttempt $reusedAttempt,
+    ): array {
+        $currentId = (int) $intake->id;
+        if ($referenceId === null) {
+            return [
+                'duplicate_reuse_trust' => 'missing_reference',
+                'duplicate_reference_reason' => 'duplicate_signal_without_reference',
+            ];
+        }
+
+        $reference = BiodataIntake::query()
+            ->whereKey($referenceId)
+            ->first([
+                'id',
+                'parsed_json',
+                'approval_snapshot_json',
+                'quality_summary_json',
+                'routing_recommendation_json',
+                'intake_locked',
+            ]);
+
+        if (! $reference instanceof BiodataIntake) {
+            return [
+                'duplicate_reuse_trust' => 'missing_reference',
+                'duplicate_reference_reason' => 'reference_intake_missing',
+            ];
+        }
+
+        $referenceAttempts = $reference->ocrAttempts()
+            ->get([
+                'id',
+                'engine',
+                'status',
+                'quality_score',
+                'normalized_text_hash',
+                'image_hash',
+                'is_primary',
+            ]);
+        $referenceHasParsedJson = $this->hasNonEmptyArray($reference->parsed_json);
+        $referenceHasReviewedSnapshot = $this->hasNonEmptyArray($reference->approval_snapshot_json);
+        $referenceHasPrimaryOcr = $referenceAttempts->contains(
+            fn (BiodataIntakeOcrAttempt $attempt): bool => (bool) $attempt->is_primary
+        );
+        $referenceHasSarvam = $referenceAttempts->contains(
+            fn (BiodataIntakeOcrAttempt $attempt): bool => $attempt->engine === BiodataIntakeOcrAttempt::ENGINE_SARVAM_AI_VISION
+                && $attempt->status === BiodataIntakeOcrAttempt::STATUS_SUCCESS
+        );
+        $referenceQualityScore = $this->referenceQualityScore($reference, $referenceAttempts);
+        $referenceIsSelfOrCircular = $referenceId === $currentId
+            || $referenceId > $currentId
+            || $this->referencePointsBackToCurrent($reference, $currentId);
+
+        $signals = [
+            'duplicate_reference_has_parsed_json' => $referenceHasParsedJson,
+            'duplicate_reference_has_reviewed_snapshot' => $referenceHasReviewedSnapshot,
+            'duplicate_reference_has_primary_ocr_attempt' => $referenceHasPrimaryOcr,
+            'duplicate_reference_has_sarvam_attempt' => $referenceHasSarvam,
+            'duplicate_reference_quality_score' => $referenceQualityScore,
+            'duplicate_reference_locked' => (bool) $reference->intake_locked,
+            'duplicate_reference_is_self_or_circular' => $referenceIsSelfOrCircular,
+        ];
+
+        if ($referenceIsSelfOrCircular) {
+            return array_merge($signals, [
+                'duplicate_reuse_trust' => 'circular',
+                'duplicate_reference_reason' => $referenceId === $currentId
+                    ? 'self_reference'
+                    : 'reference_is_not_previous_or_points_back',
+            ]);
+        }
+
+        if (! $referenceHasParsedJson && ! $referenceHasReviewedSnapshot) {
+            return array_merge($signals, [
+                'duplicate_reuse_trust' => 'weak',
+                'duplicate_reference_reason' => 'reference_missing_parsed_or_reviewed_snapshot',
+            ]);
+        }
+
+        $qualityHigh = $referenceQualityScore !== null && $referenceQualityScore >= self::HIGH_QUALITY_THRESHOLD;
+        $hasSuccessfulHashEvidence = $referenceAttempts->contains(
+            fn (BiodataIntakeOcrAttempt $attempt): bool => $attempt->status === BiodataIntakeOcrAttempt::STATUS_SUCCESS
+                && (
+                    trim((string) ($attempt->normalized_text_hash ?? '')) !== ''
+                    || trim((string) ($attempt->image_hash ?? '')) !== ''
+                    || $attempt->quality_score !== null
+                )
+        );
+        $hasParsedJsonWithStrongOcrEvidence = $referenceHasParsedJson && (
+            $referenceHasPrimaryOcr
+            || $referenceHasSarvam
+            || $qualityHigh
+            || $hasSuccessfulHashEvidence
+        );
+        $hasSafeExistingReuseEvidence = $source === 'reused_transcript_attempt'
+            && $reusedAttempt instanceof BiodataIntakeOcrAttempt
+            && in_array($matchType, [
+                'identity_fingerprint_cache',
+                'historical_paid_transcript',
+                'intake_parse_input_cache',
+                'duplicate_upload_reused_paid_transcript',
+                'duplicate_upload_reused_raw_ocr_text',
+                'reused_transcript',
+            ], true);
+
+        if ($referenceHasReviewedSnapshot) {
+            return array_merge($signals, [
+                'duplicate_reuse_eligible' => true,
+                'duplicate_reuse_trust' => 'trusted',
+                'duplicate_reference_reason' => 'reference_has_reviewed_snapshot',
+            ]);
+        }
+
+        if ($hasParsedJsonWithStrongOcrEvidence) {
+            return array_merge($signals, [
+                'duplicate_reuse_eligible' => true,
+                'duplicate_reuse_trust' => 'trusted',
+                'duplicate_reference_reason' => 'reference_parsed_with_strong_ocr_evidence',
+            ]);
+        }
+
+        if ($qualityHigh) {
+            return array_merge($signals, [
+                'duplicate_reuse_eligible' => true,
+                'duplicate_reuse_trust' => 'trusted',
+                'duplicate_reference_reason' => 'reference_quality_score_high',
+            ]);
+        }
+
+        if ($hasSafeExistingReuseEvidence) {
+            return array_merge($signals, [
+                'duplicate_reuse_eligible' => true,
+                'duplicate_reuse_trust' => 'trusted',
+                'duplicate_reference_reason' => 'safe_existing_reuse_evidence',
+            ]);
+        }
+
+        return array_merge($signals, [
+            'duplicate_reuse_trust' => 'weak',
+            'duplicate_reference_reason' => 'reference_lacks_trusted_evidence',
+        ]);
+    }
+
+    /**
+     * @param  Collection<int, BiodataIntakeOcrAttempt>  $attempts
+     */
+    private function referenceQualityScore(BiodataIntake $reference, Collection $attempts): ?float
+    {
+        $qualitySummary = is_array($reference->quality_summary_json) ? $reference->quality_summary_json : [];
+        $summaryScore = $this->nullableFloat($qualitySummary['score'] ?? null);
+        if ($summaryScore !== null) {
+            return $summaryScore;
+        }
+
+        $attempt = $attempts->first(
+            fn (BiodataIntakeOcrAttempt $attempt): bool => $attempt->quality_score !== null
+        );
+
+        return $this->nullableFloat($attempt?->quality_score);
+    }
+
+    private function referencePointsBackToCurrent(BiodataIntake $reference, int $currentId): bool
+    {
+        $recommendation = is_array($reference->routing_recommendation_json)
+            ? $reference->routing_recommendation_json
+            : [];
+        $signals = is_array($recommendation['signals'] ?? null) ? $recommendation['signals'] : [];
+        $referencePointsTo = $signals['duplicate_reference_intake_id'] ?? null;
+
+        return is_numeric($referencePointsTo) && (int) $referencePointsTo === $currentId;
     }
 
     private function duplicateReferenceFromAttempt(BiodataIntakeOcrAttempt $attempt, int $currentIntakeId): ?int
@@ -305,7 +498,7 @@ class IntakeSmartRoutingAdvisor
 
         $referenceId = (int) $candidate;
 
-        return $referenceId > 0 && $referenceId !== $currentIntakeId ? $referenceId : null;
+        return $referenceId > 0 ? $referenceId : null;
     }
 
     private function reusedAttemptMatchType(BiodataIntakeOcrAttempt $attempt): string
@@ -366,6 +559,39 @@ class IntakeSmartRoutingAdvisor
                 'engine_meta_json',
                 'is_primary',
             ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $signals
+     * @return list<string>
+     */
+    private function noSignalReasonCodes(array $signals): array
+    {
+        $reasonCodes = ['no_signal'];
+        $hasParsedJson = (bool) ($signals['has_parsed_json'] ?? false);
+        $hasRawOcrText = (bool) ($signals['has_raw_ocr_text'] ?? false);
+
+        if (! $hasParsedJson || ! $hasRawOcrText) {
+            return $reasonCodes;
+        }
+
+        if (empty($signals['has_quality_summary']) && ($signals['quality_score'] ?? null) === null) {
+            $reasonCodes[] = 'legacy_intake_missing_quality_signals';
+        }
+
+        if ((int) ($signals['ocr_attempt_count'] ?? 0) === 0) {
+            $reasonCodes[] = 'legacy_intake_missing_ocr_attempts';
+        }
+
+        if (
+            empty($signals['content_hash_present'])
+            && empty($signals['normalized_text_hash_present'])
+            && empty($signals['image_hash_present'])
+        ) {
+            $reasonCodes[] = 'legacy_intake_missing_hashes';
+        }
+
+        return array_values(array_unique($reasonCodes));
     }
 
     /**

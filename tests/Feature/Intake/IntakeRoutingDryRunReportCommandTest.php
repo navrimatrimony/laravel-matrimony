@@ -112,10 +112,18 @@ test('details output includes safe signal summary without raw evidence or provid
             'signals' => [
                 'duplicate_signal_source' => 'content_hash',
                 'duplicate_match_type' => 'exact_content_hash',
+                'duplicate_reuse_eligible' => true,
+                'duplicate_reuse_trust' => 'trusted',
                 'duplicate_reference_intake_id' => 123,
+                'duplicate_reference_reason' => 'reference_has_reviewed_snapshot',
+                'duplicate_reference_quality_score' => 0.91,
+                'duplicate_reference_has_reviewed_snapshot' => true,
+                'duplicate_reference_has_primary_ocr_attempt' => true,
+                'duplicate_reference_has_sarvam_attempt' => false,
                 'matched_hash_type' => 'content_hash',
                 'has_parsed_json' => true,
                 'has_raw_ocr_text' => true,
+                'provider_payload' => 'sk-proj-provider-payload',
                 'quality_score' => 0.82,
                 'ocr_attempt_count' => 2,
                 'primary_ocr_attempt_exists' => true,
@@ -139,14 +147,22 @@ test('details output includes safe signal summary without raw evidence or provid
         ->and($output)->toContain('Details: reuse_previous')
         ->and($output)->toContain('source=content_hash')
         ->and($output)->toContain('match=exact_content_hash')
+        ->and($output)->toContain('eligible=yes')
+        ->and($output)->toContain('trust=trusted')
         ->and($output)->toContain('ref=123')
+        ->and($output)->toContain('ref_reason=reference_has_reviewed_snapshot')
+        ->and($output)->toContain('ref_quality=0.91')
+        ->and($output)->toContain('ref_reviewed=yes')
+        ->and($output)->toContain('ref_primary=yes')
+        ->and($output)->toContain('ref_sarvam=no')
         ->and($output)->toContain('hash=content_hash')
         ->and($output)->toContain('quality=0.82')
         ->and($output)->toContain('cheap=1')
         ->and($output)->toContain('sarvam=0')
         ->and($output)->not->toContain('Sensitive OCR text')
         ->and($output)->not->toContain('9876543210')
-        ->and($output)->not->toContain('sk-proj-secret');
+        ->and($output)->not->toContain('sk-proj-secret')
+        ->and($output)->not->toContain('sk-proj-provider-payload');
 });
 
 test('command does not mutate routing data evidence parse status ocr attempts or profile', function () {
