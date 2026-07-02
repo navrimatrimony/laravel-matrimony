@@ -104,6 +104,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Smart routing policy foundation
+    |--------------------------------------------------------------------------
+    | Phase 4B guardrails only. These defaults must keep live routing disabled.
+    | Runtime code must explicitly opt in before a dry-run recommendation can
+    | become a live action.
+    */
+    'smart_routing' => [
+        'enabled' => filter_var(env('INTAKE_SMART_ROUTING_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'skip_paid_vision_enabled' => filter_var(env('INTAKE_SMART_ROUTING_SKIP_PAID_VISION_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'reuse_previous_enabled' => filter_var(env('INTAKE_SMART_ROUTING_REUSE_PREVIOUS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'min_confidence' => (float) env('INTAKE_SMART_ROUTING_MIN_CONFIDENCE', 0.90),
+        'require_human_reviewed_reference' => filter_var(env('INTAKE_SMART_ROUTING_REQUIRE_HUMAN_REVIEWED_REFERENCE', true), FILTER_VALIDATE_BOOLEAN),
+        'allow_sarvam_skip_actions' => array_values(array_filter(array_map(
+            static fn (string $action): string => trim($action),
+            explode(',', (string) env('INTAKE_SMART_ROUTING_ALLOW_SARVAM_SKIP_ACTIONS', 'reuse_previous'))
+        ), static fn (string $action): bool => $action !== '')),
+        'dry_run_only' => filter_var(env('INTAKE_SMART_ROUTING_DRY_RUN_ONLY', true), FILTER_VALIDATE_BOOLEAN),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Test-only: force ParseIntakeJob paid-vision path (mirrors testing_active_parser)
     |--------------------------------------------------------------------------
     */
