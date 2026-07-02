@@ -55,6 +55,8 @@ class BiodataIntake extends Model
         'quality_summary_json',
         'failure_codes_json',
         'field_confidence_json',
+        'routing_recommendation_json',
+        'routing_telemetry_json',
     ];
 
     protected $casts = [
@@ -65,6 +67,8 @@ class BiodataIntake extends Model
         'quality_summary_json' => 'array',
         'failure_codes_json' => 'array',
         'field_confidence_json' => 'array',
+        'routing_recommendation_json' => 'array',
+        'routing_telemetry_json' => 'array',
         'parsed_at' => 'datetime',
         'approved_at' => 'datetime',
         'reviewed_at' => 'datetime',

@@ -11,6 +11,7 @@ use App\Services\Intake\IntakeOcrAttemptRecorder;
 use App\Services\Intake\IntakeParseInputSelectionTrace;
 use App\Services\Intake\IntakePipelineService;
 use App\Services\Intake\IntakeQualitySignalService;
+use App\Services\Intake\IntakeSmartRoutingAdvisor;
 use App\Services\IntakeManualOcrPreparedService;
 use App\Services\Ocr\OcrQualityEvaluator;
 use App\Services\OcrService;
@@ -193,6 +194,7 @@ class ParseIntakeJob implements ShouldQueue
                         'ok' => false,
                         'reason' => 'no_canonical_transcript_no_raw_ocr',
                     ], now()->addDays(7));
+                    $this->storeRoutingDryRun($intake);
 
                     return;
                 }
@@ -210,6 +212,7 @@ class ParseIntakeJob implements ShouldQueue
                         'ok' => false,
                         'reason' => 'no_raw_ocr_text_non_ai_mode',
                     ], now()->addDays(7));
+                    $this->storeRoutingDryRun($intake);
 
                     return;
                 }
@@ -314,6 +317,7 @@ class ParseIntakeJob implements ShouldQueue
                     'ai_calls_used' => 0,
                 ], $qualitySignalService->intakeSignalAttributes('', null, BiodataIntakeOcrAttempt::FAILURE_EMPTY_TEXT)));
                 Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
+                $this->storeRoutingDryRun($intake);
 
                 return;
             }
@@ -420,6 +424,7 @@ class ParseIntakeJob implements ShouldQueue
                     'ai_calls_used' => $calledPaidExtract ? 1 : 0,
                 ], $qualitySignalService->intakeSignalAttributes($raw, null, $failureCode)));
                 Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
+                $this->storeRoutingDryRun($intake);
 
                 return;
             }
@@ -442,6 +447,7 @@ class ParseIntakeJob implements ShouldQueue
                     'ai_calls_used' => $calledPaidExtract ? 1 : 0,
                 ], $qualitySignalService->intakeSignalAttributes($raw, null, $failureCode)));
                 Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
+                $this->storeRoutingDryRun($intake);
 
                 return;
             }
@@ -568,6 +574,7 @@ class ParseIntakeJob implements ShouldQueue
                 'parser_mode' => $mode,
                 'error' => $lastException?->getMessage(),
             ]);
+            $this->storeRoutingDryRun($intake);
 
             return;
         }
@@ -604,6 +611,7 @@ class ParseIntakeJob implements ShouldQueue
             'parse_duration_ms' => $durationMs,
             'ai_calls_used' => $aiCalls,
         ], $qualitySignalService->intakeSignalAttributes($raw, $ssot, null, $ocrQuality)));
+        $this->storeRoutingDryRun($intake);
 
         Log::info('Intake parsed successfully', [
             'intake_id' => $intake->id,
@@ -624,6 +632,23 @@ class ParseIntakeJob implements ShouldQueue
             Log::info('DOB_TRACE_POST_SAVE', [
                 'intake_id' => $intake->id,
                 'parsed_json_core_date_of_birth' => $savedCore['date_of_birth'] ?? null,
+            ]);
+        }
+    }
+
+    private function storeRoutingDryRun(BiodataIntake $intake): void
+    {
+        try {
+            $fresh = $intake->fresh();
+            if ($fresh === null) {
+                return;
+            }
+
+            app(IntakeSmartRoutingAdvisor::class)->storeForIntake($fresh);
+        } catch (\Throwable $e) {
+            Log::warning('ParseIntakeJob: routing dry-run storage failed', [
+                'intake_id' => $intake->id,
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -796,6 +821,7 @@ class ParseIntakeJob implements ShouldQueue
                 'parse_status' => 'error',
                 'last_error' => mb_substr(trim($e->getMessage()) ?: 'parse_job_failed', 0, 255),
             ]);
+            $this->storeRoutingDryRun($intake);
         }
 
         Log::error('ParseIntakeJob failed', [
