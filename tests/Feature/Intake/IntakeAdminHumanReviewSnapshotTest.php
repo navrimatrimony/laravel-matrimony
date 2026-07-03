@@ -112,6 +112,153 @@ class IntakeAdminHumanReviewSnapshotTest extends TestCase
             ->assertSee('Provider failures');
     }
 
+    public function test_admin_show_page_renders_smart_routing_dry_run_panel_from_stored_json(): void
+    {
+        $admin = User::factory()->create([
+            'is_admin' => true,
+            'admin_role' => 'super_admin',
+        ]);
+        $member = User::factory()->create([
+            'is_admin' => false,
+            'admin_role' => null,
+        ]);
+
+        $routingRecommendation = [
+            'mode' => 'dry_run',
+            'recommended_action' => 'manual_review',
+            'reason_codes' => [
+                'critical_field_parser_proposal_available',
+                'paid_vision_not_required_due_to_parser_proposal',
+            ],
+            'confidence' => 0.82,
+            'would_skip_paid_vision' => false,
+            'would_call_paid_vision' => false,
+            'policy' => [
+                'enabled' => false,
+                'dry_run_only' => true,
+                'allowed_live_action' => null,
+                'blocked_reason' => 'routing_disabled',
+            ],
+            'signals' => [
+                'field_confidence_routing_severity' => 'critical',
+                'low_confidence_critical_fields' => ['primary_contact_number', 'date_of_birth'],
+                'low_confidence_important_fields' => ['highest_education'],
+                'critical_field_parser_proposal_outcome' => 'parser_improvement_candidate',
+                'estimated_paid_vision_avoidable' => true,
+                'missing_critical_fields_resolved_by_proposal' => true,
+                'has_ambiguous_critical_proposal' => false,
+                'critical_field_parser_raw_evidence_absent_fields' => ['full_name'],
+                'raw_ocr_text' => 'SECRET RAW OCR LINE 9876543210',
+                'primary_contact_number' => '9876543210',
+                'candidate_name' => 'Secret Candidate Name',
+                'full_address' => '123 Secret Full Address',
+                'provider_payload' => '{"api_key":"provider-secret-value"}',
+                'content_hash' => 'abcdef1234567890abcdef1234567890',
+            ],
+        ];
+
+        $intake = BiodataIntake::create([
+            'uploaded_by' => $member->id,
+            'raw_ocr_text' => 'Safe OCR placeholder',
+            'intake_status' => 'uploaded',
+            'parse_status' => 'parsed',
+            'parsed_json' => [
+                'core' => [
+                    'date_of_birth' => null,
+                ],
+            ],
+            'quality_summary_json' => [
+                'score' => 0.91,
+            ],
+            'failure_codes_json' => [],
+            'field_confidence_json' => [
+                'primary_contact_number' => [
+                    'score' => 0.2,
+                    'present' => false,
+                    'reason' => 'missing',
+                ],
+            ],
+            'routing_recommendation_json' => $routingRecommendation,
+            'approved_by_user' => false,
+            'intake_locked' => false,
+            'snapshot_schema_version' => 1,
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.biodata-intakes.show', $intake))
+            ->assertOk()
+            ->assertSee('data-testid="routing-dry-run-panel"', false)
+            ->assertSee('Smart Routing Dry Run')
+            ->assertSee('data-testid="routing-recommended-action"', false)
+            ->assertSee('manual_review')
+            ->assertSee('critical_field_parser_proposal_available')
+            ->assertSee('paid_vision_not_required_due_to_parser_proposal')
+            ->assertSee('data-testid="routing-parser-proposal-outcome"', false)
+            ->assertSee('parser_improvement_candidate')
+            ->assertSee('data-testid="routing-paid-vision-avoidable"', false)
+            ->assertSee('data-testid="routing-parser-proposal-resolved"', false)
+            ->assertSee('Review parser proposal')
+            ->assertSee('data-testid="routing-policy-enabled"', false)
+            ->assertSee('data-testid="routing-policy-dry-run-only"', false)
+            ->assertSee('data-testid="routing-policy-blocked-reason"', false)
+            ->assertSee('routing_disabled')
+            ->assertSee('data-testid="routing-field-confidence-severity"', false)
+            ->assertSee('critical')
+            ->assertSee('primary_contact_number')
+            ->assertSee('highest_education')
+            ->assertSee('full_name');
+
+        $response
+            ->assertDontSee('SECRET RAW OCR LINE')
+            ->assertDontSee('9876543210')
+            ->assertDontSee('Secret Candidate Name')
+            ->assertDontSee('123 Secret Full Address')
+            ->assertDontSee('provider-secret-value')
+            ->assertDontSee('abcdef1234567890abcdef1234567890');
+
+        $intake->refresh();
+
+        $this->assertSame($routingRecommendation, $intake->routing_recommendation_json);
+        $this->assertSame('Safe OCR placeholder', $intake->raw_ocr_text);
+        $this->assertSame('parsed', $intake->parse_status);
+        $this->assertSame(0, BiodataIntakeOcrAttempt::query()->where('intake_id', $intake->id)->count());
+    }
+
+    public function test_admin_show_page_still_works_when_routing_json_is_missing(): void
+    {
+        $admin = User::factory()->create([
+            'is_admin' => true,
+            'admin_role' => 'super_admin',
+        ]);
+        $member = User::factory()->create([
+            'is_admin' => false,
+            'admin_role' => null,
+        ]);
+
+        $intake = BiodataIntake::create([
+            'uploaded_by' => $member->id,
+            'raw_ocr_text' => '',
+            'intake_status' => 'uploaded',
+            'parse_status' => 'parsed',
+            'parsed_json' => [
+                'core' => [
+                    'full_name' => 'Parsed Candidate',
+                ],
+            ],
+            'routing_recommendation_json' => null,
+            'approved_by_user' => false,
+            'intake_locked' => false,
+            'snapshot_schema_version' => 1,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.biodata-intakes.show', $intake))
+            ->assertOk()
+            ->assertSee('data-testid="routing-dry-run-panel"', false)
+            ->assertSee('data-testid="routing-dry-run-empty"', false)
+            ->assertSee('No stored smart routing dry-run recommendation.');
+    }
+
     public function test_admin_can_save_reviewed_snapshot_without_mutating_profile_or_evidence(): void
     {
         $admin = User::factory()->create([

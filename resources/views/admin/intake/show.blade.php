@@ -38,8 +38,11 @@
     $fieldConfidenceByKey = is_array($adminQualitySignals['field_confidence_by_key'] ?? null) ? $adminQualitySignals['field_confidence_by_key'] : [];
     $fieldConfidenceByPath = is_array($adminQualitySignals['field_confidence_by_path'] ?? null) ? $adminQualitySignals['field_confidence_by_path'] : [];
     $lowConfidenceFields = is_array($adminQualitySignals['low_confidence_fields'] ?? null) ? $adminQualitySignals['low_confidence_fields'] : [];
-    $adminRoutingDryRun = is_array($adminRoutingDryRun ?? null) ? $adminRoutingDryRun : ['has_any' => false, 'recommendation' => [], 'signals' => [], 'telemetry' => []];
+    $adminRoutingDryRun = is_array($adminRoutingDryRun ?? null) ? $adminRoutingDryRun : ['has_any' => false, 'recommendation' => [], 'policy' => [], 'field_confidence' => [], 'parser_proposal' => [], 'safe_admin_next_action' => 'Duplicate/manual review candidate', 'signals' => [], 'telemetry' => []];
     $routingRecommendation = is_array($adminRoutingDryRun['recommendation'] ?? null) ? $adminRoutingDryRun['recommendation'] : [];
+    $routingPolicy = is_array($adminRoutingDryRun['policy'] ?? null) ? $adminRoutingDryRun['policy'] : [];
+    $routingFieldConfidence = is_array($adminRoutingDryRun['field_confidence'] ?? null) ? $adminRoutingDryRun['field_confidence'] : [];
+    $routingParserProposal = is_array($adminRoutingDryRun['parser_proposal'] ?? null) ? $adminRoutingDryRun['parser_proposal'] : [];
     $routingSignals = is_array($adminRoutingDryRun['signals'] ?? null) ? $adminRoutingDryRun['signals'] : [];
     $routingTelemetry = is_array($adminRoutingDryRun['telemetry'] ?? null) ? $adminRoutingDryRun['telemetry'] : [];
     $routingDisplay = static function ($value): string {
@@ -54,6 +57,18 @@
         }
 
         return trim((string) $value) !== '' ? (string) $value : '—';
+    };
+    $routingListDisplay = static function ($items): string {
+        if (! is_array($items) || $items === []) {
+            return '—';
+        }
+
+        $items = array_values(array_filter(array_map(
+            static fn ($item): string => is_scalar($item) ? trim((string) $item) : '',
+            $items
+        ), static fn (string $item): bool => $item !== ''));
+
+        return $items === [] ? '—' : implode(', ', $items);
     };
 @endphp
 
@@ -215,30 +230,33 @@
                 </div>
             @endif
 
-            @if (! empty($adminRoutingDryRun['has_any']))
-                @php
-                    $routingConfidence = is_numeric($routingRecommendation['confidence'] ?? null) ? (float) $routingRecommendation['confidence'] : null;
-                    $routingConfidenceLabel = $routingConfidence !== null ? number_format($routingConfidence, 2).' ('.((int) round($routingConfidence * 100)).'%)' : '—';
-                    $routingReasonCodes = is_array($routingRecommendation['reason_codes'] ?? null) ? $routingRecommendation['reason_codes'] : [];
-                    $routingTelemetryRows = [
-                        'sarvam_attempt_count' => 'Sarvam attempts',
-                        'cheap_ocr_attempt_count' => 'Cheap OCR attempts',
-                        'failed_provider_count' => 'Provider failures',
-                        'reuse_candidate_found' => 'Reuse candidate',
-                        'last_provider_failure_code' => 'Last provider failure',
-                        'last_quality_score' => 'Last quality score',
-                        'last_layout_score' => 'Last layout score',
-                        'duration_ms' => 'Duration ms',
-                        'cost_units' => 'Cost units',
-                    ];
-                @endphp
-                <div data-testid="routing-dry-run-panel" class="routing-dry-run-panel mb-4 rounded-lg border border-sky-200 bg-sky-50/60 p-3 text-xs text-sky-950">
-                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-                        <h3 class="text-sm font-semibold text-sky-950">Routing dry run</h3>
-                        <span class="inline-flex px-2 py-0.5 rounded-full border border-sky-200 bg-white text-sky-800 font-semibold">Read only</span>
-                    </div>
+            @php
+                $routingHasAny = ! empty($adminRoutingDryRun['has_any']);
+                $routingConfidence = is_numeric($routingRecommendation['confidence'] ?? null) ? (float) $routingRecommendation['confidence'] : null;
+                $routingConfidenceLabel = $routingConfidence !== null ? number_format($routingConfidence, 2).' ('.((int) round($routingConfidence * 100)).'%)' : '—';
+                $routingReasonCodes = is_array($routingRecommendation['reason_codes'] ?? null) ? $routingRecommendation['reason_codes'] : [];
+                $routingTelemetryRows = [
+                    'sarvam_attempt_count' => 'Sarvam attempts',
+                    'cheap_ocr_attempt_count' => 'Cheap OCR attempts',
+                    'failed_provider_count' => 'Provider failures',
+                    'reuse_candidate_found' => 'Reuse candidate',
+                    'last_provider_failure_code' => 'Last provider failure',
+                    'last_quality_score' => 'Last quality score',
+                    'last_layout_score' => 'Last layout score',
+                    'duration_ms' => 'Duration ms',
+                    'cost_units' => 'Cost units',
+                ];
+            @endphp
+            <div data-testid="routing-dry-run-panel" class="routing-dry-run-panel mb-4 rounded-lg border border-sky-200 bg-sky-50/60 p-3 text-xs text-sky-950">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <h3 class="text-sm font-semibold text-sky-950">Smart Routing Dry Run</h3>
+                    <span class="inline-flex px-2 py-0.5 rounded-full border border-sky-200 bg-white text-sky-800 font-semibold">Read only</span>
+                </div>
 
-                    <dl class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                @if (! $routingHasAny)
+                    <p data-testid="routing-dry-run-empty" class="text-sm text-sky-900">No stored smart routing dry-run recommendation.</p>
+                @else
+                    <dl class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
                         <div>
                             <dt class="{{ $label }} text-sky-800">Recommended action</dt>
                             <dd data-testid="routing-recommended-action" class="routing-recommended-action mt-1 text-sm font-semibold text-sky-950">{{ $routingRecommendation['recommended_action'] ?? '—' }}</dd>
@@ -256,6 +274,10 @@
                             <dd data-testid="routing-would-call-paid-vision" class="mt-1 text-sm font-semibold text-sky-950">{{ $routingDisplay($routingRecommendation['would_call_paid_vision'] ?? null) }}</dd>
                         </div>
                         <div>
+                            <dt class="{{ $label }} text-sky-800">Safe admin next action</dt>
+                            <dd data-testid="routing-safe-admin-next-action" class="mt-1 text-sm font-semibold text-sky-950">{{ $adminRoutingDryRun['safe_admin_next_action'] ?? 'Duplicate/manual review candidate' }}</dd>
+                        </div>
+                        <div>
                             <dt class="{{ $label }} text-sky-800">Reason codes</dt>
                             <dd data-testid="routing-reason-codes" class="routing-reason-codes mt-1 flex flex-wrap gap-1">
                                 @if ($routingReasonCodes !== [])
@@ -268,6 +290,72 @@
                             </dd>
                         </div>
                     </dl>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3 pt-3 border-t border-sky-200/80">
+                        <div>
+                            <div class="{{ $label }} text-sky-800 mb-1">Policy status</div>
+                            <dl class="grid grid-cols-1 gap-y-1">
+                                <div class="flex items-baseline justify-between gap-2 rounded bg-white/70 px-2 py-1">
+                                    <dt class="text-sky-800">Policy enabled</dt>
+                                    <dd data-testid="routing-policy-enabled" class="font-semibold text-sky-950">{{ $routingDisplay($routingPolicy['policy_enabled'] ?? null) }}</dd>
+                                </div>
+                                <div class="flex items-baseline justify-between gap-2 rounded bg-white/70 px-2 py-1">
+                                    <dt class="text-sky-800">Dry run only</dt>
+                                    <dd data-testid="routing-policy-dry-run-only" class="font-semibold text-sky-950">{{ $routingDisplay($routingPolicy['dry_run_only'] ?? null) }}</dd>
+                                </div>
+                                <div class="flex items-baseline justify-between gap-2 rounded bg-white/70 px-2 py-1">
+                                    <dt class="text-sky-800">Allowed live action</dt>
+                                    <dd data-testid="routing-policy-allowed-live-action" class="font-semibold text-sky-950">{{ $routingDisplay($routingPolicy['allowed_live_action'] ?? null) }}</dd>
+                                </div>
+                                <div class="flex items-baseline justify-between gap-2 rounded bg-white/70 px-2 py-1">
+                                    <dt class="text-sky-800">Blocked reason</dt>
+                                    <dd data-testid="routing-policy-blocked-reason" class="font-semibold text-sky-950">{{ $routingDisplay($routingPolicy['blocked_reason'] ?? null) }}</dd>
+                                </div>
+                            </dl>
+                        </div>
+                        <div>
+                            <div class="{{ $label }} text-sky-800 mb-1">Field confidence</div>
+                            <dl class="grid grid-cols-1 gap-y-1">
+                                <div class="flex items-baseline justify-between gap-2 rounded bg-white/70 px-2 py-1">
+                                    <dt class="text-sky-800">Severity</dt>
+                                    <dd data-testid="routing-field-confidence-severity" class="font-semibold text-sky-950">{{ $routingDisplay($routingFieldConfidence['severity'] ?? null) }}</dd>
+                                </div>
+                                <div class="flex items-baseline justify-between gap-2 rounded bg-white/70 px-2 py-1">
+                                    <dt class="text-sky-800">Critical low fields</dt>
+                                    <dd data-testid="routing-critical-low-fields" class="font-semibold text-sky-950 text-right">{{ $routingListDisplay($routingFieldConfidence['critical_low_fields'] ?? []) }}</dd>
+                                </div>
+                                <div class="flex items-baseline justify-between gap-2 rounded bg-white/70 px-2 py-1">
+                                    <dt class="text-sky-800">Important low fields</dt>
+                                    <dd data-testid="routing-important-low-fields" class="font-semibold text-sky-950 text-right">{{ $routingListDisplay($routingFieldConfidence['important_low_fields'] ?? []) }}</dd>
+                                </div>
+                            </dl>
+                        </div>
+                        <div>
+                            <div class="{{ $label }} text-sky-800 mb-1">Parser proposal</div>
+                            <dl class="grid grid-cols-1 gap-y-1">
+                                <div class="flex items-baseline justify-between gap-2 rounded bg-white/70 px-2 py-1">
+                                    <dt class="text-sky-800">Outcome</dt>
+                                    <dd data-testid="routing-parser-proposal-outcome" class="font-semibold text-sky-950">{{ $routingDisplay($routingParserProposal['outcome'] ?? null) }}</dd>
+                                </div>
+                                <div class="flex items-baseline justify-between gap-2 rounded bg-white/70 px-2 py-1">
+                                    <dt class="text-sky-800">Estimated paid vision avoidable</dt>
+                                    <dd data-testid="routing-paid-vision-avoidable" class="font-semibold text-sky-950">{{ $routingDisplay($routingParserProposal['estimated_paid_vision_avoidable'] ?? null) }}</dd>
+                                </div>
+                                <div class="flex items-baseline justify-between gap-2 rounded bg-white/70 px-2 py-1">
+                                    <dt class="text-sky-800">Resolved by parser proposal</dt>
+                                    <dd data-testid="routing-parser-proposal-resolved" class="font-semibold text-sky-950">{{ $routingDisplay($routingParserProposal['resolved_by_parser_proposal'] ?? null) }}</dd>
+                                </div>
+                                <div class="flex items-baseline justify-between gap-2 rounded bg-white/70 px-2 py-1">
+                                    <dt class="text-sky-800">Ambiguous proposal</dt>
+                                    <dd data-testid="routing-parser-proposal-ambiguous" class="font-semibold text-sky-950">{{ $routingDisplay($routingParserProposal['ambiguous_proposal'] ?? null) }}</dd>
+                                </div>
+                                <div class="flex items-baseline justify-between gap-2 rounded bg-white/70 px-2 py-1">
+                                    <dt class="text-sky-800">Raw evidence absent fields</dt>
+                                    <dd data-testid="routing-raw-evidence-absent-fields" class="font-semibold text-sky-950 text-right">{{ $routingListDisplay($routingParserProposal['raw_evidence_absent_fields'] ?? []) }}</dd>
+                                </div>
+                            </dl>
+                        </div>
+                    </div>
 
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3 pt-3 border-t border-sky-200/80">
                         <div>
@@ -299,8 +387,8 @@
                             @endif
                         </div>
                     </div>
-                </div>
-            @endif
+                @endif
+            </div>
 
             @if (! empty($adminReviewEditor['available']) && $adminReviewSections !== [])
                 <form method="POST" action="{{ route('admin.biodata-intakes.review-snapshot.update', $intake) }}" class="space-y-4">

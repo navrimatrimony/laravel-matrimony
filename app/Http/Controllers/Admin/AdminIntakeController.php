@@ -926,6 +926,10 @@ class AdminIntakeController extends Controller
      *         would_skip_paid_vision: ?bool,
      *         would_call_paid_vision: ?bool
      *     },
+     *     policy: array{policy_enabled: ?bool, dry_run_only: ?bool, allowed_live_action: ?string, blocked_reason: ?string},
+     *     field_confidence: array{severity: ?string, critical_low_fields: list<string>, important_low_fields: list<string>, optional_low_fields: list<string>},
+     *     parser_proposal: array{outcome: ?string, estimated_paid_vision_avoidable: ?bool, resolved_by_parser_proposal: ?bool, ambiguous_proposal: ?bool, raw_evidence_absent_fields: list<string>},
+     *     safe_admin_next_action: string,
      *     signals: list<array{key: string, label: string, value: string}>,
      *     telemetry: array<string, bool|float|int|string|null>
      * }
@@ -935,16 +939,35 @@ class AdminIntakeController extends Controller
         $recommendation = is_array($intake->routing_recommendation_json) ? $intake->routing_recommendation_json : [];
         $telemetry = is_array($intake->routing_telemetry_json) ? $intake->routing_telemetry_json : [];
         $signals = is_array($recommendation['signals'] ?? null) ? $recommendation['signals'] : [];
+        $reasonCodes = $this->adminRoutingDryRunStringList($recommendation['reason_codes'] ?? []);
 
         return [
             'has_any' => $recommendation !== [] || $telemetry !== [],
             'recommendation' => [
                 'recommended_action' => $this->adminRoutingDryRunString($recommendation['recommended_action'] ?? null),
-                'reason_codes' => $this->adminRoutingDryRunStringList($recommendation['reason_codes'] ?? []),
+                'reason_codes' => $reasonCodes,
                 'confidence' => $this->adminRoutingDryRunFloat($recommendation['confidence'] ?? null),
                 'would_skip_paid_vision' => $this->adminRoutingDryRunBool($recommendation['would_skip_paid_vision'] ?? null),
                 'would_call_paid_vision' => $this->adminRoutingDryRunBool($recommendation['would_call_paid_vision'] ?? null),
             ],
+            'policy' => $this->adminRoutingDryRunPolicySummary($recommendation),
+            'field_confidence' => [
+                'severity' => $this->adminRoutingDryRunString($signals['field_confidence_routing_severity'] ?? null) ?? 'none',
+                'critical_low_fields' => $this->adminRoutingDryRunStringList($signals['low_confidence_critical_fields'] ?? []),
+                'important_low_fields' => $this->adminRoutingDryRunStringList($signals['low_confidence_important_fields'] ?? []),
+                'optional_low_fields' => $this->adminRoutingDryRunStringList($signals['low_confidence_optional_fields'] ?? []),
+            ],
+            'parser_proposal' => [
+                'outcome' => $this->adminRoutingDryRunString($signals['critical_field_parser_proposal_outcome'] ?? null),
+                'estimated_paid_vision_avoidable' => $this->adminRoutingDryRunBool($signals['estimated_paid_vision_avoidable'] ?? null),
+                'resolved_by_parser_proposal' => $this->adminRoutingDryRunBoolFromKeys($signals, [
+                    'missing_critical_fields_resolved_by_proposal',
+                    'all_missing_critical_fields_have_safe_proposal',
+                ]),
+                'ambiguous_proposal' => $this->adminRoutingDryRunBool($signals['has_ambiguous_critical_proposal'] ?? null),
+                'raw_evidence_absent_fields' => $this->adminRoutingDryRunStringList($signals['critical_field_parser_raw_evidence_absent_fields'] ?? []),
+            ],
+            'safe_admin_next_action' => $this->adminRoutingDryRunSafeAdminNextAction($recommendation, $signals, $reasonCodes),
             'signals' => $this->adminRoutingDryRunSignalRows($signals),
             'telemetry' => [
                 'sarvam_attempt_count' => $this->adminRoutingDryRunInt($telemetry['sarvam_attempt_count'] ?? null),
@@ -973,6 +996,14 @@ class AdminIntakeController extends Controller
             'layout_score' => 'Layout score',
             'failure_codes' => 'Failure codes',
             'low_confidence_fields' => 'Low-confidence fields',
+            'field_confidence_routing_severity' => 'Field confidence severity',
+            'low_confidence_critical_fields' => 'Critical low fields',
+            'low_confidence_important_fields' => 'Important low fields',
+            'critical_field_parser_proposal_outcome' => 'Parser proposal outcome',
+            'estimated_paid_vision_avoidable' => 'Paid vision avoidable',
+            'missing_critical_fields_resolved_by_proposal' => 'Resolved by parser proposal',
+            'has_ambiguous_critical_proposal' => 'Ambiguous proposal',
+            'critical_field_parser_raw_evidence_absent_fields' => 'Raw evidence absent fields',
             'cheap_ocr_attempt_count' => 'Cheap OCR attempts',
             'sarvam_attempt_count' => 'Sarvam attempts',
             'failed_provider_count' => 'Provider failures',
@@ -1000,6 +1031,89 @@ class AdminIntakeController extends Controller
         return $rows;
     }
 
+    /**
+     * @param  array<string, mixed>  $recommendation
+     * @return array{policy_enabled: ?bool, dry_run_only: ?bool, allowed_live_action: ?string, blocked_reason: ?string}
+     */
+    private function adminRoutingDryRunPolicySummary(array $recommendation): array
+    {
+        $policy = $this->adminRoutingDryRunPolicyArray($recommendation);
+
+        return [
+            'policy_enabled' => array_key_exists('enabled', $policy)
+                ? $this->adminRoutingDryRunBool($policy['enabled'])
+                : null,
+            'dry_run_only' => array_key_exists('dry_run_only', $policy)
+                ? $this->adminRoutingDryRunBool($policy['dry_run_only'])
+                : null,
+            'allowed_live_action' => $this->adminRoutingDryRunString($policy['allowed_live_action'] ?? null) ?? 'none',
+            'blocked_reason' => $this->adminRoutingDryRunString($policy['blocked_reason'] ?? null) ?? 'none',
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $recommendation
+     * @return array<string, mixed>
+     */
+    private function adminRoutingDryRunPolicyArray(array $recommendation): array
+    {
+        foreach (['policy', 'policy_evaluation', 'policy_summary'] as $key) {
+            if (is_array($recommendation[$key] ?? null)) {
+                return $recommendation[$key];
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $source
+     * @param  list<string>  $keys
+     */
+    private function adminRoutingDryRunBoolFromKeys(array $source, array $keys): ?bool
+    {
+        foreach ($keys as $key) {
+            if (array_key_exists($key, $source)) {
+                return $this->adminRoutingDryRunBool($source[$key]);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $recommendation
+     * @param  array<string, mixed>  $signals
+     * @param  list<string>  $reasonCodes
+     */
+    private function adminRoutingDryRunSafeAdminNextAction(array $recommendation, array $signals, array $reasonCodes): string
+    {
+        $recommendedAction = $this->adminRoutingDryRunString($recommendation['recommended_action'] ?? null) ?? '';
+        $parserOutcome = $this->adminRoutingDryRunString($signals['critical_field_parser_proposal_outcome'] ?? null) ?? '';
+        $rawEvidenceAbsentFields = $this->adminRoutingDryRunStringList($signals['critical_field_parser_raw_evidence_absent_fields'] ?? []);
+        $hasAmbiguousProposal = $this->adminRoutingDryRunBool($signals['has_ambiguous_critical_proposal'] ?? null) === true
+            || in_array('critical_field_parser_proposal_ambiguous', $reasonCodes, true);
+        $estimatedAvoidable = $this->adminRoutingDryRunBool($signals['estimated_paid_vision_avoidable'] ?? null) === true;
+        $resolvedByParserProposal = $this->adminRoutingDryRunBoolFromKeys($signals, [
+            'missing_critical_fields_resolved_by_proposal',
+            'all_missing_critical_fields_have_safe_proposal',
+        ]) === true;
+
+        if ($hasAmbiguousProposal) {
+            return 'Manual verify ambiguous value';
+        }
+
+        if ($parserOutcome === 'parser_improvement_candidate' || $estimatedAvoidable || $resolvedByParserProposal) {
+            return 'Review parser proposal';
+        }
+
+        if ($recommendedAction === 'call_sarvam' || $parserOutcome === 'provider_candidate' || $rawEvidenceAbsentFields !== []) {
+            return 'Provider/Sarvam candidate';
+        }
+
+        return 'Duplicate/manual review candidate';
+    }
+
     private function adminRoutingDryRunDisplayValue(mixed $value): string
     {
         if (is_array($value)) {
@@ -1017,14 +1131,14 @@ class AdminIntakeController extends Controller
             return (string) $value;
         }
 
-        $string = trim((string) $value);
+        $string = $this->adminRoutingDryRunSafeString($value);
 
         return $string !== '' ? $string : '—';
     }
 
     private function adminRoutingDryRunString(mixed $value): ?string
     {
-        $string = trim((string) $value);
+        $string = $this->adminRoutingDryRunSafeString($value);
 
         return $string !== '' ? $string : null;
     }
@@ -1039,9 +1153,27 @@ class AdminIntakeController extends Controller
         }
 
         return array_values(array_filter(array_map(
-            static fn (mixed $item): string => is_scalar($item) ? trim((string) $item) : '',
+            fn (mixed $item): string => $this->adminRoutingDryRunSafeString($item),
             $value
         ), static fn (string $item): bool => $item !== ''));
+    }
+
+    private function adminRoutingDryRunSafeString(mixed $value): string
+    {
+        if (! is_scalar($value)) {
+            return '';
+        }
+
+        $string = trim((string) $value);
+        if ($string === '') {
+            return '';
+        }
+
+        $string = preg_replace('/sk-[A-Za-z0-9_-]+/i', '[redacted-secret]', $string) ?? $string;
+        $string = preg_replace('/\b[A-Fa-f0-9]{32,}\b/', '[redacted-hash]', $string) ?? $string;
+        $string = preg_replace('/(?<!\d)\+?\d[\d\s().-]{7,}\d(?!\d)/', '[redacted-number]', $string) ?? $string;
+
+        return Str::limit($string, 80, '...');
     }
 
     private function adminRoutingDryRunBool(mixed $value): ?bool
