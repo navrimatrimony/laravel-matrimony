@@ -198,6 +198,28 @@ class MobileOnboardingPhase3ApiTest extends TestCase
         ]);
     }
 
+    public function test_location_lookup_supports_hierarchy_filter_types_without_search_text(): void
+    {
+        Sanctum::actingAs($this->verifiedAccount());
+        $leaf = $this->locationLeaf(true);
+        $nodes = [
+            'country' => $this->ancestor($leaf, 'country'),
+            'state' => $this->ancestor($leaf, 'state'),
+            'district' => $this->ancestor($leaf, 'district'),
+            'taluka' => $this->ancestor($leaf, 'taluka'),
+        ];
+
+        foreach ($nodes as $type => $node) {
+            $response = $this->getJson('/api/v1/onboarding/lookups/locations?type='.$type.'&limit=50')
+                ->assertOk();
+
+            $row = collect($response->json('results'))->firstWhere('id', $node->id);
+            $this->assertNotNull($row, 'Expected '.$type.' row in location lookup results.');
+            $this->assertSame($type, $row['type']);
+            $this->assertFalse((bool) $row['is_final_node']);
+        }
+    }
+
     public function test_education_and_occupation_lookups_return_backend_categories_and_suggestions_are_pending(): void
     {
         $user = $this->verifiedAccount();

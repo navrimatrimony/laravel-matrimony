@@ -3269,6 +3269,94 @@ test('MobileProfile feed tabs use backend matching feeds', function () {
     }
 });
 
+test('MobileProfile list filters by canonical religion and caste ids without legacy caste text', function () {
+    [$religion, $caste, $subCaste] = mobileApiProfileTestCommunity();
+    $otherCaste = Caste::create([
+        'religion_id' => $religion->id,
+        'key' => 'other-'.strtolower(Str::random(8)),
+        'label' => 'Other Caste',
+        'is_active' => true,
+    ]);
+    $otherSubCaste = SubCaste::create([
+        'caste_id' => $otherCaste->id,
+        'key' => 'other-sub-'.strtolower(Str::random(8)),
+        'label' => 'Other Sub',
+        'status' => 'approved',
+        'is_active' => true,
+    ]);
+
+    $viewerUser = User::factory()->create(['name' => 'Canonical Community Viewer']);
+    mobileApiCreateValidActionProfile($viewerUser, 'Canonical Community Viewer', 'male');
+    $targetUser = User::factory()->create(['name' => 'Canonical Maratha Target']);
+    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Canonical Maratha Target', 'female', null, [
+        'religion_id' => $religion->id,
+        'caste_id' => $caste->id,
+        'sub_caste_id' => $subCaste->id,
+    ]);
+    $otherUser = User::factory()->create(['name' => 'Canonical Other Target']);
+    $otherProfile = mobileApiCreateValidActionProfile($otherUser, 'Canonical Other Target', 'female', null, [
+        'religion_id' => $religion->id,
+        'caste_id' => $otherCaste->id,
+        'sub_caste_id' => $otherSubCaste->id,
+    ]);
+
+    if (Schema::hasColumn('matrimony_profiles', 'caste')) {
+        $targetProfile->forceFill(['caste' => null])->saveQuietly();
+        $otherProfile->forceFill(['caste' => null])->saveQuietly();
+    }
+
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles?feed=new&religion_id='.$religion->id.'&caste_id='.$caste->id.'&caste=Maratha');
+
+    $response->assertOk();
+    $ids = collect($response->json('profiles'))->pluck('id')->all();
+    expect($ids)->toContain($targetProfile->id)
+        ->and($ids)->not->toContain($otherProfile->id);
+});
+
+test('MobileProfile list applies advanced search filters backed by stored profile fields', function () {
+    $occupation = mobileApiProfileTestOccupationMaster('Product Designer', 110);
+    $education = mobileApiProfileTestEducationDegree('B.Des.', 110);
+    $maritalStatusId = mobileApiProfileTestKnownMaritalStatus('never_married', 'Never Married');
+
+    $viewerUser = User::factory()->create(['name' => 'Advanced Filter Viewer']);
+    mobileApiCreateValidActionProfile($viewerUser, 'Advanced Filter Viewer', 'male');
+    $targetUser = User::factory()->create([
+        'name' => 'Advanced Filter Target',
+        'mobile_verified_at' => now(),
+        'last_seen_at' => now()->subDays(2),
+    ]);
+    $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Advanced Filter Target', 'female', null, [
+        'height_cm' => 165,
+        'highest_education' => $education->code,
+        'occupation_master_id' => $occupation->id,
+        'marital_status_id' => $maritalStatusId,
+    ]);
+    mobileApiAttachProfilePhoto($targetProfile);
+
+    $noPhotoUser = User::factory()->create([
+        'name' => 'Advanced Filter No Photo',
+        'mobile_verified_at' => now(),
+        'last_seen_at' => now()->subDays(2),
+    ]);
+    $noPhotoProfile = mobileApiCreateValidActionProfile($noPhotoUser, 'Advanced Filter No Photo', 'female', null, [
+        'height_cm' => 165,
+        'highest_education' => $education->code,
+        'occupation_master_id' => $occupation->id,
+        'marital_status_id' => $maritalStatusId,
+    ]);
+
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles?feed=new&height_from_cm=160&height_to_cm=170&education_id='.$education->id.'&occupation_id='.$occupation->id.'&marital_status_id='.$maritalStatusId.'&photo_available=1&verified_photo=1&recently_active=1');
+
+    $response->assertOk();
+    $ids = collect($response->json('profiles'))->pluck('id')->all();
+    expect($ids)->toContain($targetProfile->id)
+        ->and($ids)->not->toContain($noPhotoProfile->id);
+});
+
 test('MobileProfile GET api v1 matrimony profiles shows only opposite gender member profiles', function () {
     $viewerUser = User::factory()->create(['name' => 'Gender Rule Viewer']);
     $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Gender Rule Viewer', 'male');

@@ -2104,9 +2104,17 @@ class MatrimonyProfileApiController extends Controller
      */
     private function applyMobileListFilters(Builder $query, Request $request): void
     {
+        $table = $query->getModel()->getTable();
+
         // Soft deletes are automatically excluded by Laravel's SoftDeletes trait.
-        if ($request->filled('caste')) {
-            $query->where('caste', $request->caste);
+        if ($request->filled('religion_id') && Schema::hasColumn($table, 'religion_id')) {
+            $query->where($table.'.religion_id', (int) $request->integer('religion_id'));
+        }
+
+        if ($request->filled('caste_id') && Schema::hasColumn($table, 'caste_id')) {
+            $query->where($table.'.caste_id', (int) $request->integer('caste_id'));
+        } elseif ($request->filled('caste')) {
+            $this->applyLegacyCasteFilter($query, $table, (string) $request->query('caste'));
         }
 
         // Residence geo: filter by ancestor {@code addresses.id} (canonical leaf is {@see location_id}).
@@ -2126,6 +2134,39 @@ class MatrimonyProfileApiController extends Controller
             $query->where('location_id', $request->location_id);
         }
 
+        if ($request->filled('height_from_cm') && Schema::hasColumn($table, 'height_cm')) {
+            $query->whereNotNull($table.'.height_cm')
+                ->where($table.'.height_cm', '>=', (int) $request->integer('height_from_cm'));
+        }
+        if ($request->filled('height_to_cm') && Schema::hasColumn($table, 'height_cm')) {
+            $query->whereNotNull($table.'.height_cm')
+                ->where($table.'.height_cm', '<=', (int) $request->integer('height_to_cm'));
+        }
+
+        if ($request->boolean('photo_available')) {
+            $this->applyPhotoAvailableFilter($query, $table);
+        }
+
+        if ($request->boolean('verified_photo')) {
+            $this->applyVerifiedProfileFilter($query, $table);
+        }
+
+        if ($request->boolean('recently_active')) {
+            $this->applyRecentlyActiveFilter($query);
+        }
+
+        if ($request->filled('education_id')) {
+            $this->applyEducationFilter($query, $table, (int) $request->integer('education_id'));
+        }
+
+        if ($request->filled('occupation_id') && Schema::hasColumn($table, 'occupation_master_id')) {
+            $query->where($table.'.occupation_master_id', (int) $request->integer('occupation_id'));
+        }
+
+        if ($request->filled('marital_status_id') && Schema::hasColumn($table, 'marital_status_id')) {
+            $query->where($table.'.marital_status_id', (int) $request->integer('marital_status_id'));
+        }
+
         // Age filter (from date_of_birth).
         if ($request->filled('age_from') || $request->filled('age_to')) {
             $query->whereNotNull('date_of_birth');
@@ -2140,6 +2181,174 @@ class MatrimonyProfileApiController extends Controller
                 $query->whereDate('date_of_birth', '>=', $maxDate);
             }
         }
+    }
+
+    /**
+     * @param  Builder<MatrimonyProfile>  $query
+     */
+    private function applyLegacyCasteFilter(Builder $query, string $table, string $rawCaste): void
+    {
+        $caste = trim($rawCaste);
+        if ($caste === '') {
+            return;
+        }
+
+        $casteIds = [];
+        if (Schema::hasTable('master_castes')) {
+            $casteIds = Caste::query()
+                ->where(function (Builder $builder) use ($caste): void {
+                    $builder->where('label', $caste)
+                        ->orWhere('key', $caste);
+
+                    foreach (['label_en', 'label_mr'] as $column) {
+                        if (Schema::hasColumn('master_castes', $column)) {
+                            $builder->orWhere($column, $caste);
+                        }
+                    }
+                })
+                ->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+        }
+
+        $query->where(function (Builder $builder) use ($table, $caste, $casteIds): void {
+            $hasCondition = false;
+
+            if (Schema::hasColumn($table, 'caste')) {
+                $builder->where($table.'.caste', $caste);
+                $hasCondition = true;
+            }
+
+            if ($casteIds !== [] && Schema::hasColumn($table, 'caste_id')) {
+                $method = $hasCondition ? 'orWhereIn' : 'whereIn';
+                $builder->{$method}($table.'.caste_id', $casteIds);
+                $hasCondition = true;
+            }
+
+            if (! $hasCondition) {
+                $builder->whereRaw('1 = 0');
+            }
+        });
+    }
+
+    /**
+     * @param  Builder<MatrimonyProfile>  $query
+     */
+    private function applyPhotoAvailableFilter(Builder $query, string $table): void
+    {
+        if (Schema::hasTable('profile_photos')) {
+            $query->whereHas('photos', fn (Builder $photoQuery): Builder => $photoQuery->effectivelyApproved());
+
+            return;
+        }
+
+        if (Schema::hasColumn($table, 'profile_photo')) {
+            $query->whereNotNull($table.'.profile_photo')
+                ->where($table.'.profile_photo', '!=', '');
+        }
+        if (Schema::hasColumn($table, 'photo_approved')) {
+            $query->where($table.'.photo_approved', true);
+        }
+    }
+
+    /**
+     * @param  Builder<MatrimonyProfile>  $query
+     */
+    private function applyVerifiedProfileFilter(Builder $query, string $table): void
+    {
+        $hasUserVerificationColumn = Schema::hasColumn('users', 'mobile_verified_at') || Schema::hasColumn('users', 'email_verified_at');
+        $hasProfileVerificationTag = Schema::hasTable('profile_verification_tag');
+        if (! $hasUserVerificationColumn && ! $hasProfileVerificationTag) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $query->where(function (Builder $builder) use ($table, $hasUserVerificationColumn, $hasProfileVerificationTag): void {
+            if ($hasUserVerificationColumn) {
+                $builder->whereHas('user', function (Builder $userQuery): void {
+                    $userQuery->where(function (Builder $verificationQuery): void {
+                        if (Schema::hasColumn('users', 'mobile_verified_at')) {
+                            $verificationQuery->orWhereNotNull('mobile_verified_at');
+                        }
+                        if (Schema::hasColumn('users', 'email_verified_at')) {
+                            $verificationQuery->orWhereNotNull('email_verified_at');
+                        }
+                    });
+                });
+            }
+
+            if ($hasProfileVerificationTag) {
+                $method = $hasUserVerificationColumn ? 'orWhereExists' : 'whereExists';
+                $builder->{$method}(function ($subQuery) use ($table): void {
+                    $subQuery->selectRaw('1')
+                        ->from('profile_verification_tag')
+                        ->whereColumn('profile_verification_tag.matrimony_profile_id', $table.'.id')
+                        ->whereNull('profile_verification_tag.deleted_at');
+                });
+            }
+        });
+    }
+
+    /**
+     * @param  Builder<MatrimonyProfile>  $query
+     */
+    private function applyRecentlyActiveFilter(Builder $query): void
+    {
+        if (! Schema::hasColumn('users', 'last_seen_at')) {
+            return;
+        }
+
+        $query->whereHas('user', function (Builder $userQuery): void {
+            $userQuery->where('last_seen_at', '>=', now()->subDays(30));
+        });
+    }
+
+    /**
+     * @param  Builder<MatrimonyProfile>  $query
+     */
+    private function applyEducationFilter(Builder $query, string $table, int $educationId): void
+    {
+        if ($educationId <= 0) {
+            return;
+        }
+
+        $degree = Schema::hasTable('master_education') ? EducationDegree::query()->find($educationId) : null;
+        $labels = [];
+        if ($degree instanceof EducationDegree) {
+            $labels = collect([
+                $degree->code,
+                $degree->code_mr,
+                $degree->full_form,
+            ])
+                ->map(fn ($value): string => trim((string) $value))
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        $hasDegreeColumn = Schema::hasColumn($table, 'education_degree_id');
+        $hasTextColumn = Schema::hasColumn($table, 'highest_education');
+        if (! $hasDegreeColumn && (! $hasTextColumn || $labels === [])) {
+            return;
+        }
+
+        $query->where(function (Builder $builder) use ($table, $educationId, $hasDegreeColumn, $hasTextColumn, $labels): void {
+            $hasCondition = false;
+            if ($hasDegreeColumn) {
+                $builder->where($table.'.education_degree_id', $educationId);
+                $hasCondition = true;
+            }
+
+            if ($hasTextColumn && $labels !== []) {
+                foreach ($labels as $label) {
+                    $method = $hasCondition ? 'orWhere' : 'where';
+                    $builder->{$method}($table.'.highest_education', 'like', '%'.addcslashes($label, '%_\\').'%');
+                    $hasCondition = true;
+                }
+            }
+        });
     }
 
     /**

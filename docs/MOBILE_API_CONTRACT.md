@@ -497,9 +497,11 @@ Requires `caste_id`. Returns approved active sub-castes under that caste only.
 
 Query:
 
-- `q`: string, minimum practical search length is 2
+- `q`: string, minimum practical search length is 2 for `village`, `city`, and `suburb` search
 - `preferred_state_id`: nullable state row id from `addresses`
-- `type`: nullable `village`, `city`, or `suburb`
+- `type`: nullable `country`, `state`, `district`, `taluka`, `village`, `city`, or `suburb`
+
+When `type` is `country`, `state`, `district`, or `taluka`, clients may omit `q` to populate hierarchy filter pickers. Place search for `village`, `city`, and `suburb` still expects at least two search characters.
 
 Location item shape:
 
@@ -2012,7 +2014,9 @@ Requires bearer token. Lists visible, non-suspended active profiles. Legacy top-
 Optional query filters:
 
 - `feed` (`new`, `daily`, `my_matches`, `nearby`)
-- `caste`
+- `religion_id`
+- `caste_id`
+- `caste` (legacy text fallback only; ignored when `caste_id` is present)
 - `country_id`
 - `state_id`
 - `district_id`
@@ -2020,6 +2024,14 @@ Optional query filters:
 - `location_id`
 - `age_from`
 - `age_to`
+- `height_from_cm`
+- `height_to_cm`
+- `photo_available` (approved photo row required)
+- `verified_photo` (profile/user verification signal)
+- `recently_active` (user activity within the backend recent window)
+- `education_id` (matches stored highest education text when degree FK is not present)
+- `occupation_id`
+- `marital_status_id`
 
 Feed behavior is backend-owned:
 

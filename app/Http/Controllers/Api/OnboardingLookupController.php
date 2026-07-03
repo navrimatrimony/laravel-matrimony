@@ -161,19 +161,23 @@ class OnboardingLookupController extends Controller
         $request->validate([
             'q' => ['nullable', 'string', 'max:120'],
             'preferred_state_id' => ['nullable', 'integer', Rule::exists(Location::geoTable(), 'id')->where('hierarchy', 'state')->where('is_active', true)],
-            'type' => ['nullable', 'string', Rule::in(['village', 'city', 'suburb'])],
+            'type' => ['nullable', 'string', Rule::in(['country', 'state', 'district', 'taluka', 'village', 'city', 'suburb'])],
         ]);
         $params = $this->listParams($request);
         app()->setLocale($params['locale']);
+        $type = $request->input('type');
+        $allowsEmptyQuery = in_array($type, ['country', 'state', 'district', 'taluka'], true);
 
-        if (mb_strlen($params['q'], 'UTF-8') < 2) {
+        if (! $allowsEmptyQuery && mb_strlen($params['q'], 'UTF-8') < 2) {
             return $this->emptyListResponse($params);
         }
 
         $geo = Location::geoTable();
         $query = Location::query()
-            ->where('is_active', true)
-            ->where(function (Builder $builder) use ($params, $geo): void {
+            ->where('is_active', true);
+
+        if (mb_strlen($params['q'], 'UTF-8') >= 2) {
+            $query->where(function (Builder $builder) use ($params, $geo): void {
                 $like = '%'.addcslashes($params['q'], '%_\\').'%';
                 $builder->where('name', 'like', $like)
                     ->orWhere('slug', 'like', $like);
@@ -190,9 +194,10 @@ class OnboardingLookupController extends Controller
                     }
                 }
             });
+        }
 
-        $this->applyLocationTypeFilter($query, $request->input('type'));
-        $query->orderByRaw("CASE WHEN hierarchy = 'village' AND tag = 'city' THEN 0 WHEN hierarchy = 'village' AND tag = 'suburban' THEN 1 WHEN hierarchy = 'village' AND tag = 'rural' THEN 2 WHEN hierarchy = 'taluka' THEN 3 WHEN hierarchy = 'district' THEN 4 WHEN hierarchy = 'state' THEN 5 ELSE 6 END")
+        $this->applyLocationTypeFilter($query, $type);
+        $query->orderByRaw("CASE WHEN hierarchy = 'country' THEN 0 WHEN hierarchy = 'state' THEN 1 WHEN hierarchy = 'district' THEN 2 WHEN hierarchy = 'taluka' THEN 3 WHEN hierarchy = 'village' AND tag = 'city' THEN 4 WHEN hierarchy = 'village' AND tag = 'suburban' THEN 5 WHEN hierarchy = 'village' AND tag = 'rural' THEN 6 ELSE 7 END")
             ->orderBy('name')
             ->orderBy('id');
 
@@ -636,13 +641,15 @@ class OnboardingLookupController extends Controller
             'is_final_node' => $isFinal,
             'status' => $row->is_active ? 'approved' : 'inactive',
             'pincode' => $row->pincode,
-            'state_id' => $h['state']?->id ? (int) $h['state']->id : null,
-            'district_id' => $h['district']?->id ? (int) $h['district']->id : null,
-            'taluka_id' => $h['taluka']?->id ? (int) $h['taluka']->id : null,
+            'country_id' => ($h['country'] ?? null)?->id ? (int) $h['country']->id : null,
+            'state_id' => ($h['state'] ?? null)?->id ? (int) $h['state']->id : null,
+            'district_id' => ($h['district'] ?? null)?->id ? (int) $h['district']->id : null,
+            'taluka_id' => ($h['taluka'] ?? null)?->id ? (int) $h['taluka']->id : null,
             'city_id' => $type === 'city'
                 ? (int) $row->id
-                : ($h['city']?->id ? (int) $h['city']->id : null),
+                : (($h['city'] ?? null)?->id ? (int) $h['city']->id : null),
             'parent' => [
+                'country' => $this->parentNode($h['country'] ?? null),
                 'state' => $this->parentNode($h['state'] ?? null),
                 'district' => $this->parentNode($h['district'] ?? null),
                 'taluka' => $this->parentNode($h['taluka'] ?? null),
@@ -777,7 +784,9 @@ class OnboardingLookupController extends Controller
 
     private function applyLocationTypeFilter(Builder $query, mixed $type): void
     {
-        if ($type === 'village') {
+        if (in_array($type, ['country', 'state', 'district', 'taluka'], true)) {
+            $query->where('hierarchy', $type);
+        } elseif ($type === 'village') {
             $query->where('hierarchy', 'village')->where('tag', 'rural');
         } elseif ($type === 'city') {
             $query->where('hierarchy', 'village')->where('tag', 'city');
