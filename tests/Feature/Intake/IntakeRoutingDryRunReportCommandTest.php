@@ -121,6 +121,11 @@ test('details output includes safe signal summary without raw evidence or provid
                 'duplicate_reference_has_reviewed_snapshot' => true,
                 'duplicate_reference_has_primary_ocr_attempt' => true,
                 'duplicate_reference_has_sarvam_attempt' => false,
+                'duplicate_reference_has_verifiable_ocr_evidence' => true,
+                'duplicate_reference_quality_source' => 'reviewed',
+                'duplicate_reference_ocr_attempt_count' => 2,
+                'duplicate_reference_sarvam_attempt_count' => 0,
+                'backfilled_quality_not_trusted' => false,
                 'matched_hash_type' => 'content_hash',
                 'has_parsed_json' => true,
                 'has_raw_ocr_text' => true,
@@ -159,6 +164,14 @@ test('details output includes safe signal summary without raw evidence or provid
         ->and($output)->toContain('ref_reviewed=yes')
         ->and($output)->toContain('ref_primary=yes')
         ->and($output)->toContain('ref_sarvam=no')
+        ->and($output)->toContain('ref_verifiable=yes')
+        ->and($output)->toContain('ref_quality_source=reviewed')
+        ->and($output)->toContain('ref_ocr_attempts=2')
+        ->and($output)->toContain('ref_sarvam_attempts=0')
+        ->and($output)->toContain('backfilled_quality_trusted=n/a')
+        ->and($output)->toContain('Ref verifiable OCR evidence')
+        ->and($output)->toContain('Ref quality source')
+        ->and($output)->toContain('Backfilled quality trusted?')
         ->and($output)->toContain('hash=content_hash')
         ->and($output)->toContain('quality=0.82')
         ->and($output)->toContain('cheap=1')
@@ -175,6 +188,60 @@ test('details output includes safe signal summary without raw evidence or provid
         ->and($output)->not->toContain('9876543210')
         ->and($output)->not->toContain('sk-proj-secret')
         ->and($output)->not->toContain('sk-proj-provider-payload');
+});
+
+test('details json shows backfilled quality is not trusted as verifiable evidence', function () {
+    createRoutingDryRunReportIntake([
+        'routing_recommendation_json' => routingDryRunReportRecommendation([
+            'recommended_action' => 'manual_review',
+            'reason_codes' => ['duplicate_detected', 'backfilled_quality_not_trusted', 'duplicate_detected_but_untrusted'],
+            'confidence' => 0.42,
+            'signals' => [
+                'duplicate_signal_source' => 'content_hash',
+                'duplicate_match_type' => 'exact_content_hash',
+                'duplicate_reuse_eligible' => false,
+                'duplicate_reuse_trust' => 'weak',
+                'duplicate_reference_intake_id' => 321,
+                'duplicate_reference_reason' => 'reference_parsed_with_backfilled_quality_only',
+                'duplicate_reference_quality_score' => 0.91,
+                'duplicate_reference_has_reviewed_snapshot' => false,
+                'duplicate_reference_has_primary_ocr_attempt' => false,
+                'duplicate_reference_has_sarvam_attempt' => false,
+                'duplicate_reference_has_verifiable_ocr_evidence' => false,
+                'duplicate_reference_quality_source' => 'backfilled',
+                'duplicate_reference_ocr_attempt_count' => 0,
+                'duplicate_reference_sarvam_attempt_count' => 0,
+                'backfilled_quality_not_trusted' => true,
+                'has_parsed_json' => true,
+                'has_raw_ocr_text' => true,
+                'quality_score' => 0.89,
+                'ocr_attempt_count' => 0,
+                'cheap_ocr_attempt_count' => 0,
+                'sarvam_attempt_count' => 0,
+                'duplicate_field_match_eligible' => true,
+                'duplicate_field_match_score' => 1.0,
+                'duplicate_field_mismatch_codes' => [],
+            ],
+        ]),
+    ]);
+
+    $payload = routingDryRunReportJson(['--details' => true]);
+    $row = $payload['details_by_action']['manual_review'][0];
+
+    expect($row['duplicate_reuse_eligible'])->toBe('no')
+        ->and($row['duplicate_reference_has_verifiable_ocr_evidence'])->toBe('no')
+        ->and($row['duplicate_reference_quality_source'])->toBe('backfilled')
+        ->and($row['duplicate_reference_ocr_attempt_count'])->toBe(0)
+        ->and($row['duplicate_reference_sarvam_attempt_count'])->toBe(0)
+        ->and($row['backfilled_quality_not_trusted'])->toBe('yes')
+        ->and($row['backfilled_quality_trusted'])->toBe('no')
+        ->and($row['signal_summary'])->toContain('ref_verifiable=no')
+        ->and($row['signal_summary'])->toContain('ref_quality_source=backfilled')
+        ->and($row['signal_summary'])->toContain('ref_ocr_attempts=0')
+        ->and($row['signal_summary'])->toContain('ref_sarvam_attempts=0')
+        ->and($row['signal_summary'])->toContain('backfilled_quality_trusted=no')
+        ->and($row['signal_summary'])->not->toContain('9876543210')
+        ->and($row['signal_summary'])->not->toContain('sk-proj');
 });
 
 test('details json shows duplicate field mismatch codes', function () {

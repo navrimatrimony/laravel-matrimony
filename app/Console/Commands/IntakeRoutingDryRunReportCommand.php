@@ -289,6 +289,11 @@ class IntakeRoutingDryRunReportCommand extends Command
                 'Ref reviewed',
                 'Ref primary OCR',
                 'Ref Sarvam',
+                'Ref verifiable OCR evidence',
+                'Ref quality source',
+                'Ref OCR attempts',
+                'Ref Sarvam attempts',
+                'Backfilled quality trusted?',
                 'OCR',
                 'Cheap OCR',
                 'Sarvam',
@@ -312,6 +317,11 @@ class IntakeRoutingDryRunReportCommand extends Command
                 $row['duplicate_reference_has_reviewed_snapshot'],
                 $row['duplicate_reference_has_primary_ocr_attempt'],
                 $row['duplicate_reference_has_sarvam_attempt'],
+                $row['duplicate_reference_has_verifiable_ocr_evidence'],
+                $row['duplicate_reference_quality_source'],
+                $row['duplicate_reference_ocr_attempt_count'] ?? 'n/a',
+                $row['duplicate_reference_sarvam_attempt_count'] ?? 'n/a',
+                $row['backfilled_quality_trusted'],
                 $row['ocr_attempt_count'] ?? 'n/a',
                 $row['cheap_ocr_attempt_count'] ?? 'n/a',
                 $row['sarvam_attempt_count'] ?? 'n/a',
@@ -355,6 +365,12 @@ class IntakeRoutingDryRunReportCommand extends Command
             'duplicate_reference_has_reviewed_snapshot' => $this->yesNo($signals['duplicate_reference_has_reviewed_snapshot'] ?? null),
             'duplicate_reference_has_primary_ocr_attempt' => $this->yesNo($signals['duplicate_reference_has_primary_ocr_attempt'] ?? null),
             'duplicate_reference_has_sarvam_attempt' => $this->yesNo($signals['duplicate_reference_has_sarvam_attempt'] ?? null),
+            'duplicate_reference_has_verifiable_ocr_evidence' => $this->yesNo($signals['duplicate_reference_has_verifiable_ocr_evidence'] ?? null),
+            'duplicate_reference_quality_source' => $this->summaryString($signals['duplicate_reference_quality_source'] ?? null),
+            'duplicate_reference_ocr_attempt_count' => $this->nullableInt($signals['duplicate_reference_ocr_attempt_count'] ?? null),
+            'duplicate_reference_sarvam_attempt_count' => $this->nullableInt($signals['duplicate_reference_sarvam_attempt_count'] ?? null),
+            'backfilled_quality_not_trusted' => $this->yesNo($signals['backfilled_quality_not_trusted'] ?? null),
+            'backfilled_quality_trusted' => $this->backfilledQualityTrustedLabel($signals['backfilled_quality_not_trusted'] ?? null),
             'quality_score' => $this->numericValue($signals['quality_score'] ?? $telemetry['last_quality_score'] ?? null),
             'ocr_attempt_count' => $this->nullableInt($signals['ocr_attempt_count'] ?? null),
             'cheap_ocr_attempt_count' => $this->nullableInt($signals['cheap_ocr_attempt_count'] ?? $telemetry['cheap_ocr_attempt_count'] ?? null),
@@ -388,6 +404,11 @@ class IntakeRoutingDryRunReportCommand extends Command
             'ref_reviewed='.$this->yesNo($signals['duplicate_reference_has_reviewed_snapshot'] ?? null),
             'ref_primary='.$this->yesNo($signals['duplicate_reference_has_primary_ocr_attempt'] ?? null),
             'ref_sarvam='.$this->yesNo($signals['duplicate_reference_has_sarvam_attempt'] ?? null),
+            'ref_verifiable='.$this->yesNo($signals['duplicate_reference_has_verifiable_ocr_evidence'] ?? null),
+            'ref_quality_source='.$this->summaryString($signals['duplicate_reference_quality_source'] ?? null),
+            'ref_ocr_attempts='.($this->nullableInt($signals['duplicate_reference_ocr_attempt_count'] ?? null) ?? 'n/a'),
+            'ref_sarvam_attempts='.($this->nullableInt($signals['duplicate_reference_sarvam_attempt_count'] ?? null) ?? 'n/a'),
+            'backfilled_quality_trusted='.$this->backfilledQualityTrustedLabel($signals['backfilled_quality_not_trusted'] ?? null),
             'hash='.$this->summaryString($signals['matched_hash_type'] ?? null),
             'parsed='.$this->yesNo($signals['has_parsed_json'] ?? null),
             'raw='.$this->yesNo($signals['has_raw_ocr_text'] ?? null),
@@ -572,5 +593,14 @@ class IntakeRoutingDryRunReportCommand extends Command
         }
 
         return $this->boolValue($value) ? 'yes' : 'no';
+    }
+
+    private function backfilledQualityTrustedLabel(mixed $backfilledQualityNotTrusted): string
+    {
+        if ($backfilledQualityNotTrusted === null) {
+            return 'n/a';
+        }
+
+        return $this->boolValue($backfilledQualityNotTrusted) ? 'no' : 'n/a';
     }
 }

@@ -34,6 +34,11 @@ test('command compares eligible duplicate with reference', function () {
         ->and($output)->toContain('current_reference_contact_match')
         ->and($output)->toContain('current_reference_dob_match')
         ->and($output)->toContain('current_reference_name_match')
+        ->and($output)->toContain('duplicate_reference_has_verifiable_ocr_evidence')
+        ->and($output)->toContain('duplicate_reference_quality_source')
+        ->and($output)->toContain('duplicate_reference_ocr_attempt_count')
+        ->and($output)->toContain('duplicate_reference_sarvam_attempt_count')
+        ->and($output)->toContain('backfilled_quality_trusted')
         ->and($output)->toContain('policy_blocked_reason')
         ->and($output)->toContain('routing_disabled');
 });
@@ -142,8 +147,59 @@ test('json option returns valid json', function () {
         ->and($payload['routing_decision']['current_reference_contact_match'])->toBe('yes')
         ->and($payload['routing_decision']['current_reference_dob_match'])->toBe('yes')
         ->and($payload['routing_decision']['current_reference_name_match'])->toBe('yes')
+        ->and($payload['routing_decision']['duplicate_reference_has_verifiable_ocr_evidence'])->toBe('yes')
+        ->and($payload['routing_decision']['duplicate_reference_quality_source'])->toBe('reviewed')
+        ->and($payload['routing_decision']['duplicate_reference_ocr_attempt_count'])->toBe(1)
+        ->and($payload['routing_decision']['duplicate_reference_sarvam_attempt_count'])->toBe(1)
+        ->and($payload['routing_decision']['backfilled_quality_not_trusted'])->toBe('no')
+        ->and($payload['routing_decision']['backfilled_quality_trusted'])->toBe('n/a')
         ->and($payload['field_comparison'])->not->toBeEmpty()
         ->and($payload['field_comparison'][0])->toHaveKeys(['group', 'field', 'current', 'reference', 'match']);
+});
+
+test('json option shows backfilled quality is not trusted as verifiable evidence', function () {
+    $reference = createDuplicateCompareIntake([
+        'parsed_json' => duplicateCompareParsed('Backfilled Candidate', '1996-04-12', '9876543210', 'MCA'),
+        'approval_snapshot_json' => null,
+        'approved_by_user' => false,
+        'content_hash' => 'backfilled-compare-hash',
+        'quality_summary_json' => ['score' => 0.94],
+    ]);
+    $current = createDuplicateCompareIntake([
+        'parsed_json' => duplicateCompareParsed('Backfilled Candidate', '1996-04-12', '9876543210', 'MCA'),
+        'content_hash' => 'backfilled-compare-hash',
+        'routing_recommendation_json' => duplicateCompareRecommendation($reference->id, [
+            'recommended_action' => 'manual_review',
+            'reason_codes' => ['duplicate_detected', 'backfilled_quality_not_trusted', 'duplicate_detected_but_untrusted'],
+            'would_skip_paid_vision' => false,
+            'signals' => [
+                'duplicate_reuse_eligible' => false,
+                'duplicate_reuse_trust' => 'weak',
+                'duplicate_reference_reason' => 'reference_parsed_with_backfilled_quality_only',
+                'duplicate_reference_quality_score' => 0.94,
+                'duplicate_reference_has_reviewed_snapshot' => false,
+                'duplicate_reference_has_primary_ocr_attempt' => false,
+                'duplicate_reference_has_sarvam_attempt' => false,
+                'duplicate_reference_has_verifiable_ocr_evidence' => false,
+                'duplicate_reference_quality_source' => 'backfilled',
+                'duplicate_reference_ocr_attempt_count' => 0,
+                'duplicate_reference_sarvam_attempt_count' => 0,
+                'backfilled_quality_not_trusted' => true,
+            ],
+        ]),
+    ]);
+
+    $payload = duplicateCompareJson($current->id);
+
+    expect($payload['routing_decision']['recommended_action'])->toBe('manual_review')
+        ->and($payload['routing_decision']['duplicate_reuse_eligible'])->toBe('no')
+        ->and($payload['routing_decision']['duplicate_reference_has_verifiable_ocr_evidence'])->toBe('no')
+        ->and($payload['routing_decision']['duplicate_reference_quality_source'])->toBe('backfilled')
+        ->and($payload['routing_decision']['duplicate_reference_ocr_attempt_count'])->toBe(0)
+        ->and($payload['routing_decision']['duplicate_reference_sarvam_attempt_count'])->toBe(0)
+        ->and($payload['routing_decision']['backfilled_quality_not_trusted'])->toBe('yes')
+        ->and($payload['routing_decision']['backfilled_quality_trusted'])->toBe('no')
+        ->and($payload['routing_decision']['duplicate_reference_reason'])->toBe('reference_parsed_with_backfilled_quality_only');
 });
 
 test('command does not mutate parsed raw parse status routing json ocr attempts or profile', function () {
@@ -311,6 +367,14 @@ function duplicateCompareRecommendation(?int $referenceId, array $overrides = []
             'duplicate_match_type' => 'exact_content_hash',
             'matched_hash_type' => 'content_hash',
             'duplicate_reference_has_reviewed_snapshot' => true,
+            'duplicate_reference_has_primary_ocr_attempt' => true,
+            'duplicate_reference_has_sarvam_attempt' => true,
+            'duplicate_reference_has_verifiable_ocr_evidence' => true,
+            'duplicate_reference_quality_source' => 'reviewed',
+            'duplicate_reference_quality_score' => 0.94,
+            'duplicate_reference_ocr_attempt_count' => 1,
+            'duplicate_reference_sarvam_attempt_count' => 1,
+            'backfilled_quality_not_trusted' => false,
             'duplicate_field_match_eligible' => true,
             'duplicate_field_match_score' => 1.0,
             'duplicate_field_mismatch_codes' => [],

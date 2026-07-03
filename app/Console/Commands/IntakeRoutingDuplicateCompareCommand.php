@@ -184,6 +184,12 @@ class IntakeRoutingDuplicateCompareCommand extends Command
             'duplicate_signal_source' => $this->summaryString($signals['duplicate_signal_source'] ?? null),
             'duplicate_match_type' => $this->summaryString($signals['duplicate_match_type'] ?? null),
             'matched_hash_type' => $this->summaryString($signals['matched_hash_type'] ?? null),
+            'duplicate_reference_has_verifiable_ocr_evidence' => $this->yesNo($signals['duplicate_reference_has_verifiable_ocr_evidence'] ?? null),
+            'duplicate_reference_quality_source' => $this->summaryString($signals['duplicate_reference_quality_source'] ?? null),
+            'duplicate_reference_ocr_attempt_count' => $this->nullableInt($signals['duplicate_reference_ocr_attempt_count'] ?? null),
+            'duplicate_reference_sarvam_attempt_count' => $this->nullableInt($signals['duplicate_reference_sarvam_attempt_count'] ?? null),
+            'backfilled_quality_not_trusted' => $this->yesNo($signals['backfilled_quality_not_trusted'] ?? null),
+            'backfilled_quality_trusted' => $this->backfilledQualityTrustedLabel($signals['backfilled_quality_not_trusted'] ?? null),
             'duplicate_field_match_eligible' => $this->yesNo($fieldMatch['duplicate_field_match_eligible'] ?? $signals['duplicate_field_match_eligible'] ?? null),
             'duplicate_field_match_score' => $this->numericValue($fieldMatch['duplicate_field_match_score'] ?? $signals['duplicate_field_match_score'] ?? null),
             'duplicate_field_mismatch_codes' => $mismatchCodes,
@@ -810,6 +816,15 @@ class IntakeRoutingDuplicateCompareCommand extends Command
         }
 
         return $this->boolValue($value) ? 'yes' : 'no';
+    }
+
+    private function backfilledQualityTrustedLabel(mixed $backfilledQualityNotTrusted): string
+    {
+        if ($backfilledQualityNotTrusted === null) {
+            return 'n/a';
+        }
+
+        return $this->boolValue($backfilledQualityNotTrusted) ? 'no' : 'n/a';
     }
 
     private function boolValue(mixed $value): bool

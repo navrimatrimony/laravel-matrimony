@@ -60,6 +60,12 @@ class IntakeSmartRoutingAdvisor
                 $reasonCodes[] = 'duplicate_field_mismatch';
             }
 
+            if (! empty($signals['backfilled_quality_not_trusted'])) {
+                $reasonCodes[] = 'backfilled_quality_not_trusted';
+            } elseif (($signals['duplicate_reference_has_verifiable_ocr_evidence'] ?? null) === false) {
+                $reasonCodes[] = 'reference_lacks_verifiable_ocr_evidence';
+            }
+
             $reasonCodes[] = 'duplicate_detected_but_untrusted';
 
             return $this->payload('manual_review', $reasonCodes, 0.42, false, false, $signals);
@@ -235,6 +241,11 @@ class IntakeSmartRoutingAdvisor
             'duplicate_reference_has_reviewed_snapshot' => false,
             'duplicate_reference_has_primary_ocr_attempt' => false,
             'duplicate_reference_has_sarvam_attempt' => false,
+            'duplicate_reference_has_verifiable_ocr_evidence' => false,
+            'duplicate_reference_quality_source' => 'unknown',
+            'duplicate_reference_ocr_attempt_count' => null,
+            'duplicate_reference_sarvam_attempt_count' => null,
+            'backfilled_quality_not_trusted' => false,
             'duplicate_reference_quality_score' => null,
             'duplicate_reference_locked' => null,
             'duplicate_reference_is_self_or_circular' => false,
@@ -334,6 +345,7 @@ class IntakeSmartRoutingAdvisor
                 'id',
                 'parsed_json',
                 'approval_snapshot_json',
+                'raw_ocr_text',
                 'quality_summary_json',
                 'routing_recommendation_json',
                 'intake_locked',
@@ -357,7 +369,12 @@ class IntakeSmartRoutingAdvisor
                 'is_primary',
             ]);
         $referenceHasParsedJson = $this->hasNonEmptyArray($reference->parsed_json);
+        $referenceHasRawOcrText = trim((string) ($reference->raw_ocr_text ?? '')) !== '';
         $referenceHasReviewedSnapshot = $this->hasNonEmptyArray($reference->approval_snapshot_json);
+        $referenceOcrAttemptCount = $referenceAttempts->count();
+        $referenceSarvamAttemptCount = $referenceAttempts
+            ->where('engine', BiodataIntakeOcrAttempt::ENGINE_SARVAM_AI_VISION)
+            ->count();
         $referenceHasPrimaryOcr = $referenceAttempts->contains(
             fn (BiodataIntakeOcrAttempt $attempt): bool => (bool) $attempt->is_primary
         );
@@ -366,6 +383,22 @@ class IntakeSmartRoutingAdvisor
                 && $attempt->status === BiodataIntakeOcrAttempt::STATUS_SUCCESS
         );
         $referenceQualityScore = $this->referenceQualityScore($reference, $referenceAttempts);
+        $referenceAttemptQualityScore = $this->referenceAttemptQualityScore($referenceAttempts);
+        $referenceHasAcceptableQualityAttempt = $referenceAttemptQualityScore !== null
+            && $referenceAttemptQualityScore >= self::HIGH_QUALITY_THRESHOLD;
+        $referenceHasVerifiableEvidence = $referenceHasReviewedSnapshot
+            || $referenceHasPrimaryOcr
+            || $referenceHasSarvam
+            || $referenceHasAcceptableQualityAttempt;
+        $referenceQualitySource = $this->referenceQualitySource(
+            $reference,
+            $referenceHasReviewedSnapshot,
+            $referenceHasPrimaryOcr,
+            $referenceHasSarvam,
+            $referenceHasAcceptableQualityAttempt,
+        );
+        $backfilledQualityNotTrusted = $referenceQualitySource === 'backfilled'
+            && ! $referenceHasVerifiableEvidence;
         $referenceIsSelfOrCircular = $referenceId === $currentId
             || $referenceId > $currentId
             || $this->referencePointsBackToCurrent($reference, $currentId);
@@ -376,6 +409,11 @@ class IntakeSmartRoutingAdvisor
             'duplicate_reference_has_reviewed_snapshot' => $referenceHasReviewedSnapshot,
             'duplicate_reference_has_primary_ocr_attempt' => $referenceHasPrimaryOcr,
             'duplicate_reference_has_sarvam_attempt' => $referenceHasSarvam,
+            'duplicate_reference_has_verifiable_ocr_evidence' => $referenceHasVerifiableEvidence,
+            'duplicate_reference_quality_source' => $referenceQualitySource,
+            'duplicate_reference_ocr_attempt_count' => $referenceOcrAttemptCount,
+            'duplicate_reference_sarvam_attempt_count' => $referenceSarvamAttemptCount,
+            'backfilled_quality_not_trusted' => $backfilledQualityNotTrusted,
             'duplicate_reference_quality_score' => $referenceQualityScore,
             'duplicate_reference_locked' => (bool) $reference->intake_locked,
             'duplicate_reference_is_self_or_circular' => $referenceIsSelfOrCircular,
@@ -397,20 +435,10 @@ class IntakeSmartRoutingAdvisor
             ]);
         }
 
-        $qualityHigh = $referenceQualityScore !== null && $referenceQualityScore >= self::HIGH_QUALITY_THRESHOLD;
-        $hasSuccessfulHashEvidence = $referenceAttempts->contains(
-            fn (BiodataIntakeOcrAttempt $attempt): bool => $attempt->status === BiodataIntakeOcrAttempt::STATUS_SUCCESS
-                && (
-                    trim((string) ($attempt->normalized_text_hash ?? '')) !== ''
-                    || trim((string) ($attempt->image_hash ?? '')) !== ''
-                    || $attempt->quality_score !== null
-                )
-        );
         $hasParsedJsonWithStrongOcrEvidence = $referenceHasParsedJson && (
             $referenceHasPrimaryOcr
             || $referenceHasSarvam
-            || $qualityHigh
-            || $hasSuccessfulHashEvidence
+            || $referenceHasAcceptableQualityAttempt
         );
         $hasSafeExistingReuseEvidence = $source === 'reused_transcript_attempt'
             && $reusedAttempt instanceof BiodataIntakeOcrAttempt
@@ -431,17 +459,29 @@ class IntakeSmartRoutingAdvisor
             return $this->trustedDuplicateSignals($signals, 'reference_parsed_with_strong_ocr_evidence');
         }
 
-        if ($qualityHigh) {
-            return $this->trustedDuplicateSignals($signals, 'reference_quality_score_high');
+        if ($hasSafeExistingReuseEvidence && $referenceHasVerifiableEvidence) {
+            return $this->trustedDuplicateSignals($signals, 'safe_existing_reuse_evidence');
         }
 
-        if ($hasSafeExistingReuseEvidence) {
-            return $this->trustedDuplicateSignals($signals, 'safe_existing_reuse_evidence');
+        if (
+            $referenceHasParsedJson
+            && $referenceHasRawOcrText
+            && $referenceQualityScore !== null
+            && $referenceOcrAttemptCount === 0
+            && $referenceSarvamAttemptCount === 0
+            && ! $referenceHasReviewedSnapshot
+        ) {
+            return array_merge($signals, [
+                'duplicate_reuse_trust' => 'weak',
+                'duplicate_reference_reason' => 'reference_parsed_with_backfilled_quality_only',
+            ]);
         }
 
         return array_merge($signals, [
             'duplicate_reuse_trust' => 'weak',
-            'duplicate_reference_reason' => 'reference_lacks_trusted_evidence',
+            'duplicate_reference_reason' => $referenceHasVerifiableEvidence
+                ? 'reference_lacks_trusted_evidence'
+                : 'reference_lacks_verifiable_ocr_evidence',
         ]);
     }
 
@@ -477,11 +517,40 @@ class IntakeSmartRoutingAdvisor
             return $summaryScore;
         }
 
+        return $this->referenceAttemptQualityScore($attempts);
+    }
+
+    /**
+     * @param  Collection<int, BiodataIntakeOcrAttempt>  $attempts
+     */
+    private function referenceAttemptQualityScore(Collection $attempts): ?float
+    {
         $attempt = $attempts->first(
             fn (BiodataIntakeOcrAttempt $attempt): bool => $attempt->quality_score !== null
         );
 
         return $this->nullableFloat($attempt?->quality_score);
+    }
+
+    private function referenceQualitySource(
+        BiodataIntake $reference,
+        bool $referenceHasReviewedSnapshot,
+        bool $referenceHasPrimaryOcr,
+        bool $referenceHasSarvam,
+        bool $referenceHasAcceptableQualityAttempt,
+    ): string
+    {
+        if ($referenceHasReviewedSnapshot) {
+            return 'reviewed';
+        }
+
+        if ($referenceHasPrimaryOcr || $referenceHasSarvam || $referenceHasAcceptableQualityAttempt) {
+            return 'attempt';
+        }
+
+        $qualitySummary = is_array($reference->quality_summary_json) ? $reference->quality_summary_json : [];
+
+        return $this->nullableFloat($qualitySummary['score'] ?? null) !== null ? 'backfilled' : 'unknown';
     }
 
     private function referencePointsBackToCurrent(BiodataIntake $reference, int $currentId): bool
