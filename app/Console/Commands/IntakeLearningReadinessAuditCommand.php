@@ -109,6 +109,7 @@ class IntakeLearningReadinessAuditCommand extends Command
                 'matrimony_profile_id',
                 'parse_status',
                 'approval_snapshot_json',
+                'reviewed_by_user_id',
                 'review_actor_type',
                 'review_surface',
                 'approved_by_user',
@@ -168,6 +169,7 @@ class IntakeLearningReadinessAuditCommand extends Command
 
         $actor = $this->actorBucket($intake->review_actor_type);
         $surface = $this->surfaceBucket($intake->review_surface);
+        $reviewActorIdPresent = $intake->reviewed_by_user_id !== null;
         $hasReviewedSnapshot = $snapshot !== [];
         $hasOcrAttempts = $intake->ocrAttempts->isNotEmpty();
         $hasSarvamAttempt = $intake->ocrAttempts->contains(
@@ -175,9 +177,19 @@ class IntakeLearningReadinessAuditCommand extends Command
         );
         $providerCandidate = $this->isProviderCandidate($routingAction, $signals, $reasonCodes);
         $conflictRisk = $this->hasConflictRisk($routingAction, $reasonCodes, $failureCodes, $providerCandidate);
-        $blockers = $this->rowBlockers($hasReviewedSnapshot, $actor, $snapshotFields, $providerCandidate, $conflictRisk);
+        $blockers = $this->rowBlockers(
+            $hasReviewedSnapshot,
+            $actor,
+            $surface,
+            $reviewActorIdPresent,
+            $snapshotFields,
+            $providerCandidate,
+            $conflictRisk
+        );
         $learningCandidate = $hasReviewedSnapshot
             && in_array($actor, self::ACTORS, true)
+            && $reviewActorIdPresent
+            && $surface !== 'unknown'
             && $snapshotFields !== []
             && ! $conflictRisk;
 
@@ -185,6 +197,7 @@ class IntakeLearningReadinessAuditCommand extends Command
             'intake_id' => (int) $intake->id,
             'has_reviewed_snapshot' => $hasReviewedSnapshot,
             'review_actor_type' => $actor,
+            'review_actor_id_present' => $reviewActorIdPresent,
             'review_surface' => $surface,
             'has_ocr_attempts' => $hasOcrAttempts,
             'has_sarvam_attempt' => $hasSarvamAttempt,
@@ -223,6 +236,8 @@ class IntakeLearningReadinessAuditCommand extends Command
         $lowConfidenceCorrectedCounts = array_fill_keys($fields, 0);
         $reviewedCount = 0;
         $unreviewedCount = 0;
+        $reviewActorIdPresentCount = 0;
+        $actorProvenanceCompleteCount = 0;
         $providerCandidateCount = 0;
         $parserProposalAvoidableCount = 0;
         $duplicateManualReviewCount = 0;
@@ -241,6 +256,17 @@ class IntakeLearningReadinessAuditCommand extends Command
 
             $surface = $this->safeToken($row['review_surface'] ?? null, 'unknown');
             $surfaceCounts[$surface] = ($surfaceCounts[$surface] ?? 0) + 1;
+            if (! empty($row['review_actor_id_present'])) {
+                $reviewActorIdPresentCount++;
+            }
+            if (
+                ! empty($row['has_reviewed_snapshot'])
+                && in_array($actor, self::ACTORS, true)
+                && $surface !== 'unknown'
+                && ! empty($row['review_actor_id_present'])
+            ) {
+                $actorProvenanceCompleteCount++;
+            }
 
             foreach ($this->arrayValue($row['ocr_attempt_engine_counts'] ?? []) as $engine => $count) {
                 $engine = $this->safeToken($engine, 'unknown');
@@ -279,6 +305,8 @@ class IntakeLearningReadinessAuditCommand extends Command
         $readiness = $this->readinessStatus(
             $reviewedCount,
             $actorCounts,
+            $surfaceCounts,
+            $actorProvenanceCompleteCount,
             $correctedSnapshotCoverage,
             $learningCandidateCount,
             $conflictRiskCount,
@@ -292,6 +320,8 @@ class IntakeLearningReadinessAuditCommand extends Command
             'reviewed_snapshot_count' => $reviewedCount,
             'unreviewed_count' => $unreviewedCount,
             'actor_provenance_counts' => $actorCounts,
+            'review_actor_id_present_count' => $reviewActorIdPresentCount,
+            'actor_provenance_complete_count' => $actorProvenanceCompleteCount,
             'surface_counts' => $surfaceCounts,
             'ocr_attempt_counts' => $ocrAttemptCounts,
             'field_confidence_coverage_by_field' => $fieldConfidenceCoverage,
@@ -317,6 +347,8 @@ class IntakeLearningReadinessAuditCommand extends Command
     private function readinessStatus(
         int $reviewedCount,
         array $actorCounts,
+        array $surfaceCounts,
+        int $actorProvenanceCompleteCount,
         array $correctedSnapshotCoverage,
         int $learningCandidateCount,
         int $conflictRiskCount,
@@ -330,6 +362,7 @@ class IntakeLearningReadinessAuditCommand extends Command
             + (int) ($actorCounts['profile_user'] ?? 0)
             + (int) ($actorCounts['suchak'] ?? 0);
         $unknownOrSystemActorCount = (int) ($actorCounts['unknown'] ?? 0) + (int) ($actorCounts['system'] ?? 0);
+        $unknownSurfaceCount = (int) ($surfaceCounts['unknown'] ?? 0);
         $fieldCoverageTotal = array_sum($correctedSnapshotCoverage);
         $lowConfidenceCorrectedTotal = array_sum($lowConfidenceCorrectedCounts);
 
@@ -337,7 +370,14 @@ class IntakeLearningReadinessAuditCommand extends Command
             $blockers[] = 'no_reviewed_snapshots';
         }
 
-        if ($reviewedCount > 0 && $unknownOrSystemActorCount > max(0, intdiv($reviewedCount, 2))) {
+        if (
+            $reviewedCount > 0
+            && (
+                $unknownOrSystemActorCount > max(0, intdiv($reviewedCount, 2))
+                || $unknownSurfaceCount > max(0, intdiv($reviewedCount, 2))
+                || $actorProvenanceCompleteCount <= intdiv($reviewedCount, 2)
+            )
+        ) {
             $blockers[] = 'actor_provenance_missing_heavily';
         }
 
@@ -357,7 +397,7 @@ class IntakeLearningReadinessAuditCommand extends Command
             $warnings[] = 'min_samples_not_met_for_candidate_rules';
         }
 
-        if ($authorizedActorCount < $reviewedCount) {
+        if ($authorizedActorCount < $reviewedCount || $actorProvenanceCompleteCount < $reviewedCount) {
             $warnings[] = 'actor_provenance_incomplete_for_candidate_rules';
         }
 
@@ -376,6 +416,7 @@ class IntakeLearningReadinessAuditCommand extends Command
         if (
             $learningCandidateCount >= $minSamples
             && $authorizedActorCount === $reviewedCount
+            && $actorProvenanceCompleteCount === $reviewedCount
             && $conflictRiskCount === 0
             && $providerCandidateCount === 0
         ) {
@@ -404,6 +445,8 @@ class IntakeLearningReadinessAuditCommand extends Command
             ['Total intakes scanned', $summary['total_intakes_scanned'] ?? 0],
             ['Reviewed snapshot count', $summary['reviewed_snapshot_count'] ?? 0],
             ['Unreviewed count', $summary['unreviewed_count'] ?? 0],
+            ['Review actor id present count', $summary['review_actor_id_present_count'] ?? 0],
+            ['Actor provenance complete count', $summary['actor_provenance_complete_count'] ?? 0],
             ['Provider candidate count', $summary['provider_candidate_count'] ?? 0],
             ['Parser proposal avoidable count', $summary['parser_proposal_avoidable_count'] ?? 0],
             ['Duplicate/manual review count', $summary['duplicate_manual_review_count'] ?? 0],
@@ -425,6 +468,7 @@ class IntakeLearningReadinessAuditCommand extends Command
             'Intake',
             'Reviewed',
             'Actor',
+            'Actor ID',
             'Surface',
             'OCR attempts',
             'Sarvam',
@@ -436,6 +480,7 @@ class IntakeLearningReadinessAuditCommand extends Command
             $row['intake_id'],
             $this->yesNo($row['has_reviewed_snapshot'] ?? null),
             $this->safeToken($row['review_actor_type'] ?? null, 'unknown'),
+            $this->yesNo($row['review_actor_id_present'] ?? null),
             $this->safeToken($row['review_surface'] ?? null, 'unknown'),
             $this->yesNo($row['has_ocr_attempts'] ?? null),
             $this->yesNo($row['has_sarvam_attempt'] ?? null),
@@ -730,7 +775,15 @@ class IntakeLearningReadinessAuditCommand extends Command
     /**
      * @return list<string>
      */
-    private function rowBlockers(bool $hasReviewedSnapshot, string $actor, array $snapshotFields, bool $providerCandidate, bool $conflictRisk): array
+    private function rowBlockers(
+        bool $hasReviewedSnapshot,
+        string $actor,
+        string $surface,
+        bool $reviewActorIdPresent,
+        array $snapshotFields,
+        bool $providerCandidate,
+        bool $conflictRisk
+    ): array
     {
         $blockers = [];
         if (! $hasReviewedSnapshot) {
@@ -738,6 +791,12 @@ class IntakeLearningReadinessAuditCommand extends Command
         }
         if (! in_array($actor, self::ACTORS, true)) {
             $blockers[] = 'review_actor_not_authorized';
+        }
+        if (! $reviewActorIdPresent) {
+            $blockers[] = 'review_actor_id_missing';
+        }
+        if ($surface === 'unknown') {
+            $blockers[] = 'review_surface_unknown';
         }
         if ($snapshotFields === []) {
             $blockers[] = 'no_corrected_field_coverage';
@@ -917,4 +976,3 @@ class IntakeLearningReadinessAuditCommand extends Command
         );
     }
 }
-
