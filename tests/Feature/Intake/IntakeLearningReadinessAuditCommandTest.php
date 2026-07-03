@@ -33,8 +33,11 @@ test('json output is valid', function () {
 
     expect($payload['success'])->toBeTrue()
         ->and($payload['summary']['total_intakes_scanned'])->toBe(1)
+        ->and($payload['summary']['review_actor_id_present_count'])->toBe(1)
+        ->and($payload['summary']['actor_provenance_complete_count'])->toBe(1)
         ->and($payload['rows'])->toHaveCount(1)
-        ->and($payload['rows'][0]['has_reviewed_snapshot'])->toBeTrue();
+        ->and($payload['rows'][0]['has_reviewed_snapshot'])->toBeTrue()
+        ->and($payload['rows'][0]['review_actor_id_present'])->toBeTrue();
 });
 
 test('actor filter works', function () {
@@ -112,6 +115,7 @@ test('min samples affects readiness status', function () {
 test('reports not ready when no reviewed snapshots exist', function () {
     createLearningReadinessIntake([
         'approval_snapshot_json' => null,
+        'reviewed_by_user_id' => null,
         'review_actor_type' => null,
         'review_surface' => null,
         'reviewed_at' => null,
@@ -124,6 +128,32 @@ test('reports not ready when no reviewed snapshots exist', function () {
         ->and($payload['summary']['unreviewed_count'])->toBe(1)
         ->and($payload['summary']['learning_readiness_status'])->toBe('not_ready')
         ->and($payload['summary']['blockers'])->toContain('no_reviewed_snapshots');
+});
+
+test('old snapshot without provenance still audits as unknown', function () {
+    createLearningReadinessIntake([
+        'reviewed_by_user_id' => null,
+        'review_actor_type' => null,
+        'review_surface' => null,
+        'reviewed_at' => null,
+    ]);
+
+    $payload = learningReadinessAuditJson();
+
+    expect($payload['summary']['total_intakes_scanned'])->toBe(1)
+        ->and($payload['summary']['reviewed_snapshot_count'])->toBe(1)
+        ->and($payload['summary']['actor_provenance_counts']['unknown'])->toBe(1)
+        ->and($payload['summary']['surface_counts']['unknown'])->toBe(1)
+        ->and($payload['summary']['review_actor_id_present_count'])->toBe(0)
+        ->and($payload['summary']['actor_provenance_complete_count'])->toBe(0)
+        ->and($payload['summary']['learning_readiness_status'])->toBe('not_ready')
+        ->and($payload['summary']['blockers'])->toContain('actor_provenance_missing_heavily')
+        ->and($payload['rows'][0]['review_actor_type'])->toBe('unknown')
+        ->and($payload['rows'][0]['review_surface'])->toBe('unknown')
+        ->and($payload['rows'][0]['review_actor_id_present'])->toBeFalse()
+        ->and($payload['rows'][0]['blocker_summary'])->toContain('review_actor_not_authorized')
+        ->and($payload['rows'][0]['blocker_summary'])->toContain('review_actor_id_missing')
+        ->and($payload['rows'][0]['blocker_summary'])->toContain('review_surface_unknown');
 });
 
 test('reports ready for offline analysis when reviewed snapshots exist but not enough samples', function () {
@@ -275,6 +305,7 @@ function createLearningReadinessIntake(array $overrides = []): BiodataIntake
         'snapshot_schema_version' => 1,
         'approved_by_user' => true,
         'approval_snapshot_json' => learningReadinessSnapshot('Reviewed Candidate', '9876543210'),
+        'reviewed_by_user_id' => $user->id,
         'review_actor_type' => BiodataIntakeOcrAttempt::ACTOR_ADMIN,
         'review_surface' => BiodataIntakeOcrAttempt::SURFACE_ADMIN_PANEL,
         'reviewed_at' => now(),
@@ -363,4 +394,3 @@ function learningReadinessParsed(string $name, string $phone, string $address = 
         ],
     ];
 }
-
