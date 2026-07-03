@@ -106,12 +106,11 @@
     $contactRemaining = $isUnlimited ? '∞' : ($cvs['remaining'] ?? ($contactUsageSnapshot['remaining'] ?? 0));
     $maskPhoneGateDisplay = static function (?string $raw): string {
         $d = preg_replace('/\D/', '', (string) $raw);
-        $len = strlen($d);
-        if ($len <= 3) {
+        if (strlen($d) < 4) {
             return 'XXXX';
         }
 
-        return str_repeat('X', $len - 4).substr($d, -4);
+        return substr($d, 0, 4).'XXXX';
     };
 @endphp
 <div class="max-w-6xl mx-auto py-8 px-4 sm:px-6" x-data="{ adminEditMode: @js(auth()->check() && auth()->user()->is_admin === true && request()->has('admin_edit')), openRequestModal: false, showContactUpgradeModal: false }">
@@ -1229,10 +1228,7 @@
             @else
                 <div id="profile-contact-reveal-root">
                 @php
-                    $contactMaskedDigits = preg_replace('/\D/', '', (string) ($profile->primary_contact_number ?? $profile->phone ?? ''));
-                    $masked = strlen($contactMaskedDigits) >= 4
-                        ? substr($contactMaskedDigits, 0, 4) . 'XXXX'
-                        : 'XXXX';
+                    $masked = $maskPhoneGateDisplay($profile->primary_contact_number ?? $profile->phone ?? '');
                 @endphp
 
                 {{-- Valid Suchak options can be shown without automatically hiding direct contact. --}}

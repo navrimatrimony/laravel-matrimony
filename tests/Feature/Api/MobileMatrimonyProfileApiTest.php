@@ -3876,6 +3876,14 @@ test('MobileProfile display contact keeps own profile unlock disabled', function
 
 test('MobileProfile display contact exposes safe shape for other profile without leaking contact', function () {
     [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    DB::table('profile_contacts')->insert([
+        'profile_id' => $targetProfile->id,
+        'contact_name' => 'Primary',
+        'phone_number' => '9876543210',
+        'is_primary' => true,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
     Sanctum::actingAs($viewerUser);
 
     $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
@@ -3890,6 +3898,7 @@ test('MobileProfile display contact exposes safe shape for other profile without
                     'state',
                     'message',
                     'phone',
+                    'masked_phone',
                     'email',
                     'primary_cta',
                     'whatsapp_response' => [
@@ -3903,9 +3912,11 @@ test('MobileProfile display contact exposes safe shape for other profile without
         ])
         ->assertJsonPath('display.contact.title', 'Contact Information')
         ->assertJsonPath('display.contact.phone', null)
+        ->assertJsonPath('display.contact.masked_phone', '9876XXXX')
         ->assertJsonPath('display.contact.email', null)
         ->assertJsonPath('display.contact.whatsapp_response.label', 'WhatsApp Response');
 
+    expect($response->getContent())->not->toContain('9876543210');
     expect($response->json('display.contact.state'))->toBeIn([
         'locked',
         'unlock_available',
@@ -3942,12 +3953,21 @@ test('MobileProfile display contact reveals phone only from ContactAccessService
         ->assertOk()
         ->assertJsonPath('display.contact.state', 'revealed')
         ->assertJsonPath('display.contact.phone', '9876543210')
+        ->assertJsonPath('display.contact.masked_phone', null)
         ->assertJsonPath('display.contact.email', 'candidate@example.test')
         ->assertJsonPath('display.contact.primary_cta', null);
 });
 
 test('MobileProfile display contact maps upgrade and WhatsApp Response without revealing phone', function () {
     [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    DB::table('profile_contacts')->insert([
+        'profile_id' => $targetProfile->id,
+        'contact_name' => 'Primary',
+        'phone_number' => '9876543210',
+        'is_primary' => true,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
     Sanctum::actingAs($viewerUser);
 
     $this->app->instance(ContactAccessService::class, new class
@@ -3973,12 +3993,15 @@ test('MobileProfile display contact maps upgrade and WhatsApp Response without r
         ->assertOk()
         ->assertJsonPath('display.contact.state', 'upgrade_required')
         ->assertJsonPath('display.contact.phone', null)
+        ->assertJsonPath('display.contact.masked_phone', '9876XXXX')
         ->assertJsonPath('display.contact.email', null)
         ->assertJsonPath('display.contact.primary_cta.label', 'Upgrade to View Contact')
         ->assertJsonPath('display.contact.primary_cta.action', 'upgrade')
         ->assertJsonPath('display.contact.primary_cta.enabled', false)
         ->assertJsonPath('display.contact.whatsapp_response.visible', true)
         ->assertJsonPath('display.contact.whatsapp_response.enabled', false);
+
+    expect($response->getContent())->not->toContain('9876543210');
 });
 
 test('MobileProfile GET api v1 profile detail returns clean comparison payload for target preferences', function () {

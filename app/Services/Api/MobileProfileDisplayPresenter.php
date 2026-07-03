@@ -1267,11 +1267,12 @@ class MobileProfileDisplayPresenter
             return $this->contactPayloadState(
                 enabled: false,
                 state: 'unavailable',
-                message: 'Contact information is not available right now.'
+                message: 'Contact information is not available right now.',
+                maskedPhone: $this->maskedPhoneForDisplay($profile->primary_contact_number),
             );
         }
 
-        return $this->contactPayloadFromAccess($contactAccess, $contactRequestContext);
+        return $this->contactPayloadFromAccess($profile, $contactAccess, $contactRequestContext);
     }
 
     /**
@@ -1279,10 +1280,11 @@ class MobileProfileDisplayPresenter
      * @param  array<string, mixed>|null  $contactRequestContext
      * @return array<string, mixed>
      */
-    private function contactPayloadFromAccess(array $contactAccess, ?array $contactRequestContext = null): array
+    private function contactPayloadFromAccess(MatrimonyProfile $profile, array $contactAccess, ?array $contactRequestContext = null): array
     {
         $phone = $this->cleanString($contactAccess['paid_contact_phone'] ?? null);
         $email = $this->cleanString($contactAccess['paid_contact_email'] ?? null);
+        $maskedPhone = $this->maskedPhoneForDisplay($profile->primary_contact_number);
         $showMediator = ($contactAccess['show_mediator_cta'] ?? false) === true;
 
         if ($phone !== null || $email !== null) {
@@ -1301,6 +1303,7 @@ class MobileProfileDisplayPresenter
                 enabled: true,
                 state: 'upgrade_required',
                 message: 'Upgrade is required to view contact information.',
+                maskedPhone: $maskedPhone,
                 primaryCta: $this->contactPrimaryCta('Upgrade to View Contact', 'primary', 'upgrade', false),
                 whatsappVisible: $showMediator,
                 whatsappMessage: $showMediator ? 'WhatsApp Response can be shown after eligible access.' : null,
@@ -1312,13 +1315,14 @@ class MobileProfileDisplayPresenter
                 enabled: true,
                 state: 'unlock_available',
                 message: 'Contact unlock is available for this profile.',
+                maskedPhone: $maskedPhone,
                 primaryCta: $this->contactPrimaryCta('View Contact', 'primary', 'view_contact', true),
                 whatsappVisible: $showMediator,
             );
         }
 
         if (($contactAccess['show_contact_request_rail'] ?? false) === true) {
-            $requestPayload = $this->contactRequestPayload($contactRequestContext);
+            $requestPayload = $this->contactRequestPayload($contactRequestContext, $maskedPhone);
             if ($requestPayload !== null) {
                 return $requestPayload;
             }
@@ -1329,6 +1333,7 @@ class MobileProfileDisplayPresenter
                 enabled: true,
                 state: 'whatsapp_response_available',
                 message: 'WhatsApp Response is available for this profile.',
+                maskedPhone: $maskedPhone,
                 whatsappVisible: true,
                 whatsappMessage: 'You can request a WhatsApp Response when the mobile action is available.',
                 whatsappEnabled: false,
@@ -1341,14 +1346,16 @@ class MobileProfileDisplayPresenter
             return $this->contactPayloadState(
                 enabled: true,
                 state: 'locked',
-                message: 'Contact information is currently locked.'
+                message: 'Contact information is currently locked.',
+                maskedPhone: $maskedPhone,
             );
         }
 
         return $this->contactPayloadState(
             enabled: true,
             state: 'unavailable',
-            message: 'Contact information is not available for this profile.'
+            message: 'Contact information is not available for this profile.',
+            maskedPhone: $maskedPhone,
         );
     }
 
@@ -1360,6 +1367,7 @@ class MobileProfileDisplayPresenter
         string $state,
         ?string $message,
         ?string $phone = null,
+        ?string $maskedPhone = null,
         ?string $email = null,
         ?array $primaryCta = null,
         bool $whatsappVisible = false,
@@ -1387,6 +1395,7 @@ class MobileProfileDisplayPresenter
             'state' => $state,
             'message' => $message,
             'phone' => $phone,
+            'masked_phone' => $maskedPhone,
             'email' => $email,
             'primary_cta' => $primaryCta,
             'contact_request' => $contactRequest,
@@ -1398,6 +1407,20 @@ class MobileProfileDisplayPresenter
                 'enabled' => $whatsappEnabled,
             ],
         ];
+    }
+
+    private function maskedPhoneForDisplay(mixed $raw): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $raw);
+        if ($digits === '') {
+            return null;
+        }
+
+        if (strlen($digits) < 4) {
+            return 'XXXX';
+        }
+
+        return substr($digits, 0, 4).'XXXX';
     }
 
     /**
@@ -1490,7 +1513,7 @@ class MobileProfileDisplayPresenter
      * @param  array<string, mixed>|null  $contactRequestContext
      * @return array<string, mixed>|null
      */
-    private function contactRequestPayload(?array $contactRequestContext): ?array
+    private function contactRequestPayload(?array $contactRequestContext, ?string $maskedPhone = null): ?array
     {
         if ($contactRequestContext === null || ($contactRequestContext['disabled'] ?? false) === true) {
             return null;
@@ -1512,6 +1535,7 @@ class MobileProfileDisplayPresenter
                 enabled: true,
                 state: 'contact_request_available',
                 message: 'You can send a contact request for this profile.',
+                maskedPhone: $maskedPhone,
                 primaryCta: $this->contactPrimaryCta('Request Contact', 'primary', 'send_contact_request', true),
                 contactRequest: $requestMeta,
                 requestOptions: $requestOptions,
@@ -1523,6 +1547,7 @@ class MobileProfileDisplayPresenter
                 enabled: true,
                 state: 'contact_request_pending',
                 message: 'Your contact request is pending.',
+                maskedPhone: $maskedPhone,
                 primaryCta: $this->contactPrimaryCta('Request Sent', 'disabled', 'none', false),
                 contactRequest: $requestMeta,
             );
@@ -1538,6 +1563,7 @@ class MobileProfileDisplayPresenter
                 enabled: true,
                 state: 'contact_request_rejected',
                 message: $message,
+                maskedPhone: $maskedPhone,
                 contactRequest: $requestMeta,
             );
         }
@@ -1547,6 +1573,7 @@ class MobileProfileDisplayPresenter
                 enabled: true,
                 state: 'contact_request_unavailable',
                 message: 'Contact request is not available for this profile.',
+                maskedPhone: $maskedPhone,
                 contactRequest: $requestMeta,
             );
         }
@@ -1555,6 +1582,7 @@ class MobileProfileDisplayPresenter
             enabled: true,
             state: 'contact_request_unavailable',
             message: 'Contact request is available only after accepted interest.',
+            maskedPhone: $maskedPhone,
             contactRequest: $requestMeta,
         );
     }
