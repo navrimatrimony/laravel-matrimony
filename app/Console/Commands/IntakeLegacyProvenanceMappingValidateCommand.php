@@ -11,6 +11,8 @@ use Illuminate\Support\Str;
 
 class IntakeLegacyProvenanceMappingValidateCommand extends Command
 {
+    private const DEFAULT_TEMPLATE_FILE = 'intake-legacy-provenance-template.csv';
+
     private const COLUMNS = [
         'intake_id',
         'reviewed_snapshot_present',
@@ -46,9 +48,15 @@ class IntakeLegacyProvenanceMappingValidateCommand extends Command
     ];
 
     private const REVIEWER_DECISIONS = [
+        'approve',
         'approve_manual_mapping',
         'skip',
         'needs_more_evidence',
+    ];
+
+    private const APPROVE_DECISIONS = [
+        'approve',
+        'approve_manual_mapping',
     ];
 
     protected $signature = 'intake:legacy-provenance-mapping-validate
@@ -61,15 +69,17 @@ class IntakeLegacyProvenanceMappingValidateCommand extends Command
 
     public function handle(): int
     {
-        $file = $this->stringOption('file');
-        if ($file === null) {
-            $this->error('Missing required --file option.');
-
-            return self::FAILURE;
-        }
+        $explicitFile = $this->stringOption('file');
+        $file = $explicitFile ?? self::DEFAULT_TEMPLATE_FILE;
 
         $path = $this->resolveInputPath($file);
         if ($path === false || ! File::exists($path)) {
+            if ($explicitFile === null) {
+                $this->renderMissingDefaultFileMessage();
+
+                return self::FAILURE;
+            }
+
             $this->error('CSV file not found under storage/app.');
 
             return self::FAILURE;
@@ -86,6 +96,7 @@ class IntakeLegacyProvenanceMappingValidateCommand extends Command
             'success' => true,
             'filters' => [
                 'file' => $this->safeFileDisplay($path),
+                'default_file_used' => $explicitFile === null,
                 'strict' => $strict,
                 'fail_on_risk' => (bool) $this->option('fail-on-risk'),
             ],
@@ -212,7 +223,7 @@ class IntakeLegacyProvenanceMappingValidateCommand extends Command
             $riskCodes[] = 'invalid_reviewer_decision';
         }
 
-        if ($decision === 'approve_manual_mapping') {
+        if (in_array($decision, self::APPROVE_DECISIONS, true)) {
             if (! in_array($manualActor, self::MANUAL_ACTORS, true)) {
                 $riskCodes[] = 'invalid_manual_actor_type';
             }
@@ -242,7 +253,7 @@ class IntakeLegacyProvenanceMappingValidateCommand extends Command
 
         $riskCodes = array_values(array_unique($riskCodes));
         $validationStatus = $this->validationStatus($riskCodes, $stale);
-        $futureApplyCandidate = $decision === 'approve_manual_mapping'
+        $futureApplyCandidate = in_array($decision, self::APPROVE_DECISIONS, true)
             && $dbMatches
             && ! $stale
             && $riskCodes === [];
@@ -279,7 +290,9 @@ class IntakeLegacyProvenanceMappingValidateCommand extends Command
             'total_csv_rows' => $rows->count(),
             'rows_matching_db' => $rows->where('db_match', true)->count(),
             'stale_rows' => $rows->where('stale_row', true)->count(),
-            'approved_manual_mappings' => $rows->where('reviewer_decision', 'approve_manual_mapping')->count(),
+            'approved_manual_mappings' => $rows
+                ->filter(fn (array $row): bool => in_array($row['reviewer_decision'] ?? '', self::APPROVE_DECISIONS, true))
+                ->count(),
             'skipped_rows' => $rows->where('reviewer_decision', 'skip')->count(),
             'needs_more_evidence_rows' => $rows->where('reviewer_decision', 'needs_more_evidence')->count(),
             'invalid_rows' => $invalidRows,
@@ -297,6 +310,12 @@ class IntakeLegacyProvenanceMappingValidateCommand extends Command
     private function renderReport(array $report): void
     {
         $summary = $this->arrayValue($report['summary'] ?? []);
+        $filters = $this->arrayValue($report['filters'] ?? []);
+
+        $this->line('CSV file: '.($filters['file'] ?? 'unknown'));
+        if (($filters['default_file_used'] ?? false) === true) {
+            $this->line('Default file used: yes');
+        }
 
         $this->table(['Metric', 'Value'], [
             ['Total CSV rows', $summary['total_csv_rows'] ?? 0],
@@ -458,6 +477,15 @@ class IntakeLegacyProvenanceMappingValidateCommand extends Command
         }
 
         return 'no_apply';
+    }
+
+    private function renderMissingDefaultFileMessage(): void
+    {
+        $this->error('No --file option was provided and the default CSV file was not found: storage/app/'.self::DEFAULT_TEMPLATE_FILE);
+        $this->line('Generate the template first:');
+        $this->line('php artisan intake:legacy-provenance-mapping-template');
+        $this->line('Then validate explicitly:');
+        $this->line('php artisan intake:legacy-provenance-mapping-validate --file=storage/app/'.self::DEFAULT_TEMPLATE_FILE);
     }
 
     private function stringOption(string $name): ?string

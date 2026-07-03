@@ -27,10 +27,53 @@ test('valid CSV with skip rows passes', function () {
             ->and($payload['summary']['skipped_rows'])->toBe(1)
             ->and($payload['summary']['future_apply_candidate_count'])->toBe(0)
             ->and($payload['summary']['recommendation'])->toBe('no_apply')
+            ->and($payload['filters']['default_file_used'])->toBeFalse()
             ->and($payload['rows'][0]['validation_status'])->toBe('pass');
     } finally {
         File::delete(base_path($path));
     }
+});
+
+test('validate command uses default template path when file option is omitted and default file exists', function () {
+    $intake = createLegacyProvenanceValidateIntake();
+    $path = storage_path('app/intake-legacy-provenance-template.csv');
+    File::ensureDirectoryExists(dirname($path));
+    File::put($path, legacyProvenanceValidateCsv([
+        legacyProvenanceValidateRow($intake, [
+            'reviewer_decision' => 'skip',
+        ]),
+    ]));
+
+    try {
+        $exitCode = Artisan::call('intake:legacy-provenance-mapping-validate', [
+            '--json' => true,
+        ]);
+        $payload = json_decode(trim(Artisan::output()), true);
+
+        expect($exitCode)->toBe(0)
+            ->and(json_last_error())->toBe(JSON_ERROR_NONE)
+            ->and($payload['filters']['file'])->toBe('storage/app/intake-legacy-provenance-template.csv')
+            ->and($payload['filters']['default_file_used'])->toBeTrue()
+            ->and($payload['summary']['validation_status'])->toBe('pass')
+            ->and($payload['summary']['total_csv_rows'])->toBe(1)
+            ->and($payload['rows'][0]['intake_id'])->toBe($intake->id);
+    } finally {
+        File::delete($path);
+    }
+});
+
+test('validate command gives clear actionable message when file option omitted and default file missing', function () {
+    File::delete(storage_path('app/intake-legacy-provenance-template.csv'));
+
+    $exitCode = Artisan::call('intake:legacy-provenance-mapping-validate');
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(1)
+        ->and($output)->toContain('default CSV file was not found')
+        ->and($output)->toContain('Generate the template first:')
+        ->and($output)->toContain('php artisan intake:legacy-provenance-mapping-template')
+        ->and($output)->toContain('Then validate explicitly:')
+        ->and($output)->toContain('php artisan intake:legacy-provenance-mapping-validate --file=storage/app/intake-legacy-provenance-template.csv');
 });
 
 test('valid CSV with approved manual mapping reports future apply candidate but does not mutate DB', function () {
@@ -61,6 +104,33 @@ test('valid CSV with approved manual mapping reports future apply candidate but 
             ->and($intake->reviewed_by_user_id)->toBeNull()
             ->and($intake->review_actor_type)->toBeNull()
             ->and($intake->review_surface)->toBeNull();
+    } finally {
+        File::delete(base_path($path));
+    }
+});
+
+test('invalid blank manual fields fail safely for approve decision', function () {
+    $intake = createLegacyProvenanceValidateIntake();
+    $path = writeLegacyProvenanceValidateCsv([
+        legacyProvenanceValidateRow($intake, [
+            'manual_actor_type' => '',
+            'manual_actor_id' => '',
+            'manual_surface' => '',
+            'manual_notes' => '',
+            'reviewer_decision' => 'approve',
+        ]),
+    ]);
+
+    try {
+        $payload = legacyProvenanceValidateJson($path);
+
+        expect($payload['summary']['validation_status'])->toBe('fail')
+            ->and($payload['summary']['invalid_rows'])->toBe(1)
+            ->and($payload['rows'][0]['reviewer_decision'])->toBe('approve')
+            ->and($payload['rows'][0]['manual_actor_id_present'])->toBe('no')
+            ->and($payload['rows'][0]['risk_codes'])->toContain('invalid_manual_actor_type')
+            ->and($payload['rows'][0]['risk_codes'])->toContain('manual_actor_id_missing')
+            ->and($payload['rows'][0]['risk_codes'])->toContain('invalid_manual_surface');
     } finally {
         File::delete(base_path($path));
     }
