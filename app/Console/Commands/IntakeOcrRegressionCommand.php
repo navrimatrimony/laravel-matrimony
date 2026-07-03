@@ -91,6 +91,10 @@ class IntakeOcrRegressionCommand extends Command
         }
 
         $path = $this->resolveDatasetPath($dataset);
+        if ($path === false) {
+            return $this->invalidDatasetPath($dataset);
+        }
+
         if ($path === null || ! File::exists($path)) {
             return $this->missingDataset('Dataset file was not found.');
         }
@@ -193,6 +197,54 @@ class IntakeOcrRegressionCommand extends Command
         return self::FAILURE;
     }
 
+    private function invalidDatasetPath(string $dataset): int
+    {
+        $message = 'Dataset path is not allowed. Use storage/app/..., tests/Fixtures/..., tests/fixtures/..., or an absolute local path.';
+        $report = [
+            'success' => false,
+            'filters' => [
+                'dataset' => $dataset,
+                'field' => null,
+                'limit' => max(1, min(5000, (int) $this->option('limit'))),
+                'fail_under' => null,
+            ],
+            'summary' => [
+                'total_cases' => 0,
+                'valid_cases' => 0,
+                'invalid_cases' => 0,
+                'total_expected_fields' => 0,
+                'exact_match_count' => 0,
+                'mismatch_count' => 0,
+                'missing_count' => 0,
+                'overall_accuracy_percent' => 0.0,
+                'regression_status' => 'no_dataset',
+            ],
+            'field_accuracy' => [],
+            'layout_accuracy' => [],
+            'rows' => [],
+            'schema_errors' => [
+                [
+                    'line' => null,
+                    'case_id' => null,
+                    'error_codes' => ['dataset_path_not_allowed'],
+                    'message' => $message,
+                ],
+            ],
+        ];
+
+        if ((bool) $this->option('json')) {
+            $this->line(json_encode($report, JSON_UNESCAPED_SLASHES));
+
+            return self::FAILURE;
+        }
+
+        $this->error($message);
+        $this->line('Synthetic fixture: php artisan intake:ocr-regression --dataset=tests/Fixtures/Intake/golden_dataset_minimal.jsonl');
+        $this->line('Private dataset: php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/golden.jsonl');
+
+        return self::FAILURE;
+    }
+
     private function datasetOption(): ?string
     {
         $value = trim((string) $this->option('dataset'));
@@ -232,7 +284,7 @@ class IntakeOcrRegressionCommand extends Command
         return max(0.0, min(100.0, (float) $value));
     }
 
-    private function resolveDatasetPath(string $path): ?string
+    private function resolveDatasetPath(string $path): string|false|null
     {
         $path = trim($path);
         if ($path === '') {
@@ -248,7 +300,19 @@ class IntakeOcrRegressionCommand extends Command
             return storage_path('app/'.substr($normalized, strlen('storage/app/')));
         }
 
-        return storage_path('app/'.$normalized);
+        if (str_starts_with($normalized, 'tests/Fixtures/')) {
+            return base_path($normalized);
+        }
+        if (str_starts_with($normalized, 'tests/fixtures/')) {
+            $candidate = base_path($normalized);
+            if (File::exists($candidate)) {
+                return $candidate;
+            }
+
+            return base_path('tests/Fixtures/'.substr($normalized, strlen('tests/fixtures/')));
+        }
+
+        return false;
     }
 
     private function isAbsolutePath(string $path): bool
@@ -843,6 +907,14 @@ class IntakeOcrRegressionCommand extends Command
         $storage = str_replace('\\', '/', storage_path('app'));
         if (str_starts_with($normalizedPath, $storage.'/')) {
             return 'storage/app/'.substr($normalizedPath, strlen($storage) + 1);
+        }
+
+        $base = str_replace('\\', '/', base_path());
+        if (str_starts_with($normalizedPath, $base.'/tests/Fixtures/')) {
+            return 'tests/Fixtures/'.substr($normalizedPath, strlen($base.'/tests/Fixtures/'));
+        }
+        if (str_starts_with($normalizedPath, $base.'/tests/fixtures/')) {
+            return 'tests/fixtures/'.substr($normalizedPath, strlen($base.'/tests/fixtures/'));
         }
 
         return basename($path);

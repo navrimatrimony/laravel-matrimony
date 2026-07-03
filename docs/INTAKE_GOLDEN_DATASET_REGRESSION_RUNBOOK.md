@@ -26,6 +26,7 @@ php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/g
 Useful options:
 
 ```powershell
+php artisan intake:ocr-regression --dataset=tests/Fixtures/Intake/golden_dataset_minimal.jsonl
 php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/golden.jsonl --json
 php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/golden.jsonl --field=primary_contact_number
 php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/golden.jsonl --limit=500 --fail-under=85
@@ -33,15 +34,33 @@ php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/g
 
 ## Dataset Location
 
-Place the private golden dataset on the server or local machine under:
+The repository contains one fake synthetic fixture for verification only:
+
+```text
+tests/Fixtures/Intake/golden_dataset_minimal.jsonl
+```
+
+Run it with:
+
+```powershell
+php artisan intake:ocr-regression --dataset=tests/Fixtures/Intake/golden_dataset_minimal.jsonl
+```
+
+Place the real private golden dataset on the server or local machine under:
 
 ```text
 storage/app/intake-golden-datasets/golden.jsonl
 ```
 
+Run the private dataset with:
+
+```powershell
+php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/golden.jsonl
+```
+
 The command also accepts an absolute local path for operator-only use.
 
-Do not commit real biodata text, real images, full phone numbers, addresses, names, image hashes, or personal data to git. The repository test fixture uses fake synthetic biodata text only.
+Do not commit real biodata text, real images, full phone numbers, addresses, names, image hashes, or personal data to git. Real golden datasets must stay private under `storage/app` and must not be committed. The repository fixture uses fake synthetic biodata text only.
 
 ## Dataset Format
 
@@ -106,6 +125,7 @@ Mismatches do not mutate anything. They identify parser regression candidates fo
 
 ```powershell
 cd E:\LaravelProjects\laravel-matrimony
+php artisan intake:ocr-regression --dataset=tests/Fixtures/Intake/golden_dataset_minimal.jsonl
 php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/golden.jsonl
 php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/golden.jsonl --json
 ```

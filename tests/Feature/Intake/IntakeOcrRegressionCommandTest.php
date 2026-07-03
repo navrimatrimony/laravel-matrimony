@@ -42,7 +42,7 @@ test('invalid JSONL row is reported as invalid dataset', function () {
 
 test('valid minimal dataset runs and returns success', function () {
     [$exitCode, $payload] = ocrRegressionJson([
-        '--dataset' => ocrRegressionFixturePath(),
+        '--dataset' => ocrRegressionFixtureRelativePath(),
     ]);
 
     expect($exitCode)->toBe(0)
@@ -53,9 +53,68 @@ test('valid minimal dataset runs and returns success', function () {
         ->and($payload['rows'][0]['case_id'])->toBe('synthetic_case_001');
 });
 
-test('field filter works', function () {
+test('lowercase repo-relative fixture path works safely', function () {
+    [$exitCode, $payload] = ocrRegressionJson([
+        '--dataset' => 'tests/fixtures/Intake/golden_dataset_minimal.jsonl',
+    ]);
+
+    expect($exitCode)->toBe(0)
+        ->and($payload['success'])->toBeTrue()
+        ->and($payload['summary']['valid_cases'])->toBe(1)
+        ->and($payload['rows'][0]['case_id'])->toBe('synthetic_case_001');
+});
+
+test('arbitrary relative dataset path is rejected', function (string $dataset) {
+    [$exitCode, $payload] = ocrRegressionJson([
+        '--dataset' => $dataset,
+    ], expectSuccess: false);
+
+    expect($exitCode)->toBe(1)
+        ->and($payload['success'])->toBeFalse()
+        ->and($payload['schema_errors'][0]['error_codes'])->toContain('dataset_path_not_allowed')
+        ->and($payload['schema_errors'][0]['message'])->toContain('Dataset path is not allowed');
+})->with([
+    '.env',
+    'app/Models/User.php',
+    'vendor/autoload.php',
+]);
+
+test('storage app dataset path still works', function () {
+    $path = writeOcrRegressionDataset(ocrRegressionCase([
+        'case_id' => 'storage_dataset_case',
+        'ocr_text' => "Name: Storage Dataset Candidate\nMobile: 9876543210",
+        'expected_fields' => [
+            'primary_contact_number' => '9876543210',
+        ],
+    ]));
+
+    try {
+        [$exitCode, $payload] = ocrRegressionJson([
+            '--dataset' => $path,
+            '--field' => 'primary_contact_number',
+        ]);
+
+        expect($exitCode)->toBe(0)
+            ->and($payload['summary']['valid_cases'])->toBe(1)
+            ->and($payload['rows'][0]['case_id'])->toBe('storage_dataset_case');
+    } finally {
+        File::delete(base_path($path));
+    }
+});
+
+test('absolute dataset path still works', function () {
     [$exitCode, $payload] = ocrRegressionJson([
         '--dataset' => ocrRegressionFixturePath(),
+    ]);
+
+    expect($exitCode)->toBe(0)
+        ->and($payload['summary']['valid_cases'])->toBe(1)
+        ->and($payload['rows'][0]['case_id'])->toBe('synthetic_case_001');
+});
+
+test('field filter works', function () {
+    [$exitCode, $payload] = ocrRegressionJson([
+        '--dataset' => ocrRegressionFixtureRelativePath(),
         '--field' => 'primary_contact_number',
     ]);
 
@@ -167,7 +226,7 @@ test('command does not mutate intakes snapshots parsed raw OCR attempts profile 
     $attemptCountBefore = BiodataIntakeOcrAttempt::where('intake_id', $intake->id)->count();
 
     [$exitCode, $payload] = ocrRegressionJson([
-        '--dataset' => ocrRegressionFixturePath(),
+        '--dataset' => ocrRegressionFixtureRelativePath(),
     ]);
 
     $intake->refresh();
@@ -191,7 +250,7 @@ test('command does not mutate intakes snapshots parsed raw OCR attempts profile 
 
 test('json output is valid and includes expected keys', function () {
     [$exitCode, $payload] = ocrRegressionJson([
-        '--dataset' => ocrRegressionFixturePath(),
+        '--dataset' => ocrRegressionFixtureRelativePath(),
     ]);
 
     expect($exitCode)->toBe(0)
@@ -233,6 +292,11 @@ function ocrRegressionJson(array $parameters, bool $expectSuccess = true): array
 function ocrRegressionFixturePath(): string
 {
     return base_path('tests/Fixtures/Intake/golden_dataset_minimal.jsonl');
+}
+
+function ocrRegressionFixtureRelativePath(): string
+{
+    return 'tests/Fixtures/Intake/golden_dataset_minimal.jsonl';
 }
 
 function writeOcrRegressionDataset(string $contents): string
