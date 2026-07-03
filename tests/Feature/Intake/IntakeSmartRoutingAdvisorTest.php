@@ -195,9 +195,102 @@ test('missing full name keeps sarvam recommendation in dry run when raw text exi
     expect($recommendation['recommended_action'])->toBe('call_sarvam')
         ->and($recommendation['would_call_paid_vision'])->toBeTrue()
         ->and($recommendation['reason_codes'])->toContain('critical_field_confidence_low')
+        ->and($recommendation['reason_codes'])->toContain('critical_field_raw_evidence_absent')
         ->and($recommendation['signals']['low_confidence_critical_fields'])->toBe(['full_name'])
+        ->and($recommendation['signals']['critical_field_parser_proposal_outcome'])->toBe('provider_candidate')
+        ->and($recommendation['signals']['estimated_paid_vision_avoidable'])->toBeFalse()
+        ->and($recommendation['signals']['missing_critical_fields_resolved_by_proposal'])->toBeFalse()
+        ->and($recommendation['signals']['has_ambiguous_critical_proposal'])->toBeFalse()
+        ->and($recommendation['signals']['critical_field_parser_raw_evidence_absent_fields'])->toBe(['full_name'])
         ->and($recommendation['signals']['field_confidence_routing_severity'])->toBe('critical')
         ->and($recommendation['signals']['paid_vision_reasonable_for_field_confidence'])->toBeTrue();
+});
+
+test('safe parser proposals for all missing critical fields recommend manual review instead of sarvam', function () {
+    $intake = createRoutingAdvisorIntake([
+        'raw_ocr_text' => "Name: Parser Proposal Candidate\nDOB: 13/04/1996\nMobile: 9876543210",
+        'parsed_json' => routingAdvisorParsed(null, null, null, 'B.Com'),
+        'parse_status' => 'parsed',
+        'quality_summary_json' => [
+            'score' => 0.95,
+            'is_low' => false,
+        ],
+        'failure_codes_json' => [],
+        'field_confidence_json' => [
+            'full_name' => [
+                'score' => 0.1,
+                'present' => false,
+                'reason' => 'missing_parsed_value',
+            ],
+            'date_of_birth' => [
+                'score' => 0.1,
+                'present' => false,
+                'reason' => 'missing_parsed_value',
+            ],
+            'primary_contact_number' => [
+                'score' => 0.1,
+                'present' => false,
+                'reason' => 'missing_parsed_value',
+            ],
+        ],
+    ]);
+
+    $recommendation = app(IntakeSmartRoutingAdvisor::class)->recommend($intake);
+
+    expect($recommendation['recommended_action'])->toBe('manual_review')
+        ->and($recommendation['would_call_paid_vision'])->toBeFalse()
+        ->and($recommendation['would_skip_paid_vision'])->toBeFalse()
+        ->and($recommendation['reason_codes'])->toContain('critical_field_confidence_low')
+        ->and($recommendation['reason_codes'])->toContain('critical_field_parser_proposal_available')
+        ->and($recommendation['reason_codes'])->toContain('paid_vision_not_required_due_to_parser_proposal')
+        ->and($recommendation['reason_codes'])->not->toContain('critical_field_raw_evidence_absent')
+        ->and($recommendation['signals']['critical_field_parser_proposal_outcome'])->toBe('parser_improvement_candidate')
+        ->and($recommendation['signals']['estimated_paid_vision_avoidable'])->toBeTrue()
+        ->and($recommendation['signals']['missing_critical_fields_resolved_by_proposal'])->toBeTrue()
+        ->and($recommendation['signals']['has_ambiguous_critical_proposal'])->toBeFalse()
+        ->and($recommendation['signals']['critical_field_parser_raw_evidence_absent_fields'])->toBe([])
+        ->and($recommendation['signals']['critical_field_parser_missing_fields'])->toBe([
+            'full_name',
+            'date_of_birth',
+            'primary_contact_number',
+        ])
+        ->and($intake->fresh()->parsed_json)->toBe(routingAdvisorParsed(null, null, null, 'B.Com'))
+        ->and($intake->fresh()->raw_ocr_text)->toBe("Name: Parser Proposal Candidate\nDOB: 13/04/1996\nMobile: 9876543210");
+});
+
+test('ambiguous critical dob parser proposal recommends manual review instead of sarvam', function () {
+    $intake = createRoutingAdvisorIntake([
+        'raw_ocr_text' => "Name: Ambiguous DOB Candidate\nDOB: 04/05/1996\nMobile: 9876543210",
+        'parsed_json' => routingAdvisorParsed('Ambiguous DOB Candidate', null, '9876543210', 'B.Com'),
+        'parse_status' => 'parsed',
+        'quality_summary_json' => [
+            'score' => 0.95,
+            'is_low' => false,
+        ],
+        'failure_codes_json' => [],
+        'field_confidence_json' => [
+            'date_of_birth' => [
+                'score' => 0.1,
+                'present' => false,
+                'reason' => 'missing_parsed_value',
+            ],
+        ],
+    ]);
+
+    $recommendation = app(IntakeSmartRoutingAdvisor::class)->recommend($intake);
+
+    expect($recommendation['recommended_action'])->toBe('manual_review')
+        ->and($recommendation['would_call_paid_vision'])->toBeFalse()
+        ->and($recommendation['reason_codes'])->toContain('critical_field_confidence_low')
+        ->and($recommendation['reason_codes'])->toContain('critical_field_parser_proposal_ambiguous')
+        ->and($recommendation['reason_codes'])->toContain('manual_review_required_for_ambiguous_critical_field')
+        ->and($recommendation['signals']['critical_field_parser_proposal_outcome'])->toBe('manual_review')
+        ->and($recommendation['signals']['estimated_paid_vision_avoidable'])->toBeFalse()
+        ->and($recommendation['signals']['missing_critical_fields_resolved_by_proposal'])->toBeFalse()
+        ->and($recommendation['signals']['has_ambiguous_critical_proposal'])->toBeTrue()
+        ->and($recommendation['signals']['critical_field_parser_raw_evidence_absent_fields'])->toBe([])
+        ->and($intake->fresh()->parsed_json)->toBe(routingAdvisorParsed('Ambiguous DOB Candidate', null, '9876543210', 'B.Com'))
+        ->and($intake->fresh()->raw_ocr_text)->toBe("Name: Ambiguous DOB Candidate\nDOB: 04/05/1996\nMobile: 9876543210");
 });
 
 test('missing date of birth keeps sarvam recommendation in dry run when raw text exists', function () {
@@ -224,7 +317,10 @@ test('missing date of birth keeps sarvam recommendation in dry run when raw text
     expect($recommendation['recommended_action'])->toBe('call_sarvam')
         ->and($recommendation['would_call_paid_vision'])->toBeTrue()
         ->and($recommendation['reason_codes'])->toContain('critical_field_confidence_low')
+        ->and($recommendation['reason_codes'])->toContain('critical_field_raw_evidence_absent')
         ->and($recommendation['signals']['low_confidence_critical_fields'])->toBe(['date_of_birth'])
+        ->and($recommendation['signals']['critical_field_parser_proposal_outcome'])->toBe('provider_candidate')
+        ->and($recommendation['signals']['critical_field_parser_raw_evidence_absent_fields'])->toBe(['date_of_birth'])
         ->and($recommendation['signals']['field_confidence_routing_severity'])->toBe('critical')
         ->and($recommendation['signals']['paid_vision_reasonable_for_field_confidence'])->toBeTrue();
 });
@@ -254,7 +350,10 @@ test('missing primary contact is classified critical and explainable', function 
         ->and($recommendation['would_call_paid_vision'])->toBeTrue()
         ->and($recommendation['reason_codes'])->toContain('field_confidence_low')
         ->and($recommendation['reason_codes'])->toContain('critical_field_confidence_low')
+        ->and($recommendation['reason_codes'])->toContain('critical_field_raw_evidence_absent')
         ->and($recommendation['signals']['low_confidence_critical_fields'])->toBe(['primary_contact_number'])
+        ->and($recommendation['signals']['critical_field_parser_proposal_outcome'])->toBe('provider_candidate')
+        ->and($recommendation['signals']['critical_field_parser_raw_evidence_absent_fields'])->toBe(['primary_contact_number'])
         ->and($recommendation['signals']['field_confidence_routing_severity'])->toBe('critical')
         ->and($recommendation['signals']['paid_vision_reasonable_for_field_confidence'])->toBeTrue();
 });

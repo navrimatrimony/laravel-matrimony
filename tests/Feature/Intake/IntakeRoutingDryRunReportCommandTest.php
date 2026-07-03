@@ -146,6 +146,11 @@ test('details output includes safe signal summary without raw evidence or provid
                 'low_confidence_optional_fields' => ['custom_optional_field'],
                 'field_confidence_routing_severity' => 'critical',
                 'paid_vision_reasonable_for_field_confidence' => true,
+                'critical_field_parser_proposal_outcome' => 'parser_improvement_candidate',
+                'estimated_paid_vision_avoidable' => true,
+                'missing_critical_fields_resolved_by_proposal' => true,
+                'has_ambiguous_critical_proposal' => false,
+                'critical_field_parser_raw_evidence_absent_fields' => [],
             ],
         ]),
         'routing_telemetry_json' => routingDryRunReportTelemetry([
@@ -189,11 +194,21 @@ test('details output includes safe signal summary without raw evidence or provid
         ->and($output)->toContain('Optional low fields')
         ->and($output)->toContain('Field severity')
         ->and($output)->toContain('Paid vision reasonable')
+        ->and($output)->toContain('Parser proposal outcome')
+        ->and($output)->toContain('Paid vision avoidable')
+        ->and($output)->toContain('Resolved by proposal')
+        ->and($output)->toContain('Ambiguous proposal')
+        ->and($output)->toContain('Raw absent fields')
         ->and($output)->toContain('fc_critical=primary_contact_number')
         ->and($output)->toContain('fc_important=education')
         ->and($output)->toContain('fc_optional=custom_optional_field')
         ->and($output)->toContain('fc_severity=critical')
         ->and($output)->toContain('fc_paid_reasonable=yes')
+        ->and($output)->toContain('parser_outcome=parser_improvement_candidate')
+        ->and($output)->toContain('parser_avoidable=yes')
+        ->and($output)->toContain('parser_resolved=yes')
+        ->and($output)->toContain('parser_ambiguous=no')
+        ->and($output)->toContain('parser_absent=none')
         ->and($output)->toContain('Policy enabled')
         ->and($output)->toContain('routing_disabled')
         ->and($output)->toContain('skip=no')
@@ -265,6 +280,8 @@ test('details json shows backfilled quality is not trusted as verifiable evidenc
         ->and($row['low_confidence_optional_fields'])->toBe([])
         ->and($row['field_confidence_routing_severity'])->toBe('important_only')
         ->and($row['paid_vision_reasonable_for_field_confidence'])->toBe('no')
+        ->and($row['critical_field_parser_proposal_outcome'])->toBe('n/a')
+        ->and($row['estimated_paid_vision_avoidable'])->toBe('n/a')
         ->and($row['signal_summary'])->toContain('fc_critical=none')
         ->and($row['signal_summary'])->toContain('fc_important=education')
         ->and($row['signal_summary'])->toContain('fc_severity=important_only')

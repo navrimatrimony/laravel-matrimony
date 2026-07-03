@@ -27,6 +27,11 @@ test('command proposes masked phone without printing full phone', function () {
         ->and($payload['rows'][0]['phone_candidate_count'])->toBe(1)
         ->and($payload['rows'][0]['masked_phone'])->toBe('******3210')
         ->and($payload['rows'][0]['phone_confidence'])->toBe('high')
+        ->and($payload['rows'][0]['parser_proposal_outcome'])->toBe('parser_improvement_candidate')
+        ->and($payload['rows'][0]['estimated_paid_vision_avoidable'])->toBeTrue()
+        ->and($payload['rows'][0]['missing_critical_fields_resolved_by_proposal'])->toBeTrue()
+        ->and($payload['rows'][0]['has_ambiguous_critical_proposal'])->toBeFalse()
+        ->and($payload['rows'][0]['raw_evidence_absent_fields'])->toBe([])
         ->and(json_encode($payload))->not->toContain('9876543210')
         ->and(json_encode($payload))->not->toContain('Phone Proposal Candidate');
 });
@@ -102,6 +107,11 @@ test('ambiguous dob is marked ambiguous', function () {
         ->and($payload['rows'][0]['dob_normalized'])->toBeNull()
         ->and($payload['rows'][0]['dob_confidence'])->toBe('low')
         ->and($payload['rows'][0]['suggested_next_action'])->toBe('manual_review')
+        ->and($payload['rows'][0]['parser_proposal_outcome'])->toBe('manual_review')
+        ->and($payload['rows'][0]['estimated_paid_vision_avoidable'])->toBeFalse()
+        ->and($payload['rows'][0]['missing_critical_fields_resolved_by_proposal'])->toBeFalse()
+        ->and($payload['rows'][0]['has_ambiguous_critical_proposal'])->toBeTrue()
+        ->and($payload['rows'][0]['raw_evidence_absent_fields'])->toBe([])
         ->and(json_encode($payload))->not->toContain('04/05/1996');
 });
 

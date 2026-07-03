@@ -4,6 +4,7 @@ use App\Models\BiodataIntake;
 use App\Models\BiodataIntakeOcrAttempt;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
+use App\Services\Intake\IntakeSmartRoutingAdvisor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 
@@ -22,6 +23,11 @@ test('command lists call sarvam candidates', function () {
                 'low_confidence_fields' => ['date_of_birth'],
                 'quality_score' => 0.42,
                 'failure_codes' => [BiodataIntakeOcrAttempt::FAILURE_TEXT_FOUND_MAPPING_FAILED],
+                'critical_field_parser_proposal_outcome' => 'provider_candidate',
+                'estimated_paid_vision_avoidable' => false,
+                'missing_critical_fields_resolved_by_proposal' => false,
+                'has_ambiguous_critical_proposal' => false,
+                'critical_field_parser_raw_evidence_absent_fields' => ['date_of_birth'],
             ],
         ]),
     ]);
@@ -56,6 +62,11 @@ test('command lists call sarvam candidates', function () {
         ->and($payload['rows'][0]['cheap_ocr_attempt_count'])->toBe(1)
         ->and($payload['rows'][0]['sarvam_attempt_count'])->toBe(0)
         ->and($payload['rows'][0]['primary_ocr_attempt_exists'])->toBeTrue()
+        ->and($payload['rows'][0]['parser_proposal_outcome'])->toBe('provider_candidate')
+        ->and($payload['rows'][0]['estimated_paid_vision_avoidable'])->toBeFalse()
+        ->and($payload['rows'][0]['missing_critical_fields_resolved_by_proposal'])->toBeFalse()
+        ->and($payload['rows'][0]['has_ambiguous_critical_proposal'])->toBeFalse()
+        ->and($payload['rows'][0]['raw_evidence_absent_fields'])->toBe(['date_of_birth'])
         ->and($payload['rows'][0]['policy']['blocked_reason'])->toBe('routing_disabled');
 });
 
@@ -179,6 +190,11 @@ test('raw ocr text phone provider payloads addresses and hashes are not printed'
     expect($exitCode)->toBe(0)
         ->and($output)->toContain((string) $intake->id)
         ->and($output)->toContain('Paid vision reasonable')
+        ->and($output)->toContain('Parser proposal outcome')
+        ->and($output)->toContain('Paid vision avoidable')
+        ->and($output)->toContain('Resolved by proposal')
+        ->and($output)->toContain('Ambiguous proposal')
+        ->and($output)->toContain('Raw absent fields')
         ->and($output)->toContain('critical')
         ->and($output)->toContain('reference_lacks_verifiable_ocr_evidence')
         ->and($output)->not->toContain('Sensitive OCR text')
@@ -227,6 +243,26 @@ test('command does not mutate routing json parsed raw ocr attempts parse status 
         ->and($intake->parse_status)->toBe('parsed')
         ->and(BiodataIntakeOcrAttempt::where('intake_id', $intake->id)->count())->toBe($attemptCountBefore)
         ->and($profile->full_name)->toBe('Profile Before Sarvam Candidate Report');
+});
+
+test('sarvam candidates report excludes avoidable parser proposal rows after dry run refresh', function () {
+    $intake = createSarvamCandidateIntake([
+        'raw_ocr_text' => 'Mobile: 9876543210',
+        'parsed_json' => sarvamCandidateParsed('Parsed Candidate', '1111111111'),
+        'field_confidence_json' => [
+            'primary_contact_number' => ['score' => 0.1, 'present' => false, 'reason' => 'missing_parsed_value'],
+        ],
+        'routing_recommendation_json' => null,
+    ]);
+
+    $stored = app(IntakeSmartRoutingAdvisor::class)->storeForIntake($intake);
+    $payload = sarvamCandidatesJson();
+
+    expect($stored->routing_recommendation_json['recommended_action'])->toBe('manual_review')
+        ->and($stored->routing_recommendation_json['reason_codes'])->toContain('critical_field_parser_proposal_available')
+        ->and($stored->routing_recommendation_json['signals']['estimated_paid_vision_avoidable'])->toBeTrue()
+        ->and($payload['summary']['total_call_sarvam_candidates'])->toBe(0)
+        ->and($payload['rows'])->toBe([]);
 });
 
 test('non call sarvam rows are excluded', function () {

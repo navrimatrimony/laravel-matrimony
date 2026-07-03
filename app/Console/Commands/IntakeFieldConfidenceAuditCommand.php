@@ -153,7 +153,12 @@ class IntakeFieldConfidenceAuditCommand extends Command
             'has_parsed_json' => $hasParsedJson,
             'has_raw_ocr_text' => $hasRawOcrText,
             'failure_codes' => $this->failureCodes($intake, $signals),
-            'notes' => $this->notes($qualityScore, $fieldDetails, $this->tokenList($recommendation['reason_codes'] ?? [])),
+            'parser_proposal_outcome' => $this->safeToken($signals['critical_field_parser_proposal_outcome'] ?? null),
+            'estimated_paid_vision_avoidable' => $this->nullableBool($signals['estimated_paid_vision_avoidable'] ?? null),
+            'missing_critical_fields_resolved_by_proposal' => $this->nullableBool($signals['missing_critical_fields_resolved_by_proposal'] ?? null),
+            'has_ambiguous_critical_proposal' => $this->nullableBool($signals['has_ambiguous_critical_proposal'] ?? null),
+            'raw_evidence_absent_fields' => $this->tokenList($signals['critical_field_parser_raw_evidence_absent_fields'] ?? []),
+            'notes' => $this->notes($qualityScore, $fieldDetails, $this->tokenList($recommendation['reason_codes'] ?? []), $signals),
         ];
     }
 
@@ -264,6 +269,11 @@ class IntakeFieldConfidenceAuditCommand extends Command
             'Raw OCR',
             'Failure codes',
             'Reason codes',
+            'Parser proposal outcome',
+            'Paid vision avoidable',
+            'Resolved by proposal',
+            'Ambiguous proposal',
+            'Raw absent fields',
             'Notes',
         ], array_map(fn (array $row): array => [
             $row['intake_id'],
@@ -281,6 +291,11 @@ class IntakeFieldConfidenceAuditCommand extends Command
             $this->yesNo($row['has_raw_ocr_text'] ?? null),
             implode(',', $this->tokenList($row['failure_codes'] ?? [])) ?: '-',
             implode(',', $this->tokenList($row['reason_codes'] ?? [])) ?: '-',
+            $this->safeToken($row['parser_proposal_outcome'] ?? null),
+            $this->yesNo($row['estimated_paid_vision_avoidable'] ?? null),
+            $this->yesNo($row['missing_critical_fields_resolved_by_proposal'] ?? null),
+            $this->yesNo($row['has_ambiguous_critical_proposal'] ?? null),
+            implode(',', $this->tokenList($row['raw_evidence_absent_fields'] ?? [])) ?: '-',
             implode(',', $this->tokenList($row['notes'] ?? [])) ?: '-',
         ], $rows));
     }
@@ -437,7 +452,7 @@ class IntakeFieldConfidenceAuditCommand extends Command
      * @param  list<string>  $reasonCodes
      * @return list<string>
      */
-    private function notes(?float $qualityScore, array $fieldDetails, array $reasonCodes): array
+    private function notes(?float $qualityScore, array $fieldDetails, array $reasonCodes, array $signals): array
     {
         $notes = [];
         if (in_array('field_confidence_low', $reasonCodes, true)) {
@@ -467,6 +482,10 @@ class IntakeFieldConfidenceAuditCommand extends Command
 
         if ($qualityScore !== null && $qualityScore >= 0.9) {
             $notes[] = 'high_quality_low_field_confidence';
+        }
+        $outcome = $this->safeToken($signals['critical_field_parser_proposal_outcome'] ?? null, '');
+        if ($outcome !== '') {
+            $notes[] = 'parser_proposal_'.$outcome;
         }
 
         return array_values(array_unique($notes));
@@ -599,6 +618,15 @@ class IntakeFieldConfidenceAuditCommand extends Command
         }
 
         return round((float) $value, 4);
+    }
+
+    private function nullableBool(mixed $value): ?bool
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return $this->boolValue($value);
     }
 
     private function boolSignal(mixed $value, bool $fallback): bool

@@ -17,6 +17,7 @@ class IntakeSmartRoutingAdvisor
         private readonly IntakeBiodataIdentityFingerprint $identityFingerprint,
         private readonly IntakeDuplicateFieldMatchEvaluator $fieldMatchEvaluator,
         private readonly IntakeFieldConfidenceClassifier $fieldConfidenceClassifier,
+        private readonly IntakeCriticalFieldParserProposalService $criticalFieldParserProposalService,
     ) {}
 
     /**
@@ -145,6 +146,46 @@ class IntakeSmartRoutingAdvisor
         }
 
         $fieldConfidencePaidVisionReasonable = ! empty($signals['paid_vision_reasonable_for_field_confidence']);
+        $wouldCallSarvamForCriticalField = in_array('critical_field_confidence_low', $reasonCodes, true)
+            && (
+                $fieldConfidencePaidVisionReasonable
+                || array_intersect($reasonCodes, [
+                    'parser_no_fields',
+                    'two_column_layout_suspected',
+                    'low_quality_cheap_ocr',
+                ]) !== []
+            );
+
+        if ($wouldCallSarvamForCriticalField) {
+            $parserProposalOutcome = $signals['critical_field_parser_proposal_outcome'] ?? 'provider_candidate';
+            if (
+                $parserProposalOutcome === 'parser_improvement_candidate'
+                && ! empty($signals['all_missing_critical_fields_have_safe_proposal'])
+            ) {
+                $reasonCodes[] = 'critical_field_parser_proposal_available';
+                $reasonCodes[] = 'paid_vision_not_required_due_to_parser_proposal';
+
+                return $this->payload('manual_review', array_values(array_unique($reasonCodes)), 0.62, false, false, $signals);
+            }
+
+            if (
+                $parserProposalOutcome === 'manual_review'
+                && ! empty($signals['has_ambiguous_critical_proposal'])
+            ) {
+                $reasonCodes[] = 'critical_field_parser_proposal_ambiguous';
+                $reasonCodes[] = 'manual_review_required_for_ambiguous_critical_field';
+
+                return $this->payload('manual_review', array_values(array_unique($reasonCodes)), 0.6, false, false, $signals);
+            }
+
+            if (
+                $parserProposalOutcome === 'provider_candidate'
+                && $this->stringList($signals['critical_field_parser_raw_evidence_absent_fields'] ?? []) !== []
+            ) {
+                $reasonCodes[] = 'critical_field_raw_evidence_absent';
+            }
+        }
+
         if (array_intersect($reasonCodes, [
             'parser_no_fields',
             'two_column_layout_suspected',
@@ -217,6 +258,7 @@ class IntakeSmartRoutingAdvisor
         $qualitySummary = is_array($intake->quality_summary_json) ? $intake->quality_summary_json : [];
         $fieldConfidence = is_array($intake->field_confidence_json) ? $intake->field_confidence_json : [];
         $duplicateSignals = $this->duplicateSignals($intake, $attempts, $telemetry);
+        $parserProposalSignals = $this->parserProposalSignals($intake, $fieldConfidenceClassification);
 
         return array_merge([
             'parse_status' => $intake->parse_status,
@@ -250,7 +292,36 @@ class IntakeSmartRoutingAdvisor
             'image_hash_present' => $attempts->contains(
                 fn (BiodataIntakeOcrAttempt $attempt): bool => trim((string) ($attempt->image_hash ?? '')) !== ''
             ),
-        ], $duplicateSignals);
+        ], $parserProposalSignals, $duplicateSignals);
+    }
+
+    /**
+     * @param  array<string, mixed>  $fieldConfidenceClassification
+     * @return array<string, mixed>
+     */
+    private function parserProposalSignals(BiodataIntake $intake, array $fieldConfidenceClassification): array
+    {
+        $proposal = $this->criticalFieldParserProposalService->analyze($intake, [
+            'low_confidence_critical_fields' => $this->stringList($fieldConfidenceClassification['low_confidence_critical_fields'] ?? []),
+            'low_confidence_fields' => $this->stringList($fieldConfidenceClassification['low_confidence_critical_fields'] ?? []),
+        ]);
+        $outcome = is_scalar($proposal['parser_proposal_outcome'] ?? null)
+            ? trim((string) $proposal['parser_proposal_outcome'])
+            : 'provider_candidate';
+        $allSafe = (bool) ($proposal['all_missing_critical_fields_have_safe_proposal'] ?? false);
+
+        return [
+            'critical_field_parser_proposal_outcome' => $outcome !== '' ? $outcome : 'provider_candidate',
+            'critical_field_parser_missing_fields' => $this->stringList($proposal['missing_critical_fields'] ?? []),
+            'critical_field_parser_proposal_confidence' => is_array($proposal['proposal_confidence'] ?? null)
+                ? $proposal['proposal_confidence']
+                : [],
+            'critical_field_parser_raw_evidence_absent_fields' => $this->stringList($proposal['raw_evidence_absent_fields'] ?? []),
+            'all_missing_critical_fields_have_safe_proposal' => $allSafe,
+            'missing_critical_fields_resolved_by_proposal' => (bool) ($proposal['missing_critical_fields_resolved_by_proposal'] ?? false),
+            'has_ambiguous_critical_proposal' => (bool) ($proposal['has_ambiguous_critical_proposal'] ?? false),
+            'estimated_paid_vision_avoidable' => $allSafe && $outcome === 'parser_improvement_candidate',
+        ];
     }
 
     /**

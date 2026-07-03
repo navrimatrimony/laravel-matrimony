@@ -21,6 +21,11 @@ test('command lists low confidence fields', function () {
             'signals' => [
                 'quality_score' => 0.92,
                 'low_confidence_fields' => ['date_of_birth', 'education'],
+                'critical_field_parser_proposal_outcome' => 'provider_candidate',
+                'estimated_paid_vision_avoidable' => false,
+                'missing_critical_fields_resolved_by_proposal' => false,
+                'has_ambiguous_critical_proposal' => false,
+                'critical_field_parser_raw_evidence_absent_fields' => ['date_of_birth'],
             ],
         ]),
     ]);
@@ -42,6 +47,11 @@ test('command lists low confidence fields', function () {
         ->and($payload['rows'][0]['low_confidence_optional_fields'])->toBe([])
         ->and($payload['rows'][0]['field_confidence_routing_severity'])->toBe('critical')
         ->and($payload['rows'][0]['paid_vision_reasonable_for_field_confidence'])->toBeTrue()
+        ->and($payload['rows'][0]['parser_proposal_outcome'])->toBe('provider_candidate')
+        ->and($payload['rows'][0]['estimated_paid_vision_avoidable'])->toBeFalse()
+        ->and($payload['rows'][0]['missing_critical_fields_resolved_by_proposal'])->toBeFalse()
+        ->and($payload['rows'][0]['has_ambiguous_critical_proposal'])->toBeFalse()
+        ->and($payload['rows'][0]['raw_evidence_absent_fields'])->toBe(['date_of_birth'])
         ->and($payload['rows'][0]['notes'])->toContain('high_quality_low_field_confidence');
 });
 
@@ -232,6 +242,11 @@ test('raw ocr text phone provider payloads full address and hashes are not print
         ->and($output)->toContain('primary_contact_number')
         ->and($output)->toContain('Field severity')
         ->and($output)->toContain('Paid vision reasonable')
+        ->and($output)->toContain('Parser proposal outcome')
+        ->and($output)->toContain('Paid vision avoidable')
+        ->and($output)->toContain('Resolved by proposal')
+        ->and($output)->toContain('Ambiguous proposal')
+        ->and($output)->toContain('Raw absent fields')
         ->and($output)->not->toContain('Sensitive OCR text')
         ->and($output)->not->toContain('9876543210')
         ->and($output)->not->toContain('123 Secret Road')

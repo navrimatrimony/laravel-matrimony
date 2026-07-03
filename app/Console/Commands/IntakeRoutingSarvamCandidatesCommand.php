@@ -177,6 +177,11 @@ class IntakeRoutingSarvamCandidatesCommand extends Command
             'sarvam_attempt_count' => $this->sarvamAttemptCount($attempts),
             'primary_ocr_attempt_exists' => $attempts->contains(fn (BiodataIntakeOcrAttempt $attempt): bool => (bool) $attempt->is_primary),
             'duplicate' => $this->duplicateSummary($signals),
+            'parser_proposal_outcome' => $this->safeToken($signals['critical_field_parser_proposal_outcome'] ?? null),
+            'estimated_paid_vision_avoidable' => $this->nullableBool($signals['estimated_paid_vision_avoidable'] ?? null),
+            'missing_critical_fields_resolved_by_proposal' => $this->nullableBool($signals['missing_critical_fields_resolved_by_proposal'] ?? null),
+            'has_ambiguous_critical_proposal' => $this->nullableBool($signals['has_ambiguous_critical_proposal'] ?? null),
+            'raw_evidence_absent_fields' => $this->stringList($signals['critical_field_parser_raw_evidence_absent_fields'] ?? []),
             'policy' => $this->policySummary($policyEvaluation),
             'notes' => $this->notes($reasonCodes, $signals, $attempts),
         ];
@@ -262,6 +267,11 @@ class IntakeRoutingSarvamCandidatesCommand extends Command
             'Sarvam',
             'Primary',
             'Duplicate',
+            'Parser proposal outcome',
+            'Paid vision avoidable',
+            'Resolved by proposal',
+            'Ambiguous proposal',
+            'Raw absent fields',
             'Policy',
             'Notes',
         ], array_map(fn (array $row): array => [
@@ -283,6 +293,11 @@ class IntakeRoutingSarvamCandidatesCommand extends Command
             $row['sarvam_attempt_count'] ?? 'n/a',
             $this->yesNo($row['primary_ocr_attempt_exists'] ?? null),
             $this->duplicateDisplay($this->arrayValue($row['duplicate'] ?? [])),
+            $this->safeToken($row['parser_proposal_outcome'] ?? null),
+            $this->yesNo($row['estimated_paid_vision_avoidable'] ?? null),
+            $this->yesNo($row['missing_critical_fields_resolved_by_proposal'] ?? null),
+            $this->yesNo($row['has_ambiguous_critical_proposal'] ?? null),
+            implode(',', $this->stringList($row['raw_evidence_absent_fields'] ?? [])) ?: '-',
             $this->policyDisplay($this->arrayValue($row['policy'] ?? [])),
             implode(',', $this->stringList($row['notes'] ?? [])) ?: '-',
         ], $rows));
@@ -461,6 +476,10 @@ class IntakeRoutingSarvamCandidatesCommand extends Command
         }
         if ($this->sarvamAttemptCount($attempts) > 0) {
             $notes[] = 'existing_sarvam_attempt';
+        }
+        $outcome = $this->safeToken($signals['critical_field_parser_proposal_outcome'] ?? null, '');
+        if ($outcome !== '') {
+            $notes[] = 'parser_proposal_'.$outcome;
         }
 
         return array_values(array_unique($notes));
