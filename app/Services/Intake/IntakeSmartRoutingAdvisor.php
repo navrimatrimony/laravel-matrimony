@@ -16,6 +16,7 @@ class IntakeSmartRoutingAdvisor
         private readonly IntakeRoutingTelemetryService $telemetry,
         private readonly IntakeBiodataIdentityFingerprint $identityFingerprint,
         private readonly IntakeDuplicateFieldMatchEvaluator $fieldMatchEvaluator,
+        private readonly IntakeFieldConfidenceClassifier $fieldConfidenceClassifier,
     ) {}
 
     /**
@@ -28,6 +29,8 @@ class IntakeSmartRoutingAdvisor
         $failureCodes = $this->stringList($intake->failure_codes_json);
         $fieldConfidence = is_array($intake->field_confidence_json) ? $intake->field_confidence_json : [];
         $lowConfidenceKeys = $this->lowConfidenceKeys($fieldConfidence);
+        $hasRawOcrText = trim((string) ($intake->raw_ocr_text ?? '')) !== '';
+        $fieldConfidenceClassification = $this->fieldConfidenceClassifier->classify($lowConfidenceKeys, $hasRawOcrText);
         $qualityScore = $this->nullableFloat($qualitySummary['score'] ?? $telemetry['last_quality_score'] ?? null);
         $layoutScore = $this->nullableFloat($qualitySummary['layout_score'] ?? $telemetry['last_layout_score'] ?? null);
         $hasFile = trim((string) ($intake->file_path ?? '')) !== '';
@@ -44,6 +47,7 @@ class IntakeSmartRoutingAdvisor
             $layoutScore,
             $failureCodes,
             $lowConfidenceKeys,
+            $fieldConfidenceClassification,
         );
 
         $reasonCodes = [];
@@ -95,6 +99,9 @@ class IntakeSmartRoutingAdvisor
 
         if ($lowConfidenceKeys !== []) {
             $reasonCodes[] = 'field_confidence_low';
+            if (($fieldConfidenceClassification['field_confidence_routing_severity'] ?? 'none') === 'critical') {
+                $reasonCodes[] = 'critical_field_confidence_low';
+            }
         }
 
         $qualityIsHigh = $qualityScore !== null && $qualityScore >= self::HIGH_QUALITY_THRESHOLD;
@@ -120,12 +127,29 @@ class IntakeSmartRoutingAdvisor
             return $this->payload('manual_review', array_values(array_unique($reasonCodes)), 0.68, false, false, $signals);
         }
 
+        if (
+            in_array('field_confidence_low', $reasonCodes, true)
+            && empty($signals['paid_vision_reasonable_for_field_confidence'])
+            && array_intersect($reasonCodes, [
+                'parser_no_fields',
+                'two_column_layout_suspected',
+                'low_quality_cheap_ocr',
+            ]) === []
+        ) {
+            if (in_array($signals['field_confidence_routing_severity'] ?? 'none', ['important_only', 'optional_only'], true)) {
+                $reasonCodes[] = 'low_confidence_optional_fields_only';
+                $reasonCodes[] = 'paid_vision_not_justified_by_optional_missing_fields';
+            }
+
+            return $this->payload('manual_review', array_values(array_unique($reasonCodes)), 0.55, false, false, $signals);
+        }
+
+        $fieldConfidencePaidVisionReasonable = ! empty($signals['paid_vision_reasonable_for_field_confidence']);
         if (array_intersect($reasonCodes, [
             'parser_no_fields',
             'two_column_layout_suspected',
-            'field_confidence_low',
             'low_quality_cheap_ocr',
-        ]) !== []) {
+        ]) !== [] || $fieldConfidencePaidVisionReasonable) {
             return $this->payload('call_sarvam', array_values(array_unique($reasonCodes)), 0.7, false, true, $signals);
         }
 
@@ -177,6 +201,7 @@ class IntakeSmartRoutingAdvisor
      * @param  array<string, mixed>  $telemetry
      * @param  list<string>  $failureCodes
      * @param  list<string>  $lowConfidenceKeys
+     * @param  array<string, mixed>  $fieldConfidenceClassification
      * @return array<string, mixed>
      */
     private function signals(
@@ -186,6 +211,7 @@ class IntakeSmartRoutingAdvisor
         ?float $layoutScore,
         array $failureCodes,
         array $lowConfidenceKeys,
+        array $fieldConfidenceClassification,
     ): array {
         $attempts = $this->ocrAttempts($intake);
         $qualitySummary = is_array($intake->quality_summary_json) ? $intake->quality_summary_json : [];
@@ -203,6 +229,11 @@ class IntakeSmartRoutingAdvisor
             'layout_score' => $layoutScore,
             'failure_codes' => $failureCodes,
             'low_confidence_fields' => $lowConfidenceKeys,
+            'low_confidence_critical_fields' => $this->stringList($fieldConfidenceClassification['low_confidence_critical_fields'] ?? []),
+            'low_confidence_important_fields' => $this->stringList($fieldConfidenceClassification['low_confidence_important_fields'] ?? []),
+            'low_confidence_optional_fields' => $this->stringList($fieldConfidenceClassification['low_confidence_optional_fields'] ?? []),
+            'field_confidence_routing_severity' => $fieldConfidenceClassification['field_confidence_routing_severity'] ?? 'none',
+            'paid_vision_reasonable_for_field_confidence' => (bool) ($fieldConfidenceClassification['paid_vision_reasonable_for_field_confidence'] ?? false),
             'ocr_attempt_count' => $attempts->count(),
             'primary_ocr_attempt_exists' => $attempts->contains(
                 fn (BiodataIntakeOcrAttempt $attempt): bool => (bool) $attempt->is_primary

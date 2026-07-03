@@ -37,6 +37,11 @@ test('command lists low confidence fields', function () {
         ->and($payload['rows'][0]['field_confidence']['date_of_birth']['reason'])->toBe('missing_parsed_value')
         ->and($payload['rows'][0]['field_confidence']['education']['score'])->toBe(0.6)
         ->and($payload['rows'][0]['missing_fields'])->toBe(['date_of_birth'])
+        ->and($payload['rows'][0]['low_confidence_critical_fields'])->toBe(['date_of_birth'])
+        ->and($payload['rows'][0]['low_confidence_important_fields'])->toBe(['education'])
+        ->and($payload['rows'][0]['low_confidence_optional_fields'])->toBe([])
+        ->and($payload['rows'][0]['field_confidence_routing_severity'])->toBe('critical')
+        ->and($payload['rows'][0]['paid_vision_reasonable_for_field_confidence'])->toBeTrue()
         ->and($payload['rows'][0]['notes'])->toContain('high_quality_low_field_confidence');
 });
 
@@ -63,7 +68,9 @@ test('field filter works', function () {
     expect($payload['summary']['total_scanned'])->toBe(1)
         ->and($payload['filters']['field'])->toBe('primary_contact_number')
         ->and($payload['rows'][0]['intake_id'])->toBe($primaryContactLow->id)
-        ->and($payload['rows'][0]['low_confidence_fields'])->toBe(['primary_contact_number']);
+        ->and($payload['rows'][0]['low_confidence_fields'])->toBe(['primary_contact_number'])
+        ->and($payload['rows'][0]['low_confidence_critical_fields'])->toBe(['primary_contact_number'])
+        ->and($payload['rows'][0]['field_confidence_routing_severity'])->toBe('critical');
 });
 
 test('action filter works', function () {
@@ -150,18 +157,29 @@ test('summary counts are correct', function () {
             'signals' => ['low_confidence_fields' => ['caste'], 'quality_score' => 0.95],
         ]),
     ]);
+    createFieldConfidenceAuditIntake([
+        'field_confidence_json' => [
+            'custom_optional_field' => ['score' => 0.1, 'present' => false, 'status' => 'missing', 'reason' => 'missing_parsed_value', 'source_path' => null],
+        ],
+        'routing_recommendation_json' => fieldConfidenceAuditRecommendation([
+            'recommended_action' => 'unknown',
+            'reason_codes' => ['no_signal'],
+            'signals' => ['low_confidence_fields' => ['custom_optional_field'], 'quality_score' => 0.95],
+        ]),
+    ]);
 
     $payload = fieldConfidenceAuditJson();
 
-    expect($payload['summary']['total_scanned'])->toBe(5)
+    expect($payload['summary']['total_scanned'])->toBe(6)
         ->and($payload['summary']['field_counts'])->toBe([
             'address' => 1,
             'caste' => 1,
+            'custom_optional_field' => 1,
             'date_of_birth' => 1,
             'education' => 1,
             'full_name' => 1,
         ])
-        ->and($payload['summary']['confidence_bucket_counts']['0-0.24'])->toBe(1)
+        ->and($payload['summary']['confidence_bucket_counts']['0-0.24'])->toBe(2)
         ->and($payload['summary']['confidence_bucket_counts']['0.25-0.49'])->toBe(1)
         ->and($payload['summary']['confidence_bucket_counts']['0.5-0.74'])->toBe(1)
         ->and($payload['summary']['confidence_bucket_counts']['0.75-0.89'])->toBe(1)
@@ -169,11 +187,15 @@ test('summary counts are correct', function () {
         ->and($payload['summary']['recommended_action_counts'])->toBe([
             'call_sarvam' => 2,
             'manual_review' => 1,
-            'unknown' => 2,
+            'unknown' => 3,
         ])
         ->and($payload['summary']['reason_code_counts']['field_confidence_low'])->toBe(3)
         ->and($payload['summary']['reason_code_counts']['parser_no_fields'])->toBe(1)
-        ->and($payload['summary']['reason_code_counts']['no_signal'])->toBe(2);
+        ->and($payload['summary']['reason_code_counts']['no_signal'])->toBe(3)
+        ->and($payload['summary']['field_confidence_severity_counts']['critical'])->toBe(2)
+        ->and($payload['summary']['field_confidence_severity_counts']['important_only'])->toBe(3)
+        ->and($payload['summary']['field_confidence_severity_counts']['optional_only'])->toBe(1)
+        ->and($payload['summary']['paid_vision_reasonable_counts'])->toBe(['yes' => 2, 'no' => 4]);
 });
 
 test('raw ocr text phone provider payloads full address and hashes are not printed', function () {
@@ -208,6 +230,8 @@ test('raw ocr text phone provider payloads full address and hashes are not print
     expect($exitCode)->toBe(0)
         ->and($output)->toContain((string) $intake->id)
         ->and($output)->toContain('primary_contact_number')
+        ->and($output)->toContain('Field severity')
+        ->and($output)->toContain('Paid vision reasonable')
         ->and($output)->not->toContain('Sensitive OCR text')
         ->and($output)->not->toContain('9876543210')
         ->and($output)->not->toContain('123 Secret Road')

@@ -141,6 +141,11 @@ test('details output includes safe signal summary without raw evidence or provid
                 'duplicate_field_match_eligible' => true,
                 'duplicate_field_match_score' => 1.0,
                 'duplicate_field_mismatch_codes' => [],
+                'low_confidence_critical_fields' => ['primary_contact_number'],
+                'low_confidence_important_fields' => ['education'],
+                'low_confidence_optional_fields' => ['custom_optional_field'],
+                'field_confidence_routing_severity' => 'critical',
+                'paid_vision_reasonable_for_field_confidence' => true,
             ],
         ]),
         'routing_telemetry_json' => routingDryRunReportTelemetry([
@@ -179,6 +184,16 @@ test('details output includes safe signal summary without raw evidence or provid
         ->and($output)->toContain('field_match=yes')
         ->and($output)->toContain('field_score=1')
         ->and($output)->toContain('field_mismatches=none')
+        ->and($output)->toContain('Critical low fields')
+        ->and($output)->toContain('Important low fields')
+        ->and($output)->toContain('Optional low fields')
+        ->and($output)->toContain('Field severity')
+        ->and($output)->toContain('Paid vision reasonable')
+        ->and($output)->toContain('fc_critical=primary_contact_number')
+        ->and($output)->toContain('fc_important=education')
+        ->and($output)->toContain('fc_optional=custom_optional_field')
+        ->and($output)->toContain('fc_severity=critical')
+        ->and($output)->toContain('fc_paid_reasonable=yes')
         ->and($output)->toContain('Policy enabled')
         ->and($output)->toContain('routing_disabled')
         ->and($output)->toContain('skip=no')
@@ -221,6 +236,11 @@ test('details json shows backfilled quality is not trusted as verifiable evidenc
                 'duplicate_field_match_eligible' => true,
                 'duplicate_field_match_score' => 1.0,
                 'duplicate_field_mismatch_codes' => [],
+                'low_confidence_critical_fields' => [],
+                'low_confidence_important_fields' => ['education'],
+                'low_confidence_optional_fields' => [],
+                'field_confidence_routing_severity' => 'important_only',
+                'paid_vision_reasonable_for_field_confidence' => false,
             ],
         ]),
     ]);
@@ -240,6 +260,15 @@ test('details json shows backfilled quality is not trusted as verifiable evidenc
         ->and($row['signal_summary'])->toContain('ref_ocr_attempts=0')
         ->and($row['signal_summary'])->toContain('ref_sarvam_attempts=0')
         ->and($row['signal_summary'])->toContain('backfilled_quality_trusted=no')
+        ->and($row['low_confidence_critical_fields'])->toBe([])
+        ->and($row['low_confidence_important_fields'])->toBe(['education'])
+        ->and($row['low_confidence_optional_fields'])->toBe([])
+        ->and($row['field_confidence_routing_severity'])->toBe('important_only')
+        ->and($row['paid_vision_reasonable_for_field_confidence'])->toBe('no')
+        ->and($row['signal_summary'])->toContain('fc_critical=none')
+        ->and($row['signal_summary'])->toContain('fc_important=education')
+        ->and($row['signal_summary'])->toContain('fc_severity=important_only')
+        ->and($row['signal_summary'])->toContain('fc_paid_reasonable=no')
         ->and($row['signal_summary'])->not->toContain('9876543210')
         ->and($row['signal_summary'])->not->toContain('sk-proj');
 });

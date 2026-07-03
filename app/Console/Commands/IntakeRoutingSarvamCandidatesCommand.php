@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\BiodataIntake;
 use App\Models\BiodataIntakeOcrAttempt;
+use App\Services\Intake\IntakeFieldConfidenceClassifier;
 use App\Services\Intake\IntakeSmartRoutingPolicy;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
@@ -29,8 +30,10 @@ class IntakeRoutingSarvamCandidatesCommand extends Command
 
     protected $description = 'Read-only inspection report for dry-run call_sarvam biodata intake candidates.';
 
-    public function __construct(private readonly IntakeSmartRoutingPolicy $policy)
-    {
+    public function __construct(
+        private readonly IntakeSmartRoutingPolicy $policy,
+        private readonly IntakeFieldConfidenceClassifier $fieldConfidenceClassifier,
+    ) {
         parent::__construct();
     }
 
@@ -151,6 +154,8 @@ class IntakeRoutingSarvamCandidatesCommand extends Command
 
         $attempts = $this->ocrAttempts($intake);
         $policyEvaluation = $this->policy->evaluate($recommendation);
+        $lowConfidenceFields = $this->lowConfidenceFields($intake, $signals);
+        $fieldClassification = $this->fieldClassification($intake, $signals, $lowConfidenceFields);
 
         return [
             'intake_id' => (int) $intake->id,
@@ -158,7 +163,12 @@ class IntakeRoutingSarvamCandidatesCommand extends Command
             'reason_codes' => $reasonCodes,
             'quality_score' => $qualityScore,
             'quality_bucket' => $this->qualityBucket($qualityScore),
-            'field_confidence_low_fields' => $this->lowConfidenceFields($intake, $signals),
+            'field_confidence_low_fields' => $lowConfidenceFields,
+            'field_confidence_critical_fields' => $fieldClassification['low_confidence_critical_fields'],
+            'field_confidence_important_fields' => $fieldClassification['low_confidence_important_fields'],
+            'field_confidence_optional_fields' => $fieldClassification['low_confidence_optional_fields'],
+            'field_confidence_routing_severity' => $fieldClassification['field_confidence_routing_severity'],
+            'paid_vision_reasonable_for_field_confidence' => $fieldClassification['paid_vision_reasonable_for_field_confidence'],
             'failure_codes' => $this->failureCodes($intake, $signals),
             'has_raw_ocr_text' => $this->boolSignal($signals['has_raw_ocr_text'] ?? null, trim((string) ($intake->raw_ocr_text ?? '')) !== ''),
             'has_parsed_json' => $this->boolSignal($signals['has_parsed_json'] ?? null, is_array($intake->parsed_json) && $intake->parsed_json !== []),
@@ -239,6 +249,11 @@ class IntakeRoutingSarvamCandidatesCommand extends Command
             'Reasons',
             'Quality',
             'Low fields',
+            'Critical fields',
+            'Important fields',
+            'Optional fields',
+            'Field severity',
+            'Paid vision reasonable',
             'Failure codes',
             'Raw',
             'Parsed',
@@ -255,6 +270,11 @@ class IntakeRoutingSarvamCandidatesCommand extends Command
             implode(',', $this->stringList($row['reason_codes'] ?? [])) ?: '-',
             $row['quality_score'] ?? 'n/a',
             implode(',', $this->stringList($row['field_confidence_low_fields'] ?? [])) ?: '-',
+            implode(',', $this->stringList($row['field_confidence_critical_fields'] ?? [])) ?: '-',
+            implode(',', $this->stringList($row['field_confidence_important_fields'] ?? [])) ?: '-',
+            implode(',', $this->stringList($row['field_confidence_optional_fields'] ?? [])) ?: '-',
+            $this->safeToken($row['field_confidence_routing_severity'] ?? null),
+            $this->yesNo($row['paid_vision_reasonable_for_field_confidence'] ?? null),
             implode(',', $this->stringList($row['failure_codes'] ?? [])) ?: '-',
             $this->yesNo($row['has_raw_ocr_text'] ?? null),
             $this->yesNo($row['has_parsed_json'] ?? null),
@@ -336,6 +356,38 @@ class IntakeRoutingSarvamCandidatesCommand extends Command
 
     /**
      * @param  array<string, mixed>  $signals
+     * @param  list<string>  $lowConfidenceFields
+     * @return array{
+     *     low_confidence_critical_fields: list<string>,
+     *     low_confidence_important_fields: list<string>,
+     *     low_confidence_optional_fields: list<string>,
+     *     field_confidence_routing_severity: string,
+     *     paid_vision_reasonable_for_field_confidence: bool
+     * }
+     */
+    private function fieldClassification(BiodataIntake $intake, array $signals, array $lowConfidenceFields): array
+    {
+        $hasRawOcrText = $this->boolSignal($signals['has_raw_ocr_text'] ?? null, trim((string) ($intake->raw_ocr_text ?? '')) !== '');
+        $computed = $this->fieldConfidenceClassifier->classify($lowConfidenceFields, $hasRawOcrText);
+        $critical = $this->stringList($signals['low_confidence_critical_fields'] ?? []);
+        $important = $this->stringList($signals['low_confidence_important_fields'] ?? []);
+        $optional = $this->stringList($signals['low_confidence_optional_fields'] ?? []);
+        $severity = $this->scalarString($signals['field_confidence_routing_severity'] ?? null);
+        $paidVisionReasonable = array_key_exists('paid_vision_reasonable_for_field_confidence', $signals)
+            ? $this->boolValue($signals['paid_vision_reasonable_for_field_confidence'])
+            : (bool) $computed['paid_vision_reasonable_for_field_confidence'];
+
+        return [
+            'low_confidence_critical_fields' => $critical !== [] ? $critical : $computed['low_confidence_critical_fields'],
+            'low_confidence_important_fields' => $important !== [] ? $important : $computed['low_confidence_important_fields'],
+            'low_confidence_optional_fields' => $optional !== [] ? $optional : $computed['low_confidence_optional_fields'],
+            'field_confidence_routing_severity' => $severity !== '' ? $severity : $computed['field_confidence_routing_severity'],
+            'paid_vision_reasonable_for_field_confidence' => $paidVisionReasonable,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $signals
      * @return list<string>
      */
     private function failureCodes(BiodataIntake $intake, array $signals): array
@@ -388,6 +440,12 @@ class IntakeRoutingSarvamCandidatesCommand extends Command
         $notes = [];
         if (in_array('field_confidence_low', $reasonCodes, true)) {
             $notes[] = 'low_field_confidence';
+        }
+        if (! empty($signals['paid_vision_reasonable_for_field_confidence'])) {
+            $notes[] = 'paid_vision_reasonable_for_field_confidence';
+        }
+        if (($signals['field_confidence_routing_severity'] ?? null) === 'critical') {
+            $notes[] = 'critical_field_confidence_low';
         }
         if (in_array('low_quality_cheap_ocr', $reasonCodes, true)) {
             $notes[] = 'low_quality_signal';

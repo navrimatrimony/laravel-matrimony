@@ -300,6 +300,11 @@ class IntakeRoutingDryRunReportCommand extends Command
                 'Field match',
                 'Field score',
                 'Mismatch codes',
+                'Critical low fields',
+                'Important low fields',
+                'Optional low fields',
+                'Field severity',
+                'Paid vision reasonable',
                 'Policy enabled',
                 'Dry run only',
                 'Allowed live',
@@ -328,6 +333,11 @@ class IntakeRoutingDryRunReportCommand extends Command
                 $row['duplicate_field_match_eligible'],
                 $row['duplicate_field_match_score'] ?? 'n/a',
                 implode(',', $row['duplicate_field_mismatch_codes']),
+                implode(',', $row['low_confidence_critical_fields']),
+                implode(',', $row['low_confidence_important_fields']),
+                implode(',', $row['low_confidence_optional_fields']),
+                $row['field_confidence_routing_severity'],
+                $row['paid_vision_reasonable_for_field_confidence'],
                 $row['policy_enabled'],
                 $row['policy_dry_run_only'],
                 $row['policy_allowed_live_action'],
@@ -378,6 +388,11 @@ class IntakeRoutingDryRunReportCommand extends Command
             'duplicate_field_match_eligible' => $this->yesNo($signals['duplicate_field_match_eligible'] ?? null),
             'duplicate_field_match_score' => $this->numericValue($signals['duplicate_field_match_score'] ?? null),
             'duplicate_field_mismatch_codes' => $this->stringList($signals['duplicate_field_mismatch_codes'] ?? []),
+            'low_confidence_critical_fields' => $this->stringList($signals['low_confidence_critical_fields'] ?? []),
+            'low_confidence_important_fields' => $this->stringList($signals['low_confidence_important_fields'] ?? []),
+            'low_confidence_optional_fields' => $this->stringList($signals['low_confidence_optional_fields'] ?? []),
+            'field_confidence_routing_severity' => $this->summaryString($signals['field_confidence_routing_severity'] ?? null),
+            'paid_vision_reasonable_for_field_confidence' => $this->yesNo($signals['paid_vision_reasonable_for_field_confidence'] ?? null),
             'policy_enabled' => $this->yesNo($policyEvaluation['enabled'] ?? null),
             'policy_dry_run_only' => $this->yesNo($policyEvaluation['dry_run_only'] ?? null),
             'policy_allowed_live_action' => $this->policyDisplayString($policyEvaluation['allowed_live_action'] ?? null),
@@ -425,6 +440,17 @@ class IntakeRoutingDryRunReportCommand extends Command
             'field_mismatches='.($this->stringList($signals['duplicate_field_mismatch_codes'] ?? []) !== []
                 ? implode(',', $this->stringList($signals['duplicate_field_mismatch_codes'] ?? []))
                 : 'none'),
+            'fc_critical='.($this->stringList($signals['low_confidence_critical_fields'] ?? []) !== []
+                ? implode(',', $this->stringList($signals['low_confidence_critical_fields'] ?? []))
+                : 'none'),
+            'fc_important='.($this->stringList($signals['low_confidence_important_fields'] ?? []) !== []
+                ? implode(',', $this->stringList($signals['low_confidence_important_fields'] ?? []))
+                : 'none'),
+            'fc_optional='.($this->stringList($signals['low_confidence_optional_fields'] ?? []) !== []
+                ? implode(',', $this->stringList($signals['low_confidence_optional_fields'] ?? []))
+                : 'none'),
+            'fc_severity='.$this->summaryString($signals['field_confidence_routing_severity'] ?? null),
+            'fc_paid_reasonable='.$this->yesNo($signals['paid_vision_reasonable_for_field_confidence'] ?? null),
         ];
 
         return implode('; ', $parts);

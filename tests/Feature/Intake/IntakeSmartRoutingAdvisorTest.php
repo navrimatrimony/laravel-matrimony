@@ -125,9 +125,172 @@ test('low quality cheap OCR recommends paid vision without changing intake truth
         ->and($stored->routing_recommendation_json['would_skip_paid_vision'])->toBeFalse()
         ->and($stored->routing_recommendation_json['reason_codes'])->toContain('low_quality_cheap_ocr')
         ->and($stored->routing_recommendation_json['reason_codes'])->toContain('field_confidence_low')
+        ->and($stored->routing_recommendation_json['reason_codes'])->toContain('critical_field_confidence_low')
+        ->and($stored->routing_recommendation_json['signals']['low_confidence_critical_fields'])->toBe(['date_of_birth'])
+        ->and($stored->routing_recommendation_json['signals']['low_confidence_important_fields'])->toBe([])
+        ->and($stored->routing_recommendation_json['signals']['low_confidence_optional_fields'])->toBe([])
+        ->and($stored->routing_recommendation_json['signals']['field_confidence_routing_severity'])->toBe('critical')
+        ->and($stored->routing_recommendation_json['signals']['paid_vision_reasonable_for_field_confidence'])->toBeTrue()
         ->and($stored->raw_ocr_text)->toBe('Original weak OCR text')
         ->and($stored->parsed_json)->toBe($parsed)
         ->and($stored->parse_status)->toBe('parsed');
+});
+
+test('missing only non critical field confidence does not recommend sarvam', function () {
+    $parsed = routingAdvisorParsed('Optional Missing Candidate', '1996-04-12', '9876543210', null);
+    $intake = createRoutingAdvisorIntake([
+        'raw_ocr_text' => "Name: Optional Missing Candidate\nDOB: 1996-04-12\nMobile: 9876543210",
+        'parsed_json' => $parsed,
+        'parse_status' => 'parsed',
+        'quality_summary_json' => [
+            'score' => 0.95,
+            'is_low' => false,
+        ],
+        'failure_codes_json' => [],
+        'field_confidence_json' => [
+            'education' => [
+                'score' => 0.1,
+                'present' => false,
+                'reason' => 'missing_parsed_value',
+            ],
+        ],
+    ]);
+
+    $recommendation = app(IntakeSmartRoutingAdvisor::class)->recommend($intake);
+
+    expect($recommendation['recommended_action'])->toBe('manual_review')
+        ->and($recommendation['would_call_paid_vision'])->toBeFalse()
+        ->and($recommendation['reason_codes'])->toContain('field_confidence_low')
+        ->and($recommendation['reason_codes'])->toContain('low_confidence_optional_fields_only')
+        ->and($recommendation['reason_codes'])->toContain('paid_vision_not_justified_by_optional_missing_fields')
+        ->and($recommendation['reason_codes'])->not->toContain('critical_field_confidence_low')
+        ->and($recommendation['signals']['low_confidence_critical_fields'])->toBe([])
+        ->and($recommendation['signals']['low_confidence_important_fields'])->toBe(['education'])
+        ->and($recommendation['signals']['low_confidence_optional_fields'])->toBe([])
+        ->and($recommendation['signals']['field_confidence_routing_severity'])->toBe('important_only')
+        ->and($recommendation['signals']['paid_vision_reasonable_for_field_confidence'])->toBeFalse();
+});
+
+test('missing full name keeps sarvam recommendation in dry run when raw text exists', function () {
+    $intake = createRoutingAdvisorIntake([
+        'raw_ocr_text' => "DOB: 1996-04-12\nMobile: 9876543210",
+        'parsed_json' => routingAdvisorParsed(null, '1996-04-12', '9876543210', 'B.Com'),
+        'parse_status' => 'parsed',
+        'quality_summary_json' => [
+            'score' => 0.95,
+            'is_low' => false,
+        ],
+        'failure_codes_json' => [],
+        'field_confidence_json' => [
+            'full_name' => [
+                'score' => 0.1,
+                'present' => false,
+                'reason' => 'missing_parsed_value',
+            ],
+        ],
+    ]);
+
+    $recommendation = app(IntakeSmartRoutingAdvisor::class)->recommend($intake);
+
+    expect($recommendation['recommended_action'])->toBe('call_sarvam')
+        ->and($recommendation['would_call_paid_vision'])->toBeTrue()
+        ->and($recommendation['reason_codes'])->toContain('critical_field_confidence_low')
+        ->and($recommendation['signals']['low_confidence_critical_fields'])->toBe(['full_name'])
+        ->and($recommendation['signals']['field_confidence_routing_severity'])->toBe('critical')
+        ->and($recommendation['signals']['paid_vision_reasonable_for_field_confidence'])->toBeTrue();
+});
+
+test('missing date of birth keeps sarvam recommendation in dry run when raw text exists', function () {
+    $intake = createRoutingAdvisorIntake([
+        'raw_ocr_text' => "Name: DOB Missing Candidate\nMobile: 9876543210",
+        'parsed_json' => routingAdvisorParsed('DOB Missing Candidate', null, '9876543210', 'B.Com'),
+        'parse_status' => 'parsed',
+        'quality_summary_json' => [
+            'score' => 0.95,
+            'is_low' => false,
+        ],
+        'failure_codes_json' => [],
+        'field_confidence_json' => [
+            'date_of_birth' => [
+                'score' => 0.1,
+                'present' => false,
+                'reason' => 'missing_parsed_value',
+            ],
+        ],
+    ]);
+
+    $recommendation = app(IntakeSmartRoutingAdvisor::class)->recommend($intake);
+
+    expect($recommendation['recommended_action'])->toBe('call_sarvam')
+        ->and($recommendation['would_call_paid_vision'])->toBeTrue()
+        ->and($recommendation['reason_codes'])->toContain('critical_field_confidence_low')
+        ->and($recommendation['signals']['low_confidence_critical_fields'])->toBe(['date_of_birth'])
+        ->and($recommendation['signals']['field_confidence_routing_severity'])->toBe('critical')
+        ->and($recommendation['signals']['paid_vision_reasonable_for_field_confidence'])->toBeTrue();
+});
+
+test('missing primary contact is classified critical and explainable', function () {
+    $intake = createRoutingAdvisorIntake([
+        'raw_ocr_text' => "Name: Contact Missing Candidate\nDOB: 1996-04-12",
+        'parsed_json' => routingAdvisorParsed('Contact Missing Candidate', '1996-04-12', null, 'B.Com'),
+        'parse_status' => 'parsed',
+        'quality_summary_json' => [
+            'score' => 0.95,
+            'is_low' => false,
+        ],
+        'failure_codes_json' => [],
+        'field_confidence_json' => [
+            'primary_contact_number' => [
+                'score' => 0.1,
+                'present' => false,
+                'reason' => 'missing_parsed_value',
+            ],
+        ],
+    ]);
+
+    $recommendation = app(IntakeSmartRoutingAdvisor::class)->recommend($intake);
+
+    expect($recommendation['recommended_action'])->toBe('call_sarvam')
+        ->and($recommendation['would_call_paid_vision'])->toBeTrue()
+        ->and($recommendation['reason_codes'])->toContain('field_confidence_low')
+        ->and($recommendation['reason_codes'])->toContain('critical_field_confidence_low')
+        ->and($recommendation['signals']['low_confidence_critical_fields'])->toBe(['primary_contact_number'])
+        ->and($recommendation['signals']['field_confidence_routing_severity'])->toBe('critical')
+        ->and($recommendation['signals']['paid_vision_reasonable_for_field_confidence'])->toBeTrue();
+});
+
+test('mixed critical and optional confidence fields use critical severity', function () {
+    $intake = createRoutingAdvisorIntake([
+        'raw_ocr_text' => "Mobile: 9876543210",
+        'parsed_json' => routingAdvisorParsed(null, null, '9876543210', null),
+        'parse_status' => 'parsed',
+        'quality_summary_json' => [
+            'score' => 0.95,
+            'is_low' => false,
+        ],
+        'failure_codes_json' => [],
+        'field_confidence_json' => [
+            'full_name' => [
+                'score' => 0.1,
+                'present' => false,
+                'reason' => 'missing_parsed_value',
+            ],
+            'custom_optional_field' => [
+                'score' => 0.1,
+                'present' => false,
+                'reason' => 'missing_parsed_value',
+            ],
+        ],
+    ]);
+
+    $recommendation = app(IntakeSmartRoutingAdvisor::class)->recommend($intake);
+
+    expect($recommendation['recommended_action'])->toBe('call_sarvam')
+        ->and($recommendation['signals']['low_confidence_critical_fields'])->toBe(['full_name'])
+        ->and($recommendation['signals']['low_confidence_important_fields'])->toBe([])
+        ->and($recommendation['signals']['low_confidence_optional_fields'])->toBe(['custom_optional_field'])
+        ->and($recommendation['signals']['field_confidence_routing_severity'])->toBe('critical')
+        ->and($recommendation['signals']['paid_vision_reasonable_for_field_confidence'])->toBeTrue();
 });
 
 test('trusted exact content hash duplicate is reuse eligible but never copies parsed json', function () {

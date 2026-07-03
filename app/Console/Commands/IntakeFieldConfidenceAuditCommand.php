@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\BiodataIntake;
+use App\Services\Intake\IntakeFieldConfidenceClassifier;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -28,6 +29,11 @@ class IntakeFieldConfidenceAuditCommand extends Command
         {--include-locked : Include locked intakes}';
 
     protected $description = 'Read-only audit report explaining stored low field-confidence intake signals.';
+
+    public function __construct(private readonly IntakeFieldConfidenceClassifier $fieldConfidenceClassifier)
+    {
+        parent::__construct();
+    }
 
     public function handle(): int
     {
@@ -127,6 +133,9 @@ class IntakeFieldConfidenceAuditCommand extends Command
 
         $fieldDetails = $this->fieldDetails($fieldConfidence, $lowConfidenceFields);
         $qualityScore = $this->qualityScore($intake, $signals, $telemetry);
+        $hasParsedJson = $this->boolSignal($signals['has_parsed_json'] ?? null, $this->hasNonEmptyArray($intake->parsed_json));
+        $hasRawOcrText = $this->boolSignal($signals['has_raw_ocr_text'] ?? null, trim((string) ($intake->raw_ocr_text ?? '')) !== '');
+        $fieldClassification = $this->fieldClassification($lowConfidenceFields, $signals, $hasRawOcrText);
 
         return [
             'intake_id' => (int) $intake->id,
@@ -136,8 +145,13 @@ class IntakeFieldConfidenceAuditCommand extends Command
             'low_confidence_fields' => $lowConfidenceFields,
             'field_confidence' => $fieldDetails,
             'missing_fields' => $this->missingFields($fieldDetails),
-            'has_parsed_json' => $this->boolSignal($signals['has_parsed_json'] ?? null, $this->hasNonEmptyArray($intake->parsed_json)),
-            'has_raw_ocr_text' => $this->boolSignal($signals['has_raw_ocr_text'] ?? null, trim((string) ($intake->raw_ocr_text ?? '')) !== ''),
+            'low_confidence_critical_fields' => $fieldClassification['low_confidence_critical_fields'],
+            'low_confidence_important_fields' => $fieldClassification['low_confidence_important_fields'],
+            'low_confidence_optional_fields' => $fieldClassification['low_confidence_optional_fields'],
+            'field_confidence_routing_severity' => $fieldClassification['field_confidence_routing_severity'],
+            'paid_vision_reasonable_for_field_confidence' => $fieldClassification['paid_vision_reasonable_for_field_confidence'],
+            'has_parsed_json' => $hasParsedJson,
+            'has_raw_ocr_text' => $hasRawOcrText,
             'failure_codes' => $this->failureCodes($intake, $signals),
             'notes' => $this->notes($qualityScore, $fieldDetails, $this->tokenList($recommendation['reason_codes'] ?? [])),
         ];
@@ -153,6 +167,8 @@ class IntakeFieldConfidenceAuditCommand extends Command
         $confidenceBuckets = array_fill_keys(self::CONFIDENCE_BUCKETS, 0);
         $actionCounts = [];
         $reasonCodeCounts = [];
+        $severityCounts = [];
+        $paidVisionReasonableCounts = ['yes' => 0, 'no' => 0];
 
         foreach ($rows as $row) {
             foreach ($this->tokenList($row['low_confidence_fields'] ?? []) as $field) {
@@ -174,6 +190,10 @@ class IntakeFieldConfidenceAuditCommand extends Command
             foreach ($this->tokenList($row['reason_codes'] ?? []) as $reasonCode) {
                 $reasonCodeCounts[$reasonCode] = ($reasonCodeCounts[$reasonCode] ?? 0) + 1;
             }
+
+            $severity = $this->safeToken($row['field_confidence_routing_severity'] ?? null, 'none');
+            $severityCounts[$severity] = ($severityCounts[$severity] ?? 0) + 1;
+            $paidVisionReasonableCounts[! empty($row['paid_vision_reasonable_for_field_confidence']) ? 'yes' : 'no']++;
         }
 
         ksort($fieldCounts);
@@ -186,6 +206,8 @@ class IntakeFieldConfidenceAuditCommand extends Command
             'confidence_bucket_counts' => $confidenceBuckets,
             'recommended_action_counts' => $actionCounts,
             'reason_code_counts' => $reasonCodeCounts,
+            'field_confidence_severity_counts' => $severityCounts,
+            'paid_vision_reasonable_counts' => $paidVisionReasonableCounts,
         ];
     }
 
@@ -220,6 +242,11 @@ class IntakeFieldConfidenceAuditCommand extends Command
             $this->countRows($this->arrayValue($summary['reason_code_counts'] ?? []), 'none')
         );
 
+        $this->table(
+            ['Field confidence severity', 'Count'],
+            $this->countRows($this->arrayValue($summary['field_confidence_severity_counts'] ?? []), 'none')
+        );
+
         $rows = $this->arrayValue($report['rows'] ?? []);
         $this->table([
             'Intake',
@@ -228,6 +255,11 @@ class IntakeFieldConfidenceAuditCommand extends Command
             'Low fields',
             'Field confidence',
             'Missing fields',
+            'Critical fields',
+            'Important fields',
+            'Optional fields',
+            'Field severity',
+            'Paid vision reasonable',
             'Parsed',
             'Raw OCR',
             'Failure codes',
@@ -240,6 +272,11 @@ class IntakeFieldConfidenceAuditCommand extends Command
             implode(',', $this->tokenList($row['low_confidence_fields'] ?? [])) ?: '-',
             $this->fieldConfidenceDisplay($this->arrayValue($row['field_confidence'] ?? [])),
             implode(',', $this->tokenList($row['missing_fields'] ?? [])) ?: '-',
+            implode(',', $this->tokenList($row['low_confidence_critical_fields'] ?? [])) ?: '-',
+            implode(',', $this->tokenList($row['low_confidence_important_fields'] ?? [])) ?: '-',
+            implode(',', $this->tokenList($row['low_confidence_optional_fields'] ?? [])) ?: '-',
+            $this->safeToken($row['field_confidence_routing_severity'] ?? null, 'none'),
+            $this->yesNo($row['paid_vision_reasonable_for_field_confidence'] ?? null),
             $this->yesNo($row['has_parsed_json'] ?? null),
             $this->yesNo($row['has_raw_ocr_text'] ?? null),
             implode(',', $this->tokenList($row['failure_codes'] ?? [])) ?: '-',
@@ -362,6 +399,37 @@ class IntakeFieldConfidenceAuditCommand extends Command
         $fromIntake = $this->tokenList($intake->failure_codes_json);
 
         return $fromIntake !== [] ? $fromIntake : $this->tokenList($signals['failure_codes'] ?? []);
+    }
+
+    /**
+     * @param  list<string>  $lowConfidenceFields
+     * @param  array<string, mixed>  $signals
+     * @return array{
+     *     low_confidence_critical_fields: list<string>,
+     *     low_confidence_important_fields: list<string>,
+     *     low_confidence_optional_fields: list<string>,
+     *     field_confidence_routing_severity: string,
+     *     paid_vision_reasonable_for_field_confidence: bool
+     * }
+     */
+    private function fieldClassification(array $lowConfidenceFields, array $signals, bool $hasRawOcrText): array
+    {
+        $computed = $this->fieldConfidenceClassifier->classify($lowConfidenceFields, $hasRawOcrText);
+        $critical = $this->tokenList($signals['low_confidence_critical_fields'] ?? []);
+        $important = $this->tokenList($signals['low_confidence_important_fields'] ?? []);
+        $optional = $this->tokenList($signals['low_confidence_optional_fields'] ?? []);
+        $severity = $this->safeToken($signals['field_confidence_routing_severity'] ?? null, '');
+        $paidVisionReasonable = array_key_exists('paid_vision_reasonable_for_field_confidence', $signals)
+            ? $this->boolValue($signals['paid_vision_reasonable_for_field_confidence'])
+            : (bool) $computed['paid_vision_reasonable_for_field_confidence'];
+
+        return [
+            'low_confidence_critical_fields' => $critical !== [] ? $critical : $computed['low_confidence_critical_fields'],
+            'low_confidence_important_fields' => $important !== [] ? $important : $computed['low_confidence_important_fields'],
+            'low_confidence_optional_fields' => $optional !== [] ? $optional : $computed['low_confidence_optional_fields'],
+            'field_confidence_routing_severity' => $severity !== '' ? $severity : $computed['field_confidence_routing_severity'],
+            'paid_vision_reasonable_for_field_confidence' => $paidVisionReasonable,
+        ];
     }
 
     /**
