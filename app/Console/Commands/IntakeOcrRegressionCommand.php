@@ -17,9 +17,11 @@ class IntakeOcrRegressionCommand extends Command
         'education',
         'occupation',
         'primary_contact_number',
+        'document_contact_number',
         'address',
         'religion',
         'caste',
+        'sub_caste',
     ];
 
     private const OPTIONAL_FIELDS = [
@@ -39,9 +41,11 @@ class IntakeOcrRegressionCommand extends Command
         'education' => ['core.highest_education', 'core.education', 'core.education_level', 'education_history.0.degree', 'education_history.0.qualification', 'education_history.0.course', 'education_history.0.course_name'],
         'occupation' => ['core.occupation_title', 'core.occupation', 'core.profession', 'career_history.0.occupation_title', 'career_history.0.designation', 'career_history.0.job_title', 'career_history.0.role'],
         'primary_contact_number' => ['core.primary_contact_number', 'core.phone_number', 'core.mobile_number', 'core.mobile', 'candidate.primary_contact_number', 'contacts.0.phone_number', 'contacts.0.mobile', 'contacts.0.mobile_number', 'contacts.0.phone', 'contacts.0.number'],
+        'document_contact_number' => ['contacts.0.phone_number', 'contacts.0.mobile', 'contacts.0.mobile_number', 'contacts.0.phone', 'contacts.0.number', 'core.primary_contact_number', 'core.phone_number', 'core.mobile_number', 'core.mobile', 'candidate.primary_contact_number'],
         'address' => ['addresses.0.address_line', 'addresses.0.raw', 'self_addresses.0.address_line', 'parents_addresses.0.address_line', 'core.address_line', 'core.address', 'core.current_address', 'core.permanent_address'],
         'religion' => ['core.religion', 'core.religion_label', 'core.religion_id'],
         'caste' => ['core.caste', 'core.caste_label', 'core.caste_id'],
+        'sub_caste' => ['core.sub_caste', 'core.sub_caste_label', 'core.sub_caste_id', 'candidate.sub_caste'],
     ];
 
     private const PLACEHOLDER_VALUES = [
@@ -720,7 +724,7 @@ class IntakeOcrRegressionCommand extends Command
         $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
         $text = trim($text);
 
-        if ($field === 'primary_contact_number') {
+        if ($field === 'primary_contact_number' || $field === 'document_contact_number') {
             $digits = preg_replace('/\D+/', '', $text) ?? '';
             if (strlen($digits) > 10 && str_starts_with($digits, '91')) {
                 $digits = substr($digits, -10);

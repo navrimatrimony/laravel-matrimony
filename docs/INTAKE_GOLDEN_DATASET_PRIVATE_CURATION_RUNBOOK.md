@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Phase 6C.1 prepares a safe operator workflow for manually curating a private OCR regression dataset and a separate final profile target snapshot. This does not enable learning, live routing, Sarvam, OCR, paid vision, backfill, or any profile mutation.
+Phase 6C.2 prepares a safe operator workflow for manually curating a private OCR regression dataset through a CSV form and converting it to JSONL. It keeps parser scoring separate from the final profile target snapshot. This does not enable learning, live routing, Sarvam, OCR, paid vision, backfill, or any profile mutation.
 
 The committed synthetic fixture is only for system verification:
 
@@ -17,14 +17,65 @@ It is fake data and should not be treated as a real accuracy baseline.
 The real golden dataset must stay private under:
 
 ```text
+storage/app/intake-golden-datasets/golden-curation-template.csv
 storage/app/intake-golden-datasets/golden.jsonl
 ```
 
-Do not commit real OCR text, images, names, phone numbers, full addresses, image hashes, provider payloads, profile snapshots, source context, or personal data to git. The repository `.gitignore` blocks this private dataset directory, but operators should still check `git status --short` before committing any Phase 6 work.
+Do not commit real OCR text, images, names, phone numbers, full addresses, image hashes, provider payloads, profile snapshots, source context, CSV files, JSONL files, or personal data to git. The repository `.gitignore` blocks this private dataset directory, but operators should still check `git status --short` before committing any Phase 6 work.
+
+Do not send real biodata data to Codex, chat tools, tickets, public docs, or commits. Keep real curation files private on the server/local machine under `storage/app/intake-golden-datasets`.
+
+## CSV Workflow for Operators
+
+Use CSV when manual JSONL writing is difficult.
+
+Step 1: create a private CSV template:
+
+```powershell
+php artisan intake:golden-dataset-csv-template
+```
+
+Create a smaller template for trial curation:
+
+```powershell
+php artisan intake:golden-dataset-csv-template --rows=5 --output=storage/app/intake-golden-datasets/golden-curation-template.csv
+```
+
+Step 2: fill the CSV privately in Excel or a spreadsheet editor.
+
+- Fill `case_id`, `layout_type`, `language`, and `ocr_text`.
+- Fill `parser_*` columns only with values visible in the OCR text.
+- Fill `profile_*`, address, family, relatives, property, and expectations columns as the final app/profile answer key.
+- Fill `source_*` columns to record consent/source/contact-rule notes.
+- Keep the CSV under `storage/app/intake-golden-datasets`.
+- Do not commit the CSV.
+- Do not paste real biodata data into Codex.
+
+Step 3: convert the private CSV to JSONL:
+
+```powershell
+php artisan intake:golden-dataset-csv-to-jsonl --csv=storage/app/intake-golden-datasets/golden-curation-template.csv --output=storage/app/intake-golden-datasets/golden.jsonl
+```
+
+Overwrite intentionally only after checking the file:
+
+```powershell
+php artisan intake:golden-dataset-csv-to-jsonl --csv=storage/app/intake-golden-datasets/golden-curation-template.csv --output=storage/app/intake-golden-datasets/golden.jsonl --force
+```
+
+Step 4: run regression:
+
+```powershell
+php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/golden.jsonl
+```
+
+The template and converter commands only read/write private files under `storage/app/intake-golden-datasets`. They do not read `biodata_intakes`, update the database, call OCR, call Sarvam, call paid vision, create learning rules, promote learning, backfill data, or change routing.
 
 ## Start With Manual Curation
 
 Start with 20-50 manually reviewed private cases. Use only cases where the parser expected fields are verified against visible OCR text, and the final profile target is taken from an authorized human-reviewed/approved source. Sarvam, OCR, and parser output can be evidence, but they are not final truth.
+
+For non-technical curation, prefer the CSV workflow above. JSONL can still be edited manually by technical operators when needed.
 
 One case goes on each JSONL line. JSONL does not allow comments, so each line must be valid JSON.
 
@@ -71,6 +122,13 @@ Use two separate answer keys:
 - `parser_expected_fields` is the OCR/parser exam. Only include fields visible in the document OCR text. Regression scoring compares only this box.
 - `expected_profile_snapshot` is the final app/profile answer key. It may include source-derived fields that OCR cannot extract, such as source primary contact, addresses, family, relatives, property, and other full profile target sections.
 - `source_context` records who sent, consented, or created the profile and where the primary contact authority came from.
+
+In the CSV:
+
+- `parser_*` columns become `parser_expected_fields`.
+- `profile_*`, address, family, relatives, property, and expectations columns become `expected_profile_snapshot`.
+- `source_*` columns become `source_context`.
+- `parser_document_contact_number` is the OCR-visible document contact. It is not the live profile primary contact rule.
 
 The regression command accepts `expected_profile_snapshot` and `source_context` but does not score them yet. It does not print raw values from either box. JSON and console output expose only safe metadata:
 
