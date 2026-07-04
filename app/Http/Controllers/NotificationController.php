@@ -117,7 +117,7 @@ class NotificationController extends Controller
             }
 
             if ($type === 'interest_sent') {
-                $policy = ReceivedInterestTeaserPolicy::forLockedInboxTeasers(ReceivedInterestTeaserPolicy::normalized());
+                $policy = ReceivedInterestTeaserPolicy::forLockedPresentation(ReceivedInterestTeaserPolicy::normalized());
                 $timeLine = 'interest_received';
             } else {
                 $policy = WhoViewedTeaserPolicy::forWhoViewedLockedTeasers(WhoViewedTeaserPolicy::normalized());
@@ -136,7 +136,7 @@ class NotificationController extends Controller
             );
         }
 
-        return view('notifications.index', compact('notifications', 'unreadNotifications', 'actorProfiles', 'localizedTeasers'));
+        return view('notifications.index', compact('request', 'notifications', 'unreadNotifications', 'actorProfiles', 'localizedTeasers'));
     }
 
     /**
@@ -161,7 +161,7 @@ class NotificationController extends Controller
         $hasTeaser = is_array($data['teaser'] ?? null);
         if ($actorProfile && $hasTeaser && ! $revealed && in_array($type, ['interest_sent', 'profile_viewed'], true)) {
             if ($type === 'interest_sent') {
-                $policy = ReceivedInterestTeaserPolicy::forLockedInboxTeasers(ReceivedInterestTeaserPolicy::normalized());
+                $policy = ReceivedInterestTeaserPolicy::forLockedPresentation(ReceivedInterestTeaserPolicy::normalized());
                 $timeLine = 'interest_received';
             } else {
                 $policy = WhoViewedTeaserPolicy::forWhoViewedLockedTeasers(WhoViewedTeaserPolicy::normalized());

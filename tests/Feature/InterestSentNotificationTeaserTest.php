@@ -15,6 +15,7 @@ use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class InterestSentNotificationTeaserTest extends TestCase
@@ -90,5 +91,42 @@ class InterestSentNotificationTeaserTest extends TestCase
         $this->assertArrayHasKey('photo_url', $payload['teaser']);
         $this->assertArrayHasKey('avatar_style', $payload['teaser']);
         $this->assertArrayHasKey('blur_photo_class', $payload['teaser']);
+    }
+
+    public function test_web_notifications_index_renders_locked_interest_teaser_with_received_interest_policy(): void
+    {
+        $receiver = User::factory()->create(['is_admin' => false]);
+        $receiverProfile = $this->createActiveProfileWithResidence($receiver);
+        $sender = User::factory()->create(['is_admin' => false]);
+        $senderProfile = $this->createActiveProfileWithResidence($sender);
+
+        DB::table('notifications')->insert([
+            'id' => (string) Str::uuid(),
+            'type' => InterestSentNotification::class,
+            'notifiable_type' => User::class,
+            'notifiable_id' => $receiver->id,
+            'data' => json_encode([
+                'type' => 'interest_sent',
+                'message' => __('interests.notification_blurred_sender'),
+                'sender_profile_id' => $senderProfile->id,
+                'receiver_profile_id' => $receiverProfile->id,
+                'revealed' => false,
+                'teaser' => [
+                    'headline' => 'Locked interest teaser',
+                    'lines' => ['Pune district'],
+                    'viewed_summary' => 'Interested recently',
+                    'photo_url' => null,
+                    'avatar_style' => 'silhouette',
+                    'blur_photo_class' => 'blur-md scale-110 opacity-90',
+                ],
+            ], JSON_THROW_ON_ERROR),
+            'read_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($receiver)
+            ->get(route('notifications.index'))
+            ->assertOk();
     }
 }
