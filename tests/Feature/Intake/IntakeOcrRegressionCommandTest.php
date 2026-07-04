@@ -102,6 +102,149 @@ test('storage app dataset path still works', function () {
     }
 });
 
+test('legacy expected fields still work when parser expected fields are absent', function () {
+    $path = writeOcrRegressionDataset(ocrRegressionCase([
+        'case_id' => 'legacy_expected_fields_case',
+        'ocr_text' => "Name: Legacy Expected Candidate\nMobile: 9876543210",
+        'expected_fields' => [
+            'full_name' => 'Legacy Expected Candidate',
+        ],
+    ]));
+
+    try {
+        [$exitCode, $payload] = ocrRegressionJson([
+            '--dataset' => $path,
+            '--field' => 'full_name',
+        ]);
+
+        expect($exitCode)->toBe(0)
+            ->and($payload['summary']['total_expected_fields'])->toBe(1)
+            ->and($payload['summary']['exact_match_count'])->toBe(1)
+            ->and($payload['rows'][0]['profile_snapshot_present'])->toBeFalse()
+            ->and($payload['rows'][0]['source_context_present'])->toBeFalse();
+    } finally {
+        File::delete(base_path($path));
+    }
+});
+
+test('parser expected fields are used for scoring when present', function () {
+    $path = writeOcrRegressionDataset(ocrRegressionCase([
+        'case_id' => 'parser_expected_fields_case',
+        'ocr_text' => "Name: Parser Expected Candidate\nMobile: 9876543210",
+        'expected_fields' => [
+            'full_name' => 'Wrong Legacy Candidate',
+        ],
+        'parser_expected_fields' => [
+            'full_name' => 'Parser Expected Candidate',
+        ],
+    ]));
+
+    try {
+        [$exitCode, $payload] = ocrRegressionJson([
+            '--dataset' => $path,
+            '--field' => 'full_name',
+        ]);
+
+        expect($exitCode)->toBe(0)
+            ->and($payload['summary']['total_expected_fields'])->toBe(1)
+            ->and($payload['summary']['exact_match_count'])->toBe(1)
+            ->and($payload['summary']['mismatch_count'])->toBe(0)
+            ->and($payload['rows'][0]['status'])->toBe('pass');
+    } finally {
+        File::delete(base_path($path));
+    }
+});
+
+test('profile snapshot and source context expose only safe metadata and are not scored', function () {
+    $path = writeOcrRegressionDataset(ocrRegressionCase([
+        'case_id' => 'profile_snapshot_metadata_case',
+        'ocr_text' => "Name: Metadata Candidate\nMobile: 9876543210",
+        'parser_expected_fields' => [
+            'full_name' => 'Metadata Candidate',
+        ],
+        'expected_profile_snapshot' => [
+            'core' => [
+                'full_name' => 'Private Snapshot Candidate',
+                'primary_contact_number' => '7777777777',
+            ],
+            'contacts' => [
+                ['type' => 'primary', 'number' => '7777777777'],
+                ['type' => 'document_contact', 'number' => '8888888888'],
+            ],
+            'addresses' => [
+                ['address_line' => 'Private Full Address, Hidden City'],
+            ],
+            'family' => [
+                'father_name' => 'Private Father Name',
+            ],
+            'property' => [
+                'summary' => 'Private property note',
+            ],
+        ],
+        'source_context' => [
+            'consent' => [
+                'source_name' => 'Private Source Person',
+                'source_phone' => '9999999999',
+            ],
+            'primary_contact' => [
+                'source' => 'communication_or_consent',
+                'number' => '7777777777',
+            ],
+            '9999999999' => [
+                'source' => 'unsafe phone-like metadata key',
+            ],
+            'Private Source Person' => [
+                'source' => 'unsafe free-text metadata key',
+            ],
+        ],
+    ]));
+
+    try {
+        [$exitCode, $payload] = ocrRegressionJson([
+            '--dataset' => $path,
+        ]);
+        $jsonOutput = trim(Artisan::output());
+        $row = $payload['rows'][0];
+
+        expect($exitCode)->toBe(0)
+            ->and($payload['summary']['total_expected_fields'])->toBe(1)
+            ->and($row['profile_snapshot_present'])->toBeTrue()
+            ->and($row['profile_snapshot_sections'])->toBe(['core', 'contacts', 'addresses', 'family', 'property'])
+            ->and($row['address_count'])->toBe(1)
+            ->and($row['contact_count'])->toBe(2)
+            ->and($row['family_section_present'])->toBeTrue()
+            ->and($row['source_context_present'])->toBeTrue()
+            ->and($row['source_context_keys'])->toBe(['consent', 'primary_contact', 'redacted_key'])
+            ->and($jsonOutput)->not->toContain('Private Snapshot Candidate')
+            ->and($jsonOutput)->not->toContain('7777777777')
+            ->and($jsonOutput)->not->toContain('8888888888')
+            ->and($jsonOutput)->not->toContain('9999999999')
+            ->and($jsonOutput)->not->toContain('Private Full Address')
+            ->and($jsonOutput)->not->toContain('Private Father Name')
+            ->and($jsonOutput)->not->toContain('Private Source Person')
+            ->and($jsonOutput)->not->toContain('Private property note');
+
+        $humanExitCode = Artisan::call('intake:ocr-regression', [
+            '--dataset' => $path,
+        ]);
+        $humanOutput = Artisan::output();
+
+        expect($humanExitCode)->toBe(0)
+            ->and($humanOutput)->toContain('core, contacts, addresses, family, property')
+            ->and($humanOutput)->toContain('consent, primary_contact')
+            ->and($humanOutput)->not->toContain('Private Snapshot Candidate')
+            ->and($humanOutput)->not->toContain('7777777777')
+            ->and($humanOutput)->not->toContain('8888888888')
+            ->and($humanOutput)->not->toContain('9999999999')
+            ->and($humanOutput)->not->toContain('Private Full Address')
+            ->and($humanOutput)->not->toContain('Private Father Name')
+            ->and($humanOutput)->not->toContain('Private Source Person')
+            ->and($humanOutput)->not->toContain('Private property note');
+    } finally {
+        File::delete(base_path($path));
+    }
+});
+
 test('absolute dataset path still works', function () {
     [$exitCode, $payload] = ocrRegressionJson([
         '--dataset' => ocrRegressionFixturePath(),

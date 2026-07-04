@@ -27,6 +27,9 @@ class IntakeOcrRegressionCommand extends Command
         'source_label',
         'image_hash',
         'expected_snapshot',
+        'parser_expected_fields',
+        'expected_profile_snapshot',
+        'source_context',
     ];
 
     private const FIELD_PATHS = [
@@ -469,7 +472,12 @@ class IntakeOcrRegressionCommand extends Command
         $layoutType = $this->safeScalarString($row['layout_type'] ?? null);
         $language = $this->safeScalarString($row['language'] ?? null);
         $ocrText = $this->safeScalarString($row['ocr_text'] ?? null);
-        $expectedFields = $row['expected_fields'] ?? null;
+        $expectedFieldsSource = array_key_exists('parser_expected_fields', $row)
+            ? 'parser_expected_fields'
+            : 'expected_fields';
+        $expectedFields = $row[$expectedFieldsSource] ?? null;
+        $expectedProfileSnapshot = $row['expected_profile_snapshot'] ?? null;
+        $sourceContext = $row['source_context'] ?? null;
 
         foreach (['case_id' => $caseId, 'layout_type' => $layoutType, 'language' => $language, 'ocr_text' => $ocrText] as $key => $value) {
             if ($value === null || trim($value) === '') {
@@ -478,8 +486,20 @@ class IntakeOcrRegressionCommand extends Command
         }
 
         if (! is_array($expectedFields)) {
-            $errors[] = 'expected_fields_missing';
+            $errors[] = $expectedFieldsSource === 'parser_expected_fields'
+                ? 'parser_expected_fields_not_array'
+                : 'expected_fields_missing';
             $expectedFields = [];
+        }
+
+        if (array_key_exists('expected_profile_snapshot', $row) && ! is_array($expectedProfileSnapshot)) {
+            $errors[] = 'expected_profile_snapshot_not_array';
+            $expectedProfileSnapshot = null;
+        }
+
+        if (array_key_exists('source_context', $row) && ! is_array($sourceContext)) {
+            $errors[] = 'source_context_not_array';
+            $sourceContext = null;
         }
 
         foreach (array_keys($row) as $key) {
@@ -509,6 +529,9 @@ class IntakeOcrRegressionCommand extends Command
                 'language' => (string) $language,
                 'ocr_text' => (string) $ocrText,
                 'expected_fields' => $normalizedExpected,
+                'expected_fields_source' => $expectedFieldsSource,
+                'profile_snapshot_metadata' => $this->profileSnapshotMetadata(is_array($expectedProfileSnapshot) ? $expectedProfileSnapshot : null),
+                'source_context_metadata' => $this->sourceContextMetadata(is_array($sourceContext) ? $sourceContext : null),
                 '_line' => $line,
             ],
             'errors' => array_values(array_unique($errors)),
@@ -584,10 +607,84 @@ class IntakeOcrRegressionCommand extends Command
                 'exact_match_count' => $exact,
                 'mismatch_fields' => $mismatchFields,
                 'missing_fields' => $missingFields,
+                'profile_snapshot_present' => (bool) data_get($case, 'profile_snapshot_metadata.profile_snapshot_present', false),
+                'profile_snapshot_sections' => data_get($case, 'profile_snapshot_metadata.profile_snapshot_sections', []),
+                'address_count' => data_get($case, 'profile_snapshot_metadata.address_count'),
+                'contact_count' => data_get($case, 'profile_snapshot_metadata.contact_count'),
+                'family_section_present' => (bool) data_get($case, 'profile_snapshot_metadata.family_section_present', false),
+                'source_context_present' => (bool) data_get($case, 'source_context_metadata.source_context_present', false),
+                'source_context_keys' => data_get($case, 'source_context_metadata.source_context_keys', []),
                 'status' => $status,
             ],
             'field_stats' => $fieldStats,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $snapshot
+     * @return array{profile_snapshot_present: bool, profile_snapshot_sections: list<string>, address_count: ?int, contact_count: ?int, family_section_present: bool}
+     */
+    private function profileSnapshotMetadata(?array $snapshot): array
+    {
+        if ($snapshot === null) {
+            return [
+                'profile_snapshot_present' => false,
+                'profile_snapshot_sections' => [],
+                'address_count' => null,
+                'contact_count' => null,
+                'family_section_present' => false,
+            ];
+        }
+
+        return [
+            'profile_snapshot_present' => true,
+            'profile_snapshot_sections' => $this->safeTopLevelKeys($snapshot),
+            'address_count' => is_array($snapshot['addresses'] ?? null) ? count($snapshot['addresses']) : null,
+            'contact_count' => is_array($snapshot['contacts'] ?? null) ? count($snapshot['contacts']) : null,
+            'family_section_present' => array_key_exists('family', $snapshot) && is_array($snapshot['family']),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $context
+     * @return array{source_context_present: bool, source_context_keys: list<string>}
+     */
+    private function sourceContextMetadata(?array $context): array
+    {
+        if ($context === null) {
+            return [
+                'source_context_present' => false,
+                'source_context_keys' => [],
+            ];
+        }
+
+        return [
+            'source_context_present' => true,
+            'source_context_keys' => $this->safeTopLevelKeys($context),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return list<string>
+     */
+    private function safeTopLevelKeys(array $data): array
+    {
+        return array_values(array_unique(array_map(
+            fn (string|int $key): string => $this->safeMetadataKey($key),
+            array_keys($data)
+        )));
+    }
+
+    private function safeMetadataKey(string|int $key): string
+    {
+        $key = trim((string) $key);
+
+        if (preg_match('/\d{6,}/', $key) === 1 || preg_match('/^[a-z][a-z0-9_]{0,63}$/', $key) !== 1) {
+            return 'redacted_key';
+        }
+
+        return $this->safeToken($key, 'unknown');
     }
 
     private function firstParsedFieldValue(array $parsed, string $field): mixed
@@ -857,7 +954,7 @@ class IntakeOcrRegressionCommand extends Command
 
         $this->line('Rows');
         $this->table(
-            ['Case ID', 'Layout', 'Lang', 'Expected', 'Exact', 'Mismatch fields', 'Missing fields', 'Status'],
+            ['Case ID', 'Layout', 'Lang', 'Expected', 'Exact', 'Mismatch fields', 'Missing fields', 'Snapshot', 'Sections', 'Addresses', 'Contacts', 'Family', 'Source context', 'Source keys', 'Status'],
             collect($report['rows'])->map(fn (array $row): array => [
                 $row['case_id'],
                 $row['layout_type'],
@@ -866,6 +963,13 @@ class IntakeOcrRegressionCommand extends Command
                 $row['exact_match_count'],
                 implode(', ', $row['mismatch_fields']),
                 implode(', ', $row['missing_fields']),
+                ($row['profile_snapshot_present'] ?? false) ? 'yes' : 'no',
+                implode(', ', $row['profile_snapshot_sections'] ?? []),
+                $row['address_count'] ?? '',
+                $row['contact_count'] ?? '',
+                ($row['family_section_present'] ?? false) ? 'yes' : 'no',
+                ($row['source_context_present'] ?? false) ? 'yes' : 'no',
+                implode(', ', $row['source_context_keys'] ?? []),
                 $row['status'],
             ])->all()
         );

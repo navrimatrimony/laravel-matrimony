@@ -51,7 +51,12 @@ test('created file can be used by intake ocr regression', function () {
             ->and($payload['summary']['overall_accuracy_percent'])->toBe(100)
             ->and($payload['summary']['mismatch_count'])->toBe(0)
             ->and($payload['summary']['missing_count'])->toBe(0)
-            ->and(array_column($payload['rows'], 'status'))->toBe(['pass', 'pass', 'pass']);
+            ->and(array_column($payload['rows'], 'status'))->toBe(['pass', 'pass', 'pass'])
+            ->and(array_column($payload['rows'], 'profile_snapshot_present'))->toBe([true, true, true])
+            ->and(array_column($payload['rows'], 'address_count'))->toBe([1, 1, 1])
+            ->and(array_column($payload['rows'], 'contact_count'))->toBe([2, 2, 2])
+            ->and(array_column($payload['rows'], 'family_section_present'))->toBe([true, true, true])
+            ->and(array_column($payload['rows'], 'source_context_present'))->toBe([true, true, true]);
     } finally {
         goldenScaffoldDelete($path);
     }
@@ -227,8 +232,19 @@ test('output does not contain real looking secrets provider payloads and rows ar
             ->and($rows)->toHaveCount(3);
 
         foreach ($rows as $row) {
-            expect($row)->toHaveKeys(['case_id', 'layout_type', 'language', 'ocr_text', 'expected_fields'])
-                ->and($row['case_id'])->toStartWith('synthetic_private_scaffold_');
+            expect($row)->toHaveKeys([
+                'case_id',
+                'layout_type',
+                'language',
+                'ocr_text',
+                'parser_expected_fields',
+                'expected_profile_snapshot',
+                'source_context',
+            ])
+                ->and($row['case_id'])->toStartWith('synthetic_private_scaffold_')
+                ->and($row['parser_expected_fields'])->toHaveKeys(['full_name', 'date_of_birth'])
+                ->and($row['expected_profile_snapshot'])->toHaveKeys(['core', 'contacts', 'addresses', 'family', 'relatives', 'property'])
+                ->and($row['source_context'])->toHaveKeys(['consent_source', 'primary_contact_source', 'primary_contact_number']);
         }
     } finally {
         goldenScaffoldDelete($path);

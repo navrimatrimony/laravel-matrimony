@@ -141,10 +141,17 @@ class IntakeGoldenDatasetScaffoldCommand extends Command
                 'layout_type' => 'single_column',
                 'language' => 'en',
                 'ocr_text' => "Name: Synthetic Alpha\nDate of Birth: 1996-04-12\nHeight: 5 ft 7 in\nEducation: B.Sc\nOccupation: Teacher\nMobile: 5550101001\nAddress: Sample Lane, Test City\nReligion: Hindu\nCaste: Maratha",
-                'expected_fields' => [
+                'parser_expected_fields' => [
                     'full_name' => 'Synthetic Alpha',
                     'date_of_birth' => '1996-04-12',
                 ],
+                'expected_profile_snapshot' => $this->syntheticProfileSnapshot(
+                    'Synthetic Alpha',
+                    '5550101001',
+                    '5550199001',
+                    'Sample Lane, Test City'
+                ),
+                'source_context' => $this->syntheticSourceContext('self_consent', '5550199001'),
                 'notes' => 'Synthetic example only. Replace with manually reviewed private cases under storage/app.',
             ],
             [
@@ -152,10 +159,17 @@ class IntakeGoldenDatasetScaffoldCommand extends Command
                 'layout_type' => 'two_column',
                 'language' => 'en',
                 'ocr_text' => "Name: Synthetic Beta\nDOB: 1994-08-05\nEducation: B.Com\nOccupation: Clerk\nMobile: 5550101002\nAddress: Example Nagar, Test District",
-                'expected_fields' => [
+                'parser_expected_fields' => [
                     'full_name' => 'Synthetic Beta',
                     'date_of_birth' => '1994-08-05',
                 ],
+                'expected_profile_snapshot' => $this->syntheticProfileSnapshot(
+                    'Synthetic Beta',
+                    '5550101002',
+                    '5550199002',
+                    'Example Nagar, Test District'
+                ),
+                'source_context' => $this->syntheticSourceContext('guardian_consent', '5550199002'),
                 'notes' => 'Synthetic two-column-style example only.',
             ],
             [
@@ -163,12 +177,75 @@ class IntakeGoldenDatasetScaffoldCommand extends Command
                 'layout_type' => 'marathi_or_mixed_text',
                 'language' => 'mr-en',
                 'ocr_text' => "Name: Synthetic Gamma\n\u{0928}\u{093E}\u{0935}: Synthetic Gamma\nDate of Birth: 1995-03-22\n\u{0936}\u{093F}\u{0915}\u{094D}\u{0937}\u{0923}: B.A.\nMobile: 5550101003\nAddress: Sample Peth, Test Pune",
-                'expected_fields' => [
+                'parser_expected_fields' => [
                     'full_name' => 'Synthetic Gamma',
                     'date_of_birth' => '1995-03-22',
                 ],
+                'expected_profile_snapshot' => $this->syntheticProfileSnapshot(
+                    'Synthetic Gamma',
+                    '5550101003',
+                    '5550199003',
+                    'Sample Peth, Test Pune'
+                ),
+                'source_context' => $this->syntheticSourceContext('bureau_consent', '5550199003'),
                 'notes' => 'Synthetic Marathi/mixed-text example only.',
             ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function syntheticProfileSnapshot(string $name, string $documentPhone, string $primaryPhone, string $address): array
+    {
+        return [
+            'core' => [
+                'full_name' => $name,
+                'primary_contact_number' => $primaryPhone,
+            ],
+            'contacts' => [
+                [
+                    'type' => 'primary_communication_contact',
+                    'number' => $primaryPhone,
+                    'is_primary' => true,
+                ],
+                [
+                    'type' => 'document_contact',
+                    'number' => $documentPhone,
+                    'is_primary' => false,
+                ],
+            ],
+            'addresses' => [
+                [
+                    'type' => 'document_residence',
+                    'address_line' => $address,
+                ],
+            ],
+            'family' => [
+                'father_name' => 'Synthetic Father',
+                'mother_name' => 'Synthetic Mother',
+            ],
+            'relatives' => [
+                [
+                    'relation_type' => 'uncle',
+                    'relative_details' => 'Synthetic relative details',
+                ],
+            ],
+            'property' => [
+                'summary' => 'Synthetic property note',
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function syntheticSourceContext(string $consentSource, string $primaryPhone): array
+    {
+        return [
+            'consent_source' => $consentSource,
+            'primary_contact_source' => 'communication_or_consent',
+            'primary_contact_number' => $primaryPhone,
         ];
     }
 
