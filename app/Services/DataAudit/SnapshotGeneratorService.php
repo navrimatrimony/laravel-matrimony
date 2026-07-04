@@ -207,15 +207,8 @@ class SnapshotGeneratorService
         $relativeRows = $profile->relatives()->orderBy('id')->get()->map(fn ($r) => [
             'id' => (int) $r->id,
             'relation_type' => (string) ($r->relation_type ?? ''),
-            'name' => (string) ($r->name ?? ''),
-            'occupation' => (string) ($r->occupation ?? ''),
-            'occupation_master_id' => $r->occupation_master_id,
-            'occupation_custom_id' => $r->occupation_custom_id,
-            'city_id' => $r->city_id,
-            'state_id' => $r->state_id,
+            'relative_details' => (string) ($r->relative_details ?? ''),
             'contact_number' => (string) ($r->contact_number ?? ''),
-            'notes' => (string) ($r->notes ?? ''),
-            'is_primary_contact' => (bool) $r->is_primary_contact,
         ])->values()->all();
 
         $contacts = [];

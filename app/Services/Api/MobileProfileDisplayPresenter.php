@@ -89,7 +89,7 @@ class MobileProfileDisplayPresenter
             'motherOccupationMaster',
             'motherOccupationCustom',
             'siblings',
-            'relatives.city',
+            'relatives',
             'allianceNetworks.city',
             'allianceNetworks.state',
             'allianceNetworks.district',
@@ -2197,14 +2197,10 @@ class MobileProfileDisplayPresenter
         foreach ($relatives->take(3) as $relative) {
             $relation = $this->relativeRelationTypeLabel($relative->relation_type)
                 ?? $this->cleanString($relative->relation_type);
-            $location = $this->cleanString($relative->address_line)
-                ?? $this->labelFrom($relative->city);
 
             $row = $this->joinLabels([
                 $relation,
-                $this->cleanString($relative->name),
-                $this->cleanString($relative->occupation),
-                $location,
+                $this->cleanString($relative->relative_details),
             ], ' - ');
             if ($row !== null) {
                 $rows[] = $row;

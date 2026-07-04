@@ -659,7 +659,7 @@
             <p class="text-gray-500 text-sm font-medium mb-1">{{ $relativeRelationLabels[$relationType] ?? \Illuminate\Support\Str::title(str_replace('_', ' ', $relationType)) }}</p>
             @foreach($relatives as $rel)
                 <p class="font-medium text-base ml-2">
-                    {{ $rel->name ?: '—' }}{{ $rel->occupation ? ' · ' . $rel->occupation : '' }}{{ ($rel->city?->name || $rel->state?->name) ? ' (' . trim(implode(', ', array_filter([$rel->city?->name, $rel->state?->name]))) . ')' : '' }}{{ $rel->contact_number ? ' · ' . $rel->contact_number : '' }}{{ $rel->notes ? ' · ' . \Illuminate\Support\Str::limit($rel->notes, 60) : '' }}
+                    {{ $rel->relative_details ?: '—' }}{{ $rel->contact_number ? ' · ' . $rel->contact_number : '' }}
                 </p>
             @endforeach
         </div>

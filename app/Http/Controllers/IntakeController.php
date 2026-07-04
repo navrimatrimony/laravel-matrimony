@@ -951,30 +951,30 @@ class IntakeController extends Controller
         $hasSiblings = isset($snapshot['core']['has_siblings']) ? (bool) $snapshot['core']['has_siblings'] : $profileSiblings->isNotEmpty();
         [$builtPaternal, $builtMaternal, $dajiRows] = $this->partitionAndStructureRelativesForIntake($relativesOnly, $intake);
 
-        // Prefer user-edited relatives_parents_family when it has meaningful names; otherwise fall back to parsed/built relatives.
+        // Prefer user-edited relatives_parents_family when it has meaningful details; otherwise fall back to parsed/built relatives.
         if (isset($snapshot['relatives_parents_family']) && is_array($snapshot['relatives_parents_family'])) {
             $fromSnapshotParents = collect($snapshot['relatives_parents_family'])->map(fn ($r) => (object) (is_array($r) ? $r : []));
-            $hasAnyParentName = $fromSnapshotParents->contains(function ($row) {
-                $name = trim((string) ($row->name ?? ''));
+            $hasAnyParentDetails = $fromSnapshotParents->contains(function ($row) {
+                $details = trim((string) ($row->relative_details ?? $row->name ?? ''));
 
-                return $name !== '';
+                return $details !== '';
             });
-            $profileRelativesParentsFamily = $hasAnyParentName || $builtPaternal->isEmpty()
+            $profileRelativesParentsFamily = $hasAnyParentDetails || $builtPaternal->isEmpty()
                 ? $fromSnapshotParents
                 : $builtPaternal;
         } else {
             $profileRelativesParentsFamily = $builtPaternal;
         }
 
-        // Same strategy for maternal relatives: keep user edits when they added names; else use parsed/built data.
+        // Same strategy for maternal relatives: keep user edits when they added details; else use parsed/built data.
         if (isset($snapshot['relatives_maternal_family']) && is_array($snapshot['relatives_maternal_family'])) {
             $fromSnapshotMaternal = collect($snapshot['relatives_maternal_family'])->map(fn ($r) => (object) (is_array($r) ? $r : []));
-            $hasAnyMaternalName = $fromSnapshotMaternal->contains(function ($row) {
-                $name = trim((string) ($row->name ?? ''));
+            $hasAnyMaternalDetails = $fromSnapshotMaternal->contains(function ($row) {
+                $details = trim((string) ($row->relative_details ?? $row->name ?? ''));
 
-                return $name !== '';
+                return $details !== '';
             });
-            $profileRelativesMaternalFamily = $hasAnyMaternalName || $builtMaternal->isEmpty()
+            $profileRelativesMaternalFamily = $hasAnyMaternalDetails || $builtMaternal->isEmpty()
                 ? $fromSnapshotMaternal
                 : $builtMaternal;
         } else {
@@ -1228,7 +1228,7 @@ class IntakeController extends Controller
                 $r = is_array($rel) ? $rel : (array) $rel;
                 $rt = trim((string) ($r['relation_type'] ?? ''));
                 if ($rt === 'इतर' || $rt === 'Other') {
-                    $notes = trim((string) ($r['notes'] ?? ''));
+                    $notes = trim((string) ($r['relative_details'] ?? $r['notes'] ?? ''));
                     if ($notes !== '') {
                         $otherRelativesText = preg_replace('/^.*?इतर\s*नातेवाईक\s*[:-]\s*/u', '', $notes);
                         $otherRelativesText = trim(preg_replace('/\s+/u', ' ', $otherRelativesText));
@@ -2789,28 +2789,35 @@ class IntakeController extends Controller
             if ($relationType === '') {
                 continue;
             }
-            $name = trim((string) ($row['name'] ?? ''));
-            if ($relationType === 'maternal_address_ajol') {
-                $name = '';
-            }
-            $addressLine = trim((string) ($row['address_line'] ?? $row['address'] ?? $row['Address'] ?? ''));
-            $address = trim((string) ($row['address'] ?? $row['address_line'] ?? $row['Address'] ?? ''));
             $relatives[] = [
                 'id' => ! empty($row['id']) ? (int) $row['id'] : null,
                 'relation_type' => $relationType ?: '',
-                'name' => $name ?: '',
-                'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
-                'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
-                'state_id' => ! empty($row['state_id']) ? (int) $row['state_id'] : null,
+                'relative_details' => $this->relativeDetailsFromIntakeRow($row),
                 'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
-                'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
-                'address_line' => $addressLine !== '' ? $addressLine : null,
-                'address' => $address !== '' ? $address : null,
-                'is_primary_contact' => ! empty($row['is_primary_contact']),
             ];
         }
 
         return $relatives;
+    }
+
+    private function relativeDetailsFromIntakeRow(array $row): ?string
+    {
+        $direct = trim((string) ($row['relative_details'] ?? ''));
+        if ($direct !== '') {
+            return $direct;
+        }
+
+        $parts = [];
+        foreach (['name', 'occupation', 'address_line', 'address', 'Address', 'location_display', 'notes', 'raw_note'] as $key) {
+            $value = trim((string) ($row[$key] ?? ''));
+            if ($value !== '') {
+                $parts[] = $value;
+            }
+        }
+
+        $parts = array_values(array_unique($parts));
+
+        return $parts === [] ? null : implode("\n", $parts);
     }
 
     /**
@@ -3791,38 +3798,16 @@ class IntakeController extends Controller
                         is_array($parsed['relatives'] ?? null) ? $parsed['relatives'] : [],
                         [
                             'relation_type',
-                            'name',
-                            'occupation',
-                            'occupation_master_id',
-                            'occupation_custom_id',
+                            'relative_details',
                             'contact_number',
-                            'address_line',
-                            'location_display',
-                            'city_id',
-                            'taluka_id',
-                            'district_id',
-                            'state_id',
-                            'notes',
-                            'is_primary_contact',
                         ]
                     ),
                     'relatives_parents_family' => $this->orderRowList(
                         is_array($parsed['relatives_parents_family'] ?? null) ? $parsed['relatives_parents_family'] : [],
                         [
                             'relation_type',
-                            'name',
-                            'occupation',
-                            'occupation_master_id',
-                            'occupation_custom_id',
+                            'relative_details',
                             'contact_number',
-                            'address_line',
-                            'location_display',
-                            'city_id',
-                            'taluka_id',
-                            'district_id',
-                            'state_id',
-                            'notes',
-                            'is_primary_contact',
                         ]
                     ),
                     'relatives_sectioned' => [
@@ -3838,19 +3823,8 @@ class IntakeController extends Controller
                         is_array($parsed['relatives_maternal_family'] ?? null) ? $parsed['relatives_maternal_family'] : [],
                         [
                             'relation_type',
-                            'name',
-                            'occupation',
-                            'occupation_master_id',
-                            'occupation_custom_id',
+                            'relative_details',
                             'contact_number',
-                            'address_line',
-                            'location_display',
-                            'city_id',
-                            'taluka_id',
-                            'district_id',
-                            'state_id',
-                            'notes',
-                            'is_primary_contact',
                         ]
                     ),
                     'alliance_networks' => $this->orderRowList(

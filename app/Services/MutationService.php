@@ -1924,34 +1924,27 @@ class MutationService
         if ($entityType === 'profile_relatives') {
             $mapped = $row;
             $mapped['relation_type'] = trim((string) ($mapped['relation_type'] ?? ''));
-            $mapped['name'] = trim((string) ($mapped['name'] ?? ''));
-            $mapped['occupation'] = isset($mapped['occupation']) && trim((string) $mapped['occupation']) !== '' ? trim((string) $mapped['occupation']) : null;
-            $mapped['occupation_master_id'] = ! empty($mapped['occupation_master_id']) ? (int) $mapped['occupation_master_id'] : null;
-            $mapped['occupation_custom_id'] = ! empty($mapped['occupation_custom_id']) ? (int) $mapped['occupation_custom_id'] : null;
-            $locationId = ! empty($mapped['location_id']) ? (int) $mapped['location_id'] : null;
-            $cityId = ! empty($mapped['city_id']) ? (int) $mapped['city_id'] : null;
-            $mapped['city_id'] = ($locationId && $locationId > 0) ? $locationId : (($cityId && $cityId > 0) ? $cityId : null);
-            $mapped['state_id'] = ! empty($mapped['state_id']) ? (int) $mapped['state_id'] : null;
-            $mapped['taluka_id'] = ! empty($mapped['taluka_id']) ? (int) $mapped['taluka_id'] : null;
-            $mapped['district_id'] = ! empty($mapped['district_id']) ? (int) $mapped['district_id'] : null;
+            $mapped['relative_details'] = $this->relativeDetailsFromSnapshotRow($mapped);
             $mapped['contact_number'] = isset($mapped['contact_number']) && trim((string) $mapped['contact_number']) !== '' ? trim((string) $mapped['contact_number']) : null;
-            $notes = isset($mapped['notes']) && trim((string) $mapped['notes']) !== '' ? trim((string) $mapped['notes']) : null;
-            if ($notes === null && isset($mapped['additional_info']) && trim((string) $mapped['additional_info']) !== '') {
-                $notes = trim((string) $mapped['additional_info']);
-            }
-            $addressLine = trim((string) ($mapped['address_line'] ?? $mapped['address'] ?? $mapped['Address'] ?? ''));
-            if ($addressLine === '' && isset($mapped['location_input']) && trim((string) $mapped['location_input']) !== '') {
-                $addressLine = trim((string) $mapped['location_input']);
-            }
-            if (Schema::hasColumn('profile_relatives', 'address_line')) {
-                $mapped['address_line'] = $addressLine !== '' ? $addressLine : null;
-                $mapped['notes'] = $notes;
-            } else {
-                $parts = array_filter([$notes, $addressLine !== '' ? $addressLine : null]);
-                $mapped['notes'] = $parts !== [] ? implode("\n", array_unique($parts)) : null;
-            }
-            unset($mapped['address'], $mapped['Address'], $mapped['additional_info'], $mapped['location_id'], $mapped['location_input']);
-            $mapped['is_primary_contact'] = ! empty($mapped['is_primary_contact']);
+            unset(
+                $mapped['name'],
+                $mapped['occupation'],
+                $mapped['occupation_master_id'],
+                $mapped['occupation_custom_id'],
+                $mapped['city_id'],
+                $mapped['state_id'],
+                $mapped['taluka_id'],
+                $mapped['district_id'],
+                $mapped['address_line'],
+                $mapped['address'],
+                $mapped['Address'],
+                $mapped['notes'],
+                $mapped['additional_info'],
+                $mapped['location_id'],
+                $mapped['location_input'],
+                $mapped['marital_status'],
+                $mapped['is_primary_contact']
+            );
 
             return $mapped;
         }
@@ -2084,6 +2077,26 @@ class MutationService
         $found = $query->value('id');
 
         return $found !== null ? (int) $found : null;
+    }
+
+    private function relativeDetailsFromSnapshotRow(array $row): ?string
+    {
+        $direct = trim((string) ($row['relative_details'] ?? ''));
+        if ($direct !== '') {
+            return $direct;
+        }
+
+        $parts = [];
+        foreach (['name', 'occupation', 'address_line', 'address', 'Address', 'location_input', 'notes', 'additional_info'] as $key) {
+            $value = trim((string) ($row[$key] ?? ''));
+            if ($value !== '') {
+                $parts[] = $value;
+            }
+        }
+
+        $parts = array_values(array_unique($parts));
+
+        return $parts === [] ? null : implode("\n", $parts);
     }
 
     private function resolveAddressTypeToId(array $row): array

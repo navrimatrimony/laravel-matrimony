@@ -236,6 +236,8 @@ return [
         'address_city' => 'पत्ता / शहर',
         'occupation' => 'व्यवसाय',
         'additional_info' => 'अतिरिक्त माहिती',
+        'relative_details' => 'नातेवाईकाची माहिती',
+        'relative_details_placeholder' => 'नाव, व्यवसाय, पत्ता आणि इतर माहिती',
         'notes_placeholder' => 'नोंदी',
         'notes_placeholder_extended_family' => 'फक्त या व्यक्तीविषयी नोंद',
         'notes_hint_other_relatives_below' => 'इतर नातेवाईक (आडनाव/गाव) साठी खालील "इतर नातेवाईक" विभाग वापरा.',

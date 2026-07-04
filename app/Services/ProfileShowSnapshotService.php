@@ -77,8 +77,7 @@ class ProfileShowSnapshotService
             'children.childLivingWith',
             'marriages',
             'siblings.city',
-            'relatives.city',
-            'relatives.state',
+            'relatives',
             'allianceNetworks.city',
             'allianceNetworks.state',
             'allianceNetworks.district',
@@ -488,12 +487,8 @@ class ProfileShowSnapshotService
         foreach ($byType as $type => $relatives) {
             $lines = [];
             foreach ($relatives as $rel) {
-                $tail = trim(implode(', ', array_filter([$rel->city?->name, $rel->state?->name])));
-                $line = ($rel->name ?: '—')
-                    .($rel->occupation ? ' · '.$rel->occupation : '')
-                    .($tail !== '' ? ' ('.$tail.')' : '')
-                    .($rel->contact_number ? ' · '.$rel->contact_number : '')
-                    .($rel->notes ? ' · '.Str::limit((string) $rel->notes, 80) : '');
+                $line = (trim((string) ($rel->relative_details ?? '')) !== '' ? trim((string) $rel->relative_details) : '—')
+                    .($rel->contact_number ? ' · '.$rel->contact_number : '');
                 $lines[] = $line;
             }
             $heading = $labels[$type] ?? Str::title(str_replace('_', ' ', (string) $type));

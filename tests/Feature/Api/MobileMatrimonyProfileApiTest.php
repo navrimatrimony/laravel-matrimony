@@ -1915,31 +1915,17 @@ test('MobileProfile PUT api v1 matrimony-profile persists syncs relatives and hi
     [$viewerUser, $viewerProfile, $targetUser, $targetProfile] = mobileApiProfileActionPair();
     unset($viewerProfile);
 
-    $locationChain = mobileApiProfileTestLocationChain();
-    $occupationMaster = mobileApiProfileTestOccupationMaster('Relative Engineer', 303);
-
     Sanctum::actingAs($targetUser);
 
     $response = $this->putJson('/api/v1/matrimony-profile', [
         'relatives' => [
             [
                 'relation_type' => 'paternal_uncle',
-                'name' => 'Test Uncle',
-                'occupation' => 'Engineer',
-                'occupation_master_id' => $occupationMaster->id,
-                'city_id' => $locationChain['leaf']->id,
-                'state_id' => $locationChain['state']->id,
-                'district_id' => $locationChain['district']->id,
-                'taluka_id' => $locationChain['taluka']->id,
-                'address_line' => 'Pune relative address',
-                'notes' => 'Paternal side',
+                'relative_details' => "Test Uncle\nEngineer\nPune relative address\nPaternal side",
             ],
             [
                 'relation_type' => 'maternal_aunt',
-                'name' => 'Test Aunt',
-                'occupation' => 'Teacher',
-                'address_line' => 'Mumbai relative address',
-                'notes' => 'Maternal side',
+                'relative_details' => "Test Aunt\nTeacher\nMumbai relative address\nMaternal side",
             ],
         ],
     ]);
@@ -1947,9 +1933,8 @@ test('MobileProfile PUT api v1 matrimony-profile persists syncs relatives and hi
     $response->assertOk();
     expect($response->json('profile.relatives'))->toHaveCount(2);
     expect($response->json('profile.relatives.0.relation_type'))->toBe('paternal_uncle');
-    expect($response->json('profile.relatives.0.name'))->toBe('Test Uncle');
-    expect($response->json('profile.relatives.0.occupation_master_id'))->toBe($occupationMaster->id);
-    expect($response->json('profile.relatives.0.address_line'))->toBe('Pune relative address');
+    expect($response->json('profile.relatives.0.relative_details'))->toContain('Test Uncle');
+    expect($response->json('profile.relatives.0.relative_details'))->toContain('Pune relative address');
     expect(array_key_exists('contact_number', $response->json('profile.relatives.0')))->toBeFalse();
 
     $getResponse = $this->getJson('/api/v1/matrimony-profile');
@@ -1969,10 +1954,7 @@ test('MobileProfile PUT api v1 matrimony-profile persists syncs relatives and hi
             [
                 'id' => $firstRelativeId,
                 'relation_type' => 'paternal_uncle',
-                'name' => 'Updated Uncle',
-                'occupation' => 'Business',
-                'address_line' => 'Updated relative address',
-                'notes' => 'Updated notes',
+                'relative_details' => "Updated Uncle\nBusiness\nUpdated relative address\nUpdated notes",
             ],
         ],
     ]);
@@ -1980,7 +1962,7 @@ test('MobileProfile PUT api v1 matrimony-profile persists syncs relatives and hi
     $updateResponse->assertOk();
     expect($updateResponse->json('profile.relatives'))->toHaveCount(1);
     expect($updateResponse->json('profile.relatives.0.id'))->toBe($firstRelativeId);
-    expect($updateResponse->json('profile.relatives.0.name'))->toBe('Updated Uncle');
+    expect($updateResponse->json('profile.relatives.0.relative_details'))->toContain('Updated Uncle');
 
     expect(DB::table('profile_relatives')->where('profile_id', $targetProfile->id)->count())->toBe(1);
 

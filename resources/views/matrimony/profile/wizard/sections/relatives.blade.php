@@ -12,7 +12,6 @@
             :relationOptions="$relationTypesParentsFamily ?? []"
             :showMarried="false"
             :items="$profileRelativesParentsFamily ?? collect()"
-            :showPrimaryContact="true"
             :notesPlaceholder="__('components.relation.notes_placeholder_extended_family')"
             addButtonLabel="{{ __('wizard.add') }}"
             removeButtonLabel="{{ __('wizard.remove_entry') }}"

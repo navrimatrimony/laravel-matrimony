@@ -248,6 +248,8 @@ return [
         'address_city' => 'Address / city',
         'occupation' => 'Occupation',
         'additional_info' => 'Additional info',
+        'relative_details' => 'Relative details',
+        'relative_details_placeholder' => 'Name, occupation, address and other details',
         'notes_placeholder' => 'Notes',
         'notes_placeholder_extended_family' => 'Notes about this person only',
         'notes_hint_other_relatives_below' => 'For other relatives (surname / place) use the "Other Relatives" section below.',

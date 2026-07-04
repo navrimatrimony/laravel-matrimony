@@ -4,12 +4,10 @@
     'relationOptions' => [],
     'showMarried' => false,
     'items' => collect(),
-    'showPrimaryContact' => false,
     'addButtonLabel' => null,
     'removeButtonLabel' => null,
     'contentShowBinding' => null,
     'contentShowInitial' => true,
-    'addressOnlyRelationValue' => null, // e.g. 'maternal_address_ajol' — when selected, only Relation + Address shown
     'notesPlaceholder' => null, // when set (e.g. extended family), use instead of notes_placeholder to steer "other relatives" to Other Relatives section
 ])
 @php
@@ -62,7 +60,7 @@
 /* Add control only in last row; same line as Remove on the right */
 [data-relation-engine] .relation-engine-row:not(:last-child) .relation-add-wrap { display: none; }
 </style>
-<div class="space-y-4 border border-gray-200 dark:border-gray-600 rounded-lg p-4" data-relation-engine data-show-married="{{ $showMarried ? '1' : '0' }}" data-address-only-relation="{{ $addressOnlyRelationValue ?? '' }}"
+<div class="space-y-4 border border-gray-200 dark:border-gray-600 rounded-lg p-4" data-relation-engine data-show-married="{{ $showMarried ? '1' : '0' }}"
     @if($contentShowBinding) x-data="{ {{ $contentShowBinding }}: {{ $contentShowInitial ? 'true' : 'false' }} }" @else id="{{ $namePrefix }}-container" data-repeater-container data-name-prefix="{{ $namePrefix }}" data-row-class="{{ $namePrefix }}-row" data-min-rows="1" @endif>
     @if(isset($header))
     <div class="pb-2">{{ $header }}</div>
@@ -138,56 +136,20 @@
             </div>
             @else
             {{-- Relatives --}}
-            @if($addressOnlyRelationValue)
-            @php $isAddressOnly = ($r['relation_type'] ?? '') === $addressOnlyRelationValue; @endphp
-            {{-- When Ajol: one row, 2 fields (Relation | Address). When not Ajol: 2 rows × 3 fields. --}}
-            <div class="relation-address-only-wrap grid items-start" style="grid-template-columns: 1fr 1fr; gap: 0.75rem; display:{{ $isAddressOnly ? 'grid' : 'none' }};">
-                <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.relation') }}</label>
-                    <select name="{{ $namePrefix }}[{{ $idx }}][relation_type]" class="relation-type-select relation-input-h form-select w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
-                        <option value="">—</option>
-                        @foreach($opts as $opt)
-                            <option value="{{ $opt['value'] }}" {{ ($r['relation_type'] ?? '') == $opt['value'] ? 'selected' : '' }}>{{ $opt['label'] }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                @include('components.repeaters.partials.relation-location-address', ['namePrefix' => $namePrefix, 'idx' => $idx, 'r' => $r])
-            </div>
-            <div class="relation-fields-wrap relation-two-line-grid grid items-start" style="grid-template-columns: 1fr 1fr 1fr; display:{{ $isAddressOnly ? 'none' : 'grid' }}; gap: 0.75rem;">
-                <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.relation') }}</label>
-                    <select name="{{ $namePrefix }}[{{ $idx }}][relation_type]" class="relation-type-select relation-input-h form-select w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
-                        <option value="">—</option>
-                        @foreach($opts as $opt)
-                            <option value="{{ $opt['value'] }}" {{ ($r['relation_type'] ?? '') == $opt['value'] ? 'selected' : '' }}>{{ $opt['label'] }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.name') }}</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][name]" value="{{ $r['name'] ?? '' }}" placeholder="{{ __('components.relation.name_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
-                </div>
-                <div class="min-w-0">
-                    <x-profile.contact-field variant="inline" name="{{ $namePrefix }}[{{ $idx }}][contact_number]" :value="$r['contact_number'] ?? ''" :label="__('components.relation.mobile')" :placeholder="__('components.relation.ten_digit')" :showCountryCode="true" :showWhatsapp="true" :nameWhatsapp="$namePrefix . '[' . $idx . '][contact_preference]'" :valueWhatsapp="'call'" inputClass="relation-input-h w-full min-w-0 box-border" />
-                </div>
-                <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.occupation') }}</label>
-                    @if ($hasOccEngine)
-                        <x-occupation-search-engine :profile="(object) $r" :name-prefix="$namePrefix . '[' . $idx . ']'" :show-label="false" :compact="true" :form-field-style="true" />
-                    @else
-                        <input type="text" name="{{ $namePrefix }}[{{ $idx }}][occupation]" value="{{ $r['occupation'] ?? '' }}" placeholder="{{ __('components.relation.occupation_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
-                    @endif
-                </div>
-                @include('components.repeaters.partials.relation-location-address', ['namePrefix' => $namePrefix, 'idx' => $idx, 'r' => $r])
-                <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.additional_info') }}</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="{{ $notesPlaceholder }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
-                </div>
-            </div>
-            @else
-            {{-- Default relatives: 2 lines × 3 fields (Relation↔Occupation, Name↔Address, Mobile↔Additional) --}}
-            <div class="grid items-start relation-two-line-grid" style="grid-template-columns: 1fr 1fr 1fr;">
-                <div class="min-w-0">
+            @php
+                $relativeDetailsValue = trim((string) ($r['relative_details'] ?? ''));
+                if ($relativeDetailsValue === '') {
+                    $relativeDetailsValue = collect([
+                        $r['name'] ?? '',
+                        $r['occupation'] ?? '',
+                        $r['address_line'] ?? ($r['location_display'] ?? ''),
+                        $r['notes'] ?? '',
+                        $r['additional_info'] ?? '',
+                    ])->map(fn ($value) => trim((string) $value))->filter()->unique()->implode("\n");
+                }
+            @endphp
+            <div class="grid grid-cols-12 gap-3 items-start">
+                <div class="col-span-12 sm:col-span-3 min-w-0">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.relation') }}</label>
                     <select name="{{ $namePrefix }}[{{ $idx }}][relation_type]" class="relation-input-h form-select w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                         <option value="">—</option>
@@ -196,28 +158,14 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.name') }}</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][name]" value="{{ $r['name'] ?? '' }}" placeholder="{{ __('components.relation.name_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                <div class="col-span-12 sm:col-span-6 min-w-0">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.relative_details') }}</label>
+                    <textarea name="{{ $namePrefix }}[{{ $idx }}][relative_details]" rows="3" placeholder="{{ __('components.relation.relative_details_placeholder') }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0 box-border">{{ $relativeDetailsValue }}</textarea>
                 </div>
-                <div class="min-w-0">
+                <div class="col-span-12 sm:col-span-3 min-w-0">
                     <x-profile.contact-field variant="inline" name="{{ $namePrefix }}[{{ $idx }}][contact_number]" :value="$r['contact_number'] ?? ''" :label="__('components.relation.mobile')" :placeholder="__('components.relation.ten_digit')" :showCountryCode="true" :showWhatsapp="true" :nameWhatsapp="$namePrefix . '[' . $idx . '][contact_preference]'" :valueWhatsapp="'call'" inputClass="relation-input-h w-full min-w-0 box-border" />
                 </div>
-                <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.occupation') }}</label>
-                    @if ($hasOccEngine)
-                        <x-occupation-search-engine :profile="(object) $r" :name-prefix="$namePrefix . '[' . $idx . ']'" :show-label="false" :compact="true" :form-field-style="true" />
-                    @else
-                        <input type="text" name="{{ $namePrefix }}[{{ $idx }}][occupation]" value="{{ $r['occupation'] ?? '' }}" placeholder="{{ __('components.relation.occupation_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
-                    @endif
-                </div>
-                @include('components.repeaters.partials.relation-location-address', ['namePrefix' => $namePrefix, 'idx' => $idx, 'r' => $r])
-                <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.additional_info') }}</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="{{ $notesPlaceholder }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
-                </div>
             </div>
-            @endif
             @endif
 
             @if($showMarried)
@@ -250,16 +198,6 @@
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.additional_info') }}</label>
                     <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="{{ $notesPlaceholder }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
-            </div>
-            @endif
-
-            @if($showPrimaryContact)
-            @php $hidePrimaryForAddressOnly = isset($addressOnlyRelationValue) && (($r['relation_type'] ?? '') === $addressOnlyRelationValue); @endphp
-            <div class="relation-primary-contact-wrap" @if($hidePrimaryForAddressOnly) style="display:none" @endif>
-                <label class="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="{{ $namePrefix }}[{{ $idx }}][is_primary_contact]" value="1" {{ !empty($r['is_primary_contact']) ? 'checked' : '' }}>
-                    {{ __('components.relation.primary_contact') }}
-                </label>
             </div>
             @endif
 
@@ -343,6 +281,7 @@
                 var row = e.target.closest('.relation-engine-row');
                 if (row) {
                     row.querySelectorAll('input[name*="[name]"]').forEach(function(i) { i.value = ''; });
+                    row.querySelectorAll('textarea[name*="[relative_details]"]').forEach(function(i) { i.value = ''; });
                     row.querySelectorAll('input[name*="[occupation]"], input[name*="occupation_master_id"], input[name*="occupation_custom_id"]').forEach(function(i) { i.value = ''; });
                     row.querySelectorAll('input[name*="[notes]"]').forEach(function(i) { i.value = ''; });
                     row.querySelectorAll('input[name*="[contact_number]"]').forEach(function(i) { i.value = ''; });
@@ -353,50 +292,11 @@
         });
         if (showMarried) { updateMaritalStyles(); }
 
-        var addressOnlyRelation = container.getAttribute('data-address-only-relation') || '';
-        function setDisabledInEl(el, disabled) {
-            if (!el) return;
-            el.querySelectorAll('input, select, textarea').forEach(function(inp) { inp.disabled = disabled; });
-        }
-        function toggleAddressOnlyRow(row, changedSelect) {
-            if (!addressOnlyRelation) return;
-            var addrOnlyWrap = row.querySelector('.relation-address-only-wrap');
-            var fieldsWrap = row.querySelector('.relation-fields-wrap');
-            var selAddr = addrOnlyWrap ? addrOnlyWrap.querySelector('.relation-type-select') : null;
-            var selFields = fieldsWrap ? fieldsWrap.querySelector('.relation-type-select') : null;
-            if (!addrOnlyWrap || !fieldsWrap) return;
-            var val = changedSelect ? changedSelect.value : (selAddr ? selAddr.value : (selFields ? selFields.value : ''));
-            if (selAddr && selFields) { selAddr.value = val; selFields.value = val; }
-            var isAddrOnly = val === addressOnlyRelation;
-            addrOnlyWrap.style.display = isAddrOnly ? 'grid' : 'none';
-            fieldsWrap.style.display = isAddrOnly ? 'none' : 'grid';
-            setDisabledInEl(addrOnlyWrap, !isAddrOnly);
-            setDisabledInEl(fieldsWrap, isAddrOnly);
-            var primaryWrap = row.querySelector('.relation-primary-contact-wrap');
-            if (primaryWrap) primaryWrap.style.display = isAddrOnly ? 'none' : '';
-        }
-        function initAddressOnlyToggles() {
-            if (!addressOnlyRelation) return;
-            container.querySelectorAll('.relation-engine-row').forEach(function(row) {
-                var addrOnlyWrap = row.querySelector('.relation-address-only-wrap');
-                var fieldsWrap = row.querySelector('.relation-fields-wrap');
-                var selAddr = addrOnlyWrap ? addrOnlyWrap.querySelector('.relation-type-select') : null;
-                var selFields = fieldsWrap ? fieldsWrap.querySelector('.relation-type-select') : null;
-                function onRelationChange(e) { toggleAddressOnlyRow(row, e.target); }
-                [selAddr, selFields].forEach(function(sel) {
-                    if (!sel) return;
-                    sel.removeEventListener('change', row._addrOnlyChange);
-                    row._addrOnlyChange = onRelationChange;
-                    sel.addEventListener('change', onRelationChange);
-                });
-                toggleAddressOnlyRow(row, selAddr || selFields);
-            });
-        }
-        if (addressOnlyRelation) initAddressOnlyToggles();
         function clearRowFieldsIfNoRelation(row) {
             var sel = row.querySelector('select[name*="[relation_type]"]');
             if (!sel || sel.value !== '') return;
             row.querySelectorAll('input[name*="[name]"]').forEach(function(i) { i.value = ''; });
+            row.querySelectorAll('textarea[name*="[relative_details]"]').forEach(function(i) { i.value = ''; });
             row.querySelectorAll('input[name*="[occupation]"], input[name*="occupation_master_id"], input[name*="occupation_custom_id"]').forEach(function(i) { i.value = ''; });
             row.querySelectorAll('input[name*="[notes]"]').forEach(function(i) { i.value = ''; });
             row.querySelectorAll('input[name*="[contact_number]"]').forEach(function(i) { i.value = ''; });
@@ -412,7 +312,6 @@
             var newIdx = detail.index;
             if (!row) return;
             if (showMarried !== true) {
-                if (addressOnlyRelation) initAddressOnlyToggles();
                 if (window.LocationTypeahead && window.LocationTypeahead.init) window.LocationTypeahead.init();
                 return;
             }
@@ -422,7 +321,6 @@
             row.querySelectorAll('.location-typeahead-input').forEach(function(i) { i.value = ''; });
             row.querySelectorAll('.location-hidden-location-id, .location-hidden-location-input, .location-hidden-address-line, .location-hidden-city, .location-hidden-taluka, .location-hidden-district, .location-hidden-state').forEach(function(h) { h.value = ''; });
             updateMaritalStyles();
-            if (addressOnlyRelation) initAddressOnlyToggles();
             if (window.LocationTypeahead && window.LocationTypeahead.init) window.LocationTypeahead.init();
         });
 

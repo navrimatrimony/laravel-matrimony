@@ -1310,14 +1310,10 @@ Rules:
 - `siblings.*.notes`: nullable string, max 1000
 - `siblings.*.sort_order`: nullable integer, min 0
 - Send `siblings: []` with `has_siblings: false` to clear sibling rows through the same governed replace behavior used by the Laravel wizard. Omitting `siblings` preserves existing sibling rows.
-- `relatives`: nullable array, max 20 rows. Each row may include `id`, `relation_type`, `name`, `occupation`, `occupation_master_id`, `occupation_custom_id`, `city_id`, `state_id`, `district_id`, `taluka_id`, `address_line`, and `notes`.
+- `relatives`: nullable array, max 20 rows. Each row may include `id`, `relation_type`, and `relative_details`.
 - `relatives.*.relation_type`: nullable but required when the row has other data; one of `paternal_grandfather`, `paternal_grandmother`, `paternal_uncle`, `wife_paternal_uncle`, `paternal_aunt`, `husband_paternal_aunt`, `Cousin`, `maternal_address_ajol`, `maternal_grandfather`, `maternal_grandmother`, `maternal_uncle`, `wife_maternal_uncle`, `maternal_aunt`, `husband_maternal_aunt`, `maternal_cousin`
-- `relatives.*.occupation_master_id`: nullable, must exist in `master_occupations.id`
-- `relatives.*.occupation_custom_id`: nullable, must exist in the logged-in user's `master_occupation_custom.id`; cannot be sent together with `occupation_master_id`
-- `relatives.*.city_id`, `relatives.*.state_id`, `relatives.*.district_id`, `relatives.*.taluka_id`: nullable, must exist in `addresses.id`
-- `relatives.*.name`, `relatives.*.occupation`, `relatives.*.address_line`: nullable string, max 255
-- `relatives.*.notes`: nullable string, max 1000
-- `relatives.*.contact_number`, `relatives.*.contact_number_2`, `relatives.*.contact_number_3`, and `relatives.*.is_primary_contact` are not accepted by the mobile contract. Send `relatives: []` to clear relative rows. Omitting `relatives` preserves existing relative rows.
+- `relatives.*.relative_details`: nullable string, max 2000. Use this one field for relative name, occupation, address, and notes.
+- `relatives.*.contact_number`, `relatives.*.contact_number_2`, and `relatives.*.contact_number_3` are not accepted by the mobile contract. Send `relatives: []` to clear relative rows. Omitting `relatives` preserves existing relative rows.
 - `alliance_networks`: nullable array, max 20 rows. Each row may include `id`, `surname`, `city_id`, `state_id`, `district_id`, `taluka_id`, and `notes`.
 - `alliance_networks.*.surname`: nullable string, max 255, but required when that row has any location or note data because `profile_alliance_networks.surname` is required.
 - `alliance_networks.*.city_id`, `alliance_networks.*.state_id`, `alliance_networks.*.district_id`, `alliance_networks.*.taluka_id`: nullable, must exist in `addresses.id`
@@ -1530,19 +1526,7 @@ Success response: HTTP 200
         "id": 200,
         "relation_type": "paternal_uncle",
         "relation_type_label": "Paternal Uncle",
-        "name": "Uncle Name",
-        "occupation": "Engineer",
-        "occupation_master_id": null,
-        "occupation_master_label": null,
-        "occupation_custom_id": null,
-        "occupation_custom_label": null,
-        "city_id": null,
-        "city_label": null,
-        "state_id": null,
-        "district_id": null,
-        "taluka_id": null,
-        "address_line": "Pune",
-        "notes": "Paternal side"
+        "relative_details": "Uncle Name\nEngineer\nPune\nPaternal side"
       }
     ],
     "alliance_networks": [

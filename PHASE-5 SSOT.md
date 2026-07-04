@@ -18612,3 +18612,25 @@ Implementation boundary:
 * GunamilanService remains the single calculation source
 * export/report services may add presentation explanations only
 * no governed profile update()/save() path may be introduced by this report engine
+
+############################################################
+PROFILE RELATIVES SIMPLIFICATION CORRECTION - 2026-07-04
+############################################################
+
+This correction supersedes the older `profile_relatives` field mapping above.
+
+Canonical `profile_relatives` row shape:
+
+* `relation_type`
+* `relative_details`
+* `contact_number`
+
+Rules:
+
+* Extended-family UI must show only three inputs per row: relation, relative details, and contact number.
+* `relative_details` is the single free-text field for the relative name, occupation, address, and any other information.
+* The old split columns `name`, `occupation`, `marital_status`, `occupation_master_id`, `occupation_custom_id`, `city_id`, `state_id`, `taluka_id`, `district_id`, `address_line`, `notes`, and `is_primary_contact` are no longer canonical for `profile_relatives`.
+* Migration may drop old `profile_relatives` split columns without preserving testing data. This project currently treats existing local user data as testing data for this correction.
+* `MutationService` remains the governed write path. Wizard, intake, and API sources must merge paternal and maternal relative rows into the single `relatives` snapshot array before apply.
+* Legacy parser or API input keys such as `name`, `occupation`, `address_line`, or `notes` may be folded into `relative_details` during transition, but must not be written as separate `profile_relatives` columns.
+* Flutter is not part of this correction phase. Laravel/database changes are the source of truth first; client UI updates can follow later.

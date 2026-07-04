@@ -100,14 +100,12 @@ test('full profile wizard persists one representative field from every rendered 
         ]],
         'relatives_parents_family' => [[
             'relation_type' => 'paternal_uncle',
-            'name' => 'Test Uncle',
+            'relative_details' => "Test Uncle\nUbhi Peth, Sangli\nuncle notes",
             'contact_number' => '9000000004',
-            'location_input' => 'Ubhi Peth, Sangli',
-            'notes' => 'uncle notes',
         ]],
         'relatives_maternal_family' => [[
             'relation_type' => 'maternal_uncle',
-            'name' => 'Test Maternal Uncle',
+            'relative_details' => 'Test Maternal Uncle',
         ]],
         'other_relatives_text' => 'Other family details',
         'property_details' => "Test Property\nNear market",
@@ -184,14 +182,13 @@ test('full profile wizard persists one representative field from every rendered 
     $this->assertDatabaseHas('profile_relatives', [
         'profile_id' => $profile->id,
         'relation_type' => 'paternal_uncle',
-        'name' => 'Test Uncle',
-        'address_line' => 'Ubhi Peth, Sangli',
-        'notes' => 'uncle notes',
+        'relative_details' => "Test Uncle\nUbhi Peth, Sangli\nuncle notes",
+        'contact_number' => '9000000004',
     ]);
     $this->assertDatabaseHas('profile_relatives', [
         'profile_id' => $profile->id,
         'relation_type' => 'maternal_uncle',
-        'name' => 'Test Maternal Uncle',
+        'relative_details' => 'Test Maternal Uncle',
     ]);
     $this->assertDatabaseHas('matrimony_profiles', [
         'id' => $profile->id,
