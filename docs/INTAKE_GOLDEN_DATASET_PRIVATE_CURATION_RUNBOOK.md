@@ -66,6 +66,8 @@ php artisan intake:golden-dataset-scaffold --output=storage/app/intake-golden-da
 
 The scaffold command only writes fake synthetic examples. It does not read `biodata_intakes`, update the database, call OCR, call Sarvam, or create learning rules.
 
+The scaffold is a clean synthetic sanity check for the current deterministic parser. Its expected fields intentionally include only values that the parser extracts reliably from the fake examples, so the generated `golden.example.jsonl` should pass regression at 100% accuracy.
+
 ## Private Regression
 
 Run the real private dataset:
@@ -97,5 +99,7 @@ php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/g
 Regression output is an offline safety signal only. A pass means the current parser matched the expected fields in the private dataset at the configured threshold.
 
 A fail means the parser behavior should be reviewed before future learning or routing work, but this command does not change the parser or production data.
+
+Real private datasets will contain harder layouts, noisier OCR, mixed languages, and fields that are not covered by the scaffold. Lower accuracy on a real private dataset is a parser-improvement signal, not approval to promote learning, create learning rules, backfill data, or change live routing.
 
 Learning promotion remains disabled after validation. Python data engine analysis remains offline/later only and is not integrated into live routing or learning in this phase.

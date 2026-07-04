@@ -144,7 +144,6 @@ class IntakeGoldenDatasetScaffoldCommand extends Command
                 'expected_fields' => [
                     'full_name' => 'Synthetic Alpha',
                     'date_of_birth' => '1996-04-12',
-                    'primary_contact_number' => '5550101001',
                 ],
                 'notes' => 'Synthetic example only. Replace with manually reviewed private cases under storage/app.',
             ],
@@ -156,7 +155,6 @@ class IntakeGoldenDatasetScaffoldCommand extends Command
                 'expected_fields' => [
                     'full_name' => 'Synthetic Beta',
                     'date_of_birth' => '1994-08-05',
-                    'primary_contact_number' => '5550101002',
                 ],
                 'notes' => 'Synthetic two-column-style example only.',
             ],
@@ -168,7 +166,6 @@ class IntakeGoldenDatasetScaffoldCommand extends Command
                 'expected_fields' => [
                     'full_name' => 'Synthetic Gamma',
                     'date_of_birth' => '1995-03-22',
-                    'primary_contact_number' => '5550101003',
                 ],
                 'notes' => 'Synthetic Marathi/mixed-text example only.',
             ],

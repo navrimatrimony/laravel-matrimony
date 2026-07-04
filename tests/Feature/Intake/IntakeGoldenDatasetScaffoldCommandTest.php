@@ -47,7 +47,11 @@ test('created file can be used by intake ocr regression', function () {
             ->and($exitCode)->toBe(0)
             ->and($payload['success'])->toBeTrue()
             ->and($payload['summary']['regression_status'])->toBe('pass')
-            ->and($payload['summary']['valid_cases'])->toBe(3);
+            ->and($payload['summary']['valid_cases'])->toBe(3)
+            ->and($payload['summary']['overall_accuracy_percent'])->toBe(100)
+            ->and($payload['summary']['mismatch_count'])->toBe(0)
+            ->and($payload['summary']['missing_count'])->toBe(0)
+            ->and(array_column($payload['rows'], 'status'))->toBe(['pass', 'pass', 'pass']);
     } finally {
         goldenScaffoldDelete($path);
     }
