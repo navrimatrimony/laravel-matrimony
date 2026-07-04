@@ -11,6 +11,24 @@ Accept: application/json
 Authorization: Bearer <sanctum_token>
 ```
 
+## Mobile Cache Policy
+
+Read-only mobile lookup endpoints may return HTTP cache metadata without changing
+the JSON payload shape:
+
+- `Cache-Control`: `public` for public bootstrap/master endpoints, `private` for authenticated/user-scoped endpoints.
+- `ETag`: payload-scoped weak validator for conditional GET.
+- `X-Mobile-Cache-Policy`: `public` or `private`.
+- `X-Mobile-Cache-TTL`: recommended client TTL in seconds.
+- `X-Mobile-Cache-Stale-While-Revalidate`: safe stale window in seconds.
+- `X-Mobile-Cache-Tags`: backend cache grouping hint for client invalidation.
+
+Clients may send `If-None-Match` with the previous `ETag`; unchanged responses
+return HTTP `304 Not Modified`. Mutating endpoints, chat, notifications,
+payment/plan actions, contact actions, and profile-list discovery endpoints are
+not part of this cache policy. Lower TTLs are used for search/user-scoped
+lookups; own-profile reads stay private and short-lived.
+
 ## Auth
 
 ### OTP-first mobile account flow

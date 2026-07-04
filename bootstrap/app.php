@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin.section' => \App\Http\Middleware\EnsureAdminSectionAccess::class,
             'suchak.account' => \App\Http\Middleware\EnsureSuchakAccount::class,
             'subscription.feature' => \App\Http\Middleware\EnsureSubscriptionFeature::class,
+            'mobile.cache' => \App\Http\Middleware\MobileApiCachePolicy::class,
         ]);
         $middleware->web(replace: [
             \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class => \App\Http\Middleware\VerifyCsrfToken::class,

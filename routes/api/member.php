@@ -32,7 +32,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/matrimony-profile', [MatrimonyProfileApiController::class, 'store']); // CREATE
-    Route::get('/matrimony-profile', [MatrimonyProfileApiController::class, 'show']);  // FETCH
+    Route::get('/matrimony-profile', [MatrimonyProfileApiController::class, 'show'])
+        ->middleware('mobile.cache:private,45,120,my-matrimony-profile');  // FETCH
     Route::put('/matrimony-profile', [MatrimonyProfileApiController::class, 'update']); // UPDATE
     Route::post('/matrimony-profile/photo', [MatrimonyProfileApiController::class, 'uploadPhoto']); // PHOTO UPLOAD
     Route::get('/matrimony-profile/photos', [MobileProfilePhotoApiController::class, 'index']); // PHOTO GALLERY
@@ -122,9 +123,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/castes', [CasteLookupController::class, 'getCastes']); // GET ?religion_id=
     Route::get('/sub-castes', [CasteLookupController::class, 'getSubCastes']); // GET ?caste_id=&q=
     Route::post('/sub-castes', [CasteLookupController::class, 'createSubCaste']);
-    Route::get('/profile/basic-physical-options', [ProfileSetupLookupController::class, 'basicPhysicalOptions']);
-    Route::get('/profile/education-career-options', [ProfileSetupLookupController::class, 'educationCareerOptions']);
-    Route::get('/profile/marital-lifestyle-options', [ProfileSetupLookupController::class, 'maritalLifestyleOptions']);
-    Route::get('/profile/remaining-profile-options', [ProfileSetupLookupController::class, 'remainingProfileOptions']);
-    Route::get('/profile/partner-preference-options', [ProfileSetupLookupController::class, 'partnerPreferenceOptions']);
+    Route::get('/profile/basic-physical-options', [ProfileSetupLookupController::class, 'basicPhysicalOptions'])
+        ->middleware('mobile.cache:private,43200,86400,profile-basic-physical-options');
+    Route::get('/profile/education-career-options', [ProfileSetupLookupController::class, 'educationCareerOptions'])
+        ->middleware('mobile.cache:private,600,3600,profile-education-career-options');
+    Route::get('/profile/marital-lifestyle-options', [ProfileSetupLookupController::class, 'maritalLifestyleOptions'])
+        ->middleware('mobile.cache:private,43200,86400,profile-marital-lifestyle-options');
+    Route::get('/profile/remaining-profile-options', [ProfileSetupLookupController::class, 'remainingProfileOptions'])
+        ->middleware('mobile.cache:private,600,3600,profile-remaining-options');
+    Route::get('/profile/partner-preference-options', [ProfileSetupLookupController::class, 'partnerPreferenceOptions'])
+        ->middleware('mobile.cache:private,43200,86400,profile-partner-preference-options');
 });

@@ -76,7 +76,8 @@ Route::prefix('v1')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/auth/mobile-otp/send', [MobileOtpController::class, 'send']);
     Route::post('/auth/mobile-otp/verify', [MobileOtpController::class, 'verify']);
-    Route::get('/onboarding/lookups/bootstrap', [OnboardingLookupController::class, 'bootstrap']);
+    Route::get('/onboarding/lookups/bootstrap', [OnboardingLookupController::class, 'bootstrap'])
+        ->middleware('mobile.cache:public,43200,86400,onboarding-bootstrap');
     Route::patch('/account/details', [MobileAccountController::class, 'update'])
         ->middleware('auth:sanctum');
     Route::middleware('auth:sanctum')->group(function () {
@@ -89,22 +90,35 @@ Route::prefix('v1')->group(function () {
         Route::patch('/onboarding/draft/{step}', [MobileOnboardingController::class, 'saveDraftStep']);
         Route::post('/onboarding/profile/save-step', [MobileOnboardingController::class, 'saveProfileStep']);
         Route::get('/onboarding/activation-checklist', [MobileOnboardingController::class, 'activationChecklist']);
-        Route::get('/onboarding/lookups/religions', [OnboardingLookupController::class, 'religions']);
-        Route::get('/onboarding/lookups/castes', [OnboardingLookupController::class, 'castes']);
-        Route::get('/onboarding/lookups/sub-castes', [OnboardingLookupController::class, 'subCastes']);
-        Route::get('/onboarding/lookups/locations', [OnboardingLookupController::class, 'locations']);
+        Route::get('/onboarding/lookups/religions', [OnboardingLookupController::class, 'religions'])
+            ->middleware('mobile.cache:private,43200,86400,onboarding-master-religions');
+        Route::get('/onboarding/lookups/castes', [OnboardingLookupController::class, 'castes'])
+            ->middleware('mobile.cache:private,43200,86400,onboarding-master-castes');
+        Route::get('/onboarding/lookups/sub-castes', [OnboardingLookupController::class, 'subCastes'])
+            ->middleware('mobile.cache:private,43200,86400,onboarding-master-sub-castes');
+        Route::get('/onboarding/lookups/locations', [OnboardingLookupController::class, 'locations'])
+            ->middleware('mobile.cache:private,600,3600,onboarding-location-search');
         Route::post('/onboarding/location-suggestions', [OnboardingLookupController::class, 'storeLocationSuggestion']);
-        Route::get('/onboarding/lookups/education', [OnboardingLookupController::class, 'education']);
+        Route::get('/onboarding/lookups/education', [OnboardingLookupController::class, 'education'])
+            ->middleware('mobile.cache:private,600,3600,onboarding-education-search');
         Route::post('/onboarding/education-suggestions', [OnboardingLookupController::class, 'storeEducationSuggestion']);
-        Route::get('/onboarding/lookups/working-with', [OnboardingLookupController::class, 'workingWith']);
-        Route::get('/onboarding/lookups/occupations', [OnboardingLookupController::class, 'occupations']);
+        Route::get('/onboarding/lookups/working-with', [OnboardingLookupController::class, 'workingWith'])
+            ->middleware('mobile.cache:private,43200,86400,onboarding-working-with');
+        Route::get('/onboarding/lookups/occupations', [OnboardingLookupController::class, 'occupations'])
+            ->middleware('mobile.cache:private,600,3600,onboarding-occupation-search');
         Route::post('/onboarding/occupation-suggestions', [OnboardingLookupController::class, 'storeOccupationSuggestion']);
-        Route::get('/onboarding/lookups/income-options', [OnboardingLookupController::class, 'incomeOptions']);
-        Route::get('/onboarding/lookups/diet', [OnboardingLookupController::class, 'diet']);
-        Route::get('/onboarding/lookups/smoking', [OnboardingLookupController::class, 'smoking']);
-        Route::get('/onboarding/lookups/drinking', [OnboardingLookupController::class, 'drinking']);
-        Route::get('/onboarding/lookups/physical-builds', [OnboardingLookupController::class, 'physicalBuilds']);
-        Route::get('/onboarding/lookups/spectacles-lens', [OnboardingLookupController::class, 'spectaclesLens']);
+        Route::get('/onboarding/lookups/income-options', [OnboardingLookupController::class, 'incomeOptions'])
+            ->middleware('mobile.cache:private,43200,86400,onboarding-income-options');
+        Route::get('/onboarding/lookups/diet', [OnboardingLookupController::class, 'diet'])
+            ->middleware('mobile.cache:private,43200,86400,onboarding-diet');
+        Route::get('/onboarding/lookups/smoking', [OnboardingLookupController::class, 'smoking'])
+            ->middleware('mobile.cache:private,43200,86400,onboarding-smoking');
+        Route::get('/onboarding/lookups/drinking', [OnboardingLookupController::class, 'drinking'])
+            ->middleware('mobile.cache:private,43200,86400,onboarding-drinking');
+        Route::get('/onboarding/lookups/physical-builds', [OnboardingLookupController::class, 'physicalBuilds'])
+            ->middleware('mobile.cache:private,43200,86400,onboarding-physical-builds');
+        Route::get('/onboarding/lookups/spectacles-lens', [OnboardingLookupController::class, 'spectaclesLens'])
+            ->middleware('mobile.cache:private,43200,86400,onboarding-spectacles-lens');
         Route::get('/onboarding/preferences/auto-draft/preview', [OnboardingPreferenceAutoDraftController::class, 'preview']);
         Route::post('/onboarding/preferences/auto-draft', [OnboardingPreferenceAutoDraftController::class, 'store']);
         Route::get('/onboarding/preferences/auto-draft/status', [OnboardingPreferenceAutoDraftController::class, 'status']);
@@ -125,7 +139,8 @@ Route::prefix('v1')->group(function () {
     /*
     | Read-only mobile lookup options.
     */
-    Route::get('/genders', [GenderLookupController::class, 'index']);
+    Route::get('/genders', [GenderLookupController::class, 'index'])
+        ->middleware('mobile.cache:public,43200,86400,master-genders');
 
     require __DIR__.'/api/member.php';
     require __DIR__.'/api/admin.php';
