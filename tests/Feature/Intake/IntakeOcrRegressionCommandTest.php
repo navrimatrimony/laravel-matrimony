@@ -345,6 +345,129 @@ test('fail-under threshold exits non-zero when accuracy is below threshold', fun
     }
 });
 
+test('field threshold passes when synthetic field accuracy is above threshold', function () {
+    $path = writeOcrRegressionDataset(ocrRegressionCase([
+        'case_id' => 'height_threshold_pass_case',
+        'ocr_text' => "Name: Height Threshold\nHeight: 5 ft 7 in",
+        'parser_expected_fields' => [
+            'height' => '5 ft 7 in',
+        ],
+    ]));
+
+    try {
+        [$exitCode, $payload] = ocrRegressionJson([
+            '--dataset' => $path,
+            '--field' => 'height',
+            '--fail-under-field' => ['height:90'],
+        ]);
+
+        expect($exitCode)->toBe(0)
+            ->and($payload['threshold_status'])->toBe('pass')
+            ->and($payload['summary']['regression_status'])->toBe('pass')
+            ->and($payload['field_thresholds'][0]['field'])->toBe('height')
+            ->and($payload['field_thresholds'][0]['threshold'])->toEqual(90.0)
+            ->and($payload['field_thresholds'][0]['accuracy_percent'])->toEqual(100.0)
+            ->and($payload['threshold_failures'])->toBe([]);
+    } finally {
+        File::delete(base_path($path));
+    }
+});
+
+test('field threshold fails when synthetic field accuracy is below threshold', function () {
+    $path = writeOcrRegressionDataset(ocrRegressionCase([
+        'case_id' => 'height_threshold_fail_case',
+        'ocr_text' => "Name: Height Threshold\nHeight: 5 ft 7 in",
+        'parser_expected_fields' => [
+            'height' => '6 ft 1 in',
+        ],
+    ]));
+
+    try {
+        [$exitCode, $payload] = ocrRegressionJson([
+            '--dataset' => $path,
+            '--field' => 'height',
+            '--fail-under-field' => ['height:100'],
+        ], expectSuccess: false);
+
+        expect($exitCode)->toBe(1)
+            ->and($payload['threshold_status'])->toBe('fail')
+            ->and($payload['summary']['regression_status'])->toBe('fail_under_threshold')
+            ->and($payload['field_thresholds'][0]['status'])->toBe('fail')
+            ->and($payload['threshold_failures'][0]['field'])->toBe('height')
+            ->and($payload['threshold_failures'][0]['reason'])->toBe('below_threshold');
+    } finally {
+        File::delete(base_path($path));
+    }
+});
+
+test('multiple field threshold options work', function () {
+    $path = writeOcrRegressionDataset(ocrRegressionCase([
+        'case_id' => 'multiple_thresholds_case',
+        'ocr_text' => "Name: Multiple Threshold\nHeight: 5 ft 7 in\nContact: +91 9876543210",
+        'parser_expected_fields' => [
+            'height' => '5 ft 7 in',
+            'document_contact_number' => '9876543210',
+        ],
+    ]));
+
+    try {
+        [$exitCode, $payload] = ocrRegressionJson([
+            '--dataset' => $path,
+            '--fail-under-field' => ['height:90', 'document_contact_number:100'],
+        ]);
+
+        expect($exitCode)->toBe(0)
+            ->and($payload['threshold_status'])->toBe('pass')
+            ->and($payload['field_thresholds'])->toHaveCount(2)
+            ->and(array_column($payload['field_thresholds'], 'field'))->toBe(['height', 'document_contact_number'])
+            ->and($payload['threshold_failures'])->toBe([]);
+    } finally {
+        File::delete(base_path($path));
+    }
+});
+
+test('invalid field threshold format fails with clear message', function () {
+    $exitCode = Artisan::call('intake:ocr-regression', [
+        '--dataset' => ocrRegressionFixtureRelativePath(),
+        '--fail-under-field' => ['height'],
+    ]);
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(1)
+        ->and($output)->toContain('Invalid --fail-under-field value. Use field:percent, for example address:77.');
+});
+
+test('unknown field threshold fails with clear message', function () {
+    $exitCode = Artisan::call('intake:ocr-regression', [
+        '--dataset' => ocrRegressionFixtureRelativePath(),
+        '--fail-under-field' => ['unknown_field:90'],
+    ]);
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(1)
+        ->and($output)->toContain('Invalid --fail-under-field field "unknown_field". Allowed:');
+});
+
+test('json output includes threshold metadata', function () {
+    [$exitCode, $payload] = ocrRegressionJson([
+        '--dataset' => ocrRegressionFixtureRelativePath(),
+        '--fail-under' => '50',
+        '--fail-under-field' => ['document_contact_number:100'],
+    ]);
+
+    expect($exitCode)->toBe(0)
+        ->and($payload)->toHaveKeys([
+            'threshold_status',
+            'overall_threshold',
+            'field_thresholds',
+            'threshold_failures',
+        ])
+        ->and($payload['threshold_status'])->toBe('pass')
+        ->and($payload['overall_threshold']['threshold'])->toEqual(50.0)
+        ->and($payload['field_thresholds'][0]['field'])->toBe('document_contact_number')
+        ->and($payload['threshold_failures'])->toBe([]);
+});
+
 test('command output redacts raw OCR text phone full address and candidate names', function () {
     $path = writeOcrRegressionDataset(ocrRegressionCase([
         'case_id' => 'redaction_case',
@@ -359,10 +482,12 @@ test('command output redacts raw OCR text phone full address and candidate names
     try {
         $exitCode = Artisan::call('intake:ocr-regression', [
             '--dataset' => $path,
+            '--fail-under-field' => ['full_name:100', 'document_contact_number:100', 'address:100'],
         ]);
         $output = Artisan::output();
 
         expect($exitCode)->toBe(0)
+            ->and($output)->toContain('Threshold summary')
             ->and($output)->not->toContain('Sensitive Synthetic Name')
             ->and($output)->not->toContain('9876543210')
             ->and($output)->not->toContain('123 Secret Full Address')
@@ -449,6 +574,7 @@ test('command does not mutate intakes snapshots parsed raw OCR attempts profile 
 
     [$exitCode, $payload] = ocrRegressionJson([
         '--dataset' => ocrRegressionFixtureRelativePath(),
+        '--fail-under-field' => ['document_contact_number:100'],
     ]);
 
     $intake->refresh();
@@ -480,6 +606,10 @@ test('json output is valid and includes expected keys', function () {
             'success',
             'filters',
             'summary',
+            'threshold_status',
+            'overall_threshold',
+            'field_thresholds',
+            'threshold_failures',
             'field_accuracy',
             'layout_accuracy',
             'rows',
@@ -495,6 +625,7 @@ test('json output is valid and includes expected keys', function () {
             'missing_count',
             'overall_accuracy_percent',
             'regression_status',
+            'threshold_status',
         ]);
 });
 

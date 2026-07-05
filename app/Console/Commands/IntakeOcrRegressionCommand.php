@@ -71,7 +71,8 @@ class IntakeOcrRegressionCommand extends Command
         {--json : Print JSON}
         {--field= : Optional field filter}
         {--limit=500 : Maximum cases to inspect}
-        {--fail-under= : Optional minimum overall accuracy percentage}';
+        {--fail-under= : Optional minimum overall accuracy percentage}
+        {--fail-under-field=* : Optional repeatable minimum field accuracy threshold as field:percent}';
 
     protected $description = 'Read-only offline parser regression against a golden OCR text dataset.';
 
@@ -88,8 +89,9 @@ class IntakeOcrRegressionCommand extends Command
         $field = $this->fieldOption();
         $limit = max(1, min(5000, (int) $this->option('limit')));
         $failUnder = $this->failUnderOption();
+        $fieldThresholds = $this->failUnderFieldOptions();
 
-        if ($field === false || $failUnder === false) {
+        if ($field === false || $failUnder === false || $fieldThresholds === false) {
             return self::FAILURE;
         }
 
@@ -136,6 +138,11 @@ class IntakeOcrRegressionCommand extends Command
             rows: $rows,
             failUnder: $failUnder
         );
+        $thresholdReport = $this->thresholdReport($summary, $fieldAccuracy, $failUnder, $fieldThresholds);
+        if ($summary['regression_status'] === 'pass' && $thresholdReport['threshold_status'] === 'fail') {
+            $summary['regression_status'] = 'fail_under_threshold';
+        }
+        $summary['threshold_status'] = $thresholdReport['threshold_status'];
 
         $report = [
             'success' => $summary['regression_status'] === 'pass',
@@ -144,8 +151,13 @@ class IntakeOcrRegressionCommand extends Command
                 'field' => $field,
                 'limit' => $limit,
                 'fail_under' => $failUnder,
+                'fail_under_field' => $this->fieldThresholdFilterDisplay($fieldThresholds),
             ],
             'summary' => $summary,
+            'threshold_status' => $thresholdReport['threshold_status'],
+            'overall_threshold' => $thresholdReport['overall_threshold'],
+            'field_thresholds' => $thresholdReport['field_thresholds'],
+            'threshold_failures' => $thresholdReport['threshold_failures'],
             'field_accuracy' => $fieldAccuracy,
             'layout_accuracy' => $layoutAccuracy,
             'rows' => $rows,
@@ -170,6 +182,7 @@ class IntakeOcrRegressionCommand extends Command
                 'field' => null,
                 'limit' => max(1, min(5000, (int) $this->option('limit'))),
                 'fail_under' => null,
+                'fail_under_field' => [],
             ],
             'summary' => [
                 'total_cases' => 0,
@@ -181,7 +194,12 @@ class IntakeOcrRegressionCommand extends Command
                 'missing_count' => 0,
                 'overall_accuracy_percent' => 0.0,
                 'regression_status' => 'no_dataset',
+                'threshold_status' => 'fail',
             ],
+            'threshold_status' => 'fail',
+            'overall_threshold' => null,
+            'field_thresholds' => [],
+            'threshold_failures' => [],
             'field_accuracy' => [],
             'layout_accuracy' => [],
             'rows' => [],
@@ -218,6 +236,7 @@ class IntakeOcrRegressionCommand extends Command
                 'field' => null,
                 'limit' => max(1, min(5000, (int) $this->option('limit'))),
                 'fail_under' => null,
+                'fail_under_field' => [],
             ],
             'summary' => [
                 'total_cases' => 0,
@@ -229,7 +248,12 @@ class IntakeOcrRegressionCommand extends Command
                 'missing_count' => 0,
                 'overall_accuracy_percent' => 0.0,
                 'regression_status' => 'no_dataset',
+                'threshold_status' => 'fail',
             ],
+            'threshold_status' => 'fail',
+            'overall_threshold' => null,
+            'field_thresholds' => [],
+            'threshold_failures' => [],
             'field_accuracy' => [],
             'layout_accuracy' => [],
             'rows' => [],
@@ -293,6 +317,59 @@ class IntakeOcrRegressionCommand extends Command
         }
 
         return max(0.0, min(100.0, (float) $value));
+    }
+
+    /**
+     * @return array<string, float>|false
+     */
+    private function failUnderFieldOptions(): array|false
+    {
+        $values = $this->option('fail-under-field');
+        if ($values === null || $values === false || $values === '') {
+            return [];
+        }
+
+        if (is_string($values)) {
+            $values = [$values];
+        }
+
+        if (! is_array($values)) {
+            $this->error('Invalid --fail-under-field value. Use field:percent, for example address:77.');
+
+            return false;
+        }
+
+        $thresholds = [];
+        foreach ($values as $rawValue) {
+            $value = trim((string) $rawValue);
+            if ($value === '') {
+                continue;
+            }
+
+            if (! preg_match('/^([A-Za-z0-9_]+)\s*:\s*([0-9]+(?:\.[0-9]+)?)$/', $value, $matches)) {
+                $this->error('Invalid --fail-under-field value. Use field:percent, for example address:77.');
+
+                return false;
+            }
+
+            $field = Str::of($matches[1])->trim()->lower()->toString();
+            if (! in_array($field, self::FIELDS, true)) {
+                $this->error('Invalid --fail-under-field field "'.$field.'". Allowed: '.implode(', ', self::FIELDS));
+
+                return false;
+            }
+
+            $threshold = (float) $matches[2];
+            if ($threshold < 0.0 || $threshold > 100.0) {
+                $this->error('Invalid --fail-under-field percentage. Use a number from 0 to 100.');
+
+                return false;
+            }
+
+            $thresholds[$field] = $threshold;
+        }
+
+        return $thresholds;
     }
 
     private function resolveDatasetPath(string $path): string|false|null
@@ -1309,6 +1386,110 @@ class IntakeOcrRegressionCommand extends Command
         ];
     }
 
+    /**
+     * @param  list<array<string, mixed>>  $fieldAccuracy
+     * @param  array<string, float>  $fieldThresholds
+     * @return array{
+     *     threshold_status: string,
+     *     overall_threshold: array<string, mixed>|null,
+     *     field_thresholds: list<array<string, mixed>>,
+     *     threshold_failures: list<array<string, mixed>>
+     * }
+     */
+    private function thresholdReport(array $summary, array $fieldAccuracy, ?float $failUnder, array $fieldThresholds): array
+    {
+        $failures = [];
+        $overallThreshold = null;
+
+        if ($failUnder !== null) {
+            $overallAccuracy = (float) $summary['overall_accuracy_percent'];
+            $status = $overallAccuracy >= $failUnder ? 'pass' : 'fail';
+            $overallThreshold = [
+                'threshold' => $failUnder,
+                'accuracy_percent' => $overallAccuracy,
+                'status' => $status,
+            ];
+
+            if ($status === 'fail') {
+                $failures[] = [
+                    'scope' => 'overall',
+                    'field' => null,
+                    'threshold' => $failUnder,
+                    'accuracy_percent' => $overallAccuracy,
+                    'reason' => 'below_threshold',
+                ];
+            }
+        }
+
+        $accuracyByField = [];
+        foreach ($fieldAccuracy as $row) {
+            $accuracyByField[(string) $row['field']] = (float) $row['accuracy_percent'];
+        }
+
+        $fieldThresholdRows = [];
+        foreach ($fieldThresholds as $field => $threshold) {
+            if (! array_key_exists($field, $accuracyByField)) {
+                $fieldThresholdRows[] = [
+                    'field' => $field,
+                    'threshold' => $threshold,
+                    'accuracy_percent' => null,
+                    'status' => 'fail',
+                    'reason' => 'field_not_evaluated',
+                ];
+                $failures[] = [
+                    'scope' => 'field',
+                    'field' => $field,
+                    'threshold' => $threshold,
+                    'accuracy_percent' => null,
+                    'reason' => 'field_not_evaluated',
+                ];
+
+                continue;
+            }
+
+            $accuracy = $accuracyByField[$field];
+            $status = $accuracy >= $threshold ? 'pass' : 'fail';
+            $fieldThresholdRows[] = [
+                'field' => $field,
+                'threshold' => $threshold,
+                'accuracy_percent' => $accuracy,
+                'status' => $status,
+                'reason' => $status === 'pass' ? null : 'below_threshold',
+            ];
+
+            if ($status === 'fail') {
+                $failures[] = [
+                    'scope' => 'field',
+                    'field' => $field,
+                    'threshold' => $threshold,
+                    'accuracy_percent' => $accuracy,
+                    'reason' => 'below_threshold',
+                ];
+            }
+        }
+
+        return [
+            'threshold_status' => $failures === [] ? 'pass' : 'fail',
+            'overall_threshold' => $overallThreshold,
+            'field_thresholds' => $fieldThresholdRows,
+            'threshold_failures' => $failures,
+        ];
+    }
+
+    /**
+     * @param  array<string, float>  $fieldThresholds
+     * @return list<string>
+     */
+    private function fieldThresholdFilterDisplay(array $fieldThresholds): array
+    {
+        $values = [];
+        foreach ($fieldThresholds as $field => $threshold) {
+            $values[] = $field.':'.$threshold;
+        }
+
+        return $values;
+    }
+
     private function renderReport(array $report): void
     {
         $summary = $report['summary'];
@@ -1323,6 +1504,9 @@ class IntakeOcrRegressionCommand extends Command
         $this->line('Missing: '.$summary['missing_count']);
         $this->line('Overall accuracy: '.$summary['overall_accuracy_percent'].'%');
         $this->line('Regression status: '.$summary['regression_status']);
+        $this->line('Threshold status: '.$report['threshold_status']);
+
+        $this->renderThresholdSummary($report);
 
         $this->newLine();
         $this->line('Field accuracy');
@@ -1382,6 +1566,44 @@ class IntakeOcrRegressionCommand extends Command
                 implode(', ', $row['source_context_keys'] ?? []),
                 $row['status'],
             ])->all()
+        );
+    }
+
+    private function renderThresholdSummary(array $report): void
+    {
+        if (($report['overall_threshold'] ?? null) === null && ($report['field_thresholds'] ?? []) === []) {
+            return;
+        }
+
+        $rows = [];
+        if (is_array($report['overall_threshold'] ?? null)) {
+            $overall = $report['overall_threshold'];
+            $rows[] = [
+                'overall',
+                '',
+                $overall['threshold'],
+                $overall['accuracy_percent'],
+                $overall['status'],
+                $overall['status'] === 'pass' ? '' : 'below_threshold',
+            ];
+        }
+
+        foreach (($report['field_thresholds'] ?? []) as $row) {
+            $rows[] = [
+                'field',
+                $row['field'],
+                $row['threshold'],
+                $row['accuracy_percent'] ?? '',
+                $row['status'],
+                $row['reason'] ?? '',
+            ];
+        }
+
+        $this->newLine();
+        $this->line('Threshold summary');
+        $this->table(
+            ['Scope', 'Field', 'Threshold %', 'Accuracy %', 'Status', 'Reason'],
+            $rows
         );
     }
 
