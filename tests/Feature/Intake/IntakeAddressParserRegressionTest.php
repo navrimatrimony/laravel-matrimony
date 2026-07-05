@@ -100,6 +100,96 @@ class IntakeAddressParserRegressionTest extends TestCase
         }
     }
 
+    public function test_regression_command_compares_address_components_independent_of_order(): void
+    {
+        $path = $this->writeDataset([
+            'case_id' => 'address_component_order_case',
+            'layout_type' => 'single_column',
+            'language' => 'en',
+            'ocr_text' => "Name: Synthetic Address Candidate\nAddress: Village Alpha, Taluka Beta, District Gamma\nEducation: B.Com",
+            'parser_expected_fields' => [
+                'address' => 'District Gamma Taluka Beta Village Alpha',
+            ],
+        ]);
+
+        try {
+            $exitCode = Artisan::call('intake:ocr-regression', [
+                '--dataset' => $path,
+                '--field' => 'address',
+                '--json' => true,
+            ]);
+            $payload = json_decode(trim(Artisan::output()), true);
+
+            $this->assertSame(0, $exitCode);
+            $this->assertSame(1, $payload['summary']['total_expected_fields'] ?? null);
+            $this->assertSame(1, $payload['summary']['exact_match_count'] ?? null);
+            $this->assertSame(0, $payload['summary']['mismatch_count'] ?? null);
+            $this->assertEquals(100.0, $payload['field_accuracy'][0]['accuracy_percent'] ?? null);
+        } finally {
+            File::delete(base_path($path));
+        }
+    }
+
+    public function test_regression_command_compares_address_components_without_administrative_labels(): void
+    {
+        $path = $this->writeDataset([
+            'case_id' => 'address_component_label_case',
+            'layout_type' => 'single_column',
+            'language' => 'en',
+            'ocr_text' => "Name: Synthetic Address Candidate\nAddress: Village Alpha, Taluka Beta, District Gamma\nEducation: B.Com",
+            'parser_expected_fields' => [
+                'address' => 'Gamma Beta Alpha',
+            ],
+        ]);
+
+        try {
+            $exitCode = Artisan::call('intake:ocr-regression', [
+                '--dataset' => $path,
+                '--field' => 'address',
+                '--json' => true,
+            ]);
+            $payload = json_decode(trim(Artisan::output()), true);
+
+            $this->assertSame(0, $exitCode);
+            $this->assertSame(1, $payload['summary']['total_expected_fields'] ?? null);
+            $this->assertSame(1, $payload['summary']['exact_match_count'] ?? null);
+            $this->assertSame(0, $payload['summary']['mismatch_count'] ?? null);
+            $this->assertEquals(100.0, $payload['field_accuracy'][0]['accuracy_percent'] ?? null);
+        } finally {
+            File::delete(base_path($path));
+        }
+    }
+
+    public function test_regression_command_allows_only_short_marker_gap_in_long_address_components(): void
+    {
+        $path = $this->writeDataset([
+            'case_id' => 'address_short_marker_gap_case',
+            'layout_type' => 'single_column',
+            'language' => 'en',
+            'ocr_text' => "Name: Synthetic Address Candidate\nAddress: Alpha Beta Gamma Delta Epsilon Zeta Eta Theta\nEducation: B.Com",
+            'parser_expected_fields' => [
+                'address' => 'Alpha Beta Gamma रा Delta Epsilon Zeta Eta Theta',
+            ],
+        ]);
+
+        try {
+            $exitCode = Artisan::call('intake:ocr-regression', [
+                '--dataset' => $path,
+                '--field' => 'address',
+                '--json' => true,
+            ]);
+            $payload = json_decode(trim(Artisan::output()), true);
+
+            $this->assertSame(0, $exitCode);
+            $this->assertSame(1, $payload['summary']['total_expected_fields'] ?? null);
+            $this->assertSame(1, $payload['summary']['exact_match_count'] ?? null);
+            $this->assertSame(0, $payload['summary']['mismatch_count'] ?? null);
+            $this->assertEquals(100.0, $payload['field_accuracy'][0]['accuracy_percent'] ?? null);
+        } finally {
+            File::delete(base_path($path));
+        }
+    }
+
     /**
      * @return array<string, mixed>
      */

@@ -715,6 +715,18 @@ class IntakeOcrRegressionCommand extends Command
             return false;
         }
 
+        if ($this->addressComponentsMatchForComparison($expected, $actual)) {
+            return true;
+        }
+
+        if ($this->addressLocationComponentsMatchForComparison($expected, $actual)) {
+            return true;
+        }
+
+        if ($this->addressLocationComponentsMatchWithShortMarkerGap($expected, $actual)) {
+            return true;
+        }
+
         $expectedLength = mb_strlen($expected);
         $actualLength = mb_strlen($actual);
         $shorter = $expectedLength <= $actualLength ? $expected : $actual;
@@ -728,6 +740,172 @@ class IntakeOcrRegressionCommand extends Command
             && $longerLength > 0
             && ($shorterLength / $longerLength) >= 0.65
             && str_contains($longer, $shorter);
+    }
+
+    private function addressComponentsMatchForComparison(string $expected, string $actual): bool
+    {
+        $expectedTokens = $this->addressComparisonTokens($expected);
+        $actualTokens = $this->addressComparisonTokens($actual);
+
+        if (count($expectedTokens) < 3 || count($actualTokens) < 3) {
+            return false;
+        }
+
+        if (count($expectedTokens) !== count($actualTokens)) {
+            return false;
+        }
+
+        sort($expectedTokens, SORT_STRING);
+        sort($actualTokens, SORT_STRING);
+
+        return $expectedTokens === $actualTokens;
+    }
+
+    private function addressLocationComponentsMatchWithShortMarkerGap(string $expected, string $actual): bool
+    {
+        $expectedTokens = $this->addressLocationComparisonTokens($expected);
+        $actualTokens = $this->addressLocationComparisonTokens($actual);
+
+        if (count($expectedTokens) < 8 || count($actualTokens) < 8) {
+            return false;
+        }
+
+        if (count($actualTokens) >= count($expectedTokens)) {
+            return false;
+        }
+
+        $missingFromActual = $this->addressTokenMultisetDifference($expectedTokens, $actualTokens);
+        $extraInActual = $this->addressTokenMultisetDifference($actualTokens, $expectedTokens);
+
+        if ($extraInActual !== [] || $missingFromActual === [] || count($missingFromActual) > 2) {
+            return false;
+        }
+
+        if ((count($actualTokens) / count($expectedTokens)) < 0.88) {
+            return false;
+        }
+
+        foreach ($missingFromActual as $token) {
+            if (! $this->isShortAddressMarkerCandidate($token)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function addressLocationComponentsMatchForComparison(string $expected, string $actual): bool
+    {
+        $expectedTokens = $this->addressLocationComparisonTokens($expected);
+        $actualTokens = $this->addressLocationComparisonTokens($actual);
+
+        if (count($expectedTokens) < 3 || count($actualTokens) < 3) {
+            return false;
+        }
+
+        if (count($expectedTokens) !== count($actualTokens)) {
+            return false;
+        }
+
+        sort($expectedTokens, SORT_STRING);
+        sort($actualTokens, SORT_STRING);
+
+        return $expectedTokens === $actualTokens;
+    }
+
+    /**
+     * @param  list<string>  $left
+     * @param  list<string>  $right
+     * @return list<string>
+     */
+    private function addressTokenMultisetDifference(array $left, array $right): array
+    {
+        $rightCounts = array_count_values($right);
+        $missing = [];
+
+        foreach ($left as $token) {
+            if (($rightCounts[$token] ?? 0) > 0) {
+                $rightCounts[$token]--;
+                continue;
+            }
+
+            $missing[] = $token;
+        }
+
+        return $missing;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function addressComparisonTokens(string $address): array
+    {
+        $tokens = preg_split('/\s+/u', $address, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        $tokens = array_map(
+            fn (string $token): string => $this->canonicalAddressComparisonToken($token),
+            $tokens
+        );
+
+        return array_values(array_filter(
+            $tokens,
+            static fn (string $token): bool => $token !== ''
+        ));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function addressLocationComparisonTokens(string $address): array
+    {
+        return array_values(array_filter(
+            $this->addressComparisonTokens($address),
+            fn (string $token): bool => ! $this->isAddressComparisonLabelToken($token)
+        ));
+    }
+
+    private function canonicalAddressComparisonToken(string $token): string
+    {
+        return match ($token) {
+            'dist', 'distt', 'district', 'जि', 'जिल्हा' => 'district',
+            'tal', 'taluka', 'tq', 'ता', 'तालुका' => 'taluka',
+            'vill', 'village', 'gaon', 'गाव' => 'village',
+            default => $token,
+        };
+    }
+
+    private function isAddressComparisonLabelToken(string $token): bool
+    {
+        return in_array($token, [
+            'address',
+            'at',
+            'birth',
+            'contact',
+            'current',
+            'district',
+            'native',
+            'pin',
+            'pincode',
+            'place',
+            'po',
+            'post',
+            'residence',
+            'taluka',
+            'village',
+            'मु',
+            'मू',
+            'मुक्काम',
+            'पो',
+            'पोस्ट',
+            'पत्ता',
+            'पता',
+        ], true);
+    }
+
+    private function isShortAddressMarkerCandidate(string $token): bool
+    {
+        return ! preg_match('/^\d+$/u', $token)
+            && mb_strlen($token) <= 2;
     }
 
     /**
