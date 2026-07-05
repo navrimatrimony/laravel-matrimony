@@ -37,6 +37,14 @@ class IntakeOccupationParserRegressionTest extends TestCase
         $this->assertSame('SAP Consultant', $this->candidateOccupation($parsed));
     }
 
+    public function test_trailing_work_city_is_not_kept_in_candidate_occupation(): void
+    {
+        $parsed = $this->parse("Name: Synthetic City Candidate\nJob: Associate Software Developer Pune\nEducation: B Com");
+
+        $this->assertSame('Associate Software Developer', $this->candidateOccupation($parsed));
+        $this->assertSame('Pune', $parsed['core']['work_location_text'] ?? null);
+    }
+
     public function test_bare_marathi_farming_line_extracts_candidate_occupation(): void
     {
         $parsed = $this->parse("नाव :- रोहन नमुना पाटील\nशेती\nशिक्षण :- B A");

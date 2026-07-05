@@ -8003,16 +8003,47 @@ class BiodataParserService
         }
         // Common pattern: "Company, Location" → company_name + location.
         $lineClean = trim((string) (preg_replace('/\s*\.$/u', '', $line) ?? $line));
+        [$lineWithoutTrailingLocation, $trailingLocation] = $this->splitTrailingKnownWorkLocation($lineClean);
         if (preg_match('/^([^,]{2,120}),\s*(.+)$/u', $lineClean, $cm)) {
             $out['company_name'] = trim($cm[1]) !== '' ? trim($cm[1]) : null;
             $out['location'] = trim($cm[2]) !== '' ? trim($cm[2]) : null;
             $out['role_title'] = $out['company_name'] ?? $lineClean;
         } else {
+            if ($trailingLocation !== null) {
+                $lineClean = $lineWithoutTrailingLocation;
+                $out['location'] = $trailingLocation;
+            }
             $out['role_title'] = $lineClean !== '' ? $lineClean : null;
             $out['company_name'] = $lineClean !== '' ? $lineClean : null;
         }
 
         return $out;
+    }
+
+    /**
+     * OCR often appends a work city to the occupation line without a comma.
+     *
+     * @return array{0: string, 1: ?string}
+     */
+    private function splitTrailingKnownWorkLocation(string $line): array
+    {
+        $line = trim($line);
+        if ($line === '') {
+            return [$line, null];
+        }
+
+        $locationPattern = '(?:Pune|Mumbai|Bangalore|Bengaluru|Hyderabad|Chennai|Nagpur|Nashik|Kolhapur|Satara|Sangli|Solapur|Aurangabad|Ahmedabad|Delhi|Noida|Gurgaon|Gurugram|India|Maharashtra|पुणे|मुंबई|नागपूर|नाशिक|कोल्हापूर|सांगली|सातारा|सोलापूर|महाराष्ट्र)';
+        if (preg_match('/^(.+?)(?:\s*[,;\-–—]\s*|\s+)('.$locationPattern.')\.?$/ui', $line, $m) !== 1) {
+            return [$line, null];
+        }
+
+        $candidate = trim((string) $m[1]);
+        $location = trim((string) $m[2]);
+        if (mb_strlen($candidate) < 3 || $this->isLikelyLabelOnlyValue($candidate)) {
+            return [$line, null];
+        }
+
+        return [$candidate, $location !== '' ? $location : null];
     }
 
     /**
