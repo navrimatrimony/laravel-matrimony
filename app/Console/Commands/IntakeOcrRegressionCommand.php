@@ -761,12 +761,79 @@ class IntakeOcrRegressionCommand extends Command
             return $this->normalizeOccupationForComparison($text);
         }
 
+        if ($field === 'religion') {
+            return $this->normalizeReligionForComparison($text);
+        }
+
+        if ($field === 'caste') {
+            return $this->normalizeCasteForComparison($text);
+        }
+
+        if ($field === 'sub_caste') {
+            return $this->normalizeSubCasteForComparison($text);
+        }
+
         $text = mb_strtolower($text);
         $text = preg_replace('/[^\p{L}\p{N}\s.]+/u', ' ', $text) ?? $text;
         $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
         $text = trim($text);
 
         return $text !== '' ? $text : null;
+    }
+
+    private function normalizeReligionForComparison(string $text): ?string
+    {
+        $text = \App\Services\Ocr\OcrNormalize::normalizeDigits($text);
+        $text = preg_replace('/\s+/u', ' ', trim($text)) ?? $text;
+
+        if (preg_match('/(?:^|[^\p{L}])Hindu(?:$|[^\p{L}])|हिंद[ुू]/ui', $text)) {
+            return 'हिंदू';
+        }
+        if (preg_match('/(?:^|[^\p{L}])Muslim(?:$|[^\p{L}])|मुस्लिम/ui', $text)) {
+            return 'muslim';
+        }
+        if (preg_match('/(?:^|[^\p{L}])Jain(?:$|[^\p{L}])|जैन/ui', $text)) {
+            return 'jain';
+        }
+
+        return null;
+    }
+
+    private function normalizeCasteForComparison(string $text): ?string
+    {
+        $text = \App\Services\Ocr\OcrNormalize::normalizeDigits($text);
+        if (preg_match('/(?:मराठा|Maratha)/ui', $text)) {
+            return 'मराठा';
+        }
+
+        $text = mb_strtolower($text);
+        $text = preg_replace('/[^\p{L}\p{N}\s]+/u', ' ', $text) ?? $text;
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+        $text = trim($text);
+
+        return $text !== '' ? $text : null;
+    }
+
+    private function normalizeSubCasteForComparison(string $text): ?string
+    {
+        $text = \App\Services\Ocr\OcrNormalize::normalizeDigits($text);
+        $text = str_replace(["\u{00A0}", "\u{200B}", '“', '”', '‘', '’'], [' ', ' ', "'", "'", "'", "'"], $text);
+        $text = preg_replace('/(?:उपजात|पोटजात|Sub\s*-?\s*caste|Subcaste)\s*(?:[:\-：]|\s)+/ui', ' ', $text) ?? $text;
+        $text = preg_replace('/(?:हिंद[ुू]|Hindu|मराठा|Maratha)/ui', ' ', $text) ?? $text;
+        $text = preg_replace('/(?:क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कूळी|कळी)/u', 'कुळी', $text) ?? $text;
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+        $text = trim($text);
+
+        if (preg_match('/(?<!\d)(\d{1,3})\s*(?:कुळी|Kuli)(?![\p{L}\p{N}])/ui', $text, $matches)) {
+            $count = (int) $matches[1];
+            if ($count <= 0 || $count > 200) {
+                return null;
+            }
+
+            return $count.' कुळी';
+        }
+
+        return null;
     }
 
     private function parsedOccupationValue(array $parsed): mixed

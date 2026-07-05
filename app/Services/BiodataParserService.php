@@ -579,73 +579,86 @@ class BiodataParserService
 
         // Gender: explicit लिंग / Gender / Sex / "gender: male" only — no honorific or section-title inference.
         $gender = $this->extractExplicitGender($text);
-        // Religion / caste / sub-caste: support combined patterns like "जात २- हिंदु- 96 कुळी मराठा"
-        $religion = $this->extractField($text, ['धर्म', 'Religion']);
-        $religion = $religion ?? $romanized['religion'] ?? null;
-        $casteRaw = $this->extractFieldAfterLabels($text, ['जात', 'Caste', 'Community']);
+        // Religion / caste / sub-caste: parser-only, OCR-visible community fields.
+        $religion = $this->extractCandidateCommunityField($text, ['धर्म', 'Religion']);
+        $religion = $this->normalizeReligionValue($religion ?? $romanized['religion'] ?? null);
+        $explicitSubCasteRaw = $this->extractCandidateCommunityField($text, ['उपजात', 'पोटजात', 'Sub caste', 'Sub-caste', 'Subcaste']);
+        $explicitSubCommunity = $this->parseCommunityValue($explicitSubCasteRaw);
+        $casteRaw = $this->extractCandidateCommunityField($text, ['जात', 'Caste', 'Community']);
         $casteRaw = $casteRaw ?? $this->extractAfterLabelNextLine($text, 'जात');
+        $casteRaw = $casteRaw ?? $this->extractStandaloneCandidateCommunityLine($text);
         $casteRaw = $casteRaw ?? $romanized['caste'] ?? null;
         if ($casteRaw !== null) {
-            $casteRaw = $this->cleanOcrNoiseFromFieldValue($casteRaw);
+            $casteRaw = $this->cleanValue($casteRaw);
         }
         $kuliPattern = '(?:कुळी|क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कळी)';
         if ($casteRaw !== null && $casteRaw !== '') {
+            $community = $this->parseCommunityValue($casteRaw);
             // Pattern: "हिंदु- 96 कुळी मराठा" or "हिंदू- ९६ क्‌ळी मराठा" (क्‌ळी may include ZWNJ).
             if (preg_match('/हिंद[ुू]\s*-\s*([0-9०-९]+\s*'.$kuliPattern.')\s*(मराठा)?/u', $casteRaw, $m)) {
-                $subCaste = trim(preg_replace('/(?:क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कळी)/u', 'कुळी', $m[1]));
+                $subCaste = $this->normalizeSubCasteValue($m[1]);
                 $caste = 'मराठा';
-                $religion = $religion ?? 'हिंदु';
+                $religion = $religion ?? 'हिंदू';
             } elseif (preg_match('/हिंद[ुू]\s*[-]?\s*([0-9०-९]+\s*'.$kuliPattern.')\s*मराठा/u', $casteRaw, $m)) {
-                $subCaste = trim(preg_replace('/(?:क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कळी)/u', 'कुळी', $m[1]));
+                $subCaste = $this->normalizeSubCasteValue($m[1]);
                 $caste = 'मराठा';
-                $religion = $religion ?? 'हिंदु';
+                $religion = $religion ?? 'हिंदू';
             } else {
-                $subCaste = $this->extractField($text, ['उपजात', 'Sub caste']);
-                $caste = $this->normalizeCasteValue($casteRaw);
+                $religion = $religion ?? $community['religion'];
+                $subCaste = $explicitSubCommunity['sub_caste'] ?? $community['sub_caste'];
+                $caste = $community['caste'] ?? $this->normalizeCasteValue($casteRaw);
             }
         } else {
-            $subCaste = $this->extractField($text, ['उपजात', 'Sub caste']);
+            $religion = $religion ?? $explicitSubCommunity['religion'];
+            $subCaste = $explicitSubCommunity['sub_caste'];
             $caste = $this->extractCasteByDictionary($text);
             $caste = $this->normalizeCasteValue($caste);
         }
+        $caste = $caste ?? $explicitSubCommunity['caste'];
 
-        // Fallback when जात line is broken/missing: full text contains हिंदु - मराठा (९६ कुळी / ९६ क्‌ळी)
-        if (($religion === null || $caste === null) && preg_match('/हिंद[ुू]\s*[-–]\s*मराठा\s*\(([०-९0-9]+)\s*(?:कुळी|क्‌ळी|कळी)\)/u', $text, $m)) {
+        $visibleCommunityRaw = $casteRaw ?? $this->extractStandaloneCandidateCommunityLine($text);
+
+        // Fallback when जात line is broken/missing: candidate community text contains हिंदु - मराठा (९६ कुळी / ९६ क्‌ळी).
+        if ($visibleCommunityRaw !== null && ($religion === null || $caste === null) && preg_match('/हिंद[ुू]\s*[-–]\s*मराठा\s*\(([०-९0-9]+)\s*(?:कुळी|क्‌ळी|कळी)\)/u', $visibleCommunityRaw, $m)) {
             $religion = $religion ?? 'हिंदू';
             $caste = $caste ?? 'मराठा';
-            $subCaste = $subCaste ?? ($m[1].' कुळी');
+            $subCaste = $subCaste ?? $this->normalizeSubCasteValue($m[1].' कुळी');
         }
-        if (($religion === null || $caste === null) && (preg_match('/हिंद[ुू]\s*[-–]?\s*(?:[०-९0-9]+\s*क[\x{094D}\x{200C}\s]*(?:ुळी|ळी)\s*)?मराठा/u', $text) || preg_match('/हिंद[ुू]\s*[-–]?\s*मराठा/u', $text) || (mb_strpos($text, 'हिंदु') !== false && mb_strpos($text, 'मराठा') !== false))) {
+        if ($visibleCommunityRaw !== null && ($religion === null || $caste === null) && (preg_match('/हिंद[ुू]\s*[-–]?\s*(?:[०-९0-9]+\s*क[\x{094D}\x{200C}\s]*(?:ुळी|ळी)\s*)?मराठा/u', $visibleCommunityRaw) || preg_match('/हिंद[ुू]\s*[-–]?\s*मराठा/u', $visibleCommunityRaw) || (mb_strpos($visibleCommunityRaw, 'हिंदु') !== false && mb_strpos($visibleCommunityRaw, 'मराठा') !== false))) {
             $religion = $religion ?? 'हिंदू';
             $caste = $caste ?? 'मराठा';
-            if ($subCaste === null && preg_match('/([०-९0-9]+)\s*(?:कुळी|क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कळी)/u', $text, $m)) {
-                $subCaste = $m[1].' कुळी';
+            if ($subCaste === null && preg_match('/([०-९0-9]+)\s*(?:कुळी|क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कळी)/u', $visibleCommunityRaw, $m)) {
+                $subCaste = $this->normalizeSubCasteValue($m[1].' कुळी');
             }
         }
 
-        // When जात line is missing in OCR: infer from कुलस्वामी/माणकेश्वर/तुळजाभवानी + Maratha surname (भोसले).
-        if (($religion === null || $caste === null) && (
+        // Standalone visible community phrase, e.g. "96 कुळी मराठा"; do not infer religion from caste alone.
+        if (($caste === null || $subCaste === null) && ($standaloneCommunity = $this->extractStandaloneCandidateCommunityLine($text)) !== null) {
+            $community = $this->parseCommunityValue($standaloneCommunity);
+            $caste = $caste ?? $community['caste'];
+            $subCaste = $subCaste ?? $community['sub_caste'];
+            $religion = $religion ?? $community['religion'];
+        }
+
+        // When जात line is missing in OCR: infer only visible caste/sub-caste, never religion.
+        if ($caste === null && (
             mb_strpos($text, 'कुलस्वामी') !== false || mb_strpos($text, 'माणकेश्वर') !== false || mb_strpos($text, 'तुळजाभवानी') !== false || mb_strpos($text, 'तुळनापूर') !== false
         ) && (mb_strpos($text, 'भोसले') !== false || mb_strpos($text, 'मराठा') !== false)) {
-            $religion = $religion ?? 'हिंदू';
-            $caste = $caste ?? 'मराठा';
+            $caste = 'मराठा';
             if ($subCaste === null && preg_match('/([०-९0-9]+)\s*(?:कुळी|क्‌ळी|कळी)/u', $text, $m)) {
-                $subCaste = $m[1].' कुळी';
+                $subCaste = $this->normalizeSubCasteValue($m[1].' कुळी');
             }
         }
 
-        if ($religion === null) {
-            if (preg_match('/जात\s*[:\-]?\s*हिंदु/u', $text) || preg_match('/जात\s*[:\-]?\s*हिंदू/u', $text)) {
+        if ($religion === null && $visibleCommunityRaw !== null) {
+            if (preg_match('/जात\s*[:\-]?\s*हिंदु/u', $visibleCommunityRaw) || preg_match('/जात\s*[:\-]?\s*हिंदू/u', $visibleCommunityRaw)) {
                 $religion = 'हिंदू';
-            } elseif (preg_match('/हिंदू\s*[-]?\s*मराठा|हिंदूमटाठा|हिंदु\s*[-]?\s*मराठा/u', $text)) {
+            } elseif (preg_match('/हिंदू\s*[-]?\s*मराठा|हिंदूमटाठा|हिंदु\s*[-]?\s*मराठा/u', $visibleCommunityRaw)) {
                 $religion = 'हिंदू';
-            } elseif (preg_match('/जात\s*[:\-]?\s*मुस्लिम/u', $text)) {
+            } elseif (preg_match('/जात\s*[:\-]?\s*मुस्लिम/u', $visibleCommunityRaw)) {
                 $religion = 'Muslim';
-            } elseif (preg_match('/जात\s*[:\-]?\s*जैन/u', $text)) {
+            } elseif (preg_match('/जात\s*[:\-]?\s*जैन/u', $visibleCommunityRaw)) {
                 $religion = 'Jain';
-            } elseif (preg_match('/कु(?:लदेवत|ळदेवत|दुलंदेवल|देवल)/u', $text)) {
-                // Common Marathi biodata line (OCR often garbles "कुलदेवता"); Hindu context, no caste inference.
-                $religion = 'हिंदू';
             }
         }
 
@@ -656,6 +669,8 @@ class BiodataParserService
             $caste = 'मराठा';
         }
         $caste = $this->validateCaste($caste);
+        $religion = $this->normalizeReligionValue($religion);
+        $subCaste = $this->normalizeSubCasteValue($subCaste);
         $maritalRaw = $this->extractField($text, ['वैवाहिक स्थिती', 'Marital status']);
         $maritalStatus = $this->normalizeMaritalStatus($maritalRaw);
         if ($maritalStatus === null && ! $this->hasExplicitMaritalLabel($text)) {
@@ -2197,10 +2212,13 @@ class BiodataParserService
         if ($value === null || $value === '') {
             return null;
         }
-        $v = trim($value);
+        $v = \App\Services\Ocr\OcrNormalize::normalizeDigits(trim($value));
         // OCR variant: मटाठा -> मराठा
         if (mb_strpos($v, 'मटाठा') !== false) {
             $v = str_replace('मटाठा', 'मराठा', $v);
+        }
+        if (stripos($v, 'Maratha') !== false) {
+            return 'मराठा';
         }
         if (preg_match('/[-:\d]/u', $v)) {
             $tokens = preg_split('/[\s\-:,\d]+/u', $v, -1, PREG_SPLIT_NO_EMPTY);
@@ -2239,6 +2257,9 @@ class BiodataParserService
             return null;
         }
         $v = trim($value);
+        if (stripos($v, 'Maratha') !== false) {
+            return 'मराठा';
+        }
         foreach (self::CASTE_DICTIONARY as $word) {
             if ($v === $word) {
                 return $word;
@@ -2251,6 +2272,168 @@ class BiodataParserService
         }
 
         return null;
+    }
+
+    /**
+     * @return array{religion: ?string, caste: ?string, sub_caste: ?string}
+     */
+    private function parseCommunityValue(?string $value): array
+    {
+        return [
+            'religion' => $this->normalizeReligionValue($value),
+            'caste' => $this->normalizeCasteValue($value),
+            'sub_caste' => $this->normalizeSubCasteValue($value),
+        ];
+    }
+
+    private function normalizeReligionValue(?string $value): ?string
+    {
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+
+        $v = \App\Services\Ocr\OcrNormalize::normalizeDigits(trim($value));
+        $v = str_replace(["\u{00A0}", "\u{200B}", '“', '”', '‘', '’'], [' ', ' ', "'", "'", "'", "'"], $v);
+        $v = preg_replace('/\s+/u', ' ', $v) ?? $v;
+        $v = trim($v);
+
+        if (preg_match('/(?:^|[^\p{L}])Hindu(?:$|[^\p{L}])|हिंद[ुू]/ui', $v)) {
+            return 'हिंदू';
+        }
+        if (preg_match('/(?:^|[^\p{L}])Muslim(?:$|[^\p{L}])|मुस्लिम/ui', $v)) {
+            return 'Muslim';
+        }
+        if (preg_match('/(?:^|[^\p{L}])Jain(?:$|[^\p{L}])|जैन/ui', $v)) {
+            return 'Jain';
+        }
+
+        return null;
+    }
+
+    private function normalizeSubCasteValue(?string $value): ?string
+    {
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+
+        $v = \App\Services\Ocr\OcrNormalize::normalizeDigits(trim($value));
+        $v = str_replace(["\u{00A0}", "\u{200B}", '“', '”', '‘', '’'], [' ', ' ', "'", "'", "'", "'"], $v);
+        $v = preg_replace('/(?:उपजात|पोटजात|Sub\s*-?\s*caste|Subcaste)\s*(?:[:\-：]|\s)+/ui', ' ', $v) ?? $v;
+        $v = preg_replace('/(?:हिंद[ुू]|Hindu|मराठा|Maratha)/ui', ' ', $v) ?? $v;
+        $v = preg_replace('/(?:क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कूळी|कळी)/u', 'कुळी', $v) ?? $v;
+        $v = preg_replace('/\s+/u', ' ', $v) ?? $v;
+        $v = trim($v);
+
+        if (preg_match('/[6-9]\d{9}/', $v) || preg_match('/\b\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}\b/', $v)) {
+            return null;
+        }
+        $kuliPattern = '/(?<!\d)(\d{1,3})\s*(?:कुळी|Kuli)(?![\p{L}\p{N}])/ui';
+
+        if (preg_match('/\b(?:19|20)\d{2}\b/', $v) && ! preg_match($kuliPattern, $v)) {
+            return null;
+        }
+        if (preg_match('/\b\d{5,6}\b/', $v) && ! preg_match($kuliPattern, $v)) {
+            return null;
+        }
+        if (preg_match('/\b\d{1,3}(?:,\d{2,3})+\b/', $v) || preg_match('/\b\d+(?:\.\d+)?\s*(?:LPA|P\/A|PA|Lac|Lakh)\b/ui', $v)) {
+            return null;
+        }
+
+        if (preg_match($kuliPattern, $v, $m)) {
+            $count = (int) $m[1];
+            if ($count <= 0 || $count > 200) {
+                return null;
+            }
+
+            return $count.' कुळी';
+        }
+
+        return null;
+    }
+
+    private function extractCandidateCommunityField(string $text, array $labels): ?string
+    {
+        $lines = preg_split('/\R/u', $text) ?: [];
+        foreach ($lines as $index => $line) {
+            $line = trim((string) $line);
+            if ($line === '' || $this->communityLineHasRejectedContext($line, $lines, $index)) {
+                continue;
+            }
+
+            foreach ($labels as $label) {
+                $value = $this->extractCommunityValueFromLine($line, $label);
+                if ($value !== null && trim($value) !== '') {
+                    return $value;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function extractCommunityValueFromLine(string $line, string $label): ?string
+    {
+        $quoted = preg_quote($label, '/');
+        $prefix = '(?:^|[\s,;|*•\-–—])';
+        if (preg_match('/'.$prefix.$quoted.'\s*(?::\s*-\s*|[:\-：]\s*|[८8]\s*|\s+)\s*(.+)$/ui', $line, $m) !== 1) {
+            return null;
+        }
+
+        $value = trim((string) $m[1]);
+        $value = $this->truncateFieldBeforeInlineSectionLabels($value, [
+            'धर्म', 'Religion', 'जात', 'Caste', 'Community', 'उपजात', 'पोटजात', 'Sub caste', 'Sub-caste',
+            'जन्म', 'उंची', 'ऊंची', 'शिक्षण', 'नोकरी', 'व्यवसाय', 'पत्ता', 'संपर्क', 'मोबाईल', 'Mobile',
+            'वडील', 'वडिलांचे', 'आई', 'भाऊ', 'बहीण', 'बहिण', 'मामा', 'काका', 'चुलते', 'अपेक्षा',
+        ]);
+        $value = $this->cleanValue($value);
+        $value = trim($value);
+
+        return $value !== '' ? $value : null;
+    }
+
+    private function extractStandaloneCandidateCommunityLine(string $text): ?string
+    {
+        $lines = preg_split('/\R/u', $text) ?: [];
+        foreach ($lines as $index => $line) {
+            $line = trim((string) $line);
+            if ($line === '' || $this->communityLineHasRejectedContext($line, $lines, $index)) {
+                continue;
+            }
+
+            $normalized = \App\Services\Ocr\OcrNormalize::normalizeDigits($line);
+            if (preg_match('/(?<!\d)\d{1,3}\s*(?:कुळी|कूळी|क्‌ळी|Kuli)(?![\p{L}\p{N}]).*(?:मराठा|Maratha)|(?:मराठा|Maratha).*(?<!\d)\d{1,3}\s*(?:कुळी|कूळी|क्‌ळी|Kuli)(?![\p{L}\p{N}])/ui', $normalized)) {
+                return $line;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<string>  $lines
+     */
+    private function communityLineHasRejectedContext(string $line, array $lines, int $index): bool
+    {
+        if (preg_match('/^\s*(?:Name|नाव|मुलाचे\s+नाव|मुलीचे\s+नाव|वधूचे\s+नाव|वराचे\s+नाव)\s*[:\-：]/ui', $line)) {
+            return true;
+        }
+
+        if (preg_match('/(?:वडील|वडिलांचा|वडिलांची|वडिलांचे|वडिलाचे|वडिलाची|father|आई|आईचा|आईची|आईचे|mother|भाऊ|भाऊची|brother|बहिण|बहीण|बहिणीची|बहिणीचे|sister|मामा|mama|काका|चुलते|uncle|आत्या|मावशी|aunt|आजोळ|नातेवाईक|relatives|अपेक्षा|expectation|expected)/ui', $line)) {
+            return true;
+        }
+
+        $sectionReject = '/^\s*(?:कौटुंबिक|कुटुंब|Family\b|Relatives\b|नातेवाईक|अपेक्षा|Expectation\b)/ui';
+        for ($i = max(0, $index - 2); $i < $index; $i++) {
+            $near = trim((string) ($lines[$i] ?? ''));
+            if ($near !== '' && preg_match($sectionReject, $near)) {
+                return true;
+            }
+            if ($near !== '' && preg_match('/(?:वडील|वडिलांचे|आई|भाऊ|बहिण|बहीण|मामा|काका|चुलते|आत्या|मावशी|father|mother|brother|sister|uncle|aunt)/ui', $near)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** father_name: must contain श्री OR at least 2 words; reject if contains phone. */
