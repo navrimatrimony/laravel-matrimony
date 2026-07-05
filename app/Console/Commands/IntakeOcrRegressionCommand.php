@@ -40,8 +40,8 @@ class IntakeOcrRegressionCommand extends Command
         'height' => ['core.height_cm', 'core.height', 'core.height_text'],
         'education' => ['core.highest_education', 'core.education', 'core.education_level', 'education_history.0.degree', 'education_history.0.qualification', 'education_history.0.course', 'education_history.0.course_name'],
         'occupation' => ['core.occupation_title', 'core.occupation', 'core.profession', 'career_history.0.occupation_title', 'career_history.0.designation', 'career_history.0.job_title', 'career_history.0.role'],
-        'primary_contact_number' => ['core.primary_contact_number', 'core.phone_number', 'core.mobile_number', 'core.mobile', 'candidate.primary_contact_number', 'contacts.0.phone_number', 'contacts.0.mobile', 'contacts.0.mobile_number', 'contacts.0.phone', 'contacts.0.number'],
-        'document_contact_number' => ['contacts.0.phone_number', 'contacts.0.mobile', 'contacts.0.mobile_number', 'contacts.0.phone', 'contacts.0.number', 'core.primary_contact_number', 'core.phone_number', 'core.mobile_number', 'core.mobile', 'candidate.primary_contact_number'],
+        'primary_contact_number' => ['core.primary_contact_number', 'candidate.primary_contact_number'],
+        'document_contact_number' => ['core.document_contact_number', 'core.document_contact_numbers', 'document_contact_number', 'document_contact_numbers', 'contacts'],
         'address' => ['addresses.0.address_line', 'addresses.0.raw', 'self_addresses.0.address_line', 'parents_addresses.0.address_line', 'core.address_line', 'core.address', 'core.current_address', 'core.permanent_address'],
         'religion' => ['core.religion', 'core.religion_label', 'core.religion_id'],
         'caste' => ['core.caste', 'core.caste_label', 'core.caste_id'],
@@ -124,6 +124,10 @@ class IntakeOcrRegressionCommand extends Command
 
         $fieldAccuracy = $this->fieldAccuracy($fieldStats);
         $layoutAccuracy = $this->layoutAccuracy($layoutStats);
+        if ($this->shouldRedactCaseIds($path)) {
+            $rows = $this->redactRowCaseIds($rows);
+            $loaded['schema_errors'] = $this->redactSchemaErrorCaseIds($loaded['schema_errors']);
+        }
         $summary = $this->summary(
             loadedTotal: $loaded['total_loaded'],
             validCases: $validCases,
@@ -693,6 +697,10 @@ class IntakeOcrRegressionCommand extends Command
 
     private function firstParsedFieldValue(array $parsed, string $field): mixed
     {
+        if ($field === 'document_contact_number') {
+            return $this->parsedDocumentContactNumbers($parsed);
+        }
+
         foreach (self::FIELD_PATHS[$field] ?? [] as $path) {
             $value = data_get($parsed, $path);
             if (! $this->isBlank($value)) {
@@ -705,6 +713,10 @@ class IntakeOcrRegressionCommand extends Command
 
     private function normalizeForComparison(string $field, mixed $value): ?string
     {
+        if ($field === 'document_contact_number') {
+            return $this->normalizePhoneSetForComparison($value);
+        }
+
         if ($value === null || is_array($value) || is_object($value)) {
             return null;
         }
@@ -724,13 +736,8 @@ class IntakeOcrRegressionCommand extends Command
         $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
         $text = trim($text);
 
-        if ($field === 'primary_contact_number' || $field === 'document_contact_number') {
-            $digits = preg_replace('/\D+/', '', $text) ?? '';
-            if (strlen($digits) > 10 && str_starts_with($digits, '91')) {
-                $digits = substr($digits, -10);
-            }
-
-            return $digits !== '' ? $digits : null;
+        if ($field === 'primary_contact_number') {
+            return $this->normalizeSinglePhoneForComparison($text);
         }
 
         if ($field === 'date_of_birth') {
@@ -752,6 +759,117 @@ class IntakeOcrRegressionCommand extends Command
         $text = trim($text);
 
         return $text !== '' ? $text : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $parsed
+     * @return list<string>
+     */
+    private function parsedDocumentContactNumbers(array $parsed): array
+    {
+        $coreNumbers = $this->collectPhoneNumbersForComparison(data_get($parsed, 'core.document_contact_numbers'))
+            ?: $this->collectPhoneNumbersForComparison(data_get($parsed, 'core.document_contact_number'));
+        if ($coreNumbers !== []) {
+            return $coreNumbers;
+        }
+
+        $contacts = data_get($parsed, 'contacts');
+        if (! is_array($contacts)) {
+            return [];
+        }
+
+        $document = [];
+        $fallback = [];
+        foreach ($contacts as $contact) {
+            if (! is_array($contact)) {
+                continue;
+            }
+            $numbers = $this->collectPhoneNumbersForComparison([
+                $contact['phone_number'] ?? null,
+                $contact['mobile'] ?? null,
+                $contact['mobile_number'] ?? null,
+                $contact['phone'] ?? null,
+                $contact['number'] ?? null,
+            ]);
+            if ($numbers === []) {
+                continue;
+            }
+
+            $type = mb_strtolower(trim((string) ($contact['type'] ?? '')));
+            $label = mb_strtolower(trim((string) ($contact['label'] ?? '')));
+            $isPrimary = (bool) ($contact['is_primary'] ?? false);
+            if ($type === 'document_contact' || $label === 'document') {
+                array_push($document, ...$numbers);
+            } elseif (! $isPrimary) {
+                array_push($fallback, ...$numbers);
+            }
+        }
+
+        return $this->uniqueSortedPhones($document !== [] ? $document : $fallback);
+    }
+
+    private function normalizeSinglePhoneForComparison(string $text): ?string
+    {
+        $phones = $this->collectPhoneNumbersForComparison($text);
+
+        return count($phones) === 1 ? $phones[0] : null;
+    }
+
+    private function normalizePhoneSetForComparison(mixed $value): ?string
+    {
+        $phones = $this->collectPhoneNumbersForComparison($value);
+
+        return $phones !== [] ? implode('|', $phones) : null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectPhoneNumbersForComparison(mixed $value): array
+    {
+        if ($value === null) {
+            return [];
+        }
+
+        $phones = [];
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                array_push($phones, ...$this->collectPhoneNumbersForComparison($item));
+            }
+
+            return $this->uniqueSortedPhones($phones);
+        }
+
+        if (is_object($value)) {
+            return [];
+        }
+
+        $text = \App\Services\Ocr\OcrNormalize::normalizeDigits((string) $value);
+        if (preg_match_all('/(?<!\d)(?:\+?\s*91[\s.\-]*)?([6-9](?:[\s.\-]*\d){9})(?!\d)/u', $text, $matches)) {
+            foreach ($matches[1] as $candidate) {
+                $digits = preg_replace('/\D/u', '', (string) $candidate) ?? '';
+                if (preg_match('/^[6-9]\d{9}$/', $digits)) {
+                    $phones[] = $digits;
+                }
+            }
+        }
+
+        return $this->uniqueSortedPhones($phones);
+    }
+
+    /**
+     * @param  list<string>  $phones
+     * @return list<string>
+     */
+    private function uniqueSortedPhones(array $phones): array
+    {
+        $phones = array_values(array_unique(array_filter(
+            $phones,
+            static fn (string $phone): bool => (bool) preg_match('/^[6-9]\d{9}$/', $phone)
+        )));
+        sort($phones, SORT_STRING);
+
+        return $phones;
     }
 
     private function normalizeHeightForComparison(string $text): ?string
@@ -1102,5 +1220,42 @@ class IntakeOcrRegressionCommand extends Command
         }
 
         return basename($path);
+    }
+
+    private function shouldRedactCaseIds(string $path): bool
+    {
+        return str_starts_with(
+            $this->safeDatasetDisplay($path),
+            'storage/app/intake-golden-datasets/'
+        );
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private function redactRowCaseIds(array $rows): array
+    {
+        return array_values(array_map(function (array $row, int $index): array {
+            $row['case_id'] = sprintf('case_%03d', $index + 1);
+
+            return $row;
+        }, $rows, array_keys($rows)));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $errors
+     * @return list<array<string, mixed>>
+     */
+    private function redactSchemaErrorCaseIds(array $errors): array
+    {
+        return array_values(array_map(function (array $error, int $index): array {
+            $line = $error['line'] ?? null;
+            $error['case_id'] = is_int($line)
+                ? sprintf('line_%03d', $line)
+                : sprintf('schema_error_%03d', $index + 1);
+
+            return $error;
+        }, $errors, array_keys($errors)));
     }
 }

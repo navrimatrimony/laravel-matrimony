@@ -718,26 +718,9 @@ class BiodataParserService
         foreach (array_keys($this->collectSuchakHeaderPhonesToExclude($text)) as $sp) {
             $relativePhoneExclude[$sp] = true;
         }
-        // Explicit contact label: safe to capture without guessing (do not use footer-only numbers).
+        $documentContactNumbers = $this->extractDocumentContactNumbersFromText($text);
         $primaryContact = null;
         $confidence['primary_contact_number'] = self::CONF_MISSING;
-        // Keep this narrow: only set biodata primary when an explicit "संपर्क नंबर" label exists.
-        $contactRaw = $this->extractAfterLabelMultiline($text, 'संपर्क नंबर')
-            ?? $this->extractFieldAfterLabels($text, ['संपर्क नंबर']);
-        if (is_string($contactRaw) && trim($contactRaw) !== '') {
-            $contactRaw = $this->truncateFieldBeforeInlineSectionLabels($contactRaw, [
-                'शिक्षण', 'रक्त', 'वर्ण', 'गोत्र', 'रास', 'नक्षत्र', 'नाडी', 'गण', 'जन्म', 'पत्ता', 'स्थावर', 'स्थायिक', 'अपेक्षा',
-            ]);
-            $candidateDigits = \App\Services\Ocr\OcrNormalize::normalizeDigits($contactRaw) ?? $contactRaw;
-            if (preg_match('/\b([6-9]\d{9})\b/u', (string) $candidateDigits, $cm)) {
-                $digits10 = $cm[1];
-                if (! $this->phoneDigitsAppearOnlyOnFooterOrShopLines($text, $digits10)) {
-                    $primaryContact = $digits10;
-                    $confidence['primary_contact_number'] = self::CONF_DIRECT;
-                    $relativePhoneExclude[$digits10] = true;
-                }
-            }
-        }
 
         $bloodGroupRaw = $this->extractFieldAfterLabels($text, ['रक्तगट', 'रक्‍त गट', 'रक्त गट', 'Blood group'])
             ?? $this->extractField($text, ['रक्तगट', 'रक्‍त गट', 'रक्त गट', 'Blood group']);
@@ -968,6 +951,7 @@ class BiodataParserService
 
         // ——— CONTACTS (no biodata primary; numbers only as non-primary alternates for reference) ———
         $contacts = [];
+        $this->appendDocumentContactNumbers($contacts, $documentContactNumbers);
         foreach (array_filter([$fatherPhoneFromParen ?? null, $motherPhoneFromParen ?? null]) as $parenPhone) {
             $norm = \App\Services\Ocr\OcrNormalize::normalizePhone((string) $parenPhone);
             if ($norm !== null && ! isset($relativePhoneExclude[$norm])) {
@@ -984,7 +968,7 @@ class BiodataParserService
             }
         }
         if (preg_match_all('/\b([6-9]\d{9})\b/u', $text, $allMatches)) {
-            $seen = [];
+            $seen = $this->contactNumberSet($contacts);
             foreach (array_unique($allMatches[1]) as $num) {
                 $normKey = \App\Services\Ocr\OcrNormalize::normalizePhone($num) ?? $num;
                 if (isset($relativePhoneExclude[$normKey])) {
@@ -4355,7 +4339,7 @@ class BiodataParserService
             return;
         }
         $blobNorm = \App\Services\Ocr\OcrNormalize::normalizeDigits($blob);
-        if (! preg_match_all('/\b([6-9]\d{9})\b/u', $blobNorm, $m) || $m[1] === []) {
+        if ($this->extractIndianMobileNumbersFromText($blobNorm) === []) {
             $contacts = [];
 
             return;
@@ -4607,6 +4591,131 @@ class BiodataParserService
                 'is_primary' => false,
             ];
         }
+    }
+
+    /**
+     * OCR-visible document contacts are printed biodata numbers, not source/consent primary contacts.
+     *
+     * @return list<string>
+     */
+    private function extractDocumentContactNumbersFromText(string $text): array
+    {
+        $normalizedText = \App\Services\Ocr\OcrNormalize::normalizeDigits($text);
+        $lines = preg_split('/\R/u', (string) $normalizedText) ?: [];
+        $numbers = [];
+        $seen = [];
+
+        foreach ($lines as $index => $line) {
+            $line = trim((string) $line);
+            if ($line === '' || ! $this->lineHasDocumentContactLabel($line)) {
+                continue;
+            }
+
+            $blob = $line;
+            for ($next = $index + 1; $next < min(count($lines), $index + 4); $next++) {
+                $nextLine = trim((string) $lines[$next]);
+                if ($nextLine === '') {
+                    break;
+                }
+                $nextPhones = $this->extractIndianMobileNumbersFromText($nextLine);
+                if ($nextPhones === []) {
+                    break;
+                }
+                $blob .= "\n".$nextLine;
+            }
+
+            foreach ($this->extractIndianMobileNumbersFromText($blob) as $phone) {
+                if (isset($seen[$phone])) {
+                    continue;
+                }
+                if (self::isPhoneExcludedSuchakHeaderStatic($text, $phone)) {
+                    continue;
+                }
+                if ($this->phoneDigitsAppearOnlyOnFooterOrShopLines($text, $phone)
+                    || $this->phoneDigitsAppearOnlyOnTypingComputerFooterLines($text, $phone)) {
+                    continue;
+                }
+                $seen[$phone] = true;
+                $numbers[] = $phone;
+            }
+        }
+
+        return $numbers;
+    }
+
+    private function lineHasDocumentContactLabel(string $line): bool
+    {
+        return (bool) preg_match(
+            '/^\s*(?:[-*•]\s*)?(?:मोबाईल|मोबाइल|भ्रमणध्वनी|संपर्क\s*(?:क्रमांक|नंबर|नं\.?)?|Contact|Mobile|Phone|मो\.?\s*(?:नं\.?|नंबर)?)/ui',
+            $line
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractIndianMobileNumbersFromText(string $text): array
+    {
+        $text = \App\Services\Ocr\OcrNormalize::normalizeDigits($text);
+        if (! preg_match_all('/(?<!\d)(?:\+?\s*91[\s.\-]*)?([6-9](?:[\s.\-]*\d){9})(?!\d)/u', (string) $text, $matches)) {
+            return [];
+        }
+
+        $numbers = [];
+        $seen = [];
+        foreach ($matches[1] as $candidate) {
+            $digits = preg_replace('/\D/u', '', (string) $candidate) ?? '';
+            if (! preg_match('/^[6-9]\d{9}$/', $digits) || isset($seen[$digits])) {
+                continue;
+            }
+            $seen[$digits] = true;
+            $numbers[] = $digits;
+        }
+
+        return $numbers;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $contacts
+     * @param  list<string>  $numbers
+     */
+    private function appendDocumentContactNumbers(array &$contacts, array $numbers): void
+    {
+        $seen = $this->contactNumberSet($contacts);
+        foreach ($numbers as $number) {
+            $normalized = \App\Services\Ocr\OcrNormalize::normalizePhone($number);
+            if ($normalized === null || isset($seen[$normalized])) {
+                continue;
+            }
+            $seen[$normalized] = true;
+            $contacts[] = [
+                'type' => 'document_contact',
+                'label' => 'document',
+                'number' => $normalized,
+                'phone_number' => $normalized,
+                'relation_type' => '',
+                'contact_name' => '',
+                'is_primary' => false,
+            ];
+        }
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $contacts
+     * @return array<string, bool>
+     */
+    private function contactNumberSet(array $contacts): array
+    {
+        $seen = [];
+        foreach ($contacts as $contact) {
+            $raw = (string) ($contact['number'] ?? $contact['phone_number'] ?? $contact['mobile_number'] ?? $contact['phone'] ?? '');
+            $normalized = \App\Services\Ocr\OcrNormalize::normalizePhone($raw);
+            if ($normalized !== null) {
+                $seen[$normalized] = true;
+            }
+        }
+
+        return $seen;
     }
 
     private function valueIsHonorificOnlyStub(string $value): bool
@@ -5244,33 +5353,7 @@ class BiodataParserService
      */
     private function appendAlternateContactsFromSeparatedHintBlob(array &$contacts, string $blob): void
     {
-        if (! preg_match_all('/\b([6-9]\d{9})\b/', $blob, $m)) {
-            return;
-        }
-        $seen = [];
-        foreach ($contacts as $c) {
-            $raw = (string) ($c['number'] ?? $c['phone_number'] ?? '');
-            if ($raw !== '') {
-                $k = \App\Services\Ocr\OcrNormalize::normalizePhone($raw) ?? $raw;
-                $seen[$k] = true;
-            }
-        }
-        foreach (array_unique($m[1]) as $num) {
-            $norm = \App\Services\Ocr\OcrNormalize::normalizePhone((string) $num);
-            if ($norm === null || isset($seen[$norm])) {
-                continue;
-            }
-            $seen[$norm] = true;
-            $contacts[] = [
-                'type' => 'alternate',
-                'label' => 'other',
-                'number' => $norm,
-                'phone_number' => $norm,
-                'relation_type' => '',
-                'contact_name' => '',
-                'is_primary' => false,
-            ];
-        }
+        $this->appendDocumentContactNumbers($contacts, $this->extractIndianMobileNumbersFromText($blob));
     }
 
     /** Reject DOB raw text that contains no digits (avoid treating labels as dates). */

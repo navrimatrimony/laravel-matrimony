@@ -84,19 +84,45 @@ test('storage app dataset path still works', function () {
         'case_id' => 'storage_dataset_case',
         'ocr_text' => "Name: Storage Dataset Candidate\nMobile: 9876543210",
         'expected_fields' => [
-            'primary_contact_number' => '9876543210',
+            'document_contact_number' => '9876543210',
         ],
     ]));
 
     try {
         [$exitCode, $payload] = ocrRegressionJson([
             '--dataset' => $path,
-            '--field' => 'primary_contact_number',
+            '--field' => 'document_contact_number',
         ]);
 
         expect($exitCode)->toBe(0)
             ->and($payload['summary']['valid_cases'])->toBe(1)
             ->and($payload['rows'][0]['case_id'])->toBe('storage_dataset_case');
+    } finally {
+        File::delete(base_path($path));
+    }
+});
+
+test('document contact scoring compares multiple normalized phone numbers as a set', function () {
+    $path = writeOcrRegressionDataset(ocrRegressionCase([
+        'case_id' => 'document_contact_multiple_case',
+        'ocr_text' => "Name: Document Contact Candidate\nContact: +91 9876543210, 9123456789",
+        'parser_expected_fields' => [
+            'document_contact_number' => "9876543210 / 9123456789",
+        ],
+    ]));
+
+    try {
+        [$exitCode, $payload] = ocrRegressionJson([
+            '--dataset' => $path,
+            '--field' => 'document_contact_number',
+        ]);
+
+        expect($exitCode)->toBe(0)
+            ->and($payload['summary']['total_expected_fields'])->toBe(1)
+            ->and($payload['summary']['exact_match_count'])->toBe(1)
+            ->and($payload['summary']['mismatch_count'])->toBe(0)
+            ->and($payload['field_accuracy'][0]['accuracy_percent'])->toBe(100)
+            ->and($payload['rows'][0]['status'])->toBe('pass');
     } finally {
         File::delete(base_path($path));
     }
@@ -285,13 +311,13 @@ test('absolute dataset path still works', function () {
 test('field filter works', function () {
     [$exitCode, $payload] = ocrRegressionJson([
         '--dataset' => ocrRegressionFixtureRelativePath(),
-        '--field' => 'primary_contact_number',
+        '--field' => 'document_contact_number',
     ]);
 
     expect($exitCode)->toBe(0)
-        ->and($payload['filters']['field'])->toBe('primary_contact_number')
+        ->and($payload['filters']['field'])->toBe('document_contact_number')
         ->and($payload['field_accuracy'])->toHaveCount(1)
-        ->and($payload['field_accuracy'][0]['field'])->toBe('primary_contact_number')
+        ->and($payload['field_accuracy'][0]['field'])->toBe('document_contact_number')
         ->and($payload['summary']['total_expected_fields'])->toBe(1);
 });
 
@@ -325,7 +351,7 @@ test('command output redacts raw OCR text phone full address and candidate names
         'ocr_text' => "Name: Sensitive Synthetic Name\nMobile: 9876543210\nAddress: 123 Secret Full Address, Pune\nProvider payload sk-proj-secret",
         'expected_fields' => [
             'full_name' => 'Sensitive Synthetic Name',
-            'primary_contact_number' => '9876543210',
+            'document_contact_number' => '9876543210',
             'address' => '123 Secret Full Address, Pune',
         ],
     ]));
@@ -341,6 +367,32 @@ test('command output redacts raw OCR text phone full address and candidate names
             ->and($output)->not->toContain('9876543210')
             ->and($output)->not->toContain('123 Secret Full Address')
             ->and($output)->not->toContain('sk-proj-secret');
+    } finally {
+        File::delete(base_path($path));
+    }
+});
+
+test('private golden dataset output redacts case ids', function () {
+    $path = writeOcrRegressionPrivateDataset(ocrRegressionCase([
+        'case_id' => 'private_case_sensitive_synthetic_name',
+        'ocr_text' => "Name: Private Case Synthetic\nMobile: 9876543210",
+        'parser_expected_fields' => [
+            'document_contact_number' => '9876543210',
+        ],
+    ]));
+
+    try {
+        [$exitCode, $payload] = ocrRegressionJson([
+            '--dataset' => $path,
+            '--field' => 'document_contact_number',
+        ]);
+
+        $output = Artisan::output();
+
+        expect($exitCode)->toBe(0)
+            ->and($payload['rows'][0]['case_id'])->toBe('case_001')
+            ->and($output)->not->toContain('private_case_sensitive_synthetic_name')
+            ->and($output)->not->toContain('Sensitive Synthetic Name');
     } finally {
         File::delete(base_path($path));
     }
@@ -472,6 +524,16 @@ function ocrRegressionFixtureRelativePath(): string
 function writeOcrRegressionDataset(string $contents): string
 {
     $relative = 'storage/app/testing/intake-ocr-regression-'.uniqid().'.jsonl';
+    $path = base_path($relative);
+    File::ensureDirectoryExists(dirname($path));
+    File::put($path, $contents);
+
+    return $relative;
+}
+
+function writeOcrRegressionPrivateDataset(string $contents): string
+{
+    $relative = 'storage/app/intake-golden-datasets/intake-ocr-regression-'.uniqid().'.jsonl';
     $path = base_path($relative);
     File::ensureDirectoryExists(dirname($path));
     File::put($path, $contents);
