@@ -9126,6 +9126,9 @@ class BiodataParserService
             if (preg_match('/दाजी/u', $t)) {
                 continue;
             }
+            if ($this->candidateAddressLineHasOwnerPrefix($t)) {
+                continue;
+            }
             if (preg_match('/^[\s\-–—•*]*(?:पत्ता|पता)\s*(?::\s*-\s*|:\s+[:\-–—]{0,2}\s*)\s*(.+)$/u', $t, $m)
                 && ! preg_match('/^[\s\-–—•*]*निवासी\s+पत्ता/u', $t)) {
                 $buf = [trim($m[1])];
@@ -9174,10 +9177,17 @@ class BiodataParserService
         if (count($blocks) === 1) {
             return $this->finalizeAddressBlockCandidate($blocks[0]);
         }
-        if (preg_match('/(?:पत्ता|पता)\s*(?::\s*-\s*|:\s+[:\-–—]{0,2}\s*)\s*(.+?)(?=\n\n|\n\s*(?:\-\s*)?(?:निवासी\s+पत्ता|निवास\s+पत्ता)\s*[:\-]|\n(?:भाऊ|बहीण|बहिण|दाजी|चुलते|मामा|आईचे|मातेचे|वडिलांचे|इतर\s+नातेवाईक)\b|\n[अ-हA-Z]|$)/us', $scan, $m)) {
-            return $this->finalizeAddressBlockCandidate($this->trimCandidateAddressBlockAtFamilySections(trim($m[1])));
+        $explicitAddress = $this->extractExplicitCandidateAddressBlock($scan);
+        if ($explicitAddress !== null) {
+            return $explicitAddress;
         }
-        if (preg_match('/Address[:\-]?\s*(.+?)(?=\n\n|\n[अ-हA-Z]|$)/us', $text, $m)) {
+        if (preg_match('/^[\s\-–—•*]*(?:पत्ता|पता)\s*(?::\s*-\s*|:\s+[:\-–—]{0,2}\s*)\s*(.+?)(?=\n\n|\n\s*(?:\-\s*)?(?:निवासी\s+पत्ता|निवास\s+पत्ता)\s*[:\-]|\n(?:भाऊ|बहीण|बहिण|दाजी|चुलते|मामा|आईचे|मातेचे|वडिलांचे|इतर\s+नातेवाईक)\b|\n[अ-हA-Z]|$)/ums', $scan, $m)) {
+            $firstLine = trim((string) strtok((string) ($m[0] ?? ''), "\n"));
+            if (! $this->candidateAddressLineHasOwnerPrefix($firstLine)) {
+                return $this->finalizeAddressBlockCandidate($this->trimCandidateAddressBlockAtFamilySections(trim($m[1])));
+            }
+        }
+        if (preg_match('/^[\s\-–—•*]*Address\s*[:\-]?\s*(.+?)(?=\n\n|\n[अ-हA-Z]|$)/ums', $text, $m)) {
             return $this->finalizeAddressBlockCandidate(trim($m[1]));
         }
         // संपर्क पत्ता / संपर्क seal (OCR) — require पत्ता|seal so we don't capture "seal" as address; capture until मोबाईल so multiline address included
@@ -9196,6 +9206,8 @@ class BiodataParserService
                 continue;
             }
             if (preg_match('/वॉर्ड|गल्ली|पेठ|बाजार|बाजाटगेट|हाऊस|House|Ward|nagar/u', $line)
+                && ! $this->candidateAddressLineHasOwnerPrefix($line)
+                && ! $this->isCandidateAddressStrongStopLine($line)
                 && ! preg_match('/कुलस्वामी|कुळस्वामी|कुलस्वामीनी|गोत्र|रास|नक्षत्र/u', $line)) {
                 $collect[] = $line;
             }
@@ -9205,6 +9217,125 @@ class BiodataParserService
         }
 
         return null;
+    }
+
+    private function extractExplicitCandidateAddressBlock(string $text): ?string
+    {
+        $lines = preg_split('/\R/u', $text) ?: [];
+        $candidates = [];
+
+        foreach ($lines as $index => $line) {
+            $line = trim((string) $line);
+            if ($line === '' || $this->candidateAddressLineHasOwnerPrefix($line)) {
+                continue;
+            }
+
+            $match = $this->matchExplicitCandidateAddressLabel($line);
+            if ($match === null) {
+                continue;
+            }
+
+            $buffer = [];
+            if (trim($match['value']) !== '') {
+                $buffer[] = trim($match['value']);
+            }
+
+            for ($j = $index + 1, $n = count($lines); $j < $n; $j++) {
+                $next = trim((string) $lines[$j]);
+                if ($next === '') {
+                    break;
+                }
+                if ($this->matchExplicitCandidateAddressLabel($next) !== null
+                    || $this->isCandidateAddressStrongStopLine($next)
+                    || $this->candidateAddressLineHasOwnerPrefix($next)
+                    || ! $this->looksLikeCandidateAddressContinuation($next)) {
+                    break;
+                }
+
+                $buffer[] = $next;
+            }
+
+            $joined = trim(preg_replace('/\s+/u', ' ', implode(' ', $buffer)) ?? '');
+            if ($joined === '' || $this->addressValueIsPhoneOrPincodeOnly($joined)) {
+                continue;
+            }
+
+            $final = $this->finalizeAddressBlockCandidate($joined);
+            if ($final !== null && $final !== '' && ! $this->addressValueIsPhoneOrPincodeOnly($final)) {
+                $candidates[] = [
+                    'priority' => $match['priority'],
+                    'index' => $index,
+                    'address' => $final,
+                ];
+            }
+        }
+
+        if ($candidates === []) {
+            return null;
+        }
+
+        usort($candidates, static function (array $a, array $b): int {
+            return [$a['priority'], $a['index']] <=> [$b['priority'], $b['index']];
+        });
+
+        return (string) $candidates[0]['address'];
+    }
+
+    /**
+     * @return array{priority: int, value: string}|null
+     */
+    private function matchExplicitCandidateAddressLabel(string $line): ?array
+    {
+        $patterns = [
+            0 => '/^[\s\-–—•*]*(?:सध्याचा\s+पत्ता|वर्तमान\s+पत्ता|current\s+address|residence\s+address|राहणार|रा\.?)\s*(?::\s*-\s*|[:\-：>\/]\s*|[८8]\s*|\s+)(.+)$/ui',
+            1 => '/^[\s\-–—•*]*(?:(?:मुलाचा|मुलाचे|मुलाची|मुलीचा|मुलीचे|मुलीची|वधूचा|वधूचे|वराचा|वराचे)\s+)?(?:घरचा\s+पत्ता|पत्ता|पता|address)\s*(?::\s*-\s*|:\s+[:\-–—]{0,2}\s*|[:\-：>\/]\s*|[८8]\s*)(.+)$/ui',
+            2 => '/^[\s\-–—•*]*(?:मूळगाव|मूळ\s+गाव|native\s+place)\s*(?::\s*-\s*|[:\-：>\/]\s*|[८8]\s*|\s+)(.+)$/ui',
+            3 => '/^[\s\-–—•*]*(?:जन्म\s+ठिकाण|जन्मस्थळ|birth\s+place)\s*(?::\s*-\s*|[:\-：>\/]\s*|[८8]\s*|\s+)(.+)$/ui',
+            4 => '/^[\s\-–—•*]*(?:संपर्क\s+पत्ता|contact\s+address)\s*(?::\s*-\s*|[:\-：>\/]\s*|[८8]\s*|\s+)(.+)$/ui',
+        ];
+
+        foreach ($patterns as $priority => $pattern) {
+            if (preg_match($pattern, $line, $match)) {
+                $value = $this->cleanValue(trim((string) ($match[1] ?? ''))) ?? '';
+
+                return ['priority' => (int) $priority, 'value' => $value];
+            }
+        }
+
+        return null;
+    }
+
+    private function candidateAddressLineHasOwnerPrefix(string $line): bool
+    {
+        $line = trim($line);
+        if ($line === '') {
+            return false;
+        }
+
+        return preg_match('/^[\s\-–—•*]*(?:मामा|काका|चुलते|आत्या|मावशी|दाजी|भाऊ|बहिण|बहीण|वडील|वडिलांचा|वडिलांची|वडिलांचे|वडिलाचे|आई|आईचा|आईची|आईचे|नातेवाईक|relative|father|mother|brother|sister|uncle|aunt|office|work\s+location|company)(?:\s|[:：.\-]|$)/ui', $line) === 1;
+    }
+
+    private function isCandidateAddressStrongStopLine(string $line): bool
+    {
+        return preg_match('/^[\s\-–—•*]*(?:शिक्षण|Education|Qualification|शैक्षणिक\s+पात्रता|नोकरी|व्यवसाय|Occupation|Profession|Job|Working\s+as|Designation|धर्म|Religion|जात|Caste|उपजात|पोटजात|Sub\s*caste|उंची|ऊंची|Height|जन्म\s+तारीख|जन्मतारीख|जन्म\s+वेळ|जन्मवेळ|DOB|Date\s+of\s+birth|Birth\s+Date|वडील|वडिलांचे|आई|भाऊ|बहीण|बहिण|मामा|काका|चुलते|आत्या|मावशी|नातेवाईक|Relatives|अपेक्षा|Expectation|मोबाईल|मोबाइल|Mobile|Phone|संपर्क|Contact|रास|नक्षत्र|गोत्र|कुलदैवत|कुलस्वामी|देवक)\b/ui', $line) === 1;
+    }
+
+    private function looksLikeCandidateAddressContinuation(string $line): bool
+    {
+        $line = trim($line);
+        if ($line === '' || mb_strlen($line) > 180 || $this->addressValueIsPhoneOrPincodeOnly($line)) {
+            return false;
+        }
+
+        return preg_match('/,|(?:मु\.?\s*पो\.?|ता\.|जि\.|रा\.|रोड|Road|नगर|Nagar|कॉलनी|Colony|गल्ली|Lane|Plot|प्लॉट|Flat|फ्लॅट|House|घर|Apartment|अपार्टमेंट|Taluka|District|Dist|Maharashtra|महाराष्ट्र|\b\d{6}\b)/ui', $line) === 1;
+    }
+
+    private function addressValueIsPhoneOrPincodeOnly(string $value): bool
+    {
+        $normalized = \App\Services\Ocr\OcrNormalize::normalizeDigits(trim($value));
+        $digits = preg_replace('/[\s+\-().]+/', '', (string) $normalized) ?? '';
+
+        return preg_match('/^(?:[6-9]\d{9}|91[6-9]\d{9}|\d{6})$/', $digits) === 1;
     }
 
     /**

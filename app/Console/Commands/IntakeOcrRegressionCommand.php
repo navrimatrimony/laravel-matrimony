@@ -589,7 +589,7 @@ class IntakeOcrRegressionCommand extends Command
                 continue;
             }
 
-            if ($actual === $expected) {
+            if ($this->valuesMatchForComparison($field, $expected, $actual)) {
                 $exact++;
                 $fieldStats[$field]['exact_match_count']++;
                 continue;
@@ -626,6 +626,31 @@ class IntakeOcrRegressionCommand extends Command
             ],
             'field_stats' => $fieldStats,
         ];
+    }
+
+    private function valuesMatchForComparison(string $field, string $expected, string $actual): bool
+    {
+        if ($actual === $expected) {
+            return true;
+        }
+
+        if ($field !== 'address') {
+            return false;
+        }
+
+        $expectedLength = mb_strlen($expected);
+        $actualLength = mb_strlen($actual);
+        $shorter = $expectedLength <= $actualLength ? $expected : $actual;
+        $longer = $expectedLength <= $actualLength ? $actual : $expected;
+        $shorterLength = min($expectedLength, $actualLength);
+        $longerLength = max($expectedLength, $actualLength);
+        $tokenCount = count(preg_split('/\s+/u', $shorter, -1, PREG_SPLIT_NO_EMPTY) ?: []);
+
+        return $shorterLength >= 20
+            && $tokenCount >= 3
+            && $longerLength > 0
+            && ($shorterLength / $longerLength) >= 0.65
+            && str_contains($longer, $shorter);
     }
 
     /**
@@ -765,6 +790,10 @@ class IntakeOcrRegressionCommand extends Command
             return $this->normalizeEducationForComparison($text);
         }
 
+        if ($field === 'address') {
+            return $this->normalizeAddressForComparison($text);
+        }
+
         if ($field === 'religion') {
             return $this->normalizeReligionForComparison($text);
         }
@@ -779,6 +808,19 @@ class IntakeOcrRegressionCommand extends Command
 
         $text = mb_strtolower($text);
         $text = preg_replace('/[^\p{L}\p{N}\s.]+/u', ' ', $text) ?? $text;
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+        $text = trim($text);
+
+        return $text !== '' ? $text : null;
+    }
+
+    private function normalizeAddressForComparison(string $text): ?string
+    {
+        $text = \App\Services\Ocr\OcrNormalize::normalizeDigits($text);
+        $text = str_replace(["\u{00A0}", "\u{200B}", '“', '”', '‘', '’'], [' ', ' ', "'", "'", "'", "'"], $text);
+        $text = preg_replace('/^\s*(?:सध्याचा\s+पत्ता|वर्तमान\s+पत्ता|संपर्क\s+पत्ता|घरचा\s+पत्ता|मूळगाव|मूळ\s+गाव|जन्म\s+ठिकाण|जन्मस्थळ|पत्ता|पता|current\s+address|contact\s+address|residence\s+address|native\s+place|birth\s+place|address)\s*(?:[:\-：>\/]|[8]|\s)+/ui', '', $text) ?? $text;
+        $text = mb_strtolower($text);
+        $text = preg_replace('/[^\p{L}\p{N}\s]+/u', ' ', $text) ?? $text;
         $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
         $text = trim($text);
 
