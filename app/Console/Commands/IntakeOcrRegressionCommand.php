@@ -697,6 +697,10 @@ class IntakeOcrRegressionCommand extends Command
 
     private function firstParsedFieldValue(array $parsed, string $field): mixed
     {
+        if ($field === 'occupation') {
+            return $this->parsedOccupationValue($parsed);
+        }
+
         if ($field === 'document_contact_number') {
             return $this->parsedDocumentContactNumbers($parsed);
         }
@@ -753,8 +757,72 @@ class IntakeOcrRegressionCommand extends Command
             return $this->normalizeHeightForComparison($text);
         }
 
+        if ($field === 'occupation') {
+            return $this->normalizeOccupationForComparison($text);
+        }
+
         $text = mb_strtolower($text);
         $text = preg_replace('/[^\p{L}\p{N}\s.]+/u', ' ', $text) ?? $text;
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+        $text = trim($text);
+
+        return $text !== '' ? $text : null;
+    }
+
+    private function parsedOccupationValue(array $parsed): mixed
+    {
+        $titlePaths = [
+            'core.occupation_title',
+            'core.occupation',
+            'core.profession',
+            'career_history.0.occupation_title',
+            'career_history.0.designation',
+            'career_history.0.job_title',
+            'career_history.0.role',
+        ];
+
+        $generic = null;
+        foreach ($titlePaths as $path) {
+            $value = data_get($parsed, $path);
+            if ($this->isBlank($value)) {
+                continue;
+            }
+            $value = trim((string) $value);
+            if (! $this->isGenericOccupationToken($value)) {
+                return $value;
+            }
+            $generic ??= $value;
+        }
+
+        foreach ([
+            'core.company_name',
+            'career_history.0.company_name',
+            'career_history.0.employer',
+            'career_history.0.company',
+        ] as $path) {
+            $value = data_get($parsed, $path);
+            if (! $this->isBlank($value)) {
+                return $value;
+            }
+        }
+
+        return $generic;
+    }
+
+    private function isGenericOccupationToken(string $value): bool
+    {
+        $normalized = $this->normalizeOccupationForComparison($value);
+
+        return in_array($normalized, ['नोकरी', 'व्यवसाय', 'occupation', 'profession', 'job', 'work'], true);
+    }
+
+    private function normalizeOccupationForComparison(string $text): ?string
+    {
+        $text = \App\Services\Ocr\OcrNormalize::normalizeDigits($text);
+        $text = str_replace(["\u{00A0}", "\u{200B}", '“', '”', '‘', '’'], [' ', ' ', "'", "'", "'", "'"], $text);
+        $text = preg_replace('/^\s*(?:नोकरी\s*\/\s*व्यवसाय|नोकटी\s*\/\s*व्यवसाय|स्वतःचा\s+व्यवसाय|स्वत:चा\s+व्यवसाय|व्यवसाय|नोकरी|Occupation|Profession|Job|Working\s+as|Designation|Work)\s*(?:[:\-：>\/]|\s)+/ui', '', $text) ?? $text;
+        $text = mb_strtolower($text);
+        $text = preg_replace('/[^\p{L}\p{N}\s]+/u', ' ', $text) ?? $text;
         $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
         $text = trim($text);
 

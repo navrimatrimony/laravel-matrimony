@@ -56,7 +56,7 @@ class BiodataParserService
     private const DEGREE_KEYWORDS = ['B.A', 'LL.B', 'B.Com', 'B.Sc', 'M.Sc', 'MSC', 'BE', 'BAMS', 'MBBS', 'B.E', 'B.Tech', 'M.Com', 'BA', 'BCom', 'BSc'];
 
     /** Occupation keywords for career validation. */
-    private const OCCUPATION_KEYWORDS = ['नोकरी', 'व्यवसाय', 'वेतन', 'शेती', 'वकील', 'engineer', 'software', 'teacher', 'doctor', 'clerk', 'business', 'सरकारी', 'खाजगी', 'Limited', 'BPO', 'operator', 'Field', 'Home', 'I.T', 'Co ', 'Forge'];
+    private const OCCUPATION_KEYWORDS = ['नोकरी', 'व्यवसाय', 'वेतन', 'शेती', 'वकील', 'वकीली', 'अधिवक्ता', 'engineer', 'software', 'developer', 'consultant', 'advocate', 'lawyer', 'teacher', 'doctor', 'clerk', 'business', 'manager', 'analyst', 'सरकारी', 'खाजगी', 'Limited', 'BPO', 'operator', 'Field', 'Home', 'I.T', 'Co ', 'Forge', 'SAP', 'Food', 'Center', 'Centre'];
 
     /** Caste dictionary (exact match). */
     private const CASTE_DICTIONARY = [
@@ -887,9 +887,9 @@ class BiodataParserService
         }
 
         // ——— CAREER (gender-sensitive) ———
-        $nokariLineCareer = $this->extractFieldAfterLabels($text, ['नोकरी/व्यवसाय', 'नोकटी/व्यवसाय'])
-            ?? $this->extractCareerFieldPreferFirstDocumentLine($text)
-            ?? $this->extractField($text, ['नोकरी/व्यवसाय', 'नोकटी/व्यवसाय', 'व्यवसाय', 'नोकरी', 'Profession', 'Occupation']);
+        // Candidate occupation must come from the candidate/profile section only. Do not harvest
+        // parent, sibling, relative, expectation, or work-location-only lines.
+        $nokariLineCareer = $this->extractCandidateOccupationLine($text);
         $nokariLineCareer = $this->truncateFieldBeforeInlineSectionLabels($nokariLineCareer, [
             'गोत्र', 'वर्ण', 'रास', 'नक्षत्र', 'कुलस्वामी', 'कुलस्वामीनी', 'शिक्षण', 'जन्म', 'पत्ता',
         ]);
@@ -2373,6 +2373,118 @@ class BiodataParserService
         }
 
         return null;
+    }
+
+    private function extractCandidateOccupationLine(string $text): ?string
+    {
+        $lines = preg_split('/\R/u', $text) ?: [];
+        foreach ($lines as $index => $line) {
+            $line = trim((string) $line);
+            if ($line === '') {
+                continue;
+            }
+            if ($this->occupationLineHasRejectedContext($line, $lines, $index)) {
+                continue;
+            }
+
+            $value = $this->extractCandidateOccupationValueFromLine($line);
+            if ($value === null || trim($value) === '') {
+                continue;
+            }
+
+            $value = $this->truncateFieldBeforeInlineSectionLabels($value, [
+                'गोत्र', 'वर्ण', 'रास', 'नक्षत्र', 'कुलस्वामी', 'कुलस्वामीनी', 'शिक्षण', 'जन्म', 'पत्ता',
+                'वडील', 'वडिलांचे', 'आई', 'भाऊ', 'बहीण', 'बहिण', 'मामा', 'काका', 'चुलते', 'अपेक्षा',
+            ]);
+            $value = $this->cleanCandidateOccupationValue($value);
+            if ($value !== null) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    private function extractCandidateOccupationValueFromLine(string $line): ?string
+    {
+        $line = trim($line);
+        if ($line === '') {
+            return null;
+        }
+        if ($this->lineLooksLikeWorkLocationOnly($line)) {
+            return null;
+        }
+
+        $pattern = '/^\s*(?:[-*•]\s*)?(?:'
+            .'नोकरी\s*\/\s*व्यवसाय|नोकटी\s*\/\s*व्यवसाय|स्वतःचा\s+व्यवसाय|स्वत:चा\s+व्यवसाय|'
+            .'व्यवसाय|नोकरी|Occupation|Profession|Job|Working\s+as|Designation|Work'
+            .')\s*(?::\s*-\s*|[:\-：>\/]\s*|\s+)\s*(.+)$/ui';
+
+        if (preg_match($pattern, $line, $match)) {
+            return $this->cleanValue(trim((string) $match[1]));
+        }
+
+        if (preg_match('/^\s*(?:(?:स्वतःची|स्वत:ची)\s+)?(?:शेती|वकीली|वकील|अधिवक्ता|Advocate|Lawyer|Farming)\s*$/ui', $line)) {
+            return $this->cleanValue($line);
+        }
+
+        return null;
+    }
+
+    /**
+     * Reject family/relative/expectation contexts around an occupation-looking line.
+     *
+     * @param  list<string>  $lines
+     */
+    private function occupationLineHasRejectedContext(string $line, array $lines, int $index): bool
+    {
+        if ($this->lineLooksLikeWorkLocationOnly($line)) {
+            return true;
+        }
+
+        $reject = '/(?:वडील|वडिलांचा|वडिलांचे|वडिलाचे|father|आई|आईचा|आईचे|mother|भाऊ|brother|बहिण|बहीण|sister|मामा|mama|काका|चुलते|uncle|आत्या|मावशी|aunt|आजोळ|नातेवाईक|relatives|अपेक्षा|expectation|expected)/ui';
+        if (preg_match($reject, $line)) {
+            return true;
+        }
+
+        $sectionReject = '/^\s*(?:कौटुंबिक|कुटुंब|Family\b|Relatives\b|नातेवाईक|अपेक्षा|Expectation\b)/ui';
+        for ($i = max(0, $index - 2); $i < $index; $i++) {
+            $near = trim((string) ($lines[$i] ?? ''));
+            if ($near !== '' && preg_match($sectionReject, $near)) {
+                return true;
+            }
+            if ($near !== '' && preg_match('/(?:वडील|वडिलांचे|आई|भाऊ|बहिण|बहीण|मामा|काका|चुलते|आत्या|मावशी|father|mother|brother|sister|uncle|aunt)/ui', $near)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function lineLooksLikeWorkLocationOnly(string $line): bool
+    {
+        return (bool) preg_match('/^\s*(?:कामाचे\s+ठिकाण|नोकरीचे\s+ठिकाण|Work\s+location|Job\s+location|Location)\s*[:\-：]/ui', $line);
+    }
+
+    private function cleanCandidateOccupationValue(?string $value): ?string
+    {
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+        $value = trim($value);
+        $value = preg_replace('/\s*\.$/u', '', $value) ?? $value;
+        $value = trim(preg_replace('/\s+/u', ' ', $value) ?? '');
+        if ($value === '' || $this->isLikelyLabelOnlyValue($value)) {
+            return null;
+        }
+        if ($this->occupationLineHasRejectedContext($value, [], 0)) {
+            return null;
+        }
+        if ($this->valueSmellsLikeHoroscopeOrGotraLeak($value)) {
+            return null;
+        }
+
+        return $value;
     }
 
     /**
