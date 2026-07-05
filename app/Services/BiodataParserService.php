@@ -216,12 +216,14 @@ class BiodataParserService
         $confidence['height'] = $heightCm !== null || $heightRaw !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
         $educationRaw = $this->extractCandidateEducationLine($personalText) ?? $this->extractCandidateEducationLine($text);
+        $educationFromCandidateLine = $educationRaw !== null;
         $educationRaw = $educationRaw ?? $romanized['highest_education'] ?? null;
         $educationRaw = $this->cleanCandidateEducationValue($educationRaw);
         if ($educationRaw !== null && $this->valueSmellsLikeHoroscopeOrGotraLeak($educationRaw)) {
             $educationRaw = null;
         }
-        $education = $this->validateEducation($educationRaw);
+        $education = $this->validateEducation($educationRaw)
+            ?? ($educationFromCandidateLine ? $this->validateLabeledGenericEducation($educationRaw) : null);
         $education = $this->stripTrailingEducationNoise($education);
         // Same-row adjacent cells: "शिक्षण :- B.A. LL.B देवक :- … गोत्र :- …" — truncate may miss if education matched wrong line.
         if ($education !== null && (mb_strpos((string) $education, 'गोत्र') !== false || mb_strpos((string) $education, 'देवक') !== false)) {
@@ -2540,6 +2542,20 @@ class BiodataParserService
         return $this->educationValueLooksCandidateEducation($value) ? $value : null;
     }
 
+    private function validateLabeledGenericEducation(?string $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $value = $this->cleanCandidateEducationValue($value);
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return $this->labeledEducationValueLooksCandidateEducation($value) ? $value : null;
+    }
+
     private function extractCandidateEducationLine(string $text): ?string
     {
         $lines = preg_split('/\R/u', $text) ?: [];
@@ -2554,13 +2570,20 @@ class BiodataParserService
                 continue;
             }
 
+            $isLabeledEducationLine = $this->lineStartsWithEducationLabel($line);
             $value = $this->cleanCandidateEducationValue($value);
-            if ($value !== null && $this->educationValueLooksCandidateEducation($value)) {
+            if ($value !== null && ($this->educationValueLooksCandidateEducation($value)
+                || ($isLabeledEducationLine && $this->labeledEducationValueLooksCandidateEducation($value)))) {
                 return $value;
             }
         }
 
         return null;
+    }
+
+    private function lineStartsWithEducationLabel(string $line): bool
+    {
+        return preg_match('/^\s*(?:[-*•]\s*)?(?:शैक्षणिक\s+पात्रता|Educational\s+Qualification|Qualification|Education|शिक्षण)\s*(?::\s*-\s*|[:\-：>\/]\s*|[८8]\s*|\s+)/ui', $line) === 1;
     }
 
     private function extractCandidateEducationValueFromLine(string $line): ?string
@@ -2664,6 +2687,43 @@ class BiodataParserService
         }
 
         return (bool) preg_match('/(?:^|[^\d])(?:10|12)\s*(?:वी|th|वी\.)(?:$|[^\p{L}\p{N}])/ui', $v);
+    }
+
+    private function labeledEducationValueLooksCandidateEducation(string $value): bool
+    {
+        $v = \App\Services\Ocr\OcrNormalize::normalizeDigits(trim($value));
+        if ($v === '' || $this->educationValueLooksCandidateEducation($v)) {
+            return $v !== '';
+        }
+
+        if ($this->educationLineHasRejectedContext($v, [], 0)
+            || $this->valueSmellsLikeHoroscopeOrGotraLeak($v)
+            || ! preg_match('/[\p{L}]/u', $v)
+        ) {
+            return false;
+        }
+
+        if (preg_match('/(?:Address|Contact|Mobile|Phone|Religion|Caste|Sub\s*Caste|Gotra|Rashi|Nakshatra|Birth|DOB|Date\s+of\s+Birth|Occupation|Profession|Job|Working\s+as|Designation|Work|पत्ता|संपर्क|मोबाईल|मोबाइल|धर्म|जात|उपजात|पोटजात|गोत्र|रास|नक्षत्र|जन्म|नोकरी|व्यवसाय|पगार|वेतन)/ui', $v)) {
+            return false;
+        }
+
+        if (preg_match('/\b[6-9]\d{9}\b/u', $v)
+            || preg_match('/\d{1,2}\s*[\/.-]\s*\d{1,2}\s*[\/.-]\s*\d{2,4}/u', $v)
+        ) {
+            return false;
+        }
+
+        $length = mb_strlen($v);
+        if ($length < 2 || $length > 64) {
+            return false;
+        }
+
+        $tokens = preg_split('/\s+/u', $v, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if (count($tokens) > 8) {
+            return false;
+        }
+
+        return preg_match('/^[\p{L}\p{N}][\p{L}\p{N}\s\.&\/()+-]{1,63}$/u', $v) === 1;
     }
 
     /** Career must contain occupation keywords. */

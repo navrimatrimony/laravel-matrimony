@@ -44,6 +44,27 @@ class IntakeEducationParserRegressionTest extends TestCase
         $this->assertSame('MCA', $this->candidateEducation($parsed));
     }
 
+    public function test_labeled_generic_english_education_value_extracts_candidate_education(): void
+    {
+        $parsed = $this->parse("Name: Synthetic Generic Candidate\nEducation: Alpha Beta");
+
+        $this->assertSame('Alpha Beta', $this->candidateEducation($parsed));
+    }
+
+    public function test_labeled_generic_marathi_education_value_extracts_candidate_education(): void
+    {
+        $parsed = $this->parse("नाव: नमुना उमेदवार\nशिक्षण: X Y");
+
+        $this->assertSame('X Y', $this->candidateEducation($parsed));
+    }
+
+    public function test_labeled_generic_qualification_value_extracts_candidate_education(): void
+    {
+        $parsed = $this->parse("Name: Synthetic Qualification Candidate\nQualification: Alpha");
+
+        $this->assertSame('Alpha', $this->candidateEducation($parsed));
+    }
+
     public function test_father_education_is_not_candidate_education(): void
     {
         $parsed = $this->parse("नाव: नमुना उमेदवार\nवडिलांचे शिक्षण: B.Sc Agriculture");
@@ -68,6 +89,27 @@ class IntakeEducationParserRegressionTest extends TestCase
     public function test_job_line_is_not_candidate_education(): void
     {
         $parsed = $this->parse("Name: Synthetic Job Candidate\nOccupation: Software Engineer");
+
+        $this->assertNull($this->candidateEducation($parsed));
+    }
+
+    public function test_unlabeled_generic_text_is_not_candidate_education(): void
+    {
+        $parsed = $this->parse("Name: Synthetic Unlabeled Candidate\nAlpha Beta");
+
+        $this->assertNull($this->candidateEducation($parsed));
+    }
+
+    public function test_labeled_generic_education_rejects_occupation_noise(): void
+    {
+        $parsed = $this->parse("Name: Synthetic Boundary Candidate\nEducation: Occupation Alpha");
+
+        $this->assertNull($this->candidateEducation($parsed));
+    }
+
+    public function test_labeled_generic_education_rejects_address_noise(): void
+    {
+        $parsed = $this->parse("Name: Synthetic Boundary Candidate\nEducation: Address Alpha");
 
         $this->assertNull($this->candidateEducation($parsed));
     }
