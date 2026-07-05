@@ -1,16 +1,19 @@
 # Intake OCR Phase 6 Private Regression Close Report
 
-## Phase scope completed
+## Final phase status
 
-Phase 6 closed the current private OCR regression hardening pass for deterministic parser safety and regression protection.
+Phase 6 deterministic OCR parser hardening cycle is closed.
 
-Completed scope:
+Final stop point:
 
-- Deterministic parser hardening was applied only where a safe parser rule was justified.
-- The occupation improvement from Phase 6H was locked by a stricter threshold guard in Phase 6I.
-- The private golden dataset remained local-only and was not committed.
-- Learning stayed disabled.
-- No Sarvam, OCR provider, paid vision, database mutation, profile apply, backfill, or live routing behavior was enabled by this close report.
+- Final overall regression accuracy: 91.21%.
+- Current locked overall guard: 91%.
+- Current locked education guard: 95%.
+- Current locked address guard: 88%.
+- The remaining failures are explicitly deferred, not ignored.
+- Future accuracy work, if required, should start as **Phase 7A - Occupation/religion strategy audit, read-only**.
+
+This close report documents the final post-Phase 6R/6S state. It does not enable parser behavior changes, learning, live routing, provider calls, profile apply, backfill, or database mutation.
 
 ## Safety rules preserved
 
@@ -25,18 +28,22 @@ This report is safe for GitHub. It intentionally excludes:
 - Raw actual parsed values
 - Private golden dataset contents
 
-Only aggregate counts, percentages, command references, and phase-level recommendations are included.
+Only aggregate counts, percentages, command references, field names, commit references, safety status, and phase-level recommendations are included.
 
 ## Completed commits summary
 
 | Commit | Summary | Safety note |
 | --- | --- | --- |
-| `fe370ff4` | Improved deterministic occupation parsing. | Parser-only hardening, no learning or provider calls. |
-| `dd2d1d74` | Updated OCR regression thresholds after occupation hardening. | Runbook threshold guard update only. |
+| `fe370ff4` | Improve deterministic occupation parsing | Parser-only hardening, no learning or provider calls. |
+| `dd2d1d74` | Update OCR regression thresholds after occupation hardening | Threshold guard update only. |
+| `06384fa6` | Improve deterministic address normalization | Parser-only hardening, no provider calls or profile mutation. |
+| `a393744c` | Update OCR regression thresholds after address hardening | Threshold guard update only. |
+| `40d9b537` | Improve deterministic education validation | Parser-only hardening, no learning or provider calls. |
+| `c3137d86` | Update OCR regression thresholds after education hardening | Threshold guard update only. |
 
 ## Accuracy improvements summary
 
-| Field | Baseline | Current locked state | Result |
+| Field | Baseline | Final state | Result |
 | --- | ---: | ---: | --- |
 | height | 0% | 94.74% | Improved |
 | document_contact_number | 44.44% | 100% | Improved |
@@ -44,9 +51,9 @@ Only aggregate counts, percentages, command references, and phase-level recommen
 | religion | 61.11% | 83.33% | Improved |
 | sub_caste | 56.25% | 100% | Improved |
 | caste | 100% | 100% | Maintained |
-| education | 65% | 80% | Improved |
-| address | 72.22% | 77.78% | Improved |
-| overall | Not locked here | 88.46% | Current locked state |
+| education | 65% | 95% | Improved |
+| address | 72.22% | 88.89% | Improved |
+| overall | Not locked here | 91.21% | Final locked state |
 
 ## Current locked threshold guard command
 
@@ -54,33 +61,51 @@ Only aggregate counts, percentages, command references, and phase-level recommen
 php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/golden.jsonl --fail-under=91 --fail-under-field=full_name:85 --fail-under-field=date_of_birth:95 --fail-under-field=height:94 --fail-under-field=education:95 --fail-under-field=occupation:66 --fail-under-field=document_contact_number:100 --fail-under-field=address:88 --fail-under-field=religion:83 --fail-under-field=caste:100 --fail-under-field=sub_caste:100
 ```
 
-## Current field accuracy table
+## Final accuracy table
+
+| Field | Accuracy | Final threshold | Status |
+| --- | ---: | ---: | --- |
+| overall | 91.21% | 91 | pass |
+| full_name | 85% | 85 | pass |
+| date_of_birth | 95% | 95 | pass |
+| height | 94.74% | 94 | pass |
+| education | 95% | 95 | pass |
+| occupation | 66.67% | 66 | pass |
+| document_contact_number | 100% | 100 | pass |
+| address | 88.89% | 88 | pass |
+| religion | 83.33% | 83 | pass |
+| caste | 100% | 100 | pass |
+| sub_caste | 100% | 100 | pass |
+
+## Final field detail
 
 | Field | Expected | Exact | Mismatches | Missing actual | Accuracy |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | full_name | 20 | 17 | 3 | 0 | 85% |
 | date_of_birth | 20 | 19 | 0 | 1 | 95% |
 | height | 19 | 18 | 0 | 1 | 94.74% |
-| education | 20 | 16 | 0 | 4 | 80% |
+| education | 20 | 19 | 0 | 1 | 95% |
 | occupation | 15 | 10 | 4 | 1 | 66.67% |
 | primary_contact_number | 0 | 0 | 0 | 0 | Not scored |
 | document_contact_number | 18 | 18 | 0 | 0 | 100% |
-| address | 18 | 14 | 4 | 0 | 77.78% |
+| address | 18 | 16 | 2 | 0 | 88.89% |
 | religion | 18 | 15 | 0 | 3 | 83.33% |
 | caste | 18 | 18 | 0 | 0 | 100% |
 | sub_caste | 16 | 16 | 0 | 0 | 100% |
 
-Overall current locked accuracy: 88.46%.
+Overall final locked accuracy: 91.21%.
 
-## Remaining weak fields
+## Deferred work
 
-| Field | Accuracy | Mismatches | Missing actual | Notes |
-| --- | ---: | ---: | ---: | --- |
-| address | 77.78% | 4 | 0 | Best next target because remaining failures are mismatches and address quality affects profile quality. |
-| education | 80% | 0 | 4 | Mostly missing-actual issues; likely needs extraction-source audit later. |
-| full_name | 85% | 3 | 0 | Remaining failures are mismatches; not the recommended immediate next target. |
-| religion | 83.33% | 0 | 3 | Mostly missing-actual issues; likely needs extraction-source audit later. |
-| occupation | 66.67% | 4 | 1 | Improved in Phase 6H but still has 5 aggregate failures. |
+The remaining failures are deferred because the current cycle has reached a strong locked checkpoint and no additional shared low-risk hardening pattern was proven safely.
+
+| Deferred area | Reason |
+| --- | --- |
+| Occupation strategy audit | Deferred to future Phase 7A, read-only first. It has the largest remaining failure count but the highest parser/source ambiguity risk. |
+| Religion source-label/community mapping audit | Deferred. Remaining failures are missing-actual issues and may involve mapping or source-label ambiguity. |
+| Full name sensitive mismatch audit | Deferred. This is a sensitive field and should not be hardened without a separate micro-audit. |
+| Address source-label ambiguity review | Deferred. Remaining failures look like source selection or label ambiguity rather than a clearly shared normalization rule. |
+| Single residuals for date_of_birth, height, and education | Deferred because yield is low and no shared safe parser pattern is established. |
 
 ## Learning status
 
@@ -97,7 +122,7 @@ No learning promotion was enabled and no learning rules were created.
 
 ## Private dataset safety confirmation
 
-The private golden dataset remains local-only.
+The private golden dataset remains local-only and untracked.
 
 Safety confirmations:
 
@@ -106,14 +131,20 @@ Safety confirmations:
 - `storage/app/intake-golden-datasets` is not tracked by Git.
 - The locked regression command is read-only and does not mutate intakes, profiles, parser input text, learning state, or routing behavior.
 
-## Next recommended phase
+## Provider and mutation safety confirmation
 
-Recommended next phase:
+No provider calls, Sarvam calls, database mutation, profile apply, profile backfill, live routing change, learning enablement, or learning promotion were enabled in this close state.
 
-**Phase 6K - Address failure micro-audit, read-only.**
+## Stop-point decision
 
-Reason:
+Decision: close the current Phase 6 deterministic OCR parser hardening cycle at 91.21%.
 
-Address is the best immediate target because it has 4 mismatches, 0 missing actual, and affects full profile quality. Education and religion are mostly missing-actual issues and may need extraction-source audit later. Occupation improved in Phase 6H but still has 5 aggregate failures; the immediate next safe target should be address because it has 4 mismatches and the current locked threshold is only 77.
+Rationale:
 
-Phase 6K should be audit-only at the start. It should not implement parser changes until the failure categories are understood without printing raw OCR text, names, phones, full addresses, real private case IDs, raw expected values, or raw actual parsed values.
+- The current locked threshold guard passes at 91.21% against the overall threshold of 91%.
+- Education is now protected at 95%.
+- Address is now protected at 88%.
+- Document contact, caste, and sub-caste are fully protected at 100%.
+- Remaining failures are concentrated in fields that need read-only strategy audit before any further parser changes.
+
+If additional accuracy is required later, start a new cycle as **Phase 7A - Occupation/religion strategy audit, read-only**.
