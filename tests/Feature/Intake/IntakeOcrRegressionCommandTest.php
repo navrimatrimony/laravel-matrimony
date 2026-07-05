@@ -155,6 +155,33 @@ test('parser expected fields are used for scoring when present', function () {
     }
 });
 
+test('height scoring compares text expectations with parsed centimeter output', function () {
+    $path = writeOcrRegressionDataset(ocrRegressionCase([
+        'case_id' => 'height_text_vs_cm_case',
+        'language' => 'mr',
+        'ocr_text' => "नाव :- अनिल नमुना पाटील\nउंची: 5 फूट 5 इंच\nशिक्षण :- B Com",
+        'parser_expected_fields' => [
+            'height' => '5 फूट 5 इंच',
+        ],
+    ]));
+
+    try {
+        [$exitCode, $payload] = ocrRegressionJson([
+            '--dataset' => $path,
+            '--field' => 'height',
+        ]);
+
+        expect($exitCode)->toBe(0)
+            ->and($payload['summary']['total_expected_fields'])->toBe(1)
+            ->and($payload['summary']['exact_match_count'])->toBe(1)
+            ->and($payload['summary']['mismatch_count'])->toBe(0)
+            ->and($payload['field_accuracy'][0]['accuracy_percent'])->toBe(100)
+            ->and($payload['rows'][0]['status'])->toBe('pass');
+    } finally {
+        File::delete(base_path($path));
+    }
+});
+
 test('profile snapshot and source context expose only safe metadata and are not scored', function () {
     $path = writeOcrRegressionDataset(ocrRegressionCase([
         'case_id' => 'profile_snapshot_metadata_case',

@@ -743,11 +743,7 @@ class IntakeOcrRegressionCommand extends Command
         }
 
         if ($field === 'height') {
-            $height = mb_strtolower($text);
-            $height = str_replace(['centimeters', 'centimetres'], 'cm', $height);
-            $height = preg_replace('/\s+/u', '', $height) ?? $height;
-
-            return trim($height) !== '' ? $height : null;
+            return $this->normalizeHeightForComparison($text);
         }
 
         $text = mb_strtolower($text);
@@ -756,6 +752,86 @@ class IntakeOcrRegressionCommand extends Command
         $text = trim($text);
 
         return $text !== '' ? $text : null;
+    }
+
+    private function normalizeHeightForComparison(string $text): ?string
+    {
+        $height = trim(str_replace(['centimeters', 'centimetres'], 'cm', mb_strtolower($text)));
+        if ($height === '') {
+            return null;
+        }
+
+        if (is_numeric($height)) {
+            $key = $this->heightCmComparisonKey((float) $height);
+            if ($key !== null) {
+                return $key;
+            }
+        }
+
+        if (preg_match('/^([0-9]+(?:\.[0-9]+)?)\s*cm$/i', $height, $m)) {
+            $key = $this->heightCmComparisonKey((float) $m[1]);
+            if ($key !== null) {
+                return $key;
+            }
+        }
+
+        $height = \App\Services\Ocr\OcrNormalize::normalizeDigits($height);
+        $normalized = \App\Services\Ocr\OcrNormalize::normalizeHeight($height);
+        $sources = [];
+        foreach ([$normalized, $height] as $source) {
+            if (is_string($source) && trim($source) !== '') {
+                $sources[] = trim($source);
+            }
+        }
+
+        foreach (array_values(array_unique($sources)) as $source) {
+            if (preg_match('/([3-7])\s*[\'’′]\s*([0-9]{1,2})\s*(?:"|”|″)?/u', $source, $m)) {
+                $key = $this->heightFeetInchesComparisonKey((int) $m[1], (int) $m[2]);
+                if ($key !== null) {
+                    return $key;
+                }
+            }
+
+            if (preg_match('/([3-7])\s*(?:फूट|फुट|feet|foot|ft)\.?\s*([0-9]{1,2})\s*(?:इंच|inches|inch|in)?/ui', $source, $m)) {
+                $key = $this->heightFeetInchesComparisonKey((int) $m[1], (int) $m[2]);
+                if ($key !== null) {
+                    return $key;
+                }
+            }
+
+            if (preg_match('/^\s*(?:height|उंची|ऊंची)?\s*[:\-]?\s*([3-7])\s*[\.\-]\s*([0-9]{1,2})\s*$/ui', $source, $m)) {
+                $key = $this->heightFeetInchesComparisonKey((int) $m[1], (int) $m[2]);
+                if ($key !== null) {
+                    return $key;
+                }
+            }
+        }
+
+        $height = preg_replace('/\s+/u', '', $height) ?? $height;
+
+        return trim($height) !== '' ? $height : null;
+    }
+
+    private function heightCmComparisonKey(float $cm): ?string
+    {
+        if ($cm < 90 || $cm > 230) {
+            return null;
+        }
+
+        $totalInches = (int) round($cm / 2.54);
+        $feet = intdiv($totalInches, 12);
+        $inches = $totalInches % 12;
+
+        return $this->heightFeetInchesComparisonKey($feet, $inches);
+    }
+
+    private function heightFeetInchesComparisonKey(int $feet, int $inches): ?string
+    {
+        if ($feet < 3 || $feet > 7 || $inches < 0 || $inches > 11) {
+            return null;
+        }
+
+        return $feet.'ft'.$inches.'in';
     }
 
     /**

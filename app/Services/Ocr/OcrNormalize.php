@@ -186,7 +186,7 @@ class OcrNormalize
 
     /**
      * Normalize height values to standard format "5'7\"".
-     * Examples: "5.7 inch", "5 à¤«à¥à¤Ÿ 7 à¤‡à¤‚à¤š", "5' 7\"", "5 ft 7 in"
+     * Examples: "5.7 inch", "5 फूट 7 इंच", "5' 7\"", "5 ft 7 in"
      */
     public static function normalizeHeight(?string $value): ?string
     {
@@ -197,37 +197,77 @@ class OcrNormalize
         $value = trim($value);
         $value = self::normalizeDigits($value);
 
+        // Pattern: "5 फूट 7 इंच" / "5 फुट 7 इंच"
+        if (preg_match('/([3-7])\s*(?:फूट|फुट)\s*([0-9]{1,2})\s*(?:इंच)?/u', $value, $m)) {
+            $normalized = self::normalizeFeetInches((int) $m[1], (int) $m[2]);
+            if ($normalized !== null) {
+                return $normalized;
+            }
+        }
+
         // Pattern: "5 à¤«à¥à¤Ÿ 7 à¤‡à¤‚à¤š" or "5 à¤«à¥‚à¤Ÿ 7 à¤‡à¤‚à¤š"
         if (preg_match('/(\d+)\s*[à¤«à¤«à¥‚]à¥?à¤Ÿ\s*(\d+)\s*à¤‡à¤‚à¤š/u', $value, $m)) {
             return $m[1] . "'" . $m[2] . '"';
         }
 
         // Pattern: "5' 7\"" or "5'7\""
-        if (preg_match("/(\d+)['']\s*(\d+)[\"]/", $value, $m)) {
-            return $m[1] . "'" . $m[2] . '"';
+        if (preg_match('/([3-7])\s*[\'’′]\s*([0-9]{1,2})\s*(?:"|”|″)?/u', $value, $m)) {
+            $normalized = self::normalizeFeetInches((int) $m[1], (int) $m[2]);
+            if ($normalized !== null) {
+                return $normalized;
+            }
         }
 
-        // Pattern: "5 ft 7 in" or "5ft 7in"
-        if (preg_match('/(\d+)\s*ft\s*(\d+)\s*in/i', $value, $m)) {
-            return $m[1] . "'" . $m[2] . '"';
+        // Pattern: "5 ft 7 in", "5 feet 7 inches", or "5ft 7in"
+        if (preg_match('/\b([3-7])\s*(?:feet|foot|ft)\.?\s*([0-9]{1,2})\s*(?:inches|inch|in)?\b/i', $value, $m)) {
+            $normalized = self::normalizeFeetInches((int) $m[1], (int) $m[2]);
+            if ($normalized !== null) {
+                return $normalized;
+            }
         }
 
         // Pattern: "5.7 inch" or "5.7inch"
-        if (preg_match('/(\d+)\.(\d+)\s*inch/i', $value, $m)) {
-            return $m[1] . "'" . $m[2] . '"';
+        if (preg_match('/([3-7])\.([0-9]{1,2})\s*inch/i', $value, $m)) {
+            $normalized = self::normalizeFeetInches((int) $m[1], (int) $m[2]);
+            if ($normalized !== null) {
+                return $normalized;
+            }
         }
 
         // Pattern: "5.7 इंच" (feet.inches style common on Marathi biodata OCR)
-        if (preg_match('/(\d+)\.(\d+)\s*इंच/u', $value, $m)) {
-            return $m[1]."'".$m[2].'"';
+        if (preg_match('/([3-7])\.([0-9]{1,2})\s*इंच/u', $value, $m)) {
+            $normalized = self::normalizeFeetInches((int) $m[1], (int) $m[2]);
+            if ($normalized !== null) {
+                return $normalized;
+            }
+        }
+
+        // Compact biodata height value only: "5.6" / "5-6" after a height label.
+        if (preg_match('/^\s*(?:Height|उंची|ऊंची)?\s*[:\-]?\s*([3-7])\s*[\.\-]\s*([0-9]{1,2})\s*$/ui', $value, $m)) {
+            $normalized = self::normalizeFeetInches((int) $m[1], (int) $m[2]);
+            if ($normalized !== null) {
+                return $normalized;
+            }
         }
 
         // If already in correct format, return as-is
-        if (preg_match("/^\d+['']\d+[\"]$/", $value)) {
-            return $value;
+        if (preg_match('/^\s*([3-7])\s*[\'’′]\s*([0-9]{1,2})\s*(?:"|”|″)?\s*$/u', $value, $m)) {
+            $normalized = self::normalizeFeetInches((int) $m[1], (int) $m[2]);
+            if ($normalized !== null) {
+                return $normalized;
+            }
         }
 
         return $value;
+    }
+
+    private static function normalizeFeetInches(int $feet, int $inches): ?string
+    {
+        if ($feet < 3 || $feet > 7 || $inches < 0 || $inches > 11) {
+            return null;
+        }
+
+        return $feet . "'" . $inches . '"';
     }
 
     /**

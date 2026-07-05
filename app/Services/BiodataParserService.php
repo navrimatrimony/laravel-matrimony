@@ -192,8 +192,8 @@ class BiodataParserService
         }
         $confidence['date_of_birth'] = $dateOfBirth !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
-        $heightRaw = $this->extractFieldAfterLabels($personalText, ['उंची', 'ऊंची', 'Height']);
-        $heightRaw = $heightRaw ?? $this->extractFieldAfterLabels($text, ['उंची', 'ऊंची', 'Height']);
+        $heightRaw = $this->extractFieldAfterLabels($personalText, ['उंची', 'ऊंची', 'Height', 'height']);
+        $heightRaw = $heightRaw ?? $this->extractFieldAfterLabels($text, ['उंची', 'ऊंची', 'Height', 'height']);
         // SSOT Day-27: Apply baseline normalization + patterns
         $heightNormalized = \App\Services\Ocr\OcrNormalize::normalizeHeight($heightRaw);
         if ($heightNormalized && $heightNormalized !== $heightRaw) {
@@ -3326,6 +3326,14 @@ class BiodataParserService
         if ($r === '') {
             return ['height' => null, 'height_cm' => null];
         }
+        $parsed = $this->parseHeightFeetInchesValue($r, true);
+        if ($parsed !== null) {
+            return [
+                'height' => $parsed['display'],
+                'height_cm' => $parsed['cm'],
+            ];
+        }
+
         if (preg_match('/(\d)\s*\'\s*(\d{1,2})\s*(?:\"|in\b)?/u', $r, $m)) {
             $ft = (int) $m[1];
             $in = (int) $m[2];
@@ -6954,6 +6962,12 @@ class BiodataParserService
         if ($value === null || $value === '') {
             return null;
         }
+        $value = \App\Services\Ocr\OcrNormalize::normalizeDigits(trim($value));
+        $parsed = $this->parseHeightFeetInchesValue($value, true);
+        if ($parsed !== null) {
+            return $parsed['cm'];
+        }
+
         // फूट or फुट, optional space after digit (५फुट ६इंच). OCR often reads ५ as ७५ (5 feet → 75 feet).
         if (preg_match('/(\d{1,2})\s*फ[ुू]ट\s*(\d{1,2})\s*(इंच|inch|bap)?/u', $value, $m)) {
             $feet = (int) $m[1];
@@ -6986,9 +7000,83 @@ class BiodataParserService
         return null;
     }
 
+    /**
+     * Strict height parser for explicit height values. Compact decimal/hyphen forms
+     * are accepted only when the caller has already isolated a height field value.
+     *
+     * @return array{feet:int,inches:int,cm:float,display:string}|null
+     */
+    private function parseHeightFeetInchesValue(?string $value, bool $allowCompactNumeric): ?array
+    {
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+
+        $raw = \App\Services\Ocr\OcrNormalize::normalizeDigits(trim($value));
+        $normalized = \App\Services\Ocr\OcrNormalize::normalizeHeight($raw);
+        $sources = [];
+        foreach ([$normalized, $raw] as $source) {
+            if (is_string($source) && trim($source) !== '') {
+                $sources[] = trim($source);
+            }
+        }
+        $sources = array_values(array_unique($sources));
+
+        foreach ($sources as $source) {
+            if (preg_match('/([3-7])\s*(?:फूट|फुट|feet|foot|ft)\.?\s*([0-9]{1,2})\s*(?:इंच|inches|inch|in)?/ui', $source, $m)) {
+                $parts = $this->validatedHeightParts((int) $m[1], (int) $m[2]);
+                if ($parts !== null) {
+                    return $parts;
+                }
+            }
+
+            if (preg_match('/([3-7])\s*[\'’′]\s*([0-9]{1,2})\s*(?:"|”|″)?/u', $source, $m)) {
+                $parts = $this->validatedHeightParts((int) $m[1], (int) $m[2]);
+                if ($parts !== null) {
+                    return $parts;
+                }
+            }
+
+            if ($allowCompactNumeric
+                && preg_match('/^\s*(?:Height|उंची|ऊंची)?\s*[:\-]?\s*([3-7])\s*[\.\-]\s*([0-9]{1,2})\s*$/ui', $source, $m)) {
+                $parts = $this->validatedHeightParts((int) $m[1], (int) $m[2]);
+                if ($parts !== null) {
+                    return $parts;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{feet:int,inches:int,cm:float,display:string}|null
+     */
+    private function validatedHeightParts(int $feet, int $inches): ?array
+    {
+        if ($feet < 3 || $feet > 7 || $inches < 0 || $inches > 11) {
+            return null;
+        }
+
+        return [
+            'feet' => $feet,
+            'inches' => $inches,
+            'cm' => round((($feet * 12) + $inches) * 2.54, 2),
+            'display' => $feet.' ft '.$inches.' in',
+        ];
+    }
+
     /** Fallback: search full text for feet/inches patterns and return height in cm. */
     private function extractHeightFromText(string $text): ?float
     {
+        $text = \App\Services\Ocr\OcrNormalize::normalizeDigits($text);
+        if (preg_match('/(?:[3-7]\s*(?:फूट|फुट|feet|foot|ft)\.?\s*[0-9]{1,2}\s*(?:इंच|inches|inch|in)?|[3-7]\s*[\'’′]\s*[0-9]{1,2}\s*(?:"|”|″)?)/ui', $text, $m)) {
+            $parsed = $this->parseHeightFeetInchesValue($m[0], false);
+            if ($parsed !== null) {
+                return $parsed['cm'];
+            }
+        }
+
         if (preg_match('/(\d{1,2})\s*फ[ुू]ट\s*(\d{1,2})/u', $text, $m)) {
             $feet = (int) $m[1];
             $inches = (int) $m[2];
@@ -7291,6 +7379,10 @@ class BiodataParserService
         $src = $heightNormalized ?? $heightRaw;
         if ($src !== null && trim($src) !== '') {
             $src = \App\Services\Ocr\OcrNormalize::normalizeDigits(trim($src));
+            $parsed = $this->parseHeightFeetInchesValue($src, true);
+            if ($parsed !== null) {
+                return $parsed['display'];
+            }
             if (preg_match('/(\d{1,2})\s*फ[ुू]ट\s*(\d{1,2})/u', $src, $m)) {
                 return (int) $m[1].' ft '.(int) $m[2].' in';
             }

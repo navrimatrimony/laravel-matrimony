@@ -192,6 +192,14 @@ Run one field:
 php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/golden.jsonl --field=primary_contact_number
 ```
 
+For targeted deterministic parser improvements, run the relevant private field slice, for example:
+
+```powershell
+php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/golden.jsonl --field=height
+```
+
+Private regression signals can guide narrow parser fixes such as height extraction, but private biodata data must remain outside git, and learning promotion, learning rules, backfills, live OCR, Sarvam, and paid vision remain disabled.
+
 Fail CI/operator check below a threshold:
 
 ```powershell
