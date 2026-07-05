@@ -53,7 +53,12 @@ class BiodataParserService
     private const OCR_BLACKLIST_WORDS = ['snp', 'pres', 'gone', 'ae', 'ora', 'ast'];
 
     /** Degree keywords for education validation. */
-    private const DEGREE_KEYWORDS = ['B.A', 'LL.B', 'B.Com', 'B.Sc', 'M.Sc', 'MSC', 'BE', 'BAMS', 'MBBS', 'B.E', 'B.Tech', 'M.Com', 'BA', 'BCom', 'BSc'];
+    private const DEGREE_KEYWORDS = [
+        'B.A', 'M.A', 'LL.B', 'L.L.B', 'B.Com', 'M.Com', 'B.Sc', 'M.Sc', 'MSC',
+        'BE', 'B.E', 'B.Tech', 'M.Tech', 'BAMS', 'MBBS', 'BDS', 'MBA', 'BCA',
+        'MCA', 'BCS', 'MCS', 'BA', 'MA', 'BCom', 'MCom', 'BSc', 'MSc', 'BTech', 'MTech',
+        'SSC', 'HSC',
+    ];
 
     /** Occupation keywords for career validation. */
     private const OCCUPATION_KEYWORDS = ['नोकरी', 'व्यवसाय', 'वेतन', 'शेती', 'वकील', 'वकीली', 'अधिवक्ता', 'engineer', 'software', 'developer', 'consultant', 'advocate', 'lawyer', 'teacher', 'doctor', 'clerk', 'business', 'manager', 'analyst', 'सरकारी', 'खाजगी', 'Limited', 'BPO', 'operator', 'Field', 'Home', 'I.T', 'Co ', 'Forge', 'SAP', 'Food', 'Center', 'Centre'];
@@ -210,21 +215,13 @@ class BiodataParserService
         $heightDisplay = $this->formatHeightFeetInchesDisplay($heightCm, $heightRaw, $heightNormalized);
         $confidence['height'] = $heightCm !== null || $heightRaw !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
-        $educationRaw = $this->extractAfterLabelMultiline($personalText, 'शिक्षण') ?? $this->extractAfterLabelMultiline($text, 'शिक्षण');
-        $educationRaw = $educationRaw ?? $this->extractFieldAfterLabels($personalText, ['शिक्षण', 'Education']);
-        $educationRaw = $educationRaw ?? $this->extractFieldAfterLabels($text, ['शिक्षण', 'Education']);
+        $educationRaw = $this->extractCandidateEducationLine($personalText) ?? $this->extractCandidateEducationLine($text);
         $educationRaw = $educationRaw ?? $romanized['highest_education'] ?? null;
-        $educationRaw = $this->truncateFieldBeforeInlineSectionLabels($educationRaw, ['उंची', 'ऊंची', 'वर्ण', 'जात', 'रक्त', 'देवक', 'रास', 'नक्षत्र', 'नाड', 'नाडी', 'गण', 'गोत्र', 'जन्म']);
-        if ($educationRaw !== null) {
-            $educationRaw = preg_replace('/\s*\.$/u', '', trim($educationRaw));
-        }
+        $educationRaw = $this->cleanCandidateEducationValue($educationRaw);
         if ($educationRaw !== null && $this->valueSmellsLikeHoroscopeOrGotraLeak($educationRaw)) {
             $educationRaw = null;
         }
         $education = $this->validateEducation($educationRaw);
-        if ($education === null && $educationRaw !== null && mb_strlen(trim($educationRaw)) >= 5) {
-            $education = trim($educationRaw);
-        }
         $education = $this->stripTrailingEducationNoise($education);
         // Same-row adjacent cells: "शिक्षण :- B.A. LL.B देवक :- … गोत्र :- …" — truncate may miss if education matched wrong line.
         if ($education !== null && (mb_strpos((string) $education, 'गोत्र') !== false || mb_strpos((string) $education, 'देवक') !== false)) {
@@ -2534,13 +2531,139 @@ class BiodataParserService
         if ($value === null || $value === '') {
             return null;
         }
-        foreach (self::DEGREE_KEYWORDS as $kw) {
-            if (stripos($value, $kw) !== false) {
+
+        $value = $this->cleanCandidateEducationValue($value);
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return $this->educationValueLooksCandidateEducation($value) ? $value : null;
+    }
+
+    private function extractCandidateEducationLine(string $text): ?string
+    {
+        $lines = preg_split('/\R/u', $text) ?: [];
+        foreach ($lines as $index => $line) {
+            $line = trim((string) $line);
+            if ($line === '' || $this->educationLineHasRejectedContext($line, $lines, $index)) {
+                continue;
+            }
+
+            $value = $this->extractCandidateEducationValueFromLine($line);
+            if ($value === null || trim($value) === '') {
+                continue;
+            }
+
+            $value = $this->cleanCandidateEducationValue($value);
+            if ($value !== null && $this->educationValueLooksCandidateEducation($value)) {
                 return $value;
             }
         }
 
         return null;
+    }
+
+    private function extractCandidateEducationValueFromLine(string $line): ?string
+    {
+        if ($this->educationLineHasRejectedContext($line, [], 0)) {
+            return null;
+        }
+
+        $pattern = '/^\s*(?:[-*•]\s*)?(?:'
+            .'शैक्षणिक\s+पात्रता|Educational\s+Qualification|Qualification|Education|शिक्षण'
+            .')\s*(?::\s*-\s*|[:\-：>\/]\s*|[८8]\s*|\s+)\s*(.+)$/ui';
+
+        if (preg_match($pattern, $line, $match)) {
+            return $this->cleanValue(trim((string) $match[1]));
+        }
+
+        $trimmed = trim($line);
+        if ($this->educationValueLooksCandidateEducation($trimmed)
+            && preg_match('/^(?:\(?\s*)?(?:B\.?\s?E|BE|B\.?\s?Tech|BTech|M\.?\s?Tech|MTech|B\.?\s?Com|BCom|M\.?\s?Com|MCom|B\.?\s?A|BA|M\.?\s?A|MA|B\.?\s?Sc|BSc|M\.?\s?Sc|MSc|BCA|MCA|BCS|MCS|MBA|BDS|L\.?\s?L\.?\s?B|LLB|SSC|HSC|10\s*वी|12\s*वी)\b/ui', $trimmed)
+        ) {
+            return $this->cleanValue($trimmed);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<string>  $lines
+     */
+    private function educationLineHasRejectedContext(string $line, array $lines, int $index): bool
+    {
+        if (preg_match('/^\s*(?:Occupation|Profession|Job|Working\s+as|Designation|Work|नोकरी|व्यवसाय|कामाचे\s+ठिकाण|नोकरीचे\s+ठिकाण)\s*[:\-：]/ui', $line)) {
+            return true;
+        }
+
+        if (preg_match('/(?:वडील|वडिलांचा|वडिलांची|वडिलांचे|वडिलाचे|वडिलाची|father|आई|आईचा|आईची|आईचे|mother|भाऊ|भाऊचे|भाऊची|brother|बहिण|बहीण|बहिणीचे|बहिणीची|sister|मामा|mama|काका|चुलते|uncle|आत्या|मावशी|aunt|आजोळ|नातेवाईक|relatives|अपेक्षा|expectation|expected|पाहिजे)/ui', $line)) {
+            return true;
+        }
+
+        $sectionReject = '/^\s*(?:कौटुंबिक|कुटुंब|Family\b|Relatives\b|नातेवाईक|अपेक्षा|Expectation\b)/ui';
+        for ($i = max(0, $index - 2); $i < $index; $i++) {
+            $near = trim((string) ($lines[$i] ?? ''));
+            if ($near !== '' && preg_match($sectionReject, $near)) {
+                return true;
+            }
+            if ($near !== '' && preg_match('/(?:वडील|वडिलांचे|आई|भाऊ|बहिण|बहीण|मामा|काका|चुलते|आत्या|मावशी|father|mother|brother|sister|uncle|aunt)/ui', $near)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function cleanCandidateEducationValue(?string $value): ?string
+    {
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+
+        $value = \App\Services\Ocr\OcrNormalize::normalizeDigits(trim($value));
+        $value = str_replace(["\u{00A0}", "\u{200B}", '“', '”', '‘', '’'], [' ', ' ', "'", "'", "'", "'"], $value);
+        $value = $this->truncateFieldBeforeInlineSectionLabels($value, [
+            'उंची', 'ऊंची', 'वर्ण', 'जात', 'धर्म', 'रक्त', 'देवक', 'रास', 'नक्षत्र', 'नाड', 'नाडी',
+            'गण', 'गोत्र', 'जन्म', 'नोकरी', 'व्यवसाय', 'पत्ता', 'संपर्क', 'मोबाईल', 'Mobile',
+            'Occupation', 'Profession', 'Job', 'Work',
+        ]);
+        $value = preg_split('/\s+(?:उंची|ऊंची|वर्ण|जात|धर्म|रक्त|देवक|रास|नक्षत्र|नाड|नाडी|गण|गोत्र|जन्म|नोकरी|व्यवसाय|पत्ता|संपर्क|मोबाईल|Mobile|Occupation|Profession|Job|Work)\s*(?::|-|[८8])\s*/ui', $value, 2)[0] ?? $value;
+        $value = preg_replace('/\s*\.$/u', '', trim($value)) ?? $value;
+        $value = trim(preg_replace('/\s+/u', ' ', $value) ?? '');
+        if ($value === '' || $this->isLikelyLabelOnlyValue($value)) {
+            return null;
+        }
+        if ($this->valueSmellsLikeHoroscopeOrGotraLeak($value)) {
+            return null;
+        }
+        if (preg_match('/(?:Occupation|Profession|Job|Working\s+as|नोकरी|व्यवसाय|पगार|वेतन)\s*[:\-]/ui', $value)) {
+            return null;
+        }
+
+        return $value;
+    }
+
+    private function educationValueLooksCandidateEducation(string $value): bool
+    {
+        $v = \App\Services\Ocr\OcrNormalize::normalizeDigits($value);
+        if (preg_match('/(?:वडील|आई|भाऊ|बहिण|बहीण|मामा|काका|चुलते|आत्या|मावशी|अपेक्षा|father|mother|brother|sister|uncle|aunt|expectation)/ui', $v)) {
+            return false;
+        }
+
+        $degreePattern = '/\b(?:'
+            .'B\s*\.?\s*E|BE|B\s*\.?\s*Tech|BTech|M\s*\.?\s*Tech|MTech|'
+            .'B\s*\.?\s*Com|BCom|M\s*\.?\s*Com|MCom|'
+            .'B\s*\.?\s*A|BA|M\s*\.?\s*A|MA|'
+            .'B\s*\.?\s*Sc|BSc|M\s*\.?\s*Sc|MSc|MSC|'
+            .'BCA|MCA|BCS|MCS|MBA|BDS|BAMS|MBBS|'
+            .'L\s*\.?\s*L\s*\.?\s*B|LLB|SSC|HSC'
+            .')\b/ui';
+
+        if (preg_match($degreePattern, $v)) {
+            return true;
+        }
+
+        return (bool) preg_match('/(?:^|[^\d])(?:10|12)\s*(?:वी|th|वी\.)(?:$|[^\p{L}\p{N}])/ui', $v);
     }
 
     /** Career must contain occupation keywords. */

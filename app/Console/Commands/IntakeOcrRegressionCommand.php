@@ -761,6 +761,10 @@ class IntakeOcrRegressionCommand extends Command
             return $this->normalizeOccupationForComparison($text);
         }
 
+        if ($field === 'education') {
+            return $this->normalizeEducationForComparison($text);
+        }
+
         if ($field === 'religion') {
             return $this->normalizeReligionForComparison($text);
         }
@@ -775,6 +779,37 @@ class IntakeOcrRegressionCommand extends Command
 
         $text = mb_strtolower($text);
         $text = preg_replace('/[^\p{L}\p{N}\s.]+/u', ' ', $text) ?? $text;
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+        $text = trim($text);
+
+        return $text !== '' ? $text : null;
+    }
+
+    private function normalizeEducationForComparison(string $text): ?string
+    {
+        $text = \App\Services\Ocr\OcrNormalize::normalizeDigits($text);
+        $text = str_replace(["\u{00A0}", "\u{200B}", '“', '”', '‘', '’'], [' ', ' ', "'", "'", "'", "'"], $text);
+        $text = preg_replace('/^\s*(?:शैक्षणिक\s+पात्रता|Educational\s+Qualification|Qualification|Education|शिक्षण)\s*(?:[:\-：>\/]|[८8]|\s)+/ui', '', $text) ?? $text;
+        $replacements = [
+            '/\bB\s*\.?\s*Tech\b/ui' => 'BTech',
+            '/\bM\s*\.?\s*Tech\b/ui' => 'MTech',
+            '/\bB\s*\.?\s*Com\b/ui' => 'BCom',
+            '/\bM\s*\.?\s*Com\b/ui' => 'MCom',
+            '/\bB\s*\.?\s*Sc\b/ui' => 'BSc',
+            '/\bM\s*\.?\s*Sc\b/ui' => 'MSc',
+            '/\bB\s*\.?\s*E\b/ui' => 'BE',
+            '/\bB\s*\.?\s*A\b/ui' => 'BA',
+            '/\bM\s*\.?\s*A\b/ui' => 'MA',
+            '/\bL\s*\.?\s*L\s*\.?\s*B\b/ui' => 'LLB',
+            '/\bM\s*\.?\s*C\s*\.?\s*A\b/ui' => 'MCA',
+            '/\bB\s*\.?\s*C\s*\.?\s*S\b/ui' => 'BCS',
+            '/\bM\s*\.?\s*C\s*\.?\s*S\b/ui' => 'MCS',
+        ];
+        foreach ($replacements as $pattern => $replacement) {
+            $text = preg_replace($pattern, $replacement, $text) ?? $text;
+        }
+        $text = mb_strtolower($text);
+        $text = preg_replace('/[^\p{L}\p{N}\s]+/u', ' ', $text) ?? $text;
         $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
         $text = trim($text);
 
