@@ -211,7 +211,7 @@ php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/g
 Use the threshold guard after each deterministic parser change to prevent silent accuracy regression against the private golden dataset:
 
 ```powershell
-php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/golden.jsonl --fail-under=88 --fail-under-field=full_name:85 --fail-under-field=date_of_birth:95 --fail-under-field=height:94 --fail-under-field=education:80 --fail-under-field=occupation:66 --fail-under-field=document_contact_number:100 --fail-under-field=address:77 --fail-under-field=religion:83 --fail-under-field=caste:100 --fail-under-field=sub_caste:100
+php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/golden.jsonl --fail-under=89 --fail-under-field=full_name:85 --fail-under-field=date_of_birth:95 --fail-under-field=height:94 --fail-under-field=education:80 --fail-under-field=occupation:66 --fail-under-field=document_contact_number:100 --fail-under-field=address:88 --fail-under-field=religion:83 --fail-under-field=caste:100 --fail-under-field=sub_caste:100
 ```
 
 This guard is read-only. It only compares offline parser output with `parser_expected_fields`; it does not enable learning, create learning rules, apply profiles, mutate `biodata_intakes`, backfill data, call OCR, call Sarvam, call paid vision, or change routing.
