@@ -51,7 +51,7 @@ Only aggregate counts, percentages, command references, and phase-level recommen
 ## Current locked threshold guard command
 
 ```powershell
-php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/golden.jsonl --fail-under=89 --fail-under-field=full_name:85 --fail-under-field=date_of_birth:95 --fail-under-field=height:94 --fail-under-field=education:80 --fail-under-field=occupation:66 --fail-under-field=document_contact_number:100 --fail-under-field=address:88 --fail-under-field=religion:83 --fail-under-field=caste:100 --fail-under-field=sub_caste:100
+php artisan intake:ocr-regression --dataset=storage/app/intake-golden-datasets/golden.jsonl --fail-under=91 --fail-under-field=full_name:85 --fail-under-field=date_of_birth:95 --fail-under-field=height:94 --fail-under-field=education:95 --fail-under-field=occupation:66 --fail-under-field=document_contact_number:100 --fail-under-field=address:88 --fail-under-field=religion:83 --fail-under-field=caste:100 --fail-under-field=sub_caste:100
 ```
 
 ## Current field accuracy table
