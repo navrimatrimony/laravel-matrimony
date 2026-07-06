@@ -15,6 +15,24 @@
         'needs_review' => 0,
         'failed' => 0,
     ];
+    $readinessSummary = $readinessSummary ?? [
+        'ready_for_profile_review' => 0,
+        'not_ready' => 0,
+        'blocked' => 0,
+        'owner_missing' => 0,
+        'parse_pending_error' => 0,
+    ];
+    $readinessByItem = $readinessByItem ?? [];
+    $readinessStatusLabels = [
+        'ready_for_profile_review' => 'Ready for profile review',
+        'not_ready' => 'Not ready',
+        'blocked' => 'Blocked',
+    ];
+    $readinessStatusClasses = [
+        'ready_for_profile_review' => 'border-green-200 bg-green-50 text-green-800',
+        'not_ready' => 'border-amber-200 bg-amber-50 text-amber-800',
+        'blocked' => 'border-red-200 bg-red-50 text-red-700',
+    ];
 @endphp
 <div class="space-y-6">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -36,6 +54,10 @@
 
     <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
         This page is review visibility only. It does not create, approve, claim, or apply profiles.
+    </div>
+
+    <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+        Readiness preview does not create, approve, or apply profiles.
     </div>
 
     <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -62,6 +84,20 @@
             'Parse Errors' => $reviewSummary['parse_error'],
             'Needs Review' => $reviewSummary['needs_review'],
             'Failed' => $reviewSummary['failed'],
+        ] as $label => $value)
+            <div class="rounded-lg bg-white p-4 shadow">
+                <p class="text-xs font-semibold uppercase text-gray-500">{{ $label }}</p>
+                <p class="mt-1 text-lg font-semibold text-gray-900">{{ $value }}</p>
+            </div>
+        @endforeach
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        @foreach ([
+            'Ready for Profile Review' => $readinessSummary['ready_for_profile_review'],
+            'Blocked' => $readinessSummary['blocked'],
+            'Owner Missing' => $readinessSummary['owner_missing'],
+            'Parse Pending/Error' => $readinessSummary['parse_pending_error'],
         ] as $label => $value)
             <div class="rounded-lg bg-white p-4 shadow">
                 <p class="text-xs font-semibold uppercase text-gray-500">{{ $label }}</p>
@@ -126,6 +162,7 @@
                             <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Owner</th>
                             <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Intake</th>
                             <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Parsed JSON</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Readiness</th>
                             <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Exceptions</th>
                             <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Source</th>
                             <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Actions</th>
@@ -136,6 +173,12 @@
                             @php
                                 $intake = $item->biodataIntake;
                                 $hasParsedJson = $intake && ! empty($intake->parsed_json);
+                                $readiness = $readinessByItem[$item->id] ?? [
+                                    'status' => 'not_ready',
+                                    'reason_codes' => [],
+                                    'display_reasons' => [],
+                                ];
+                                $readinessStatus = $readiness['status'] ?? 'not_ready';
                                 $exceptionBadges = [];
                                 if (! $intake) {
                                     $exceptionBadges[] = ['label' => 'Missing linked intake', 'class' => 'border-red-200 bg-red-50 text-red-700'];
@@ -185,6 +228,25 @@
                                 </td>
                                 <td class="px-4 py-2 text-sm text-gray-700">{{ $hasParsedJson ? 'Yes' : 'No' }}</td>
                                 <td class="px-4 py-2 text-sm">
+                                    <span class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $readinessStatusClasses[$readinessStatus] ?? $readinessStatusClasses['not_ready'] }}">
+                                        {{ $readinessStatusLabels[$readinessStatus] ?? 'Not ready' }}
+                                    </span>
+                                    @if (! empty($readiness['reason_codes']))
+                                        <div class="mt-2 flex max-w-xs flex-wrap gap-1">
+                                            @foreach ($readiness['reason_codes'] as $reasonCode)
+                                                <span class="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[11px] font-mono text-gray-700">{{ $reasonCode }}</span>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                    @if (! empty($readiness['display_reasons']))
+                                        <ul class="mt-1 max-w-xs list-disc space-y-0.5 pl-4 text-xs text-gray-600">
+                                            @foreach ($readiness['display_reasons'] as $reason)
+                                                <li>{{ $reason }}</li>
+                                            @endforeach
+                                        </ul>
+                                    @endif
+                                </td>
+                                <td class="px-4 py-2 text-sm">
                                     @if ($exceptionBadges === [])
                                         <span class="text-gray-400">-</span>
                                     @else
@@ -200,10 +262,11 @@
                                     <div class="flex min-w-40 flex-col gap-2">
                                         @if ($intake)
                                             <a href="{{ route('admin.biodata-intakes.show', $intake) }}" class="font-medium text-indigo-600 hover:text-indigo-800">Open intake review</a>
-                                            @if ($intake->uploaded_by === null)
-                                                <a href="{{ route('admin.bulk-intakes.items.assign-owner', [$batch, $item]) }}" class="font-medium text-blue-700 hover:text-blue-900">Assign owner</a>
-                                                <a href="{{ route('admin.bulk-intakes.items.create-owner', [$batch, $item]) }}" class="font-medium text-emerald-700 hover:text-emerald-900">Create owner</a>
-                                            @endif
+                                        @endif
+                                        <a href="{{ route('admin.bulk-intakes.items.readiness', [$batch, $item]) }}" class="font-medium text-slate-700 hover:text-slate-900">Readiness details</a>
+                                        @if ($intake && $intake->uploaded_by === null)
+                                            <a href="{{ route('admin.bulk-intakes.items.assign-owner', [$batch, $item]) }}" class="font-medium text-blue-700 hover:text-blue-900">Assign owner</a>
+                                            <a href="{{ route('admin.bulk-intakes.items.create-owner', [$batch, $item]) }}" class="font-medium text-emerald-700 hover:text-emerald-900">Create owner</a>
                                         @endif
 
                                         @if ($intake && $intake->parse_status === 'pending' && $item->item_status !== \App\Models\BulkIntakeBatchItem::STATUS_PARSE_QUEUED && ! $intake->approved_by_user && ! $intake->intake_locked)

@@ -8,6 +8,7 @@ use App\Models\BulkIntakeBatchItem;
 use App\Models\IntakeSourceContext;
 use App\Models\User;
 use App\Services\Intake\BulkIntakeBatchService;
+use App\Services\Intake\BulkIntakeReadinessService;
 use App\Services\Intake\IntakeCreationService;
 use App\Services\Intake\IntakeOwnerAssignmentService;
 use App\Services\Intake\IntakeSourceContextRecorder;
@@ -103,7 +104,12 @@ class AdminBulkIntakeController extends Controller
             ->with('success', 'Bulk intake batch processed as unclaimed staging. Parsing and profile apply remain separate.');
     }
 
-    public function show(Request $request, BulkIntakeBatch $bulkIntakeBatch, BulkIntakeBatchService $batchService)
+    public function show(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchService $batchService,
+        BulkIntakeReadinessService $readinessService
+    )
     {
         $statusFilters = $this->bulkItemStatusFilters();
         $statusFilter = (string) $request->query('status', 'all');
@@ -112,16 +118,28 @@ class AdminBulkIntakeController extends Controller
         }
 
         $bulkIntakeBatch->load('uploadedByUser:id,name,email,mobile');
+        $readinessReport = $readinessService->readinessForBatch($bulkIntakeBatch);
 
         $itemsQuery = $bulkIntakeBatch->items()
             ->with([
-                'biodataIntake:id,uploaded_by,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,parsed_json,created_at',
-                'biodataIntake.uploadedByUser:id,name,email,mobile',
+                'biodataIntake:id,uploaded_by,matrimony_profile_id,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,parsed_json,created_at',
+                'biodataIntake.uploadedByUser:id,name,email,mobile,is_admin,admin_role',
+                'biodataIntake.uploadedByUser.matrimonyProfile:id,user_id',
             ])
             ->orderBy('item_sequence');
 
-        $this->applyBulkItemStatusFilter($itemsQuery, $statusFilter);
-        $bulkIntakeBatch->setRelation('items', $itemsQuery->get());
+        if (! in_array($statusFilter, ['ready', 'not_ready', 'blocked'], true)) {
+            $this->applyBulkItemStatusFilter($itemsQuery, $statusFilter);
+        }
+
+        $items = $itemsQuery->get();
+        if (in_array($statusFilter, ['ready', 'not_ready', 'blocked'], true)) {
+            $targetStatus = $statusFilter === 'ready' ? 'ready_for_profile_review' : $statusFilter;
+            $items = $items
+                ->filter(fn (BulkIntakeBatchItem $item): bool => ($readinessReport['by_item_id'][(int) $item->id]['status'] ?? null) === $targetStatus)
+                ->values();
+        }
+        $bulkIntakeBatch->setRelation('items', $items);
 
         $sourceContextCountsByItem = IntakeSourceContext::query()
             ->where('bulk_intake_batch_id', $bulkIntakeBatch->id)
@@ -134,8 +152,32 @@ class AdminBulkIntakeController extends Controller
             'batch' => $bulkIntakeBatch,
             'sourceContextCountsByItem' => $sourceContextCountsByItem,
             'reviewSummary' => $batchService->buildBatchReviewSummary($bulkIntakeBatch),
+            'readinessByItem' => $readinessReport['by_item_id'],
+            'readinessSummary' => $readinessReport['summary'],
             'statusFilter' => $statusFilter,
             'statusFilters' => $statusFilters,
+        ]);
+    }
+
+    public function readiness(
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeReadinessService $readinessService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+
+        $bulkIntakeBatch->load('uploadedByUser:id,name,email,mobile');
+        $bulkIntakeBatchItem->load([
+            'biodataIntake:id,uploaded_by,matrimony_profile_id,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,parsed_json,created_at',
+            'biodataIntake.uploadedByUser:id,name,email,mobile,is_admin,admin_role',
+            'biodataIntake.uploadedByUser.matrimonyProfile:id,user_id',
+        ]);
+
+        return view('admin.bulk-intakes.readiness', [
+            'batch' => $bulkIntakeBatch,
+            'item' => $bulkIntakeBatchItem,
+            'intake' => $bulkIntakeBatchItem->biodataIntake,
+            'readiness' => $readinessService->readinessForItem($bulkIntakeBatchItem),
         ]);
     }
 
@@ -401,6 +443,9 @@ class AdminBulkIntakeController extends Controller
             'parse_error' => 'Parse Error',
             'needs_review' => 'Needs Review',
             'failed' => 'Failed',
+            'ready' => 'Ready',
+            'not_ready' => 'Not Ready',
+            'blocked' => 'Blocked',
         ];
     }
 
