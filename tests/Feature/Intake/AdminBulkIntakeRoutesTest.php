@@ -15,7 +15,9 @@ test('admin bulk intake route names exist', function () {
         ->and(route('admin.bulk-intakes.queue-free-parse', ['bulkIntakeBatch' => 123]))->toBe(url('/admin/bulk-intakes/123/queue-free-parse'))
         ->and(route('admin.bulk-intakes.items.queue-free-parse', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/queue-free-parse'))
         ->and(route('admin.bulk-intakes.items.mark-needs-review', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/mark-needs-review'))
-        ->and(route('admin.bulk-intakes.items.clear-needs-review', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/clear-needs-review'));
+        ->and(route('admin.bulk-intakes.items.clear-needs-review', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/clear-needs-review'))
+        ->and(route('admin.bulk-intakes.items.assign-owner', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/assign-owner'))
+        ->and(route('admin.bulk-intakes.items.assign-owner.store', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/assign-owner'));
 });
 
 test('admin can access bulk intake index create and show pages', function () {
@@ -86,6 +88,14 @@ test('non admin cannot access admin bulk intake routes', function () {
 
     $this->actingAs($member)
         ->post(route('admin.bulk-intakes.items.clear-needs-review', [$batch, $item]))
+        ->assertForbidden();
+
+    $this->actingAs($member)
+        ->get(route('admin.bulk-intakes.items.assign-owner', [$batch, $item]))
+        ->assertForbidden();
+
+    $this->actingAs($member)
+        ->post(route('admin.bulk-intakes.items.assign-owner.store', [$batch, $item]))
         ->assertForbidden();
 });
 

@@ -518,7 +518,7 @@ class BulkIntakeBatchService
     }
 
     /**
-     * @return array{total: int, unclaimed: int, intakes_created: int, parse_pending: int, parse_queued: int, parsed: int, parse_error: int, needs_review: int, failed: int}
+     * @return array{total: int, unclaimed: int, claimed: int, intakes_created: int, parse_pending: int, parse_queued: int, parsed: int, parse_error: int, needs_review: int, failed: int}
      */
     public function buildBatchReviewSummary(BulkIntakeBatch $batch): array
     {
@@ -529,6 +529,7 @@ class BulkIntakeBatchService
         return [
             'total' => $items->count(),
             'unclaimed' => $items->filter(fn (BulkIntakeBatchItem $item): bool => $item->biodataIntake instanceof BiodataIntake && $item->biodataIntake->uploaded_by === null)->count(),
+            'claimed' => $items->filter(fn (BulkIntakeBatchItem $item): bool => $item->biodataIntake instanceof BiodataIntake && $item->biodataIntake->uploaded_by !== null)->count(),
             'intakes_created' => $items->whereNotNull('biodata_intake_id')->count(),
             'parse_pending' => $items->filter(fn (BulkIntakeBatchItem $item): bool => $item->biodataIntake instanceof BiodataIntake && (string) $item->biodataIntake->parse_status === 'pending')->count(),
             'parse_queued' => $items->where('item_status', BulkIntakeBatchItem::STATUS_PARSE_QUEUED)->count(),

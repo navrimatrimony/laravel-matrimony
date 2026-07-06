@@ -6,6 +6,7 @@
     $reviewSummary = $reviewSummary ?? [
         'total' => 0,
         'unclaimed' => 0,
+        'claimed' => 0,
         'intakes_created' => 0,
         'parse_pending' => 0,
         'parse_queued' => 0,
@@ -29,6 +30,9 @@
     @if (session('success'))
         <div class="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">{{ session('success') }}</div>
     @endif
+    @if (session('error'))
+        <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{{ session('error') }}</div>
+    @endif
 
     <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
         This page is review visibility only. It does not create, approve, claim, or apply profiles.
@@ -50,6 +54,7 @@
         @foreach ([
             'Total Items' => $reviewSummary['total'],
             'Unclaimed' => $reviewSummary['unclaimed'],
+            'Claimed' => $reviewSummary['claimed'],
             'Intakes Created' => $reviewSummary['intakes_created'],
             'Parse Pending' => $reviewSummary['parse_pending'],
             'Parse Queued' => $reviewSummary['parse_queued'],
@@ -195,6 +200,9 @@
                                     <div class="flex min-w-40 flex-col gap-2">
                                         @if ($intake)
                                             <a href="{{ route('admin.biodata-intakes.show', $intake) }}" class="font-medium text-indigo-600 hover:text-indigo-800">Open intake review</a>
+                                            @if ($intake->uploaded_by === null)
+                                                <a href="{{ route('admin.bulk-intakes.items.assign-owner', [$batch, $item]) }}" class="font-medium text-blue-700 hover:text-blue-900">Assign owner</a>
+                                            @endif
                                         @endif
 
                                         @if ($intake && $intake->parse_status === 'pending' && $item->item_status !== \App\Models\BulkIntakeBatchItem::STATUS_PARSE_QUEUED && ! $intake->approved_by_user && ! $intake->intake_locked)

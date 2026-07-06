@@ -9,6 +9,7 @@ use App\Models\IntakeSourceContext;
 use App\Models\User;
 use App\Services\Intake\BulkIntakeBatchService;
 use App\Services\Intake\IntakeCreationService;
+use App\Services\Intake\IntakeOwnerAssignmentService;
 use App\Services\Intake\IntakeSourceContextRecorder;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -133,6 +134,67 @@ class AdminBulkIntakeController extends Controller
             'statusFilter' => $statusFilter,
             'statusFilters' => $statusFilters,
         ]);
+    }
+
+    public function assignOwnerForm(BulkIntakeBatch $bulkIntakeBatch, BulkIntakeBatchItem $bulkIntakeBatchItem)
+    {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+
+        $bulkIntakeBatch->load('uploadedByUser:id,name,email,mobile');
+        $bulkIntakeBatchItem->load('biodataIntake:id,uploaded_by,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,parsed_json,created_at');
+        $intake = $bulkIntakeBatchItem->biodataIntake;
+
+        abort_unless($intake !== null, 404);
+
+        if ($intake->uploaded_by !== null) {
+            return redirect()
+                ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
+                ->with('error', 'Owner already assigned. Reassignment is not available in this phase.');
+        }
+
+        return view('admin.bulk-intakes.assign-owner', [
+            'batch' => $bulkIntakeBatch,
+            'item' => $bulkIntakeBatchItem,
+            'intake' => $intake,
+        ]);
+    }
+
+    public function assignOwner(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        IntakeOwnerAssignmentService $ownerAssignmentService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $bulkIntakeBatchItem->load('biodataIntake:id,uploaded_by,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,parsed_json,created_at');
+        $intake = $bulkIntakeBatchItem->biodataIntake;
+        abort_unless($intake !== null, 404);
+
+        if ($intake->uploaded_by !== null) {
+            return redirect()
+                ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
+                ->with('error', 'Owner already assigned. Reassignment is not available in this phase.');
+        }
+
+        $validated = $request->validate([
+            'owner_user_id' => ['required', 'integer', 'exists:users,id'],
+            'consent_confirmed' => ['accepted'],
+            'consent_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $ownerUser = User::query()->findOrFail((int) $validated['owner_user_id']);
+
+        $ownerAssignmentService->assignExistingUserToUnclaimedIntake($intake, $ownerUser, $request->user(), [
+            'bulk_intake_batch_id' => $bulkIntakeBatch->id,
+            'bulk_intake_batch_item_id' => $bulkIntakeBatchItem->id,
+            'consent_note' => $validated['consent_note'] ?? null,
+        ]);
+
+        return redirect()
+            ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
+            ->with('success', 'Owner assigned to intake after consent confirmation.');
     }
 
     public function queueFreeParse(
