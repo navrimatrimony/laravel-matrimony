@@ -116,4 +116,9 @@ class BiodataIntake extends Model
     {
         return $this->hasMany(BiodataIntakeOcrAttempt::class, 'intake_id');
     }
+
+    public function sourceContexts(): HasMany
+    {
+        return $this->hasMany(IntakeSourceContext::class, 'biodata_intake_id');
+    }
 }

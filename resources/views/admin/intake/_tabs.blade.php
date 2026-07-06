@@ -11,4 +11,10 @@
     >
         Manual Form
     </a>
+    <a
+        href="{{ route('admin.bulk-intakes.index') }}"
+        class="rounded-lg px-4 py-2 text-sm font-semibold {{ ($activeAdminProfileTab ?? '') === 'bulk' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' }}"
+    >
+        Bulk Intake
+    </a>
 </div>

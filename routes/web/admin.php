@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AbuseReportController;
 use App\Http\Controllers\Admin\AdminCapabilityController;
+use App\Http\Controllers\Admin\AdminBulkIntakeController;
 use App\Http\Controllers\Admin\AdminCasteController;
 use App\Http\Controllers\Admin\AdminConflictRecordController;
 use App\Http\Controllers\Admin\AdminCouponController;
@@ -633,6 +634,15 @@ Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('ad
     /*
     | Phase-4 Day-4: Biodata Intake Sandbox & Attach (admin only)
     */
+    Route::prefix('bulk-intakes')->name('bulk-intakes.')->group(function () {
+        Route::get('/', [AdminBulkIntakeController::class, 'index'])->name('index');
+        Route::get('/create', [AdminBulkIntakeController::class, 'create'])->name('create');
+        Route::post('/', [AdminBulkIntakeController::class, 'store'])->name('store');
+        Route::post('/{bulkIntakeBatch}/queue-free-parse', [AdminBulkIntakeController::class, 'queueFreeParse'])->name('queue-free-parse');
+        Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/queue-free-parse', [AdminBulkIntakeController::class, 'queueFreeParseItem'])->name('items.queue-free-parse');
+        Route::get('/{bulkIntakeBatch}', [AdminBulkIntakeController::class, 'show'])->name('show');
+    });
+
     Route::get('/biodata-intakes', [AdminIntakeController::class, 'biodataIntakesIndex'])->name('biodata-intakes.index');
     Route::get('/biodata-intakes/create', [AdminIntakeController::class, 'createEntry'])->name('biodata-intakes.create');
     Route::post('/biodata-intakes', [AdminIntakeController::class, 'storeEntry'])->name('biodata-intakes.store');

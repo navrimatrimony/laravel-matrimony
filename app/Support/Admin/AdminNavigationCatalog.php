@@ -38,6 +38,7 @@ final class AdminNavigationCatalog
                 'description' => 'Biodata entry, intake review, OCR simulation, parser rules, and intake settings.',
                 'tabs' => [
                     self::tab('Biodata Intake', 'admin.biodata-intakes.index', ['admin.biodata-intakes.*', 'admin.suggestions.review*']),
+                    self::tab('Bulk Intakes', 'admin.bulk-intakes.index', ['admin.bulk-intakes.*']),
                     self::tab('Review Queue', 'admin.intake.index', ['admin.intake.*']),
                     self::tab('OCR Simulation', 'admin.ocr-simulation.index', ['admin.ocr-simulation.*']),
                     self::tab('OCR Rules', 'admin.ocr-patterns.index', ['admin.ocr-patterns.*']),

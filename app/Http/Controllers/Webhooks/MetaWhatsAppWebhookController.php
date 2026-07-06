@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Webhooks;
 
 use App\Http\Controllers\Controller;
+use App\Services\WhatsApp\WhatsAppInboundProcessor;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
@@ -35,7 +36,7 @@ class MetaWhatsAppWebhookController extends Controller
     /**
      * POST delivery / inbound payloads.
      */
-    public function handle(Request $request): \Illuminate\Http\JsonResponse
+    public function handle(Request $request, WhatsAppInboundProcessor $processor): \Illuminate\Http\JsonResponse
     {
         $secret = trim((string) config('whatsapp.app_secret', ''));
         if ($secret !== '') {
@@ -51,6 +52,11 @@ class MetaWhatsAppWebhookController extends Controller
 
         if (config('app.debug')) {
             Log::debug('whatsapp_webhook_payload', ['payload' => $request->all()]);
+        }
+
+        $result = $processor->process($request->all());
+        if (config('app.debug')) {
+            Log::debug('whatsapp_webhook_processed', ['result' => $result]);
         }
 
         return response()->json(['success' => true]);
