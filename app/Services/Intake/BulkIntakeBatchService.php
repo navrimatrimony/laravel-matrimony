@@ -213,6 +213,146 @@ class BulkIntakeBatchService
         });
     }
 
+    /**
+     * @param  array<int, UploadedFile>  $files
+     * @param  array<int, string>  $textItems
+     */
+    public function processUnclaimedBulkBatch(
+        BulkIntakeBatch $batch,
+        array $files,
+        array $textItems,
+        User $actor,
+        IntakeCreationService $intakeCreation,
+        IntakeSourceContextRecorder $sourceContextRecorder
+    ): BulkIntakeBatch {
+        $this->markProcessing($batch);
+
+        $sequence = ((int) $batch->items()->max('item_sequence')) + 1;
+
+        foreach ($files as $file) {
+            if (! $file instanceof UploadedFile) {
+                continue;
+            }
+
+            try {
+                $fileHash = $this->hashFile($file);
+                $item = $this->addItem($batch, [
+                    'item_sequence' => $sequence,
+                    'input_type' => BulkIntakeBatchItem::INPUT_FILE,
+                    'original_filename' => $file->getClientOriginalName(),
+                    'file_hash' => $fileHash,
+                    'idempotency_key' => $this->itemIdempotencyKey($batch, $sequence, 'file', $fileHash),
+                    'item_status' => BulkIntakeBatchItem::STATUS_PENDING,
+                ]);
+
+                $this->createUnclaimedIntakeForItem($item, $actor, $intakeCreation, $sourceContextRecorder, $file, null);
+            } catch (Throwable $e) {
+                if (isset($item) && $item instanceof BulkIntakeBatchItem) {
+                    $this->failItem($item, 'bulk_file_intake_failed', $e->getMessage());
+                }
+            } finally {
+                unset($item);
+                $sequence++;
+            }
+        }
+
+        foreach ($textItems as $rawText) {
+            $rawText = trim((string) $rawText);
+            if ($rawText === '') {
+                continue;
+            }
+
+            try {
+                $textHash = hash('sha256', $rawText);
+                $item = $this->addItem($batch, [
+                    'item_sequence' => $sequence,
+                    'input_type' => BulkIntakeBatchItem::INPUT_TEXT,
+                    'raw_text_hash' => $textHash,
+                    'idempotency_key' => $this->itemIdempotencyKey($batch, $sequence, 'text', $textHash),
+                    'item_status' => BulkIntakeBatchItem::STATUS_PENDING,
+                    'summary_text' => mb_substr($rawText, 0, 500),
+                ]);
+
+                $this->createUnclaimedIntakeForItem($item, $actor, $intakeCreation, $sourceContextRecorder, null, $rawText);
+            } catch (Throwable $e) {
+                if (isset($item) && $item instanceof BulkIntakeBatchItem) {
+                    $this->failItem($item, 'bulk_text_intake_failed', $e->getMessage());
+                }
+            } finally {
+                unset($item);
+                $sequence++;
+            }
+        }
+
+        $this->refreshCounters($batch);
+
+        $batch->forceFill([
+            'batch_status' => BulkIntakeBatch::STATUS_COMPLETED,
+            'completed_at' => now(),
+        ])->save();
+
+        return $this->refreshCounters($batch);
+    }
+
+    public function createUnclaimedIntakeForItem(
+        BulkIntakeBatchItem $item,
+        User $actor,
+        IntakeCreationService $intakeCreation,
+        IntakeSourceContextRecorder $sourceContextRecorder,
+        ?UploadedFile $file = null,
+        ?string $rawText = null
+    ): BulkIntakeBatchItem {
+        if ($item->biodata_intake_id !== null) {
+            return $item->refresh();
+        }
+
+        $item->forceFill([
+            'item_status' => BulkIntakeBatchItem::STATUS_PROCESSING,
+            'failure_code' => null,
+            'failure_message' => null,
+        ])->save();
+
+        $prepared = $intakeCreation->prepare(null, $file, $rawText);
+
+        return DB::transaction(function () use ($item, $actor, $intakeCreation, $sourceContextRecorder, $prepared): BulkIntakeBatchItem {
+            $lockedItem = BulkIntakeBatchItem::query()->lockForUpdate()->findOrFail($item->id);
+            if ($lockedItem->biodata_intake_id !== null) {
+                return $lockedItem->refresh();
+            }
+
+            $intake = $intakeCreation->persistPreparedForUnclaimedBulk($prepared);
+
+            $lockedItem->forceFill([
+                'biodata_intake_id' => $intake->id,
+                'source_file_path' => $intake->file_path,
+                'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
+                'failure_code' => null,
+                'failure_message' => null,
+            ])->save();
+
+            $sourceContextRecorder->recordForIntake($intake, [
+                'source_type' => \App\Models\IntakeSourceContext::SOURCE_ADMIN_BULK,
+                'source_surface' => \App\Models\IntakeSourceContext::SURFACE_ADMIN_PANEL,
+                'actor_type' => \App\Models\IntakeSourceContext::ACTOR_ADMIN,
+                'actor_user_id' => $actor->id,
+                'bulk_intake_batch_id' => $lockedItem->bulk_intake_batch_id,
+                'bulk_intake_batch_item_id' => $lockedItem->id,
+                'idempotency_key' => 'admin_bulk_batch_item:'.$lockedItem->id,
+                'source_meta_json' => [
+                    'owner_user_id' => null,
+                    'candidate_user_id' => null,
+                    'owner_user_mode' => 'unclaimed_bulk_staging',
+                    'consent_status' => 'pending',
+                    'profile_creation_policy' => 'after_candidate_consent',
+                    'intake_creation_policy' => BulkIntakeBatch::POLICY_EXISTING_CHAIN,
+                    'parse_dispatch' => 'deferred',
+                ],
+            ]);
+
+            return $lockedItem->refresh();
+        });
+    }
+
     public function failItem(BulkIntakeBatchItem $item, string $failureCode, string $message): BulkIntakeBatchItem
     {
         $item->forceFill([

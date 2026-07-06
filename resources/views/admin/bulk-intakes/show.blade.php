@@ -80,8 +80,8 @@
     <div class="rounded-lg bg-white p-6 shadow">
         <dl class="grid gap-4 text-sm md:grid-cols-3">
             <div>
-                <dt class="font-semibold text-gray-700">Actor</dt>
-                <dd class="mt-1 text-gray-600">{{ $batch->uploaded_by_actor_type ?: '—' }} · {{ $batch->uploadedByUser?->name ?? '—' }}</dd>
+                <dt class="font-semibold text-gray-700">Uploader</dt>
+                <dd class="mt-1 text-gray-600">{{ $batch->uploaded_by_actor_type ?: '—' }} · {{ $batch->uploadedByUser?->name ?? '—' }}{{ $batch->uploadedByUser?->email ? ' · '.$batch->uploadedByUser->email : '' }}</dd>
             </div>
             <div>
                 <dt class="font-semibold text-gray-700">Created</dt>
@@ -147,6 +147,11 @@
                                     @if ($item->biodataIntake)
                                         <a href="{{ route('admin.biodata-intakes.show', $item->biodataIntake) }}" class="font-medium text-indigo-600 hover:text-indigo-800">#{{ $item->biodataIntake->id }}</a>
                                         <span class="block text-xs text-gray-500">parse: {{ $item->biodataIntake->parse_status }}</span>
+                                        @if ($item->biodataIntake->uploaded_by)
+                                            <span class="block text-xs text-gray-500">owner: {{ $item->biodataIntake->uploadedByUser?->name ?? ('user #'.$item->biodataIntake->uploaded_by) }}</span>
+                                        @else
+                                            <span class="block text-xs text-amber-700">owner: Unclaimed / consent pending</span>
+                                        @endif
                                     @else
                                         —
                                     @endif

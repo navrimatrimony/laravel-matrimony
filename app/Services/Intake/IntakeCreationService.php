@@ -83,6 +83,22 @@ class IntakeCreationService
      */
     public function persistPrepared(int $userId, array $prepared): BiodataIntake
     {
+        return $this->persistPreparedWithUploader($userId, $prepared);
+    }
+
+    /**
+     * @param  array{file_path: string|null, original_filename: string|null, raw_ocr_text: string, upload_ocr_debug?: array<string, mixed>|null, reused_paid_extraction_text?: bool, reused_from_intake_id?: int}  $prepared
+     */
+    public function persistPreparedForUnclaimedBulk(array $prepared): BiodataIntake
+    {
+        return $this->persistPreparedWithUploader(null, $prepared);
+    }
+
+    /**
+     * @param  array{file_path: string|null, original_filename: string|null, raw_ocr_text: string, upload_ocr_debug?: array<string, mixed>|null, reused_paid_extraction_text?: bool, reused_from_intake_id?: int}  $prepared
+     */
+    private function persistPreparedWithUploader(?int $userId, array $prepared): BiodataIntake
+    {
         return DB::transaction(function () use ($userId, $prepared): BiodataIntake {
             $rawText = $prepared['raw_ocr_text'];
 

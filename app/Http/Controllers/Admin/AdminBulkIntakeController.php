@@ -40,16 +40,7 @@ class AdminBulkIntakeController extends Controller
 
     public function create()
     {
-        $users = User::query()
-            ->where(function ($query): void {
-                $query->where('is_admin', false)->orWhereNull('is_admin');
-            })
-            ->whereNull('admin_role')
-            ->latest()
-            ->limit(500)
-            ->get(['id', 'name', 'email', 'mobile']);
-
-        return view('admin.bulk-intakes.create', ['users' => $users]);
+        return view('admin.bulk-intakes.create');
     }
 
     public function store(
@@ -60,18 +51,10 @@ class AdminBulkIntakeController extends Controller
     ) {
         $validated = $request->validate([
             'batch_name' => ['nullable', 'string', 'max:255'],
-            'owner_user_id' => ['required', 'integer', 'exists:users,id'],
             'files' => ['nullable', 'array'],
             'files.*' => ['file', 'max:20480'],
             'raw_text' => ['nullable', 'string'],
         ]);
-
-        $ownerUser = User::query()->findOrFail((int) $validated['owner_user_id']);
-        if ($ownerUser->isAnyAdmin()) {
-            throw ValidationException::withMessages([
-                'owner_user_id' => 'Select a non-admin member account.',
-            ]);
-        }
 
         $files = array_values(array_filter($request->file('files', [])));
         $textItems = $this->splitTextItems((string) ($validated['raw_text'] ?? ''));
@@ -82,6 +65,8 @@ class AdminBulkIntakeController extends Controller
         }
 
         $actor = $request->user();
+        abort_unless($actor instanceof User, 403);
+
         $batch = $batchService->createBatch([
             'uploaded_by_user_id' => $actor?->id,
             'uploaded_by_actor_type' => BulkIntakeBatch::ACTOR_ADMIN,
@@ -91,15 +76,17 @@ class AdminBulkIntakeController extends Controller
             'intake_creation_policy' => BulkIntakeBatch::POLICY_EXISTING_CHAIN,
             'ocr_policy' => BulkIntakeBatch::OCR_POLICY_FREE_OCR_FIRST,
             'meta_json' => [
-                'owner_user_id' => (int) $ownerUser->id,
-                'owner_user_mode' => 'existing_user_for_whole_batch',
+                'owner_user_id' => null,
+                'candidate_user_id' => null,
+                'owner_user_mode' => 'unclaimed_bulk_staging',
+                'consent_status' => 'pending',
+                'profile_creation_policy' => 'after_candidate_consent',
                 'parse_dispatch' => 'deferred',
             ],
         ]);
 
-        $batch = $batchService->processExistingUserBatch(
+        $batch = $batchService->processUnclaimedBulkBatch(
             $batch,
-            $ownerUser,
             $files,
             $textItems,
             $actor,
@@ -109,7 +96,7 @@ class AdminBulkIntakeController extends Controller
 
         return redirect()
             ->route('admin.bulk-intakes.show', $batch)
-            ->with('success', 'Bulk intake batch processed. Created biodata intake rows only; parsing and profile apply remain separate.');
+            ->with('success', 'Bulk intake batch processed as unclaimed staging. Parsing and profile apply remain separate.');
     }
 
     public function show(BulkIntakeBatch $bulkIntakeBatch)
@@ -118,6 +105,7 @@ class AdminBulkIntakeController extends Controller
             'uploadedByUser:id,name,email',
             'items' => fn ($query) => $query->orderBy('item_sequence'),
             'items.biodataIntake:id,uploaded_by,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,created_at',
+            'items.biodataIntake.uploadedByUser:id,name,email',
         ]);
 
         $sourceContextCountsByItem = IntakeSourceContext::query()

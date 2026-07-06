@@ -18,31 +18,34 @@ use Illuminate\Support\Facades\Schema;
 
 uses(RefreshDatabase::class);
 
-test('admin can create batch for existing user with raw text items', function () {
+test('admin can create unclaimed bulk batch with raw text items', function () {
     Queue::fake();
     $admin = adminBulkIntakeAdmin();
-    $member = adminBulkIntakeMember();
 
     $response = $this->actingAs($admin)->post(route('admin.bulk-intakes.store'), [
-        'batch_name' => 'Two text biodatas',
-        'owner_user_id' => $member->id,
+        'batch_name' => 'Two unclaimed text biodatas',
         'raw_text' => "Name: First Candidate\nMobile: 9000000001\n---INTAKE---\nName: Second Candidate\nMobile: 9000000002",
     ]);
 
     $batch = BulkIntakeBatch::query()->sole();
 
     $response->assertRedirect(route('admin.bulk-intakes.show', $batch));
+    $response->assertSessionDoesntHaveErrors('owner_user_id');
+
     expect($batch->fresh()->batch_status)->toBe(BulkIntakeBatch::STATUS_COMPLETED)
         ->and($batch->fresh()->total_items)->toBe(2)
         ->and($batch->fresh()->total_texts)->toBe(2)
         ->and($batch->fresh()->total_intakes_created)->toBe(2)
+        ->and($batch->fresh()->meta_json['owner_user_mode'])->toBe('unclaimed_bulk_staging')
+        ->and($batch->fresh()->meta_json['consent_status'])->toBe('pending')
+        ->and($batch->fresh()->meta_json['profile_creation_policy'])->toBe('after_candidate_consent')
         ->and(BulkIntakeBatchItem::count())->toBe(2)
         ->and(BiodataIntake::count())->toBe(2)
         ->and(IntakeSourceContext::count())->toBe(2)
         ->and(MatrimonyProfile::count())->toBe(0);
 
-    BiodataIntake::query()->get()->each(function (BiodataIntake $intake) use ($member): void {
-        expect((int) $intake->uploaded_by)->toBe((int) $member->id)
+    BiodataIntake::query()->get()->each(function (BiodataIntake $intake): void {
+        expect($intake->uploaded_by)->toBeNull()
             ->and($intake->parse_status)->toBe('pending');
     });
 
@@ -53,16 +56,20 @@ test('admin can create batch for existing user with raw text items', function ()
             ->and((int) $context->actor_user_id)->toBe((int) $admin->id)
             ->and((int) $context->bulk_intake_batch_id)->toBe((int) $batch->id)
             ->and($context->bulk_intake_batch_item_id)->not->toBeNull()
-            ->and($context->biodata_intake_id)->not->toBeNull();
+            ->and($context->biodata_intake_id)->not->toBeNull()
+            ->and($context->source_meta_json['owner_user_id'])->toBeNull()
+            ->and($context->source_meta_json['candidate_user_id'])->toBeNull()
+            ->and($context->source_meta_json['owner_user_mode'])->toBe('unclaimed_bulk_staging')
+            ->and($context->source_meta_json['consent_status'])->toBe('pending')
+            ->and($context->source_meta_json['profile_creation_policy'])->toBe('after_candidate_consent');
     });
 
     Queue::assertNotPushed(ParseIntakeJob::class);
 });
 
-test('admin can create batch with multiple files through existing intake preparation path', function () {
+test('admin can create unclaimed bulk batch with multiple files through existing intake preparation path', function () {
     Queue::fake();
     $admin = adminBulkIntakeAdmin();
-    $member = adminBulkIntakeMember();
 
     $this->mock(OcrService::class, function ($mock): void {
         $mock->shouldReceive('extractTextFromPath')->twice()->andReturn(
@@ -76,8 +83,7 @@ test('admin can create batch with multiple files through existing intake prepara
     });
 
     $response = $this->actingAs($admin)->post(route('admin.bulk-intakes.store'), [
-        'batch_name' => 'Two file biodatas',
-        'owner_user_id' => $member->id,
+        'batch_name' => 'Two unclaimed file biodatas',
         'files' => [
             UploadedFile::fake()->createWithContent('candidate-one.jpg', 'file-one-bytes'),
             UploadedFile::fake()->createWithContent('candidate-two.jpg', 'file-two-bytes'),
@@ -94,12 +100,56 @@ test('admin can create batch with multiple files through existing intake prepara
         ->and(IntakeSourceContext::count())->toBe(2)
         ->and(MatrimonyProfile::count())->toBe(0);
 
-    expect(BiodataIntake::query()->pluck('raw_ocr_text')->all())->toBe([
-        'Name: File Candidate One',
-        'Name: File Candidate Two',
-    ]);
+    expect(BiodataIntake::query()->pluck('uploaded_by')->all())->toBe([null, null])
+        ->and(BiodataIntake::query()->pluck('raw_ocr_text')->all())->toBe([
+            'Name: File Candidate One',
+            'Name: File Candidate Two',
+        ]);
 
     Queue::assertNotPushed(ParseIntakeJob::class);
+});
+
+test('create page does not show existing member user field', function () {
+    $admin = adminBulkIntakeAdmin();
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.create'))
+        ->assertOk()
+        ->assertSee('Bulk intake is staging only', false)
+        ->assertDontSee('Existing member user ID', false)
+        ->assertDontSee('Mode A only', false);
+});
+
+test('unclaimed bulk persistence stores nullable uploaded by', function () {
+    $intake = app(IntakeCreationService::class)->persistPreparedForUnclaimedBulk([
+        'file_path' => null,
+        'original_filename' => null,
+        'raw_ocr_text' => 'Name: Unclaimed Candidate',
+    ]);
+
+    expect($intake->uploaded_by)->toBeNull()
+        ->and($intake->parse_status)->toBe('pending')
+        ->and(MatrimonyProfile::count())->toBe(0);
+});
+
+test('queue free parse works for unclaimed bulk intakes', function () {
+    Queue::fake();
+    $admin = adminBulkIntakeAdmin();
+
+    $this->actingAs($admin)->post(route('admin.bulk-intakes.store'), [
+        'batch_name' => 'Queue unclaimed text biodatas',
+        'raw_text' => "Name: Queue Candidate One\nMobile: 9000000301\n---INTAKE---\nName: Queue Candidate Two\nMobile: 9000000302",
+    ]);
+    $batch = BulkIntakeBatch::query()->sole();
+
+    $this->actingAs($admin)
+        ->post(route('admin.bulk-intakes.queue-free-parse', $batch))
+        ->assertRedirect(route('admin.bulk-intakes.show', $batch));
+
+    Queue::assertPushed(ParseIntakeJob::class, 2);
+    expect(BulkIntakeBatchItem::query()->where('item_status', BulkIntakeBatchItem::STATUS_PARSE_QUEUED)->count())->toBe(2)
+        ->and(BiodataIntake::query()->whereNull('uploaded_by')->count())->toBe(2)
+        ->and(MatrimonyProfile::count())->toBe(0);
 });
 
 test('bulk intake batch item does not store parsed profile data columns', function () {
@@ -109,35 +159,9 @@ test('bulk intake batch item does not store parsed profile data columns', functi
         ->and(Schema::hasColumn('bulk_intake_batch_items', 'normalized_profile_json'))->toBeFalse();
 });
 
-test('owner user cannot be admin', function () {
+test('unclaimed item retry idempotency does not duplicate biodata intake', function () {
     Queue::fake();
     $admin = adminBulkIntakeAdmin();
-    $adminOwner = User::factory()->create([
-        'is_admin' => true,
-        'admin_role' => 'super_admin',
-    ]);
-
-    $response = $this
-        ->actingAs($admin)
-        ->from(route('admin.bulk-intakes.create'))
-        ->post(route('admin.bulk-intakes.store'), [
-            'owner_user_id' => $adminOwner->id,
-            'raw_text' => 'Name: Should Not Create',
-        ]);
-
-    $response->assertRedirect(route('admin.bulk-intakes.create'));
-    $response->assertSessionHasErrors('owner_user_id');
-    expect(BulkIntakeBatch::count())->toBe(0)
-        ->and(BulkIntakeBatchItem::count())->toBe(0)
-        ->and(BiodataIntake::count())->toBe(0)
-        ->and(MatrimonyProfile::count())->toBe(0);
-    Queue::assertNotPushed(ParseIntakeJob::class);
-});
-
-test('item retry idempotency does not duplicate biodata intake', function () {
-    Queue::fake();
-    $admin = adminBulkIntakeAdmin();
-    $member = adminBulkIntakeMember();
     $batchService = app(BulkIntakeBatchService::class);
     $batch = $batchService->createBatch([
         'uploaded_by_user_id' => $admin->id,
@@ -151,18 +175,16 @@ test('item retry idempotency does not duplicate biodata intake', function () {
         'idempotency_key' => 'retry-bulk-item-one',
     ]);
 
-    $first = $batchService->createIntakeForItem(
+    $first = $batchService->createUnclaimedIntakeForItem(
         $item,
-        $member,
         $admin,
         app(IntakeCreationService::class),
         app(IntakeSourceContextRecorder::class),
         null,
         'Name: Retry Candidate'
     );
-    $second = $batchService->createIntakeForItem(
+    $second = $batchService->createUnclaimedIntakeForItem(
         $first,
-        $member,
         $admin,
         app(IntakeCreationService::class),
         app(IntakeSourceContextRecorder::class),
@@ -174,6 +196,7 @@ test('item retry idempotency does not duplicate biodata intake', function () {
         ->and($second->biodata_intake_id)->toBe($first->biodata_intake_id)
         ->and($second->item_status)->toBe(BulkIntakeBatchItem::STATUS_INTAKE_CREATED)
         ->and(BiodataIntake::count())->toBe(1)
+        ->and(BiodataIntake::query()->first()->uploaded_by)->toBeNull()
         ->and(IntakeSourceContext::count())->toBe(1);
     Queue::assertNotPushed(ParseIntakeJob::class);
 });
@@ -183,13 +206,5 @@ function adminBulkIntakeAdmin(): User
     return User::factory()->create([
         'is_admin' => true,
         'admin_role' => 'super_admin',
-    ]);
-}
-
-function adminBulkIntakeMember(): User
-{
-    return User::factory()->create([
-        'is_admin' => false,
-        'admin_role' => null,
     ]);
 }

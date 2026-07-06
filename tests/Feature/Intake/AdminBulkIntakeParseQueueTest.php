@@ -22,8 +22,7 @@ test('admin can queue free parse for bulk-created pending intakes', function () 
     Queue::fake();
 
     $admin = parseQueueAdminUser();
-    $member = parseQueueMemberUser();
-    $batch = createParseQueueTextBatch($this, $admin, $member);
+    $batch = createParseQueueTextBatch($this, $admin);
 
     Queue::assertNotPushed(ParseIntakeJob::class);
 
@@ -60,8 +59,7 @@ test('queue free parse skips already parsed non pending intakes', function () {
     Queue::fake();
 
     $admin = parseQueueAdminUser();
-    $member = parseQueueMemberUser();
-    $batch = createParseQueueTextBatch($this, $admin, $member);
+    $batch = createParseQueueTextBatch($this, $admin);
     $items = BulkIntakeBatchItem::query()
         ->where('bulk_intake_batch_id', $batch->id)
         ->with('biodataIntake')
@@ -94,8 +92,7 @@ test('queue free parse is idempotent for already queued items', function () {
     Queue::fake();
 
     $admin = parseQueueAdminUser();
-    $member = parseQueueMemberUser();
-    $batch = createParseQueueTextBatch($this, $admin, $member);
+    $batch = createParseQueueTextBatch($this, $admin);
 
     $this->actingAs($admin)->post(route('admin.bulk-intakes.queue-free-parse', $batch))
         ->assertRedirect(route('admin.bulk-intakes.show', $batch));
@@ -117,8 +114,7 @@ test('approved or locked intake is skipped', function () {
     Queue::fake();
 
     $admin = parseQueueAdminUser();
-    $member = parseQueueMemberUser();
-    $batch = createParseQueueTextBatch($this, $admin, $member);
+    $batch = createParseQueueTextBatch($this, $admin);
     $items = BulkIntakeBatchItem::query()
         ->where('bulk_intake_batch_id', $batch->id)
         ->with('biodataIntake')
@@ -142,7 +138,7 @@ test('non admin cannot queue bulk parse', function () {
 
     $admin = parseQueueAdminUser();
     $member = parseQueueMemberUser();
-    $batch = createParseQueueTextBatch($this, $admin, $member);
+    $batch = createParseQueueTextBatch($this, $admin);
 
     $this->actingAs($member)
         ->post(route('admin.bulk-intakes.queue-free-parse', $batch))
@@ -160,8 +156,7 @@ test('paid vision service is not invoked by controller service queue path', func
     });
 
     $admin = parseQueueAdminUser();
-    $member = parseQueueMemberUser();
-    $batch = createParseQueueTextBatch($this, $admin, $member);
+    $batch = createParseQueueTextBatch($this, $admin);
 
     $this->actingAs($admin)
         ->post(route('admin.bulk-intakes.queue-free-parse', $batch))
@@ -170,11 +165,10 @@ test('paid vision service is not invoked by controller service queue path', func
     Queue::assertPushed(ParseIntakeJob::class, 2);
 });
 
-function createParseQueueTextBatch(object $testCase, User $admin, User $member): BulkIntakeBatch
+function createParseQueueTextBatch(object $testCase, User $admin): BulkIntakeBatch
 {
     $response = $testCase->actingAs($admin)->post(route('admin.bulk-intakes.store'), [
         'batch_name' => 'Parse queue test batch',
-        'owner_user_id' => $member->id,
         'raw_text' => "Name: Parse Queue Candidate One\nMobile: 9000000101\n---INTAKE---\nName: Parse Queue Candidate Two\nMobile: 9000000102",
     ]);
 
@@ -182,6 +176,7 @@ function createParseQueueTextBatch(object $testCase, User $admin, User $member):
     $response->assertRedirect(route('admin.bulk-intakes.show', $batch));
 
     expect(BiodataIntake::query()->where('parse_status', 'pending')->count())->toBe(2);
+    expect(BiodataIntake::query()->whereNull('uploaded_by')->count())->toBe(2);
 
     return $batch;
 }
