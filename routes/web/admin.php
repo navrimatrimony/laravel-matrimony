@@ -648,6 +648,9 @@ Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('ad
         Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/create-owner', [AdminBulkIntakeController::class, 'createOwner'])->name('items.create-owner.store');
         Route::get('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/readiness', [AdminBulkIntakeController::class, 'readiness'])->name('items.readiness');
         Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/bootstrap-draft-profile', [AdminBulkIntakeController::class, 'bootstrapDraftProfile'])->name('items.bootstrap-draft-profile');
+        Route::get('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/apply-preview', [AdminBulkIntakeController::class, 'applyPreview'])->name('items.apply-preview');
+        Route::get('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/manual-transcript', [AdminBulkIntakeController::class, 'manualTranscriptForm'])->name('items.manual-transcript');
+        Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/manual-transcript', [AdminBulkIntakeController::class, 'storeManualTranscript'])->name('items.manual-transcript.store');
         Route::get('/{bulkIntakeBatch}', [AdminBulkIntakeController::class, 'show'])->name('show');
     });
 

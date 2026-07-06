@@ -17,6 +17,8 @@ class BiodataIntakeOcrAttempt extends Model
 
     public const ENGINE_REUSED_TRANSCRIPT = 'reused_transcript';
 
+    public const ENGINE_MANUAL_TRANSCRIPT = 'manual_transcript';
+
     public const ACTOR_ADMIN = 'admin';
 
     public const ACTOR_PROFILE_USER = 'profile_user';

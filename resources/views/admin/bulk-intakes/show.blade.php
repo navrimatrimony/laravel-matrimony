@@ -194,6 +194,14 @@
                                 if ($intake && (string) $intake->parse_status === 'parsed' && ! $hasParsedJson) {
                                     $exceptionBadges[] = ['label' => 'Parsed JSON missing', 'class' => 'border-orange-200 bg-orange-50 text-orange-700'];
                                 }
+                                $lastError = (string) ($intake?->last_error ?? '');
+                                $canAddManualTranscript = $intake && (
+                                    ! $hasParsedJson
+                                    || (string) $intake->parse_status === 'error'
+                                    || filled($lastError)
+                                    || str_contains($lastError, 'empty_text')
+                                    || str_contains($lastError, 'reparse_no_canonical_or_raw_ocr')
+                                );
                             @endphp
                             <tr>
                                 <td class="px-4 py-2 text-sm text-gray-900">{{ $item->item_sequence }}</td>
@@ -264,6 +272,12 @@
                                             <a href="{{ route('admin.biodata-intakes.show', $intake) }}" class="font-medium text-indigo-600 hover:text-indigo-800">Open intake review</a>
                                         @endif
                                         <a href="{{ route('admin.bulk-intakes.items.readiness', [$batch, $item]) }}" class="font-medium text-slate-700 hover:text-slate-900">Readiness details</a>
+                                        @if ($canAddManualTranscript)
+                                            <a href="{{ route('admin.bulk-intakes.items.manual-transcript', [$batch, $item]) }}" class="font-medium text-orange-700 hover:text-orange-900">Add manual transcript</a>
+                                        @endif
+                                        @if ($intake && $intake->matrimony_profile_id && $item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_PROFILE_DRAFT_CREATED)
+                                            <a href="{{ route('admin.bulk-intakes.items.apply-preview', [$batch, $item]) }}" class="font-medium text-purple-700 hover:text-purple-900">Preview parsed fields</a>
+                                        @endif
                                         @if (($readiness['status'] ?? null) === 'ready_for_profile_review')
                                             <form method="POST" action="{{ route('admin.bulk-intakes.items.bootstrap-draft-profile', [$batch, $item]) }}" class="space-y-2 rounded-lg border border-green-200 bg-green-50 p-3 text-xs text-green-900">
                                                 @csrf

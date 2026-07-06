@@ -21,7 +21,10 @@ test('admin bulk intake route names exist', function () {
         ->and(route('admin.bulk-intakes.items.create-owner', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/create-owner'))
         ->and(route('admin.bulk-intakes.items.create-owner.store', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/create-owner'))
         ->and(route('admin.bulk-intakes.items.readiness', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/readiness'))
-        ->and(route('admin.bulk-intakes.items.bootstrap-draft-profile', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/bootstrap-draft-profile'));
+        ->and(route('admin.bulk-intakes.items.bootstrap-draft-profile', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/bootstrap-draft-profile'))
+        ->and(route('admin.bulk-intakes.items.apply-preview', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/apply-preview'))
+        ->and(route('admin.bulk-intakes.items.manual-transcript', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/manual-transcript'))
+        ->and(route('admin.bulk-intakes.items.manual-transcript.store', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/manual-transcript'));
 });
 
 test('admin can access bulk intake index create and show pages', function () {
@@ -116,6 +119,20 @@ test('non admin cannot access admin bulk intake routes', function () {
 
     $this->actingAs($member)
         ->post(route('admin.bulk-intakes.items.bootstrap-draft-profile', [$batch, $item]))
+        ->assertForbidden();
+
+    $this->actingAs($member)
+        ->get(route('admin.bulk-intakes.items.apply-preview', [$batch, $item]))
+        ->assertForbidden();
+
+    $this->actingAs($member)
+        ->get(route('admin.bulk-intakes.items.manual-transcript', [$batch, $item]))
+        ->assertForbidden();
+
+    $this->actingAs($member)
+        ->post(route('admin.bulk-intakes.items.manual-transcript.store', [$batch, $item]), [
+            'transcript' => str_repeat('Manual transcript text. ', 2),
+        ])
         ->assertForbidden();
 });
 

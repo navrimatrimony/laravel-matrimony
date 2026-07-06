@@ -7,8 +7,10 @@ use App\Models\BulkIntakeBatch;
 use App\Models\BulkIntakeBatchItem;
 use App\Models\IntakeSourceContext;
 use App\Models\User;
+use App\Services\Intake\BulkIntakeApplyPreviewService;
 use App\Services\Intake\BulkIntakeBatchService;
 use App\Services\Intake\BulkIntakeDraftProfileBootstrapService;
+use App\Services\Intake\BulkIntakeManualTranscriptService;
 use App\Services\Intake\BulkIntakeReadinessService;
 use App\Services\Intake\IntakeCreationService;
 use App\Services\Intake\IntakeOwnerAssignmentService;
@@ -191,7 +193,7 @@ class AdminBulkIntakeController extends Controller
         abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
         abort_unless($request->user() instanceof User, 403);
 
-        $validated = $request->validate([
+        $request->validate([
             'bootstrap_confirmed' => ['accepted'],
         ]);
 
@@ -203,6 +205,83 @@ class AdminBulkIntakeController extends Controller
         return redirect()
             ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
             ->with('success', 'Draft profile shell created for profile #'.$result['profile']->id.'. Parsed biodata fields were not applied.');
+    }
+
+    public function applyPreview(
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeApplyPreviewService $previewService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+
+        $bulkIntakeBatch->load('uploadedByUser:id,name,email,mobile');
+        $bulkIntakeBatchItem->load([
+            'biodataIntake:id,uploaded_by,matrimony_profile_id,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,parsed_json,created_at',
+            'biodataIntake.uploadedByUser:id,name,email,mobile,is_admin,admin_role',
+            'biodataIntake.profile',
+        ]);
+
+        $preview = $previewService->previewForItem($bulkIntakeBatchItem);
+
+        return view('admin.bulk-intakes.apply-preview', [
+            'batch' => $bulkIntakeBatch,
+            'item' => $bulkIntakeBatchItem,
+            'intake' => $bulkIntakeBatchItem->biodataIntake,
+            'profile' => $bulkIntakeBatchItem->biodataIntake?->profile,
+            'preview' => $preview,
+        ]);
+    }
+
+    public function manualTranscriptForm(BulkIntakeBatch $bulkIntakeBatch, BulkIntakeBatchItem $bulkIntakeBatchItem)
+    {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+
+        $bulkIntakeBatch->load('uploadedByUser:id,name,email,mobile');
+        $bulkIntakeBatchItem->load([
+            'biodataIntake:id,uploaded_by,matrimony_profile_id,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,parsed_json,raw_ocr_text,last_parse_input_text,created_at',
+            'biodataIntake.uploadedByUser:id,name,email,mobile,is_admin,admin_role',
+        ]);
+
+        abort_unless($bulkIntakeBatchItem->biodataIntake !== null, 404);
+
+        return view('admin.bulk-intakes.manual-transcript', [
+            'batch' => $bulkIntakeBatch,
+            'item' => $bulkIntakeBatchItem,
+            'intake' => $bulkIntakeBatchItem->biodataIntake,
+        ]);
+    }
+
+    public function storeManualTranscript(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeManualTranscriptService $manualTranscriptService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $validated = $request->validate([
+            'transcript' => ['required', 'string', 'min:20', 'max:30000'],
+            'queue_parse' => ['nullable', 'boolean'],
+        ]);
+
+        $bulkIntakeBatchItem->load('biodataIntake:id,uploaded_by,parse_status,last_error,approved_by_user,intake_locked,parsed_json,raw_ocr_text,last_parse_input_text');
+        abort_unless($bulkIntakeBatchItem->biodataIntake !== null, 404);
+
+        $result = $manualTranscriptService->saveTranscriptForItem(
+            $bulkIntakeBatchItem,
+            $request->user(),
+            (string) $validated['transcript'],
+            $request->boolean('queue_parse')
+        );
+
+        $message = $result['queued']
+            ? 'Manual transcript saved and parse-input-only parse queued. Raw OCR text was not overwritten.'
+            : 'Manual transcript saved as parse input evidence. Raw OCR text was not overwritten.';
+
+        return redirect()
+            ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
+            ->with('success', $message);
     }
 
     public function assignOwnerForm(BulkIntakeBatch $bulkIntakeBatch, BulkIntakeBatchItem $bulkIntakeBatchItem)
