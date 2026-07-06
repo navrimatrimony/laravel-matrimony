@@ -640,6 +640,8 @@ Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('ad
         Route::post('/', [AdminBulkIntakeController::class, 'store'])->name('store');
         Route::post('/{bulkIntakeBatch}/queue-free-parse', [AdminBulkIntakeController::class, 'queueFreeParse'])->name('queue-free-parse');
         Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/queue-free-parse', [AdminBulkIntakeController::class, 'queueFreeParseItem'])->name('items.queue-free-parse');
+        Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/mark-needs-review', [AdminBulkIntakeController::class, 'markItemNeedsReview'])->name('items.mark-needs-review');
+        Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/clear-needs-review', [AdminBulkIntakeController::class, 'clearItemNeedsReview'])->name('items.clear-needs-review');
         Route::get('/{bulkIntakeBatch}', [AdminBulkIntakeController::class, 'show'])->name('show');
     });
 

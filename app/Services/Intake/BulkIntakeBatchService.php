@@ -465,6 +465,80 @@ class BulkIntakeBatchService
         }
     }
 
+    public function markItemNeedsReview(BulkIntakeBatchItem $item, User $actor, ?string $reason = null): BulkIntakeBatchItem
+    {
+        $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
+        if ((string) $item->item_status !== BulkIntakeBatchItem::STATUS_NEEDS_REVIEW) {
+            $meta['previous_item_status'] = (string) $item->item_status;
+        }
+
+        $meta['needs_review_marked_by_user_id'] = (int) $actor->id;
+        $meta['needs_review_marked_at'] = now()->toIso8601String();
+        $meta['needs_review_reason'] = $this->stringOrNull($reason);
+
+        $item->forceFill([
+            'item_status' => BulkIntakeBatchItem::STATUS_NEEDS_REVIEW,
+            'item_meta_json' => $meta,
+            'failure_code' => null,
+            'failure_message' => null,
+        ])->save();
+
+        $batch = $item->batch;
+        if ($batch !== null) {
+            $this->refreshCounters($batch);
+        }
+
+        return $item->refresh();
+    }
+
+    public function clearItemNeedsReview(BulkIntakeBatchItem $item, User $actor): BulkIntakeBatchItem
+    {
+        $item->loadMissing('biodataIntake');
+
+        $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
+        $previousStatus = $this->stringOrNull($meta['previous_item_status'] ?? null);
+        $targetStatus = $previousStatus ?? $this->defaultStatusAfterReviewClear($item);
+
+        unset($meta['previous_item_status']);
+        $meta['needs_review_cleared_by_user_id'] = (int) $actor->id;
+        $meta['needs_review_cleared_at'] = now()->toIso8601String();
+        $meta['needs_review_restored_item_status'] = $targetStatus;
+
+        $item->forceFill([
+            'item_status' => $targetStatus,
+            'item_meta_json' => $meta,
+        ])->save();
+
+        $batch = $item->batch;
+        if ($batch !== null) {
+            $this->refreshCounters($batch);
+        }
+
+        return $item->refresh();
+    }
+
+    /**
+     * @return array{total: int, unclaimed: int, intakes_created: int, parse_pending: int, parse_queued: int, parsed: int, parse_error: int, needs_review: int, failed: int}
+     */
+    public function buildBatchReviewSummary(BulkIntakeBatch $batch): array
+    {
+        $items = $batch->items()
+            ->with('biodataIntake:id,uploaded_by,parse_status,last_error,parsed_json')
+            ->get();
+
+        return [
+            'total' => $items->count(),
+            'unclaimed' => $items->filter(fn (BulkIntakeBatchItem $item): bool => $item->biodataIntake instanceof BiodataIntake && $item->biodataIntake->uploaded_by === null)->count(),
+            'intakes_created' => $items->whereNotNull('biodata_intake_id')->count(),
+            'parse_pending' => $items->filter(fn (BulkIntakeBatchItem $item): bool => $item->biodataIntake instanceof BiodataIntake && (string) $item->biodataIntake->parse_status === 'pending')->count(),
+            'parse_queued' => $items->where('item_status', BulkIntakeBatchItem::STATUS_PARSE_QUEUED)->count(),
+            'parsed' => $items->filter(fn (BulkIntakeBatchItem $item): bool => $item->biodataIntake instanceof BiodataIntake && (string) $item->biodataIntake->parse_status === 'parsed')->count(),
+            'parse_error' => $items->filter(fn (BulkIntakeBatchItem $item): bool => $item->biodataIntake instanceof BiodataIntake && (string) $item->biodataIntake->parse_status === 'error')->count(),
+            'needs_review' => $items->where('item_status', BulkIntakeBatchItem::STATUS_NEEDS_REVIEW)->count(),
+            'failed' => $items->where('item_status', BulkIntakeBatchItem::STATUS_FAILED)->count(),
+        ];
+    }
+
     public function refreshCounters(BulkIntakeBatch $batch): BulkIntakeBatch
     {
         $items = $batch->items();
@@ -569,6 +643,16 @@ class BulkIntakeBatchService
                 $reason => 1,
             ],
         ];
+    }
+
+    private function defaultStatusAfterReviewClear(BulkIntakeBatchItem $item): string
+    {
+        $intake = $item->biodataIntake;
+        if ($intake instanceof BiodataIntake && (string) $intake->parse_status === 'error') {
+            return BulkIntakeBatchItem::STATUS_FAILED;
+        }
+
+        return BulkIntakeBatchItem::STATUS_INTAKE_CREATED;
     }
 
     private function stringOrNull(mixed $value): ?string

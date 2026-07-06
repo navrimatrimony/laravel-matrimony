@@ -99,14 +99,25 @@ class AdminBulkIntakeController extends Controller
             ->with('success', 'Bulk intake batch processed as unclaimed staging. Parsing and profile apply remain separate.');
     }
 
-    public function show(BulkIntakeBatch $bulkIntakeBatch)
+    public function show(Request $request, BulkIntakeBatch $bulkIntakeBatch, BulkIntakeBatchService $batchService)
     {
-        $bulkIntakeBatch->load([
-            'uploadedByUser:id,name,email',
-            'items' => fn ($query) => $query->orderBy('item_sequence'),
-            'items.biodataIntake:id,uploaded_by,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,created_at',
-            'items.biodataIntake.uploadedByUser:id,name,email',
-        ]);
+        $statusFilters = $this->bulkItemStatusFilters();
+        $statusFilter = (string) $request->query('status', 'all');
+        if (! array_key_exists($statusFilter, $statusFilters)) {
+            $statusFilter = 'all';
+        }
+
+        $bulkIntakeBatch->load('uploadedByUser:id,name,email,mobile');
+
+        $itemsQuery = $bulkIntakeBatch->items()
+            ->with([
+                'biodataIntake:id,uploaded_by,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,parsed_json,created_at',
+                'biodataIntake.uploadedByUser:id,name,email,mobile',
+            ])
+            ->orderBy('item_sequence');
+
+        $this->applyBulkItemStatusFilter($itemsQuery, $statusFilter);
+        $bulkIntakeBatch->setRelation('items', $itemsQuery->get());
 
         $sourceContextCountsByItem = IntakeSourceContext::query()
             ->where('bulk_intake_batch_id', $bulkIntakeBatch->id)
@@ -118,6 +129,9 @@ class AdminBulkIntakeController extends Controller
         return view('admin.bulk-intakes.show', [
             'batch' => $bulkIntakeBatch,
             'sourceContextCountsByItem' => $sourceContextCountsByItem,
+            'reviewSummary' => $batchService->buildBatchReviewSummary($bulkIntakeBatch),
+            'statusFilter' => $statusFilter,
+            'statusFilters' => $statusFilters,
         ]);
     }
 
@@ -140,6 +154,42 @@ class AdminBulkIntakeController extends Controller
         return redirect()
             ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
             ->with('success', $this->queueSummaryMessage($summary));
+    }
+
+    public function markItemNeedsReview(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeBatchService $batchService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $batchService->markItemNeedsReview($bulkIntakeBatchItem, $request->user(), $validated['reason'] ?? null);
+
+        return redirect()
+            ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
+            ->with('success', 'Bulk intake item marked as needs review.');
+    }
+
+    public function clearItemNeedsReview(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeBatchService $batchService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $batchService->clearItemNeedsReview($bulkIntakeBatchItem, $request->user());
+
+        return redirect()
+            ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
+            ->with('success', 'Bulk intake item review flag cleared.');
     }
 
     public function queueFreeParseItem(
@@ -190,5 +240,40 @@ class AdminBulkIntakeController extends Controller
         }
 
         return $message;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function bulkItemStatusFilters(): array
+    {
+        return [
+            'all' => 'All',
+            'unclaimed' => 'Unclaimed',
+            'pending' => 'Pending',
+            'parse_queued' => 'Parse Queued',
+            'parsed' => 'Parsed',
+            'parse_error' => 'Parse Error',
+            'needs_review' => 'Needs Review',
+            'failed' => 'Failed',
+        ];
+    }
+
+    private function applyBulkItemStatusFilter($query, string $statusFilter): void
+    {
+        match ($statusFilter) {
+            'unclaimed' => $query->whereHas('biodataIntake', fn ($intakeQuery) => $intakeQuery->whereNull('uploaded_by')),
+            'pending' => $query->where(function ($nested): void {
+                $nested
+                    ->where('item_status', BulkIntakeBatchItem::STATUS_PENDING)
+                    ->orWhereHas('biodataIntake', fn ($intakeQuery) => $intakeQuery->where('parse_status', 'pending'));
+            }),
+            'parse_queued' => $query->where('item_status', BulkIntakeBatchItem::STATUS_PARSE_QUEUED),
+            'parsed' => $query->whereHas('biodataIntake', fn ($intakeQuery) => $intakeQuery->where('parse_status', 'parsed')),
+            'parse_error' => $query->whereHas('biodataIntake', fn ($intakeQuery) => $intakeQuery->where('parse_status', 'error')),
+            'needs_review' => $query->where('item_status', BulkIntakeBatchItem::STATUS_NEEDS_REVIEW),
+            'failed' => $query->where('item_status', BulkIntakeBatchItem::STATUS_FAILED),
+            default => null,
+        };
     }
 }
