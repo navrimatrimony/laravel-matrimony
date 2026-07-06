@@ -264,6 +264,17 @@
                                             <a href="{{ route('admin.biodata-intakes.show', $intake) }}" class="font-medium text-indigo-600 hover:text-indigo-800">Open intake review</a>
                                         @endif
                                         <a href="{{ route('admin.bulk-intakes.items.readiness', [$batch, $item]) }}" class="font-medium text-slate-700 hover:text-slate-900">Readiness details</a>
+                                        @if (($readiness['status'] ?? null) === 'ready_for_profile_review')
+                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.bootstrap-draft-profile', [$batch, $item]) }}" class="space-y-2 rounded-lg border border-green-200 bg-green-50 p-3 text-xs text-green-900">
+                                                @csrf
+                                                <p>This creates an empty draft profile shell only. Parsed biodata fields are not applied in this step.</p>
+                                                <label class="flex items-start gap-2">
+                                                    <input type="checkbox" name="bootstrap_confirmed" value="1" class="mt-0.5 rounded border-green-400 text-indigo-600 focus:ring-indigo-500">
+                                                    <span>I confirm this ready item should get a draft profile shell.</span>
+                                                </label>
+                                                <button type="submit" class="text-left text-sm font-semibold text-green-700 hover:text-green-900">Create draft profile</button>
+                                            </form>
+                                        @endif
                                         @if ($intake && $intake->uploaded_by === null)
                                             <a href="{{ route('admin.bulk-intakes.items.assign-owner', [$batch, $item]) }}" class="font-medium text-blue-700 hover:text-blue-900">Assign owner</a>
                                             <a href="{{ route('admin.bulk-intakes.items.create-owner', [$batch, $item]) }}" class="font-medium text-emerald-700 hover:text-emerald-900">Create owner</a>

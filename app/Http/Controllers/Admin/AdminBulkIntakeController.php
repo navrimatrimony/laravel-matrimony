@@ -8,6 +8,7 @@ use App\Models\BulkIntakeBatchItem;
 use App\Models\IntakeSourceContext;
 use App\Models\User;
 use App\Services\Intake\BulkIntakeBatchService;
+use App\Services\Intake\BulkIntakeDraftProfileBootstrapService;
 use App\Services\Intake\BulkIntakeReadinessService;
 use App\Services\Intake\IntakeCreationService;
 use App\Services\Intake\IntakeOwnerAssignmentService;
@@ -179,6 +180,29 @@ class AdminBulkIntakeController extends Controller
             'intake' => $bulkIntakeBatchItem->biodataIntake,
             'readiness' => $readinessService->readinessForItem($bulkIntakeBatchItem),
         ]);
+    }
+
+    public function bootstrapDraftProfile(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeDraftProfileBootstrapService $bootstrapService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $validated = $request->validate([
+            'bootstrap_confirmed' => ['accepted'],
+        ]);
+
+        $bulkIntakeBatchItem->load('biodataIntake:id,uploaded_by,matrimony_profile_id,parse_status,approved_by_user,intake_locked,parsed_json');
+        abort_unless($bulkIntakeBatchItem->biodataIntake !== null, 404);
+
+        $result = $bootstrapService->bootstrapForItem($bulkIntakeBatchItem, $request->user());
+
+        return redirect()
+            ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
+            ->with('success', 'Draft profile shell created for profile #'.$result['profile']->id.'. Parsed biodata fields were not applied.');
     }
 
     public function assignOwnerForm(BulkIntakeBatch $bulkIntakeBatch, BulkIntakeBatchItem $bulkIntakeBatchItem)

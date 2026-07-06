@@ -543,13 +543,16 @@ class BulkIntakeBatchService
     public function refreshCounters(BulkIntakeBatch $batch): BulkIntakeBatch
     {
         $items = $batch->items();
+        $profilesCreated = (clone $items)
+            ->whereHas('biodataIntake', fn ($intakeQuery) => $intakeQuery->whereNotNull('matrimony_profile_id'))
+            ->count();
 
         $batch->forceFill([
             'total_items' => (clone $items)->count(),
             'total_files' => (clone $items)->where('input_type', BulkIntakeBatchItem::INPUT_FILE)->count(),
             'total_texts' => (clone $items)->where('input_type', BulkIntakeBatchItem::INPUT_TEXT)->count(),
             'total_intakes_created' => (clone $items)->whereNotNull('biodata_intake_id')->count(),
-            'total_profiles_created' => 0,
+            'total_profiles_created' => $profilesCreated,
             'total_conflicts_generated' => 0,
             'total_needs_review' => (clone $items)->where('item_status', BulkIntakeBatchItem::STATUS_NEEDS_REVIEW)->count(),
             'total_failed' => (clone $items)->where('item_status', BulkIntakeBatchItem::STATUS_FAILED)->count(),

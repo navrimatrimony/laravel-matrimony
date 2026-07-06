@@ -25,6 +25,8 @@ class BulkIntakeBatchItem extends Model
 
     public const STATUS_PARSE_QUEUED = 'parse_queued';
 
+    public const STATUS_PROFILE_DRAFT_CREATED = 'profile_draft_created';
+
     public const STATUS_NEEDS_REVIEW = 'needs_review';
 
     public const STATUS_FAILED = 'failed';
