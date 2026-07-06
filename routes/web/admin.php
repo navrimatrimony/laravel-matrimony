@@ -644,6 +644,8 @@ Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('ad
         Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/clear-needs-review', [AdminBulkIntakeController::class, 'clearItemNeedsReview'])->name('items.clear-needs-review');
         Route::get('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/assign-owner', [AdminBulkIntakeController::class, 'assignOwnerForm'])->name('items.assign-owner');
         Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/assign-owner', [AdminBulkIntakeController::class, 'assignOwner'])->name('items.assign-owner.store');
+        Route::get('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/create-owner', [AdminBulkIntakeController::class, 'createOwnerForm'])->name('items.create-owner');
+        Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/create-owner', [AdminBulkIntakeController::class, 'createOwner'])->name('items.create-owner.store');
         Route::get('/{bulkIntakeBatch}', [AdminBulkIntakeController::class, 'show'])->name('show');
     });
 

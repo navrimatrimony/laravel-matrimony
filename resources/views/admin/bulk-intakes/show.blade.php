@@ -202,6 +202,7 @@
                                             <a href="{{ route('admin.biodata-intakes.show', $intake) }}" class="font-medium text-indigo-600 hover:text-indigo-800">Open intake review</a>
                                             @if ($intake->uploaded_by === null)
                                                 <a href="{{ route('admin.bulk-intakes.items.assign-owner', [$batch, $item]) }}" class="font-medium text-blue-700 hover:text-blue-900">Assign owner</a>
+                                                <a href="{{ route('admin.bulk-intakes.items.create-owner', [$batch, $item]) }}" class="font-medium text-emerald-700 hover:text-emerald-900">Create owner</a>
                                             @endif
                                         @endif
 

@@ -11,7 +11,10 @@ use App\Services\Intake\BulkIntakeBatchService;
 use App\Services\Intake\IntakeCreationService;
 use App\Services\Intake\IntakeOwnerAssignmentService;
 use App\Services\Intake\IntakeSourceContextRecorder;
+use App\Support\MobileNumber;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AdminBulkIntakeController extends Controller
@@ -195,6 +198,86 @@ class AdminBulkIntakeController extends Controller
         return redirect()
             ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
             ->with('success', 'Owner assigned to intake after consent confirmation.');
+    }
+
+    public function createOwnerForm(BulkIntakeBatch $bulkIntakeBatch, BulkIntakeBatchItem $bulkIntakeBatchItem)
+    {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+
+        $bulkIntakeBatch->load('uploadedByUser:id,name,email,mobile');
+        $bulkIntakeBatchItem->load('biodataIntake:id,uploaded_by,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,parsed_json,created_at');
+        $intake = $bulkIntakeBatchItem->biodataIntake;
+
+        abort_unless($intake !== null, 404);
+
+        if ($intake->uploaded_by !== null) {
+            return redirect()
+                ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
+                ->with('error', 'Owner already assigned. Reassignment is not available in this phase.');
+        }
+
+        return view('admin.bulk-intakes.create-owner', [
+            'batch' => $bulkIntakeBatch,
+            'item' => $bulkIntakeBatchItem,
+            'intake' => $intake,
+        ]);
+    }
+
+    public function createOwner(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        IntakeOwnerAssignmentService $ownerAssignmentService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $bulkIntakeBatchItem->load('biodataIntake:id,uploaded_by,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,parsed_json,created_at');
+        $intake = $bulkIntakeBatchItem->biodataIntake;
+        abort_unless($intake !== null, 404);
+
+        if ($intake->uploaded_by !== null) {
+            return redirect()
+                ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
+                ->with('error', 'Owner already assigned. Reassignment is not available in this phase.');
+        }
+
+        $validated = $request->validate([
+            'new_name' => ['required', 'string', 'max:255'],
+            'new_mobile' => ['required', 'string', 'max:32'],
+            'new_email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')],
+            'registering_for' => ['required', Rule::in(['self', 'parent_guardian', 'sibling', 'relative', 'friend', 'other'])],
+            'consent_confirmed' => ['accepted'],
+            'consent_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $mobile = MobileNumber::normalize($validated['new_mobile']);
+        if ($mobile === null) {
+            return back()
+                ->withInput()
+                ->withErrors(['new_mobile' => __('otp.enter_valid_10_digit_mobile')]);
+        }
+
+        Validator::make(
+            ['new_mobile' => $mobile],
+            ['new_mobile' => ['required', Rule::unique('users', 'mobile')]],
+            ['new_mobile.unique' => __('auth.mobile_duplicate_register')]
+        )->validate();
+
+        $ownerAssignmentService->createMemberAndAssignToUnclaimedIntake($intake, $request->user(), [
+            'name' => $validated['new_name'],
+            'email' => $validated['new_email'] ?? null,
+            'mobile' => $mobile,
+            'registering_for' => $validated['registering_for'],
+        ], [
+            'bulk_intake_batch_id' => $bulkIntakeBatch->id,
+            'bulk_intake_batch_item_id' => $bulkIntakeBatchItem->id,
+            'consent_note' => $validated['consent_note'] ?? null,
+        ]);
+
+        return redirect()
+            ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
+            ->with('success', 'New member owner created and assigned after consent confirmation.');
     }
 
     public function queueFreeParse(
