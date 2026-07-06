@@ -79,7 +79,10 @@ class BulkIntakeReadinessService
             $notReadyReasons[] = 'needs_review';
         }
 
-        if ((string) $item->item_status === BulkIntakeBatchItem::STATUS_PARSE_QUEUED) {
+        if (
+            (string) $item->item_status === BulkIntakeBatchItem::STATUS_PARSE_QUEUED
+            && (string) $intake->parse_status !== 'parsed'
+        ) {
             $notReadyReasons[] = 'parse_queued';
         } elseif ((string) $intake->parse_status === 'pending') {
             $notReadyReasons[] = 'parse_pending';

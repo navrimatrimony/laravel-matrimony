@@ -71,6 +71,61 @@ test('parse pending item is not ready', function () {
         ->and($readiness['reason_codes'])->toContain('parse_pending');
 });
 
+test('stale parse queued item is ready when linked intake is parsed with parsed json', function () {
+    $owner = readinessMemberUser();
+    $batch = readinessBatch(readinessAdminUser());
+    $intake = readinessIntake($owner, [
+        'parse_status' => 'parsed',
+        'parsed_json' => ['core' => ['full_name' => 'Stale Queue Ready Candidate']],
+    ]);
+    $item = readinessItem($batch, [
+        'biodata_intake_id' => $intake->id,
+        'item_status' => BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
+    ]);
+
+    $readiness = app(BulkIntakeReadinessService::class)->readinessForItem($item);
+
+    expect($readiness['status'])->toBe('ready_for_profile_review')
+        ->and($readiness['ready'])->toBeTrue()
+        ->and($readiness['reason_codes'])->toBe([]);
+});
+
+test('stale parse queued item with parsed intake and existing owner profile is blocked only by profile', function () {
+    $owner = readinessMemberUser();
+    MatrimonyProfile::factory()->create(['user_id' => $owner->id]);
+    $batch = readinessBatch(readinessAdminUser());
+    $intake = readinessIntake($owner, [
+        'parse_status' => 'parsed',
+        'parsed_json' => ['core' => ['full_name' => 'Stale Queue Blocked Candidate']],
+    ]);
+    $item = readinessItem($batch, [
+        'biodata_intake_id' => $intake->id,
+        'item_status' => BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
+    ]);
+
+    $readiness = app(BulkIntakeReadinessService::class)->readinessForItem($item);
+
+    expect($readiness['status'])->toBe('blocked')
+        ->and($readiness['ready'])->toBeFalse()
+        ->and($readiness['reason_codes'])->toBe(['already_has_profile']);
+});
+
+test('parse queued item remains not ready while linked intake is still pending', function () {
+    $owner = readinessMemberUser();
+    $batch = readinessBatch(readinessAdminUser());
+    $intake = readinessIntake($owner, ['parse_status' => 'pending']);
+    $item = readinessItem($batch, [
+        'biodata_intake_id' => $intake->id,
+        'item_status' => BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
+    ]);
+
+    $readiness = app(BulkIntakeReadinessService::class)->readinessForItem($item);
+
+    expect($readiness['status'])->toBe('not_ready')
+        ->and($readiness['ready'])->toBeFalse()
+        ->and($readiness['reason_codes'])->toBe(['parse_queued']);
+});
+
 test('parse error item is not ready', function () {
     $owner = readinessMemberUser();
     $batch = readinessBatch(readinessAdminUser());
@@ -143,6 +198,28 @@ test('locked or approved intake is blocked', function () {
         ->and($lockedReadiness['reason_codes'])->toContain('intake_locked')
         ->and($approvedReadiness['status'])->toBe('blocked')
         ->and($approvedReadiness['reason_codes'])->toContain('intake_approved_already');
+});
+
+test('show page displays create draft profile action for stale parse queued parsed ready item', function () {
+    $admin = readinessAdminUser();
+    $owner = readinessMemberUser();
+    $batch = readinessBatch($admin);
+    $intake = readinessIntake($owner, [
+        'parse_status' => 'parsed',
+        'parsed_json' => ['core' => ['full_name' => 'Stale Queue Action Candidate']],
+    ]);
+    readinessItem($batch, [
+        'biodata_intake_id' => $intake->id,
+        'item_status' => BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
+        'original_filename' => 'stale-queued-ready.pdf',
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('stale-queued-ready.pdf', false)
+        ->assertSee('Ready for profile review', false)
+        ->assertSee('Create draft profile', false);
 });
 
 test('ready not ready and blocked filters work', function () {
