@@ -7,12 +7,19 @@ use App\Models\BiodataIntake;
 use App\Models\BulkIntakeBatch;
 use App\Models\BulkIntakeBatchItem;
 use App\Models\User;
+use App\Services\Ocr\OcrNormalize;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class BulkIntakeBatchService
 {
+    private const USABLE_OCR_TEXT_MIN_LENGTH = 20;
+
+    private const EMPTY_OCR_FAILURE_CODE = 'empty_ocr_text';
+
+    private const EMPTY_OCR_FAILURE_MESSAGE = 'OCR did not extract usable text from this file.';
+
     public function createBatch(array $attributes): BulkIntakeBatch
     {
         return BulkIntakeBatch::create([
@@ -459,10 +466,16 @@ class BulkIntakeBatchService
                 return $this->skipQueueSummary('already_parse_queued');
             }
 
+            if (! $this->usableParseInputForQueue($intake)) {
+                $this->markItemEmptyOcrNeedsReview($item, $queueMode);
+
+                return $this->skipQueueSummary(self::EMPTY_OCR_FAILURE_CODE);
+            }
+
             IntakeExtractionReuseResolver::flagNextParseJobAsParseInputOnly((int) $intake->id);
             ParseIntakeJob::dispatch((int) $intake->id, true);
 
-            $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
+            $meta = $this->withoutOcrFailureMeta(is_array($item->item_meta_json) ? $item->item_meta_json : []);
             $item->forceFill([
                 'item_status' => BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
                 'item_meta_json' => array_merge($meta, [
@@ -498,6 +511,90 @@ class BulkIntakeBatchService
                 'skipped_reasons' => [],
             ];
         }
+    }
+
+    private function usableParseInputForQueue(BiodataIntake $intake): bool
+    {
+        $cachedText = app(IntakeExtractionReuseResolver::class)->getCachedParseInputText((int) $intake->id);
+
+        foreach ([
+            (string) ($intake->last_parse_input_text ?? ''),
+            (string) ($cachedText ?? ''),
+            (string) ($intake->raw_ocr_text ?? ''),
+        ] as $text) {
+            if (mb_strlen($this->normalizedUsabilityText($text), 'UTF-8') >= self::USABLE_OCR_TEXT_MIN_LENGTH) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizedUsabilityText(string $text): string
+    {
+        $normalized = trim(OcrNormalize::normalizeRawTextForParsing($text));
+        $normalized = preg_replace('/\s+/u', ' ', $normalized);
+
+        return is_string($normalized) ? trim($normalized) : '';
+    }
+
+    private function markItemEmptyOcrNeedsReview(BulkIntakeBatchItem $item, string $queueMode): BulkIntakeBatchItem
+    {
+        $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
+        if ((string) $item->item_status !== BulkIntakeBatchItem::STATUS_NEEDS_REVIEW) {
+            $meta['previous_item_status'] = (string) $item->item_status;
+        }
+
+        $markedAt = now()->toIso8601String();
+        $meta = array_merge($meta, [
+            'ocr_text_usable' => false,
+            'ocr_text_min_length' => self::USABLE_OCR_TEXT_MIN_LENGTH,
+            'ocr_failure_code' => self::EMPTY_OCR_FAILURE_CODE,
+            'ocr_failure_message' => self::EMPTY_OCR_FAILURE_MESSAGE,
+            'parse_queue_attempt_mode' => $queueMode,
+            'parse_skipped_reason' => self::EMPTY_OCR_FAILURE_CODE,
+            'parse_skipped_at' => $markedAt,
+        ]);
+
+        if ($queueMode === 'auto_free_parse_after_upload') {
+            $meta['auto_parse_skipped_reason'] = self::EMPTY_OCR_FAILURE_CODE;
+            $meta['auto_parse_skipped_at'] = $markedAt;
+        }
+
+        $item->forceFill([
+            'item_status' => BulkIntakeBatchItem::STATUS_NEEDS_REVIEW,
+            'item_meta_json' => $meta,
+            'failure_code' => self::EMPTY_OCR_FAILURE_CODE,
+            'failure_message' => self::EMPTY_OCR_FAILURE_MESSAGE,
+        ])->save();
+
+        $batch = $item->batch;
+        if ($batch !== null) {
+            $this->refreshCounters($batch);
+        }
+
+        return $item->refresh();
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     * @return array<string, mixed>
+     */
+    private function withoutOcrFailureMeta(array $meta): array
+    {
+        unset(
+            $meta['ocr_text_usable'],
+            $meta['ocr_text_min_length'],
+            $meta['ocr_failure_code'],
+            $meta['ocr_failure_message'],
+            $meta['parse_queue_attempt_mode'],
+            $meta['parse_skipped_reason'],
+            $meta['parse_skipped_at'],
+            $meta['auto_parse_skipped_reason'],
+            $meta['auto_parse_skipped_at']
+        );
+
+        return $meta;
     }
 
     public function markItemNeedsReview(BulkIntakeBatchItem $item, User $actor, ?string $reason = null): BulkIntakeBatchItem

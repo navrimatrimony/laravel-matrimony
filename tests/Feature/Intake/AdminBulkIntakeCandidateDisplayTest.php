@@ -104,6 +104,36 @@ test('bulk list explains queued and pending free parse states', function () {
         ->assertSee('Mobile: —', false);
 });
 
+test('bulk list shows OCR failure diagnostics when parsed json is missing', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'raw_ocr_text' => '',
+        'parse_status' => 'pending',
+        'parsed_json' => [],
+    ]);
+    candidateDisplayItem($batch, $intake, [
+        'item_status' => BulkIntakeBatchItem::STATUS_NEEDS_REVIEW,
+        'failure_code' => 'empty_ocr_text',
+        'failure_message' => 'OCR did not extract usable text from this file.',
+        'item_meta_json' => [
+            'ocr_text_usable' => false,
+            'ocr_failure_code' => 'empty_ocr_text',
+            'ocr_failure_message' => 'OCR did not extract usable text from this file.',
+            'auto_parse_skipped_reason' => 'empty_ocr_text',
+        ],
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Mobile: —', false)
+        ->assertSee('Parsed JSON: No', false)
+        ->assertSee('OCR failed: no text extracted', false)
+        ->assertSee('OCR failed / no text extracted', false)
+        ->assertSee('Add manual transcript (OCR failed fallback)', false);
+});
+
 test('bulk list does not store parsed data on bulk item', function () {
     expect(Schema::hasColumn('bulk_intake_batch_items', 'parsed_json'))->toBeFalse()
         ->and(Schema::hasColumn('bulk_intake_batch_items', 'profile_data_json'))->toBeFalse()

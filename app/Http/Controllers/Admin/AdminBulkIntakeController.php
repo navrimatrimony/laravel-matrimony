@@ -505,6 +505,12 @@ class AdminBulkIntakeController extends Controller
 
         $summary = $batchService->queueFreeParseForItem($bulkIntakeBatchItem, $request->user());
 
+        if (($summary['skipped_reasons']['empty_ocr_text'] ?? 0) > 0) {
+            return redirect()
+                ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
+                ->with('error', 'Cannot queue free parse because OCR text is empty. Add manual transcript or re-upload clearer file.');
+        }
+
         return redirect()
             ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
             ->with('success', $this->queueSummaryMessage($summary));

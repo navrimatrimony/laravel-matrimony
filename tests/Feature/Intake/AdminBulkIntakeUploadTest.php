@@ -101,8 +101,8 @@ test('admin bulk upload file auto queues free parse by default', function () {
 
     $this->mock(OcrService::class, function ($mock): void {
         $mock->shouldReceive('extractTextFromPath')->twice()->andReturn(
-            'Name: File Candidate One',
-            'Name: File Candidate Two',
+            'नाव : फाइल उमेदवार एक मोबाईल : 9000000501',
+            'नाव : फाइल उमेदवार दोन मोबाईल : 9000000502',
         );
         $mock->shouldReceive('getLastExtractTextFromPathDebug')->twice()->andReturn([
             'kind' => 'image',
@@ -141,8 +141,8 @@ test('admin bulk upload file auto queues free parse by default', function () {
 
     expect(BiodataIntake::query()->pluck('uploaded_by')->all())->toBe([null, null])
         ->and(BiodataIntake::query()->pluck('raw_ocr_text')->all())->toBe([
-            'Name: File Candidate One',
-            'Name: File Candidate Two',
+            'नाव : फाइल उमेदवार एक मोबाईल : 9000000501',
+            'नाव : फाइल उमेदवार दोन मोबाईल : 9000000502',
         ]);
 
     BiodataIntake::query()->get()->each(function (BiodataIntake $intake): void {
@@ -153,6 +153,56 @@ test('admin bulk upload file auto queues free parse by default', function () {
     Queue::assertPushed(ParseIntakeJob::class, function (ParseIntakeJob $job): bool {
         return $job->forceRecompute === true;
     });
+});
+
+test('admin bulk upload file with empty OCR does not auto queue free parse', function () {
+    Queue::fake();
+    $admin = adminBulkIntakeAdmin();
+
+    $this->mock(AiVisionExtractionService::class, function ($mock): void {
+        $mock->shouldNotReceive('extractTextForIntake');
+        $mock->shouldNotReceive('evaluateExtractedTextQuality');
+    });
+
+    $this->mock(OcrService::class, function ($mock): void {
+        $mock->shouldReceive('extractTextFromPath')->once()->andReturn('');
+        $mock->shouldReceive('getLastExtractTextFromPathDebug')->once()->andReturn([
+            'kind' => 'image',
+            'ocr_pipeline' => 'test',
+        ]);
+    });
+
+    $response = $this->actingAs($admin)->post(route('admin.bulk-intakes.store'), [
+        'batch_name' => 'Empty OCR file biodata',
+        'files' => [
+            UploadedFile::fake()->createWithContent('empty-ocr.jpg', 'file-bytes'),
+        ],
+    ]);
+
+    $batch = BulkIntakeBatch::query()->sole();
+    $item = BulkIntakeBatchItem::query()->sole();
+    $intake = BiodataIntake::query()->sole();
+
+    $response->assertRedirect(route('admin.bulk-intakes.show', $batch));
+
+    expect($item->item_status)->toBe(BulkIntakeBatchItem::STATUS_NEEDS_REVIEW)
+        ->and($item->failure_code)->toBe('empty_ocr_text')
+        ->and($item->failure_message)->toBe('OCR did not extract usable text from this file.')
+        ->and($item->item_meta_json['ocr_text_usable'])->toBeFalse()
+        ->and($item->item_meta_json['ocr_failure_code'])->toBe('empty_ocr_text')
+        ->and($item->item_meta_json['auto_parse_skipped_reason'])->toBe('empty_ocr_text')
+        ->and($intake->raw_ocr_text)->toBe('')
+        ->and($intake->parse_status)->toBe('pending')
+        ->and(MatrimonyProfile::count())->toBe(0);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('OCR failed: no text extracted', false)
+        ->assertSee('OCR failed / no text extracted', false)
+        ->assertSee('Add manual transcript (OCR failed fallback)', false);
+
+    Queue::assertNotPushed(ParseIntakeJob::class);
 });
 
 test('admin can disable auto free parse after upload', function () {

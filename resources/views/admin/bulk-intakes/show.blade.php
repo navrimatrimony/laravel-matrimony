@@ -179,6 +179,7 @@
                         @foreach ($batch->items as $item)
                             @php
                                 $intake = $item->biodataIntake;
+                                $itemMeta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
                                 $candidate = $candidateByItemId[$item->id] ?? [
                                     'full_name' => null,
                                     'mobile' => null,
@@ -216,6 +217,14 @@
                                 if ($intake && (string) $intake->parse_status === 'parsed' && ! $hasParsedJson) {
                                     $exceptionBadges[] = ['label' => 'Parsed JSON missing', 'class' => 'border-orange-200 bg-orange-50 text-orange-700'];
                                 }
+                                $hasEmptyOcrFailure = (string) $item->failure_code === 'empty_ocr_text'
+                                    || (
+                                        (string) $item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_NEEDS_REVIEW
+                                        && (string) data_get($itemMeta, 'ocr_failure_code') === 'empty_ocr_text'
+                                    );
+                                if ($hasEmptyOcrFailure) {
+                                    $exceptionBadges[] = ['label' => 'OCR failed / no text extracted', 'class' => 'border-red-200 bg-red-50 text-red-700'];
+                                }
                                 $lastError = (string) ($intake?->last_error ?? '');
                                 $canAddManualTranscript = $intake && (
                                     (string) $intake->parse_status === 'error'
@@ -223,6 +232,7 @@
                                     || filled($lastError)
                                     || str_contains($lastError, 'empty_text')
                                     || str_contains($lastError, 'reparse_no_canonical_or_raw_ocr')
+                                    || $hasEmptyOcrFailure
                                 );
                             @endphp
                             <tr>
@@ -256,6 +266,8 @@
                                         <a href="{{ route('admin.biodata-intakes.show', $intake) }}" class="font-medium text-indigo-600 hover:text-indigo-800">#{{ $intake->id }}</a>
                                         @if ($parseStatus === 'parsed' && $hasParsedJson)
                                             <span class="block text-xs font-medium text-green-700">Parse: OK</span>
+                                        @elseif ($hasEmptyOcrFailure)
+                                            <span class="block text-xs font-medium text-red-700">OCR failed: no text extracted</span>
                                         @elseif ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_PARSE_QUEUED)
                                             <span class="block text-xs font-medium text-amber-700">Free parse queued</span>
                                         @elseif ($parseStatus === 'pending')

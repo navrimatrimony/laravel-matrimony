@@ -110,6 +110,53 @@ test('queue free parse is idempotent for already queued items', function () {
     expect(BulkIntakeBatchItem::query()->where('item_status', BulkIntakeBatchItem::STATUS_PARSE_QUEUED)->count())->toBe(2);
 });
 
+test('manual queue free parse item refuses empty OCR text', function () {
+    Queue::fake();
+
+    $admin = parseQueueAdminUser();
+    $batch = BulkIntakeBatch::create([
+        'uploaded_by_user_id' => $admin->id,
+        'uploaded_by_actor_type' => BulkIntakeBatch::ACTOR_ADMIN,
+        'source_surface' => BulkIntakeBatch::SURFACE_ADMIN_PANEL,
+        'batch_status' => BulkIntakeBatch::STATUS_COMPLETED,
+    ]);
+    $intake = BiodataIntake::create([
+        'uploaded_by' => null,
+        'raw_ocr_text' => '',
+        'parsed_json' => [],
+        'intake_status' => 'uploaded',
+        'parse_status' => 'pending',
+        'parser_version' => 'rules_only',
+        'snapshot_schema_version' => 1,
+        'approved_by_user' => false,
+        'intake_locked' => false,
+    ]);
+    $item = BulkIntakeBatchItem::create([
+        'bulk_intake_batch_id' => $batch->id,
+        'biodata_intake_id' => $intake->id,
+        'item_sequence' => 1,
+        'input_type' => BulkIntakeBatchItem::INPUT_FILE,
+        'original_filename' => 'empty-ocr.jpg',
+        'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->post(route('admin.bulk-intakes.items.queue-free-parse', [$batch, $item]));
+
+    $response->assertRedirect(route('admin.bulk-intakes.show', $batch));
+    $response->assertSessionHas('error', 'Cannot queue free parse because OCR text is empty. Add manual transcript or re-upload clearer file.');
+
+    $item->refresh();
+
+    expect($item->item_status)->toBe(BulkIntakeBatchItem::STATUS_NEEDS_REVIEW)
+        ->and($item->failure_code)->toBe('empty_ocr_text')
+        ->and($item->failure_message)->toBe('OCR did not extract usable text from this file.')
+        ->and($item->item_meta_json['ocr_failure_code'])->toBe('empty_ocr_text')
+        ->and($item->item_meta_json['parse_skipped_reason'])->toBe('empty_ocr_text');
+
+    Queue::assertNotPushed(ParseIntakeJob::class);
+});
+
 test('approved or locked intake is skipped', function () {
     Queue::fake();
 
