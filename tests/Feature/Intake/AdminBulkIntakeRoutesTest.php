@@ -53,7 +53,7 @@ test('admin can access bulk intake index create and show pages', function () {
         ->assertSee('Bulk Intake #'.$batch->id, false);
 });
 
-test('bulk intake show keeps extraction actions and hides owner profile actions', function () {
+test('bulk intake show keeps extraction actions and hides readiness owner profile actions', function () {
     $admin = adminBulkIntakeRoutesAdmin();
     $batch = BulkIntakeBatch::create([
         'uploaded_by_user_id' => $admin->id,
@@ -104,10 +104,14 @@ test('bulk intake show keeps extraction actions and hides owner profile actions'
         ->assertOk()
         ->assertSee('Current stage: candidate extraction and review. Owner assignment and profile creation are later steps.', false)
         ->assertSee('Open intake review', false)
-        ->assertSee('Profile Readiness details', false)
         ->assertSee('Add manual transcript (OCR failed fallback)', false)
         ->assertSee('Queue free parse item', false)
         ->assertSee('Mark needs review', false)
+        ->assertDontSee('Profile Readiness', false)
+        ->assertDontSee('Profile Readiness details', false)
+        ->assertDontSee('Ready for Profile Review', false)
+        ->assertDontSee('Owner Missing', false)
+        ->assertDontSee('Not ready', false)
         ->assertDontSee('Assign owner', false)
         ->assertDontSee('Create owner', false)
         ->assertDontSee('Create draft profile', false)

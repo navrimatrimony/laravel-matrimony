@@ -4,6 +4,7 @@ use App\Models\BiodataIntake;
 use App\Models\BulkIntakeBatch;
 use App\Models\BulkIntakeBatchItem;
 use App\Models\User;
+use App\Services\Intake\BulkIntakeCandidateDisplayService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
@@ -134,8 +135,214 @@ test('bulk list shows OCR failure diagnostics when parsed json is missing', func
         ->assertSee('Add manual transcript (OCR failed fallback)', false);
 });
 
+test('bulk list uses OCR fallback name for review when parsed full name is missing', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'raw_ocr_text' => "बायोडाटा\nकुमारी अंजली गोरखनाथ जाधव\nजन्म तारीख : 12/03/1996",
+        'parsed_json' => [
+            'core' => [
+                'full_name' => null,
+            ],
+        ],
+    ]);
+    $item = candidateDisplayItem($batch, $intake);
+
+    $candidate = app(BulkIntakeCandidateDisplayService::class)->candidateForItem($item);
+
+    expect($candidate['full_name'])->toBe('अंजली गोरखनाथ जाधव')
+        ->and($candidate['name_source'])->toBe('ocr_fallback')
+        ->and($candidate['name_needs_review'])->toBeTrue();
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('अंजली गोरखनाथ जाधव', false)
+        ->assertSee('review', false);
+});
+
+test('bulk list cleans OCR junk prefix from parsed candidate name', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => '4 af आशाराणी तात्यासो कदम',
+            ],
+        ],
+    ]);
+    $item = candidateDisplayItem($batch, $intake);
+
+    $candidate = app(BulkIntakeCandidateDisplayService::class)->candidateForItem($item);
+
+    expect($candidate['full_name'])->toBe('आशाराणी तात्यासो कदम')
+        ->and($candidate['name_source'])->toBe('parsed_json')
+        ->and($candidate['name_needs_review'])->toBeTrue();
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('आशाराणी तात्यासो कदम', false)
+        ->assertDontSee('4 af आशाराणी', false)
+        ->assertSee('review', false);
+});
+
+test('relation label names are not used as candidate names', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'raw_ocr_text' => 'मामा राजू गोरखनाथ जाधव',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'मामा राजू गोरखनाथ जाधव',
+            ],
+        ],
+    ]);
+    $item = candidateDisplayItem($batch, $intake);
+
+    $candidate = app(BulkIntakeCandidateDisplayService::class)->candidateForItem($item);
+
+    expect($candidate['full_name'])->toBeNull()
+        ->and($candidate['name_source'])->toBeNull();
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertDontSee('मामा राजू गोरखनाथ जाधव', false);
+});
+
+test('impossible DOB is not shown as trusted age', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'DOB Review Candidate',
+                'date_of_birth' => '1898-08-18',
+            ],
+        ],
+    ]);
+    $item = candidateDisplayItem($batch, $intake);
+
+    $candidate = app(BulkIntakeCandidateDisplayService::class)->candidateForItem($item);
+
+    expect($candidate['date_of_birth'])->toBeNull()
+        ->and($candidate['age'])->toBeNull()
+        ->and($candidate['dob_needs_review'])->toBeTrue();
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertDontSee('1898-08-18', false)
+        ->assertSee('Age: —', false)
+        ->assertSee('review', false);
+});
+
+test('very tall but possible height is shown with review flag', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Height Review Candidate',
+                'height_cm' => 198.12,
+            ],
+        ],
+    ]);
+    $item = candidateDisplayItem($batch, $intake);
+
+    $candidate = app(BulkIntakeCandidateDisplayService::class)->candidateForItem($item);
+
+    expect($candidate['height'])->toBe('198 cm')
+        ->and($candidate['height_needs_review'])->toBeTrue();
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('198 cm', false)
+        ->assertSee('review', false);
+});
+
+test('long address line is not dumped as city', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $garbageAddress = 'गाव पोस्ट तालुका जिल्हा पत्ता मोबाईल जन्म शिक्षण नोकरी वडील आई '.str_repeat('अतिरिक्त मजकूर ', 8);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'City Review Candidate',
+                'address_line' => $garbageAddress,
+            ],
+        ],
+    ]);
+    $item = candidateDisplayItem($batch, $intake);
+
+    $candidate = app(BulkIntakeCandidateDisplayService::class)->candidateForItem($item);
+
+    expect($candidate['city'])->toBeNull();
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertDontSee($garbageAddress, false);
+});
+
+test('long education and occupation OCR paragraphs are not dumped fully', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $longEducation = 'B.Com शिक्षण मोबाईल 9876543210 जन्म 12/03/1996 वडील गोरखनाथ पत्ता पुणे '.str_repeat('जास्त मजकूर ', 6);
+    $longOccupation = 'Software Developer Mobile 9876543210 Address Pune Father Gorakhnath '.str_repeat('extra text ', 8);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Long Field Candidate',
+                'highest_education' => $longEducation,
+                'occupation_title' => $longOccupation,
+            ],
+        ],
+    ]);
+    $item = candidateDisplayItem($batch, $intake);
+
+    $candidate = app(BulkIntakeCandidateDisplayService::class)->candidateForItem($item);
+
+    expect($candidate['education'])->toBe('Review')
+        ->and($candidate['occupation'])->toBe('Review')
+        ->and($candidate['education_needs_review'])->toBeTrue()
+        ->and($candidate['occupation_needs_review'])->toBeTrue();
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Review', false)
+        ->assertDontSee($longEducation, false)
+        ->assertDontSee($longOccupation, false);
+});
+
 test('bulk list does not store parsed data on bulk item', function () {
-    expect(Schema::hasColumn('bulk_intake_batch_items', 'parsed_json'))->toBeFalse()
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'raw_ocr_text' => "बायोडाटा\nकुमारी स्टोरेज टेस्ट",
+        'parsed_json' => [
+            'core' => [
+                'full_name' => null,
+            ],
+        ],
+    ]);
+    $item = candidateDisplayItem($batch, $intake);
+
+    app(BulkIntakeCandidateDisplayService::class)->candidateForItem($item);
+
+    expect($item->fresh()->item_meta_json)->toBeNull()
+        ->and(Schema::hasColumn('bulk_intake_batch_items', 'parsed_json'))->toBeFalse()
         ->and(Schema::hasColumn('bulk_intake_batch_items', 'profile_data_json'))->toBeFalse()
         ->and(Schema::hasColumn('bulk_intake_batch_items', 'parsed_profile_json'))->toBeFalse()
         ->and(Schema::hasColumn('bulk_intake_batch_items', 'normalized_profile_json'))->toBeFalse();
@@ -162,10 +369,14 @@ test('owner and profile actions stay hidden from main list while extraction acti
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
         ->assertSee('Open intake review', false)
-        ->assertSee('Profile Readiness details', false)
         ->assertSee('Add manual transcript (OCR failed fallback)', false)
         ->assertSee('Queue free parse item', false)
         ->assertSee('Mark needs review', false)
+        ->assertDontSee('Profile Readiness', false)
+        ->assertDontSee('Profile Readiness details', false)
+        ->assertDontSee('Ready for Profile Review', false)
+        ->assertDontSee('Owner Missing', false)
+        ->assertDontSee('Not ready', false)
         ->assertDontSee('Assign owner', false)
         ->assertDontSee('Create owner', false)
         ->assertDontSee('Create draft profile', false)
@@ -180,7 +391,9 @@ test('routes for hidden owner and profile actions still exist', function () {
         ->and(route('admin.bulk-intakes.items.bootstrap-draft-profile', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))
         ->toBe(url('/admin/bulk-intakes/123/items/456/bootstrap-draft-profile'))
         ->and(route('admin.bulk-intakes.items.apply-preview', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))
-        ->toBe(url('/admin/bulk-intakes/123/items/456/apply-preview'));
+        ->toBe(url('/admin/bulk-intakes/123/items/456/apply-preview'))
+        ->and(route('admin.bulk-intakes.items.readiness', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))
+        ->toBe(url('/admin/bulk-intakes/123/items/456/readiness'));
 });
 
 function candidateDisplayAdminUser(): User

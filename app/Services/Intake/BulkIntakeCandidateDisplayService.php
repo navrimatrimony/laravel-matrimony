@@ -11,6 +11,8 @@ use Illuminate\Support\Carbon;
 
 class BulkIntakeCandidateDisplayService
 {
+    private const SAFE_TEXT_LIMIT = 70;
+
     /**
      * @return array{
      *     full_name: string|null,
@@ -24,14 +26,19 @@ class BulkIntakeCandidateDisplayService
      *     occupation: string|null,
      *     parse_status: string|null,
      *     parsed_json_present: bool,
-     *     missing_fields: list<string>
+     *     missing_fields: list<string>,
+     *     name_source: string|null,
+     *     name_needs_review: bool,
+     *     dob_needs_review: bool,
+     *     height_needs_review: bool,
+     *     education_needs_review: bool,
+     *     occupation_needs_review: bool,
+     *     display_warnings: list<string>
      * }
      */
     public function candidateForItem(BulkIntakeBatchItem $item): array
     {
-        $item->loadMissing('biodataIntake:id,parse_status,parsed_json');
-
-        return $this->candidateForIntake($item->biodataIntake);
+        return $this->candidateForIntake($this->intakeForDisplay($item));
     }
 
     /**
@@ -47,52 +54,342 @@ class BulkIntakeCandidateDisplayService
      *     occupation: string|null,
      *     parse_status: string|null,
      *     parsed_json_present: bool,
-     *     missing_fields: list<string>
+     *     missing_fields: list<string>,
+     *     name_source: string|null,
+     *     name_needs_review: bool,
+     *     dob_needs_review: bool,
+     *     height_needs_review: bool,
+     *     education_needs_review: bool,
+     *     occupation_needs_review: bool,
+     *     display_warnings: list<string>
      * }
      */
     public function candidateForIntake(?BiodataIntake $intake): array
     {
         $parsed = is_array($intake?->parsed_json) ? $intake->parsed_json : [];
         $core = is_array($parsed['core'] ?? null) ? $parsed['core'] : [];
+        $warnings = [];
 
+        $name = $this->candidateName($parsed, $intake, $warnings);
+        $dobAge = $this->dobAge($parsed, $warnings);
+        $height = $this->height($parsed, $warnings);
+        $education = $this->safeDisplayField($this->educationRaw($parsed), 'education', $warnings);
+        $occupation = $this->safeDisplayField($this->occupationRaw($parsed), 'occupation', $warnings);
+
+        $result = [
+            'full_name' => $name['value'],
+            'mobile' => $this->mobile($parsed),
+            'date_of_birth' => $dobAge['date_of_birth'],
+            'age' => $dobAge['age'],
+            'height' => $height['value'],
+            'gender' => $this->gender($core),
+            'city' => $this->city($parsed),
+            'education' => $education['value'],
+            'occupation' => $occupation['value'],
+            'parse_status' => $intake?->parse_status,
+            'parsed_json_present' => $parsed !== [],
+            'missing_fields' => [],
+            'name_source' => $name['source'],
+            'name_needs_review' => $name['needs_review'],
+            'dob_needs_review' => $dobAge['needs_review'],
+            'height_needs_review' => $height['needs_review'],
+            'education_needs_review' => $education['needs_review'],
+            'occupation_needs_review' => $occupation['needs_review'],
+            'display_warnings' => array_values(array_unique($warnings)),
+        ];
+
+        $result['missing_fields'] = $this->missingFields($result);
+
+        return $result;
+    }
+
+    private function intakeForDisplay(BulkIntakeBatchItem $item): ?BiodataIntake
+    {
+        $loaded = $item->relationLoaded('biodataIntake') ? $item->biodataIntake : null;
+        if ($loaded instanceof BiodataIntake) {
+            $attributes = $loaded->getAttributes();
+            if (array_key_exists('raw_ocr_text', $attributes) && array_key_exists('last_parse_input_text', $attributes)) {
+                return $loaded;
+            }
+        }
+
+        $intakeId = $item->biodata_intake_id ?? $loaded?->id;
+        if ($intakeId === null) {
+            return null;
+        }
+
+        return BiodataIntake::query()->find((int) $intakeId, [
+            'id',
+            'parse_status',
+            'parsed_json',
+            'raw_ocr_text',
+            'last_parse_input_text',
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $parsed
+     * @param  list<string>  $warnings
+     * @return array{value: string|null, source: string|null, needs_review: bool}
+     */
+    private function candidateName(array $parsed, ?BiodataIntake $intake, array &$warnings): array
+    {
+        $rawName = $this->firstString($parsed, [
+            'core.full_name',
+            'full_name',
+            'candidate.full_name',
+            'candidate_name',
+            'name',
+            'profile.full_name',
+        ]);
+
+        if ($rawName !== null) {
+            $clean = $this->cleanNameCandidate($rawName);
+            if ($clean['accepted']) {
+                if ($clean['needs_review']) {
+                    $warnings[] = 'name_cleaned';
+                }
+
+                return [
+                    'value' => $clean['value'],
+                    'source' => 'parsed_json',
+                    'needs_review' => $clean['needs_review'],
+                ];
+            }
+
+            $warnings[] = 'name_rejected_'.$clean['reason'];
+        }
+
+        if ($parsed === []) {
+            return [
+                'value' => null,
+                'source' => null,
+                'needs_review' => false,
+            ];
+        }
+
+        $fallback = $this->fallbackNameFromOcr($intake);
+        if ($fallback !== null) {
+            $warnings[] = 'name_ocr_fallback';
+
+            return [
+                'value' => $fallback,
+                'source' => 'ocr_fallback',
+                'needs_review' => true,
+            ];
+        }
+
+        return [
+            'value' => null,
+            'source' => null,
+            'needs_review' => false,
+        ];
+    }
+
+    /**
+     * @return array{accepted: bool, value: string|null, needs_review: bool, reason: string}
+     */
+    private function cleanNameCandidate(string $value): array
+    {
+        $original = $this->normalizeDisplayString($value);
+        $name = $original;
+
+        $name = preg_replace('/^[\s\p{P}\p{S}\d]+/u', '', $name) ?? $name;
+        $name = preg_replace('/^(?:af|aoe|ous|a0e|os|oe|ch)\s+/iu', '', $name) ?? $name;
+        $name = preg_replace('/^(?:[a-z]{1,5}\s+){1,3}(?=[\x{0900}-\x{097F}])/iu', '', $name) ?? $name;
+        $name = preg_replace('/^(?:name|candidate\s+name|full\s+name|नाव|पूर्ण\s+नाव)\s*[:：\-\s]+/iu', '', $name) ?? $name;
+
+        do {
+            $before = $name;
+            $name = preg_replace('/^(?:बायोडाटा|कु\.?|कुमार|कुमारी|चि\.?|चिरंजीव|सौ\.?|श्रीमती|श्री\.?)\s+/u', '', $name) ?? $name;
+            $name = trim($name, " \t\n\r\0\x0B:-|.,;");
+        } while ($name !== $before);
+
+        $name = $this->normalizeDisplayString($name);
+        $needsReview = $name !== $original;
+
+        if ($name === '') {
+            return ['accepted' => false, 'value' => null, 'needs_review' => false, 'reason' => 'empty'];
+        }
+
+        if (in_array(mb_strtolower($name, 'UTF-8'), ['बायोडाटा', 'bio data', 'biodata'], true)) {
+            return ['accepted' => false, 'value' => null, 'needs_review' => false, 'reason' => 'title'];
+        }
+
+        if (mb_strlen($name, 'UTF-8') > 80) {
+            return ['accepted' => false, 'value' => null, 'needs_review' => false, 'reason' => 'too_long'];
+        }
+
+        if ($this->containsRelationLabel($name)) {
+            return ['accepted' => false, 'value' => null, 'needs_review' => false, 'reason' => 'relation_label'];
+        }
+
+        if (preg_match('/(?:\+?91[\s-]?)?[6-9]\d{9}/', preg_replace('/\s+/', '', $name) ?? '') === 1) {
+            return ['accepted' => false, 'value' => null, 'needs_review' => false, 'reason' => 'phone_number'];
+        }
+
+        if ($this->junkRatio($name) > 0.30) {
+            return ['accepted' => false, 'value' => null, 'needs_review' => false, 'reason' => 'junk_ratio'];
+        }
+
+        if (! preg_match('/\p{L}/u', $name)) {
+            return ['accepted' => false, 'value' => null, 'needs_review' => false, 'reason' => 'no_letters'];
+        }
+
+        return [
+            'accepted' => true,
+            'value' => $name,
+            'needs_review' => $needsReview,
+            'reason' => 'ok',
+        ];
+    }
+
+    private function fallbackNameFromOcr(?BiodataIntake $intake): ?string
+    {
+        $text = trim((string) ($intake?->last_parse_input_text ?? ''));
+        if ($text === '') {
+            $text = trim((string) ($intake?->raw_ocr_text ?? ''));
+        }
+        if ($text === '') {
+            return null;
+        }
+
+        $lines = preg_split('/\R/u', $text) ?: [];
+        $lines = array_values(array_filter(
+            array_map(fn (string $line): string => $this->normalizeDisplayString($line), $lines),
+            static fn (string $line): bool => $line !== ''
+        ));
+        $lines = array_slice($lines, 0, 15);
+
+        foreach ($lines as $index => $line) {
+            if (! $this->hasNameMarker($line)) {
+                continue;
+            }
+
+            $clean = $this->cleanNameCandidate($line);
+            if ($clean['accepted']) {
+                return $clean['value'];
+            }
+
+            $next = $lines[$index + 1] ?? null;
+            if ($next !== null) {
+                $cleanNext = $this->cleanNameCandidate($next);
+                if ($cleanNext['accepted']) {
+                    return $cleanNext['value'];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function hasNameMarker(string $line): bool
+    {
+        foreach (['बायोडाटा', 'कुमार', 'कुमारी', 'चि.', 'चिरंजीव', 'सौ.', 'श्रीमती', 'नाव', 'Name'] as $marker) {
+            if (mb_stripos($line, $marker, 0, 'UTF-8') !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $parsed
+     * @param  list<string>  $warnings
+     * @return array{date_of_birth: string|null, age: int|null, needs_review: bool}
+     */
+    private function dobAge(array $parsed, array &$warnings): array
+    {
         $dateOfBirth = $this->firstString($parsed, [
             'core.date_of_birth',
             'core.dob',
             'date_of_birth',
             'dob',
         ]);
-        $ageFromDob = $this->ageFromDate($dateOfBirth);
-        $age = $ageFromDob ?? $this->firstInt($parsed, [
+
+        if ($dateOfBirth !== null) {
+            $age = $this->ageFromDate($dateOfBirth);
+            if ($age !== null && $age >= 18 && $age <= 75) {
+                return [
+                    'date_of_birth' => $dateOfBirth,
+                    'age' => $age,
+                    'needs_review' => false,
+                ];
+            }
+
+            $warnings[] = 'invalid_age_range';
+
+            return [
+                'date_of_birth' => null,
+                'age' => null,
+                'needs_review' => true,
+            ];
+        }
+
+        $age = $this->firstInt($parsed, [
             'core.age',
             'age',
             'candidate.age',
         ]);
 
-        $result = [
-            'full_name' => $this->firstString($parsed, [
-                'core.full_name',
-                'full_name',
-                'candidate.full_name',
-                'candidate_name',
-                'name',
-                'profile.full_name',
-            ]),
-            'mobile' => $this->mobile($parsed),
-            'date_of_birth' => $dateOfBirth,
-            'age' => $age,
-            'height' => $this->height($parsed),
-            'gender' => $this->gender($core),
-            'city' => $this->city($parsed, $core),
-            'education' => $this->education($parsed),
-            'occupation' => $this->occupation($parsed),
-            'parse_status' => $intake?->parse_status,
-            'parsed_json_present' => $parsed !== [],
-            'missing_fields' => [],
-        ];
+        if ($age === null) {
+            return ['date_of_birth' => null, 'age' => null, 'needs_review' => false];
+        }
 
-        $result['missing_fields'] = $this->missingFields($result);
+        if ($age >= 18 && $age <= 75) {
+            return ['date_of_birth' => null, 'age' => $age, 'needs_review' => false];
+        }
 
-        return $result;
+        $warnings[] = 'invalid_age_range';
+
+        return ['date_of_birth' => null, 'age' => null, 'needs_review' => true];
+    }
+
+    /**
+     * @param  array<string, mixed>  $parsed
+     * @param  list<string>  $warnings
+     * @return array{value: string|null, needs_review: bool}
+     */
+    private function height(array $parsed, array &$warnings): array
+    {
+        if ($this->confidenceZeroOrLowStatus($parsed, ['core.height_cm', 'height_cm'])) {
+            $warnings[] = 'height_low_confidence';
+
+            return ['value' => null, 'needs_review' => true];
+        }
+
+        $heightCm = data_get($parsed, 'core.height_cm', data_get($parsed, 'height_cm'));
+        if (is_numeric($heightCm)) {
+            $height = (float) $heightCm;
+            if ($height >= 120 && $height <= 213) {
+                $needsReview = $height >= 190;
+                if ($needsReview) {
+                    $warnings[] = 'height_review';
+                }
+
+                return [
+                    'value' => ((string) (int) round($height)).' cm',
+                    'needs_review' => $needsReview,
+                ];
+            }
+
+            $warnings[] = 'height_invalid_range';
+
+            return ['value' => null, 'needs_review' => true];
+        }
+
+        $height = $this->firstString($parsed, [
+            'core.height',
+            'height',
+        ]);
+        if ($height !== null && mb_strlen($height, 'UTF-8') <= 30 && preg_match('/\d/u', $height)) {
+            $warnings[] = 'height_text_review';
+
+            return ['value' => $height, 'needs_review' => true];
+        }
+
+        return ['value' => null, 'needs_review' => false];
     }
 
     /**
@@ -139,31 +436,6 @@ class BulkIntakeCandidateDisplayService
     }
 
     /**
-     * @param  array<string, mixed>  $parsed
-     */
-    private function height(array $parsed): ?string
-    {
-        $heightCm = data_get($parsed, 'core.height_cm', data_get($parsed, 'height_cm'));
-        if (is_numeric($heightCm) && (float) $heightCm > 0) {
-            return ((string) (int) round((float) $heightCm)).' cm';
-        }
-
-        $height = $this->firstString($parsed, [
-            'core.height',
-            'height',
-        ]);
-        if ($height !== null) {
-            return $height;
-        }
-
-        if (is_string($heightCm) && trim($heightCm) !== '') {
-            return trim($heightCm);
-        }
-
-        return null;
-    }
-
-    /**
      * @param  array<string, mixed>  $core
      */
     private function gender(array $core): ?string
@@ -190,28 +462,31 @@ class BulkIntakeCandidateDisplayService
 
     /**
      * @param  array<string, mixed>  $parsed
-     * @param  array<string, mixed>  $core
      */
-    private function city(array $parsed, array $core): ?string
+    private function city(array $parsed): ?string
     {
-        $city = $this->firstString($parsed, [
-            'core.location',
+        $city = $this->safeLocation($this->firstString($parsed, [
             'core.city',
             'core.city_text',
-            'core.address_line',
-            'core.native_place',
-            'core.work_location_text',
-            'location',
+            'core.birth_place_text',
             'city',
             'city_text',
-            'address_line',
-        ]);
+            'location_display',
+        ]));
         if ($city !== null) {
             return $city;
         }
 
-        foreach ([$core['native_place'] ?? null, $parsed['native_place'] ?? null] as $place) {
-            $city = $this->locationFromObject($place);
+        foreach ([data_get($parsed, 'core.native_place'), $parsed['native_place'] ?? null] as $place) {
+            if (! is_array($place)) {
+                continue;
+            }
+
+            $city = $this->safeLocation($this->firstString($place, [
+                'city',
+                'location_display',
+                'address_line',
+            ]));
             if ($city !== null) {
                 return $city;
             }
@@ -223,7 +498,11 @@ class BulkIntakeCandidateDisplayService
         }
 
         foreach ($addresses as $address) {
-            $city = $this->locationFromObject($address);
+            if (! is_array($address)) {
+                continue;
+            }
+
+            $city = $this->safeLocation($this->firstString($address, ['city', 'location_display']));
             if ($city !== null) {
                 return $city;
             }
@@ -232,10 +511,28 @@ class BulkIntakeCandidateDisplayService
         return null;
     }
 
+    private function safeLocation(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = $this->normalizeDisplayString($value);
+        if ($value === '' || mb_strlen($value, 'UTF-8') > self::SAFE_TEXT_LIMIT) {
+            return null;
+        }
+
+        if ($this->unrelatedMarkerCount($value) > 0) {
+            return null;
+        }
+
+        return $value;
+    }
+
     /**
      * @param  array<string, mixed>  $parsed
      */
-    private function education(array $parsed): ?string
+    private function educationRaw(array $parsed): ?string
     {
         $education = $this->firstString($parsed, [
             'core.highest_education',
@@ -269,7 +566,7 @@ class BulkIntakeCandidateDisplayService
     /**
      * @param  array<string, mixed>  $parsed
      */
-    private function occupation(array $parsed): ?string
+    private function occupationRaw(array $parsed): ?string
     {
         $occupation = $this->firstString($parsed, [
             'core.occupation',
@@ -314,6 +611,40 @@ class BulkIntakeCandidateDisplayService
         }
 
         return null;
+    }
+
+    /**
+     * @param  list<string>  $warnings
+     * @return array{value: string|null, needs_review: bool}
+     */
+    private function safeDisplayField(?string $value, string $field, array &$warnings): array
+    {
+        if ($value === null) {
+            return ['value' => null, 'needs_review' => false];
+        }
+
+        $value = $this->normalizeDisplayString($value);
+        if ($value === '') {
+            return ['value' => null, 'needs_review' => false];
+        }
+
+        $markerCount = $this->unrelatedMarkerCount($value);
+        if ($markerCount >= 2 || $this->containsRelationLabel($value)) {
+            $warnings[] = $field.'_review';
+
+            return ['value' => 'Review', 'needs_review' => true];
+        }
+
+        if (mb_strlen($value, 'UTF-8') > self::SAFE_TEXT_LIMIT) {
+            $warnings[] = $field.'_truncated';
+
+            return [
+                'value' => mb_substr($value, 0, self::SAFE_TEXT_LIMIT, 'UTF-8').'...',
+                'needs_review' => true,
+            ];
+        }
+
+        return ['value' => $value, 'needs_review' => false];
     }
 
     private function ageFromDate(?string $date): ?int
@@ -370,7 +701,7 @@ class BulkIntakeCandidateDisplayService
             return null;
         }
 
-        $string = trim((string) $value);
+        $string = $this->normalizeDisplayString((string) $value);
 
         return $string === '' || in_array(strtolower($string), ['null', 'nil', 'n/a', 'na', 'none', 'undefined', '-'], true)
             ? null
@@ -390,20 +721,90 @@ class BulkIntakeCandidateDisplayService
         return null;
     }
 
-    private function locationFromObject(mixed $value): ?string
+    private function normalizeDisplayString(string $value): string
     {
-        if (! is_array($value)) {
-            return $this->stringValue($value);
-        }
+        $value = preg_replace('/\s+/u', ' ', trim($value));
 
-        foreach (['city', 'location_text', 'location_display', 'place', 'village', 'taluka', 'district', 'state', 'address_line', 'raw', 'name'] as $key) {
-            $string = $this->stringValue($value[$key] ?? null);
-            if ($string !== null) {
-                return $string;
+        return is_string($value) ? trim($value) : '';
+    }
+
+    private function containsRelationLabel(string $value): bool
+    {
+        $lower = mb_strtolower($value, 'UTF-8');
+        foreach (['वडील', 'आई', 'मामा', 'आत्या', 'भाऊ', 'बहीण', 'बहिण', 'काका', 'चुलते', 'आजोळ'] as $label) {
+            if (mb_stripos($lower, $label, 0, 'UTF-8') !== false) {
+                return true;
             }
         }
 
-        return null;
+        return preg_match('/(^|\s)(father|mother|brother|sister|uncle|aunt)(\s|$)/iu', $value) === 1;
+    }
+
+    private function junkRatio(string $value): float
+    {
+        $compact = preg_replace('/\s+/u', '', $value) ?? '';
+        $length = mb_strlen($compact, 'UTF-8');
+        if ($length === 0) {
+            return 1.0;
+        }
+
+        $junk = preg_match_all('/[^\p{L}\p{M}.]/u', $compact);
+
+        return ((int) $junk) / $length;
+    }
+
+    private function unrelatedMarkerCount(string $value): int
+    {
+        $count = 0;
+        foreach ([
+            'मोबाईल',
+            'मोबाइल',
+            'Mobile',
+            'DOB',
+            'जन्म',
+            'वडील',
+            'आई',
+            'मामा',
+            'भाऊ',
+            'बहिण',
+            'पत्ता',
+            'Address',
+            'Height',
+            'उंची',
+            'धर्म',
+            'जात',
+        ] as $marker) {
+            if (mb_stripos($value, $marker, 0, 'UTF-8') !== false) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * @param  array<string, mixed>  $parsed
+     * @param  list<string>  $paths
+     */
+    private function confidenceZeroOrLowStatus(array $parsed, array $paths): bool
+    {
+        $confidence = is_array($parsed['confidence_map'] ?? null) ? $parsed['confidence_map'] : [];
+        foreach ($paths as $path) {
+            if (array_key_exists($path, $confidence) && (float) $confidence[$path] <= 0.0) {
+                return true;
+            }
+        }
+
+        foreach (['field_status', 'status_map', 'missing_map'] as $root) {
+            foreach ($paths as $path) {
+                $status = data_get($parsed, $root.'.'.$path);
+                if (is_string($status) && $status === 'low_confidence') {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -419,7 +820,14 @@ class BulkIntakeCandidateDisplayService
      *     occupation: string|null,
      *     parse_status: string|null,
      *     parsed_json_present: bool,
-     *     missing_fields: list<string>
+     *     missing_fields: list<string>,
+     *     name_source: string|null,
+     *     name_needs_review: bool,
+     *     dob_needs_review: bool,
+     *     height_needs_review: bool,
+     *     education_needs_review: bool,
+     *     occupation_needs_review: bool,
+     *     display_warnings: list<string>
      * }  $candidate
      * @return list<string>
      */
