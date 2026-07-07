@@ -34,9 +34,19 @@ test('item is ready when owner exists parsed json is present and no profile exis
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
+        ->assertSee('Current stage: candidate extraction and review. Owner assignment and profile creation are later steps.', false)
+        ->assertSee('Parse: OK', false)
+        ->assertSee('Open intake review', false)
+        ->assertDontSee('Readiness preview does not create, approve, or apply profiles.', false)
+        ->assertDontSee('Ready for profile review', false)
+        ->assertDontSee('Readiness details', false)
+        ->assertDontSee('Create draft profile', false);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.items.readiness', [$batch, $item]))
+        ->assertOk()
         ->assertSee('Readiness preview does not create, approve, or apply profiles.', false)
-        ->assertSee('Ready for profile review', false)
-        ->assertSee('Readiness details', false);
+        ->assertSee('Ready for profile review', false);
 });
 
 test('unclaimed item is not ready with owner unassigned reason', function () {
@@ -218,47 +228,51 @@ test('show page hides create draft profile action for stale parse queued parsed 
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
         ->assertSee('stale-queued-ready.pdf', false)
-        ->assertSee('Ready for profile review', false)
+        ->assertSee('Parse: OK', false)
+        ->assertSee('Parsed JSON: Yes', false)
+        ->assertDontSee('Ready for profile review', false)
+        ->assertDontSee('Readiness details', false)
         ->assertDontSee('Create draft profile', false);
 });
 
-test('ready not ready and blocked filters work', function () {
+test('main list status filters work without readiness buckets', function () {
     $admin = readinessAdminUser();
-    $readyOwner = readinessMemberUser();
-    $blockedOwner = readinessMemberUser();
-    MatrimonyProfile::factory()->create(['user_id' => $blockedOwner->id]);
     $batch = readinessBatch($admin);
 
-    $readyIntake = readinessIntake($readyOwner, [
+    $parsedIntake = readinessIntake(null, [
         'parse_status' => 'parsed',
-        'parsed_json' => ['core' => ['full_name' => 'Ready Candidate']],
+        'parsed_json' => ['core' => ['full_name' => 'Parsed Candidate']],
     ]);
-    $notReadyIntake = readinessIntake(null, ['parse_status' => 'pending']);
-    $blockedIntake = readinessIntake($blockedOwner, [
-        'parse_status' => 'parsed',
-        'parsed_json' => ['core' => ['full_name' => 'Blocked Candidate']],
+    $reviewIntake = readinessIntake(null, ['parse_status' => 'pending']);
+    $errorIntake = readinessIntake(null, [
+        'parse_status' => 'error',
+        'last_error' => 'Parser failed',
     ]);
 
-    readinessItem($batch, ['biodata_intake_id' => $readyIntake->id, 'original_filename' => 'green-filter.pdf']);
-    readinessItem($batch, ['biodata_intake_id' => $notReadyIntake->id, 'original_filename' => 'amber-filter.pdf']);
-    readinessItem($batch, ['biodata_intake_id' => $blockedIntake->id, 'original_filename' => 'red-filter.pdf']);
+    readinessItem($batch, ['biodata_intake_id' => $parsedIntake->id, 'original_filename' => 'green-filter.pdf']);
+    readinessItem($batch, [
+        'biodata_intake_id' => $reviewIntake->id,
+        'item_status' => BulkIntakeBatchItem::STATUS_NEEDS_REVIEW,
+        'original_filename' => 'amber-filter.pdf',
+    ]);
+    readinessItem($batch, ['biodata_intake_id' => $errorIntake->id, 'original_filename' => 'red-filter.pdf']);
 
     $this->actingAs($admin)
-        ->get(route('admin.bulk-intakes.show', ['bulkIntakeBatch' => $batch, 'status' => 'ready']))
+        ->get(route('admin.bulk-intakes.show', ['bulkIntakeBatch' => $batch, 'status' => 'parsed']))
         ->assertOk()
         ->assertSee('green-filter.pdf', false)
         ->assertDontSee('amber-filter.pdf', false)
         ->assertDontSee('red-filter.pdf', false);
 
     $this->actingAs($admin)
-        ->get(route('admin.bulk-intakes.show', ['bulkIntakeBatch' => $batch, 'status' => 'not_ready']))
+        ->get(route('admin.bulk-intakes.show', ['bulkIntakeBatch' => $batch, 'status' => 'needs_review']))
         ->assertOk()
         ->assertSee('amber-filter.pdf', false)
         ->assertDontSee('green-filter.pdf', false)
         ->assertDontSee('red-filter.pdf', false);
 
     $this->actingAs($admin)
-        ->get(route('admin.bulk-intakes.show', ['bulkIntakeBatch' => $batch, 'status' => 'blocked']))
+        ->get(route('admin.bulk-intakes.show', ['bulkIntakeBatch' => $batch, 'status' => 'parse_error']))
         ->assertOk()
         ->assertSee('red-filter.pdf', false)
         ->assertDontSee('green-filter.pdf', false)

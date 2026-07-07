@@ -13,6 +13,7 @@ use App\Services\Intake\BulkIntakeBatchService;
 use App\Services\Intake\BulkIntakeCandidateDisplayService;
 use App\Services\Intake\BulkIntakeDraftProfileBootstrapService;
 use App\Services\Intake\BulkIntakeManualTranscriptService;
+use App\Services\Intake\BulkIntakeProgressPresenter;
 use App\Services\Intake\BulkIntakeReadinessService;
 use App\Services\Intake\IntakeOwnerAssignmentService;
 use App\Support\MobileNumber;
@@ -98,13 +99,15 @@ class AdminBulkIntakeController extends Controller
         $sequence = 1;
         foreach ($files as $file) {
             $item = $batchService->createPendingItemFromUploadedFile($batch, $file, $sequence, $queueFreeParseAfterUpload);
-            ProcessBulkIntakeBatchItemJob::dispatch((int) $item->id, (int) $actor->id, $queueFreeParseAfterUpload);
+            ProcessBulkIntakeBatchItemJob::dispatch((int) $item->id, (int) $actor->id, $queueFreeParseAfterUpload)
+                ->onQueue(ProcessBulkIntakeBatchItemJob::QUEUE_NAME);
             $sequence++;
         }
 
         foreach ($textItems as $rawText) {
             $item = $batchService->createPendingItemFromRawText($batch, $rawText, $sequence, $queueFreeParseAfterUpload);
-            ProcessBulkIntakeBatchItemJob::dispatch((int) $item->id, (int) $actor->id, $queueFreeParseAfterUpload);
+            ProcessBulkIntakeBatchItemJob::dispatch((int) $item->id, (int) $actor->id, $queueFreeParseAfterUpload)
+                ->onQueue(ProcessBulkIntakeBatchItemJob::QUEUE_NAME);
             $sequence++;
         }
 
@@ -119,7 +122,8 @@ class AdminBulkIntakeController extends Controller
         Request $request,
         BulkIntakeBatch $bulkIntakeBatch,
         BulkIntakeBatchService $batchService,
-        BulkIntakeCandidateDisplayService $candidateDisplayService
+        BulkIntakeCandidateDisplayService $candidateDisplayService,
+        BulkIntakeProgressPresenter $progressPresenter
     )
     {
         $statusFilters = $this->bulkItemStatusFilters();
@@ -159,7 +163,7 @@ class AdminBulkIntakeController extends Controller
         return view('admin.bulk-intakes.show', [
             'batch' => $bulkIntakeBatch,
             'sourceContextCountsByItem' => $sourceContextCountsByItem,
-            'reviewSummary' => $batchService->buildBatchReviewSummary($bulkIntakeBatch),
+            'progress' => $progressPresenter->progressForBatch($bulkIntakeBatch),
             'candidateByItemId' => $candidateByItemId,
             'statusFilter' => $statusFilter,
             'statusFilters' => $statusFilters,

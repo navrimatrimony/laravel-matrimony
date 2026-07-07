@@ -20,6 +20,8 @@ class ProcessBulkIntakeBatchItemJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public const QUEUE_NAME = 'bulk-intake';
+
     public int $timeout = 300;
 
     public int $tries = 2;
@@ -28,7 +30,9 @@ class ProcessBulkIntakeBatchItemJob implements ShouldQueue
         public int $bulkIntakeBatchItemId,
         public int $actorUserId,
         public bool $queueFreeParseAfterUpload = true
-    ) {}
+    ) {
+        $this->onQueue(self::QUEUE_NAME);
+    }
 
     /**
      * @return list<object>

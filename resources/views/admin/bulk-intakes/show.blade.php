@@ -3,17 +3,28 @@
 @section('content')
 @php
     $activeAdminProfileTab = 'bulk';
-    $reviewSummary = $reviewSummary ?? [
+    $progress = $progress ?? [
         'total' => 0,
         'pending' => 0,
         'processing' => 0,
-        'intakes_created' => 0,
-        'parse_pending' => 0,
+        'intake_created' => 0,
         'parse_queued' => 0,
         'parsed' => 0,
         'parse_error' => 0,
         'needs_review' => 0,
         'failed' => 0,
+        'completed_or_terminal' => 0,
+        'percent_done' => 0,
+        'approx_eta_seconds' => null,
+        'approx_eta_label' => 'calculating',
+        'active_work_label' => 'pending',
+        'last_activity_at' => null,
+        'queue_backlog' => 0,
+        'failed_jobs_count' => 0,
+        'worker_warning' => null,
+        'user_message' => 'Bulk processing runs in background. You can leave this page open and refresh later. Website and app requests are not blocked by this batch.',
+        'ocr_failed' => 0,
+        'error_summary' => [],
     ];
     $candidateByItemId = $candidateByItemId ?? [];
     $missingDisplay = '—';
@@ -52,23 +63,52 @@
         </div>
     </div>
 
-    <div class="grid gap-4 md:grid-cols-3 xl:grid-cols-9">
-        @foreach ([
-            'Total Items' => $reviewSummary['total'],
-            'Pending' => $reviewSummary['pending'],
-            'Processing' => $reviewSummary['processing'],
-            'Intakes Created' => $reviewSummary['intakes_created'],
-            'Parse Queued' => $reviewSummary['parse_queued'],
-            'Parsed' => $reviewSummary['parsed'],
-            'Parse Errors' => $reviewSummary['parse_error'],
-            'Needs Review' => $reviewSummary['needs_review'],
-            'Failed' => $reviewSummary['failed'],
-        ] as $label => $value)
-            <div class="rounded-lg bg-white p-4 shadow">
-                <p class="text-xs font-semibold uppercase text-gray-500">{{ $label }}</p>
-                <p class="mt-1 text-lg font-semibold text-gray-900">{{ $value }}</p>
+    <div class="rounded-lg bg-white p-6 shadow">
+        <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900">Background processing</h2>
+                <p class="mt-1 text-sm text-gray-600">{{ $progress['user_message'] }}</p>
             </div>
-        @endforeach
+            <span class="inline-flex w-fit rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase text-indigo-700">
+                {{ $progress['active_work_label'] }}
+            </span>
+        </div>
+
+        <div class="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-6">
+            @foreach ([
+                'Total items' => $progress['total'],
+                'Pending' => $progress['pending'],
+                'Processing' => $progress['processing'],
+                'Parse queued' => $progress['parse_queued'],
+                'Parsed' => $progress['parsed'],
+                'Needs review' => $progress['needs_review'],
+                'Failed' => $progress['failed'],
+                'Percent done' => $progress['percent_done'].'%',
+                'Approx ETA' => $progress['approx_eta_label'],
+                'Queue backlog' => $progress['queue_backlog'],
+                'Last activity' => $progress['last_activity_at'] ?: $missingDisplay,
+                'Failed jobs' => $progress['failed_jobs_count'],
+            ] as $label => $value)
+                <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                    <p class="text-xs font-semibold uppercase text-gray-500">{{ $label }}</p>
+                    <p class="mt-1 text-sm font-semibold text-gray-900">{{ $value }}</p>
+                </div>
+            @endforeach
+        </div>
+
+        @if (! empty($progress['error_summary']))
+            <div class="mt-4 flex flex-wrap gap-2">
+                @foreach ($progress['error_summary'] as $errorSummaryLine)
+                    <span class="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">{{ $errorSummaryLine }}</span>
+                @endforeach
+            </div>
+        @endif
+
+        @if (! empty($progress['worker_warning']))
+            <div class="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm font-medium text-amber-900">
+                {{ $progress['worker_warning'] }}
+            </div>
+        @endif
     </div>
 
     <div class="rounded-lg bg-white p-6 shadow">
@@ -115,7 +155,7 @@
         <p class="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
             Current stage: candidate extraction and review. Owner assignment and profile creation are later steps.
             Candidate fields appear after free parse completes. Manual transcript is only needed if OCR/free parse fails.
-            Processing runs in background. Refresh to see progress.
+            Bulk processing runs in background. You can leave this page open and refresh later.
         </p>
 
         @if ($batch->items->isEmpty())

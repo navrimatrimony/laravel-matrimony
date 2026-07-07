@@ -3,6 +3,7 @@
 namespace App\Services\Intake;
 
 use App\Jobs\ParseIntakeJob;
+use App\Jobs\ProcessBulkIntakeBatchItemJob;
 use App\Models\BiodataIntake;
 use App\Models\BulkIntakeBatch;
 use App\Models\BulkIntakeBatchItem;
@@ -16,6 +17,8 @@ use Throwable;
 
 class BulkIntakeBatchService
 {
+    public const BULK_QUEUE_NAME = ProcessBulkIntakeBatchItemJob::QUEUE_NAME;
+
     private const USABLE_OCR_TEXT_MIN_LENGTH = 20;
 
     private const EMPTY_OCR_FAILURE_CODE = 'empty_ocr_text';
@@ -378,12 +381,17 @@ class BulkIntakeBatchService
 
             $intake = $intakeCreation->persistPrepared((int) $ownerUser->id, $prepared);
 
+            $meta = is_array($lockedItem->item_meta_json) ? $lockedItem->item_meta_json : [];
             $lockedItem->forceFill([
                 'biodata_intake_id' => $intake->id,
                 'source_file_path' => $intake->file_path,
                 'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
                 'failure_code' => null,
                 'failure_message' => null,
+                'item_meta_json' => array_merge($meta, [
+                    'background_status' => 'intake_created',
+                    'intake_created_at' => now()->toIso8601String(),
+                ]),
             ])->save();
 
             $sourceContextRecorder->recordForIntake($intake, [
@@ -521,12 +529,17 @@ class BulkIntakeBatchService
 
             $intake = $intakeCreation->persistPreparedForUnclaimedBulk($prepared);
 
+            $meta = is_array($lockedItem->item_meta_json) ? $lockedItem->item_meta_json : [];
             $lockedItem->forceFill([
                 'biodata_intake_id' => $intake->id,
                 'source_file_path' => $intake->file_path,
                 'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
                 'failure_code' => null,
                 'failure_message' => null,
+                'item_meta_json' => array_merge($meta, [
+                    'background_status' => 'intake_created',
+                    'intake_created_at' => now()->toIso8601String(),
+                ]),
             ])->save();
 
             $sourceContextRecorder->recordForIntake($intake, [
@@ -554,10 +567,17 @@ class BulkIntakeBatchService
 
     public function failItem(BulkIntakeBatchItem $item, string $failureCode, string $message): BulkIntakeBatchItem
     {
+        $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
         $item->forceFill([
             'item_status' => BulkIntakeBatchItem::STATUS_FAILED,
             'failure_code' => $failureCode,
             'failure_message' => mb_substr($message, 0, 2000),
+            'item_meta_json' => array_merge($meta, [
+                'background_status' => 'failed',
+                'failed_at' => now()->toIso8601String(),
+                'failure_code' => $failureCode,
+                'failure_message' => mb_substr($message, 0, 2000),
+            ]),
         ])->save();
 
         $batch = $item->batch;
@@ -658,16 +678,19 @@ class BulkIntakeBatchService
             }
 
             IntakeExtractionReuseResolver::flagNextParseJobAsParseInputOnly((int) $intake->id);
-            ParseIntakeJob::dispatch((int) $intake->id, true);
+            ParseIntakeJob::dispatch((int) $intake->id, true)->onQueue(self::BULK_QUEUE_NAME);
 
             $meta = $this->withoutOcrFailureMeta(is_array($item->item_meta_json) ? $item->item_meta_json : []);
+            $queuedAt = now()->toIso8601String();
             $item->forceFill([
                 'item_status' => BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
                 'item_meta_json' => array_merge($meta, [
+                    'background_status' => 'parse_queued',
                     'parse_queue_mode' => BulkIntakeBatch::OCR_POLICY_FREE_OCR_FIRST,
                     'parse_input_only' => true,
                     'queued_by_user_id' => (int) $actor->id,
                     'queued_by_actor_type' => BulkIntakeBatch::ACTOR_ADMIN,
+                    'parse_queued_at' => $queuedAt,
                 ], [
                     'parse_queue_mode' => $queueMode,
                 ], $timestampMeta),
