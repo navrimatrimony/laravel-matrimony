@@ -78,6 +78,47 @@ test('bulk list handles missing candidate fields safely', function () {
         ->assertSee('Parsed JSON: Yes', false);
 });
 
+test('bulk list keeps text item display short and prefers linked parsed status', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $longSummary = 'Full biodata raw text should not be dumped in the table. '
+        .str_repeat('Candidate family education occupation mobile address horoscope details. ', 8);
+    $intake = candidateDisplayIntake([
+        'uploaded_by' => null,
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Short Text Candidate',
+                'primary_contact_number' => '9876543210',
+                'height_cm' => 166,
+                'highest_education' => 'MBA',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $intake, [
+        'input_type' => BulkIntakeBatchItem::INPUT_TEXT,
+        'original_filename' => null,
+        'summary_text' => $longSummary,
+        'item_status' => BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Text item #1', false)
+        ->assertSee('text · parsed', false)
+        ->assertSee('Short Text Candidate', false)
+        ->assertSee('Mobile: 9876543210', false)
+        ->assertSee('166 cm', false)
+        ->assertSee('MBA', false)
+        ->assertSee('Parse: OK', false)
+        ->assertSee('Parsed JSON: Yes', false)
+        ->assertDontSee($longSummary, false)
+        ->assertDontSee('text · parse queued', false)
+        ->assertDontSee('Free parse queued', false)
+        ->assertDontSee('Unclaimed / consent pending', false);
+});
+
 test('bulk list explains queued and pending free parse states', function () {
     $admin = candidateDisplayAdminUser();
     $batch = candidateDisplayBatch($admin);

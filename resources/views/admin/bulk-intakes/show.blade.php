@@ -166,11 +166,18 @@
                                 ];
                                 $hasParsedJson = (bool) ($candidate['parsed_json_present'] ?? false);
                                 $parseStatus = (string) ($candidate['parse_status'] ?? $intake?->parse_status ?? '');
+                                $itemDisplayStatus = $parseStatus !== '' ? $parseStatus : (string) $item->item_status;
+                                $itemDisplayStatus = str_replace('_', ' ', $itemDisplayStatus);
+                                $itemDisplayLabel = $item->input_type === \App\Models\BulkIntakeBatchItem::INPUT_TEXT
+                                    ? 'Text item #'.$item->item_sequence
+                                    : ($item->original_filename ?: $missingDisplay);
+                                $textPreview = null;
+                                if ($item->input_type === \App\Models\BulkIntakeBatchItem::INPUT_TEXT && filled($item->summary_text)) {
+                                    $textPreview = \Illuminate\Support\Str::limit((string) $item->summary_text, 80);
+                                }
                                 $exceptionBadges = [];
                                 if (! $intake) {
                                     $exceptionBadges[] = ['label' => 'Missing linked intake', 'class' => 'border-red-200 bg-red-50 text-red-700'];
-                                } elseif ($intake->uploaded_by === null) {
-                                    $exceptionBadges[] = ['label' => 'Unclaimed / consent pending', 'class' => 'border-amber-200 bg-amber-50 text-amber-800'];
                                 }
                                 if ($intake && (string) $intake->parse_status === 'error') {
                                     $exceptionBadges[] = ['label' => 'Parse error', 'class' => 'border-red-200 bg-red-50 text-red-700'];
@@ -189,6 +196,9 @@
                                 if ($hasEmptyOcrFailure) {
                                     $exceptionBadges[] = ['label' => 'OCR failed / no text extracted', 'class' => 'border-red-200 bg-red-50 text-red-700'];
                                 }
+                                if ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_NEEDS_REVIEW) {
+                                    $exceptionBadges[] = ['label' => 'Needs review', 'class' => 'border-amber-200 bg-amber-50 text-amber-800'];
+                                }
                                 $lastError = (string) ($intake?->last_error ?? '');
                                 $canAddManualTranscript = $intake && (
                                     (string) $intake->parse_status === 'error'
@@ -202,8 +212,11 @@
                             <tr>
                                 <td class="px-4 py-2 text-sm text-gray-900">{{ $item->item_sequence }}</td>
                                 <td class="px-4 py-2 text-sm text-gray-700">
-                                    <span class="font-medium">{{ $item->original_filename ?: ($item->summary_text ?: $missingDisplay) }}</span>
-                                    <span class="block text-xs text-gray-500">{{ $item->input_type }} · {{ $item->item_status }}</span>
+                                    <span class="font-medium">{{ $itemDisplayLabel }}</span>
+                                    <span class="block text-xs text-gray-500">{{ $item->input_type }} · {{ $itemDisplayStatus }}</span>
+                                    @if ($textPreview)
+                                        <span class="block max-w-xs truncate text-xs text-gray-400">{{ $textPreview }}</span>
+                                    @endif
                                     @if ($item->failure_code)
                                         <span class="block max-w-xs truncate text-xs text-red-700" title="{{ $item->failure_message }}">{{ $item->failure_code }}: {{ $item->failure_message }}</span>
                                     @endif
