@@ -200,7 +200,7 @@ test('locked or approved intake is blocked', function () {
         ->and($approvedReadiness['reason_codes'])->toContain('intake_approved_already');
 });
 
-test('show page displays create draft profile action for stale parse queued parsed ready item', function () {
+test('show page hides create draft profile action for stale parse queued parsed ready item', function () {
     $admin = readinessAdminUser();
     $owner = readinessMemberUser();
     $batch = readinessBatch($admin);
@@ -219,7 +219,7 @@ test('show page displays create draft profile action for stale parse queued pars
         ->assertOk()
         ->assertSee('stale-queued-ready.pdf', false)
         ->assertSee('Ready for profile review', false)
-        ->assertSee('Create draft profile', false);
+        ->assertDontSee('Create draft profile', false);
 });
 
 test('ready not ready and blocked filters work', function () {

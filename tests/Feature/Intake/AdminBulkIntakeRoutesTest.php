@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\BiodataIntake;
 use App\Models\BulkIntakeBatch;
 use App\Models\BulkIntakeBatchItem;
 use App\Models\User;
@@ -50,6 +51,48 @@ test('admin can access bulk intake index create and show pages', function () {
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
         ->assertSee('Bulk Intake #'.$batch->id, false);
+});
+
+test('bulk intake show keeps extraction actions and hides owner profile actions', function () {
+    $admin = adminBulkIntakeRoutesAdmin();
+    $batch = BulkIntakeBatch::create([
+        'uploaded_by_user_id' => $admin->id,
+        'uploaded_by_actor_type' => BulkIntakeBatch::ACTOR_ADMIN,
+        'source_surface' => BulkIntakeBatch::SURFACE_ADMIN_PANEL,
+        'batch_status' => BulkIntakeBatch::STATUS_COMPLETED,
+    ]);
+    $intake = BiodataIntake::create([
+        'uploaded_by' => null,
+        'raw_ocr_text' => 'Name: Extraction Stage Candidate',
+        'parsed_json' => [],
+        'intake_status' => 'uploaded',
+        'parse_status' => 'pending',
+        'parser_version' => 'rules_only',
+        'snapshot_schema_version' => 1,
+        'approved_by_user' => false,
+        'intake_locked' => false,
+    ]);
+    BulkIntakeBatchItem::create([
+        'bulk_intake_batch_id' => $batch->id,
+        'biodata_intake_id' => $intake->id,
+        'item_sequence' => 1,
+        'input_type' => BulkIntakeBatchItem::INPUT_TEXT,
+        'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Current stage: candidate extraction and review. Owner assignment and profile creation are later steps.', false)
+        ->assertSee('Open intake review', false)
+        ->assertSee('Profile Readiness details', false)
+        ->assertSee('Add manual transcript', false)
+        ->assertSee('Queue free parse item', false)
+        ->assertSee('Mark needs review', false)
+        ->assertDontSee('Assign owner', false)
+        ->assertDontSee('Create owner', false)
+        ->assertDontSee('Create draft profile', false)
+        ->assertDontSee('Preview parsed fields', false);
 });
 
 test('non admin cannot access admin bulk intake routes', function () {

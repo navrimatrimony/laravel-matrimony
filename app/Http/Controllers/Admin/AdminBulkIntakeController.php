@@ -9,6 +9,7 @@ use App\Models\IntakeSourceContext;
 use App\Models\User;
 use App\Services\Intake\BulkIntakeApplyPreviewService;
 use App\Services\Intake\BulkIntakeBatchService;
+use App\Services\Intake\BulkIntakeCandidateDisplayService;
 use App\Services\Intake\BulkIntakeDraftProfileBootstrapService;
 use App\Services\Intake\BulkIntakeManualTranscriptService;
 use App\Services\Intake\BulkIntakeReadinessService;
@@ -111,6 +112,7 @@ class AdminBulkIntakeController extends Controller
         Request $request,
         BulkIntakeBatch $bulkIntakeBatch,
         BulkIntakeBatchService $batchService,
+        BulkIntakeCandidateDisplayService $candidateDisplayService,
         BulkIntakeReadinessService $readinessService
     )
     {
@@ -143,6 +145,11 @@ class AdminBulkIntakeController extends Controller
                 ->values();
         }
         $bulkIntakeBatch->setRelation('items', $items);
+        $candidateByItemId = $items
+            ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
+                (int) $item->id => $candidateDisplayService->candidateForItem($item),
+            ])
+            ->all();
 
         $sourceContextCountsByItem = IntakeSourceContext::query()
             ->where('bulk_intake_batch_id', $bulkIntakeBatch->id)
@@ -155,6 +162,7 @@ class AdminBulkIntakeController extends Controller
             'batch' => $bulkIntakeBatch,
             'sourceContextCountsByItem' => $sourceContextCountsByItem,
             'reviewSummary' => $batchService->buildBatchReviewSummary($bulkIntakeBatch),
+            'candidateByItemId' => $candidateByItemId,
             'readinessByItem' => $readinessReport['by_item_id'],
             'readinessSummary' => $readinessReport['summary'],
             'statusFilter' => $statusFilter,

@@ -23,6 +23,8 @@
         'parse_pending_error' => 0,
     ];
     $readinessByItem = $readinessByItem ?? [];
+    $candidateByItemId = $candidateByItemId ?? [];
+    $missingDisplay = '—';
     $readinessStatusLabels = [
         'ready_for_profile_review' => 'Ready for profile review',
         'not_ready' => 'Not ready',
@@ -147,6 +149,9 @@
                 @endforeach
             </div>
         </div>
+        <p class="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            Current stage: candidate extraction and review. Owner assignment and profile creation are later steps.
+        </p>
 
         @if ($batch->items->isEmpty())
             <p class="mt-3 text-sm text-gray-600">No items found for this filter.</p>
@@ -156,13 +161,14 @@
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Seq</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Input</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Filename</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Item Status</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Owner</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Intake</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Parsed JSON</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Readiness</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">File/Text</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Candidate</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">DOB / Age</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Height / Gender</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">City</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Education / Occupation</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Parse</th>
+                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Profile Readiness</th>
                             <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Exceptions</th>
                             <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Source</th>
                             <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Actions</th>
@@ -172,7 +178,22 @@
                         @foreach ($batch->items as $item)
                             @php
                                 $intake = $item->biodataIntake;
-                                $hasParsedJson = $intake && ! empty($intake->parsed_json);
+                                $candidate = $candidateByItemId[$item->id] ?? [
+                                    'full_name' => null,
+                                    'mobile' => null,
+                                    'date_of_birth' => null,
+                                    'age' => null,
+                                    'height' => null,
+                                    'gender' => null,
+                                    'city' => null,
+                                    'education' => null,
+                                    'occupation' => null,
+                                    'parse_status' => $intake?->parse_status,
+                                    'parsed_json_present' => false,
+                                    'missing_fields' => [],
+                                ];
+                                $hasParsedJson = (bool) ($candidate['parsed_json_present'] ?? false);
+                                $parseStatus = (string) ($candidate['parse_status'] ?? $intake?->parse_status ?? '');
                                 $readiness = $readinessByItem[$item->id] ?? [
                                     'status' => 'not_ready',
                                     'reason_codes' => [],
@@ -205,40 +226,54 @@
                             @endphp
                             <tr>
                                 <td class="px-4 py-2 text-sm text-gray-900">{{ $item->item_sequence }}</td>
-                                <td class="px-4 py-2 text-sm text-gray-700">{{ $item->input_type }}</td>
-                                <td class="px-4 py-2 text-sm text-gray-700">{{ $item->original_filename ?: '-' }}</td>
                                 <td class="px-4 py-2 text-sm text-gray-700">
-                                    <span class="font-medium">{{ $item->item_status }}</span>
+                                    <span class="font-medium">{{ $item->original_filename ?: ($item->summary_text ?: $missingDisplay) }}</span>
+                                    <span class="block text-xs text-gray-500">{{ $item->input_type }} · {{ $item->item_status }}</span>
                                     @if ($item->failure_code)
                                         <span class="block max-w-xs truncate text-xs text-red-700" title="{{ $item->failure_message }}">{{ $item->failure_code }}: {{ $item->failure_message }}</span>
                                     @endif
                                 </td>
                                 <td class="px-4 py-2 text-sm text-gray-700">
-                                    @if ($intake && $intake->uploaded_by)
-                                        <span class="font-medium">{{ $intake->uploadedByUser?->name ?? ('User #'.$intake->uploaded_by) }}</span>
-                                        <span class="block text-xs text-gray-500">{{ $intake->uploadedByUser?->mobile ?: ($intake->uploadedByUser?->email ?: '-') }}</span>
-                                    @elseif ($intake)
-                                        <span class="font-medium text-amber-700">Unclaimed / consent pending</span>
-                                    @else
-                                        <span class="text-red-700">Missing linked intake</span>
-                                    @endif
+                                    <span class="font-medium">{{ $candidate['full_name'] ?? $missingDisplay }}</span>
+                                    <span class="block text-xs text-gray-500">Mobile: {{ $candidate['mobile'] ?? $missingDisplay }}</span>
+                                </td>
+                                <td class="px-4 py-2 text-sm text-gray-700">
+                                    <span class="font-medium">{{ $candidate['date_of_birth'] ?? $missingDisplay }}</span>
+                                    <span class="block text-xs text-gray-500">Age: {{ $candidate['age'] ?? $missingDisplay }}</span>
+                                </td>
+                                <td class="px-4 py-2 text-sm text-gray-700">
+                                    <span class="font-medium">{{ $candidate['height'] ?? $missingDisplay }}</span>
+                                    <span class="block text-xs text-gray-500">Gender: {{ $candidate['gender'] ?? $missingDisplay }}</span>
+                                </td>
+                                <td class="px-4 py-2 text-sm text-gray-700">{{ $candidate['city'] ?? $missingDisplay }}</td>
+                                <td class="px-4 py-2 text-sm text-gray-700">
+                                    <span class="font-medium">{{ $candidate['education'] ?? $missingDisplay }}</span>
+                                    <span class="block text-xs text-gray-500">{{ $candidate['occupation'] ?? $missingDisplay }}</span>
                                 </td>
                                 <td class="px-4 py-2 text-sm">
                                     @if ($intake)
                                         <a href="{{ route('admin.biodata-intakes.show', $intake) }}" class="font-medium text-indigo-600 hover:text-indigo-800">#{{ $intake->id }}</a>
-                                        <span class="block text-xs text-gray-500">parse: {{ $intake->parse_status }}</span>
+                                        @if ($parseStatus === 'parsed' && $hasParsedJson)
+                                            <span class="block text-xs font-medium text-green-700">Parse: OK</span>
+                                        @else
+                                            <span class="block text-xs text-gray-500">Parse: {{ $parseStatus !== '' ? $parseStatus : $missingDisplay }}</span>
+                                        @endif
+                                        <span class="block text-xs text-gray-500">Parsed JSON: {{ $hasParsedJson ? 'Yes' : 'No' }}</span>
                                         @if ($intake->last_error)
                                             <span class="block max-w-xs truncate text-xs text-red-700" title="{{ $intake->last_error }}">{{ \Illuminate\Support\Str::limit((string) $intake->last_error, 90) }}</span>
                                         @endif
                                     @else
-                                        -
+                                        <span class="text-red-700">Missing linked intake</span>
+                                        <span class="block text-xs text-gray-500">Parsed JSON: No</span>
                                     @endif
                                 </td>
-                                <td class="px-4 py-2 text-sm text-gray-700">{{ $hasParsedJson ? 'Yes' : 'No' }}</td>
                                 <td class="px-4 py-2 text-sm">
                                     <span class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $readinessStatusClasses[$readinessStatus] ?? $readinessStatusClasses['not_ready'] }}">
                                         {{ $readinessStatusLabels[$readinessStatus] ?? 'Not ready' }}
                                     </span>
+                                    @if ($readinessStatus === 'not_ready' && $hasParsedJson && (string) $intake?->parse_status === 'parsed')
+                                        <span class="block text-xs text-gray-500">Candidate extraction is complete; profile readiness is a later step.</span>
+                                    @endif
                                     @if (! empty($readiness['reason_codes']))
                                         <div class="mt-2 flex max-w-xs flex-wrap gap-1">
                                             @foreach ($readiness['reason_codes'] as $reasonCode)
@@ -271,27 +306,9 @@
                                         @if ($intake)
                                             <a href="{{ route('admin.biodata-intakes.show', $intake) }}" class="font-medium text-indigo-600 hover:text-indigo-800">Open intake review</a>
                                         @endif
-                                        <a href="{{ route('admin.bulk-intakes.items.readiness', [$batch, $item]) }}" class="font-medium text-slate-700 hover:text-slate-900">Readiness details</a>
+                                        <a href="{{ route('admin.bulk-intakes.items.readiness', [$batch, $item]) }}" class="font-medium text-slate-700 hover:text-slate-900">Profile Readiness details</a>
                                         @if ($canAddManualTranscript)
                                             <a href="{{ route('admin.bulk-intakes.items.manual-transcript', [$batch, $item]) }}" class="font-medium text-orange-700 hover:text-orange-900">Add manual transcript</a>
-                                        @endif
-                                        @if ($intake && $intake->matrimony_profile_id && $item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_PROFILE_DRAFT_CREATED)
-                                            <a href="{{ route('admin.bulk-intakes.items.apply-preview', [$batch, $item]) }}" class="font-medium text-purple-700 hover:text-purple-900">Preview parsed fields</a>
-                                        @endif
-                                        @if (($readiness['status'] ?? null) === 'ready_for_profile_review')
-                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.bootstrap-draft-profile', [$batch, $item]) }}" class="space-y-2 rounded-lg border border-green-200 bg-green-50 p-3 text-xs text-green-900">
-                                                @csrf
-                                                <p>This creates an empty draft profile shell only. Parsed biodata fields are not applied in this step.</p>
-                                                <label class="flex items-start gap-2">
-                                                    <input type="checkbox" name="bootstrap_confirmed" value="1" class="mt-0.5 rounded border-green-400 text-indigo-600 focus:ring-indigo-500">
-                                                    <span>I confirm this ready item should get a draft profile shell.</span>
-                                                </label>
-                                                <button type="submit" class="text-left text-sm font-semibold text-green-700 hover:text-green-900">Create draft profile</button>
-                                            </form>
-                                        @endif
-                                        @if ($intake && $intake->uploaded_by === null)
-                                            <a href="{{ route('admin.bulk-intakes.items.assign-owner', [$batch, $item]) }}" class="font-medium text-blue-700 hover:text-blue-900">Assign owner</a>
-                                            <a href="{{ route('admin.bulk-intakes.items.create-owner', [$batch, $item]) }}" class="font-medium text-emerald-700 hover:text-emerald-900">Create owner</a>
                                         @endif
 
                                         @if ($intake && $intake->parse_status === 'pending' && $item->item_status !== \App\Models\BulkIntakeBatchItem::STATUS_PARSE_QUEUED && ! $intake->approved_by_user && ! $intake->intake_locked)
