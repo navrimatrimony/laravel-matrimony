@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ProcessBulkIntakeBatchItemJob;
 use App\Models\BulkIntakeBatch;
 use App\Models\BulkIntakeBatchItem;
 use App\Models\IntakeSourceContext;
@@ -13,9 +14,7 @@ use App\Services\Intake\BulkIntakeCandidateDisplayService;
 use App\Services\Intake\BulkIntakeDraftProfileBootstrapService;
 use App\Services\Intake\BulkIntakeManualTranscriptService;
 use App\Services\Intake\BulkIntakeReadinessService;
-use App\Services\Intake\IntakeCreationService;
 use App\Services\Intake\IntakeOwnerAssignmentService;
-use App\Services\Intake\IntakeSourceContextRecorder;
 use App\Support\MobileNumber;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -54,9 +53,7 @@ class AdminBulkIntakeController extends Controller
 
     public function store(
         Request $request,
-        BulkIntakeBatchService $batchService,
-        IntakeCreationService $intakeCreation,
-        IntakeSourceContextRecorder $sourceContextRecorder
+        BulkIntakeBatchService $batchService
     ) {
         $validated = $request->validate([
             'batch_name' => ['nullable', 'string', 'max:255'],
@@ -98,27 +95,31 @@ class AdminBulkIntakeController extends Controller
             ],
         ]);
 
-        $batch = $batchService->processUnclaimedBulkBatch(
-            $batch,
-            $files,
-            $textItems,
-            $actor,
-            $intakeCreation,
-            $sourceContextRecorder,
-            $queueFreeParseAfterUpload
-        );
+        $sequence = 1;
+        foreach ($files as $file) {
+            $item = $batchService->createPendingItemFromUploadedFile($batch, $file, $sequence, $queueFreeParseAfterUpload);
+            ProcessBulkIntakeBatchItemJob::dispatch((int) $item->id, (int) $actor->id, $queueFreeParseAfterUpload);
+            $sequence++;
+        }
+
+        foreach ($textItems as $rawText) {
+            $item = $batchService->createPendingItemFromRawText($batch, $rawText, $sequence, $queueFreeParseAfterUpload);
+            ProcessBulkIntakeBatchItemJob::dispatch((int) $item->id, (int) $actor->id, $queueFreeParseAfterUpload);
+            $sequence++;
+        }
+
+        $batch = $batchService->refreshCounters($batch);
 
         return redirect()
             ->route('admin.bulk-intakes.show', $batch)
-            ->with('success', 'Bulk intake batch processed as unclaimed staging. Parsing and profile apply remain separate.');
+            ->with('success', 'Bulk intake queued. Items will process in background.');
     }
 
     public function show(
         Request $request,
         BulkIntakeBatch $bulkIntakeBatch,
         BulkIntakeBatchService $batchService,
-        BulkIntakeCandidateDisplayService $candidateDisplayService,
-        BulkIntakeReadinessService $readinessService
+        BulkIntakeCandidateDisplayService $candidateDisplayService
     )
     {
         $statusFilters = $this->bulkItemStatusFilters();
@@ -127,8 +128,8 @@ class AdminBulkIntakeController extends Controller
             $statusFilter = 'all';
         }
 
+        $bulkIntakeBatch = $batchService->refreshCounters($bulkIntakeBatch);
         $bulkIntakeBatch->load('uploadedByUser:id,name,email,mobile');
-        $readinessReport = $readinessService->readinessForBatch($bulkIntakeBatch);
 
         $itemsQuery = $bulkIntakeBatch->items()
             ->with([
@@ -138,17 +139,9 @@ class AdminBulkIntakeController extends Controller
             ])
             ->orderBy('item_sequence');
 
-        if (! in_array($statusFilter, ['ready', 'not_ready', 'blocked'], true)) {
-            $this->applyBulkItemStatusFilter($itemsQuery, $statusFilter);
-        }
+        $this->applyBulkItemStatusFilter($itemsQuery, $statusFilter);
 
         $items = $itemsQuery->get();
-        if (in_array($statusFilter, ['ready', 'not_ready', 'blocked'], true)) {
-            $targetStatus = $statusFilter === 'ready' ? 'ready_for_profile_review' : $statusFilter;
-            $items = $items
-                ->filter(fn (BulkIntakeBatchItem $item): bool => ($readinessReport['by_item_id'][(int) $item->id]['status'] ?? null) === $targetStatus)
-                ->values();
-        }
         $bulkIntakeBatch->setRelation('items', $items);
         $candidateByItemId = $items
             ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
@@ -168,8 +161,6 @@ class AdminBulkIntakeController extends Controller
             'sourceContextCountsByItem' => $sourceContextCountsByItem,
             'reviewSummary' => $batchService->buildBatchReviewSummary($bulkIntakeBatch),
             'candidateByItemId' => $candidateByItemId,
-            'readinessByItem' => $readinessReport['by_item_id'],
-            'readinessSummary' => $readinessReport['summary'],
             'statusFilter' => $statusFilter,
             'statusFilters' => $statusFilters,
         ]);
@@ -558,28 +549,23 @@ class AdminBulkIntakeController extends Controller
     {
         return [
             'all' => 'All',
-            'unclaimed' => 'Unclaimed',
             'pending' => 'Pending',
+            'processing' => 'Processing',
+            'intake_created' => 'Intake Created',
             'parse_queued' => 'Parse Queued',
             'parsed' => 'Parsed',
             'parse_error' => 'Parse Error',
             'needs_review' => 'Needs Review',
             'failed' => 'Failed',
-            'ready' => 'Ready',
-            'not_ready' => 'Not Ready',
-            'blocked' => 'Blocked',
         ];
     }
 
     private function applyBulkItemStatusFilter($query, string $statusFilter): void
     {
         match ($statusFilter) {
-            'unclaimed' => $query->whereHas('biodataIntake', fn ($intakeQuery) => $intakeQuery->whereNull('uploaded_by')),
-            'pending' => $query->where(function ($nested): void {
-                $nested
-                    ->where('item_status', BulkIntakeBatchItem::STATUS_PENDING)
-                    ->orWhereHas('biodataIntake', fn ($intakeQuery) => $intakeQuery->where('parse_status', 'pending'));
-            }),
+            'pending' => $query->where('item_status', BulkIntakeBatchItem::STATUS_PENDING),
+            'processing' => $query->where('item_status', BulkIntakeBatchItem::STATUS_PROCESSING),
+            'intake_created' => $query->where('item_status', BulkIntakeBatchItem::STATUS_INTAKE_CREATED),
             'parse_queued' => $query->where('item_status', BulkIntakeBatchItem::STATUS_PARSE_QUEUED),
             'parsed' => $query->whereHas('biodataIntake', fn ($intakeQuery) => $intakeQuery->where('parse_status', 'parsed')),
             'parse_error' => $query->whereHas('biodataIntake', fn ($intakeQuery) => $intakeQuery->where('parse_status', 'error')),

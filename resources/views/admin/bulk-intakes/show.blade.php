@@ -5,8 +5,8 @@
     $activeAdminProfileTab = 'bulk';
     $reviewSummary = $reviewSummary ?? [
         'total' => 0,
-        'unclaimed' => 0,
-        'claimed' => 0,
+        'pending' => 0,
+        'processing' => 0,
         'intakes_created' => 0,
         'parse_pending' => 0,
         'parse_queued' => 0,
@@ -55,10 +55,9 @@
     <div class="grid gap-4 md:grid-cols-3 xl:grid-cols-9">
         @foreach ([
             'Total Items' => $reviewSummary['total'],
-            'Unclaimed' => $reviewSummary['unclaimed'],
-            'Claimed' => $reviewSummary['claimed'],
+            'Pending' => $reviewSummary['pending'],
+            'Processing' => $reviewSummary['processing'],
             'Intakes Created' => $reviewSummary['intakes_created'],
-            'Parse Pending' => $reviewSummary['parse_pending'],
             'Parse Queued' => $reviewSummary['parse_queued'],
             'Parsed' => $reviewSummary['parsed'],
             'Parse Errors' => $reviewSummary['parse_error'],
@@ -116,6 +115,7 @@
         <p class="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
             Current stage: candidate extraction and review. Owner assignment and profile creation are later steps.
             Candidate fields appear after free parse completes. Manual transcript is only needed if OCR/free parse fails.
+            Processing runs in background. Refresh to see progress.
         </p>
 
         @if ($batch->items->isEmpty())
@@ -166,8 +166,13 @@
                                 ];
                                 $hasParsedJson = (bool) ($candidate['parsed_json_present'] ?? false);
                                 $parseStatus = (string) ($candidate['parse_status'] ?? $intake?->parse_status ?? '');
-                                $itemDisplayStatus = $parseStatus !== '' ? $parseStatus : (string) $item->item_status;
-                                $itemDisplayStatus = str_replace('_', ' ', $itemDisplayStatus);
+                                $itemDisplayStatus = match (true) {
+                                    $parseStatus === 'parsed' && $hasParsedJson => 'parsed',
+                                    $item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_PENDING => 'pending',
+                                    $item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_PROCESSING => 'processing',
+                                    $parseStatus !== '' => str_replace('_', ' ', $parseStatus),
+                                    default => str_replace('_', ' ', (string) $item->item_status),
+                                };
                                 $itemDisplayLabel = $item->input_type === \App\Models\BulkIntakeBatchItem::INPUT_TEXT
                                     ? 'Text item #'.$item->item_sequence
                                     : ($item->original_filename ?: $missingDisplay);
@@ -176,7 +181,11 @@
                                     $textPreview = \Illuminate\Support\Str::limit((string) $item->summary_text, 80);
                                 }
                                 $exceptionBadges = [];
-                                if (! $intake) {
+                                $waitingForBackgroundIntake = ! $intake && in_array((string) $item->item_status, [
+                                    \App\Models\BulkIntakeBatchItem::STATUS_PENDING,
+                                    \App\Models\BulkIntakeBatchItem::STATUS_PROCESSING,
+                                ], true);
+                                if (! $intake && ! $waitingForBackgroundIntake) {
                                     $exceptionBadges[] = ['label' => 'Missing linked intake', 'class' => 'border-red-200 bg-red-50 text-red-700'];
                                 }
                                 if ($intake && (string) $intake->parse_status === 'error') {
@@ -274,7 +283,13 @@
                                             <span class="block max-w-xs truncate text-xs text-red-700" title="{{ $intake->last_error }}">{{ \Illuminate\Support\Str::limit((string) $intake->last_error, 90) }}</span>
                                         @endif
                                     @else
-                                        <span class="text-red-700">Missing linked intake</span>
+                                        @if ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_PENDING)
+                                            <span class="text-gray-500">Waiting for background processing</span>
+                                        @elseif ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_PROCESSING)
+                                            <span class="text-amber-700">OCR/parse preparation running</span>
+                                        @else
+                                            <span class="text-red-700">Missing linked intake</span>
+                                        @endif
                                         <span class="block text-xs text-gray-500">Parsed JSON: No</span>
                                     @endif
                                 </td>

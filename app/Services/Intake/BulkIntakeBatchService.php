@@ -10,6 +10,8 @@ use App\Models\User;
 use App\Services\Ocr\OcrNormalize;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use Throwable;
 
 class BulkIntakeBatchService
@@ -70,6 +72,189 @@ class BulkIntakeBatchService
 
             return $item;
         });
+    }
+
+    public function createPendingItemFromUploadedFile(
+        BulkIntakeBatch $batch,
+        UploadedFile $file,
+        int $sequence,
+        bool $queueFreeParseAfterUpload
+    ): BulkIntakeBatchItem {
+        $fileHash = $this->hashFile($file);
+        $storedPath = $file->store('bulk-intake-sources/'.$batch->id);
+        if (! is_string($storedPath) || $storedPath === '') {
+            throw new RuntimeException('Bulk intake source file could not be stored.');
+        }
+
+        return $this->addItem($batch, [
+            'item_sequence' => $sequence,
+            'input_type' => BulkIntakeBatchItem::INPUT_FILE,
+            'original_filename' => $file->getClientOriginalName(),
+            'source_file_path' => $storedPath,
+            'file_hash' => $fileHash,
+            'idempotency_key' => $this->itemIdempotencyKey($batch, $sequence, 'file', $fileHash),
+            'item_status' => BulkIntakeBatchItem::STATUS_PENDING,
+            'item_meta_json' => [
+                'async_processing' => true,
+                'queue_free_parse_after_upload' => $queueFreeParseAfterUpload,
+                'source_file_path' => $storedPath,
+                'source_original_filename' => $file->getClientOriginalName(),
+                'source_mime_type' => $file->getClientMimeType(),
+                'background_status' => 'queued',
+                'queued_at' => now()->toIso8601String(),
+            ],
+        ]);
+    }
+
+    public function createPendingItemFromRawText(
+        BulkIntakeBatch $batch,
+        string $rawText,
+        int $sequence,
+        bool $queueFreeParseAfterUpload
+    ): BulkIntakeBatchItem {
+        $rawText = trim($rawText);
+        if ($rawText === '') {
+            throw new RuntimeException('Bulk intake text item is empty.');
+        }
+
+        $textHash = hash('sha256', $rawText);
+
+        return $this->addItem($batch, [
+            'item_sequence' => $sequence,
+            'input_type' => BulkIntakeBatchItem::INPUT_TEXT,
+            'raw_text_hash' => $textHash,
+            'idempotency_key' => $this->itemIdempotencyKey($batch, $sequence, 'text', $textHash),
+            'item_status' => BulkIntakeBatchItem::STATUS_PENDING,
+            'summary_text' => mb_substr($rawText, 0, 500),
+            'item_meta_json' => [
+                'async_processing' => true,
+                'queue_free_parse_after_upload' => $queueFreeParseAfterUpload,
+                'source_text' => $rawText,
+                'background_status' => 'queued',
+                'queued_at' => now()->toIso8601String(),
+            ],
+        ]);
+    }
+
+    public function processPendingItem(
+        BulkIntakeBatchItem $item,
+        User $actor,
+        IntakeCreationService $intakeCreation,
+        IntakeSourceContextRecorder $sourceContextRecorder,
+        bool $queueFreeParseAfterUpload = true
+    ): BulkIntakeBatchItem {
+        $claimedItem = $this->claimItemForProcessing($item);
+
+        if ($claimedItem->biodata_intake_id !== null) {
+            if ($queueFreeParseAfterUpload) {
+                $this->queueAutoFreeParseAfterUploadForItem($claimedItem, $actor);
+            }
+
+            $batch = $claimedItem->batch;
+            if ($batch !== null) {
+                $this->refreshCounters($batch);
+            }
+
+            return $claimedItem->refresh();
+        }
+
+        $file = null;
+        $rawText = null;
+
+        if ($claimedItem->input_type === BulkIntakeBatchItem::INPUT_FILE) {
+            $file = $this->uploadedFileFromPendingItem($claimedItem);
+        } else {
+            $rawText = $this->sourceTextFromPendingItem($claimedItem);
+            if (trim($rawText) === '') {
+                return $this->markItemEmptyOcrNeedsReview($claimedItem, 'bulk_item_processing');
+            }
+        }
+
+        $processedItem = $this->createUnclaimedIntakeForItem(
+            $claimedItem,
+            $actor,
+            $intakeCreation,
+            $sourceContextRecorder,
+            $file,
+            $rawText
+        );
+
+        if ($queueFreeParseAfterUpload) {
+            $this->queueAutoFreeParseAfterUploadForItem($processedItem, $actor);
+        } else {
+            $batch = $processedItem->batch;
+            if ($batch !== null) {
+                $this->refreshCounters($batch);
+            }
+        }
+
+        return $processedItem->refresh();
+    }
+
+    private function claimItemForProcessing(BulkIntakeBatchItem $item): BulkIntakeBatchItem
+    {
+        return DB::transaction(function () use ($item): BulkIntakeBatchItem {
+            $lockedItem = BulkIntakeBatchItem::query()->lockForUpdate()->findOrFail($item->id);
+            if ($lockedItem->biodata_intake_id !== null) {
+                return $lockedItem->refresh();
+            }
+
+            $meta = is_array($lockedItem->item_meta_json) ? $lockedItem->item_meta_json : [];
+            $lockedItem->forceFill([
+                'item_status' => BulkIntakeBatchItem::STATUS_PROCESSING,
+                'failure_code' => null,
+                'failure_message' => null,
+                'item_meta_json' => array_merge($meta, [
+                    'background_status' => 'processing',
+                    'processing_started_at' => now()->toIso8601String(),
+                ]),
+            ])->save();
+
+            $batch = $lockedItem->batch;
+            if ($batch !== null) {
+                $this->refreshCounters($batch);
+            }
+
+            return $lockedItem->refresh();
+        });
+    }
+
+    private function uploadedFileFromPendingItem(BulkIntakeBatchItem $item): UploadedFile
+    {
+        $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
+        $sourcePath = $this->stringOrNull($meta['source_file_path'] ?? null)
+            ?? $this->stringOrNull($item->source_file_path);
+        if ($sourcePath === null) {
+            throw new RuntimeException('Bulk intake source file path is missing.');
+        }
+
+        $absolutePath = Storage::path($sourcePath);
+        if (! is_file($absolutePath) || ! is_readable($absolutePath)) {
+            throw new RuntimeException('Bulk intake source file is not readable.');
+        }
+
+        $originalName = $this->stringOrNull($meta['source_original_filename'] ?? null)
+            ?? $this->stringOrNull($item->original_filename)
+            ?? basename($sourcePath);
+
+        return new UploadedFile(
+            $absolutePath,
+            $originalName,
+            $this->stringOrNull($meta['source_mime_type'] ?? null),
+            null,
+            true
+        );
+    }
+
+    private function sourceTextFromPendingItem(BulkIntakeBatchItem $item): string
+    {
+        $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
+        $sourceText = $meta['source_text'] ?? null;
+        if (is_string($sourceText)) {
+            return $sourceText;
+        }
+
+        return (string) ($item->summary_text ?? '');
     }
 
     public function markProcessing(BulkIntakeBatch $batch): BulkIntakeBatch
@@ -650,7 +835,7 @@ class BulkIntakeBatchService
     }
 
     /**
-     * @return array{total: int, unclaimed: int, claimed: int, intakes_created: int, parse_pending: int, parse_queued: int, parsed: int, parse_error: int, needs_review: int, failed: int}
+     * @return array{total: int, pending: int, processing: int, unclaimed: int, claimed: int, intakes_created: int, parse_pending: int, parse_queued: int, parsed: int, parse_error: int, needs_review: int, failed: int}
      */
     public function buildBatchReviewSummary(BulkIntakeBatch $batch): array
     {
@@ -660,6 +845,8 @@ class BulkIntakeBatchService
 
         return [
             'total' => $items->count(),
+            'pending' => $items->where('item_status', BulkIntakeBatchItem::STATUS_PENDING)->count(),
+            'processing' => $items->where('item_status', BulkIntakeBatchItem::STATUS_PROCESSING)->count(),
             'unclaimed' => $items->filter(fn (BulkIntakeBatchItem $item): bool => $item->biodataIntake instanceof BiodataIntake && $item->biodataIntake->uploaded_by === null)->count(),
             'claimed' => $items->filter(fn (BulkIntakeBatchItem $item): bool => $item->biodataIntake instanceof BiodataIntake && $item->biodataIntake->uploaded_by !== null)->count(),
             'intakes_created' => $items->whereNotNull('biodata_intake_id')->count(),
@@ -689,6 +876,63 @@ class BulkIntakeBatchService
             'total_needs_review' => (clone $items)->where('item_status', BulkIntakeBatchItem::STATUS_NEEDS_REVIEW)->count(),
             'total_failed' => (clone $items)->where('item_status', BulkIntakeBatchItem::STATUS_FAILED)->count(),
         ])->save();
+
+        return $this->refreshBatchLifecycleStatus($batch->refresh());
+    }
+
+    private function refreshBatchLifecycleStatus(BulkIntakeBatch $batch): BulkIntakeBatch
+    {
+        if ((string) $batch->batch_status === BulkIntakeBatch::STATUS_CANCELLED) {
+            return $batch;
+        }
+
+        $items = $batch->items()
+            ->with('biodataIntake:id,parse_status,parsed_json')
+            ->get(['id', 'bulk_intake_batch_id', 'biodata_intake_id', 'item_status']);
+
+        if ($items->isEmpty()) {
+            $batch->forceFill([
+                'batch_status' => BulkIntakeBatch::STATUS_PENDING,
+                'completed_at' => null,
+            ])->save();
+
+            return $batch->refresh();
+        }
+
+        $active = $items->contains(function (BulkIntakeBatchItem $item): bool {
+            if (in_array((string) $item->item_status, [
+                BulkIntakeBatchItem::STATUS_PENDING,
+                BulkIntakeBatchItem::STATUS_PROCESSING,
+            ], true)) {
+                return true;
+            }
+
+            if ((string) $item->item_status !== BulkIntakeBatchItem::STATUS_PARSE_QUEUED) {
+                return false;
+            }
+
+            $intake = $item->biodataIntake;
+
+            return ! $intake instanceof BiodataIntake || (string) $intake->parse_status === 'pending';
+        });
+
+        $failedCount = $items->where('item_status', BulkIntakeBatchItem::STATUS_FAILED)->count();
+        $status = $active
+            ? BulkIntakeBatch::STATUS_PROCESSING
+            : ($failedCount === $items->count() ? BulkIntakeBatch::STATUS_FAILED : BulkIntakeBatch::STATUS_COMPLETED);
+
+        $attributes = [
+            'batch_status' => $status,
+        ];
+        if ($status === BulkIntakeBatch::STATUS_PROCESSING && $batch->started_at === null) {
+            $attributes['started_at'] = now();
+            $attributes['completed_at'] = null;
+        }
+        if (in_array($status, [BulkIntakeBatch::STATUS_COMPLETED, BulkIntakeBatch::STATUS_FAILED], true) && $batch->completed_at === null) {
+            $attributes['completed_at'] = now();
+        }
+
+        $batch->forceFill($attributes)->save();
 
         return $batch->refresh();
     }

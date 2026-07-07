@@ -7,7 +7,10 @@ use App\Models\BulkIntakeBatchItem;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
 use App\Services\AiVisionExtractionService;
+use App\Services\Intake\BulkIntakeBatchService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
+use App\Services\Intake\IntakeCreationService;
+use App\Services\Intake\IntakeSourceContextRecorder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
@@ -223,10 +226,31 @@ function createParseQueueTextBatch(object $testCase, User $admin): BulkIntakeBat
     $batch = BulkIntakeBatch::query()->sole();
     $response->assertRedirect(route('admin.bulk-intakes.show', $batch));
 
+    parseQueueProcessPendingItems($batch, $admin, false);
+
     expect(BiodataIntake::query()->where('parse_status', 'pending')->count())->toBe(2);
     expect(BiodataIntake::query()->whereNull('uploaded_by')->count())->toBe(2);
 
     return $batch;
+}
+
+function parseQueueProcessPendingItems(BulkIntakeBatch $batch, User $admin, bool $queueFreeParseAfterUpload): void
+{
+    $service = app(BulkIntakeBatchService::class);
+
+    BulkIntakeBatchItem::query()
+        ->where('bulk_intake_batch_id', $batch->id)
+        ->orderBy('item_sequence')
+        ->get()
+        ->each(function (BulkIntakeBatchItem $item) use ($service, $admin, $queueFreeParseAfterUpload): void {
+            $service->processPendingItem(
+                $item,
+                $admin,
+                app(IntakeCreationService::class),
+                app(IntakeSourceContextRecorder::class),
+                $queueFreeParseAfterUpload
+            );
+        });
 }
 
 function parseQueueAdminUser(): User
