@@ -733,8 +733,11 @@ class BiodataParserService
             $relativePhoneExclude[$sp] = true;
         }
         $documentContactNumbers = $this->extractDocumentContactNumbersFromText($text);
-        $primaryContact = null;
-        $confidence['primary_contact_number'] = self::CONF_MISSING;
+        $primaryContact = $this->extractPrimaryContactNumber($text, $relativePhoneExclude);
+        if ($primaryContact !== null && $this->phoneDigitsAppearOnlyOnFooterOrShopLines($text, $primaryContact)) {
+            $primaryContact = null;
+        }
+        $confidence['primary_contact_number'] = $primaryContact !== null ? self::CONF_REGEX : self::CONF_MISSING;
 
         $bloodGroupRaw = $this->extractFieldAfterLabels($text, ['रक्तगट', 'रक्‍त गट', 'रक्त गट', 'Blood group'])
             ?? $this->extractField($text, ['रक्तगट', 'रक्‍त गट', 'रक्त गट', 'Blood group']);
@@ -3151,7 +3154,7 @@ class BiodataParserService
             }
         }
 
-        $labelLinePattern = '/❖\s*संपर्क|संपर्क\s*क्रमांक|संपर्क\s*[:\-]|मोबाईल\s*नं|मोबाईल\s*नंबर|मोबाइल|मो\.|Contact\.?\s*No|(?<![\p{L}])Contact(?![\p{L}])|Mobile/ui';
+        $labelLinePattern = '/❖\s*संपर्क|संपर्क\s*क्रमांक|संपर्क\s*नंबर|संपर्क\s*[:\-]|मोबाईल\s*नं|मोबाईल\s*नंबर|मोबाइल|मो\.|Contact\.?\s*No|(?<![\p{L}])Contact(?![\p{L}])|Mobile/ui';
         foreach (explode("\n", $text) as $line) {
             $t = trim($line);
             if ($t === '') {
@@ -3188,7 +3191,7 @@ class BiodataParserService
 
         $contactStr = $this->extractFieldAfterLabels(
             $text,
-            ['संपर्क क्रमांक', 'मोबाईल नं', 'मोबाईल नंबर', 'Contact.No.', 'Contact', 'Mobile']
+            ['संपर्क क्रमांक', 'संपर्क नंबर', 'मोबाईल नं', 'मोबाईल नंबर', 'Contact.No.', 'Contact', 'Mobile']
         );
         if ($contactStr !== null) {
             $normalized = \App\Services\Ocr\OcrNormalize::normalizePhone(preg_replace('/\s+/', '', $contactStr));

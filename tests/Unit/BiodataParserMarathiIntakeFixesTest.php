@@ -2,15 +2,26 @@
 
 namespace Tests\Unit;
 
+use App\Models\AdminSetting;
+use App\Models\BiodataIntake;
 use App\Services\BiodataParserService;
+use App\Services\Intake\BulkIntakeCandidateDisplayService;
 use App\Services\Ocr\OcrNormalize;
 use App\Services\Parsing\IntakeParsedSnapshotSkeleton;
+use App\Services\Parsing\Parsers\RulesOnlyBiodataParser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class BiodataParserMarathiIntakeFixesTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function tearDown(): void
+    {
+        config(['intake.use_normalized_draft_parser' => false]);
+
+        parent::tearDown();
+    }
 
     public function test_sibling_brother_line_with_avivahit_chi_preserves_name_and_degree(): void
     {
@@ -870,5 +881,117 @@ HTML;
         $this->assertContains('9082922044', $nums);
         $this->assertContains('8765432109', $nums);
         $this->assertNotContains('9604289289', $nums);
+    }
+
+    public function test_normalized_parser_rescues_noisy_marathi_ocr_candidate_fields(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+बायोडाटा
+मुलाचे नाव चि.अनिकेत जयवंत पाटील ae et
+जन्मदि ०४.०३.२०००
+उंची ५ फूट ५ इंच
+मो.नं. ९८२४६४३९२५
+जन्म ठिकाण पुणे
+शिक्षण B.Com Computer
+पद Software Engineer, TCS Pune
+वडिलांचे नाव : श्री. जयवंत पाटील
+TXT);
+
+        $core = $parsed['core'] ?? [];
+
+        $this->assertSame('अनिकेत जयवंत पाटील', (string) ($core['full_name'] ?? ''));
+        $this->assertSame('male', (string) ($core['gender'] ?? ''));
+        $this->assertSame('2000-03-04', (string) ($core['date_of_birth'] ?? ''));
+        $this->assertEqualsWithDelta(165.1, (float) ($core['height_cm'] ?? 0), 0.5);
+        $this->assertSame('9824643925', (string) ($core['primary_contact_number'] ?? ''));
+        $this->assertSame('पुणे', (string) ($core['birth_place_text'] ?? ''));
+        $this->assertSame('B.Com Computer', (string) ($core['highest_education'] ?? ''));
+        $this->assertSame('Software Engineer, TCS Pune', (string) ($core['occupation_title'] ?? ''));
+    }
+
+    public function test_normalized_parser_rescues_female_name_and_gender_from_noisy_label(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+मुलीचे नाव कु.अकषदा सुरेश पाटील
+लिंग : स्त्री
+जन्म तारीख १४/०६/२००१
+TXT);
+
+        $core = $parsed['core'] ?? [];
+
+        $this->assertSame('अकषदा सुरेश पाटील', (string) ($core['full_name'] ?? ''));
+        $this->assertSame('female', (string) ($core['gender'] ?? ''));
+        $this->assertSame('2001-06-14', (string) ($core['date_of_birth'] ?? ''));
+    }
+
+    public function test_normalized_parser_rejects_impossible_labeled_dob(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+मुलाचे नाव चि. टेस्ट उमेदवार
+जन्म तारीख ३१/०२/२०००
+TXT);
+
+        $this->assertNull(($parsed['core'] ?? [])['date_of_birth'] ?? null);
+    }
+
+    public function test_normalized_parser_does_not_use_family_relation_as_candidate_name(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+बायोडाटा
+वडिलांचे नाव : श्री. सुरेश पाटील
+मामा : श्री. अनिल पाटील
+मोबाईल : ९८२४६४३९२५
+TXT);
+
+        $name = (string) (($parsed['core'] ?? [])['full_name'] ?? '');
+
+        $this->assertSame('', $name);
+        $this->assertStringNotContainsString('सुरेश', $name);
+        $this->assertStringNotContainsString('अनिल', $name);
+    }
+
+    public function test_candidate_display_reads_rescued_fields_from_parsed_json(): void
+    {
+        $raw = <<<'TXT'
+मुलाचे नाव चि.अनिकेत जयवंत पाटील ae et
+जन्मदि ०४.०३.२०००
+उंची ५ फूट ५ इंच
+मो.नं. ९८२४६४३९२५
+जन्म ठिकाण पुणे
+शिक्षण B.Com Computer
+पद Software Engineer, TCS Pune
+TXT;
+
+        $parsed = $this->parseWithNormalizedDraft($raw);
+        $intake = BiodataIntake::create([
+            'uploaded_by' => null,
+            'raw_ocr_text' => $raw,
+            'parsed_json' => $parsed,
+            'intake_status' => 'uploaded',
+            'parse_status' => 'parsed',
+            'parser_version' => 'rules_only',
+            'snapshot_schema_version' => 1,
+            'approved_by_user' => false,
+            'intake_locked' => false,
+        ]);
+
+        $candidate = $this->app->make(BulkIntakeCandidateDisplayService::class)->candidateForIntake($intake);
+
+        $this->assertSame('अनिकेत जयवंत पाटील', $candidate['full_name']);
+        $this->assertSame('9824643925', $candidate['mobile']);
+        $this->assertSame('2000-03-04', $candidate['date_of_birth']);
+        $this->assertSame('165 cm', $candidate['height']);
+        $this->assertSame('Male', $candidate['gender']);
+        $this->assertSame('पुणे', $candidate['city']);
+        $this->assertSame('B.Com Computer', $candidate['education']);
+        $this->assertSame('Software Engineer, TCS Pune', $candidate['occupation']);
+    }
+
+    private function parseWithNormalizedDraft(string $raw): array
+    {
+        config(['intake.use_normalized_draft_parser' => true]);
+        AdminSetting::setValue('intake_use_normalized_draft_parser', '1');
+
+        return $this->app->make(RulesOnlyBiodataParser::class)->parse($raw);
     }
 }

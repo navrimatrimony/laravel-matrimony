@@ -217,6 +217,7 @@ class IntakeNormalizedBiodataDraftBuilder
         $this->extractStandaloneBasicFields($allLines, $core);
         $this->extractEnglishBasicFields($allLines, $core);
         $this->extractEducationCareer($allLines, $core);
+        $core = app(MarathiOcrFieldRescueService::class)->rescueCoreFields($allLines, $core);
         $this->extractParentFamilyDetailsFromOrderedLines(
             $allLines,
             array_merge($sections['family']['lines'] ?? [], $sections['addresses']['lines'] ?? []),
@@ -240,6 +241,11 @@ class IntakeNormalizedBiodataDraftBuilder
                 }
                 $contacts[$phone] = ['phone_number' => $phone];
             }
+        }
+        $primaryContact = OcrNormalize::normalizePhone((string) ($core['primary_contact_number'] ?? ''));
+        if (is_string($primaryContact) && preg_match('/^[6-9]\d{9}$/', $primaryContact) && ! isset($parentPhones[$primaryContact])) {
+            $core['primary_contact_number'] = $primaryContact;
+            $contacts = [$primaryContact => ['phone_number' => $primaryContact]] + $contacts;
         }
         $this->routeOrphanPhonesToPreviewContactSlots($core, array_keys($contacts));
         $this->syncParentContactAliases($core);
@@ -941,6 +947,7 @@ class IntakeNormalizedBiodataDraftBuilder
             'father_contact_1' => null,
             'father_contact_2' => null,
             'father_contact_3' => null,
+            'primary_contact_number' => null,
             'primary_contact_number_2' => null,
             'primary_contact_number_3' => null,
             'mother_name' => null,
