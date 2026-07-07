@@ -55,8 +55,17 @@
             <textarea id="raw_text" name="raw_text" rows="10" class="mt-1 block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Paste one or more biodata texts. Separate items with ---INTAKE--- on its own line.">{{ old('raw_text') }}</textarea>
         </div>
 
+        <label class="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+            <input type="hidden" name="queue_free_parse_after_upload" value="0">
+            <input type="checkbox" name="queue_free_parse_after_upload" value="1" class="mt-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" @checked((bool) old('queue_free_parse_after_upload', true))>
+            <span>
+                <span class="block font-semibold text-gray-900">Queue free parse after upload</span>
+                <span class="mt-1 block text-xs text-gray-600">Checked by default. Uses existing OCR/raw text only; paid Sarvam/OpenAI vision extraction is not called.</span>
+            </span>
+        </label>
+
         <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-            Bulk intake creates biodata_intakes only. It does not auto-parse, approve, apply, or create profiles.
+            Bulk intake creates biodata_intakes and can queue free parsing. It does not approve, apply, assign owners, or create profiles.
         </div>
 
         <div class="flex justify-end">

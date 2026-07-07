@@ -77,6 +77,33 @@ test('bulk list handles missing candidate fields safely', function () {
         ->assertSee('Parsed JSON: Yes', false);
 });
 
+test('bulk list explains queued and pending free parse states', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $queuedIntake = candidateDisplayIntake([
+        'parse_status' => 'pending',
+        'parsed_json' => [],
+    ]);
+    candidateDisplayItem($batch, $queuedIntake, [
+        'item_status' => BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
+    ]);
+    $pendingIntake = candidateDisplayIntake([
+        'parse_status' => 'pending',
+        'parsed_json' => [],
+    ]);
+    candidateDisplayItem($batch, $pendingIntake, [
+        'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Candidate fields appear after free parse completes. Manual transcript is only needed if OCR/free parse fails.', false)
+        ->assertSee('Free parse queued', false)
+        ->assertSee('Waiting for free parse', false)
+        ->assertSee('Mobile: —', false);
+});
+
 test('bulk list does not store parsed data on bulk item', function () {
     expect(Schema::hasColumn('bulk_intake_batch_items', 'parsed_json'))->toBeFalse()
         ->and(Schema::hasColumn('bulk_intake_batch_items', 'profile_data_json'))->toBeFalse()
@@ -87,19 +114,26 @@ test('bulk list does not store parsed data on bulk item', function () {
 test('owner and profile actions stay hidden from main list while extraction actions remain visible', function () {
     $admin = candidateDisplayAdminUser();
     $batch = candidateDisplayBatch($admin);
-    $intake = candidateDisplayIntake([
+    $pendingIntake = candidateDisplayIntake([
         'uploaded_by' => null,
         'parse_status' => 'pending',
         'parsed_json' => [],
     ]);
-    candidateDisplayItem($batch, $intake);
+    candidateDisplayItem($batch, $pendingIntake);
+    $fallbackIntake = candidateDisplayIntake([
+        'uploaded_by' => null,
+        'parse_status' => 'error',
+        'last_error' => 'empty_text',
+        'parsed_json' => [],
+    ]);
+    candidateDisplayItem($batch, $fallbackIntake);
 
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
         ->assertSee('Open intake review', false)
         ->assertSee('Profile Readiness details', false)
-        ->assertSee('Add manual transcript', false)
+        ->assertSee('Add manual transcript (OCR failed fallback)', false)
         ->assertSee('Queue free parse item', false)
         ->assertSee('Mark needs review', false)
         ->assertDontSee('Assign owner', false)

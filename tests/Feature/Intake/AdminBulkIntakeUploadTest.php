@@ -7,18 +7,25 @@ use App\Models\BulkIntakeBatchItem;
 use App\Models\IntakeSourceContext;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
+use App\Services\AiVisionExtractionService;
 use App\Services\Intake\BulkIntakeBatchService;
+use App\Services\Intake\IntakeExtractionReuseResolver;
 use App\Services\Intake\IntakeCreationService;
 use App\Services\Intake\IntakeSourceContextRecorder;
 use App\Services\OcrService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 
 uses(RefreshDatabase::class);
 
-test('admin can create unclaimed bulk batch with raw text items', function () {
+beforeEach(function (): void {
+    Cache::flush();
+});
+
+test('admin bulk upload raw text auto queues free parse by default', function () {
     Queue::fake();
     $admin = adminBulkIntakeAdmin();
 
@@ -39,14 +46,27 @@ test('admin can create unclaimed bulk batch with raw text items', function () {
         ->and($batch->fresh()->meta_json['owner_user_mode'])->toBe('unclaimed_bulk_staging')
         ->and($batch->fresh()->meta_json['consent_status'])->toBe('pending')
         ->and($batch->fresh()->meta_json['profile_creation_policy'])->toBe('after_candidate_consent')
+        ->and($batch->fresh()->meta_json['parse_dispatch'])->toBe('auto_free_parse_after_upload')
         ->and(BulkIntakeBatchItem::count())->toBe(2)
         ->and(BiodataIntake::count())->toBe(2)
         ->and(IntakeSourceContext::count())->toBe(2)
         ->and(MatrimonyProfile::count())->toBe(0);
 
+    $items = BulkIntakeBatchItem::query()->orderBy('item_sequence')->get();
+    expect($items->pluck('item_status')->all())->toBe([
+        BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
+        BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
+    ]);
+    $items->each(function (BulkIntakeBatchItem $item): void {
+        expect($item->item_meta_json['parse_queue_mode'])->toBe('auto_free_parse_after_upload')
+            ->and($item->item_meta_json['parse_input_only'])->toBeTrue()
+            ->and($item->item_meta_json['auto_queued_at'])->not->toBeNull();
+    });
+
     BiodataIntake::query()->get()->each(function (BiodataIntake $intake): void {
         expect($intake->uploaded_by)->toBeNull()
-            ->and($intake->parse_status)->toBe('pending');
+            ->and($intake->parse_status)->toBe('pending')
+            ->and(IntakeExtractionReuseResolver::peekParseInputOnlyFlag((int) $intake->id))->toBeTrue();
     });
 
     IntakeSourceContext::query()->get()->each(function (IntakeSourceContext $context) use ($admin, $batch): void {
@@ -64,12 +84,20 @@ test('admin can create unclaimed bulk batch with raw text items', function () {
             ->and($context->source_meta_json['profile_creation_policy'])->toBe('after_candidate_consent');
     });
 
-    Queue::assertNotPushed(ParseIntakeJob::class);
+    Queue::assertPushed(ParseIntakeJob::class, 2);
+    Queue::assertPushed(ParseIntakeJob::class, function (ParseIntakeJob $job): bool {
+        return $job->forceRecompute === true;
+    });
 });
 
-test('admin can create unclaimed bulk batch with multiple files through existing intake preparation path', function () {
+test('admin bulk upload file auto queues free parse by default', function () {
     Queue::fake();
     $admin = adminBulkIntakeAdmin();
+
+    $this->mock(AiVisionExtractionService::class, function ($mock): void {
+        $mock->shouldNotReceive('extractTextForIntake');
+        $mock->shouldNotReceive('evaluateExtractedTextQuality');
+    });
 
     $this->mock(OcrService::class, function ($mock): void {
         $mock->shouldReceive('extractTextFromPath')->twice()->andReturn(
@@ -100,11 +128,54 @@ test('admin can create unclaimed bulk batch with multiple files through existing
         ->and(IntakeSourceContext::count())->toBe(2)
         ->and(MatrimonyProfile::count())->toBe(0);
 
+    $items = BulkIntakeBatchItem::query()->orderBy('item_sequence')->get();
+    expect($items->pluck('item_status')->all())->toBe([
+        BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
+        BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
+    ]);
+    $items->each(function (BulkIntakeBatchItem $item): void {
+        expect($item->item_meta_json['parse_queue_mode'])->toBe('auto_free_parse_after_upload')
+            ->and($item->item_meta_json['parse_input_only'])->toBeTrue()
+            ->and($item->item_meta_json['auto_queued_at'])->not->toBeNull();
+    });
+
     expect(BiodataIntake::query()->pluck('uploaded_by')->all())->toBe([null, null])
         ->and(BiodataIntake::query()->pluck('raw_ocr_text')->all())->toBe([
             'Name: File Candidate One',
             'Name: File Candidate Two',
         ]);
+
+    BiodataIntake::query()->get()->each(function (BiodataIntake $intake): void {
+        expect(IntakeExtractionReuseResolver::peekParseInputOnlyFlag((int) $intake->id))->toBeTrue();
+    });
+
+    Queue::assertPushed(ParseIntakeJob::class, 2);
+    Queue::assertPushed(ParseIntakeJob::class, function (ParseIntakeJob $job): bool {
+        return $job->forceRecompute === true;
+    });
+});
+
+test('admin can disable auto free parse after upload', function () {
+    Queue::fake();
+    $admin = adminBulkIntakeAdmin();
+
+    $response = $this->actingAs($admin)->post(route('admin.bulk-intakes.store'), [
+        'batch_name' => 'Deferred parse text biodata',
+        'raw_text' => 'Name: Deferred Candidate Mobile: 9000000401',
+        'queue_free_parse_after_upload' => '0',
+    ]);
+
+    $batch = BulkIntakeBatch::query()->sole();
+
+    $response->assertRedirect(route('admin.bulk-intakes.show', $batch));
+
+    $item = BulkIntakeBatchItem::query()->sole();
+    $intake = BiodataIntake::query()->sole();
+
+    expect($item->item_status)->toBe(BulkIntakeBatchItem::STATUS_INTAKE_CREATED)
+        ->and($intake->parse_status)->toBe('pending')
+        ->and($batch->fresh()->meta_json['parse_dispatch'])->toBe('deferred')
+        ->and(MatrimonyProfile::count())->toBe(0);
 
     Queue::assertNotPushed(ParseIntakeJob::class);
 });
@@ -116,6 +187,8 @@ test('create page does not show existing member user field', function () {
         ->get(route('admin.bulk-intakes.create'))
         ->assertOk()
         ->assertSee('Bulk intake is staging only', false)
+        ->assertSee('Queue free parse after upload', false)
+        ->assertSee('paid Sarvam/OpenAI vision extraction is not called', false)
         ->assertDontSee('Existing member user ID', false)
         ->assertDontSee('Mode A only', false);
 });
@@ -139,6 +212,7 @@ test('queue free parse works for unclaimed bulk intakes', function () {
     $this->actingAs($admin)->post(route('admin.bulk-intakes.store'), [
         'batch_name' => 'Queue unclaimed text biodatas',
         'raw_text' => "Name: Queue Candidate One\nMobile: 9000000301\n---INTAKE---\nName: Queue Candidate Two\nMobile: 9000000302",
+        'queue_free_parse_after_upload' => '0',
     ]);
     $batch = BulkIntakeBatch::query()->sole();
 

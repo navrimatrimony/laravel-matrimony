@@ -63,7 +63,11 @@ class AdminBulkIntakeController extends Controller
             'files' => ['nullable', 'array'],
             'files.*' => ['file', 'max:20480'],
             'raw_text' => ['nullable', 'string'],
+            'queue_free_parse_after_upload' => ['nullable', 'boolean'],
         ]);
+        $queueFreeParseAfterUpload = array_key_exists('queue_free_parse_after_upload', $validated)
+            ? $request->boolean('queue_free_parse_after_upload')
+            : true;
 
         $files = array_values(array_filter($request->file('files', [])));
         $textItems = $this->splitTextItems((string) ($validated['raw_text'] ?? ''));
@@ -90,7 +94,7 @@ class AdminBulkIntakeController extends Controller
                 'owner_user_mode' => 'unclaimed_bulk_staging',
                 'consent_status' => 'pending',
                 'profile_creation_policy' => 'after_candidate_consent',
-                'parse_dispatch' => 'deferred',
+                'parse_dispatch' => $queueFreeParseAfterUpload ? 'auto_free_parse_after_upload' : 'deferred',
             ],
         ]);
 
@@ -100,7 +104,8 @@ class AdminBulkIntakeController extends Controller
             $textItems,
             $actor,
             $intakeCreation,
-            $sourceContextRecorder
+            $sourceContextRecorder,
+            $queueFreeParseAfterUpload
         );
 
         return redirect()

@@ -223,7 +223,8 @@ class BulkIntakeBatchService
         array $textItems,
         User $actor,
         IntakeCreationService $intakeCreation,
-        IntakeSourceContextRecorder $sourceContextRecorder
+        IntakeSourceContextRecorder $sourceContextRecorder,
+        bool $queueFreeParseAfterUpload = true
     ): BulkIntakeBatch {
         $this->markProcessing($batch);
 
@@ -245,7 +246,10 @@ class BulkIntakeBatchService
                     'item_status' => BulkIntakeBatchItem::STATUS_PENDING,
                 ]);
 
-                $this->createUnclaimedIntakeForItem($item, $actor, $intakeCreation, $sourceContextRecorder, $file, null);
+                $item = $this->createUnclaimedIntakeForItem($item, $actor, $intakeCreation, $sourceContextRecorder, $file, null);
+                if ($queueFreeParseAfterUpload) {
+                    $this->queueAutoFreeParseAfterUploadForItem($item, $actor);
+                }
             } catch (Throwable $e) {
                 if (isset($item) && $item instanceof BulkIntakeBatchItem) {
                     $this->failItem($item, 'bulk_file_intake_failed', $e->getMessage());
@@ -273,7 +277,10 @@ class BulkIntakeBatchService
                     'summary_text' => mb_substr($rawText, 0, 500),
                 ]);
 
-                $this->createUnclaimedIntakeForItem($item, $actor, $intakeCreation, $sourceContextRecorder, null, $rawText);
+                $item = $this->createUnclaimedIntakeForItem($item, $actor, $intakeCreation, $sourceContextRecorder, null, $rawText);
+                if ($queueFreeParseAfterUpload) {
+                    $this->queueAutoFreeParseAfterUploadForItem($item, $actor);
+                }
             } catch (Throwable $e) {
                 if (isset($item) && $item instanceof BulkIntakeBatchItem) {
                     $this->failItem($item, 'bulk_text_intake_failed', $e->getMessage());
@@ -405,6 +412,33 @@ class BulkIntakeBatchService
      */
     public function queueFreeParseForItem(BulkIntakeBatchItem $item, User $actor): array
     {
+        return $this->queueFreeParseForItemWithMode(
+            $item,
+            $actor,
+            BulkIntakeBatch::OCR_POLICY_FREE_OCR_FIRST,
+            ['queued_at' => now()->toIso8601String()]
+        );
+    }
+
+    /**
+     * @return array{queued: int, skipped: int, failed: int, skipped_reasons: array<string, int>}
+     */
+    public function queueAutoFreeParseAfterUploadForItem(BulkIntakeBatchItem $item, User $actor): array
+    {
+        return $this->queueFreeParseForItemWithMode(
+            $item,
+            $actor,
+            'auto_free_parse_after_upload',
+            ['auto_queued_at' => now()->toIso8601String()]
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $timestampMeta
+     * @return array{queued: int, skipped: int, failed: int, skipped_reasons: array<string, int>}
+     */
+    private function queueFreeParseForItemWithMode(BulkIntakeBatchItem $item, User $actor, string $queueMode, array $timestampMeta): array
+    {
         try {
             $item->loadMissing('biodataIntake');
             $intake = $item->biodataIntake;
@@ -436,8 +470,9 @@ class BulkIntakeBatchService
                     'parse_input_only' => true,
                     'queued_by_user_id' => (int) $actor->id,
                     'queued_by_actor_type' => BulkIntakeBatch::ACTOR_ADMIN,
-                    'queued_at' => now()->toIso8601String(),
-                ]),
+                ], [
+                    'parse_queue_mode' => $queueMode,
+                ], $timestampMeta),
                 'failure_code' => null,
                 'failure_message' => null,
             ])->save();

@@ -79,6 +79,25 @@ test('bulk intake show keeps extraction actions and hides owner profile actions'
         'input_type' => BulkIntakeBatchItem::INPUT_TEXT,
         'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
     ]);
+    $fallbackIntake = BiodataIntake::create([
+        'uploaded_by' => null,
+        'raw_ocr_text' => '',
+        'parsed_json' => [],
+        'intake_status' => 'uploaded',
+        'parse_status' => 'error',
+        'last_error' => 'empty_text',
+        'parser_version' => 'rules_only',
+        'snapshot_schema_version' => 1,
+        'approved_by_user' => false,
+        'intake_locked' => false,
+    ]);
+    BulkIntakeBatchItem::create([
+        'bulk_intake_batch_id' => $batch->id,
+        'biodata_intake_id' => $fallbackIntake->id,
+        'item_sequence' => 2,
+        'input_type' => BulkIntakeBatchItem::INPUT_TEXT,
+        'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
+    ]);
 
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
@@ -86,7 +105,7 @@ test('bulk intake show keeps extraction actions and hides owner profile actions'
         ->assertSee('Current stage: candidate extraction and review. Owner assignment and profile creation are later steps.', false)
         ->assertSee('Open intake review', false)
         ->assertSee('Profile Readiness details', false)
-        ->assertSee('Add manual transcript', false)
+        ->assertSee('Add manual transcript (OCR failed fallback)', false)
         ->assertSee('Queue free parse item', false)
         ->assertSee('Mark needs review', false)
         ->assertDontSee('Assign owner', false)

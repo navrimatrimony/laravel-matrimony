@@ -170,6 +170,7 @@ function createParseQueueTextBatch(object $testCase, User $admin): BulkIntakeBat
     $response = $testCase->actingAs($admin)->post(route('admin.bulk-intakes.store'), [
         'batch_name' => 'Parse queue test batch',
         'raw_text' => "Name: Parse Queue Candidate One\nMobile: 9000000101\n---INTAKE---\nName: Parse Queue Candidate Two\nMobile: 9000000102",
+        'queue_free_parse_after_upload' => '0',
     ]);
 
     $batch = BulkIntakeBatch::query()->sole();

@@ -151,6 +151,7 @@
         </div>
         <p class="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
             Current stage: candidate extraction and review. Owner assignment and profile creation are later steps.
+            Candidate fields appear after free parse completes. Manual transcript is only needed if OCR/free parse fails.
         </p>
 
         @if ($batch->items->isEmpty())
@@ -217,8 +218,8 @@
                                 }
                                 $lastError = (string) ($intake?->last_error ?? '');
                                 $canAddManualTranscript = $intake && (
-                                    ! $hasParsedJson
-                                    || (string) $intake->parse_status === 'error'
+                                    (string) $intake->parse_status === 'error'
+                                    || ((string) $intake->parse_status === 'parsed' && ! $hasParsedJson)
                                     || filled($lastError)
                                     || str_contains($lastError, 'empty_text')
                                     || str_contains($lastError, 'reparse_no_canonical_or_raw_ocr')
@@ -255,6 +256,10 @@
                                         <a href="{{ route('admin.biodata-intakes.show', $intake) }}" class="font-medium text-indigo-600 hover:text-indigo-800">#{{ $intake->id }}</a>
                                         @if ($parseStatus === 'parsed' && $hasParsedJson)
                                             <span class="block text-xs font-medium text-green-700">Parse: OK</span>
+                                        @elseif ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_PARSE_QUEUED)
+                                            <span class="block text-xs font-medium text-amber-700">Free parse queued</span>
+                                        @elseif ($parseStatus === 'pending')
+                                            <span class="block text-xs text-gray-500">Waiting for free parse</span>
                                         @else
                                             <span class="block text-xs text-gray-500">Parse: {{ $parseStatus !== '' ? $parseStatus : $missingDisplay }}</span>
                                         @endif
@@ -308,7 +313,7 @@
                                         @endif
                                         <a href="{{ route('admin.bulk-intakes.items.readiness', [$batch, $item]) }}" class="font-medium text-slate-700 hover:text-slate-900">Profile Readiness details</a>
                                         @if ($canAddManualTranscript)
-                                            <a href="{{ route('admin.bulk-intakes.items.manual-transcript', [$batch, $item]) }}" class="font-medium text-orange-700 hover:text-orange-900">Add manual transcript</a>
+                                            <a href="{{ route('admin.bulk-intakes.items.manual-transcript', [$batch, $item]) }}" class="font-medium text-orange-700 hover:text-orange-900">Add manual transcript (OCR failed fallback)</a>
                                         @endif
 
                                         @if ($intake && $intake->parse_status === 'pending' && $item->item_status !== \App\Models\BulkIntakeBatchItem::STATUS_PARSE_QUEUED && ! $intake->approved_by_user && ! $intake->intake_locked)
