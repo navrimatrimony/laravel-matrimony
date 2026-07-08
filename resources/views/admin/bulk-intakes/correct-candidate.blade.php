@@ -11,7 +11,7 @@
     $canSave = (bool) ($canSave ?? false);
     $duplicateHints = is_array($duplicateHints ?? null) ? $duplicateHints : [];
     $heightOptions = [];
-    for ($heightInches = 48; $heightInches <= 84; $heightInches++) {
+    for ($heightInches = 54; $heightInches <= 84; $heightInches++) {
         $feet = intdiv($heightInches, 12);
         $inches = $heightInches % 12;
         $heightCm = (int) round($heightInches * 2.54);
@@ -32,6 +32,32 @@
             grid-template-columns: minmax(0, 56%) minmax(380px, 44%);
             align-items: start;
         }
+    }
+
+    .bulk-height-combobox {
+        position: relative;
+    }
+
+    .bulk-height-options {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: calc(100% + 0.25rem);
+        z-index: 40;
+        max-height: 16rem;
+        overflow-y: auto;
+    }
+
+    .bulk-image-zoom-container {
+        max-height: 38rem;
+        overflow: auto;
+    }
+
+    .bulk-image-preview {
+        display: block;
+        width: 100%;
+        max-width: none;
+        transform-origin: top left;
     }
 </style>
 
@@ -100,8 +126,18 @@
                 <div class="mt-5">
                     <h3 class="text-sm font-semibold text-gray-800">Original image preview</h3>
                     @if (! empty($imagePreview['available']) && ! empty($imagePreview['data_uri']))
-                        <div class="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
-                            <img src="{{ $imagePreview['data_uri'] }}" alt="Original biodata image preview" class="max-h-[32rem] w-full rounded object-contain">
+                        <div class="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3" data-bulk-image-zoom>
+                            <div data-testid="bulk-image-zoom-toolbar" class="mb-2 flex flex-wrap items-center gap-2 text-xs">
+                                <button type="button" data-zoom-action="out" class="rounded border border-gray-300 bg-white px-2 py-1 font-semibold text-gray-700 hover:bg-gray-50">Zoom -</button>
+                                <button type="button" data-zoom-action="in" class="rounded border border-gray-300 bg-white px-2 py-1 font-semibold text-gray-700 hover:bg-gray-50">Zoom +</button>
+                                <button type="button" data-zoom-action="reset" class="rounded border border-gray-300 bg-white px-2 py-1 font-semibold text-gray-700 hover:bg-gray-50">Reset</button>
+                                <button type="button" data-zoom-action="fit" class="rounded border border-gray-300 bg-white px-2 py-1 font-semibold text-gray-700 hover:bg-gray-50">Fit width</button>
+                                <button type="button" data-zoom-action="100" class="rounded border border-gray-300 bg-white px-2 py-1 font-semibold text-gray-700 hover:bg-gray-50">100%</button>
+                                <span data-zoom-level class="rounded bg-gray-100 px-2 py-1 font-semibold text-gray-600">100%</span>
+                            </div>
+                            <div data-testid="bulk-image-zoom-container" class="bulk-image-zoom-container rounded border border-gray-200 bg-white p-2">
+                                <img src="{{ $imagePreview['data_uri'] }}" alt="Original biodata image preview" class="bulk-image-preview rounded object-contain" data-testid="bulk-image-preview" data-zoom-image>
+                            </div>
                             @if (! empty($imagePreview['label']))
                                 <p class="mt-2 break-words text-xs text-gray-500">{{ $imagePreview['label'] }}</p>
                             @endif
@@ -176,16 +212,39 @@
                                     data-testid="bulk-correction-date-input"
                                 >
                             @elseif ($key === 'height')
-                                <input
-                                    type="text"
-                                    name="height"
-                                    list="bulk-height-options"
-                                    value="{{ $value }}"
-                                    placeholder="165 cm or 5'5&quot;"
-                                    @disabled(! $canSave)
-                                    class="{{ $inputClass }}"
-                                    data-testid="bulk-correction-height-input"
-                                >
+                                <div data-testid="bulk-height-combobox" class="bulk-height-combobox" data-height-combobox>
+                                    <div class="relative">
+                                        <input
+                                            type="text"
+                                            name="height"
+                                            value="{{ $value }}"
+                                            placeholder="165 cm or 5'5&quot;"
+                                            autocomplete="off"
+                                            aria-autocomplete="list"
+                                            aria-expanded="false"
+                                            @disabled(! $canSave)
+                                            class="{{ $inputClass }} pr-10"
+                                            data-testid="bulk-correction-height-input"
+                                            data-height-combobox-input
+                                        >
+                                        <button
+                                            type="button"
+                                            class="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-lg border-l border-gray-300 bg-white text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                            aria-label="Show height options"
+                                            data-height-combobox-toggle
+                                            @disabled(! $canSave)
+                                        >
+                                            <span aria-hidden="true">▾</span>
+                                        </button>
+                                    </div>
+                                    <div class="bulk-height-options hidden rounded-lg border border-gray-200 bg-white shadow-lg" data-height-combobox-panel>
+                                        @foreach ($heightOptions as $heightOption)
+                                            <button type="button" class="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-800" data-height-value="{{ $heightOption['value'] }}">
+                                                {{ $heightOption['label'] }}
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                </div>
                             @elseif ($key === 'education')
                                 @php $educationProfile = (object) ['highest_education' => $value]; @endphp
                                 <input type="hidden" name="education" value="{{ $value }}">
@@ -330,17 +389,91 @@
     </div>
 </div>
 
-<datalist id="bulk-height-options">
-    @foreach ($heightOptions as $heightOption)
-        <option value="{{ $heightOption['value'] }}">{{ $heightOption['label'] }}</option>
-    @endforeach
-</datalist>
-
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         if (window.LocationTypeahead && window.LocationTypeahead.init) {
             window.LocationTypeahead.init();
         }
+
+        document.querySelectorAll('[data-height-combobox]').forEach(function (combobox) {
+            var input = combobox.querySelector('[data-height-combobox-input]');
+            var toggle = combobox.querySelector('[data-height-combobox-toggle]');
+            var panel = combobox.querySelector('[data-height-combobox-panel]');
+            if (!input || !toggle || !panel) return;
+
+            function openPanel() {
+                if (input.disabled) return;
+                panel.classList.remove('hidden');
+                input.setAttribute('aria-expanded', 'true');
+            }
+
+            function closePanel() {
+                panel.classList.add('hidden');
+                input.setAttribute('aria-expanded', 'false');
+            }
+
+            input.addEventListener('focus', openPanel);
+            input.addEventListener('click', openPanel);
+            input.addEventListener('input', openPanel);
+            toggle.addEventListener('click', function () {
+                if (panel.classList.contains('hidden')) {
+                    openPanel();
+                    input.focus();
+                } else {
+                    closePanel();
+                }
+            });
+
+            panel.querySelectorAll('[data-height-value]').forEach(function (option) {
+                option.addEventListener('click', function () {
+                    input.value = option.getAttribute('data-height-value') || '';
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    closePanel();
+                    input.focus();
+                });
+            });
+
+            document.addEventListener('click', function (event) {
+                if (!combobox.contains(event.target)) {
+                    closePanel();
+                }
+            });
+        });
+
+        document.querySelectorAll('[data-bulk-image-zoom]').forEach(function (root) {
+            var image = root.querySelector('[data-zoom-image]');
+            var level = root.querySelector('[data-zoom-level]');
+            if (!image) return;
+            var zoom = 100;
+
+            function applyZoom(nextZoom) {
+                zoom = Math.max(75, Math.min(300, nextZoom));
+                image.style.width = zoom + '%';
+                if (level) {
+                    level.textContent = zoom + '%';
+                }
+            }
+
+            root.querySelectorAll('[data-zoom-action]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var action = button.getAttribute('data-zoom-action');
+                    if (action === 'in') {
+                        applyZoom(zoom + 25);
+                    } else if (action === 'out') {
+                        applyZoom(zoom - 25);
+                    } else {
+                        applyZoom(100);
+                    }
+                });
+            });
+
+            image.addEventListener('click', function () {
+                applyZoom(zoom === 100 ? 150 : 100);
+            });
+
+            applyZoom(100);
+        });
     });
 </script>
 @endsection

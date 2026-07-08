@@ -707,8 +707,26 @@ class BulkIntakeCandidateCorrectionService
             return $this->boundedHeight((float) $m[1]);
         }
 
+        if (preg_match('/^\s*([3-7])\s*(?:[\'’′]|ft\.?|feet|foot)\s*([0-9]{1,2})?\s*(?:"|”|″|in\.?|inch|inches)?\s*$/iu', $text, $m) === 1) {
+            $feet = (int) $m[1];
+            $inches = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : 0;
+            if ($inches > 11) {
+                throw ValidationException::withMessages([
+                    'height' => 'Enter height as cm or feet/inches.',
+                ]);
+            }
+
+            return $this->boundedHeight(($feet * 12 + $inches) * 2.54);
+        }
+
         $normalized = OcrNormalize::normalizeHeight($text);
         if (is_string($normalized) && preg_match('/([3-7])\s*[\'’′]\s*([0-9]{1,2})\s*(?:"|”|″)?/u', $normalized, $m) === 1) {
+            if ((int) $m[2] > 11) {
+                throw ValidationException::withMessages([
+                    'height' => 'Enter height as cm or feet/inches.',
+                ]);
+            }
+
             return $this->boundedHeight((((int) $m[1]) * 12 + (int) $m[2]) * 2.54);
         }
 

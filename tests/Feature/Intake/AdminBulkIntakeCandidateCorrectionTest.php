@@ -7,10 +7,16 @@ use App\Models\MatrimonyProfile;
 use App\Models\User;
 use App\Services\Intake\IntakeHumanReviewSnapshotService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
 
 test('admin can open bulk candidate correction page', function () {
+    Storage::disk('local')->put(
+        'testing/candidate-correction.png',
+        base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=')
+    );
+
     $admin = candidateCorrectionAdminUser();
     $batch = candidateCorrectionBatch($admin);
     $intake = candidateCorrectionIntake([
@@ -34,7 +40,10 @@ test('admin can open bulk candidate correction page', function () {
             ],
         ],
     ]);
-    $item = candidateCorrectionItem($batch, $intake);
+    $item = candidateCorrectionItem($batch, $intake, [
+        'original_filename' => 'candidate-correction.png',
+        'source_file_path' => 'testing/candidate-correction.png',
+    ]);
 
     $response = $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
@@ -57,12 +66,19 @@ test('admin can open bulk candidate correction page', function () {
         ->assertSee('नाव : Parsed Candidate', false)
         ->assertSee('type="date"', false)
         ->assertSee('data-testid="bulk-correction-date-input"', false)
+        ->assertSee('data-testid="bulk-height-combobox"', false)
         ->assertSee('data-testid="bulk-correction-height-input"', false)
-        ->assertSee('list="bulk-height-options"', false)
-        ->assertSee('datalist id="bulk-height-options"', false)
         ->assertSee('5&#039;3&quot; / 160 cm', false)
+        ->assertDontSee('list="bulk-height-options"', false)
+        ->assertDontSee('datalist id="bulk-height-options"', false)
         ->assertDontSee('data-testid="bulk-correction-height-free-text"', false)
         ->assertDontSee('name="height_cm"', false)
+        ->assertSee('data-testid="bulk-image-zoom-toolbar"', false)
+        ->assertSee('data-testid="bulk-image-zoom-container"', false)
+        ->assertSee('data-testid="bulk-image-preview"', false)
+        ->assertSee('data-bulk-image-zoom', false)
+        ->assertSee('data-zoom-action="in"', false)
+        ->assertSee('data-zoom-action="out"', false)
         ->assertSee('education-multiselect-root-bulk-correction-education-', false)
         ->assertSee('location-typeahead-wrapper', false)
         ->assertSee('data-display-sync-name="location"', false)
@@ -78,6 +94,7 @@ test('admin can open bulk candidate correction page', function () {
     $form = strpos($html, 'id="bulk-candidate-correction-form"');
     $duplicate = strpos($html, 'data-testid="bulk-correction-duplicate-history-card"');
     $review = strpos($html, 'Review flag');
+    $zoom = strpos($html, 'data-testid="bulk-image-zoom-toolbar"');
 
     expect($left)->not->toBeFalse()
         ->and($sourceText)->not->toBeFalse()
@@ -85,6 +102,9 @@ test('admin can open bulk candidate correction page', function () {
         ->and($form)->not->toBeFalse()
         ->and($duplicate)->not->toBeFalse()
         ->and($review)->not->toBeFalse()
+        ->and($zoom)->not->toBeFalse()
+        ->and($zoom)->toBeGreaterThan($left)
+        ->and($zoom)->toBeLessThan($right)
         ->and($sourceText)->toBeGreaterThan($left)
         ->and($sourceText)->toBeLessThan($right)
         ->and($form)->toBeGreaterThan($right)
@@ -247,8 +267,11 @@ test('bulk candidate correction page renders only one height input control', fun
     $response = $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
         ->assertOk()
+        ->assertSee('data-testid="bulk-height-combobox"', false)
         ->assertSee('data-testid="bulk-correction-height-input"', false)
         ->assertSee('value="157 cm"', false)
+        ->assertDontSee('list="bulk-height-options"', false)
+        ->assertDontSee('datalist id="bulk-height-options"', false)
         ->assertDontSee('data-testid="bulk-correction-height-free-text"', false)
         ->assertDontSee('name="height_cm"', false);
 
@@ -256,6 +279,57 @@ test('bulk candidate correction page renders only one height input control', fun
 
     expect(substr_count($html, 'name="height"'))->toBe(1)
         ->and(substr_count($html, 'data-testid="bulk-correction-height-input"'))->toBe(1);
+});
+
+test('bulk candidate correction normalizes common typed height formats', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+
+    foreach ([
+        "5'3\"" => 160,
+        '160 cm' => 160,
+        '5 ft 3 in' => 160,
+        '5 feet 3 inch' => 160,
+        '5ft3in' => 160,
+    ] as $heightInput => $expectedCm) {
+        $parsed = [
+            'core' => [
+                'full_name' => 'Height Format Candidate',
+                'primary_contact_number' => '9876500000',
+                'date_of_birth' => '1998-04-01',
+                'height_cm' => 150,
+                'gender' => 'male',
+                'highest_education' => 'BSc',
+                'city_text' => 'Old City',
+            ],
+        ];
+        $intake = candidateCorrectionIntake([
+            'raw_ocr_text' => 'Original OCR text for height format '.$heightInput,
+            'parsed_json' => $parsed,
+        ]);
+        $item = candidateCorrectionItem($batch, $intake);
+
+        $this->actingAs($admin)
+            ->patch(route('admin.bulk-intakes.items.correct-candidate.update', [$batch, $item]), [
+                'name' => 'Height Format Candidate',
+                'mobile' => '9876543210',
+                'date_of_birth' => '1998-04-15',
+                'height' => $heightInput,
+                'gender' => 'female',
+                'education' => 'MCA',
+                'location' => 'Pune',
+            ])
+            ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]));
+
+        $intake->refresh();
+        $item->refresh();
+
+        expect(data_get($intake->approval_snapshot_json, 'core.height_cm'))->toBe($expectedCm)
+            ->and(data_get($intake->approval_snapshot_json, 'core.height'))->toBe('5 ft 3 in')
+            ->and($intake->raw_ocr_text)->toBe('Original OCR text for height format '.$heightInput)
+            ->and($intake->parsed_json)->toBe($parsed)
+            ->and($item->item_meta_json)->toBeNull();
+    }
 });
 
 test('typed height and unselected typed location save into reviewed snapshot', function () {
@@ -326,6 +400,7 @@ test('reviewed height reopens as saved display text instead of height cm fallbac
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
         ->assertOk()
+        ->assertSee('data-testid="bulk-height-combobox"', false)
         ->assertSee('data-testid="bulk-correction-height-input"', false)
         ->assertSee('value="5 ft 3 in"', false)
         ->assertDontSee('value="160 cm"', false);
