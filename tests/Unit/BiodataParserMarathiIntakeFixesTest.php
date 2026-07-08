@@ -922,7 +922,7 @@ TXT);
         $this->assertSame('male', (string) ($core['gender'] ?? ''));
     }
 
-    public function test_normalized_parser_infers_female_from_standalone_ku_candidate_line(): void
+    public function test_normalized_parser_does_not_infer_female_from_standalone_ku_candidate_line(): void
     {
         $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
 कु. अंजली गोरखनाथ जाधव
@@ -932,7 +932,33 @@ TXT);
         $core = $parsed['core'] ?? [];
 
         $this->assertSame('अंजली गोरखनाथ जाधव', (string) ($core['full_name'] ?? ''));
-        $this->assertSame('female', (string) ($core['gender'] ?? ''));
+        $this->assertNull($core['gender'] ?? null);
+    }
+
+    public function test_normalized_parser_bare_ku_before_male_name_does_not_force_female(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+नाव कु अर्जुन राजाराम पाटील
+मोबाईल : ९८२४६४३९२५
+TXT);
+
+        $core = $parsed['core'] ?? [];
+
+        $this->assertSame('अर्जुन राजाराम पाटील', (string) ($core['full_name'] ?? ''));
+        $this->assertNotSame('female', $core['gender'] ?? null);
+    }
+
+    public function test_normalized_parser_brother_family_line_does_not_infer_candidate_male(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+अपूर्वा सुधीर डोंगरे
+भाऊ : चि. अनिकेत सुधीर डोंगरे
+मोबाईल : ९८२४६४३९२५
+TXT);
+
+        $core = $parsed['core'] ?? [];
+
+        $this->assertNotSame('male', $core['gender'] ?? null);
     }
 
     public function test_normalized_parser_family_relation_honorifics_do_not_drive_candidate_gender(): void
@@ -986,6 +1012,35 @@ TXT);
 
         $this->assertSame('ICICI Bank, Karad', (string) ($core['occupation_title'] ?? ''));
         $this->assertTrue(($core['highest_education'] ?? null) === null || (string) ($core['highest_education'] ?? '') === '');
+    }
+
+    public function test_normalized_parser_candidate_occupation_before_family_wins_over_father_occupation(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+मुलाचे नाव चि. अनिकेत जयवंत पाटील
+नोकरी: अरविंद कॉटस्पिन लिमिटेड, गोकुळ शिरगाव, कोल्हापूर
+कौटुंबिक माहिती
+वडील : श्री. जयवंत पाटील नोकरी: शिक्षक
+TXT);
+
+        $core = $parsed['core'] ?? [];
+
+        $this->assertSame('अरविंद कॉटस्पिन लिमिटेड, गोकुळ शिरगाव, कोल्हापूर', (string) ($core['occupation_title'] ?? ''));
+        $this->assertStringNotContainsString('शिक्षक', (string) ($core['occupation_title'] ?? ''));
+    }
+
+    public function test_normalized_parser_keeps_education_and_occupation_separate(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+मुलाचे नाव चि. अनिकेत जयवंत पाटील
+शिक्षण: B.Com
+नोकरी: ICICI Bank, Karad
+TXT);
+
+        $core = $parsed['core'] ?? [];
+
+        $this->assertSame('B.Com', (string) ($core['highest_education'] ?? ''));
+        $this->assertSame('ICICI Bank, Karad', (string) ($core['occupation_title'] ?? ''));
     }
 
     public function test_normalized_parser_prefers_mobile_label_over_numeric_garbage(): void
@@ -1110,6 +1165,21 @@ TXT;
 
         $this->assertSame('ICICI Bank, Karad', (string) (($parsed['core'] ?? [])['occupation_title'] ?? ''));
         $this->assertSame('ICICI Bank, Karad', $candidate['occupation']);
+    }
+
+    public function test_legacy_full_parser_display_reads_vyavsay_sheti_occupation(): void
+    {
+        $raw = <<<'TXT'
+बायोडाटा
+मुलाचे नाव चि.अनिकेत जयवंत पाटील
+व्यवसाय: शेती
+TXT;
+
+        $parsed = $this->parseWithLegacyRulesOnly($raw);
+        $candidate = $this->candidateDisplayFromParsed($raw, $parsed);
+
+        $this->assertSame('शेती', (string) (($parsed['core'] ?? [])['occupation_title'] ?? ''));
+        $this->assertSame('शेती', $candidate['occupation']);
     }
 
     public function test_normalized_parser_rejects_impossible_labeled_dob(): void

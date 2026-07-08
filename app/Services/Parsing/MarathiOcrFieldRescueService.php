@@ -22,9 +22,11 @@ final class MarathiOcrFieldRescueService
         }
 
         $gender = $this->rescueGender($lines);
-        if ($gender !== null && ($this->empty($core['gender'] ?? null) || $gender['source'] === 'explicit')) {
+        if ($gender !== null) {
             $core['gender'] = $gender['value'];
-        } elseif ($gender === null && ! $this->empty($core['gender'] ?? null) && $this->genderLooksDrivenByFamilyHonorific($lines)) {
+        } elseif ($gender === null
+            && ! $this->empty($core['gender'] ?? null)
+            && ($this->genderLooksDrivenByFamilyHonorific($lines) || $this->genderLooksDrivenByWeakKuHonorific($lines))) {
             $core['gender'] = null;
         }
 
@@ -151,20 +153,43 @@ final class MarathiOcrFieldRescueService
             }
         }
 
-        foreach ($this->candidateScopedLines($lines) as $line) {
-            if ($this->hasRelationContext($line)) {
-                continue;
-            }
+        $candidateLines = array_values(array_filter(
+            $this->candidateScopedLines($lines),
+            fn (string $line): bool => ! $this->hasRelationContext($line)
+        ));
 
-            if ($this->lineHasFemaleCandidateSignal($line)) {
-                return ['value' => 'female', 'source' => 'label'];
-            }
-            if ($this->lineHasMaleCandidateSignal($line)) {
-                return ['value' => 'male', 'source' => 'label'];
+        foreach ([
+            fn (string $line): ?string => $this->genderFromCandidateNameLabel($line),
+            fn (string $line): ?string => $this->genderFromStrongCandidateWord($line),
+            fn (string $line): ?string => $this->genderFromCandidateHonorific($line),
+        ] as $resolver) {
+            $gender = $this->singleGenderFromCandidateLines($candidateLines, $resolver);
+            if ($gender !== null) {
+                return ['value' => $gender, 'source' => 'candidate'];
             }
         }
 
         return null;
+    }
+
+    /**
+     * @param  list<string>  $lines
+     */
+    private function singleGenderFromCandidateLines(array $lines, callable $resolver): ?string
+    {
+        $found = [];
+        foreach ($lines as $line) {
+            if ($this->hasRelationContext($line)) {
+                continue;
+            }
+
+            $gender = $resolver($line);
+            if ($gender !== null) {
+                $found[$gender] = true;
+            }
+        }
+
+        return count($found) === 1 ? array_key_first($found) : null;
     }
 
     private function genderFromText(string $value): ?string
@@ -431,12 +456,13 @@ final class MarathiOcrFieldRescueService
      */
     private function rescueOccupation(array $lines): ?string
     {
+        $labelPattern = $this->candidateOccupationLabelPattern();
         foreach ($this->candidateScopedLines($lines) as $line) {
-            if (preg_match('/नोकरी|नौकरी|व्यवसाय|पद|कंपनी|वेतन|उत्पन्न|occupation|profession|job|designation|company|salary|income/ui', $line) !== 1) {
+            if (preg_match('/'.$labelPattern.'/ui', $line) !== 1) {
                 continue;
             }
 
-            $value = $this->valueAfterLabelPattern($line, 'नोकरी|नौकरी|व्यवसाय|पद|कंपनी|वेतन|उत्पन्न|occupation|profession|job|designation|company|salary|income') ?? '';
+            $value = $this->valueAfterOccupationLabelPattern($line) ?? '';
             $value = $this->cleanOccupationText($value);
             if ($this->validOccupationField($value, $line)) {
                 return $value;
@@ -444,6 +470,21 @@ final class MarathiOcrFieldRescueService
         }
 
         return null;
+    }
+
+    private function candidateOccupationLabelPattern(): string
+    {
+        return 'नोकरी|नौकरी|व्यवसाय|पद|कंपनी|occupation|profession|job|designation|company';
+    }
+
+    private function valueAfterOccupationLabelPattern(string $line): ?string
+    {
+        $labelPattern = $this->candidateOccupationLabelPattern();
+        if (preg_match('/(?:^|\s)(?:'.$labelPattern.')\s*(?:(?:[:：\-–—.>\/]|[८8])\s*|\s+)+(.+)$/ui', $line, $m) !== 1) {
+            return null;
+        }
+
+        return $this->stopAtNextCandidateField(trim($m[1]));
     }
 
     private function valueAfterLabelPattern(string $line, string $labelPattern): ?string
@@ -553,6 +594,8 @@ final class MarathiOcrFieldRescueService
     private function cleanOccupationText(string $value): string
     {
         $value = $this->stopAtNextCandidateField($value);
+        $value = preg_replace('/^(?:'.$this->candidateOccupationLabelPattern().')\s*(?:[:：\-–—.>\/]|[८8]|\s)*/ui', '', $value) ?? $value;
+        $value = preg_replace('/^[\s:：\-–—.>\/८8]+/u', '', $value) ?? $value;
         $value = preg_replace('/(?:मोबाईल|मोबाइल|मोबा\.?|मो\.?\s*नं\.?|संपर्क)\s*[:\-]?\s*(?:\+?91[\s\-]*)?[6-9][0-9\s\-\/]{9,14}/ui', '', $value) ?? $value;
         $value = preg_replace('/(?<!\d)[6-9]\d{9}(?!\d)/u', '', OcrNormalize::normalizeDigits($value)) ?? $value;
 
@@ -740,19 +783,59 @@ final class MarathiOcrFieldRescueService
 
     private function lineHasMaleCandidateSignal(string $line): bool
     {
-        return preg_match('/(?:मुलाचे\s+नां?व|मुलगा|वराचे\s+नां?व|(?<!\p{L})वर(?!\p{L}))/u', $line) === 1
+        return $this->genderFromCandidateNameLabel($line) === 'male'
+            || $this->genderFromStrongCandidateWord($line) === 'male'
             || $this->hasMaleCandidateHonorific($line);
     }
 
     private function lineHasFemaleCandidateSignal(string $line): bool
     {
-        return preg_match('/(?:मुलीचे\s+नां?व|मुलगी|वधूचे\s+नां?व|(?<!\p{L})वधू(?!\p{L}))/u', $line) === 1
-            || $this->hasFemaleCandidateHonorific($line);
+        return $this->genderFromCandidateNameLabel($line) === 'female'
+            || $this->genderFromStrongCandidateWord($line) === 'female'
+            || $this->genderFromCandidateHonorific($line) === 'female';
+    }
+
+    private function genderFromCandidateNameLabel(string $line): ?string
+    {
+        $hasFemale = preg_match('/(?:मुलीचे\s+नां?व|वधूचे\s+नां?व)/u', $line) === 1;
+        $hasMale = preg_match('/(?:मुलाचे\s+नां?व|वराचे\s+नां?व)/u', $line) === 1;
+
+        if ($hasFemale === $hasMale) {
+            return null;
+        }
+
+        return $hasFemale ? 'female' : 'male';
+    }
+
+    private function genderFromStrongCandidateWord(string $line): ?string
+    {
+        $hasFemale = preg_match('/(?:मुलगी|(?<!\p{L})वधू(?!\p{L}))/u', $line) === 1;
+        $hasMale = preg_match('/(?:मुलगा|(?<!\p{L})वर(?!\p{L}))/u', $line) === 1;
+
+        if ($hasFemale === $hasMale) {
+            return null;
+        }
+
+        return $hasFemale ? 'female' : 'male';
+    }
+
+    private function genderFromCandidateHonorific(string $line): ?string
+    {
+        $hasFemale = $this->hasFemaleCandidateHonorific($line);
+        $hasMale = $this->hasMaleCandidateHonorific($line);
+
+        if ($hasFemale === $hasMale) {
+            return null;
+        }
+
+        return $hasFemale ? 'female' : 'male';
     }
 
     private function hasCandidateHonorific(string $line): bool
     {
-        return $this->hasMaleCandidateHonorific($line) || $this->hasFemaleCandidateHonorific($line);
+        return $this->hasMaleCandidateHonorific($line)
+            || $this->hasFemaleCandidateHonorific($line)
+            || $this->hasWeakKuCandidateHonorific($line);
     }
 
     private function hasMaleCandidateHonorific(string $line): bool
@@ -762,7 +845,12 @@ final class MarathiOcrFieldRescueService
 
     private function hasFemaleCandidateHonorific(string $line): bool
     {
-        return preg_match('/(?:^|[\s:：\-–—(])(?:कु\.|कुं\.?|कु\s+|कुमारी\s*)\s*[\p{L}\p{M}]/u', $line) === 1;
+        return preg_match('/(?:^|[\s:：\-–—(])(?:कुमारी\s*)\s*[\p{L}\p{M}]/u', $line) === 1;
+    }
+
+    private function hasWeakKuCandidateHonorific(string $line): bool
+    {
+        return preg_match('/(?:^|[\s:：\-–—(])(?:कु\.|कुं\.?|कु\s+)\s*[\p{L}\p{M}]/u', $line) === 1;
     }
 
     /**
@@ -779,6 +867,28 @@ final class MarathiOcrFieldRescueService
 
         foreach ($lines as $line) {
             if ($this->hasRelationContext($line) && $this->hasCandidateHonorific($line)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  list<string>  $lines
+     */
+    private function genderLooksDrivenByWeakKuHonorific(array $lines): bool
+    {
+        foreach ($this->candidateScopedLines($lines) as $line) {
+            if ($this->hasRelationContext($line)) {
+                continue;
+            }
+
+            if ($this->lineHasMaleCandidateSignal($line) || $this->lineHasFemaleCandidateSignal($line)) {
+                return false;
+            }
+
+            if ($this->hasWeakKuCandidateHonorific($line)) {
                 return true;
             }
         }
