@@ -8,6 +8,7 @@ use App\Models\BulkIntakeBatch;
 use App\Models\BulkIntakeBatchItem;
 use App\Models\IntakeSourceContext;
 use App\Models\User;
+use App\Services\EducationService;
 use App\Services\Intake\BulkIntakeApplyPreviewService;
 use App\Services\Intake\BulkIntakeBatchService;
 use App\Services\Intake\BulkIntakeCandidateCorrectionService;
@@ -138,7 +139,7 @@ class AdminBulkIntakeController extends Controller
 
         $itemsQuery = $bulkIntakeBatch->items()
             ->with([
-                'biodataIntake:id,uploaded_by,matrimony_profile_id,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,parsed_json,created_at',
+                'biodataIntake:id,uploaded_by,matrimony_profile_id,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,parsed_json,approval_snapshot_json,reviewed_by_user_id,review_actor_type,review_surface,reviewed_at,approval_policy,approval_status,approved_at,created_at',
                 'biodataIntake.uploadedByUser:id,name,email,mobile,is_admin,admin_role',
                 'biodataIntake.uploadedByUser.matrimonyProfile:id,user_id',
             ])
@@ -321,7 +322,8 @@ class AdminBulkIntakeController extends Controller
         Request $request,
         BulkIntakeBatch $bulkIntakeBatch,
         BulkIntakeBatchItem $bulkIntakeBatchItem,
-        BulkIntakeCandidateCorrectionService $correctionService
+        BulkIntakeCandidateCorrectionService $correctionService,
+        EducationService $educationService
     ) {
         abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
         abort_unless($request->user() instanceof User, 403);
@@ -331,10 +333,22 @@ class AdminBulkIntakeController extends Controller
             'mobile' => ['nullable', 'string', 'max:32'],
             'date_of_birth' => ['nullable', 'string', 'max:40'],
             'height' => ['nullable', 'string', 'max:40'],
+            'height_cm' => ['nullable', 'integer', 'min:120', 'max:220'],
             'gender' => ['nullable', 'string', Rule::in(['', 'male', 'female', 'unknown'])],
             'education' => ['nullable', 'string', 'max:255'],
+            'education_slots' => ['nullable'],
+            'education_degree_ids' => ['nullable', 'array'],
+            'education_degree_ids.*' => ['integer', 'min:1'],
+            'education_custom' => ['nullable', 'array'],
+            'education_custom.*' => ['nullable', 'string', 'max:255'],
             'location' => ['nullable', 'string', 'max:255'],
+            'location_input' => ['nullable', 'string', 'max:255'],
+            'location_id' => ['nullable', 'integer', 'min:1'],
         ]);
+
+        if ($educationService->mergeMultiselectEducationIntoRequest($request)) {
+            $validated['education'] = $request->input('highest_education');
+        }
 
         $correctionService->saveCorrection($bulkIntakeBatchItem, $request->user(), $validated);
 

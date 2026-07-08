@@ -7,6 +7,7 @@ use App\Models\BulkIntakeBatchItem;
 use App\Models\User;
 use App\Services\Ocr\OcrNormalize;
 use App\Support\MobileNumber;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
@@ -66,6 +67,7 @@ class BulkIntakeCandidateCorrectionService
 
         $fields = array_map(function (array $field) use ($fieldConfidence, $parsedConfidenceMap): array {
             $field['confidence'] = $this->confidenceSignal($fieldConfidence, $parsedConfidenceMap, $field['confidence_aliases']);
+            $field['warnings'] = $this->warningsForField((string) $field['key'], $field['value'] ?? null);
             unset($field['confidence_aliases']);
 
             return $field;
@@ -183,12 +185,20 @@ class BulkIntakeCandidateCorrectionService
         $snapshot['core']['full_name'] = $this->nullableText($input['name'] ?? null);
         $snapshot['core']['primary_contact_number'] = $this->normalizedMobile($input['mobile'] ?? null);
         $snapshot['core']['date_of_birth'] = $this->normalizedDate($input['date_of_birth'] ?? null);
-        $heightCm = $this->normalizedHeightCm($input['height'] ?? null);
+        $heightText = $this->stringOrNull($input['height'] ?? null);
+        $heightCm = $this->normalizedHeightCm($heightText, $heightText === null ? ($input['height_cm'] ?? null) : null);
         $snapshot['core']['height_cm'] = $heightCm;
         $snapshot['core']['height'] = $heightCm !== null ? $this->heightDisplay($heightCm) : null;
         $snapshot['core']['gender'] = $this->normalizedGender($input['gender'] ?? null);
         $snapshot['core']['highest_education'] = $this->nullableText($input['education'] ?? null);
-        $snapshot['core']['city_text'] = $this->nullableText($input['location'] ?? null);
+        $location = $this->correctionLocation($input);
+        $snapshot['core']['city_text'] = $location;
+        if (array_key_exists('location_display', $snapshot['core'])) {
+            $snapshot['core']['location_display'] = $location;
+        }
+        if (array_key_exists('address_line', $snapshot['core'])) {
+            $snapshot['core']['address_line'] = $location;
+        }
 
         return $this->applyPrimaryContact($snapshot, $snapshot['core']['primary_contact_number']);
     }
@@ -250,6 +260,120 @@ class BulkIntakeCandidateCorrectionService
             'type' => $type,
             'confidence_aliases' => $confidenceAliases,
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function warningsForField(string $key, mixed $value): array
+    {
+        return match ($key) {
+            'mobile' => $this->mobileWarnings($value),
+            'date_of_birth' => $this->dateOfBirthWarnings($value),
+            'height' => $this->heightWarnings($value),
+            'gender' => $this->genderWarnings($value),
+            default => [],
+        };
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function mobileWarnings(mixed $value): array
+    {
+        $text = $this->stringOrNull($value);
+        if ($text === null) {
+            return [];
+        }
+
+        $mobile = MobileNumber::normalize(OcrNormalize::normalizeDigits($text));
+
+        return $mobile === null
+            ? ['Mobile does not normalize to a valid 10 digit Indian number.']
+            : [];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function dateOfBirthWarnings(mixed $value): array
+    {
+        $text = $this->stringOrNull($value);
+        if ($text === null) {
+            return [];
+        }
+
+        $normalized = OcrNormalize::normalizeDate($text);
+        if (! is_string($normalized) || preg_match('/^\d{4}-\d{2}-\d{2}$/', $normalized) !== 1) {
+            return ['DOB is not parseable as YYYY-MM-DD or DD/MM/YYYY.'];
+        }
+
+        [$year, $month, $day] = array_map('intval', explode('-', $normalized));
+        if (! checkdate($month, $day, $year)) {
+            return ['DOB is not a valid calendar date.'];
+        }
+
+        $age = Carbon::create($year, $month, $day)->age;
+        if ($age < 18) {
+            return ['Age is below 18 and should be reviewed.'];
+        }
+        if ($age > 75) {
+            return ['Age is above 75 and should be reviewed.'];
+        }
+
+        return [];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function heightWarnings(mixed $value): array
+    {
+        $text = $this->stringOrNull($value);
+        if ($text === null) {
+            return [];
+        }
+
+        try {
+            $this->normalizedHeightCm($text);
+
+            return [];
+        } catch (ValidationException $exception) {
+            return $this->firstValidationMessages($exception, 'height', 'Height is not parseable as cm or feet/inches.');
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function genderWarnings(mixed $value): array
+    {
+        $text = $this->stringOrNull($value);
+        if ($text === null || strtolower($text) === 'unknown') {
+            return ['Gender is unknown and should be reviewed.'];
+        }
+
+        try {
+            $this->normalizedGender($text);
+
+            return [];
+        } catch (ValidationException $exception) {
+            return $this->firstValidationMessages($exception, 'gender', 'Gender is not Male, Female, or Unknown.');
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function firstValidationMessages(ValidationException $exception, string $key, string $fallback): array
+    {
+        $messages = $exception->errors()[$key] ?? [];
+        $messages = array_values(array_filter(array_map(
+            fn (mixed $message): ?string => $this->stringOrNull($message),
+            is_array($messages) ? $messages : []
+        )));
+
+        return $messages !== [] ? $messages : [$fallback];
     }
 
     /**
@@ -559,9 +683,16 @@ class BulkIntakeCandidateCorrectionService
         return $normalized;
     }
 
-    private function normalizedHeightCm(mixed $value): ?int
+    private function normalizedHeightCm(mixed $value, mixed $heightCmValue = null): ?int
     {
         $text = $this->stringOrNull($value);
+        if ($text === null && $heightCmValue !== null) {
+            $heightCm = is_numeric($heightCmValue) ? (float) $heightCmValue : null;
+            if ($heightCm !== null) {
+                return $this->boundedHeight($heightCm);
+            }
+        }
+
         if ($text === null) {
             return null;
         }
@@ -618,6 +749,21 @@ class BulkIntakeCandidateCorrectionService
         }
 
         return $lower;
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     */
+    private function correctionLocation(array $input): ?string
+    {
+        foreach (['location', 'location_input'] as $key) {
+            $text = $this->nullableText($input[$key] ?? null);
+            if ($text !== null) {
+                return $text;
+            }
+        }
+
+        return null;
     }
 
     private function stringOrNull(mixed $value): ?string

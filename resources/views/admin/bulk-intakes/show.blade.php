@@ -195,6 +195,8 @@
                                     'occupation' => null,
                                     'parse_status' => $intake?->parse_status,
                                     'parsed_json_present' => false,
+                                    'display_source' => 'parsed_json',
+                                    'reviewed_snapshot_present' => false,
                                     'missing_fields' => [],
                                     'name_source' => null,
                                     'name_needs_review' => false,
@@ -205,6 +207,7 @@
                                     'display_warnings' => [],
                                 ];
                                 $hasParsedJson = (bool) ($candidate['parsed_json_present'] ?? false);
+                                $usesReviewedSnapshot = ($candidate['display_source'] ?? null) === 'approval_snapshot_json';
                                 $parseStatus = (string) ($candidate['parse_status'] ?? $intake?->parse_status ?? '');
                                 $itemDisplayStatus = match (true) {
                                     $parseStatus === 'parsed' && $hasParsedJson => 'parsed',
@@ -272,6 +275,9 @@
                                 </td>
                                 <td class="px-4 py-2 text-sm text-gray-700">
                                     <span class="font-medium">{{ $candidate['full_name'] ?? $missingDisplay }}</span>
+                                    @if ($usesReviewedSnapshot)
+                                        <span data-testid="bulk-candidate-reviewed-badge" class="ml-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">Reviewed</span>
+                                    @endif
                                     @if (($candidate['name_needs_review'] ?? false))
                                         <span class="ml-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">review</span>
                                     @endif

@@ -26,6 +26,8 @@ class BulkIntakeCandidateDisplayService
      *     occupation: string|null,
      *     parse_status: string|null,
      *     parsed_json_present: bool,
+     *     display_source: string,
+     *     reviewed_snapshot_present: bool,
      *     missing_fields: list<string>,
      *     name_source: string|null,
      *     name_needs_review: bool,
@@ -54,6 +56,8 @@ class BulkIntakeCandidateDisplayService
      *     occupation: string|null,
      *     parse_status: string|null,
      *     parsed_json_present: bool,
+     *     display_source: string,
+     *     reviewed_snapshot_present: bool,
      *     missing_fields: list<string>,
      *     name_source: string|null,
      *     name_needs_review: bool,
@@ -67,27 +71,33 @@ class BulkIntakeCandidateDisplayService
     public function candidateForIntake(?BiodataIntake $intake): array
     {
         $parsed = is_array($intake?->parsed_json) ? $intake->parsed_json : [];
-        $core = is_array($parsed['core'] ?? null) ? $parsed['core'] : [];
+        $reviewed = is_array($intake?->approval_snapshot_json) ? $intake->approval_snapshot_json : [];
+        $reviewedSnapshotPresent = $reviewed !== [];
+        $displaySource = $reviewedSnapshotPresent ? 'approval_snapshot_json' : 'parsed_json';
+        $display = $reviewedSnapshotPresent ? $reviewed : $parsed;
+        $core = is_array($display['core'] ?? null) ? $display['core'] : [];
         $warnings = [];
 
-        $name = $this->candidateName($parsed, $intake, $warnings);
-        $dobAge = $this->dobAge($parsed, $warnings);
-        $height = $this->height($parsed, $warnings);
-        $education = $this->safeDisplayField($this->educationRaw($parsed), 'education', $warnings);
-        $occupation = $this->safeDisplayField($this->occupationRaw($parsed), 'occupation', $warnings);
+        $name = $this->candidateName($display, $intake, $warnings, $displaySource);
+        $dobAge = $this->dobAge($display, $warnings);
+        $height = $this->height($display, $warnings);
+        $education = $this->safeDisplayField($this->educationRaw($display), 'education', $warnings);
+        $occupation = $this->safeDisplayField($this->occupationRaw($display), 'occupation', $warnings);
 
         $result = [
             'full_name' => $name['value'],
-            'mobile' => $this->mobile($parsed),
+            'mobile' => $this->mobile($display),
             'date_of_birth' => $dobAge['date_of_birth'],
             'age' => $dobAge['age'],
             'height' => $height['value'],
             'gender' => $this->gender($core),
-            'city' => $this->city($parsed),
+            'city' => $this->city($display),
             'education' => $education['value'],
             'occupation' => $occupation['value'],
             'parse_status' => $intake?->parse_status,
             'parsed_json_present' => $parsed !== [],
+            'display_source' => $displaySource,
+            'reviewed_snapshot_present' => $reviewedSnapshotPresent,
             'missing_fields' => [],
             'name_source' => $name['source'],
             'name_needs_review' => $name['needs_review'],
@@ -108,7 +118,11 @@ class BulkIntakeCandidateDisplayService
         $loaded = $item->relationLoaded('biodataIntake') ? $item->biodataIntake : null;
         if ($loaded instanceof BiodataIntake) {
             $attributes = $loaded->getAttributes();
-            if (array_key_exists('raw_ocr_text', $attributes) && array_key_exists('last_parse_input_text', $attributes)) {
+            if (
+                array_key_exists('raw_ocr_text', $attributes)
+                && array_key_exists('last_parse_input_text', $attributes)
+                && array_key_exists('approval_snapshot_json', $attributes)
+            ) {
                 return $loaded;
             }
         }
@@ -122,6 +136,7 @@ class BulkIntakeCandidateDisplayService
             'id',
             'parse_status',
             'parsed_json',
+            'approval_snapshot_json',
             'raw_ocr_text',
             'last_parse_input_text',
         ]);
@@ -132,7 +147,7 @@ class BulkIntakeCandidateDisplayService
      * @param  list<string>  $warnings
      * @return array{value: string|null, source: string|null, needs_review: bool}
      */
-    private function candidateName(array $parsed, ?BiodataIntake $intake, array &$warnings): array
+    private function candidateName(array $parsed, ?BiodataIntake $intake, array &$warnings, string $displaySource): array
     {
         $rawName = $this->firstString($parsed, [
             'core.full_name',
@@ -152,7 +167,7 @@ class BulkIntakeCandidateDisplayService
 
                 return [
                     'value' => $clean['value'],
-                    'source' => 'parsed_json',
+                    'source' => $displaySource,
                     'needs_review' => $clean['needs_review'],
                 ];
             }
@@ -362,7 +377,7 @@ class BulkIntakeCandidateDisplayService
         $heightCm = data_get($parsed, 'core.height_cm', data_get($parsed, 'height_cm'));
         if (is_numeric($heightCm)) {
             $height = (float) $heightCm;
-            if ($height >= 120 && $height <= 213) {
+            if ($height >= 120 && $height <= 220) {
                 $needsReview = $height >= 190;
                 if ($needsReview) {
                     $warnings[] = 'height_review';
@@ -820,6 +835,8 @@ class BulkIntakeCandidateDisplayService
      *     occupation: string|null,
      *     parse_status: string|null,
      *     parsed_json_present: bool,
+     *     display_source: string,
+     *     reviewed_snapshot_present: bool,
      *     missing_fields: list<string>,
      *     name_source: string|null,
      *     name_needs_review: bool,

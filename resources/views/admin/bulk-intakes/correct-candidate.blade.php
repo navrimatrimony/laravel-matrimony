@@ -35,10 +35,10 @@
     @enderror
 
     <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-        This saves only a human-reviewed intake snapshot. It does not create users, create profiles, apply profiles, queue WhatsApp, or call paid OCR/provider extraction.
+        Saves only the reviewed intake snapshot. No user/profile creation, WhatsApp queue, apply flow, or paid provider extraction runs here.
     </div>
 
-    <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.85fr)]">
+    <div data-testid="bulk-correction-workspace-grid" class="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(380px,0.85fr)]">
         <div class="space-y-6">
             <div class="rounded-lg bg-white p-6 shadow">
                 <h2 class="text-lg font-semibold text-gray-900">Original evidence</h2>
@@ -90,23 +90,20 @@
                 </div>
             </div>
 
-            <div class="rounded-lg bg-white p-6 shadow">
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <h2 class="text-lg font-semibold text-gray-900">{{ $sourceTextLabel }}</h2>
-                    <span class="text-xs font-semibold uppercase text-gray-500">Read only</span>
-                </div>
+            <details class="rounded-lg bg-white p-6 shadow">
+                <summary class="cursor-pointer text-lg font-semibold text-gray-900">{{ $sourceTextLabel }}</summary>
+                <span class="mt-1 block text-xs font-semibold uppercase text-gray-500">Read only</span>
                 @if ($sourceText)
-                    <pre class="mt-4 max-h-[34rem] overflow-auto whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-4 text-xs leading-relaxed text-gray-800">{{ $sourceText }}</pre>
+                    <pre class="mt-4 max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-4 text-xs leading-relaxed text-gray-800">{{ $sourceText }}</pre>
                 @else
                     <p class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">No OCR or parse input text is available for this item.</p>
                 @endif
-            </div>
+            </details>
         </div>
 
         <div class="space-y-6">
-            <div class="rounded-lg bg-white p-6 shadow">
+            <div class="rounded-lg bg-white p-6 shadow lg:sticky lg:top-4">
                 <h2 class="text-lg font-semibold text-gray-900">Correct candidate fields</h2>
-                <p class="mt-1 text-sm text-gray-600">Only these 7 fields are editable in this phase.</p>
 
                 @if (! $canSave)
                     <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -114,7 +111,7 @@
                     </div>
                 @endif
 
-                <form method="POST" action="{{ route('admin.bulk-intakes.items.correct-candidate.update', [$batch, $item]) }}" class="mt-5 space-y-4">
+                <form id="bulk-candidate-correction-form" method="POST" action="{{ route('admin.bulk-intakes.items.correct-candidate.update', [$batch, $item]) }}" class="mt-5 space-y-4">
                     @csrf
                     @method('PATCH')
 
@@ -127,12 +124,15 @@
                             $confidence = is_array($field['confidence'] ?? null) ? $field['confidence'] : [];
                             $isLowConfidence = ! empty($confidence['is_low']);
                             $confidenceLabel = (string) ($confidence['label'] ?? '');
+                            $warnings = is_array($field['warnings'] ?? null)
+                                ? array_values(array_filter(array_map('strval', $field['warnings'])))
+                                : [];
                             $inputClass = $isLowConfidence
                                 ? 'w-full rounded-lg border-amber-300 bg-amber-50 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 disabled:bg-gray-100'
                                 : 'w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100';
                         @endphp
 
-                        <label class="block text-sm" @if ($isLowConfidence) data-testid="bulk-correction-low-confidence-{{ $key }}" @endif>
+                        <div class="block text-sm" @if ($isLowConfidence) data-testid="bulk-correction-low-confidence-{{ $key }}" @endif>
                             <span class="mb-1 flex flex-wrap items-center gap-2 font-semibold text-gray-800">
                                 <span>{{ $label }}</span>
                                 @if ($isLowConfidence)
@@ -142,7 +142,48 @@
                                 @endif
                             </span>
 
-                            @if ($type === 'select' && $key === 'gender')
+                            @if ($key === 'date_of_birth')
+                                <input
+                                    type="date"
+                                    name="{{ $key }}"
+                                    value="{{ preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1 ? $value : '' }}"
+                                    @disabled(! $canSave)
+                                    class="{{ $inputClass }}"
+                                    data-testid="bulk-correction-date-input"
+                                >
+                            @elseif ($key === 'height')
+                                <x-profile.height-picker
+                                    :value="$value"
+                                    hidden-name="height_cm"
+                                    input-name="height"
+                                    :free-text-value="$value"
+                                    :allow-free-text="true"
+                                    :compact="true"
+                                    label=""
+                                    wrapper-class="height-picker w-full"
+                                />
+                            @elseif ($key === 'education')
+                                @php $educationProfile = (object) ['highest_education' => $value]; @endphp
+                                <input type="hidden" name="education" value="{{ $value }}">
+                                <x-education-multiselect-engine
+                                    :profile="$educationProfile"
+                                    form-selector="#bulk-candidate-correction-form"
+                                    :suffix="'bulk-correction-education-'.$item->id"
+                                />
+                            @elseif ($key === 'location')
+                                <input type="hidden" name="location" value="{{ $value }}">
+                                <x-profile.location-typeahead
+                                    context="residence"
+                                    :value="$value"
+                                    placeholder="Type city or village"
+                                    label=""
+                                    :gps-assist="false"
+                                    :no-border="true"
+                                    :compact-row="true"
+                                    display-sync-name="location"
+                                    id="bulk-correction-location-{{ $item->id }}"
+                                />
+                            @elseif ($type === 'select' && $key === 'gender')
                                 <select name="{{ $key }}" @disabled(! $canSave) class="{{ $inputClass }}">
                                     <option value="" @selected($value === '')>Select gender</option>
                                     <option value="male" @selected(strtolower($value) === 'male')>Male</option>
@@ -163,6 +204,14 @@
                                 <span class="mt-1 block text-xs font-medium text-red-700">{{ $message }}</span>
                             @enderror
 
+                            @if ($warnings !== [])
+                                <span data-testid="bulk-correction-warning-{{ $key }}" class="mt-1 block space-y-1">
+                                    @foreach ($warnings as $warning)
+                                        <span class="block rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">{{ $warning }}</span>
+                                    @endforeach
+                                </span>
+                            @endif
+
                             @if ($key === 'mobile')
                                 <span class="mt-1 block text-xs text-gray-500">Use a valid 10 digit Indian mobile number.</span>
                             @elseif ($key === 'date_of_birth')
@@ -172,7 +221,7 @@
                             @elseif ($key === 'location')
                                 <span class="mt-1 block text-xs text-gray-500">Single location text only. Do not paste a full address paragraph here.</span>
                             @endif
-                        </label>
+                        </div>
                     @endforeach
 
                     <div class="flex flex-wrap items-center gap-3 pt-2">

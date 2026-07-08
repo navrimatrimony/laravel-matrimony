@@ -1,9 +1,23 @@
-@props(['value' => null, 'namePrefix' => '', 'label' => 'Height', 'required' => false, 'wrapperClass' => null])
+@props([
+    'value' => null,
+    'namePrefix' => '',
+    'label' => 'Height',
+    'required' => false,
+    'wrapperClass' => null,
+    'allowFreeText' => false,
+    'inputName' => null,
+    'hiddenName' => null,
+    'freeTextValue' => null,
+    'compact' => false,
+])
 
 @php
-    $inputName = $namePrefix !== '' ? $namePrefix . '[height_cm]' : 'height_cm';
+    $resolvedHiddenName = $hiddenName ?? ($namePrefix !== '' ? $namePrefix . '[height_cm]' : 'height_cm');
+    $resolvedInputName = $inputName ?? ($namePrefix !== '' ? $namePrefix . '[height]' : 'height');
     $heightCm = old($namePrefix !== '' ? str_replace('[', '.', str_replace(']', '', $namePrefix)) . '.height_cm' : 'height_cm', $value);
     $heightCm = $heightCm !== null && $heightCm !== '' ? (int) $heightCm : null;
+    $freeTextOldKey = str_replace(']', '', str_replace('[', '.', $resolvedInputName));
+    $freeTextDisplay = old($freeTextOldKey, $freeTextValue ?? ($heightCm ? ((string) $heightCm).' cm' : ''));
 
     // Range: first option "Below 4 feet 6 inch", then 4'6" through 7'0", then "Above 7 feet". No options below 4'6" or above 7'.
     $options = [];
@@ -35,7 +49,7 @@
             }
         }
     }
-    $wrap = $wrapperClass ?? 'height-picker w-full border border-gray-200 dark:border-gray-600 rounded-lg p-3';
+    $wrap = $wrapperClass ?? ('height-picker w-full border border-gray-200 dark:border-gray-600 rounded-lg '.($compact ? 'p-0' : 'p-3'));
 @endphp
 <div class="{{ $wrap }}" x-data="heightPickerState({{ $selectedCm }})">
     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $label }} @if($required)<span class="text-red-500">*</span>@endif</label>
@@ -49,7 +63,17 @@
         </select>
         <span class="text-sm text-gray-600 dark:text-gray-400 shrink-0" x-text="formatDisplay()"></span>
     </div>
-    <input type="hidden" name="{{ $inputName }}" :value="heightCm">
+    @if ($allowFreeText)
+        <input
+            type="text"
+            name="{{ $resolvedInputName }}"
+            value="{{ $freeTextDisplay }}"
+            placeholder="165 cm or 5'5&quot;"
+            class="mt-2 w-full rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+            data-testid="bulk-correction-height-free-text"
+        >
+    @endif
+    <input type="hidden" name="{{ $resolvedHiddenName }}" :value="heightCm">
 
 <script>
 document.addEventListener('alpine:init', function() {

@@ -40,7 +40,8 @@ test('admin can open bulk candidate correction page', function () {
         ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
         ->assertOk()
         ->assertSee('Bulk Candidate Correction', false)
-        ->assertSee('Only these 7 fields are editable in this phase.', false)
+        ->assertSee('data-testid="bulk-correction-workspace-grid"', false)
+        ->assertDontSee('Only these 7 fields are editable in this phase.', false)
         ->assertSee('Parsed Candidate', false)
         ->assertSee('9876543210', false)
         ->assertSee('1998-04-15', false)
@@ -48,8 +49,13 @@ test('admin can open bulk candidate correction page', function () {
         ->assertSee('MCA', false)
         ->assertSee('Pune', false)
         ->assertSee('नाव : Parsed Candidate', false)
+        ->assertSee('type="date"', false)
+        ->assertSee('data-testid="bulk-correction-date-input"', false)
+        ->assertSee('data-testid="bulk-correction-height-free-text"', false)
+        ->assertSee('education-multiselect-root-bulk-correction-education-', false)
+        ->assertSee('data-display-sync-name="location"', false)
         ->assertSee('data-testid="bulk-correction-low-confidence-name"', false)
-        ->assertSee('This saves only a human-reviewed intake snapshot.', false);
+        ->assertSee('Saves only the reviewed intake snapshot.', false);
 });
 
 test('admin can save seven field correction without mutating evidence or bulk item parsed data', function () {
@@ -120,6 +126,158 @@ test('admin can save seven field correction without mutating evidence or bulk it
         ->and($item->item_meta_json)->toBeNull()
         ->and(User::query()->count())->toBe($userCountBefore)
         ->and(MatrimonyProfile::query()->count())->toBe($profileCountBefore);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Corrected Candidate', false)
+        ->assertSee('Mobile: 9876543210', false)
+        ->assertSee('1998-04-15', false)
+        ->assertSee('168 cm', false)
+        ->assertSee('Gender: Female', false)
+        ->assertSee('MCA', false)
+        ->assertSee('Pune', false)
+        ->assertSee('data-testid="bulk-candidate-reviewed-badge"', false)
+        ->assertSee('Reviewed', false)
+        ->assertSee('Parsed JSON: Yes', false)
+        ->assertDontSee('Parsed Candidate', false)
+        ->assertDontSee('9876500000', false)
+        ->assertDontSee('Old City', false);
+});
+
+test('admin can save centralized education height and location engine payloads into reviewed snapshot', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $parsed = [
+        'core' => [
+            'full_name' => 'Engine Candidate',
+            'primary_contact_number' => '9876500000',
+            'date_of_birth' => '1998-04-01',
+            'height_cm' => 160,
+            'gender' => 'male',
+            'highest_education' => 'Old Education',
+            'city_text' => 'Old City',
+        ],
+    ];
+    $intake = candidateCorrectionIntake([
+        'raw_ocr_text' => 'Original OCR text',
+        'parsed_json' => $parsed,
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->patch(route('admin.bulk-intakes.items.correct-candidate.update', [$batch, $item]), [
+            'name' => 'Engine Candidate',
+            'mobile' => '9876543210',
+            'date_of_birth' => '1998-04-15',
+            'height' => '165 cm',
+            'height_cm' => 160,
+            'gender' => 'female',
+            'education_slots' => json_encode([
+                ['t' => 'c', 'x' => 'Custom Marine Engineering Diploma'],
+            ]),
+            'location_input' => 'Satara',
+        ])
+        ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]));
+
+    $intake->refresh();
+    $item->refresh();
+
+    expect(data_get($intake->approval_snapshot_json, 'core.height_cm'))->toBe(165)
+        ->and(data_get($intake->approval_snapshot_json, 'core.height'))->toBe('5 ft 5 in')
+        ->and(data_get($intake->approval_snapshot_json, 'core.highest_education'))->toBe('Custom Marine Engineering Diploma')
+        ->and(data_get($intake->approval_snapshot_json, 'core.city_text'))->toBe('Satara')
+        ->and($intake->raw_ocr_text)->toBe('Original OCR text')
+        ->and($intake->parsed_json)->toBe($parsed)
+        ->and($item->item_meta_json)->toBeNull();
+});
+
+test('admin can mark bulk candidate correction item as needs review without mutating evidence', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $parsed = [
+        'core' => [
+            'full_name' => 'Needs Review Candidate',
+            'primary_contact_number' => '9876543210',
+        ],
+    ];
+    $intake = candidateCorrectionIntake([
+        'raw_ocr_text' => 'Original OCR text for review flag',
+        'parsed_json' => $parsed,
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->post(route('admin.bulk-intakes.items.mark-needs-review', [$batch, $item]), [
+            'reason' => 'Candidate correction needs manual review',
+        ])
+        ->assertRedirect(route('admin.bulk-intakes.show', $batch))
+        ->assertSessionHas('success');
+
+    $item->refresh();
+    $intake->refresh();
+
+    expect($item->item_status)->toBe(BulkIntakeBatchItem::STATUS_NEEDS_REVIEW)
+        ->and(data_get($item->item_meta_json, 'previous_item_status'))->toBe(BulkIntakeBatchItem::STATUS_INTAKE_CREATED)
+        ->and(data_get($item->item_meta_json, 'needs_review_reason'))->toBe('Candidate correction needs manual review')
+        ->and($intake->raw_ocr_text)->toBe('Original OCR text for review flag')
+        ->and($intake->parsed_json)->toBe($parsed);
+});
+
+test('non admin cannot mark bulk candidate correction item as needs review', function () {
+    $admin = candidateCorrectionAdminUser();
+    $member = User::factory()->create([
+        'is_admin' => false,
+        'admin_role' => null,
+    ]);
+    $batch = candidateCorrectionBatch($admin);
+    $intake = candidateCorrectionIntake();
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($member)
+        ->post(route('admin.bulk-intakes.items.mark-needs-review', [$batch, $item]), [
+            'reason' => 'Forbidden review flag',
+        ])
+        ->assertForbidden();
+
+    $item->refresh();
+    $intake->refresh();
+
+    expect($item->item_status)->toBe(BulkIntakeBatchItem::STATUS_INTAKE_CREATED)
+        ->and($item->item_meta_json)->toBeNull()
+        ->and($intake->raw_ocr_text)->toBe('Original OCR text')
+        ->and($intake->parsed_json)->toBe([]);
+});
+
+test('bulk candidate correction page renders validation warnings for suspicious extracted fields', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $intake = candidateCorrectionIntake([
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Warning Candidate',
+                'primary_contact_number' => '12345',
+                'date_of_birth' => '2012-04-15',
+                'height' => 'very tall',
+                'gender' => 'not-sure',
+                'highest_education' => 'BCom',
+                'city_text' => 'Pune',
+            ],
+        ],
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-correction-warning-mobile"', false)
+        ->assertSee('Mobile does not normalize to a valid 10 digit Indian number.', false)
+        ->assertSee('data-testid="bulk-correction-warning-date_of_birth"', false)
+        ->assertSee('Age is below 18 and should be reviewed.', false)
+        ->assertSee('data-testid="bulk-correction-warning-height"', false)
+        ->assertSee('Enter height as cm or feet/inches.', false)
+        ->assertSee('data-testid="bulk-correction-warning-gender"', false)
+        ->assertSee('Select Male, Female, or Unknown.', false);
 });
 
 test('bulk candidate correction save is blocked after intake approval or lock', function () {

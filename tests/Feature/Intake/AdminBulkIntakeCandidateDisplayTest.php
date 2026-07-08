@@ -55,6 +55,75 @@ test('bulk list shows parsed candidate fields from linked intake', function () {
     }
 });
 
+test('bulk list prefers reviewed snapshot values and keeps parsed json presence separate', function () {
+    Carbon::setTestNow(Carbon::parse('2026-07-07 12:00:00'));
+
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Old Parsed Candidate',
+                'primary_contact_number' => '9876500000',
+                'date_of_birth' => '1998-04-01',
+                'height_cm' => 160,
+                'gender' => 'male',
+                'city_text' => 'Old City',
+                'highest_education' => 'BSc',
+                'occupation_title' => 'Old Occupation',
+            ],
+        ],
+        'approval_snapshot_json' => [
+            'core' => [
+                'full_name' => 'Reviewed Candidate',
+                'primary_contact_number' => '9876543210',
+                'date_of_birth' => '1998-04-15',
+                'height_cm' => 168,
+                'gender' => 'female',
+                'city_text' => 'Pune',
+                'highest_education' => 'MCA',
+                'occupation_title' => 'Reviewed Occupation',
+            ],
+        ],
+    ]);
+    $item = candidateDisplayItem($batch, $intake, [
+        'original_filename' => 'reviewed-candidate.pdf',
+    ]);
+
+    $candidate = app(BulkIntakeCandidateDisplayService::class)->candidateForItem($item);
+
+    expect($candidate['full_name'])->toBe('Reviewed Candidate')
+        ->and($candidate['mobile'])->toBe('9876543210')
+        ->and($candidate['height'])->toBe('168 cm')
+        ->and($candidate['city'])->toBe('Pune')
+        ->and($candidate['education'])->toBe('MCA')
+        ->and($candidate['display_source'])->toBe('approval_snapshot_json')
+        ->and($candidate['reviewed_snapshot_present'])->toBeTrue()
+        ->and($candidate['parsed_json_present'])->toBeTrue();
+
+    try {
+        $this->actingAs($admin)
+            ->get(route('admin.bulk-intakes.show', $batch))
+            ->assertOk()
+            ->assertSee('Reviewed Candidate', false)
+            ->assertSee('Mobile: 9876543210', false)
+            ->assertSee('1998-04-15', false)
+            ->assertSee('168 cm', false)
+            ->assertSee('Gender: Female', false)
+            ->assertSee('Pune', false)
+            ->assertSee('MCA', false)
+            ->assertSee('Reviewed Occupation', false)
+            ->assertSee('Parsed JSON: Yes', false)
+            ->assertSee('data-testid="bulk-candidate-reviewed-badge"', false)
+            ->assertDontSee('Old Parsed Candidate', false)
+            ->assertDontSee('Old City', false)
+            ->assertDontSee('BSc', false);
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
 test('bulk list handles missing candidate fields safely', function () {
     $admin = candidateDisplayAdminUser();
     $batch = candidateDisplayBatch($admin);
