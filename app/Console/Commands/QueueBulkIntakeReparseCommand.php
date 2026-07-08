@@ -88,7 +88,7 @@ class QueueBulkIntakeReparseCommand extends Command
         $runId = now()->format('YmdHisv');
 
         foreach ($items as $item) {
-            $decision = $this->queueDecision($item, $only);
+            $decision = $this->queueDecision($item, $only, $force);
 
             if (! $decision['queue']) {
                 $this->countSkippedReason($skippedReasons, $decision['reason']);
@@ -132,7 +132,7 @@ class QueueBulkIntakeReparseCommand extends Command
     /**
      * @return array{queue: bool, reason: string}
      */
-    private function queueDecision(BulkIntakeBatchItem $item, string $only): array
+    private function queueDecision(BulkIntakeBatchItem $item, string $only, bool $force): array
     {
         if ($item->biodata_intake_id === null) {
             return ['queue' => false, 'reason' => 'missing_linked_intake_id'];
@@ -152,7 +152,7 @@ class QueueBulkIntakeReparseCommand extends Command
         }
 
         if ($this->hasActiveReparseInFlight($item, $intake)) {
-            return ['queue' => false, 'reason' => 'already_reparse_queued'];
+            return ['queue' => false, 'reason' => $force ? 'active_inflight' : 'already_reparse_queued'];
         }
 
         if (! $this->hasUsableParseInput($intake)) {
@@ -176,8 +176,12 @@ class QueueBulkIntakeReparseCommand extends Command
 
     private function hasActiveReparseInFlight(BulkIntakeBatchItem $item, BiodataIntake $intake): bool
     {
-        return ((string) $item->item_status === BulkIntakeBatchItem::STATUS_PARSE_QUEUED)
-            || ((string) $intake->parse_status === 'pending');
+        $itemStatus = (string) $item->item_status;
+        $parseStatus = (string) $intake->parse_status;
+
+        return $parseStatus === 'pending'
+            || $itemStatus === BulkIntakeBatchItem::STATUS_PROCESSING
+            || ($itemStatus === BulkIntakeBatchItem::STATUS_PARSE_QUEUED && $parseStatus === 'pending');
     }
 
     private function hasParsedJson(BiodataIntake $intake): bool

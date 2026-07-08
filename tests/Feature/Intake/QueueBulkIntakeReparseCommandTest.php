@@ -128,7 +128,7 @@ test('previous historical reparse metadata does not block another reparse when i
         'parsed_json' => ['core' => ['full_name' => 'Historical Reparse Candidate']],
     ]);
     $item = queueReparseCommandItem($batch, $intake, [
-        'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
+        'item_status' => BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
         'item_meta_json' => [
             'reparse_queued_at' => now()->subDay()->toIso8601String(),
             'reparse_reason' => 'latest_parser',
@@ -173,7 +173,7 @@ test('force queues eligible item with historical reparse metadata and records fo
         'parsed_json' => ['core' => ['full_name' => 'Forced Historical Candidate']],
     ]);
     $item = queueReparseCommandItem($batch, $intake, [
-        'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
+        'item_status' => BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
         'item_meta_json' => [
             'reparse_queued_at' => now()->subHours(2)->toIso8601String(),
             'reparse_reason' => 'latest_parser',
@@ -201,6 +201,42 @@ test('force queues eligible item with historical reparse metadata and records fo
     expect($freshItem->item_status)->toBe(BulkIntakeBatchItem::STATUS_PARSE_QUEUED)
         ->and($freshItem->item_meta_json['reparse_force'] ?? null)->toBeTrue()
         ->and($freshItem->item_meta_json['reparse_run_id'] ?? null)->not->toBe('old-run')
+        ->and($intake->fresh()->parse_status)->toBe('pending');
+});
+
+test('stale parse queued item with parsed intake is queued again without force', function () {
+    Queue::fake();
+
+    $admin = queueReparseCommandAdminUser();
+    $batch = queueReparseCommandBatch($admin);
+    $intake = queueReparseCommandIntake([
+        'raw_ocr_text' => queueReparseCommandUsableText('Stale Parse Queued Candidate'),
+        'parse_status' => 'parsed',
+        'parsed_json' => ['core' => ['full_name' => 'Stale Parse Queued Candidate']],
+    ]);
+    $item = queueReparseCommandItem($batch, $intake, [
+        'item_status' => BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
+        'item_meta_json' => [
+            'reparse_queued_at' => now()->subDay()->toIso8601String(),
+            'reparse_reason' => 'latest_parser',
+            'reparse_run_id' => 'old-run',
+        ],
+    ]);
+
+    $exitCode = Artisan::call('bulk-intake:queue-reparse', [
+        'batchId' => $batch->id,
+    ]);
+
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(0);
+    expect($output)
+        ->toContain('Queued count: 1')
+        ->toContain('Skipped count: 0')
+        ->not->toContain('already_reparse_queued=1');
+
+    Queue::assertPushed(ParseIntakeJob::class, 1);
+    expect($item->fresh()->item_meta_json['reparse_run_id'] ?? null)->not->toBe('old-run')
         ->and($intake->fresh()->parse_status)->toBe('pending');
 });
 
@@ -288,6 +324,43 @@ test('active parse queued items are not queued again', function () {
     expect($item->fresh()->item_meta_json['reparse_reason'] ?? null)->toBe('latest_parser');
 });
 
+test('force still skips active pending intake as active inflight', function () {
+    Queue::fake();
+
+    $admin = queueReparseCommandAdminUser();
+    $batch = queueReparseCommandBatch($admin);
+    $intake = queueReparseCommandIntake([
+        'raw_ocr_text' => queueReparseCommandUsableText('Force Active Pending Candidate'),
+        'parse_status' => 'pending',
+    ]);
+    $item = queueReparseCommandItem($batch, $intake, [
+        'item_status' => BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
+        'item_meta_json' => [
+            'reparse_queued_at' => now()->subMinute()->toIso8601String(),
+            'reparse_reason' => 'latest_parser',
+            'reparse_run_id' => 'active-run',
+        ],
+    ]);
+
+    $exitCode = Artisan::call('bulk-intake:queue-reparse', [
+        'batchId' => $batch->id,
+        '--force' => true,
+    ]);
+
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(0);
+    expect($output)
+        ->toContain('Force: yes')
+        ->toContain('Queued count: 0')
+        ->toContain('active_inflight=1')
+        ->not->toContain('already_reparse_queued=1');
+
+    Queue::assertNotPushed(ParseIntakeJob::class);
+    expect($item->fresh()->item_meta_json['reparse_run_id'] ?? null)->toBe('active-run')
+        ->and($intake->fresh()->parse_status)->toBe('pending');
+});
+
 test('force still skips approved locked and empty input items', function () {
     Queue::fake();
 
@@ -350,7 +423,7 @@ test('dry run force writes nothing and dispatches nothing for historical reparse
         'parsed_json' => ['core' => ['full_name' => 'Dry Run Force Candidate']],
     ]);
     $item = queueReparseCommandItem($batch, $intake, [
-        'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
+        'item_status' => BulkIntakeBatchItem::STATUS_PARSE_QUEUED,
         'item_meta_json' => [
             'reparse_queued_at' => now()->subDay()->toIso8601String(),
             'reparse_reason' => 'latest_parser',
@@ -377,7 +450,7 @@ test('dry run force writes nothing and dispatches nothing for historical reparse
 
     $freshItem = $item->fresh();
     $freshIntake = $intake->fresh();
-    expect($freshItem->item_status)->toBe(BulkIntakeBatchItem::STATUS_INTAKE_CREATED)
+    expect($freshItem->item_status)->toBe(BulkIntakeBatchItem::STATUS_PARSE_QUEUED)
         ->and($freshItem->item_meta_json['reparse_run_id'] ?? null)->toBe('old-run')
         ->and($freshIntake->parse_status)->toBe('parsed')
         ->and($freshIntake->last_error)->toBe('old_error')
