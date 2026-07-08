@@ -1,0 +1,633 @@
+<?php
+
+namespace App\Services\Intake;
+
+use App\Models\BiodataIntake;
+use App\Models\BulkIntakeBatchItem;
+use App\Models\User;
+use App\Services\Ocr\OcrNormalize;
+use App\Support\MobileNumber;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
+
+class BulkIntakeCandidateCorrectionService
+{
+    private const LOW_CONFIDENCE_THRESHOLD = 0.65;
+
+    public function __construct(
+        private readonly BulkIntakeCandidateDisplayService $candidateDisplayService,
+        private readonly IntakeHumanReviewSnapshotService $reviewSnapshotService,
+        private readonly IntakePipelineService $intakePipeline,
+    ) {}
+
+    /**
+     * @return array{
+     *     intake: BiodataIntake|null,
+     *     fields: list<array<string, mixed>>,
+     *     source_snapshot_source: string,
+     *     source_text: string|null,
+     *     source_text_label: string,
+     *     image_preview: array{available: bool, data_uri: string|null, label: string|null, message: string|null},
+     *     can_save: bool
+     * }
+     */
+    public function correctionDataForItem(BulkIntakeBatchItem $item): array
+    {
+        $intake = $this->intakeForItem($item);
+        if (! $intake instanceof BiodataIntake) {
+            return [
+                'intake' => null,
+                'fields' => [],
+                'source_snapshot_source' => 'missing_intake',
+                'source_text' => null,
+                'source_text_label' => 'Missing linked intake',
+                'image_preview' => $this->emptyImagePreview('Missing linked intake.'),
+                'can_save' => false,
+            ];
+        }
+
+        $source = $this->sourceSnapshot($intake);
+        $snapshot = $source['snapshot'];
+        $candidate = $this->candidateDisplayService->candidateForIntake($intake);
+        $fields = [
+            $this->field('name', 'Name', $this->snapshotText($snapshot, ['core.full_name']) ?? $candidate['full_name'], ['full_name', 'core.full_name'], 'text'),
+            $this->field('mobile', 'Mobile', $this->snapshotMobile($snapshot) ?? $candidate['mobile'], ['primary_contact_number', 'core.primary_contact_number', 'phone_number', 'contacts.0.phone_number'], 'tel'),
+            $this->field('date_of_birth', 'DOB', $this->snapshotText($snapshot, ['core.date_of_birth', 'date_of_birth']) ?? $candidate['date_of_birth'], ['date_of_birth', 'core.date_of_birth'], 'text'),
+            $this->field('height', 'Height', $this->snapshotHeight($snapshot) ?? $candidate['height'], ['height_cm', 'core.height_cm', 'height', 'core.height'], 'text'),
+            $this->field('gender', 'Gender', $this->snapshotGender($snapshot) ?? $candidate['gender'], ['gender', 'core.gender', 'gender_id', 'core.gender_id'], 'select'),
+            $this->field('education', 'Education', $this->snapshotText($snapshot, ['core.highest_education', 'core.highest_education_other', 'highest_education', 'education']) ?? $candidate['education'], ['highest_education', 'core.highest_education'], 'text'),
+            $this->field('location', 'Location', $this->snapshotLocation($snapshot) ?? $candidate['city'], ['city_text', 'core.city_text', 'city', 'core.city', 'address_line', 'core.address_line'], 'text'),
+        ];
+
+        $fieldConfidence = is_array($intake->field_confidence_json) ? $intake->field_confidence_json : [];
+        $parsedConfidenceMap = is_array(data_get($intake->parsed_json, 'confidence_map'))
+            ? data_get($intake->parsed_json, 'confidence_map')
+            : [];
+
+        $fields = array_map(function (array $field) use ($fieldConfidence, $parsedConfidenceMap): array {
+            $field['confidence'] = $this->confidenceSignal($fieldConfidence, $parsedConfidenceMap, $field['confidence_aliases']);
+            unset($field['confidence_aliases']);
+
+            return $field;
+        }, $fields);
+
+        $sourceText = $this->sourceText($item, $intake);
+
+        return [
+            'intake' => $intake,
+            'fields' => $fields,
+            'source_snapshot_source' => $source['source'],
+            'source_text' => $sourceText['text'],
+            'source_text_label' => $sourceText['label'],
+            'image_preview' => $this->imagePreview($item, $intake),
+            'can_save' => ! $this->snapshotLocked($intake),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     */
+    public function saveCorrection(BulkIntakeBatchItem $item, User $actor, array $input): BiodataIntake
+    {
+        $intake = $this->intakeForItem($item);
+        if (! $intake instanceof BiodataIntake) {
+            throw ValidationException::withMessages([
+                'candidate' => 'Linked biodata intake is missing.',
+            ]);
+        }
+
+        if ($this->snapshotLocked($intake)) {
+            throw ValidationException::withMessages([
+                'candidate' => 'Candidate correction is blocked after approval or lock.',
+            ]);
+        }
+
+        $source = $this->sourceSnapshot($intake);
+        $snapshot = $this->applyCorrection($source['snapshot'], $input);
+        $snapshot = $this->intakePipeline->normalizeSnapshotForStorage($snapshot, (int) $actor->id);
+
+        return $this->reviewSnapshotService->saveReviewedSnapshot($intake, $snapshot, [
+            'reviewed_by_user_id' => (int) $actor->id,
+            'review_actor_type' => IntakeHumanReviewSnapshotService::ACTOR_ADMIN,
+            'review_surface' => IntakeHumanReviewSnapshotService::SURFACE_ADMIN_PANEL,
+            'approval_policy' => IntakeHumanReviewSnapshotService::POLICY_PHASE2A_HUMAN_REVIEW_V1,
+            'approval_status' => IntakeHumanReviewSnapshotService::STATUS_REVIEWED,
+        ]);
+    }
+
+    private function intakeForItem(BulkIntakeBatchItem $item): ?BiodataIntake
+    {
+        $item->loadMissing([
+            'biodataIntake' => fn ($query) => $query->select([
+                'id',
+                'uploaded_by',
+                'matrimony_profile_id',
+                'original_filename',
+                'file_path',
+                'intake_status',
+                'parse_status',
+                'last_error',
+                'approved_by_user',
+                'approved_at',
+                'intake_locked',
+                'parsed_json',
+                'approval_snapshot_json',
+                'raw_ocr_text',
+                'last_parse_input_text',
+                'field_confidence_json',
+                'reviewed_by_user_id',
+                'review_actor_type',
+                'review_surface',
+                'reviewed_at',
+                'approval_policy',
+                'approval_status',
+                'created_at',
+            ]),
+        ]);
+
+        return $item->biodataIntake;
+    }
+
+    /**
+     * @return array{source: string, snapshot: array<string, mixed>}
+     */
+    private function sourceSnapshot(BiodataIntake $intake): array
+    {
+        if (is_array($intake->approval_snapshot_json) && $intake->approval_snapshot_json !== []) {
+            return [
+                'source' => 'approval_snapshot_json',
+                'snapshot' => $intake->approval_snapshot_json,
+            ];
+        }
+
+        if (is_array($intake->parsed_json) && $intake->parsed_json !== []) {
+            return [
+                'source' => 'parsed_json',
+                'snapshot' => $intake->parsed_json,
+            ];
+        }
+
+        return [
+            'source' => 'empty',
+            'snapshot' => [],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    private function applyCorrection(array $snapshot, array $input): array
+    {
+        $snapshot['core'] = is_array($snapshot['core'] ?? null) ? $snapshot['core'] : [];
+        $snapshot['core']['full_name'] = $this->nullableText($input['name'] ?? null);
+        $snapshot['core']['primary_contact_number'] = $this->normalizedMobile($input['mobile'] ?? null);
+        $snapshot['core']['date_of_birth'] = $this->normalizedDate($input['date_of_birth'] ?? null);
+        $heightCm = $this->normalizedHeightCm($input['height'] ?? null);
+        $snapshot['core']['height_cm'] = $heightCm;
+        $snapshot['core']['height'] = $heightCm !== null ? $this->heightDisplay($heightCm) : null;
+        $snapshot['core']['gender'] = $this->normalizedGender($input['gender'] ?? null);
+        $snapshot['core']['highest_education'] = $this->nullableText($input['education'] ?? null);
+        $snapshot['core']['city_text'] = $this->nullableText($input['location'] ?? null);
+
+        return $this->applyPrimaryContact($snapshot, $snapshot['core']['primary_contact_number']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    private function applyPrimaryContact(array $snapshot, ?string $mobile): array
+    {
+        $contacts = is_array($snapshot['contacts'] ?? null) ? array_values($snapshot['contacts']) : [];
+        $targetIndex = null;
+        foreach ($contacts as $index => $contact) {
+            if (! is_array($contact)) {
+                continue;
+            }
+            if (! empty($contact['is_primary']) || in_array((string) ($contact['relation_type'] ?? ''), ['self', 'candidate'], true)) {
+                $targetIndex = $index;
+                break;
+            }
+        }
+
+        if ($targetIndex === null) {
+            if ($mobile === null) {
+                $snapshot['contacts'] = $contacts;
+
+                return $snapshot;
+            }
+            $contacts[] = [
+                'phone_number' => $mobile,
+                'relation_type' => 'self',
+                'contact_name' => 'Self',
+                'is_primary' => 1,
+            ];
+        } else {
+            $contact = is_array($contacts[$targetIndex]) ? $contacts[$targetIndex] : [];
+            $contact['phone_number'] = $mobile;
+            $contact['relation_type'] = $contact['relation_type'] ?? 'self';
+            $contact['contact_name'] = $contact['contact_name'] ?? 'Self';
+            $contact['is_primary'] = $contact['is_primary'] ?? 1;
+            $contacts[$targetIndex] = $contact;
+        }
+
+        $snapshot['contacts'] = $contacts;
+
+        return $snapshot;
+    }
+
+    /**
+     * @param  list<string>  $confidenceAliases
+     * @return array<string, mixed>
+     */
+    private function field(string $key, string $label, mixed $value, array $confidenceAliases, string $type): array
+    {
+        return [
+            'key' => $key,
+            'label' => $label,
+            'value' => $this->stringOrNull($value) ?? '',
+            'type' => $type,
+            'confidence_aliases' => $confidenceAliases,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $fieldConfidence
+     * @param  array<string, mixed>  $parsedConfidenceMap
+     * @param  list<string>  $aliases
+     * @return array{available: bool, is_low: bool, score: float|null, label: string|null}
+     */
+    private function confidenceSignal(array $fieldConfidence, array $parsedConfidenceMap, array $aliases): array
+    {
+        foreach ($aliases as $alias) {
+            $signal = $this->arrayValueForPath($fieldConfidence, $alias);
+            if (is_array($signal)) {
+                return $this->formatConfidenceSignal($signal);
+            }
+        }
+
+        foreach ($fieldConfidence as $key => $signal) {
+            if (! is_array($signal)) {
+                continue;
+            }
+            $sourcePath = $this->stringOrNull($signal['source_path'] ?? null);
+            if ($sourcePath !== null && in_array($sourcePath, $aliases, true)) {
+                return $this->formatConfidenceSignal($signal);
+            }
+            if (is_string($key) && in_array($key, $aliases, true)) {
+                return $this->formatConfidenceSignal($signal);
+            }
+        }
+
+        foreach ($aliases as $alias) {
+            $score = $this->arrayValueForPath($parsedConfidenceMap, $alias);
+            if (is_numeric($score)) {
+                $score = (float) $score;
+
+                return [
+                    'available' => true,
+                    'is_low' => $score < self::LOW_CONFIDENCE_THRESHOLD,
+                    'score' => $score,
+                    'label' => ((int) round($score * 100)).'%',
+                ];
+            }
+        }
+
+        return [
+            'available' => false,
+            'is_low' => false,
+            'score' => null,
+            'label' => null,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $signal
+     * @return array{available: bool, is_low: bool, score: float|null, label: string|null}
+     */
+    private function formatConfidenceSignal(array $signal): array
+    {
+        $score = is_numeric($signal['score'] ?? null) ? (float) $signal['score'] : null;
+        $isLow = ! empty($signal['is_low'])
+            || ($score !== null && $score < self::LOW_CONFIDENCE_THRESHOLD)
+            || in_array((string) ($signal['status'] ?? ''), ['low_confidence', 'missing'], true);
+
+        return [
+            'available' => true,
+            'is_low' => $isLow,
+            'score' => $score,
+            'label' => $score !== null ? ((int) round($score * 100)).'%' : ($isLow ? 'Low' : null),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $source
+     */
+    private function arrayValueForPath(array $source, string $path): mixed
+    {
+        if (array_key_exists($path, $source)) {
+            return $source[$path];
+        }
+
+        return data_get($source, $path);
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     * @param  list<string>  $paths
+     */
+    private function snapshotText(array $snapshot, array $paths): ?string
+    {
+        foreach ($paths as $path) {
+            $value = $this->stringOrNull(data_get($snapshot, $path));
+            if ($value !== null) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function snapshotMobile(array $snapshot): ?string
+    {
+        $mobile = $this->snapshotText($snapshot, [
+            'core.primary_contact_number',
+            'core.mobile',
+            'primary_contact_number',
+            'mobile',
+        ]);
+        if ($mobile !== null) {
+            return $mobile;
+        }
+
+        $contacts = is_array($snapshot['contacts'] ?? null) ? $snapshot['contacts'] : [];
+        foreach ($contacts as $contact) {
+            if (! is_array($contact)) {
+                continue;
+            }
+            $mobile = $this->snapshotText($contact, ['phone_number', 'number', 'mobile', 'contact_number']);
+            if ($mobile !== null) {
+                return $mobile;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function snapshotHeight(array $snapshot): ?string
+    {
+        $heightCm = data_get($snapshot, 'core.height_cm', data_get($snapshot, 'height_cm'));
+        if (is_numeric($heightCm)) {
+            return ((string) (int) round((float) $heightCm)).' cm';
+        }
+
+        return $this->snapshotText($snapshot, ['core.height', 'height']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function snapshotGender(array $snapshot): ?string
+    {
+        $gender = $this->snapshotText($snapshot, ['core.gender', 'gender']);
+        if ($gender === null) {
+            return null;
+        }
+
+        $lower = strtolower($gender);
+
+        return in_array($lower, ['male', 'female', 'unknown'], true) ? $lower : $gender;
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function snapshotLocation(array $snapshot): ?string
+    {
+        return $this->snapshotText($snapshot, [
+            'core.city_text',
+            'core.city',
+            'core.location_display',
+            'core.address_line',
+            'city_text',
+            'city',
+            'location_display',
+        ]);
+    }
+
+    /**
+     * @return array{text: string|null, label: string}
+     */
+    private function sourceText(BulkIntakeBatchItem $item, BiodataIntake $intake): array
+    {
+        foreach ([
+            'Last parse input text' => $intake->last_parse_input_text,
+            'Raw OCR text' => $intake->raw_ocr_text,
+            'Bulk item text summary' => $item->summary_text,
+        ] as $label => $value) {
+            $text = $this->stringOrNull($value);
+            if ($text !== null) {
+                return [
+                    'text' => $text,
+                    'label' => $label,
+                ];
+            }
+        }
+
+        return [
+            'text' => null,
+            'label' => 'No parse input text available',
+        ];
+    }
+
+    /**
+     * @return array{available: bool, data_uri: string|null, label: string|null, message: string|null}
+     */
+    private function imagePreview(BulkIntakeBatchItem $item, BiodataIntake $intake): array
+    {
+        $relativePath = $this->stringOrNull($intake->file_path) ?? $this->stringOrNull($item->source_file_path);
+        if ($relativePath === null) {
+            return $this->emptyImagePreview('No uploaded image file is linked to this item.');
+        }
+
+        $extension = strtolower(pathinfo($relativePath, PATHINFO_EXTENSION));
+        if (! in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+            return $this->emptyImagePreview('Original file is not a browser-previewable image.');
+        }
+
+        if (! Storage::disk('local')->exists($relativePath)) {
+            return $this->emptyImagePreview('Original image file is not available on local storage.');
+        }
+
+        $absolutePath = Storage::disk('local')->path($relativePath);
+        $size = @filesize($absolutePath);
+        if ($size === false || $size > 5 * 1024 * 1024) {
+            return $this->emptyImagePreview('Original image preview is skipped because the file is too large.');
+        }
+
+        $mime = @mime_content_type($absolutePath);
+        if (! is_string($mime) || ! in_array($mime, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
+            return $this->emptyImagePreview('Original file MIME type is not supported for inline preview.');
+        }
+
+        $bytes = @file_get_contents($absolutePath);
+        if (! is_string($bytes) || $bytes === '') {
+            return $this->emptyImagePreview('Original image file could not be read for preview.');
+        }
+
+        return [
+            'available' => true,
+            'data_uri' => 'data:'.$mime.';base64,'.base64_encode($bytes),
+            'label' => $intake->original_filename ?: $item->original_filename ?: basename($relativePath),
+            'message' => null,
+        ];
+    }
+
+    /**
+     * @return array{available: bool, data_uri: string|null, label: string|null, message: string|null}
+     */
+    private function emptyImagePreview(string $message): array
+    {
+        return [
+            'available' => false,
+            'data_uri' => null,
+            'label' => null,
+            'message' => $message,
+        ];
+    }
+
+    private function snapshotLocked(BiodataIntake $intake): bool
+    {
+        return (bool) $intake->approved_by_user
+            || (bool) $intake->intake_locked
+            || $intake->approved_at !== null
+            || (string) ($intake->approval_status ?? '') === IntakeHumanReviewSnapshotService::STATUS_APPROVED;
+    }
+
+    private function nullableText(mixed $value): ?string
+    {
+        $text = $this->stringOrNull($value);
+
+        return $text !== null ? mb_substr($text, 0, 255, 'UTF-8') : null;
+    }
+
+    private function normalizedMobile(mixed $value): ?string
+    {
+        $text = $this->stringOrNull($value);
+        if ($text === null) {
+            return null;
+        }
+
+        $mobile = MobileNumber::normalize(OcrNormalize::normalizeDigits($text));
+        if ($mobile === null) {
+            throw ValidationException::withMessages([
+                'mobile' => 'Enter a valid 10 digit mobile number.',
+            ]);
+        }
+
+        return $mobile;
+    }
+
+    private function normalizedDate(mixed $value): ?string
+    {
+        $text = $this->stringOrNull($value);
+        if ($text === null) {
+            return null;
+        }
+
+        $normalized = OcrNormalize::normalizeDate($text);
+        if (! is_string($normalized) || preg_match('/^\d{4}-\d{2}-\d{2}$/', $normalized) !== 1) {
+            throw ValidationException::withMessages([
+                'date_of_birth' => 'Enter DOB as YYYY-MM-DD or DD/MM/YYYY.',
+            ]);
+        }
+
+        [$year, $month, $day] = array_map('intval', explode('-', $normalized));
+        if (! checkdate($month, $day, $year)) {
+            throw ValidationException::withMessages([
+                'date_of_birth' => 'Enter a valid DOB.',
+            ]);
+        }
+
+        return $normalized;
+    }
+
+    private function normalizedHeightCm(mixed $value): ?int
+    {
+        $text = $this->stringOrNull($value);
+        if ($text === null) {
+            return null;
+        }
+
+        $text = OcrNormalize::normalizeDigits($text);
+        if (preg_match('/^\s*(\d{3})(?:\.\d+)?\s*(?:cm|cms|centimeter|centimeters)?\s*$/i', $text, $m) === 1) {
+            return $this->boundedHeight((float) $m[1]);
+        }
+
+        $normalized = OcrNormalize::normalizeHeight($text);
+        if (is_string($normalized) && preg_match('/([3-7])\s*[\'’′]\s*([0-9]{1,2})\s*(?:"|”|″)?/u', $normalized, $m) === 1) {
+            return $this->boundedHeight((((int) $m[1]) * 12 + (int) $m[2]) * 2.54);
+        }
+
+        throw ValidationException::withMessages([
+            'height' => 'Enter height as cm or feet/inches.',
+        ]);
+    }
+
+    private function boundedHeight(float $heightCm): int
+    {
+        $height = (int) round($heightCm);
+        if ($height < 120 || $height > 220) {
+            throw ValidationException::withMessages([
+                'height' => 'Height must be between 120 cm and 220 cm.',
+            ]);
+        }
+
+        return $height;
+    }
+
+    private function heightDisplay(int $heightCm): string
+    {
+        $totalInches = (int) round($heightCm / 2.54);
+        $feet = intdiv($totalInches, 12);
+        $inches = $totalInches % 12;
+
+        return $feet.' ft '.$inches.' in';
+    }
+
+    private function normalizedGender(mixed $value): ?string
+    {
+        $text = $this->stringOrNull($value);
+        if ($text === null || strtolower($text) === 'unknown') {
+            return null;
+        }
+
+        $normalized = OcrNormalize::normalizeGender($text);
+        $lower = strtolower((string) $normalized);
+        if (! in_array($lower, ['male', 'female'], true)) {
+            throw ValidationException::withMessages([
+                'gender' => 'Select Male, Female, or Unknown.',
+            ]);
+        }
+
+        return $lower;
+    }
+
+    private function stringOrNull(mixed $value): ?string
+    {
+        if ($value === null || is_array($value) || is_object($value) || is_bool($value)) {
+            return null;
+        }
+
+        $text = trim((string) $value);
+
+        return $text !== '' ? $text : null;
+    }
+}

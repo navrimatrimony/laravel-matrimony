@@ -17,6 +17,8 @@ test('admin bulk intake route names exist', function () {
         ->and(route('admin.bulk-intakes.items.queue-free-parse', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/queue-free-parse'))
         ->and(route('admin.bulk-intakes.items.mark-needs-review', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/mark-needs-review'))
         ->and(route('admin.bulk-intakes.items.clear-needs-review', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/clear-needs-review'))
+        ->and(route('admin.bulk-intakes.items.correct-candidate', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/correct-candidate'))
+        ->and(route('admin.bulk-intakes.items.correct-candidate.update', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/correct-candidate'))
         ->and(route('admin.bulk-intakes.items.assign-owner', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/assign-owner'))
         ->and(route('admin.bulk-intakes.items.assign-owner.store', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/assign-owner'))
         ->and(route('admin.bulk-intakes.items.create-owner', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/create-owner'))
@@ -106,6 +108,7 @@ test('bulk intake show keeps extraction actions and hides readiness owner profil
         ->assertSee('Open intake review', false)
         ->assertSee('Add manual transcript (OCR failed fallback)', false)
         ->assertSee('Queue free parse item', false)
+        ->assertSee('Correct candidate', false)
         ->assertSee('Mark needs review', false)
         ->assertDontSee('Profile Readiness', false)
         ->assertDontSee('Profile Readiness details', false)
@@ -161,6 +164,16 @@ test('non admin cannot access admin bulk intake routes', function () {
 
     $this->actingAs($member)
         ->post(route('admin.bulk-intakes.items.clear-needs-review', [$batch, $item]))
+        ->assertForbidden();
+
+    $this->actingAs($member)
+        ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertForbidden();
+
+    $this->actingAs($member)
+        ->patch(route('admin.bulk-intakes.items.correct-candidate.update', [$batch, $item]), [
+            'name' => 'Forbidden Candidate',
+        ])
         ->assertForbidden();
 
     $this->actingAs($member)

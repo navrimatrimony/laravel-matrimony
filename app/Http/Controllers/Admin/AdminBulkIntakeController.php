@@ -10,6 +10,7 @@ use App\Models\IntakeSourceContext;
 use App\Models\User;
 use App\Services\Intake\BulkIntakeApplyPreviewService;
 use App\Services\Intake\BulkIntakeBatchService;
+use App\Services\Intake\BulkIntakeCandidateCorrectionService;
 use App\Services\Intake\BulkIntakeCandidateDisplayService;
 use App\Services\Intake\BulkIntakeDraftProfileBootstrapService;
 use App\Services\Intake\BulkIntakeManualTranscriptService;
@@ -290,6 +291,56 @@ class AdminBulkIntakeController extends Controller
         return redirect()
             ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
             ->with('success', $message);
+    }
+
+    public function correctCandidateForm(
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeCandidateCorrectionService $correctionService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+
+        $bulkIntakeBatch->load('uploadedByUser:id,name,email,mobile');
+        $correction = $correctionService->correctionDataForItem($bulkIntakeBatchItem);
+        abort_unless($correction['intake'] !== null, 404);
+
+        return view('admin.bulk-intakes.correct-candidate', [
+            'batch' => $bulkIntakeBatch,
+            'item' => $bulkIntakeBatchItem,
+            'intake' => $correction['intake'],
+            'fields' => $correction['fields'],
+            'sourceSnapshotSource' => $correction['source_snapshot_source'],
+            'sourceText' => $correction['source_text'],
+            'sourceTextLabel' => $correction['source_text_label'],
+            'imagePreview' => $correction['image_preview'],
+            'canSave' => $correction['can_save'],
+        ]);
+    }
+
+    public function saveCandidateCorrection(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeCandidateCorrectionService $correctionService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $validated = $request->validate([
+            'name' => ['nullable', 'string', 'max:255'],
+            'mobile' => ['nullable', 'string', 'max:32'],
+            'date_of_birth' => ['nullable', 'string', 'max:40'],
+            'height' => ['nullable', 'string', 'max:40'],
+            'gender' => ['nullable', 'string', Rule::in(['', 'male', 'female', 'unknown'])],
+            'education' => ['nullable', 'string', 'max:255'],
+            'location' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $correctionService->saveCorrection($bulkIntakeBatchItem, $request->user(), $validated);
+
+        return redirect()
+            ->route('admin.bulk-intakes.items.correct-candidate', [$bulkIntakeBatch, $bulkIntakeBatchItem])
+            ->with('success', 'Candidate correction saved as reviewed snapshot. Profile data was not modified.');
     }
 
     public function assignOwnerForm(BulkIntakeBatch $bulkIntakeBatch, BulkIntakeBatchItem $bulkIntakeBatchItem)

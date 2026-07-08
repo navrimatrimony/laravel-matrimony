@@ -349,6 +349,7 @@
                                     <div class="flex min-w-40 flex-col gap-2">
                                         @if ($intake)
                                             <a href="{{ route('admin.biodata-intakes.show', $intake) }}" class="font-medium text-indigo-600 hover:text-indigo-800">Open intake review</a>
+                                            <a href="{{ route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]) }}" class="font-medium text-emerald-700 hover:text-emerald-900">Correct candidate</a>
                                         @endif
                                         @if ($canAddManualTranscript)
                                             <a href="{{ route('admin.bulk-intakes.items.manual-transcript', [$batch, $item]) }}" class="font-medium text-orange-700 hover:text-orange-900">Add manual transcript (OCR failed fallback)</a>
