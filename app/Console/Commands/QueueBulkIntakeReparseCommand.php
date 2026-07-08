@@ -40,7 +40,8 @@ class QueueBulkIntakeReparseCommand extends Command
     protected $signature = 'bulk-intake:queue-reparse
         {batchId : Bulk intake batch id}
         {--dry-run : List eligible items without database writes or job dispatch}
-        {--only=all : all, parsed, parse_error, needs_review, or missing_parsed_json}';
+        {--only=all : all, parsed, parse_error, needs_review, or missing_parsed_json}
+        {--force : Queue eligible historical reparses again while preserving active in-flight protection}';
 
     protected $description = 'Queue ParseIntakeJob reparse jobs for existing linked intakes in a bulk intake batch.';
 
@@ -56,6 +57,7 @@ class QueueBulkIntakeReparseCommand extends Command
         $batchId = (int) $this->argument('batchId');
         $only = strtolower(trim((string) $this->option('only')));
         $dryRun = (bool) $this->option('dry-run');
+        $force = (bool) $this->option('force');
 
         if ($batchId < 1) {
             $this->error('Batch id must be a positive integer.');
@@ -83,6 +85,7 @@ class QueueBulkIntakeReparseCommand extends Command
 
         $queuedIntakeIds = [];
         $skippedReasons = [];
+        $runId = now()->format('YmdHisv');
 
         foreach ($items as $item) {
             $decision = $this->queueDecision($item, $only);
@@ -103,7 +106,7 @@ class QueueBulkIntakeReparseCommand extends Command
             $queuedIntakeIds[] = (int) $intake->id;
 
             if (! $dryRun) {
-                $this->markQueuedAndDispatch($item, $intake);
+                $this->markQueuedAndDispatch($item, $intake, $force, $runId);
             }
         }
 
@@ -113,6 +116,7 @@ class QueueBulkIntakeReparseCommand extends Command
         $this->info('Bulk intake reparse queue summary');
         $this->line('Batch ID: '.$batch->id);
         $this->line('Only filter: '.$only);
+        $this->line('Force: '.($force ? 'yes' : 'no'));
         if ($dryRun) {
             $this->warn('DRY RUN: no database writes or jobs dispatched.');
         }
@@ -147,7 +151,7 @@ class QueueBulkIntakeReparseCommand extends Command
             return ['queue' => false, 'reason' => 'filter_not_matched'];
         }
 
-        if ($this->alreadyQueuedForLatestParser($item)) {
+        if ($this->hasActiveReparseInFlight($item, $intake)) {
             return ['queue' => false, 'reason' => 'already_reparse_queued'];
         }
 
@@ -170,13 +174,10 @@ class QueueBulkIntakeReparseCommand extends Command
         };
     }
 
-    private function alreadyQueuedForLatestParser(BulkIntakeBatchItem $item): bool
+    private function hasActiveReparseInFlight(BulkIntakeBatchItem $item, BiodataIntake $intake): bool
     {
-        $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
-
-        return (string) $item->item_status === BulkIntakeBatchItem::STATUS_PARSE_QUEUED
-            && (string) ($meta['reparse_reason'] ?? '') === self::REPARSE_REASON
-            && trim((string) ($meta['reparse_queued_at'] ?? '')) !== '';
+        return ((string) $item->item_status === BulkIntakeBatchItem::STATUS_PARSE_QUEUED)
+            || ((string) $intake->parse_status === 'pending');
     }
 
     private function hasParsedJson(BiodataIntake $intake): bool
@@ -209,7 +210,7 @@ class QueueBulkIntakeReparseCommand extends Command
         return is_string($normalized) ? trim($normalized) : '';
     }
 
-    private function markQueuedAndDispatch(BulkIntakeBatchItem $item, BiodataIntake $intake): void
+    private function markQueuedAndDispatch(BulkIntakeBatchItem $item, BiodataIntake $intake, bool $force, string $runId): void
     {
         $queuedAt = now()->toIso8601String();
         $parserVersion = $this->parserVersionForJob($intake);
@@ -230,6 +231,8 @@ class QueueBulkIntakeReparseCommand extends Command
                 'reparse_queued_at' => $queuedAt,
                 'reparse_reason' => self::REPARSE_REASON,
                 'reparse_parser_version' => $parserVersion,
+                'reparse_force' => $force,
+                'reparse_run_id' => $runId,
                 'parse_queue_mode' => 'bulk_intake_reparse_latest_parser',
                 'parse_input_only' => true,
             ]),

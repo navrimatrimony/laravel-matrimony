@@ -108,10 +108,100 @@ test('command queues ParseIntakeJob on bulk-intake queue for parsed linked intak
         ->and($freshItem->item_meta_json['reparse_queued_at'] ?? null)->not->toBeNull()
         ->and($freshItem->item_meta_json['reparse_reason'] ?? null)->toBe('latest_parser')
         ->and($freshItem->item_meta_json['reparse_parser_version'] ?? null)->toBe('rules_only')
+        ->and($freshItem->item_meta_json['reparse_force'] ?? null)->toBeFalse()
+        ->and($freshItem->item_meta_json['reparse_run_id'] ?? null)->not->toBeNull()
         ->and($freshIntake->parse_status)->toBe('pending')
         ->and($freshIntake->last_error)->toBeNull()
         ->and($freshIntake->raw_ocr_text)->toBe($intake->raw_ocr_text)
         ->and($freshIntake->parsed_json)->toEqual(['core' => ['full_name' => 'Old Parsed Candidate']]);
+});
+
+test('previous historical reparse metadata does not block another reparse when intake is parsed', function () {
+    Queue::fake();
+
+    $admin = queueReparseCommandAdminUser();
+    $batch = queueReparseCommandBatch($admin);
+    $intake = queueReparseCommandIntake([
+        'raw_ocr_text' => queueReparseCommandUsableText('Historical Reparse Candidate'),
+        'parse_status' => 'parsed',
+        'last_error' => 'old_error',
+        'parsed_json' => ['core' => ['full_name' => 'Historical Reparse Candidate']],
+    ]);
+    $item = queueReparseCommandItem($batch, $intake, [
+        'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
+        'item_meta_json' => [
+            'reparse_queued_at' => now()->subDay()->toIso8601String(),
+            'reparse_reason' => 'latest_parser',
+            'reparse_run_id' => 'old-run',
+        ],
+    ]);
+
+    $exitCode = Artisan::call('bulk-intake:queue-reparse', [
+        'batchId' => $batch->id,
+    ]);
+
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(0);
+    expect($output)
+        ->toContain('Queued count: 1')
+        ->toContain('Skipped count: 0')
+        ->not->toContain('already_reparse_queued=1');
+
+    Queue::assertPushed(ParseIntakeJob::class, 1);
+
+    $freshItem = $item->fresh();
+    $freshIntake = $intake->fresh();
+    expect($freshItem->item_status)->toBe(BulkIntakeBatchItem::STATUS_PARSE_QUEUED)
+        ->and($freshItem->item_meta_json['reparse_reason'] ?? null)->toBe('latest_parser')
+        ->and($freshItem->item_meta_json['reparse_run_id'] ?? null)->not->toBe('old-run')
+        ->and($freshItem->item_meta_json['reparse_force'] ?? null)->toBeFalse()
+        ->and($freshIntake->parse_status)->toBe('pending')
+        ->and($freshIntake->last_error)->toBeNull()
+        ->and($freshIntake->raw_ocr_text)->toBe($intake->raw_ocr_text)
+        ->and($freshIntake->parsed_json)->toEqual(['core' => ['full_name' => 'Historical Reparse Candidate']]);
+});
+
+test('force queues eligible item with historical reparse metadata and records force marker', function () {
+    Queue::fake();
+
+    $admin = queueReparseCommandAdminUser();
+    $batch = queueReparseCommandBatch($admin);
+    $intake = queueReparseCommandIntake([
+        'raw_ocr_text' => queueReparseCommandUsableText('Forced Historical Candidate'),
+        'parse_status' => 'parsed',
+        'parsed_json' => ['core' => ['full_name' => 'Forced Historical Candidate']],
+    ]);
+    $item = queueReparseCommandItem($batch, $intake, [
+        'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
+        'item_meta_json' => [
+            'reparse_queued_at' => now()->subHours(2)->toIso8601String(),
+            'reparse_reason' => 'latest_parser',
+            'reparse_force' => false,
+            'reparse_run_id' => 'old-run',
+        ],
+    ]);
+
+    $exitCode = Artisan::call('bulk-intake:queue-reparse', [
+        'batchId' => $batch->id,
+        '--force' => true,
+    ]);
+
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(0);
+    expect($output)
+        ->toContain('Force: yes')
+        ->toContain('Queued count: 1')
+        ->toContain('Skipped count: 0');
+
+    Queue::assertPushed(ParseIntakeJob::class, 1);
+
+    $freshItem = $item->fresh();
+    expect($freshItem->item_status)->toBe(BulkIntakeBatchItem::STATUS_PARSE_QUEUED)
+        ->and($freshItem->item_meta_json['reparse_force'] ?? null)->toBeTrue()
+        ->and($freshItem->item_meta_json['reparse_run_id'] ?? null)->not->toBe('old-run')
+        ->and($intake->fresh()->parse_status)->toBe('pending');
 });
 
 test('items without linked intake are skipped safely', function () {
@@ -167,7 +257,7 @@ test('items without usable parse input are skipped and not dispatched', function
         ->and($intake->fresh()->parse_status)->toBe('parsed');
 });
 
-test('already reparse queued items are not queued again', function () {
+test('active parse queued items are not queued again', function () {
     Queue::fake();
 
     $admin = queueReparseCommandAdminUser();
@@ -196,6 +286,103 @@ test('already reparse queued items are not queued again', function () {
         ->toContain('already_reparse_queued=1');
     Queue::assertNotPushed(ParseIntakeJob::class);
     expect($item->fresh()->item_meta_json['reparse_reason'] ?? null)->toBe('latest_parser');
+});
+
+test('force still skips approved locked and empty input items', function () {
+    Queue::fake();
+
+    $admin = queueReparseCommandAdminUser();
+    $batch = queueReparseCommandBatch($admin);
+    $approved = queueReparseCommandIntake([
+        'raw_ocr_text' => queueReparseCommandUsableText('Force Approved Candidate'),
+        'parse_status' => 'parsed',
+        'approved_by_user' => true,
+        'parsed_json' => ['core' => ['full_name' => 'Force Approved Candidate']],
+    ]);
+    $locked = queueReparseCommandIntake([
+        'raw_ocr_text' => queueReparseCommandUsableText('Force Locked Candidate'),
+        'parse_status' => 'parsed',
+        'intake_locked' => true,
+        'parsed_json' => ['core' => ['full_name' => 'Force Locked Candidate']],
+    ]);
+    $emptyInput = queueReparseCommandIntake([
+        'raw_ocr_text' => '',
+        'last_parse_input_text' => '',
+        'parse_status' => 'parsed',
+        'parsed_json' => ['core' => ['full_name' => 'Force Empty Candidate']],
+    ]);
+    queueReparseCommandItem($batch, $approved, ['item_sequence' => 1]);
+    queueReparseCommandItem($batch, $locked, ['item_sequence' => 2]);
+    queueReparseCommandItem($batch, $emptyInput, ['item_sequence' => 3]);
+
+    $exitCode = Artisan::call('bulk-intake:queue-reparse', [
+        'batchId' => $batch->id,
+        '--force' => true,
+    ]);
+
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(0);
+    expect($output)
+        ->toContain('Force: yes')
+        ->toContain('Queued count: 0')
+        ->toContain('approved_or_locked=2')
+        ->toContain('no_usable_parse_input=1');
+
+    Queue::assertNotPushed(ParseIntakeJob::class);
+    expect($approved->fresh()->parse_status)->toBe('parsed')
+        ->and($locked->fresh()->parse_status)->toBe('parsed')
+        ->and($emptyInput->fresh()->parse_status)->toBe('parsed')
+        ->and($approved->fresh()->parsed_json)->toEqual(['core' => ['full_name' => 'Force Approved Candidate']])
+        ->and($locked->fresh()->parsed_json)->toEqual(['core' => ['full_name' => 'Force Locked Candidate']])
+        ->and($emptyInput->fresh()->parsed_json)->toEqual(['core' => ['full_name' => 'Force Empty Candidate']]);
+});
+
+test('dry run force writes nothing and dispatches nothing for historical reparse metadata', function () {
+    Queue::fake();
+
+    $admin = queueReparseCommandAdminUser();
+    $batch = queueReparseCommandBatch($admin);
+    $intake = queueReparseCommandIntake([
+        'raw_ocr_text' => queueReparseCommandUsableText('Dry Run Force Candidate'),
+        'parse_status' => 'parsed',
+        'last_error' => 'old_error',
+        'parsed_json' => ['core' => ['full_name' => 'Dry Run Force Candidate']],
+    ]);
+    $item = queueReparseCommandItem($batch, $intake, [
+        'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
+        'item_meta_json' => [
+            'reparse_queued_at' => now()->subDay()->toIso8601String(),
+            'reparse_reason' => 'latest_parser',
+            'reparse_run_id' => 'old-run',
+        ],
+    ]);
+
+    $exitCode = Artisan::call('bulk-intake:queue-reparse', [
+        'batchId' => $batch->id,
+        '--dry-run' => true,
+        '--force' => true,
+    ]);
+
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(0);
+    expect($output)
+        ->toContain('DRY RUN')
+        ->toContain('Force: yes')
+        ->toContain('Queued count: 1');
+
+    Queue::assertNotPushed(ParseIntakeJob::class);
+    expect(IntakeExtractionReuseResolver::peekParseInputOnlyFlag((int) $intake->id))->toBeFalse();
+
+    $freshItem = $item->fresh();
+    $freshIntake = $intake->fresh();
+    expect($freshItem->item_status)->toBe(BulkIntakeBatchItem::STATUS_INTAKE_CREATED)
+        ->and($freshItem->item_meta_json['reparse_run_id'] ?? null)->toBe('old-run')
+        ->and($freshIntake->parse_status)->toBe('parsed')
+        ->and($freshIntake->last_error)->toBe('old_error')
+        ->and($freshIntake->raw_ocr_text)->toBe($intake->raw_ocr_text)
+        ->and($freshIntake->parsed_json)->toEqual(['core' => ['full_name' => 'Dry Run Force Candidate']]);
 });
 
 test('approved and locked intakes are skipped safely', function () {
