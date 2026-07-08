@@ -152,6 +152,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Free Tesseract multi-pass OCR
+    |--------------------------------------------------------------------------
+    |
+    | Local Tesseract only. No paid provider calls are made here.
+    | Attempts are bounded so upload/bulk workers cannot run unbounded OCR loops.
+    |
+    */
+    'tesseract_multipass' => [
+        'enabled' => env('OCR_TESSERACT_MULTIPASS_ENABLED', true),
+        'psm_modes' => [6, 4, 11],
+        'preprocessing_presets' => ['resolved', 'photo_capture', 'high_contrast'],
+        'english_fallback_enabled' => env('OCR_TESSERACT_ENG_FALLBACK_ENABLED', true),
+        'max_attempts' => (int) env('OCR_TESSERACT_MULTIPASS_MAX_ATTEMPTS', 24),
+        'max_runtime_seconds' => (int) env('OCR_TESSERACT_MULTIPASS_MAX_RUNTIME_SECONDS', 60),
+        'attempt_timeout_seconds' => (int) env('OCR_TESSERACT_ATTEMPT_TIMEOUT_SECONDS', 20),
+        'preprocess_timeout_seconds' => (int) env('OCR_TESSERACT_PREPROCESS_TIMEOUT_SECONDS', 15),
+        'imagemagick_cli_enabled' => env('OCR_IMAGEMAGICK_CLI_ENABLED', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Parse-time OCR quality auto-retry (manual prepared image only)
     |--------------------------------------------------------------------------
     |

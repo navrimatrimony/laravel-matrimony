@@ -2,15 +2,13 @@
 
 namespace App\Services;
 
-use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Services\Domain\OcrDomainIntelligenceService;
-use App\Services\Ocr\ImagePreprocessingService;
 use App\Services\Ocr\OcrNormalize;
 use App\Services\Ocr\OcrPostProcessor;
+use App\Services\Ocr\TesseractMultiPassOcrService;
 use Illuminate\Support\Facades\Log;
 use Smalot\PdfParser\Parser as PdfParser;
-use thiagoalessio\TesseractOCR\TesseractOCR;
 
 class OcrService
 {
@@ -18,7 +16,7 @@ class OcrService
     private ?array $lastExtractTextFromPathDebug = null;
 
     public function __construct(
-        private ImagePreprocessingService $imagePreprocessing,
+        private TesseractMultiPassOcrService $tesseractMultiPassOcr,
         private OcrPostProcessor $ocrPostProcessor,
         private OcrDomainIntelligenceService $domainIntelligence,
     ) {}
@@ -72,140 +70,26 @@ class OcrService
                 return $this->extractTextFromPdf($fullPath);
             }
 
-            $ocrInputPath = $fullPath;
-            $derivedTempPath = null;
-            $prep = null;
-            $skippedReason = null;
-            $preprocessUsed = false;
-            $fallbackUsed = false;
-            $presetResolved = null;
+            $result = $this->tesseractMultiPassOcr->extractFromImage(
+                $fullPath,
+                $storagePath,
+                $originalFilename,
+                $presetOverride
+            );
+            $this->lastExtractTextFromPathDebug = $result['debug'];
 
-            $preprocessingOff = ($presetOverride === 'off');
-            if ($preprocessingOff) {
-                $skippedReason = 'off';
-            }
-
-            if (! $preprocessingOff && $this->imagePreprocessing->shouldPreprocess($storagePath, $originalFilename)) {
-                $t0 = microtime(true);
-                $effectivePreset = $presetOverride ?? config('ocr.preprocessing.preset_override');
-                if ($effectivePreset === '' || $effectivePreset === 'auto') {
-                    $effectivePreset = null;
-                }
-                $prep = $this->imagePreprocessing->preprocessForOcr(
-                    $fullPath,
-                    $storagePath,
-                    $originalFilename,
-                    $effectivePreset
-                );
-                $durationMs = (int) round((microtime(true) - $t0) * 1000);
-
-                $preprocessUsed = (bool) ($prep['used'] ?? false);
-                $fallbackUsed = (bool) ($prep['fallback_used'] ?? false);
-                $presetResolved = $prep['preset'] ?? null;
-
-                $prepMeta = is_array($prep['meta'] ?? null) ? $prep['meta'] : [];
-                Log::info('ocr_extraction: preprocessing summary', [
-                    'ext' => $ext,
-                    'preset' => $presetResolved,
-                    'preprocess_used' => $preprocessUsed,
-                    'preprocess_fallback' => $fallbackUsed,
-                    'preprocess_skip_reason' => $prepMeta['skipped_reason'] ?? null,
-                    'duration_ms' => $durationMs,
-                    'driver' => $prepMeta['driver'] ?? null,
-                    'steps' => $preprocessUsed ? ($prepMeta['applied_steps'] ?? $prepMeta['steps'] ?? []) : [],
-                ]);
-
-                if (! $preprocessUsed && $skippedReason === null) {
-                    $skippedReason = $prepMeta['skipped_reason'] ?? null;
-                }
-
-                if ($preprocessUsed && is_string($prep['output_absolute_path']) && $prep['output_absolute_path'] !== '') {
-                    $ocrInputPath = $prep['output_absolute_path'];
-                    $derivedTempPath = $prep['output_absolute_path'];
-                }
-            } elseif (! $preprocessingOff && ! $this->imagePreprocessing->shouldPreprocess($storagePath, $originalFilename)) {
-                $skippedReason = (bool) config('ocr.preprocessing.enabled', true) ? 'not_applicable' : 'preprocessing_disabled';
-            }
-
-            $originalSize = @filesize($fullPath);
-            $derivedSize = ($derivedTempPath !== null && is_file($derivedTempPath)) ? @filesize($derivedTempPath) : null;
-
-            $keepDerived = $derivedTempPath !== null
-                && is_file($derivedTempPath)
-                && config('app.debug')
-                && (bool) config('ocr.preprocessing.debug_keep_derived_when_app_debug', true);
-
-            $prepMetaForDebug = (is_array($prep) && is_array($prep['meta'] ?? null)) ? $prep['meta'] : [];
-
-            $ocrPipeline = 'direct_from_original';
-            if ($preprocessingOff) {
-                $ocrPipeline = 'preprocessing_off';
-            } elseif ($preprocessUsed) {
-                $ocrPipeline = 'auto_preprocessed';
-            }
-
-            $this->lastExtractTextFromPathDebug = [
-                'kind' => 'image',
-                'ocr_pipeline' => $ocrPipeline,
+            Log::info('ocr_extraction: tesseract multipass result', [
                 'original_absolute_path' => $fullPath,
-                'original_storage_relative' => $storagePath,
-                'derived_absolute_path' => $derivedTempPath,
-                'derived_storage_relative' => $preprocessUsed && is_array($prep) ? ($prep['output_path'] ?? null) : null,
-                'final_ocr_input_path' => $ocrInputPath,
+                'final_ocr_input_path' => $this->lastExtractTextFromPathDebug['final_ocr_input_path'] ?? null,
                 'preset_request' => $presetOverride,
-                'preset_resolved' => $presetResolved,
-                'preprocess_used' => $preprocessUsed,
-                'fallback_used' => $fallbackUsed,
-                'skipped_preprocessing_reason' => $skippedReason,
-                'derived_kept_on_disk' => $keepDerived,
-                'original_filesize' => $originalSize !== false ? $originalSize : null,
-                'derived_filesize' => $derivedSize !== false ? $derivedSize : null,
-                'original_width' => $prepMetaForDebug['original_width'] ?? null,
-                'original_height' => $prepMetaForDebug['original_height'] ?? null,
-                'derived_width' => $prepMetaForDebug['width'] ?? null,
-                'derived_height' => $prepMetaForDebug['height'] ?? null,
-                'driver' => $prepMetaForDebug['driver'] ?? null,
-                'output_format' => $prepMetaForDebug['output_format'] ?? null,
-                'applied_steps' => $prepMetaForDebug['applied_steps'] ?? $prepMetaForDebug['steps'] ?? [],
-                'driver_resolution_diagnostics' => config('app.debug') ? ($prepMetaForDebug['resolution_diagnostics'] ?? null) : null,
-            ];
-
-            if ($this->lastExtractTextFromPathDebug['original_width'] === null) {
-                $dim = @getimagesize($fullPath);
-                if (is_array($dim)) {
-                    $this->lastExtractTextFromPathDebug['original_width'] = $dim[0] ?? null;
-                    $this->lastExtractTextFromPathDebug['original_height'] = $dim[1] ?? null;
-                }
-            }
-
-            Log::info('ocr_extraction: tesseract input', [
-                'original_absolute_path' => $fullPath,
-                'derived_absolute_path' => $derivedTempPath,
-                'final_ocr_input_path' => $ocrInputPath,
-                'preset_request' => $presetOverride,
-                'preset_resolved' => $presetResolved,
-                'preprocess_used' => $preprocessUsed,
-                'fallback_used' => $fallbackUsed,
-                'original_filesize' => $this->lastExtractTextFromPathDebug['original_filesize'],
-                'derived_filesize' => $this->lastExtractTextFromPathDebug['derived_filesize'],
-                'original_width' => $this->lastExtractTextFromPathDebug['original_width'],
-                'original_height' => $this->lastExtractTextFromPathDebug['original_height'],
-                'derived_width' => $this->lastExtractTextFromPathDebug['derived_width'],
-                'derived_height' => $this->lastExtractTextFromPathDebug['derived_height'],
+                'chosen_variant' => $this->lastExtractTextFromPathDebug['chosen_variant'] ?? null,
+                'chosen_psm' => $this->lastExtractTextFromPathDebug['chosen_psm'] ?? null,
+                'chosen_language' => $this->lastExtractTextFromPathDebug['chosen_language'] ?? null,
+                'score' => $this->lastExtractTextFromPathDebug['score'] ?? null,
+                'attempt_count' => $this->lastExtractTextFromPathDebug['attempt_count'] ?? null,
             ]);
 
-            try {
-                return $this->runTesseract($ocrInputPath);
-            } finally {
-                $shouldDelete = $derivedTempPath !== null
-                    && is_file($derivedTempPath)
-                    && (bool) config('ocr.preprocessing.cleanup_enabled', true)
-                    && ! $keepDerived;
-
-                if ($shouldDelete) {
-                    @unlink($derivedTempPath);
-                }
-            }
+            return $result['text'];
         }
 
         $this->lastExtractTextFromPathDebug = [
@@ -529,43 +413,4 @@ class OcrService
         }
     }
 
-    /**
-     * Run Tesseract OCR on an image file. Returns trimmed text or empty string on failure.
-     */
-    private function runTesseract(string $fullPath): string
-    {
-        try {
-            $ocrProvider = AdminSetting::getValue('intake_ocr_provider', 'tesseract');
-            if ($ocrProvider === 'off') {
-                return '';
-            }
-
-            // For now we only support local Tesseract; future providers can be plugged in here.
-            $ocr = new TesseractOCR($fullPath);
-            $exe = trim((string) config('services.tesseract.path'));
-            // If TESSERACT_PATH points to a missing/invalid binary (common on local Windows installs),
-            // fall back to default executable resolution (PATH).
-            if ($exe !== '' && is_file($exe)) {
-                $ocr->executable($exe);
-            }
-            // OEM 1 = LSTM only; PSM 6 = uniform block of text (typical biodata layout).
-            $ocr->oem(1);
-            $ocr->psm(6);
-
-            $langHint = AdminSetting::getValue('intake_ocr_language_hint', 'mixed');
-            if ($langHint === 'mr') {
-                $ocr->lang('mar');
-            } elseif ($langHint === 'en') {
-                $ocr->lang('eng');
-            } else {
-                // Mixed Marathi + English (labels, degrees, company names).
-                $ocr->lang('mar', 'eng');
-            }
-            $text = $ocr->run();
-
-            return trim($text);
-        } catch (\Throwable $e) {
-            return '';
-        }
-    }
 }

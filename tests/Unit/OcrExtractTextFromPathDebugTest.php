@@ -1,6 +1,6 @@
 <?php
 
-use App\Services\Ocr\ImagePreprocessingService;
+use App\Services\Ocr\TesseractMultiPassOcrService;
 use App\Services\OcrService;
 
 uses(Tests\TestCase::class);
@@ -21,10 +21,17 @@ test('preset off skips preprocessor and final OCR input path is the original fil
     }
     file_put_contents($abs, $png !== false ? $png : '');
 
-    $mock = Mockery::mock(ImagePreprocessingService::class);
-    $mock->shouldNotReceive('shouldPreprocess');
-    $mock->shouldNotReceive('preprocessForOcr');
-    $this->app->instance(ImagePreprocessingService::class, $mock);
+    $mock = Mockery::mock(TesseractMultiPassOcrService::class);
+    $mock->shouldReceive('extractFromImage')->once()->with($abs, $rel, 'test.png', 'off')->andReturn([
+        'text' => '',
+        'debug' => [
+            'kind' => 'image',
+            'preprocess_used' => false,
+            'final_ocr_input_path' => $abs,
+            'skipped_preprocessing_reason' => 'off',
+        ],
+    ]);
+    $this->app->instance(TesseractMultiPassOcrService::class, $mock);
 
     $ocr = $this->app->make(OcrService::class);
     $ocr->extractTextFromPath($rel, 'test.png', 'off');
@@ -54,36 +61,21 @@ test('named preset uses derived path for final OCR input when preprocess succeed
     }
     file_put_contents($abs, $png !== false ? $png : '');
 
-    $derived = storage_path('app/private/ocr-preprocessed/derived_'.uniqid('', true).'.png');
-    $dDir = dirname($derived);
-    if (! is_dir($dDir)) {
-        mkdir($dDir, 0755, true);
-    }
+    $derived = sys_get_temp_dir().DIRECTORY_SEPARATOR.'ocr_derived_'.uniqid('', true).'.png';
     file_put_contents($derived, 'derived-bytes');
 
-    $mock = Mockery::mock(ImagePreprocessingService::class);
-    $mock->shouldReceive('shouldPreprocess')->once()->andReturn(true);
-    $mock->shouldReceive('preprocessForOcr')->once()->andReturn([
-        'used' => true,
-        'preset' => 'noisy_scan',
-        'output_path' => 'ocr-preprocessed/'.basename($derived),
-        'output_absolute_path' => $derived,
-        'source_path' => $abs,
-        'fallback_used' => false,
-        'meta' => [
-            'driver' => 'imagick',
-            'steps' => ['adaptive_threshold_div_22_off_14'],
-            'width' => 3,
-            'height' => 3,
-            'original_width' => 1,
-            'original_height' => 1,
-            'output_format' => 'png',
-            'output_filesize_bytes' => 13,
-            'applied_steps' => ['adaptive_threshold_div_22_off_14'],
-            'preset_name' => 'noisy_scan',
+    $mock = Mockery::mock(TesseractMultiPassOcrService::class);
+    $mock->shouldReceive('extractFromImage')->once()->with($abs, $rel, 'test.png', 'noisy_scan')->andReturn([
+        'text' => '',
+        'debug' => [
+            'kind' => 'image',
+            'preprocess_used' => true,
+            'final_ocr_input_path' => $derived,
+            'original_absolute_path' => $abs,
+            'derived_absolute_path' => $derived,
         ],
     ]);
-    $this->app->instance(ImagePreprocessingService::class, $mock);
+    $this->app->instance(TesseractMultiPassOcrService::class, $mock);
 
     $beforeHash = md5_file($abs);
 
@@ -117,35 +109,19 @@ test('debug keep derived skips unlink when app.debug and config enabled', functi
     }
     file_put_contents($abs, $png !== false ? $png : '');
 
-    $derived = storage_path('app/private/ocr-preprocessed/keep_'.uniqid('', true).'.png');
-    if (! is_dir(dirname($derived))) {
-        mkdir(dirname($derived), 0755, true);
-    }
+    $derived = sys_get_temp_dir().DIRECTORY_SEPARATOR.'ocr_keep_'.uniqid('', true).'.png';
     file_put_contents($derived, 'keep-me');
 
-    $mock = Mockery::mock(ImagePreprocessingService::class);
-    $mock->shouldReceive('shouldPreprocess')->once()->andReturn(true);
-    $mock->shouldReceive('preprocessForOcr')->once()->andReturn([
-        'used' => true,
-        'preset' => 'marathi_printed',
-        'output_path' => 'ocr-preprocessed/'.basename($derived),
-        'output_absolute_path' => $derived,
-        'source_path' => $abs,
-        'fallback_used' => false,
-        'meta' => [
-            'driver' => 'imagick',
-            'steps' => ['grayscale'],
-            'width' => 2,
-            'height' => 2,
-            'original_width' => 1,
-            'original_height' => 1,
-            'output_format' => 'png',
-            'output_filesize_bytes' => 6,
-            'applied_steps' => ['grayscale'],
-            'preset_name' => 'marathi_printed',
+    $mock = Mockery::mock(TesseractMultiPassOcrService::class);
+    $mock->shouldReceive('extractFromImage')->once()->with($abs, $rel, 'test.png', 'marathi_printed')->andReturn([
+        'text' => '',
+        'debug' => [
+            'kind' => 'image',
+            'derived_kept_on_disk' => true,
+            'derived_absolute_path' => $derived,
         ],
     ]);
-    $this->app->instance(ImagePreprocessingService::class, $mock);
+    $this->app->instance(TesseractMultiPassOcrService::class, $mock);
 
     $ocr = $this->app->make(OcrService::class);
     $ocr->extractTextFromPath($rel, 'test.png', 'marathi_printed');
