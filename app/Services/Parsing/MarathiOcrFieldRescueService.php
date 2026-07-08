@@ -24,6 +24,8 @@ final class MarathiOcrFieldRescueService
         $gender = $this->rescueGender($lines);
         if ($gender !== null && ($this->empty($core['gender'] ?? null) || $gender['source'] === 'explicit')) {
             $core['gender'] = $gender['value'];
+        } elseif ($gender === null && ! $this->empty($core['gender'] ?? null) && $this->genderLooksDrivenByFamilyHonorific($lines)) {
+            $core['gender'] = null;
         }
 
         $dob = $this->rescueDateOfBirth($lines);
@@ -54,9 +56,7 @@ final class MarathiOcrFieldRescueService
         }
 
         $occupation = $this->rescueOccupation($lines);
-        if ($occupation !== null
-            && $this->shouldReplaceShortText($core['occupation_title'] ?? null)
-            && $this->empty($core['company_name'] ?? null)) {
+        if ($occupation !== null && $this->shouldReplaceOccupation($core['occupation_title'] ?? null)) {
             $core['occupation_title'] = $occupation;
         }
 
@@ -109,6 +109,17 @@ final class MarathiOcrFieldRescueService
             }
         }
 
+        foreach ($this->candidateScopedLines($lines) as $line) {
+            if ($this->hasRelationContext($line) || ! $this->hasCandidateHonorific($line)) {
+                continue;
+            }
+
+            $name = $this->cleanName($line);
+            if ($this->validRescuedName($name)) {
+                return $name;
+            }
+        }
+
         return null;
     }
 
@@ -140,14 +151,15 @@ final class MarathiOcrFieldRescueService
             }
         }
 
-        foreach ($lines as $line) {
+        foreach ($this->candidateScopedLines($lines) as $line) {
             if ($this->hasRelationContext($line)) {
                 continue;
             }
-            if (preg_match('/(?:मुलीचे\s+नां?व|मुलगी|वधू|कु\.?|कुमारी)/u', $line) === 1) {
+
+            if ($this->lineHasFemaleCandidateSignal($line)) {
                 return ['value' => 'female', 'source' => 'label'];
             }
-            if (preg_match('/(?:मुलाचे\s+नां?व|मुलगा|वराचे\s+नां?व|चि\.?|चिरंजीव)/u', $line) === 1) {
+            if ($this->lineHasMaleCandidateSignal($line)) {
                 return ['value' => 'male', 'source' => 'label'];
             }
         }
@@ -321,12 +333,25 @@ final class MarathiOcrFieldRescueService
             if (! $this->lineHasMobileLabel($line) || $this->isFooterNoise($line)) {
                 continue;
             }
-            if ($this->hasNearbyParentContext($lines, $index)) {
+            if ($this->hasRelationContext($line)) {
+                continue;
+            }
+            if (($this->hasNearbyParentContext($lines, $index) && ! $this->lineHasDirectContactLabel($line))
+                || $this->hasNonContactPhoneContext($line)) {
                 continue;
             }
 
             foreach ($this->extractPhones($line) as $phone) {
                 return $phone;
+            }
+
+            $nextLine = $lines[$index + 1] ?? null;
+            if (is_string($nextLine)
+                && ! $this->hasRelationContext($nextLine)
+                && ! $this->hasNonContactPhoneContext($nextLine)) {
+                foreach ($this->extractPhones($nextLine) as $phone) {
+                    return $phone;
+                }
             }
         }
 
@@ -406,13 +431,14 @@ final class MarathiOcrFieldRescueService
      */
     private function rescueOccupation(array $lines): ?string
     {
-        foreach ($lines as $line) {
-            if (preg_match('/नोकरी|व्यवसाय|पद|occupation|job|designation/ui', $line) !== 1) {
+        foreach ($this->candidateScopedLines($lines) as $line) {
+            if (preg_match('/नोकरी|नौकरी|व्यवसाय|पद|कंपनी|वेतन|उत्पन्न|occupation|profession|job|designation|company|salary|income/ui', $line) !== 1) {
                 continue;
             }
-            $value = $this->valueAfterLabelPattern($line, 'नोकरी|व्यवसाय|पद|occupation|job|designation') ?? '';
-            $value = $this->cleanShortText($value);
-            if ($this->validShortField($value)) {
+
+            $value = $this->valueAfterLabelPattern($line, 'नोकरी|नौकरी|व्यवसाय|पद|कंपनी|वेतन|उत्पन्न|occupation|profession|job|designation|company|salary|income') ?? '';
+            $value = $this->cleanOccupationText($value);
+            if ($this->validOccupationField($value, $line)) {
                 return $value;
             }
         }
@@ -441,14 +467,16 @@ final class MarathiOcrFieldRescueService
     {
         $value = $this->stopAtNextCandidateField($value);
         $value = preg_replace('/\([^)]*\)/u', '', $value) ?? $value;
-        $value = preg_replace('/^(?:[a-z]{1,5}\s+){1,4}(?=[\x{0900}-\x{097F}])/iu', '', $value) ?? $value;
-        $value = preg_replace('/\s+(?:[a-z]{1,5}\s*){1,5}$/iu', '', $value) ?? $value;
+        $value = $this->stripNameEdgeNoiseTokens($value);
         $value = $this->trimEdgePunctuation($value);
         do {
             $before = $value;
             $value = preg_replace('/^(?:bio\s*data|candidate|full\s*name|name)\s*[:：\-–—.\s]+/iu', '', $value) ?? $value;
+            $value = $this->stripNameEdgeNoiseTokens($value);
             $value = $this->stripCandidateNameLabelPrefix($value);
+            $value = $this->stripNameEdgeNoiseTokens($value);
             $value = $this->stripNameHonorificPrefix($value);
+            $value = $this->stripNameEdgeNoiseTokens($value);
             $value = $this->trimEdgePunctuation($value);
         } while ($value !== $before);
 
@@ -522,6 +550,15 @@ final class MarathiOcrFieldRescueService
         return trim(preg_replace('/\s+/u', ' ', $this->trimEdgePunctuation($value)) ?? $value);
     }
 
+    private function cleanOccupationText(string $value): string
+    {
+        $value = $this->stopAtNextCandidateField($value);
+        $value = preg_replace('/(?:मोबाईल|मोबाइल|मोबा\.?|मो\.?\s*नं\.?|संपर्क)\s*[:\-]?\s*(?:\+?91[\s\-]*)?[6-9][0-9\s\-\/]{9,14}/ui', '', $value) ?? $value;
+        $value = preg_replace('/(?<!\d)[6-9]\d{9}(?!\d)/u', '', OcrNormalize::normalizeDigits($value)) ?? $value;
+
+        return trim(preg_replace('/\s+/u', ' ', $this->trimEdgePunctuation($value)) ?? $value);
+    }
+
     private function validCandidateName(string $name): bool
     {
         if ($name === '' || mb_strlen($name, 'UTF-8') > 80 || $this->hasRelationContext($name) || $this->hasAnyFieldLabel($name)) {
@@ -568,6 +605,10 @@ final class MarathiOcrFieldRescueService
             return true;
         }
 
+        if ($this->hasCandidateHonorific($value) && $this->validRescuedName($this->cleanName($value))) {
+            return true;
+        }
+
         return ! $this->validCandidateName($this->cleanName($value));
     }
 
@@ -578,6 +619,19 @@ final class MarathiOcrFieldRescueService
         }
 
         return ! $this->validShortField($value);
+    }
+
+    private function shouldReplaceOccupation(mixed $value): bool
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return true;
+        }
+
+        if (in_array(trim($value), ['नोकरी', 'नौकरी', 'व्यवसाय', 'job', 'occupation'], true)) {
+            return true;
+        }
+
+        return ! $this->validOccupationField($value, '');
     }
 
     private function validShortLocation(string $value): bool
@@ -594,6 +648,27 @@ final class MarathiOcrFieldRescueService
             && preg_match('/\p{L}|\d/u', $value) === 1
             && ! $this->hasRelationContext($value)
             && $this->junkRatio($value) <= 0.45;
+    }
+
+    private function validOccupationField(string $value, string $sourceLine): bool
+    {
+        if ($value === ''
+            || mb_strlen($value, 'UTF-8') > 120
+            || preg_match('/\p{L}|\d/u', $value) !== 1
+            || $this->hasRelationContext($value)
+            || $this->junkRatio($value) > 0.45
+            || $this->looksLikeEducationOnly($value)
+            || $this->looksLikeMoneyOnly($value)) {
+            return false;
+        }
+
+        if (preg_match('/^व्यवसाय/u', trim($sourceLine)) === 1
+            && preg_match('/^[A-Za-z][A-Za-z0-9&().\/\-\s]+,\s*[A-Za-z][A-Za-z\s]+(?:\s*[-–—]?\s*\d{3,})?\.?$/u', $value) === 1
+            && preg_match('/\b(?:consultant|analyst|engineer|developer|manager|executive|officer|architect|accountant|teacher|lecturer|professor|designer|sap|finance|hr|marketing|banker|clerk|specialist|lead|senior)\b/ui', $value) !== 1) {
+            return false;
+        }
+
+        return true;
     }
 
     private function validHeightCm(mixed $value): bool
@@ -631,9 +706,125 @@ final class MarathiOcrFieldRescueService
             || preg_match('/\b(?:father|mother|brother|sister|uncle|aunt)\b/ui', $value) === 1;
     }
 
+    private function hasNonContactPhoneContext(string $line): bool
+    {
+        return preg_match('/(?:जन्म\s*तारीख|जन्मतारीख|जन्म\s*दिनांक|जन्म\s*वेळ|जन्मवेळ|जमीन|शेती|एकर|उत्पन्न|वेतन|पत्ता|पिन\s*कोड|pincode|pin\s*code|कुंडली|पत्रिका|नक्षत्र|रास|राशी|गण|नाडी|देवक|कुलदैवत)/ui', $line) === 1;
+    }
+
     private function hasAnyFieldLabel(string $value): bool
     {
         return preg_match('/(?:^|\s)(?:मुलाचे\s+नां?व|मुलीचे\s+नां?व|वधूचे\s+नां?व|वराचे\s+नां?व|जन्म\s*तारीख|जन्मतारीख|जन्म\s*दिनांक|जन्मदि|जन्म\s*ठिकाण|जन्म\s*स्थळ|उंची|ऊंची|लिंग|शिक्षण|शैक्षणिक|नोकरी|व्यवसाय|पद|मोबाईल|मोबाइल|संपर्क|पत्ता|धर्म|जात)(?:[\s:：\-–—.]|$)/ui', $value) === 1;
+    }
+
+    /**
+     * @param  list<string>  $lines
+     * @return list<string>
+     */
+    private function candidateScopedLines(array $lines): array
+    {
+        $out = [];
+        foreach ($lines as $line) {
+            if ($this->isFamilySectionBoundary($line)) {
+                break;
+            }
+            $out[] = $line;
+        }
+
+        return $out;
+    }
+
+    private function isFamilySectionBoundary(string $line): bool
+    {
+        return preg_match('/^\s*(?:कौटुंबिक\s+माहिती|कौटुंबिक\s+तपशील|वडील|वडिलांचे|वडीलांचे|पित्याचे|आई|आईचे|मातेचे|भाऊ|बहिण|बहीण|मुलाचे\s+भाऊ|मुलाची\s+बहीण|मुलाची\s+बहिण|मामा|मावशी|माऊशी|आत्या|चुलते|काका|आजोळ|नातेवाईक|इतर\s+नातेवाईक|पाहुणे)(?:[\s:：\-–—.]|$)/u', $line) === 1;
+    }
+
+    private function lineHasMaleCandidateSignal(string $line): bool
+    {
+        return preg_match('/(?:मुलाचे\s+नां?व|मुलगा|वराचे\s+नां?व|(?<!\p{L})वर(?!\p{L}))/u', $line) === 1
+            || $this->hasMaleCandidateHonorific($line);
+    }
+
+    private function lineHasFemaleCandidateSignal(string $line): bool
+    {
+        return preg_match('/(?:मुलीचे\s+नां?व|मुलगी|वधूचे\s+नां?व|(?<!\p{L})वधू(?!\p{L}))/u', $line) === 1
+            || $this->hasFemaleCandidateHonorific($line);
+    }
+
+    private function hasCandidateHonorific(string $line): bool
+    {
+        return $this->hasMaleCandidateHonorific($line) || $this->hasFemaleCandidateHonorific($line);
+    }
+
+    private function hasMaleCandidateHonorific(string $line): bool
+    {
+        return preg_match('/(?:^|[\s:：\-–—(])(?:चि\.|चि\s+|चिरंजीव\s*)\s*[\p{L}\p{M}]/u', $line) === 1;
+    }
+
+    private function hasFemaleCandidateHonorific(string $line): bool
+    {
+        return preg_match('/(?:^|[\s:：\-–—(])(?:कु\.|कुं\.?|कु\s+|कुमारी\s*)\s*[\p{L}\p{M}]/u', $line) === 1;
+    }
+
+    /**
+     * @param  list<string>  $lines
+     */
+    private function genderLooksDrivenByFamilyHonorific(array $lines): bool
+    {
+        foreach ($this->candidateScopedLines($lines) as $line) {
+            if (! $this->hasRelationContext($line)
+                && ($this->lineHasMaleCandidateSignal($line) || $this->lineHasFemaleCandidateSignal($line))) {
+                return false;
+            }
+        }
+
+        foreach ($lines as $line) {
+            if ($this->hasRelationContext($line) && $this->hasCandidateHonorific($line)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function lineHasDirectContactLabel(string $line): bool
+    {
+        return preg_match('/(?:मोबाईल|मोबाइल|मो\.?\s*नं\.?|संपर्क|mobile|phone|contact)/ui', $line) === 1;
+    }
+
+    private function stripNameEdgeNoiseTokens(string $value): string
+    {
+        $value = OcrNormalize::normalizeDigits($value);
+        $value = preg_replace('/^\s*(?:\d+\s*)+/u', '', $value) ?? $value;
+
+        if (preg_match('/[\x{0900}-\x{097F}]/u', $value) !== 1) {
+            return trim($value);
+        }
+
+        $value = preg_replace('/^(?:[a-z]{1,5}\s+){1,4}(?=[\x{0900}-\x{097F}])/iu', '', $value) ?? $value;
+        $value = preg_replace('/\s+(?:[a-z]{1,5}\s*){1,5}$/iu', '', $value) ?? $value;
+
+        $noise = '(?:ae|et|ner|ia|s|च्च)';
+        do {
+            $before = $value;
+            $value = preg_replace('/^\s*(?:\d+|'.$noise.')\s+/iu', '', $value) ?? $value;
+            $value = preg_replace('/\s+(?:\d+|'.$noise.')\s*$/iu', '', $value) ?? $value;
+            $value = $this->trimEdgePunctuation($value);
+        } while ($value !== $before);
+
+        return trim($value);
+    }
+
+    private function looksLikeEducationOnly(string $value): bool
+    {
+        return preg_match('/^(?:B\.?\s*(?:Com|A|Sc|E|Tech)|M\.?\s*(?:Com|A|Sc|E|Tech)|MBA|BBA|BCOM|BSC|BE|ME|MTECH|Diploma|ITI|HSC|SSC|शिक्षण|पदवी)/ui', trim($value)) === 1
+            && preg_match('/\b(?:consultant|analyst|engineer|developer|manager|executive|officer|teacher|lecturer|professor|company|bank|शेती|नोकरी|व्यवसाय)\b/ui', $value) !== 1;
+    }
+
+    private function looksLikeMoneyOnly(string $value): bool
+    {
+        $normalized = str_replace(',', '', OcrNormalize::normalizeDigits($value));
+
+        return preg_match('/^[\s₹RsINR0-9.,\/\-]+(?:लाख|lac|lpa|per\s*month|per\s*annum|वार्षिक|monthly|yearly)?\s*$/ui', $normalized) === 1;
     }
 
     private function looksLikeAddress(string $value): bool

@@ -883,6 +883,134 @@ HTML;
         $this->assertNotContains('9604289289', $nums);
     }
 
+    public function test_normalized_parser_cleans_male_candidate_label_name_and_infers_gender(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+मुलाचे नाव चि.अनिकेत जयवंत पाटील
+मोबाईल : ९८२४६४३९२५
+TXT);
+
+        $core = $parsed['core'] ?? [];
+
+        $this->assertSame('अनिकेत जयवंत पाटील', (string) ($core['full_name'] ?? ''));
+        $this->assertSame('male', (string) ($core['gender'] ?? ''));
+    }
+
+    public function test_normalized_parser_cleans_female_candidate_label_name_and_infers_gender(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+मुलीचे नाव कु.अक्षदा अनिल कामठे
+मोबाईल : ९८२४६४३९२५
+TXT);
+
+        $core = $parsed['core'] ?? [];
+
+        $this->assertSame('अक्षदा अनिल कामठे', (string) ($core['full_name'] ?? ''));
+        $this->assertSame('female', (string) ($core['gender'] ?? ''));
+    }
+
+    public function test_normalized_parser_infers_male_from_standalone_chi_candidate_line(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+चि. संदीप बंडा मगदूम
+जन्म तारीख : ०४/०३/२०००
+TXT);
+
+        $core = $parsed['core'] ?? [];
+
+        $this->assertSame('संदीप बंडा मगदूम', (string) ($core['full_name'] ?? ''));
+        $this->assertSame('male', (string) ($core['gender'] ?? ''));
+    }
+
+    public function test_normalized_parser_infers_female_from_standalone_ku_candidate_line(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+कु. अंजली गोरखनाथ जाधव
+जन्म तारीख : १४/०६/२००१
+TXT);
+
+        $core = $parsed['core'] ?? [];
+
+        $this->assertSame('अंजली गोरखनाथ जाधव', (string) ($core['full_name'] ?? ''));
+        $this->assertSame('female', (string) ($core['gender'] ?? ''));
+    }
+
+    public function test_normalized_parser_family_relation_honorifics_do_not_drive_candidate_gender(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+नाव : लीना दत्तात्रय खालकर
+वडील : श्री. दत्तात्रय खालकर
+भाऊ : चि. संदीप दत्तात्रय खालकर
+बहिण : कु. स्नेहा दत्तात्रय खालकर
+मोबाईल : ९८२४६४३९२५
+TXT);
+
+        $core = $parsed['core'] ?? [];
+
+        $this->assertSame('लीना दत्तात्रय खालकर', (string) ($core['full_name'] ?? ''));
+        $this->assertNull($core['gender'] ?? null);
+    }
+
+    public function test_normalized_parser_maps_label_anchored_nokari_to_candidate_occupation(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+मुलाचे नाव चि. अनिकेत जयवंत पाटील
+नोकरी: Capgemini, SAP Consultant, Senior Analyst
+शिक्षण: B.Com Computer
+TXT);
+
+        $core = $parsed['core'] ?? [];
+
+        $this->assertSame('Capgemini, SAP Consultant, Senior Analyst', (string) ($core['occupation_title'] ?? ''));
+        $this->assertSame('B.Com Computer', (string) ($core['highest_education'] ?? ''));
+    }
+
+    public function test_normalized_parser_maps_vyavsay_sheti_to_candidate_occupation(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+मुलाचे नाव चि. अनिकेत जयवंत पाटील
+व्यवसाय: शेती
+TXT);
+
+        $this->assertSame('शेती', (string) (($parsed['core'] ?? [])['occupation_title'] ?? ''));
+    }
+
+    public function test_normalized_parser_maps_bank_nokari_to_occupation_not_education(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+मुलाचे नाव चि. अनिकेत जयवंत पाटील
+नोकरी: ICICI Bank, Karad
+TXT);
+
+        $core = $parsed['core'] ?? [];
+
+        $this->assertSame('ICICI Bank, Karad', (string) ($core['occupation_title'] ?? ''));
+        $this->assertTrue(($core['highest_education'] ?? null) === null || (string) ($core['highest_education'] ?? '') === '');
+    }
+
+    public function test_normalized_parser_prefers_mobile_label_over_numeric_garbage(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+मुलाचे नाव चि. अनिकेत जयवंत पाटील
+जन्म तारीख : ०४/०३/२०००
+उत्पन्न : ९९८८७७६६५५
+मोबाईल : ९८२४६४३९२५
+TXT);
+
+        $this->assertSame('9824643925', (string) (($parsed['core'] ?? [])['primary_contact_number'] ?? ''));
+    }
+
+    public function test_normalized_parser_direct_contact_beats_family_relative_mobile(): void
+    {
+        $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
+मुलाचे नाव चि. अनिकेत जयवंत पाटील
+मामा : श्री. सुरेश पाटील मो. ९८२४६४३९२५
+मोबाईल : ९७६५४३२१०९
+TXT);
+
+        $this->assertSame('9765432109', (string) (($parsed['core'] ?? [])['primary_contact_number'] ?? ''));
+    }
+
     public function test_normalized_parser_rescues_noisy_marathi_ocr_candidate_fields(): void
     {
         $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
