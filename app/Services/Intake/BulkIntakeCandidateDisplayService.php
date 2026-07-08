@@ -7,6 +7,7 @@ use App\Models\BulkIntakeBatchItem;
 use App\Models\MasterGender;
 use App\Models\OccupationCustom;
 use App\Models\OccupationMaster;
+use App\Services\Ocr\OcrNormalize;
 use Illuminate\Support\Carbon;
 
 class BulkIntakeCandidateDisplayService
@@ -384,7 +385,7 @@ class BulkIntakeCandidateDisplayService
                 }
 
                 return [
-                    'value' => ((string) (int) round($height)).' cm',
+                    'value' => $this->heightDisplayFromCm($height),
                     'needs_review' => $needsReview,
                 ];
             }
@@ -399,12 +400,71 @@ class BulkIntakeCandidateDisplayService
             'height',
         ]);
         if ($height !== null && mb_strlen($height, 'UTF-8') <= 30 && preg_match('/\d/u', $height)) {
+            $heightCmFromText = $this->heightCmFromText($height);
+            if ($heightCmFromText !== null) {
+                $needsReview = ! $isReviewedSnapshot || $heightCmFromText >= 190;
+                if ($needsReview) {
+                    $warnings[] = $heightCmFromText >= 190 ? 'height_review' : 'height_text_review';
+                }
+
+                return [
+                    'value' => $this->heightDisplayFromCm($heightCmFromText),
+                    'needs_review' => $needsReview,
+                ];
+            }
+
             $warnings[] = 'height_text_review';
 
             return ['value' => $height, 'needs_review' => true];
         }
 
         return ['value' => null, 'needs_review' => false];
+    }
+
+    private function heightDisplayFromCm(float $heightCm): string
+    {
+        $totalInches = (int) round($heightCm / 2.54);
+        $feet = intdiv($totalInches, 12);
+        $inches = $totalInches % 12;
+
+        return $feet.' ft '.$inches.' in';
+    }
+
+    private function heightCmFromText(string $value): ?float
+    {
+        $text = OcrNormalize::normalizeDigits($this->normalizeDisplayString($value));
+
+        if (preg_match('/^\s*(\d{3})(?:\.\d+)?\s*(?:cm|cms|centimeter|centimeters)?\s*$/i', $text, $m) === 1) {
+            $heightCm = (float) $m[1];
+
+            return $heightCm >= 120 && $heightCm <= 220 ? $heightCm : null;
+        }
+
+        if (preg_match('/^\s*([3-7])\s*(?:[\'’′]|ft\.?|feet|foot)\s*([0-9]{1,2})?\s*(?:"|”|″|in\.?|inch|inches)?\s*$/iu', $text, $m) === 1) {
+            $feet = (int) $m[1];
+            $inches = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : 0;
+            if ($inches > 11) {
+                return null;
+            }
+
+            $heightCm = ($feet * 12 + $inches) * 2.54;
+
+            return $heightCm >= 120 && $heightCm <= 220 ? $heightCm : null;
+        }
+
+        $normalized = OcrNormalize::normalizeHeight($text);
+        if (is_string($normalized) && preg_match('/([3-7])\s*[\'’′]\s*([0-9]{1,2})\s*(?:"|”|″)?/u', $normalized, $m) === 1) {
+            $inches = (int) $m[2];
+            if ($inches > 11) {
+                return null;
+            }
+
+            $heightCm = (((int) $m[1]) * 12 + $inches) * 2.54;
+
+            return $heightCm >= 120 && $heightCm <= 220 ? $heightCm : null;
+        }
+
+        return null;
     }
 
     /**

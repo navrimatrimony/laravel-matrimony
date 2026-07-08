@@ -17,6 +17,8 @@ test('admin bulk intake route names exist', function () {
         ->and(route('admin.bulk-intakes.items.queue-free-parse', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/queue-free-parse'))
         ->and(route('admin.bulk-intakes.items.mark-needs-review', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/mark-needs-review'))
         ->and(route('admin.bulk-intakes.items.clear-needs-review', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/clear-needs-review'))
+        ->and(route('admin.bulk-intakes.items.mark-duplicate', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/mark-duplicate'))
+        ->and(route('admin.bulk-intakes.items.clear-duplicate', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/clear-duplicate'))
         ->and(route('admin.bulk-intakes.items.correct-candidate', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/correct-candidate'))
         ->and(route('admin.bulk-intakes.items.correct-candidate.update', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/correct-candidate'))
         ->and(route('admin.bulk-intakes.items.assign-owner', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/assign-owner'))
@@ -164,6 +166,16 @@ test('non admin cannot access admin bulk intake routes', function () {
 
     $this->actingAs($member)
         ->post(route('admin.bulk-intakes.items.clear-needs-review', [$batch, $item]))
+        ->assertForbidden();
+
+    $this->actingAs($member)
+        ->post(route('admin.bulk-intakes.items.mark-duplicate', [$batch, $item]), [
+            'reason' => 'Forbidden duplicate mark',
+        ])
+        ->assertForbidden();
+
+    $this->actingAs($member)
+        ->post(route('admin.bulk-intakes.items.clear-duplicate', [$batch, $item]))
         ->assertForbidden();
 
     $this->actingAs($member)

@@ -354,6 +354,7 @@ class AdminBulkIntakeController extends Controller
             'location' => ['nullable', 'string', 'max:255'],
             'location_input' => ['nullable', 'string', 'max:255'],
             'location_id' => ['nullable', 'integer', 'min:1'],
+            'after_save' => ['nullable', Rule::in(['stay'])],
         ]);
 
         if ($educationService->mergeMultiselectEducationIntoRequest($request)) {
@@ -362,8 +363,17 @@ class AdminBulkIntakeController extends Controller
 
         $correctionService->saveCorrection($bulkIntakeBatchItem, $request->user(), $validated);
 
+        if (($validated['after_save'] ?? null) === 'stay') {
+            return redirect()
+                ->route('admin.bulk-intakes.items.correct-candidate', [$bulkIntakeBatch, $bulkIntakeBatchItem])
+                ->with('success', 'Candidate correction saved as reviewed snapshot. Profile data was not modified.');
+        }
+
         return redirect()
-            ->route('admin.bulk-intakes.items.correct-candidate', [$bulkIntakeBatch, $bulkIntakeBatchItem])
+            ->route('admin.bulk-intakes.show', [
+                'bulkIntakeBatch' => $bulkIntakeBatch,
+                'highlight_item' => $bulkIntakeBatchItem->id,
+            ])
             ->with('success', 'Candidate correction saved as reviewed snapshot. Profile data was not modified.');
     }
 
@@ -563,6 +573,76 @@ class AdminBulkIntakeController extends Controller
         return redirect()
             ->route('admin.bulk-intakes.show', $bulkIntakeBatch)
             ->with('success', 'Bulk intake item review flag cleared.');
+    }
+
+    public function markItemManualDuplicate(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $validator = Validator::make($request->all(), [
+            'matched_biodata_intake_id' => ['nullable', 'integer', 'exists:biodata_intakes,id'],
+            'matched_profile_id' => ['nullable', 'integer', 'exists:matrimony_profiles,id'],
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+        $validator->after(function ($validator) use ($request): void {
+            $hasIntake = filled($request->input('matched_biodata_intake_id'));
+            $hasProfile = filled($request->input('matched_profile_id'));
+            $hasReason = trim((string) $request->input('reason', '')) !== '';
+            if (! $hasIntake && ! $hasProfile && ! $hasReason) {
+                $validator->errors()->add('duplicate_review', 'Provide a matched intake, matched profile, or reason.');
+            }
+        });
+        $validated = $validator->validate();
+
+        $meta = is_array($bulkIntakeBatchItem->item_meta_json) ? $bulkIntakeBatchItem->item_meta_json : [];
+        $meta['duplicate_review'] = [
+            'status' => 'manual_duplicate',
+            'matched_biodata_intake_id' => isset($validated['matched_biodata_intake_id']) ? (int) $validated['matched_biodata_intake_id'] : null,
+            'matched_profile_id' => isset($validated['matched_profile_id']) ? (int) $validated['matched_profile_id'] : null,
+            'reason' => trim((string) ($validated['reason'] ?? '')) !== '' ? trim((string) $validated['reason']) : null,
+            'marked_by_user_id' => (int) $request->user()->id,
+            'marked_at' => now()->toISOString(),
+            'cleared_by_user_id' => null,
+            'cleared_at' => null,
+        ];
+
+        $bulkIntakeBatchItem->forceFill(['item_meta_json' => $meta])->save();
+
+        return redirect()
+            ->back()
+            ->with('success', 'Bulk intake item marked as manual duplicate.');
+    }
+
+    public function clearItemManualDuplicate(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $meta = is_array($bulkIntakeBatchItem->item_meta_json) ? $bulkIntakeBatchItem->item_meta_json : [];
+        $existing = is_array($meta['duplicate_review'] ?? null) ? $meta['duplicate_review'] : [];
+        $meta['duplicate_review'] = [
+            'status' => 'cleared',
+            'matched_biodata_intake_id' => isset($existing['matched_biodata_intake_id']) ? (int) $existing['matched_biodata_intake_id'] : null,
+            'matched_profile_id' => isset($existing['matched_profile_id']) ? (int) $existing['matched_profile_id'] : null,
+            'reason' => is_string($existing['reason'] ?? null) && trim($existing['reason']) !== '' ? trim($existing['reason']) : null,
+            'marked_by_user_id' => isset($existing['marked_by_user_id']) ? (int) $existing['marked_by_user_id'] : null,
+            'marked_at' => is_string($existing['marked_at'] ?? null) ? $existing['marked_at'] : null,
+            'cleared_by_user_id' => (int) $request->user()->id,
+            'cleared_at' => now()->toISOString(),
+        ];
+
+        $bulkIntakeBatchItem->forceFill(['item_meta_json' => $meta])->save();
+
+        return redirect()
+            ->back()
+            ->with('success', 'Bulk intake item manual duplicate flag cleared.');
     }
 
     public function queueFreeParseItem(

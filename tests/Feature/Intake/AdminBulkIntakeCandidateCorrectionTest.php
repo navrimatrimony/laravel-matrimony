@@ -76,6 +76,8 @@ test('admin can open bulk candidate correction page', function () {
         ->assertSee('data-testid="bulk-image-zoom-toolbar"', false)
         ->assertSee('data-testid="bulk-image-zoom-container"', false)
         ->assertSee('data-testid="bulk-image-preview"', false)
+        ->assertSee('loading="lazy"', false)
+        ->assertSee('decoding="async"', false)
         ->assertSee('data-bulk-image-zoom', false)
         ->assertSee('data-zoom-action="in"', false)
         ->assertSee('data-zoom-action="out"', false)
@@ -143,6 +145,10 @@ test('admin can save seven field correction without mutating evidence or bulk it
     $item = candidateCorrectionItem($batch, $intake);
     $userCountBefore = User::query()->count();
     $profileCountBefore = MatrimonyProfile::query()->count();
+    $showRoute = route('admin.bulk-intakes.show', [
+        'bulkIntakeBatch' => $batch,
+        'highlight_item' => $item->id,
+    ]);
 
     $this->actingAs($admin)
         ->patch(route('admin.bulk-intakes.items.correct-candidate.update', [$batch, $item]), [
@@ -154,7 +160,7 @@ test('admin can save seven field correction without mutating evidence or bulk it
             'education' => 'MCA',
             'location' => 'Pune',
         ])
-        ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertRedirect($showRoute)
         ->assertSessionHas('success');
 
     $intake->refresh();
@@ -182,12 +188,14 @@ test('admin can save seven field correction without mutating evidence or bulk it
         ->and(MatrimonyProfile::query()->count())->toBe($profileCountBefore);
 
     $this->actingAs($admin)
-        ->get(route('admin.bulk-intakes.show', $batch))
+        ->get($showRoute)
         ->assertOk()
+        ->assertSee('id="bulk-item-'.$item->id.'"', false)
         ->assertSee('Corrected Candidate', false)
         ->assertSee('Mobile: 9876543210', false)
         ->assertSee('1998-04-15', false)
-        ->assertSee('168 cm', false)
+        ->assertSee('5 ft 6 in', false)
+        ->assertDontSee('168 cm', false)
         ->assertSee('Gender: Female', false)
         ->assertSee('MCA', false)
         ->assertSee('Pune', false)
@@ -231,6 +239,7 @@ test('admin can save centralized education height and location engine payloads i
                 ['t' => 'c', 'x' => 'Custom Marine Engineering Diploma'],
             ]),
             'location_input' => 'Satara',
+            'after_save' => 'stay',
         ])
         ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]));
 
@@ -318,6 +327,7 @@ test('bulk candidate correction normalizes common typed height formats', functio
                 'gender' => 'female',
                 'education' => 'MCA',
                 'location' => 'Pune',
+                'after_save' => 'stay',
             ])
             ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]));
 
@@ -361,6 +371,7 @@ test('typed height and unselected typed location save into reviewed snapshot', f
             'gender' => 'female',
             'education' => 'MCA',
             'location' => 'Typed Free Text Village',
+            'after_save' => 'stay',
         ])
         ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]));
 
@@ -536,6 +547,167 @@ test('bulk candidate correction page renders read only duplicate history hints w
     expect($intake->raw_ocr_text)->toBe('Original duplicate hint OCR text')
         ->and($intake->parsed_json)->toBe($parsed)
         ->and($item->item_meta_json)->toBeNull();
+});
+
+test('admin can mark item manual duplicate from correction page without mutating intake evidence', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $matched = candidateCorrectionIntake([
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Matched Candidate',
+            ],
+        ],
+    ]);
+    $parsed = [
+        'core' => [
+            'full_name' => 'Manual Duplicate Candidate',
+            'primary_contact_number' => '9876543210',
+        ],
+    ];
+    $approval = [
+        'core' => [
+            'full_name' => 'Reviewed Manual Duplicate Candidate',
+            'primary_contact_number' => '9876543210',
+        ],
+    ];
+    $intake = candidateCorrectionIntake([
+        'raw_ocr_text' => 'Original duplicate manual OCR text',
+        'parsed_json' => $parsed,
+        'approval_snapshot_json' => $approval,
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->from(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->post(route('admin.bulk-intakes.items.mark-duplicate', [$batch, $item]), [
+            'matched_biodata_intake_id' => $matched->id,
+            'reason' => 'Same biodata was uploaded before.',
+        ])
+        ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertSessionHas('success');
+
+    $item->refresh();
+    $intake->refresh();
+
+    $duplicateReview = data_get($item->item_meta_json, 'duplicate_review');
+
+    expect($item->item_status)->toBe(BulkIntakeBatchItem::STATUS_INTAKE_CREATED)
+        ->and($duplicateReview)->toBeArray()
+        ->and(data_get($duplicateReview, 'status'))->toBe('manual_duplicate')
+        ->and(data_get($duplicateReview, 'matched_biodata_intake_id'))->toBe($matched->id)
+        ->and(data_get($duplicateReview, 'matched_profile_id'))->toBeNull()
+        ->and(data_get($duplicateReview, 'reason'))->toBe('Same biodata was uploaded before.')
+        ->and(data_get($duplicateReview, 'marked_by_user_id'))->toBe($admin->id)
+        ->and(data_get($duplicateReview, 'marked_at'))->not->toBeNull()
+        ->and(data_get($duplicateReview, 'cleared_by_user_id'))->toBeNull()
+        ->and(data_get($duplicateReview, 'cleared_at'))->toBeNull()
+        ->and(data_get($duplicateReview, 'full_name'))->toBeNull()
+        ->and(data_get($duplicateReview, 'primary_contact_number'))->toBeNull()
+        ->and(data_get($duplicateReview, 'candidate'))->toBeNull()
+        ->and($intake->raw_ocr_text)->toBe('Original duplicate manual OCR text')
+        ->and($intake->parsed_json)->toBe($parsed)
+        ->and($intake->approval_snapshot_json)->toBe($approval);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-correction-manual-duplicate-card"', false)
+        ->assertSee('data-testid="bulk-correction-manual-duplicate-badge"', false)
+        ->assertSee('Manual duplicate', false)
+        ->assertSee('Clear duplicate', false);
+});
+
+test('admin can clear manual duplicate without changing item status or intake evidence', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $parsed = [
+        'core' => [
+            'full_name' => 'Clear Manual Duplicate Candidate',
+        ],
+    ];
+    $approval = [
+        'core' => [
+            'full_name' => 'Reviewed Clear Manual Duplicate Candidate',
+        ],
+    ];
+    $intake = candidateCorrectionIntake([
+        'raw_ocr_text' => 'Original clear duplicate OCR text',
+        'parsed_json' => $parsed,
+        'approval_snapshot_json' => $approval,
+    ]);
+    $item = candidateCorrectionItem($batch, $intake, [
+        'item_meta_json' => [
+            'existing_key' => 'keep',
+            'duplicate_review' => [
+                'status' => 'manual_duplicate',
+                'matched_biodata_intake_id' => $intake->id,
+                'matched_profile_id' => null,
+                'reason' => 'Existing duplicate mark',
+                'marked_by_user_id' => $admin->id,
+                'marked_at' => '2026-07-08T10:00:00+00:00',
+                'cleared_by_user_id' => null,
+                'cleared_at' => null,
+            ],
+        ],
+    ]);
+
+    $this->actingAs($admin)
+        ->from(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->post(route('admin.bulk-intakes.items.clear-duplicate', [$batch, $item]))
+        ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertSessionHas('success');
+
+    $item->refresh();
+    $intake->refresh();
+
+    expect($item->item_status)->toBe(BulkIntakeBatchItem::STATUS_INTAKE_CREATED)
+        ->and(data_get($item->item_meta_json, 'existing_key'))->toBe('keep')
+        ->and(data_get($item->item_meta_json, 'duplicate_review.status'))->toBe('cleared')
+        ->and(data_get($item->item_meta_json, 'duplicate_review.matched_biodata_intake_id'))->toBe($intake->id)
+        ->and(data_get($item->item_meta_json, 'duplicate_review.reason'))->toBe('Existing duplicate mark')
+        ->and(data_get($item->item_meta_json, 'duplicate_review.marked_by_user_id'))->toBe($admin->id)
+        ->and(data_get($item->item_meta_json, 'duplicate_review.cleared_by_user_id'))->toBe($admin->id)
+        ->and(data_get($item->item_meta_json, 'duplicate_review.cleared_at'))->not->toBeNull()
+        ->and($intake->raw_ocr_text)->toBe('Original clear duplicate OCR text')
+        ->and($intake->parsed_json)->toBe($parsed)
+        ->and($intake->approval_snapshot_json)->toBe($approval);
+});
+
+test('non admin cannot mark or clear manual duplicate', function () {
+    $admin = candidateCorrectionAdminUser();
+    $member = User::factory()->create([
+        'is_admin' => false,
+        'admin_role' => null,
+    ]);
+    $batch = candidateCorrectionBatch($admin);
+    $intake = candidateCorrectionIntake([
+        'raw_ocr_text' => 'Original non admin duplicate OCR text',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Non Admin Candidate',
+            ],
+        ],
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($member)
+        ->post(route('admin.bulk-intakes.items.mark-duplicate', [$batch, $item]), [
+            'reason' => 'Forbidden duplicate mark',
+        ])
+        ->assertForbidden();
+
+    $this->actingAs($member)
+        ->post(route('admin.bulk-intakes.items.clear-duplicate', [$batch, $item]))
+        ->assertForbidden();
+
+    $item->refresh();
+    $intake->refresh();
+
+    expect($item->item_status)->toBe(BulkIntakeBatchItem::STATUS_INTAKE_CREATED)
+        ->and($item->item_meta_json)->toBeNull()
+        ->and($intake->raw_ocr_text)->toBe('Original non admin duplicate OCR text')
+        ->and(data_get($intake->parsed_json, 'core.full_name'))->toBe('Non Admin Candidate');
 });
 
 test('bulk candidate correction save is blocked after intake approval or lock', function () {

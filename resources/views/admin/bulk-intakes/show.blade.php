@@ -29,6 +29,7 @@
     $candidateByItemId = $candidateByItemId ?? [];
     $duplicateHintsByItemId = $duplicateHintsByItemId ?? [];
     $missingDisplay = '—';
+    $highlightItemId = (int) request()->query('highlight_item', 0);
 @endphp
 <div class="space-y-6">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -208,6 +209,9 @@
                                     'display_warnings' => [],
                                 ];
                                 $duplicateHints = is_array($duplicateHintsByItemId[$item->id] ?? null) ? $duplicateHintsByItemId[$item->id] : [];
+                                $manualDuplicateReview = is_array(data_get($itemMeta, 'duplicate_review')) ? data_get($itemMeta, 'duplicate_review') : [];
+                                $manualDuplicateActive = (string) data_get($manualDuplicateReview, 'status') === 'manual_duplicate';
+                                $primaryDuplicateHint = is_array($duplicateHints[0] ?? null) ? $duplicateHints[0] : [];
                                 $hasParsedJson = (bool) ($candidate['parsed_json_present'] ?? false);
                                 $usesReviewedSnapshot = ($candidate['display_source'] ?? null) === 'approval_snapshot_json';
                                 $parseStatus = (string) ($candidate['parse_status'] ?? $intake?->parse_status ?? '');
@@ -253,6 +257,13 @@
                                 if ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_NEEDS_REVIEW) {
                                     $exceptionBadges[] = ['label' => 'Needs review', 'class' => 'border-amber-200 bg-amber-50 text-amber-800'];
                                 }
+                                if ($manualDuplicateActive) {
+                                    $exceptionBadges[] = [
+                                        'label' => 'Manual duplicate',
+                                        'class' => 'border-rose-200 bg-rose-50 text-rose-700',
+                                        'testid' => 'bulk-manual-duplicate-badge',
+                                    ];
+                                }
                                 foreach (array_slice($duplicateHints, 0, 2) as $duplicateHint) {
                                     $exceptionBadges[] = [
                                         'label' => (string) ($duplicateHint['label'] ?? 'Possible duplicate'),
@@ -269,8 +280,9 @@
                                     || str_contains($lastError, 'reparse_no_canonical_or_raw_ocr')
                                     || $hasEmptyOcrFailure
                                 );
+                                $isHighlightedItem = $highlightItemId === (int) $item->id;
                             @endphp
-                            <tr>
+                            <tr id="bulk-item-{{ $item->id }}" @if ($isHighlightedItem) style="background-color: #ecfdf5;" @endif>
                                 <td class="px-4 py-2 text-sm text-gray-900">{{ $item->item_sequence }}</td>
                                 <td class="px-4 py-2 text-sm text-gray-700">
                                     <span class="font-medium">{{ $itemDisplayLabel }}</span>
@@ -386,6 +398,25 @@
                                             <form method="POST" action="{{ route('admin.bulk-intakes.items.mark-needs-review', [$batch, $item]) }}">
                                                 @csrf
                                                 <button type="submit" class="text-left text-sm font-medium text-amber-700 hover:text-amber-900">Mark needs review</button>
+                                            </form>
+                                        @endif
+
+                                        @if ($manualDuplicateActive)
+                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.clear-duplicate', [$batch, $item]) }}">
+                                                @csrf
+                                                <button type="submit" class="text-left text-sm font-medium text-rose-700 hover:text-rose-900">Clear duplicate</button>
+                                            </form>
+                                        @elseif ($duplicateHints !== [])
+                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.mark-duplicate', [$batch, $item]) }}">
+                                                @csrf
+                                                @if (! empty($primaryDuplicateHint['matched_intake_id']))
+                                                    <input type="hidden" name="matched_biodata_intake_id" value="{{ (int) $primaryDuplicateHint['matched_intake_id'] }}">
+                                                @endif
+                                                @if (! empty($primaryDuplicateHint['matched_profile_id']))
+                                                    <input type="hidden" name="matched_profile_id" value="{{ (int) $primaryDuplicateHint['matched_profile_id'] }}">
+                                                @endif
+                                                <input type="hidden" name="reason" value="{{ trim('Duplicate/history hint: '.(string) ($primaryDuplicateHint['label'] ?? 'Possible duplicate')) }}">
+                                                <button type="submit" class="text-left text-sm font-medium text-rose-700 hover:text-rose-900">Mark duplicate</button>
                                             </form>
                                         @endif
                                     </div>

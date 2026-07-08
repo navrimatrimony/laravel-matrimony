@@ -642,6 +642,8 @@ Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('ad
         Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/queue-free-parse', [AdminBulkIntakeController::class, 'queueFreeParseItem'])->name('items.queue-free-parse');
         Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/mark-needs-review', [AdminBulkIntakeController::class, 'markItemNeedsReview'])->name('items.mark-needs-review');
         Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/clear-needs-review', [AdminBulkIntakeController::class, 'clearItemNeedsReview'])->name('items.clear-needs-review');
+        Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/mark-duplicate', [AdminBulkIntakeController::class, 'markItemManualDuplicate'])->name('items.mark-duplicate');
+        Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/clear-duplicate', [AdminBulkIntakeController::class, 'clearItemManualDuplicate'])->name('items.clear-duplicate');
         Route::get('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/correct-candidate', [AdminBulkIntakeController::class, 'correctCandidateForm'])->name('items.correct-candidate');
         Route::patch('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/correct-candidate', [AdminBulkIntakeController::class, 'saveCandidateCorrection'])->name('items.correct-candidate.update');
         Route::get('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/assign-owner', [AdminBulkIntakeController::class, 'assignOwnerForm'])->name('items.assign-owner');

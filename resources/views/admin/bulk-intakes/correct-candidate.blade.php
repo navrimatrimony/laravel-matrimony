@@ -10,6 +10,9 @@
     $imagePreview = is_array($imagePreview ?? null) ? $imagePreview : ['available' => false, 'data_uri' => null, 'label' => null, 'message' => null];
     $canSave = (bool) ($canSave ?? false);
     $duplicateHints = is_array($duplicateHints ?? null) ? $duplicateHints : [];
+    $itemMeta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
+    $manualDuplicateReview = is_array(data_get($itemMeta, 'duplicate_review')) ? data_get($itemMeta, 'duplicate_review') : [];
+    $manualDuplicateActive = (string) data_get($manualDuplicateReview, 'status') === 'manual_duplicate';
     $heightOptions = [];
     for ($heightInches = 54; $heightInches <= 84; $heightInches++) {
         $feet = intdiv($heightInches, 12);
@@ -136,7 +139,7 @@
                                 <span data-zoom-level class="rounded bg-gray-100 px-2 py-1 font-semibold text-gray-600">100%</span>
                             </div>
                             <div data-testid="bulk-image-zoom-container" class="bulk-image-zoom-container rounded border border-gray-200 bg-white p-2">
-                                <img src="{{ $imagePreview['data_uri'] }}" alt="Original biodata image preview" class="bulk-image-preview rounded object-contain" data-testid="bulk-image-preview" data-zoom-image>
+                                <img src="{{ $imagePreview['data_uri'] }}" alt="Original biodata image preview" loading="lazy" decoding="async" class="bulk-image-preview rounded object-contain" data-testid="bulk-image-preview" data-zoom-image>
                             </div>
                             @if (! empty($imagePreview['label']))
                                 <p class="mt-2 break-words text-xs text-gray-500">{{ $imagePreview['label'] }}</p>
@@ -311,6 +314,9 @@
                         <button type="submit" @disabled(! $canSave) class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
                             Save correction
                         </button>
+                        <button type="submit" name="after_save" value="stay" @disabled(! $canSave) class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">
+                            Save and stay
+                        </button>
                         <a href="{{ route('admin.bulk-intakes.show', $batch) }}" class="text-sm font-medium text-gray-600 hover:text-gray-900">Cancel</a>
                     </div>
                 </form>
@@ -361,6 +367,84 @@
                             </div>
                         @endforeach
                     </div>
+                @endif
+            </div>
+
+            <div class="rounded-lg bg-white p-6 shadow" data-testid="bulk-correction-manual-duplicate-card">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900">Manual duplicate</h2>
+                        <p class="mt-1 text-sm text-gray-600">Stores only duplicate review metadata on this bulk item.</p>
+                    </div>
+                    @if ($manualDuplicateActive)
+                        <span data-testid="bulk-correction-manual-duplicate-badge" class="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">Manual duplicate</span>
+                    @endif
+                </div>
+
+                @error('duplicate_review')
+                    <div class="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{{ $message }}</div>
+                @enderror
+
+                @if ($manualDuplicateActive)
+                    <dl class="mt-4 grid gap-3 text-sm text-gray-700 sm:grid-cols-2">
+                        <div>
+                            <dt class="font-semibold">Matched intake</dt>
+                            <dd>{{ data_get($manualDuplicateReview, 'matched_biodata_intake_id') ?: '-' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="font-semibold">Matched profile</dt>
+                            <dd>{{ data_get($manualDuplicateReview, 'matched_profile_id') ?: '-' }}</dd>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <dt class="font-semibold">Reason</dt>
+                            <dd class="whitespace-pre-wrap">{{ data_get($manualDuplicateReview, 'reason') ?: '-' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="font-semibold">Marked by</dt>
+                            <dd>#{{ data_get($manualDuplicateReview, 'marked_by_user_id') ?: '-' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="font-semibold">Marked at</dt>
+                            <dd>{{ data_get($manualDuplicateReview, 'marked_at') ?: '-' }}</dd>
+                        </div>
+                    </dl>
+
+                    <form method="POST" action="{{ route('admin.bulk-intakes.items.clear-duplicate', [$batch, $item]) }}" class="mt-4">
+                        @csrf
+                        <button type="submit" class="rounded-lg border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50">
+                            Clear duplicate
+                        </button>
+                    </form>
+                @else
+                    <form method="POST" action="{{ route('admin.bulk-intakes.items.mark-duplicate', [$batch, $item]) }}" class="mt-4 space-y-4">
+                        @csrf
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-semibold text-gray-800">Matched intake id</span>
+                                <input type="number" min="1" name="matched_biodata_intake_id" value="{{ old('matched_biodata_intake_id') }}" class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                @error('matched_biodata_intake_id')
+                                    <span class="mt-1 block text-xs font-medium text-red-700">{{ $message }}</span>
+                                @enderror
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block font-semibold text-gray-800">Matched profile id</span>
+                                <input type="number" min="1" name="matched_profile_id" value="{{ old('matched_profile_id') }}" class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                @error('matched_profile_id')
+                                    <span class="mt-1 block text-xs font-medium text-red-700">{{ $message }}</span>
+                                @enderror
+                            </label>
+                        </div>
+                        <label class="block text-sm">
+                            <span class="mb-1 block font-semibold text-gray-800">Reason</span>
+                            <textarea name="reason" rows="3" maxlength="1000" class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('reason') }}</textarea>
+                            @error('reason')
+                                <span class="mt-1 block text-xs font-medium text-red-700">{{ $message }}</span>
+                            @enderror
+                        </label>
+                        <button type="submit" class="rounded-lg border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50">
+                            Mark duplicate
+                        </button>
+                    </form>
                 @endif
             </div>
 

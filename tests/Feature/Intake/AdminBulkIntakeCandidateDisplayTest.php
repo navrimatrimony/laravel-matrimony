@@ -43,7 +43,8 @@ test('bulk list shows parsed candidate fields from linked intake', function () {
             ->assertSee('Mobile: 9876543210', false)
             ->assertSee('1998-04-15', false)
             ->assertSee('Age: 28', false)
-            ->assertSee('165 cm', false)
+            ->assertSee('5 ft 5 in', false)
+            ->assertDontSee('165 cm', false)
             ->assertSee('Gender: Female', false)
             ->assertSee('Pune', false)
             ->assertSee('MCA', false)
@@ -95,7 +96,7 @@ test('bulk list prefers reviewed snapshot values and keeps parsed json presence 
 
     expect($candidate['full_name'])->toBe('Reviewed Candidate')
         ->and($candidate['mobile'])->toBe('9876543210')
-        ->and($candidate['height'])->toBe('168 cm')
+        ->and($candidate['height'])->toBe('5 ft 6 in')
         ->and($candidate['city'])->toBe('Pune')
         ->and($candidate['education'])->toBe('MCA')
         ->and($candidate['display_source'])->toBe('approval_snapshot_json')
@@ -109,7 +110,8 @@ test('bulk list prefers reviewed snapshot values and keeps parsed json presence 
             ->assertSee('Reviewed Candidate', false)
             ->assertSee('Mobile: 9876543210', false)
             ->assertSee('1998-04-15', false)
-            ->assertSee('168 cm', false)
+            ->assertSee('5 ft 6 in', false)
+            ->assertDontSee('168 cm', false)
             ->assertSee('Gender: Female', false)
             ->assertSee('Pune', false)
             ->assertSee('MCA', false)
@@ -165,7 +167,7 @@ test('bulk list shows reviewed snapshot height even when old confidence marks he
 
     $candidate = app(BulkIntakeCandidateDisplayService::class)->candidateForItem($item);
 
-    expect($candidate['height'])->toBe('160 cm')
+    expect($candidate['height'])->toBe('5 ft 3 in')
         ->and($candidate['height_needs_review'])->toBeFalse()
         ->and($candidate['display_warnings'])->not->toContain('height_low_confidence')
         ->and($candidate['missing_fields'])->not->toContain('height');
@@ -174,7 +176,8 @@ test('bulk list shows reviewed snapshot height even when old confidence marks he
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
         ->assertSee('Reviewed Height Candidate', false)
-        ->assertSee('160 cm', false)
+        ->assertSee('5 ft 3 in', false)
+        ->assertDontSee('160 cm', false)
         ->assertSee('data-testid="bulk-candidate-reviewed-badge"', false);
 });
 
@@ -207,7 +210,8 @@ test('bulk list shows duplicate hint when same mobile exists in another intake',
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
         ->assertSee('data-testid="bulk-duplicate-history-hint"', false)
-        ->assertSee('Same mobile found', false);
+        ->assertSee('Same mobile found', false)
+        ->assertSee('Mark duplicate', false);
 
     $intake->refresh();
     $item->refresh();
@@ -215,6 +219,44 @@ test('bulk list shows duplicate hint when same mobile exists in another intake',
     expect($intake->raw_ocr_text)->toBe('Original current duplicate OCR')
         ->and($intake->parsed_json)->toBe($currentParsed)
         ->and($item->item_meta_json)->toBeNull();
+});
+
+test('bulk list shows manual duplicate badge and clear action', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Manual Duplicate List Candidate',
+                'primary_contact_number' => '9876543210',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $intake, [
+        'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
+        'item_meta_json' => [
+            'duplicate_review' => [
+                'status' => 'manual_duplicate',
+                'matched_biodata_intake_id' => $intake->id,
+                'matched_profile_id' => null,
+                'reason' => 'Already exists in another intake',
+                'marked_by_user_id' => $admin->id,
+                'marked_at' => '2026-07-08T10:00:00+00:00',
+                'cleared_by_user_id' => null,
+                'cleared_at' => null,
+            ],
+        ],
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Manual Duplicate List Candidate', false)
+        ->assertSee('data-testid="bulk-manual-duplicate-badge"', false)
+        ->assertSee('Manual duplicate', false)
+        ->assertSee('Clear duplicate', false)
+        ->assertDontSee('Mark duplicate', false);
 });
 
 test('bulk list does not show duplicate hint for unique candidate', function () {
@@ -341,7 +383,8 @@ test('bulk list keeps text item display short and prefers linked parsed status',
         ->assertSee('text · parsed', false)
         ->assertSee('Short Text Candidate', false)
         ->assertSee('Mobile: 9876543210', false)
-        ->assertSee('166 cm', false)
+        ->assertSee('5 ft 5 in', false)
+        ->assertDontSee('166 cm', false)
         ->assertSee('MBA', false)
         ->assertSee('Parse: OK', false)
         ->assertSee('Parsed JSON: Yes', false)
@@ -531,13 +574,14 @@ test('very tall but possible height is shown with review flag', function () {
 
     $candidate = app(BulkIntakeCandidateDisplayService::class)->candidateForItem($item);
 
-    expect($candidate['height'])->toBe('198 cm')
+    expect($candidate['height'])->toBe('6 ft 6 in')
         ->and($candidate['height_needs_review'])->toBeTrue();
 
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('198 cm', false)
+        ->assertSee('6 ft 6 in', false)
+        ->assertDontSee('198 cm', false)
         ->assertSee('review', false);
 });
 
