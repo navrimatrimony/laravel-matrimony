@@ -124,6 +124,115 @@ test('bulk list prefers reviewed snapshot values and keeps parsed json presence 
     }
 });
 
+test('bulk list shows duplicate hint when same mobile exists in another intake', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Existing Candidate',
+                'primary_contact_number' => '9876543210',
+            ],
+        ],
+    ]);
+    $currentParsed = [
+        'core' => [
+            'full_name' => 'Current Candidate',
+            'primary_contact_number' => '+91 98765 43210',
+        ],
+    ];
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'raw_ocr_text' => 'Original current duplicate OCR',
+        'parsed_json' => $currentParsed,
+    ]);
+    $item = candidateDisplayItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-duplicate-history-hint"', false)
+        ->assertSee('Same mobile found', false);
+
+    $intake->refresh();
+    $item->refresh();
+
+    expect($intake->raw_ocr_text)->toBe('Original current duplicate OCR')
+        ->and($intake->parsed_json)->toBe($currentParsed)
+        ->and($item->item_meta_json)->toBeNull();
+});
+
+test('bulk list does not show duplicate hint for unique candidate', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Unique Candidate',
+                'primary_contact_number' => '9123456789',
+                'date_of_birth' => '1998-04-15',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Unique Candidate', false)
+        ->assertDontSee('data-testid="bulk-duplicate-history-hint"', false)
+        ->assertDontSee('Same mobile found', false)
+        ->assertDontSee('Same name + DOB', false)
+        ->assertDontSee('Previous intake found', false);
+});
+
+test('duplicate hints prefer reviewed snapshot over parsed json', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Reviewed Mobile Reference',
+                'primary_contact_number' => '9000000000',
+            ],
+        ],
+    ]);
+    $parsed = [
+        'core' => [
+            'full_name' => 'Old Parsed Candidate',
+            'primary_contact_number' => '9111111111',
+        ],
+    ];
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => $parsed,
+        'approval_snapshot_json' => [
+            'core' => [
+                'full_name' => 'Reviewed Candidate',
+                'primary_contact_number' => '+91 90000 00000',
+            ],
+        ],
+    ]);
+    $item = candidateDisplayItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Reviewed Candidate', false)
+        ->assertSee('Same mobile found', false)
+        ->assertSee('data-testid="bulk-candidate-reviewed-badge"', false)
+        ->assertDontSee('Mobile: 9111111111', false);
+
+    $intake->refresh();
+    $item->refresh();
+
+    expect($intake->parsed_json)->toBe($parsed)
+        ->and($item->item_meta_json)->toBeNull();
+});
+
 test('bulk list handles missing candidate fields safely', function () {
     $admin = candidateDisplayAdminUser();
     $batch = candidateDisplayBatch($admin);

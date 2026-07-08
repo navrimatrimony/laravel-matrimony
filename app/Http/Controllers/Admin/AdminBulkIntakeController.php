@@ -14,6 +14,7 @@ use App\Services\Intake\BulkIntakeBatchService;
 use App\Services\Intake\BulkIntakeCandidateCorrectionService;
 use App\Services\Intake\BulkIntakeCandidateDisplayService;
 use App\Services\Intake\BulkIntakeDraftProfileBootstrapService;
+use App\Services\Intake\BulkIntakeDuplicateHistoryHintService;
 use App\Services\Intake\BulkIntakeManualTranscriptService;
 use App\Services\Intake\BulkIntakeProgressPresenter;
 use App\Services\Intake\BulkIntakeReadinessService;
@@ -125,6 +126,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeBatch $bulkIntakeBatch,
         BulkIntakeBatchService $batchService,
         BulkIntakeCandidateDisplayService $candidateDisplayService,
+        BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService,
         BulkIntakeProgressPresenter $progressPresenter
     )
     {
@@ -139,7 +141,7 @@ class AdminBulkIntakeController extends Controller
 
         $itemsQuery = $bulkIntakeBatch->items()
             ->with([
-                'biodataIntake:id,uploaded_by,matrimony_profile_id,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,parsed_json,approval_snapshot_json,reviewed_by_user_id,review_actor_type,review_surface,reviewed_at,approval_policy,approval_status,approved_at,created_at',
+                'biodataIntake:id,uploaded_by,matrimony_profile_id,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,parsed_json,approval_snapshot_json,reviewed_by_user_id,review_actor_type,review_surface,reviewed_at,approval_policy,approval_status,approved_at,content_hash,parsed_at,created_at,updated_at',
                 'biodataIntake.uploadedByUser:id,name,email,mobile,is_admin,admin_role',
                 'biodataIntake.uploadedByUser.matrimonyProfile:id,user_id',
             ])
@@ -152,6 +154,11 @@ class AdminBulkIntakeController extends Controller
         $candidateByItemId = $items
             ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
                 (int) $item->id => $candidateDisplayService->candidateForItem($item),
+            ])
+            ->all();
+        $duplicateHintsByItemId = $items
+            ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
+                (int) $item->id => $duplicateHistoryHintService->hintsForItem($item),
             ])
             ->all();
 
@@ -167,6 +174,7 @@ class AdminBulkIntakeController extends Controller
             'sourceContextCountsByItem' => $sourceContextCountsByItem,
             'progress' => $progressPresenter->progressForBatch($bulkIntakeBatch),
             'candidateByItemId' => $candidateByItemId,
+            'duplicateHintsByItemId' => $duplicateHintsByItemId,
             'statusFilter' => $statusFilter,
             'statusFilters' => $statusFilters,
         ]);
@@ -297,7 +305,8 @@ class AdminBulkIntakeController extends Controller
     public function correctCandidateForm(
         BulkIntakeBatch $bulkIntakeBatch,
         BulkIntakeBatchItem $bulkIntakeBatchItem,
-        BulkIntakeCandidateCorrectionService $correctionService
+        BulkIntakeCandidateCorrectionService $correctionService,
+        BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService
     ) {
         abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
 
@@ -315,6 +324,7 @@ class AdminBulkIntakeController extends Controller
             'sourceTextLabel' => $correction['source_text_label'],
             'imagePreview' => $correction['image_preview'],
             'canSave' => $correction['can_save'],
+            'duplicateHints' => $duplicateHistoryHintService->hintsForItem($bulkIntakeBatchItem),
         ]);
     }
 

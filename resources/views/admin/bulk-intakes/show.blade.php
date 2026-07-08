@@ -27,6 +27,7 @@
         'error_summary' => [],
     ];
     $candidateByItemId = $candidateByItemId ?? [];
+    $duplicateHintsByItemId = $duplicateHintsByItemId ?? [];
     $missingDisplay = '—';
 @endphp
 <div class="space-y-6">
@@ -206,6 +207,7 @@
                                     'occupation_needs_review' => false,
                                     'display_warnings' => [],
                                 ];
+                                $duplicateHints = is_array($duplicateHintsByItemId[$item->id] ?? null) ? $duplicateHintsByItemId[$item->id] : [];
                                 $hasParsedJson = (bool) ($candidate['parsed_json_present'] ?? false);
                                 $usesReviewedSnapshot = ($candidate['display_source'] ?? null) === 'approval_snapshot_json';
                                 $parseStatus = (string) ($candidate['parse_status'] ?? $intake?->parse_status ?? '');
@@ -250,6 +252,13 @@
                                 }
                                 if ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_NEEDS_REVIEW) {
                                     $exceptionBadges[] = ['label' => 'Needs review', 'class' => 'border-amber-200 bg-amber-50 text-amber-800'];
+                                }
+                                foreach (array_slice($duplicateHints, 0, 2) as $duplicateHint) {
+                                    $exceptionBadges[] = [
+                                        'label' => (string) ($duplicateHint['label'] ?? 'Possible duplicate'),
+                                        'class' => 'border-purple-200 bg-purple-50 text-purple-700',
+                                        'testid' => 'bulk-duplicate-history-hint',
+                                    ];
                                 }
                                 $lastError = (string) ($intake?->last_error ?? '');
                                 $canAddManualTranscript = $intake && (
@@ -345,7 +354,7 @@
                                     @else
                                         <div class="flex max-w-xs flex-wrap gap-1">
                                             @foreach ($exceptionBadges as $badge)
-                                                <span class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $badge['class'] }}">{{ $badge['label'] }}</span>
+                                                <span @if (! empty($badge['testid'])) data-testid="{{ $badge['testid'] }}" @endif class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $badge['class'] }}">{{ $badge['label'] }}</span>
                                             @endforeach
                                         </div>
                                     @endif

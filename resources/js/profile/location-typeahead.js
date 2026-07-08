@@ -821,6 +821,7 @@
             clearCanonicalSelection(wrapper);
             var locationInputHidden = wrapper.querySelector('.location-hidden-location-input');
             if (locationInputHidden) locationInputHidden.value = q;
+            syncLocationDisplaySyncTarget(wrapper);
             if (q.length < MIN_SEARCH_CHARS) {
                 resultsEl.classList.add('hidden');
                 resultsEl.style.display = 'none';
@@ -846,6 +847,12 @@
                         renderResults(wrapper, resultsEl, [], onSelect);
                     });
             }, DEBOUNCE_MS);
+        });
+        ['keyup', 'change'].forEach(function (eventName) {
+            input.addEventListener(eventName, function () {
+                syncLocationHiddensFromVisible(wrapper);
+                syncLocationDisplaySyncTarget(wrapper);
+            });
         });
         input.addEventListener('focus', function () {
             if (input.value.trim().length >= MIN_SEARCH_CHARS && resultsEl.innerHTML) {
@@ -874,27 +881,34 @@
         }
 
         syncLocationHiddensFromVisible(wrapper);
+        syncLocationDisplaySyncTarget(wrapper);
     }
 
-    /** Copy visible typeahead text into the named sync field (e.g. career_history[n][location]) so free-typed text posts. */
+    /** Copy one visible typeahead value into the named sync field so free-typed text posts before submit. */
+    function syncLocationDisplaySyncTarget(wrapper) {
+        if (!wrapper) return;
+        var syncName = wrapper.getAttribute('data-display-sync-name');
+        if (!syncName) return;
+        var form = wrapper.closest('form');
+        if (!form || !form.elements) return;
+        var vis = wrapper.querySelector('.location-typeahead-input');
+        if (!vis) return;
+        var found = null;
+        for (var i = 0; i < form.elements.length; i++) {
+            var el = form.elements[i];
+            if (el.name === syncName) {
+                found = el;
+                break;
+            }
+        }
+        if (!found) return;
+        found.value = vis.value != null ? vis.value : '';
+    }
+
+    /** Copy visible typeahead text into named sync fields (e.g. career_history[n][location]) so free-typed text posts. */
     function syncLocationDisplaySyncTargets(form) {
         if (!form || !form.elements) return;
-        form.querySelectorAll('.location-typeahead-wrapper[data-display-sync-name]').forEach(function (wrapper) {
-            var syncName = wrapper.getAttribute('data-display-sync-name');
-            if (!syncName) return;
-            var vis = wrapper.querySelector('.location-typeahead-input');
-            if (!vis) return;
-            var found = null;
-            for (var i = 0; i < form.elements.length; i++) {
-                var el = form.elements[i];
-                if (el.name === syncName) {
-                    found = el;
-                    break;
-                }
-            }
-            if (!found) return;
-            found.value = vis.value != null ? vis.value : '';
-        });
+        form.querySelectorAll('.location-typeahead-wrapper[data-display-sync-name]').forEach(syncLocationDisplaySyncTarget);
     }
 
     /** Copy visible typeahead text into POSTed hidden fields (siblings/relatives rows). */

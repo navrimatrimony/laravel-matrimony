@@ -9,7 +9,21 @@
     $sourceSnapshotSource = is_string($sourceSnapshotSource ?? null) ? $sourceSnapshotSource : 'unknown';
     $imagePreview = is_array($imagePreview ?? null) ? $imagePreview : ['available' => false, 'data_uri' => null, 'label' => null, 'message' => null];
     $canSave = (bool) ($canSave ?? false);
+    $duplicateHints = is_array($duplicateHints ?? null) ? $duplicateHints : [];
+    $heightOptions = [];
+    for ($heightInches = 48; $heightInches <= 84; $heightInches++) {
+        $feet = intdiv($heightInches, 12);
+        $inches = $heightInches % 12;
+        $heightOptions[] = [
+            'value' => $feet."'".$inches.'"',
+            'label' => $feet.' ft '.$inches.' in',
+        ];
+    }
 @endphp
+
+@once
+    @vite(['resources/js/profile/location-typeahead.js'])
+@endonce
 
 <div class="space-y-6">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -38,8 +52,8 @@
         Saves only the reviewed intake snapshot. No user/profile creation, WhatsApp queue, apply flow, or paid provider extraction runs here.
     </div>
 
-    <div data-testid="bulk-correction-workspace-grid" class="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(380px,0.85fr)]">
-        <div class="space-y-6">
+    <div data-testid="bulk-correction-two-column-layout" class="grid gap-6 lg:grid-cols-[minmax(0,0.55fr)_minmax(380px,0.45fr)] lg:items-start">
+        <div data-testid="bulk-correction-left-evidence" class="space-y-6">
             <div class="rounded-lg bg-white p-6 shadow">
                 <h2 class="text-lg font-semibold text-gray-900">Original evidence</h2>
                 <dl class="mt-4 grid gap-4 text-sm md:grid-cols-2">
@@ -101,7 +115,7 @@
             </details>
         </div>
 
-        <div class="space-y-6">
+        <div data-testid="bulk-correction-right-form" class="space-y-6">
             <div class="rounded-lg bg-white p-6 shadow lg:sticky lg:top-4">
                 <h2 class="text-lg font-semibold text-gray-900">Correct candidate fields</h2>
 
@@ -152,16 +166,16 @@
                                     data-testid="bulk-correction-date-input"
                                 >
                             @elseif ($key === 'height')
-                                <x-profile.height-picker
-                                    :value="$value"
-                                    hidden-name="height_cm"
-                                    input-name="height"
-                                    :free-text-value="$value"
-                                    :allow-free-text="true"
-                                    :compact="true"
-                                    label=""
-                                    wrapper-class="height-picker w-full"
-                                />
+                                <input
+                                    type="text"
+                                    name="height"
+                                    list="bulk-height-options"
+                                    value="{{ $value }}"
+                                    placeholder="165 cm or 5'5&quot;"
+                                    @disabled(! $canSave)
+                                    class="{{ $inputClass }}"
+                                    data-testid="bulk-correction-height-input"
+                                >
                             @elseif ($key === 'education')
                                 @php $educationProfile = (object) ['highest_education' => $value]; @endphp
                                 <input type="hidden" name="education" value="{{ $value }}">
@@ -233,6 +247,54 @@
                 </form>
             </div>
 
+            <div class="rounded-lg bg-white p-6 shadow" data-testid="bulk-correction-duplicate-history-card">
+                <h2 class="text-lg font-semibold text-gray-900">Duplicate / history hints</h2>
+                <p class="mt-1 text-sm text-gray-600">Read-only signals from existing intakes, hashes, and profile contact indexes.</p>
+
+                @if ($duplicateHints === [])
+                    <p class="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">No duplicate or prior-history hints found.</p>
+                @else
+                    <div class="mt-4 space-y-3">
+                        @foreach ($duplicateHints as $hint)
+                            <div class="rounded-lg border border-purple-200 bg-purple-50 p-3 text-sm text-purple-900">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span data-testid="bulk-correction-duplicate-history-hint" class="rounded-full border border-purple-300 bg-white px-2 py-0.5 text-xs font-semibold text-purple-700">{{ $hint['label'] ?? 'Possible duplicate' }}</span>
+                                    <span class="text-xs font-medium text-purple-700">Confidence: {{ $hint['confidence'] ?? 'unknown' }}</span>
+                                </div>
+                                <dl class="mt-2 grid gap-1 text-xs text-purple-800 sm:grid-cols-2">
+                                    <div>
+                                        <dt class="font-semibold">Reason</dt>
+                                        <dd>{{ $hint['reason'] ?? '-' }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="font-semibold">Match type</dt>
+                                        <dd>{{ $hint['type'] ?? '-' }}</dd>
+                                    </div>
+                                    @if (! empty($hint['matched_intake_id']))
+                                        <div>
+                                            <dt class="font-semibold">Matched intake</dt>
+                                            <dd>#{{ $hint['matched_intake_id'] }}</dd>
+                                        </div>
+                                    @endif
+                                    @if (! empty($hint['matched_profile_id']))
+                                        <div>
+                                            <dt class="font-semibold">Matched profile</dt>
+                                            <dd>#{{ $hint['matched_profile_id'] }}</dd>
+                                        </div>
+                                    @endif
+                                    @if (! empty($hint['last_seen_at']))
+                                        <div>
+                                            <dt class="font-semibold">Last seen</dt>
+                                            <dd>{{ $hint['last_seen_at'] }}</dd>
+                                        </div>
+                                    @endif
+                                </dl>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+
             <div class="rounded-lg bg-white p-6 shadow">
                 <h2 class="text-lg font-semibold text-gray-900">Review flag</h2>
                 <p class="mt-1 text-sm text-gray-600">Use this when the item needs manual follow-up before consent or profile work.</p>
@@ -257,4 +319,18 @@
         </div>
     </div>
 </div>
+
+<datalist id="bulk-height-options">
+    @foreach ($heightOptions as $heightOption)
+        <option value="{{ $heightOption['value'] }}">{{ $heightOption['label'] }}</option>
+    @endforeach
+</datalist>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        if (window.LocationTypeahead && window.LocationTypeahead.init) {
+            window.LocationTypeahead.init();
+        }
+    });
+</script>
 @endsection

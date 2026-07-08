@@ -40,7 +40,9 @@ test('admin can open bulk candidate correction page', function () {
         ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
         ->assertOk()
         ->assertSee('Bulk Candidate Correction', false)
-        ->assertSee('data-testid="bulk-correction-workspace-grid"', false)
+        ->assertSee('data-testid="bulk-correction-two-column-layout"', false)
+        ->assertSee('data-testid="bulk-correction-left-evidence"', false)
+        ->assertSee('data-testid="bulk-correction-right-form"', false)
         ->assertDontSee('Only these 7 fields are editable in this phase.', false)
         ->assertSee('Parsed Candidate', false)
         ->assertSee('9876543210', false)
@@ -51,9 +53,16 @@ test('admin can open bulk candidate correction page', function () {
         ->assertSee('नाव : Parsed Candidate', false)
         ->assertSee('type="date"', false)
         ->assertSee('data-testid="bulk-correction-date-input"', false)
-        ->assertSee('data-testid="bulk-correction-height-free-text"', false)
+        ->assertSee('data-testid="bulk-correction-height-input"', false)
+        ->assertSee('list="bulk-height-options"', false)
+        ->assertSee('datalist id="bulk-height-options"', false)
+        ->assertDontSee('data-testid="bulk-correction-height-free-text"', false)
+        ->assertDontSee('name="height_cm"', false)
         ->assertSee('education-multiselect-root-bulk-correction-education-', false)
+        ->assertSee('location-typeahead-wrapper', false)
         ->assertSee('data-display-sync-name="location"', false)
+        ->assertSee('data-search-url="', false)
+        ->assertSee('/api/location/search', false)
         ->assertSee('data-testid="bulk-correction-low-confidence-name"', false)
         ->assertSee('Saves only the reviewed intake snapshot.', false);
 });
@@ -192,6 +201,81 @@ test('admin can save centralized education height and location engine payloads i
         ->and($item->item_meta_json)->toBeNull();
 });
 
+test('bulk candidate correction page renders only one height input control', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $intake = candidateCorrectionIntake([
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Single Height Candidate',
+                'primary_contact_number' => '9876543210',
+                'date_of_birth' => '1998-04-15',
+                'height_cm' => 157,
+                'gender' => 'female',
+                'highest_education' => 'MCA',
+                'city_text' => 'Pune',
+            ],
+        ],
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $response = $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-correction-height-input"', false)
+        ->assertSee('value="157 cm"', false)
+        ->assertDontSee('data-testid="bulk-correction-height-free-text"', false)
+        ->assertDontSee('name="height_cm"', false);
+
+    $html = $response->getContent();
+
+    expect(substr_count($html, 'name="height"'))->toBe(1)
+        ->and(substr_count($html, 'data-testid="bulk-correction-height-input"'))->toBe(1);
+});
+
+test('typed height and unselected typed location save into reviewed snapshot', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $parsed = [
+        'core' => [
+            'full_name' => 'Free Text Candidate',
+            'primary_contact_number' => '9876500000',
+            'date_of_birth' => '1998-04-01',
+            'height_cm' => 160,
+            'gender' => 'male',
+            'highest_education' => 'BSc',
+            'city_text' => 'Old City',
+        ],
+    ];
+    $intake = candidateCorrectionIntake([
+        'raw_ocr_text' => 'Original OCR text for free text save',
+        'parsed_json' => $parsed,
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->patch(route('admin.bulk-intakes.items.correct-candidate.update', [$batch, $item]), [
+            'name' => 'Free Text Candidate',
+            'mobile' => '9876543210',
+            'date_of_birth' => '1998-04-15',
+            'height' => "5'2\"",
+            'gender' => 'female',
+            'education' => 'MCA',
+            'location' => 'Typed Free Text Village',
+        ])
+        ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]));
+
+    $intake->refresh();
+    $item->refresh();
+
+    expect(data_get($intake->approval_snapshot_json, 'core.height_cm'))->toBe(157)
+        ->and(data_get($intake->approval_snapshot_json, 'core.height'))->toBe('5 ft 2 in')
+        ->and(data_get($intake->approval_snapshot_json, 'core.city_text'))->toBe('Typed Free Text Village')
+        ->and($intake->raw_ocr_text)->toBe('Original OCR text for free text save')
+        ->and($intake->parsed_json)->toBe($parsed)
+        ->and($item->item_meta_json)->toBeNull();
+});
+
 test('admin can mark bulk candidate correction item as needs review without mutating evidence', function () {
     $admin = candidateCorrectionAdminUser();
     $batch = candidateCorrectionBatch($admin);
@@ -278,6 +362,50 @@ test('bulk candidate correction page renders validation warnings for suspicious 
         ->assertSee('Enter height as cm or feet/inches.', false)
         ->assertSee('data-testid="bulk-correction-warning-gender"', false)
         ->assertSee('Select Male, Female, or Unknown.', false);
+});
+
+test('bulk candidate correction page renders read only duplicate history hints without mutating evidence', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    candidateCorrectionIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Duplicate Reference',
+                'primary_contact_number' => '9876543210',
+                'date_of_birth' => '1998-04-15',
+            ],
+        ],
+    ]);
+    $parsed = [
+        'core' => [
+            'full_name' => 'Duplicate Current',
+            'primary_contact_number' => '+91 98765 43210',
+            'date_of_birth' => '1998-04-15',
+        ],
+    ];
+    $intake = candidateCorrectionIntake([
+        'raw_ocr_text' => 'Original duplicate hint OCR text',
+        'parsed_json' => $parsed,
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-correction-duplicate-history-card"', false)
+        ->assertSee('Duplicate / history hints', false)
+        ->assertSee('data-testid="bulk-correction-duplicate-history-hint"', false)
+        ->assertSee('Same mobile found', false)
+        ->assertSee('Matched intake', false)
+        ->assertDontSee('9876543210', false);
+
+    $intake->refresh();
+    $item->refresh();
+
+    expect($intake->raw_ocr_text)->toBe('Original duplicate hint OCR text')
+        ->and($intake->parsed_json)->toBe($parsed)
+        ->and($item->item_meta_json)->toBeNull();
 });
 
 test('bulk candidate correction save is blocked after intake approval or lock', function () {
