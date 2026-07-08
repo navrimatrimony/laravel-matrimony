@@ -7,6 +7,7 @@ use App\Services\BiodataParserService;
 use App\Services\Parsing\IntakeNormalizedBiodataDraftBuilder;
 use App\Services\Parsing\IntakeNormalizedDraftToParsedJsonMapper;
 use App\Services\Parsing\IntakeParsedSnapshotSkeleton;
+use App\Services\Parsing\MarathiOcrFieldRescueService;
 use App\Services\Parsing\Contracts\BiodataParserInterface;
 
 /**
@@ -22,6 +23,7 @@ class RulesOnlyBiodataParser implements BiodataParserInterface
         protected IntakeParsedSnapshotSkeleton $skeleton,
         protected IntakeNormalizedBiodataDraftBuilder $draftBuilder,
         protected IntakeNormalizedDraftToParsedJsonMapper $draftMapper,
+        protected MarathiOcrFieldRescueService $marathiOcrFieldRescue,
     ) {
     }
 
@@ -31,7 +33,7 @@ class RulesOnlyBiodataParser implements BiodataParserInterface
             $draft = $this->draftBuilder->build($rawText, $context);
             $parsed = $this->draftMapper->map($draft);
 
-            return $this->ensureSsotShape($parsed);
+            return $this->ensureSsotShape($this->applyMarathiOcrFieldRescue($rawText, $parsed));
         }
 
         // Existing BiodataParserService already normalizes + splits + extracts.
@@ -39,7 +41,7 @@ class RulesOnlyBiodataParser implements BiodataParserInterface
         // We delegate and then ensure shape completeness in one place.
         $parsed = $this->inner->parse($rawText);
 
-        return $this->ensureSsotShape($parsed);
+        return $this->ensureSsotShape($this->applyMarathiOcrFieldRescue($rawText, $parsed));
     }
 
     /**
@@ -76,5 +78,27 @@ class RulesOnlyBiodataParser implements BiodataParserInterface
     private function ensureSsotShape(array $parsed): array
     {
         return $this->skeleton->ensure($parsed);
+    }
+
+    /**
+     * @param  array<string, mixed>  $parsed
+     * @return array<string, mixed>
+     */
+    private function applyMarathiOcrFieldRescue(string $rawText, array $parsed): array
+    {
+        $lines = preg_split('/\R/u', $rawText) ?: [];
+        $lines = array_values(array_filter(
+            array_map(static fn (string $line): string => trim($line), $lines),
+            static fn (string $line): bool => $line !== ''
+        ));
+
+        if ($lines === []) {
+            return $parsed;
+        }
+
+        $core = is_array($parsed['core'] ?? null) ? $parsed['core'] : [];
+        $parsed['core'] = $this->marathiOcrFieldRescue->rescueCoreFields($lines, $core);
+
+        return $parsed;
     }
 }

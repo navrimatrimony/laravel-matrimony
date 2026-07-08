@@ -99,6 +99,50 @@ test('mobile comparison normalizes devanagari digits before comparing', function
         ->not->toContain('mobile,');
 });
 
+test('command matches gender and occupation from canonical parsed core fields', function () {
+    $admin = comparisonCommandAdminUser();
+    $cleanBatch = comparisonCommandBatch($admin, 'Clean canonical fields batch');
+    $imageBatch = comparisonCommandBatch($admin, 'Image canonical fields batch');
+
+    $cleanIntake = comparisonCommandIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Canonical Candidate',
+                'gender' => 'male',
+                'occupation_title' => 'ICICI Bank, Karad',
+            ],
+        ],
+    ]);
+    $imageIntake = comparisonCommandIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Canonical Candidate',
+                'gender' => 'male',
+                'occupation_title' => 'ICICI Bank, Karad',
+            ],
+        ],
+    ]);
+
+    comparisonCommandItem($cleanBatch, $cleanIntake, ['item_sequence' => 1]);
+    comparisonCommandItem($imageBatch, $imageIntake, ['item_sequence' => 1]);
+
+    $exitCode = Artisan::call('bulk-intake:compare-candidates', [
+        'cleanTextBatchId' => $cleanBatch->id,
+        'imageOcrBatchId' => $imageBatch->id,
+    ]);
+
+    $output = Artisan::output();
+
+    expect($exitCode)->toBe(0);
+    expect($output)
+        ->toContain('gender matched count: 1')
+        ->toContain('occupation matched count: 1')
+        ->toContain('none')
+        ->toContain('matched');
+});
+
 test('command is read only for intakes and bulk items', function () {
     $admin = comparisonCommandAdminUser();
     $cleanBatch = comparisonCommandBatch($admin, 'Read only clean batch');

@@ -65,9 +65,7 @@ class AiFirstRulesMergeUsesLegacyTest extends TestCase
         config(['intake.use_normalized_draft_parser' => true]);
 
         $text = $this->swapnilText();
-        $expected = app(IntakeParsedSnapshotSkeleton::class)->ensure(
-            app(BiodataParserService::class)->parse($text)
-        );
+        $expected = app(RulesOnlyBiodataParser::class)->parse($text, ['legacy_rules_only' => true]);
 
         $this->mock(ExternalAiParsingService::class, function ($mock): void {
             $mock->shouldReceive('parseToSsot')->once()->andThrow(new \RuntimeException('ai unavailable'));
@@ -76,7 +74,8 @@ class AiFirstRulesMergeUsesLegacyTest extends TestCase
         $out = app(AiFirstBiodataParser::class)->parse($text, ['parser_mode' => 'ai_first_v1']);
 
         $this->assertSame($expected, $out);
-        $this->assertSame('चि. स्वप्नील सतिश शिंदे', ($out['core']['full_name'] ?? null));
+        $this->assertSame('स्वप्नील सतिश शिंदे', ($out['core']['full_name'] ?? null));
+        $this->assertSame('male', ($out['core']['gender'] ?? null));
     }
 
     private function maheshText(): string

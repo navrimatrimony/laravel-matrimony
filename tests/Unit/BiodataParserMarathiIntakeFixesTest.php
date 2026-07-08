@@ -1052,6 +1052,66 @@ TXT);
         $this->assertSame('2001-06-14', (string) ($core['date_of_birth'] ?? ''));
     }
 
+    public function test_legacy_full_parser_display_infers_male_gender_from_noisy_candidate_label(): void
+    {
+        $raw = <<<'TXT'
+बायोडाटा
+मुलाचे नाव चि.अनिकेत जयवंत पाटील
+मोबाईल : ९८२४६४३९२५
+TXT;
+
+        $parsed = $this->parseWithLegacyRulesOnly($raw);
+        $candidate = $this->candidateDisplayFromParsed($raw, $parsed);
+
+        $this->assertSame('male', (string) (($parsed['core'] ?? [])['gender'] ?? ''));
+        $this->assertSame('Male', $candidate['gender']);
+    }
+
+    public function test_legacy_full_parser_display_infers_female_gender_from_noisy_candidate_label(): void
+    {
+        $raw = <<<'TXT'
+बायोडाटा
+मुलीचे नाव कु.अक्षदा अनिल कामठे
+मोबाईल : ९८२४६४३९२५
+TXT;
+
+        $parsed = $this->parseWithLegacyRulesOnly($raw);
+        $candidate = $this->candidateDisplayFromParsed($raw, $parsed);
+
+        $this->assertSame('female', (string) (($parsed['core'] ?? [])['gender'] ?? ''));
+        $this->assertSame('Female', $candidate['gender']);
+    }
+
+    public function test_legacy_full_parser_display_reads_label_anchored_nokari_occupation(): void
+    {
+        $raw = <<<'TXT'
+बायोडाटा
+मुलाचे नाव चि.अनिकेत जयवंत पाटील
+नोकरी Capgemini SAP Consultant Senior Analyst
+TXT;
+
+        $parsed = $this->parseWithLegacyRulesOnly($raw);
+        $candidate = $this->candidateDisplayFromParsed($raw, $parsed);
+
+        $this->assertSame('Capgemini SAP Consultant Senior Analyst', (string) (($parsed['core'] ?? [])['occupation_title'] ?? ''));
+        $this->assertSame('Capgemini SAP Consultant Senior Analyst', $candidate['occupation']);
+    }
+
+    public function test_legacy_full_parser_display_reads_bank_nokari_occupation(): void
+    {
+        $raw = <<<'TXT'
+बायोडाटा
+मुलाचे नाव चि.अनिकेत जयवंत पाटील
+नोकरी ICICI Bank, Karad
+TXT;
+
+        $parsed = $this->parseWithLegacyRulesOnly($raw);
+        $candidate = $this->candidateDisplayFromParsed($raw, $parsed);
+
+        $this->assertSame('ICICI Bank, Karad', (string) (($parsed['core'] ?? [])['occupation_title'] ?? ''));
+        $this->assertSame('ICICI Bank, Karad', $candidate['occupation']);
+    }
+
     public function test_normalized_parser_rejects_impossible_labeled_dob(): void
     {
         $parsed = $this->parseWithNormalizedDraft(<<<'TXT'
@@ -1121,5 +1181,34 @@ TXT;
         AdminSetting::setValue('intake_use_normalized_draft_parser', '1');
 
         return $this->app->make(RulesOnlyBiodataParser::class)->parse($raw);
+    }
+
+    private function parseWithLegacyRulesOnly(string $raw): array
+    {
+        config(['intake.use_normalized_draft_parser' => false]);
+        AdminSetting::setValue('intake_use_normalized_draft_parser', '0');
+
+        return $this->app->make(RulesOnlyBiodataParser::class)->parse($raw, ['legacy_rules_only' => true]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $parsed
+     * @return array<string, mixed>
+     */
+    private function candidateDisplayFromParsed(string $raw, array $parsed): array
+    {
+        $intake = BiodataIntake::create([
+            'uploaded_by' => null,
+            'raw_ocr_text' => $raw,
+            'parsed_json' => $parsed,
+            'intake_status' => 'uploaded',
+            'parse_status' => 'parsed',
+            'parser_version' => 'rules_only',
+            'snapshot_schema_version' => 1,
+            'approved_by_user' => false,
+            'intake_locked' => false,
+        ]);
+
+        return $this->app->make(BulkIntakeCandidateDisplayService::class)->candidateForIntake($intake);
     }
 }
