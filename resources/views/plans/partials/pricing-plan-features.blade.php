@@ -5,14 +5,16 @@
     /** @var \Illuminate\Support\Collection $secondaryFeatureRows */
     $wrapInBillingToggle = $wrapInBillingToggle ?? true;
     $quotaBonusPercent = (int) ($quotaBonusPercent ?? 0);
+    $durationMultiplier = (float) ($durationMultiplier ?? 1.0);
     /** One SSOT line (label — value) for pricing; no split value/suffix paths. */
-    $catalogLine = static function (object $feat) use ($quotaBonusPercent, $billingDurationType): string {
+    $catalogLine = static function (object $feat) use ($quotaBonusPercent, $durationMultiplier, $billingDurationType): string {
         if (property_exists($feat, 'catalog_quota_payload') && is_array($feat->catalog_quota_payload)) {
             return PlanQuotaCatalogFormatter::catalogLineFromPayload(
                 (string) $feat->key,
                 $feat->catalog_quota_payload,
                 $quotaBonusPercent,
-                $billingDurationType
+                $billingDurationType,
+                $durationMultiplier
             );
         }
 

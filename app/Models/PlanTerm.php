@@ -130,6 +130,19 @@ class PlanTerm extends Model
         };
     }
 
+    public static function quotaDurationMultiplierFor(string $billingKey, int $durationDays = 0): float
+    {
+        return match ($billingKey) {
+            self::BILLING_MONTHLY => 1.0,
+            self::BILLING_QUARTERLY => 3.0,
+            self::BILLING_HALF_YEARLY => 6.0,
+            self::BILLING_YEARLY => 12.0,
+            self::BILLING_FIVE_YEARLY => 60.0,
+            self::BILLING_LIFETIME => 1.0,
+            default => $durationDays > 0 ? max(1.0, $durationDays / 30.0) : 1.0,
+        };
+    }
+
     /**
      * Human label key under {@code subscriptions.billing_*}.
      */

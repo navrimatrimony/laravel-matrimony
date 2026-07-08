@@ -316,6 +316,10 @@ class MobilePlanApiController extends Controller
             'final_price' => round((float) $term->final_price, 2),
             'discount_percent' => (int) ($term->discount_percent ?? 0),
             'quota_bonus_percent' => (int) ($term->quota_bonus_percent ?? 0),
+            'quota_duration_multiplier' => PlanTerm::quotaDurationMultiplierFor(
+                (string) $term->billing_key,
+                (int) $term->duration_days
+            ),
         ];
     }
 
@@ -325,16 +329,20 @@ class MobilePlanApiController extends Controller
     private function catalogFeatureLines(Plan $plan, ?PlanTerm $defaultTerm): array
     {
         $quotaBonusPercent = $defaultTerm instanceof PlanTerm ? (int) ($defaultTerm->quota_bonus_percent ?? 0) : 0;
+        $durationMultiplier = $defaultTerm instanceof PlanTerm
+            ? PlanTerm::quotaDurationMultiplierFor((string) $defaultTerm->billing_key, (int) $defaultTerm->duration_days)
+            : 1.0;
         $billingDurationType = $defaultTerm instanceof PlanTerm ? (string) $defaultTerm->billing_key : null;
 
         return $plan->catalogFeatureRowsForPricing()
-            ->map(function (object $feature) use ($quotaBonusPercent, $billingDurationType): string {
+            ->map(function (object $feature) use ($quotaBonusPercent, $durationMultiplier, $billingDurationType): string {
                 if (property_exists($feature, 'catalog_quota_payload') && is_array($feature->catalog_quota_payload)) {
                     return PlanQuotaCatalogFormatter::catalogLineFromPayload(
                         (string) $feature->key,
                         $feature->catalog_quota_payload,
                         $quotaBonusPercent,
                         $billingDurationType,
+                        $durationMultiplier,
                     );
                 }
 

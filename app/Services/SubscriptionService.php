@@ -208,6 +208,10 @@ class SubscriptionService
                         'duration_days' => (int) $planTerm->duration_days,
                         'discount_percent' => $planTerm->discount_percent !== null ? (int) $planTerm->discount_percent : null,
                         'quota_bonus_percent' => (int) ($planTerm->quota_bonus_percent ?? 0),
+                        'quota_duration_multiplier' => PlanTerm::quotaDurationMultiplierFor(
+                            (string) $planTerm->billing_key,
+                            (int) $planTerm->duration_days
+                        ),
                         'base_amount' => round((float) $resolved['base_amount'], 2),
                         'final_amount' => $finalCharged,
                         'currency' => 'INR',
@@ -224,6 +228,7 @@ class SubscriptionService
                         'duration_days' => $duration,
                         'discount_percent' => null,
                         'quota_bonus_percent' => 0,
+                        'quota_duration_multiplier' => 1.0,
                         'base_amount' => round((float) $resolved['base_amount'], 2),
                         'final_amount' => $finalCharged,
                         'currency' => 'INR',
@@ -387,6 +392,11 @@ class SubscriptionService
                         ? (int) $pending['discount_percent']
                         : null,
                     'quota_bonus_percent' => (int) ($pending['quota_bonus_percent'] ?? ($term?->quota_bonus_percent ?? 0)),
+                    'quota_duration_multiplier' => isset($pending['quota_duration_multiplier'])
+                        ? (float) $pending['quota_duration_multiplier']
+                        : ($term instanceof PlanTerm
+                            ? PlanTerm::quotaDurationMultiplierFor((string) $term->billing_key, (int) $term->duration_days)
+                            : 1.0),
                     'base_amount' => round((float) ($pending['base_amount'] ?? 0), 2),
                     'final_amount' => $finalAmt,
                     'currency' => $currency,
@@ -466,6 +476,9 @@ class SubscriptionService
             'duration_days_total' => $durationTotal,
             'discount_percent' => $term?->discount_percent,
             'quota_bonus_percent' => (int) ($term?->quota_bonus_percent ?? 0),
+            'quota_duration_multiplier' => $term instanceof PlanTerm
+                ? PlanTerm::quotaDurationMultiplierFor((string) $term->billing_key, (int) $term->duration_days)
+                : 1.0,
             'base_amount' => round((float) $resolved['base_amount'], 2),
             'final_amount' => $finalAfterCoupon,
             'currency' => 'INR',
@@ -588,6 +601,9 @@ class SubscriptionService
                 ? (int) $pending['discount_percent']
                 : null,
             'quota_bonus_percent' => (int) ($pending['quota_bonus_percent'] ?? 0),
+            'quota_duration_multiplier' => isset($pending['quota_duration_multiplier'])
+                ? (float) $pending['quota_duration_multiplier']
+                : 1.0,
             'final_amount' => round((float) ($pending['final_amount'] ?? 0), 2),
         ];
     }
@@ -807,6 +823,10 @@ class SubscriptionService
                     'plan_term_id' => (int) $term->id,
                     'duration_days' => $duration,
                     'quota_bonus_percent' => (int) ($term->quota_bonus_percent ?? 0),
+                    'quota_duration_multiplier' => PlanTerm::quotaDurationMultiplierFor(
+                        (string) $term->billing_key,
+                        (int) $term->duration_days
+                    ),
                     'base_amount' => null,
                     'final_amount' => null,
                     'currency' => 'INR',
@@ -869,6 +889,10 @@ class SubscriptionService
                         'plan_term_id' => (int) $term->id,
                         'duration_days' => $duration,
                         'quota_bonus_percent' => (int) ($term->quota_bonus_percent ?? 0),
+                        'quota_duration_multiplier' => PlanTerm::quotaDurationMultiplierFor(
+                            (string) $term->billing_key,
+                            (int) $term->duration_days
+                        ),
                     ],
                 );
 
@@ -1005,7 +1029,8 @@ class SubscriptionService
         $effective = $this->effectiveLimitFromQuotaPayload(
             $base,
             $payload,
-            $this->quotaBonusPercentForUser($user)
+            $this->quotaBonusPercentForUser($user),
+            $this->quotaDurationMultiplierForUser($user)
         );
 
         return $effective + $this->carriedQuotaBonus($user, $key);
@@ -1250,12 +1275,18 @@ class SubscriptionService
     /**
      * @param  array<string, mixed>  $payload
      */
-    private function effectiveLimitFromQuotaPayload(int $baseLimit, array $payload, int $quotaBonusPercent): int
+    private function effectiveLimitFromQuotaPayload(
+        int $baseLimit,
+        array $payload,
+        int $quotaBonusPercent,
+        float $quotaDurationMultiplier = 1.0
+    ): int
     {
         return PlanQuotaLimitCalculator::effectiveLimit(
             $baseLimit,
             (string) ($payload['refresh_type'] ?? ''),
-            $quotaBonusPercent
+            $quotaBonusPercent,
+            $quotaDurationMultiplier
         );
     }
 
@@ -1282,6 +1313,34 @@ class SubscriptionService
         }
 
         return 0;
+    }
+
+    private function quotaDurationMultiplierForUser(User $user): float
+    {
+        $sub = $this->getActiveSubscription($user);
+        if (! $sub instanceof Subscription) {
+            return 1.0;
+        }
+
+        return $this->quotaDurationMultiplierForSubscription($sub);
+    }
+
+    private function quotaDurationMultiplierForSubscription(Subscription $subscription): float
+    {
+        $snap = $subscription->checkoutSnapshot();
+        if (array_key_exists('quota_duration_multiplier', $snap)) {
+            return max(1.0, (float) $snap['quota_duration_multiplier']);
+        }
+
+        $subscription->loadMissing('planTerm');
+        if ($subscription->planTerm instanceof PlanTerm) {
+            return PlanTerm::quotaDurationMultiplierFor(
+                (string) $subscription->planTerm->billing_key,
+                (int) $subscription->planTerm->duration_days
+            );
+        }
+
+        return 1.0;
     }
 
     /**
@@ -1312,15 +1371,21 @@ class SubscriptionService
         ];
 
         $carry = [];
+        $previousQuotaBonus = $this->quotaBonusPercentForSubscription($previous);
+        $previousQuotaDurationMultiplier = $this->quotaDurationMultiplierForSubscription($previous);
         foreach ($featurePeriods as $featureKey => $period) {
             $limit = 0;
             $prevSnap = $previous->checkoutSnapshot();
             $qp = is_array($prevSnap['quota_policies'] ?? null) ? $prevSnap['quota_policies'] : null;
-            $previousQuotaBonus = $this->quotaBonusPercentForSubscription($previous);
             if (is_array($qp) && isset($qp[$featureKey]) && is_array($qp[$featureKey])) {
                 $payload = $qp[$featureKey];
                 $limit = PlanQuotaPolicyMirror::subscriptionLimitIntFromQuotaPayload($featureKey, $payload);
-                $limit = $this->effectiveLimitFromQuotaPayload($limit, $payload, $previousQuotaBonus);
+                $limit = $this->effectiveLimitFromQuotaPayload(
+                    $limit,
+                    $payload,
+                    $previousQuotaBonus,
+                    $previousQuotaDurationMultiplier
+                );
             } else {
                 $previous->plan->loadMissing('quotaPolicies');
                 $row = $previous->plan->quotaPolicies->firstWhere('feature_key', $featureKey);
@@ -1330,7 +1395,12 @@ class SubscriptionService
                         $featureKey,
                         $payload,
                     );
-                    $limit = $this->effectiveLimitFromQuotaPayload($limit, $payload, $previousQuotaBonus);
+                    $limit = $this->effectiveLimitFromQuotaPayload(
+                        $limit,
+                        $payload,
+                        $previousQuotaBonus,
+                        $previousQuotaDurationMultiplier
+                    );
                 } else {
                     throw QuotaPolicySourceViolation::missingPolicyRow(
                         'resolveCarryQuotaFromPreviousSubscription.subscription_id='.(int) $previous->id,

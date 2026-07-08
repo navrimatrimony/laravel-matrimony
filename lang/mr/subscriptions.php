@@ -128,6 +128,8 @@ return [
     'chat_quota_phase1_refresh_monthly_30d_ist' => 'रीफ्रेश',
     'chat_quota_phase1_refresh_monthly_30d_ist_long' => 'मासिक (३० दिवस, IST)',
     'chat_quota_phase1_refresh_lifetime' => 'आजीवन (एकदाच pool)',
+    'chat_quota_phase1_refresh_total' => 'एकूण',
+    'chat_quota_phase1_refresh_plan_duration' => 'प्लॅन कालावधी',
     'chat_quota_phase1_limit' => 'मर्यादा (रीफ्रेश विंडोनुसार संदेश; lifetime = pool आकार)',
     'chat_quota_phase1_limit_placeholder' => 'उदा. 300',
     'chat_quota_phase1_daily_sub_cap' => 'पर्यायी कमाल प्रति दिवस (विंडो आत उप-मर्यादा)',

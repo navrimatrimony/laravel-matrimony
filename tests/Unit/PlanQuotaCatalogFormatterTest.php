@@ -46,7 +46,7 @@ class PlanQuotaCatalogFormatterTest extends TestCase
         $this->assertSame($expected, $line);
     }
 
-    public function test_quota_bonus_applies_to_daily_weekly_monthly_catalog_limits_only(): void
+    public function test_quota_bonus_uses_duration_multiplier_only_for_plan_period_catalog_limits(): void
     {
         $dailyChat = [
             'is_enabled' => true,
@@ -67,7 +67,23 @@ class PlanQuotaCatalogFormatterTest extends TestCase
         $lifetimeInterest = [
             'is_enabled' => true,
             'refresh_type' => PlanQuotaPolicy::REFRESH_LIFETIME,
-            'limit_value' => 10,
+            'limit_value' => 50,
+            'daily_sub_cap' => null,
+            'per_day_usage_limit_enabled' => false,
+            'policy_meta' => [],
+        ];
+        $totalInterest = [
+            'is_enabled' => true,
+            'refresh_type' => PlanQuotaPolicy::REFRESH_TOTAL,
+            'limit_value' => 50,
+            'daily_sub_cap' => null,
+            'per_day_usage_limit_enabled' => false,
+            'policy_meta' => [],
+        ];
+        $planDurationInterest = [
+            'is_enabled' => true,
+            'refresh_type' => PlanQuotaPolicy::REFRESH_PLAN_DURATION,
+            'limit_value' => 50,
             'daily_sub_cap' => null,
             'per_day_usage_limit_enabled' => false,
             'policy_meta' => [],
@@ -75,15 +91,23 @@ class PlanQuotaCatalogFormatterTest extends TestCase
 
         $this->assertSame(
             '22'.__('subscriptions.quota_line_chat_suffix_per_day'),
-            PlanQuotaCatalogFormatter::quotaValueLineOnlyFromPayload(PlanFeatureKeys::CHAT_SEND_LIMIT, $dailyChat, 10, 'half_yearly')
+            PlanQuotaCatalogFormatter::quotaValueLineOnlyFromPayload(PlanFeatureKeys::CHAT_SEND_LIMIT, $dailyChat, 10, 'half_yearly', 6.0)
         );
         $this->assertSame(
             __('subscriptions.quota_line_per_week', ['count' => '110']),
-            PlanQuotaCatalogFormatter::quotaValueLineOnlyFromPayload(PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH, $weeklyMediator, 10, 'half_yearly')
+            PlanQuotaCatalogFormatter::quotaValueLineOnlyFromPayload(PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH, $weeklyMediator, 10, 'half_yearly', 6.0)
         );
         $this->assertSame(
-            __('subscriptions.quota_line_total', ['count' => '10']),
-            PlanQuotaCatalogFormatter::quotaValueLineOnlyFromPayload(PlanFeatureKeys::INTEREST_VIEW_LIMIT, $lifetimeInterest, 10, 'half_yearly')
+            __('subscriptions.quota_line_total', ['count' => '330']),
+            PlanQuotaCatalogFormatter::quotaValueLineOnlyFromPayload(PlanFeatureKeys::INTEREST_VIEW_LIMIT, $lifetimeInterest, 10, 'half_yearly', 6.0)
+        );
+        $this->assertSame(
+            __('subscriptions.quota_line_total', ['count' => '330']),
+            PlanQuotaCatalogFormatter::quotaValueLineOnlyFromPayload(PlanFeatureKeys::INTEREST_VIEW_LIMIT, $totalInterest, 10, 'half_yearly', 6.0)
+        );
+        $this->assertSame(
+            __('subscriptions.quota_line_total', ['count' => '330']),
+            PlanQuotaCatalogFormatter::quotaValueLineOnlyFromPayload(PlanFeatureKeys::INTEREST_VIEW_LIMIT, $planDurationInterest, 10, 'half_yearly', 6.0)
         );
     }
 
@@ -108,11 +132,11 @@ class PlanQuotaCatalogFormatterTest extends TestCase
 
         $this->assertSame(
             __('subscriptions.unlimited'),
-            PlanQuotaCatalogFormatter::quotaValueLineOnlyFromPayload(PlanFeatureKeys::CHAT_SEND_LIMIT, $unlimited, 10, 'half_yearly')
+            PlanQuotaCatalogFormatter::quotaValueLineOnlyFromPayload(PlanFeatureKeys::CHAT_SEND_LIMIT, $unlimited, 10, 'half_yearly', 6.0)
         );
         $this->assertSame(
             __('subscriptions.quota_line_per_day', ['count' => '0']),
-            PlanQuotaCatalogFormatter::quotaValueLineOnlyFromPayload(PlanFeatureKeys::CONTACT_VIEW_LIMIT, $zero, 10, 'half_yearly')
+            PlanQuotaCatalogFormatter::quotaValueLineOnlyFromPayload(PlanFeatureKeys::CONTACT_VIEW_LIMIT, $zero, 10, 'half_yearly', 6.0)
         );
     }
 }

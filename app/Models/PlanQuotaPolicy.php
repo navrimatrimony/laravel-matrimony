@@ -20,6 +20,10 @@ class PlanQuotaPolicy extends Model
 
     public const REFRESH_LIFETIME = 'lifetime';
 
+    public const REFRESH_TOTAL = 'total';
+
+    public const REFRESH_PLAN_DURATION = 'plan_duration';
+
     /** Incoming interest reveal window aligned with calendar quarters. */
     public const REFRESH_QUARTERLY = 'quarterly';
 
@@ -70,6 +74,8 @@ class PlanQuotaPolicy extends Model
             self::REFRESH_MONTHLY_30D_IST,
             self::REFRESH_QUARTERLY,
             self::REFRESH_LIFETIME,
+            self::REFRESH_TOTAL,
+            self::REFRESH_PLAN_DURATION,
         ];
     }
 
@@ -78,6 +84,8 @@ class PlanQuotaPolicy extends Model
      */
     public static function normalizeRefreshType(string $refresh): string
     {
+        $refresh = strtolower(trim($refresh));
+
         return $refresh === 'monthly' ? self::REFRESH_MONTHLY_30D_IST : $refresh;
     }
 

@@ -18,7 +18,7 @@ class SubscriptionQuotaBonusTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_runtime_quota_bonus_applies_only_to_refresh_limits(): void
+    public function test_runtime_quota_bonus_and_duration_multiplier_follow_refresh_category(): void
     {
         $user = User::factory()->create();
         $plan = $this->createPlanWithQuotaPolicies();
@@ -47,6 +47,7 @@ class SubscriptionQuotaBonusTest extends TestCase
                         'plan_term_id' => (int) $term->id,
                         'billing_key' => (string) $term->billing_key,
                         'quota_bonus_percent' => 10,
+                        'quota_duration_multiplier' => 6.0,
                     ],
                 ),
             ],
@@ -56,7 +57,7 @@ class SubscriptionQuotaBonusTest extends TestCase
 
         $this->assertSame(22, $service->getFeatureLimit($user, PlanFeatureKeys::CHAT_SEND_LIMIT));
         $this->assertSame(110, $service->getFeatureLimit($user, PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH));
-        $this->assertSame(10, $service->getFeatureLimit($user, PlanFeatureKeys::INTEREST_VIEW_LIMIT));
+        $this->assertSame(330, $service->getFeatureLimit($user, PlanFeatureKeys::INTEREST_VIEW_LIMIT));
         $this->assertSame(-1, $service->getFeatureLimit($user, SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT));
         $this->assertSame(0, $service->getFeatureLimit($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT));
     }
@@ -92,7 +93,7 @@ class SubscriptionQuotaBonusTest extends TestCase
 
         $this->setQuota($plan, PlanFeatureKeys::CHAT_SEND_LIMIT, PlanQuotaPolicy::REFRESH_DAILY, 20);
         $this->setQuota($plan, PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH, PlanQuotaPolicy::REFRESH_WEEKLY, 100);
-        $this->setQuota($plan, PlanFeatureKeys::INTEREST_VIEW_LIMIT, PlanQuotaPolicy::REFRESH_LIFETIME, 10);
+        $this->setQuota($plan, PlanFeatureKeys::INTEREST_VIEW_LIMIT, PlanQuotaPolicy::REFRESH_LIFETIME, 50);
         $this->setQuota($plan, PlanFeatureKeys::CONTACT_VIEW_LIMIT, PlanQuotaPolicy::REFRESH_DAILY, 0);
         $this->setQuota($plan, SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT, PlanQuotaPolicy::REFRESH_UNLIMITED, null);
 

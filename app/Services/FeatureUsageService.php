@@ -1251,7 +1251,10 @@ class FeatureUsageService
             PlanQuotaPolicy::REFRESH_WEEKLY => $now->copy()->startOfWeek(),
             PlanQuotaPolicy::REFRESH_QUARTERLY => $now->copy()->startOfQuarter(),
             PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST => $now->copy()->startOfMonth(),
-            PlanQuotaPolicy::REFRESH_LIFETIME, PlanQuotaPolicy::REFRESH_UNLIMITED => null,
+            PlanQuotaPolicy::REFRESH_LIFETIME,
+            PlanQuotaPolicy::REFRESH_TOTAL,
+            PlanQuotaPolicy::REFRESH_PLAN_DURATION,
+            PlanQuotaPolicy::REFRESH_UNLIMITED => null,
             default => $now->copy()->startOfMonth(),
         };
 

@@ -30,7 +30,9 @@ final class PlanQuotaRefreshRuntime
         return match ($rt) {
             PlanQuotaPolicy::REFRESH_WEEKLY, 'weekly' => 'weekly',
             PlanQuotaPolicy::REFRESH_DAILY, 'daily' => 'daily',
-            PlanQuotaPolicy::REFRESH_LIFETIME, 'lifetime' => 'lifetime',
+            PlanQuotaPolicy::REFRESH_LIFETIME,
+            PlanQuotaPolicy::REFRESH_TOTAL,
+            PlanQuotaPolicy::REFRESH_PLAN_DURATION => 'lifetime',
             PlanQuotaPolicy::REFRESH_QUARTERLY, 'quarterly' => 'quarterly',
             PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST => 'monthly',
             default => 'monthly',

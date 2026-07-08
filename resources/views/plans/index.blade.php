@@ -392,6 +392,10 @@
                                         'primaryFeatureRows' => $primaryFeatureRows,
                                         'secondaryFeatureRows' => $secondaryFeatureRows,
                                         'quotaBonusPercent' => (int) ($termCatalog->quota_bonus_percent ?? 0),
+                                        'durationMultiplier' => \App\Models\PlanTerm::quotaDurationMultiplierFor(
+                                            (string) $termCatalog->billing_key,
+                                            (int) $termCatalog->duration_days
+                                        ),
                                         'billingDurationType' => (string) $termCatalog->billing_key,
                                         'selectedBillingId' => (int) $termCatalog->id,
                                         'wrapInBillingToggle' => true,
@@ -403,6 +407,7 @@
                                     'primaryFeatureRows' => $primaryFeatureRows,
                                     'secondaryFeatureRows' => $secondaryFeatureRows,
                                     'quotaBonusPercent' => 0,
+                                    'durationMultiplier' => 1.0,
                                     'billingDurationType' => null,
                                     'selectedBillingId' => 0,
                                     'wrapInBillingToggle' => false,

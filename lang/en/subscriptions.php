@@ -287,6 +287,8 @@ return [
     'chat_quota_phase1_refresh_monthly_30d_ist' => 'Refresh',
     'chat_quota_phase1_refresh_monthly_30d_ist_long' => 'Monthly (30-day window, IST)',
     'chat_quota_phase1_refresh_lifetime' => 'Lifetime (one-time pool)',
+    'chat_quota_phase1_refresh_total' => 'Total',
+    'chat_quota_phase1_refresh_plan_duration' => 'Plan duration',
     'chat_quota_phase1_limit' => 'Limit (messages per refresh window, except lifetime = pool size)',
     'chat_quota_phase1_limit_placeholder' => 'e.g. 300',
     'chat_quota_phase1_daily_sub_cap' => 'Optional max per day (sub-cap inside the window)',
