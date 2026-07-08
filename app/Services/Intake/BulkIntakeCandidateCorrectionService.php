@@ -507,12 +507,17 @@ class BulkIntakeCandidateCorrectionService
      */
     private function snapshotHeight(array $snapshot): ?string
     {
+        $heightText = $this->snapshotText($snapshot, ['core.height', 'height']);
+        if ($heightText !== null) {
+            return $heightText;
+        }
+
         $heightCm = data_get($snapshot, 'core.height_cm', data_get($snapshot, 'height_cm'));
         if (is_numeric($heightCm)) {
             return ((string) (int) round((float) $heightCm)).' cm';
         }
 
-        return $this->snapshotText($snapshot, ['core.height', 'height']);
+        return null;
     }
 
     /**

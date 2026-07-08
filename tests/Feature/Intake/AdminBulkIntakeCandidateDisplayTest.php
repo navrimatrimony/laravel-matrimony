@@ -124,6 +124,60 @@ test('bulk list prefers reviewed snapshot values and keeps parsed json presence 
     }
 });
 
+test('bulk list shows reviewed snapshot height even when old confidence marks height low', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Old Low Confidence Candidate',
+                'height_cm' => 160,
+            ],
+            'confidence_map' => [
+                'core.height_cm' => 0.0,
+            ],
+            'field_status' => [
+                'core' => [
+                    'height_cm' => 'low_confidence',
+                ],
+            ],
+        ],
+        'approval_snapshot_json' => [
+            'core' => [
+                'full_name' => 'Reviewed Height Candidate',
+                'height_cm' => 160,
+                'height' => '5 ft 3 in',
+            ],
+            'confidence_map' => [
+                'core.height_cm' => 0.0,
+            ],
+            'field_status' => [
+                'core' => [
+                    'height_cm' => 'low_confidence',
+                ],
+            ],
+        ],
+    ]);
+    $item = candidateDisplayItem($batch, $intake, [
+        'original_filename' => 'reviewed-height-candidate.pdf',
+    ]);
+
+    $candidate = app(BulkIntakeCandidateDisplayService::class)->candidateForItem($item);
+
+    expect($candidate['height'])->toBe('160 cm')
+        ->and($candidate['height_needs_review'])->toBeFalse()
+        ->and($candidate['display_warnings'])->not->toContain('height_low_confidence')
+        ->and($candidate['missing_fields'])->not->toContain('height');
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Reviewed Height Candidate', false)
+        ->assertSee('160 cm', false)
+        ->assertSee('data-testid="bulk-candidate-reviewed-badge"', false);
+});
+
 test('bulk list shows duplicate hint when same mobile exists in another intake', function () {
     $admin = candidateDisplayAdminUser();
     $batch = candidateDisplayBatch($admin);

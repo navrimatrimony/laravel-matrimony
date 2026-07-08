@@ -36,13 +36,17 @@ test('admin can open bulk candidate correction page', function () {
     ]);
     $item = candidateCorrectionItem($batch, $intake);
 
-    $this->actingAs($admin)
+    $response = $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
         ->assertOk()
         ->assertSee('Bulk Candidate Correction', false)
+        ->assertSee('bulk-correction-layout', false)
+        ->assertSee('@media (min-width: 1024px)', false)
         ->assertSee('data-testid="bulk-correction-two-column-layout"', false)
         ->assertSee('data-testid="bulk-correction-left-evidence"', false)
         ->assertSee('data-testid="bulk-correction-right-form"', false)
+        ->assertDontSee('lg:grid-cols-[', false)
+        ->assertDontSee('lg:sticky', false)
         ->assertDontSee('Only these 7 fields are editable in this phase.', false)
         ->assertSee('Parsed Candidate', false)
         ->assertSee('9876543210', false)
@@ -56,6 +60,7 @@ test('admin can open bulk candidate correction page', function () {
         ->assertSee('data-testid="bulk-correction-height-input"', false)
         ->assertSee('list="bulk-height-options"', false)
         ->assertSee('datalist id="bulk-height-options"', false)
+        ->assertSee('5&#039;3&quot; / 160 cm', false)
         ->assertDontSee('data-testid="bulk-correction-height-free-text"', false)
         ->assertDontSee('name="height_cm"', false)
         ->assertSee('education-multiselect-root-bulk-correction-education-', false)
@@ -65,6 +70,26 @@ test('admin can open bulk candidate correction page', function () {
         ->assertSee('/api/location/search', false)
         ->assertSee('data-testid="bulk-correction-low-confidence-name"', false)
         ->assertSee('Saves only the reviewed intake snapshot.', false);
+
+    $html = $response->getContent();
+    $left = strpos($html, 'data-testid="bulk-correction-left-evidence"');
+    $sourceText = strpos($html, 'Last parse input text');
+    $right = strpos($html, 'data-testid="bulk-correction-right-form"');
+    $form = strpos($html, 'id="bulk-candidate-correction-form"');
+    $duplicate = strpos($html, 'data-testid="bulk-correction-duplicate-history-card"');
+    $review = strpos($html, 'Review flag');
+
+    expect($left)->not->toBeFalse()
+        ->and($sourceText)->not->toBeFalse()
+        ->and($right)->not->toBeFalse()
+        ->and($form)->not->toBeFalse()
+        ->and($duplicate)->not->toBeFalse()
+        ->and($review)->not->toBeFalse()
+        ->and($sourceText)->toBeGreaterThan($left)
+        ->and($sourceText)->toBeLessThan($right)
+        ->and($form)->toBeGreaterThan($right)
+        ->and($duplicate)->toBeGreaterThan($form)
+        ->and($review)->toBeGreaterThan($duplicate);
 });
 
 test('admin can save seven field correction without mutating evidence or bulk item parsed data', function () {
@@ -274,6 +299,36 @@ test('typed height and unselected typed location save into reviewed snapshot', f
         ->and($intake->raw_ocr_text)->toBe('Original OCR text for free text save')
         ->and($intake->parsed_json)->toBe($parsed)
         ->and($item->item_meta_json)->toBeNull();
+});
+
+test('reviewed height reopens as saved display text instead of height cm fallback', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $intake = candidateCorrectionIntake([
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Height Rehydrate Candidate',
+                'primary_contact_number' => '9876543210',
+                'height_cm' => 160,
+            ],
+        ],
+        'approval_snapshot_json' => [
+            'core' => [
+                'full_name' => 'Height Rehydrate Candidate',
+                'primary_contact_number' => '9876543210',
+                'height_cm' => 160,
+                'height' => '5 ft 3 in',
+            ],
+        ],
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-correction-height-input"', false)
+        ->assertSee('value="5 ft 3 in"', false)
+        ->assertDontSee('value="160 cm"', false);
 });
 
 test('admin can mark bulk candidate correction item as needs review without mutating evidence', function () {

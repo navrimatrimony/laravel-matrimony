@@ -80,7 +80,7 @@ class BulkIntakeCandidateDisplayService
 
         $name = $this->candidateName($display, $intake, $warnings, $displaySource);
         $dobAge = $this->dobAge($display, $warnings);
-        $height = $this->height($display, $warnings);
+        $height = $this->height($display, $warnings, $reviewedSnapshotPresent);
         $education = $this->safeDisplayField($this->educationRaw($display), 'education', $warnings);
         $occupation = $this->safeDisplayField($this->occupationRaw($display), 'occupation', $warnings);
 
@@ -366,9 +366,9 @@ class BulkIntakeCandidateDisplayService
      * @param  list<string>  $warnings
      * @return array{value: string|null, needs_review: bool}
      */
-    private function height(array $parsed, array &$warnings): array
+    private function height(array $parsed, array &$warnings, bool $isReviewedSnapshot = false): array
     {
-        if ($this->confidenceZeroOrLowStatus($parsed, ['core.height_cm', 'height_cm'])) {
+        if (! $isReviewedSnapshot && $this->confidenceZeroOrLowStatus($parsed, ['core.height_cm', 'height_cm'])) {
             $warnings[] = 'height_low_confidence';
 
             return ['value' => null, 'needs_review' => true];

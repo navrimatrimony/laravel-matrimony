@@ -14,9 +14,10 @@
     for ($heightInches = 48; $heightInches <= 84; $heightInches++) {
         $feet = intdiv($heightInches, 12);
         $inches = $heightInches % 12;
+        $heightCm = (int) round($heightInches * 2.54);
         $heightOptions[] = [
             'value' => $feet."'".$inches.'"',
-            'label' => $feet.' ft '.$inches.' in',
+            'label' => $feet."'".$inches.'" / '.$heightCm.' cm',
         ];
     }
 @endphp
@@ -24,6 +25,15 @@
 @once
     @vite(['resources/js/profile/location-typeahead.js'])
 @endonce
+
+<style>
+    @media (min-width: 1024px) {
+        .bulk-correction-layout {
+            grid-template-columns: minmax(0, 56%) minmax(380px, 44%);
+            align-items: start;
+        }
+    }
+</style>
 
 <div class="space-y-6">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -52,8 +62,8 @@
         Saves only the reviewed intake snapshot. No user/profile creation, WhatsApp queue, apply flow, or paid provider extraction runs here.
     </div>
 
-    <div data-testid="bulk-correction-two-column-layout" class="grid gap-6 lg:grid-cols-[minmax(0,0.55fr)_minmax(380px,0.45fr)] lg:items-start">
-        <div data-testid="bulk-correction-left-evidence" class="space-y-6">
+    <div data-testid="bulk-correction-two-column-layout" class="bulk-correction-layout grid gap-6">
+        <section data-testid="bulk-correction-left-evidence" class="space-y-6">
             <div class="rounded-lg bg-white p-6 shadow">
                 <h2 class="text-lg font-semibold text-gray-900">Original evidence</h2>
                 <dl class="mt-4 grid gap-4 text-sm md:grid-cols-2">
@@ -113,10 +123,10 @@
                     <p class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">No OCR or parse input text is available for this item.</p>
                 @endif
             </details>
-        </div>
+        </section>
 
-        <div data-testid="bulk-correction-right-form" class="space-y-6">
-            <div class="rounded-lg bg-white p-6 shadow lg:sticky lg:top-4">
+        <aside data-testid="bulk-correction-right-form" class="space-y-6">
+            <div class="rounded-lg bg-white p-6 shadow">
                 <h2 class="text-lg font-semibold text-gray-900">Correct candidate fields</h2>
 
                 @if (! $canSave)
@@ -316,7 +326,7 @@
                     </form>
                 @endif
             </div>
-        </div>
+        </aside>
     </div>
 </div>
 
