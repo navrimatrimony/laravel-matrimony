@@ -315,6 +315,7 @@ class MobilePlanApiController extends Controller
             'price' => round((float) $term->price, 2),
             'final_price' => round((float) $term->final_price, 2),
             'discount_percent' => (int) ($term->discount_percent ?? 0),
+            'quota_bonus_percent' => (int) ($term->quota_bonus_percent ?? 0),
         ];
     }
 
@@ -323,16 +324,16 @@ class MobilePlanApiController extends Controller
      */
     private function catalogFeatureLines(Plan $plan, ?PlanTerm $defaultTerm): array
     {
-        $durationMultiplier = $this->durationMultiplier($plan, $defaultTerm);
+        $quotaBonusPercent = $defaultTerm instanceof PlanTerm ? (int) ($defaultTerm->quota_bonus_percent ?? 0) : 0;
         $billingDurationType = $defaultTerm instanceof PlanTerm ? (string) $defaultTerm->billing_key : null;
 
         return $plan->catalogFeatureRowsForPricing()
-            ->map(function (object $feature) use ($durationMultiplier, $billingDurationType): string {
+            ->map(function (object $feature) use ($quotaBonusPercent, $billingDurationType): string {
                 if (property_exists($feature, 'catalog_quota_payload') && is_array($feature->catalog_quota_payload)) {
                     return PlanQuotaCatalogFormatter::catalogLineFromPayload(
                         (string) $feature->key,
                         $feature->catalog_quota_payload,
-                        $durationMultiplier,
+                        $quotaBonusPercent,
                         $billingDurationType,
                     );
                 }
@@ -342,34 +343,13 @@ class MobilePlanApiController extends Controller
                     .PlanFeatureLabel::catalogFormatValue(
                         (string) $feature->key,
                         (string) ($feature->value ?? ''),
-                        $durationMultiplier,
+                        1.0,
                         $billingDurationType,
                     );
             })
             ->filter(fn (string $line): bool => trim($line) !== '')
             ->values()
             ->all();
-    }
-
-    private function durationMultiplier(Plan $plan, ?PlanTerm $defaultTerm): float
-    {
-        if (! $defaultTerm instanceof PlanTerm) {
-            return 1.0;
-        }
-
-        $visibleTerms = $this->visibleTerms($plan);
-        $positiveDurations = $visibleTerms
-            ->map(fn (PlanTerm $term): int => (int) $term->duration_days)
-            ->filter(fn (int $days): bool => $days > 0)
-            ->values();
-        $baselineDays = $positiveDurations->isNotEmpty() ? (int) $positiveDurations->min() : 0;
-        $selectedDays = (int) $defaultTerm->duration_days;
-
-        if ($baselineDays <= 0 || $selectedDays <= 0) {
-            return 1.0;
-        }
-
-        return max(0.0, $selectedDays / $baselineDays);
     }
 
     private function featureStatePayload(array $state): array

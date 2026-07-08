@@ -140,7 +140,7 @@ class PlanUpdateBillingRequestTest extends TestCase
             'quota_policies' => $this->quotaPoliciesPayload(),
             'term_rows' => $this->termRowsList([
                 PlanTerm::BILLING_MONTHLY => ['price' => '100', 'is_visible' => '1'],
-                PlanTerm::BILLING_QUARTERLY => ['price' => '2', 'discount_percent' => '50', 'is_visible' => '1'],
+                PlanTerm::BILLING_QUARTERLY => ['price' => '2', 'discount_percent' => '50', 'quota_bonus_percent' => '5', 'is_visible' => '1'],
             ]),
         ];
 
@@ -157,6 +157,7 @@ class PlanUpdateBillingRequestTest extends TestCase
         $this->assertNotNull($q);
         $this->assertSame(2.0, (float) $q->price);
         $this->assertSame(50, (int) $q->discount_percent);
+        $this->assertSame(5, (int) $q->quota_bonus_percent);
     }
 
     public function test_update_plan_normalizes_quota_limit_with_leading_zeros(): void

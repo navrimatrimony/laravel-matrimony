@@ -386,15 +386,12 @@
                             @endif
 
                             @if ($useTerms)
-                                @php
-                                    $refDaysCatalog = max(1, (int) $visibleTerms->min('duration_days'));
-                                @endphp
                                 @foreach ($visibleTerms as $termCatalog)
                                     @include('plans.partials.pricing-plan-features', [
                                         'planId' => $plan->id,
                                         'primaryFeatureRows' => $primaryFeatureRows,
                                         'secondaryFeatureRows' => $secondaryFeatureRows,
-                                        'durationMultiplier' => ((float) $termCatalog->duration_days) / (float) $refDaysCatalog,
+                                        'quotaBonusPercent' => (int) ($termCatalog->quota_bonus_percent ?? 0),
                                         'billingDurationType' => (string) $termCatalog->billing_key,
                                         'selectedBillingId' => (int) $termCatalog->id,
                                         'wrapInBillingToggle' => true,
@@ -405,7 +402,7 @@
                                     'planId' => $plan->id,
                                     'primaryFeatureRows' => $primaryFeatureRows,
                                     'secondaryFeatureRows' => $secondaryFeatureRows,
-                                    'durationMultiplier' => 1.0,
+                                    'quotaBonusPercent' => 0,
                                     'billingDurationType' => null,
                                     'selectedBillingId' => 0,
                                     'wrapInBillingToggle' => false,

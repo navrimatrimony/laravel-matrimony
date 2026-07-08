@@ -12,12 +12,9 @@ use Illuminate\Support\Str;
 final class PlanFeatureLabel
 {
     /**
-     * Public catalog (/plans): scale pool limits by billing duration vs shortest option on the card.
-     *
-     * @param  float  $durationMultiplier  e.g. 90/30 = 3 for quarterly vs monthly baseline
-     * @param  string|null  $billingDurationType  {@see \App\Models\PlanTerm::billing_key}
+     * Public catalog (/plans): legacy plan_feature rows do not carry refresh type, so never scale by billing duration.
      */
-    public static function catalogFormatValue(string $key, string $value, float $durationMultiplier, ?string $billingDurationType = null): string
+    public static function catalogFormatValue(string $key, string $value, float $ignoredDurationMultiplier, ?string $billingDurationType = null): string
     {
         $v = trim($value);
         if ($v === '') {
@@ -31,32 +28,7 @@ final class PlanFeatureLabel
             return self::truthy($v) ? __('subscriptions.yes') : __('subscriptions.no');
         }
 
-        $mult = max(0.0, $durationMultiplier);
-        if ($mult > 0 && $mult !== 1.0 && self::catalogShouldScaleLimitKey($key)) {
-            $n = (int) $v;
-            if ($n !== 9999 && $n >= 0) {
-                $scaled = (int) max(0, (int) round($n * $mult));
-
-                return self::formatValue($key, (string) $scaled);
-            }
-        }
-
         return self::formatValue($key, $v);
-    }
-
-    /**
-     * Keys whose numeric cap represents a per-cycle pool that grows with subscription length on the pricing card.
-     */
-    private static function catalogShouldScaleLimitKey(string $key): bool
-    {
-        return in_array($key, [
-            PlanFeatureKeys::CONTACT_VIEW_LIMIT,
-            PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH,
-            PlanFeatureKeys::INTEREST_VIEW_LIMIT,
-            'photo_blur_limit',
-            PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT,
-            PlanFeatureKeys::BIODATA_EXPORT_LIMIT,
-        ], true);
     }
 
     /**

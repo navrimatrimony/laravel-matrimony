@@ -72,8 +72,8 @@ class PlanMultiDurationStoreTest extends TestCase
 
         $silverTerms = $this->termRowsList([
             PlanTerm::BILLING_MONTHLY => ['price' => '100', 'is_visible' => '1'],
-            PlanTerm::BILLING_QUARTERLY => ['price' => '280', 'is_visible' => '1'],
-            PlanTerm::BILLING_HALF_YEARLY => ['price' => '520', 'is_visible' => '1'],
+            PlanTerm::BILLING_QUARTERLY => ['price' => '280', 'quota_bonus_percent' => '5', 'is_visible' => '1'],
+            PlanTerm::BILLING_HALF_YEARLY => ['price' => '520', 'quota_bonus_percent' => '10', 'is_visible' => '1'],
         ]);
 
         $silverResponse = $this->actingAs($admin)->post(route('admin.plans.store'), [
@@ -143,6 +143,8 @@ class PlanMultiDurationStoreTest extends TestCase
 
         $this->assertSame(280.0, (float) $silver->terms->firstWhere('billing_key', PlanTerm::BILLING_QUARTERLY)->price);
         $this->assertSame(290.0, (float) $gold->terms->firstWhere('billing_key', PlanTerm::BILLING_QUARTERLY)->price);
+        $this->assertSame(5, (int) $silver->terms->firstWhere('billing_key', PlanTerm::BILLING_QUARTERLY)->quota_bonus_percent);
+        $this->assertSame(10, (int) $silver->terms->firstWhere('billing_key', PlanTerm::BILLING_HALF_YEARLY)->quota_bonus_percent);
         $this->assertTrue($silver->terms->firstWhere('billing_key', PlanTerm::BILLING_HALF_YEARLY)->is_visible);
         $this->assertFalse($gold->terms->firstWhere('billing_key', PlanTerm::BILLING_HALF_YEARLY)->is_visible);
     }
@@ -163,7 +165,7 @@ class PlanMultiDurationStoreTest extends TestCase
             'quota_policies' => $this->quotaPoliciesPayload(),
             'term_rows' => $this->termRowsList([
                 PlanTerm::BILLING_MONTHLY => ['price' => '100', 'is_visible' => '1'],
-                PlanTerm::BILLING_QUARTERLY => ['price' => '270', 'discount_percent' => '5', 'is_visible' => '1'],
+                PlanTerm::BILLING_QUARTERLY => ['price' => '270', 'discount_percent' => '5', 'quota_bonus_percent' => '5', 'is_visible' => '1'],
             ]),
         ];
 
@@ -177,5 +179,6 @@ class PlanMultiDurationStoreTest extends TestCase
         $this->assertSame(2, $plan->terms->count());
         $this->assertTrue($plan->terms->pluck('billing_key')->contains(PlanTerm::BILLING_MONTHLY));
         $this->assertTrue($plan->terms->pluck('billing_key')->contains(PlanTerm::BILLING_QUARTERLY));
+        $this->assertSame(5, (int) $plan->terms->firstWhere('billing_key', PlanTerm::BILLING_QUARTERLY)->quota_bonus_percent);
     }
 }

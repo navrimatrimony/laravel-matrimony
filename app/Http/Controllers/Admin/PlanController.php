@@ -311,6 +311,7 @@ class PlanController extends Controller
             'term_rows.*.billing_key' => ['required', 'string', Rule::in(PlanTerm::presetBillingKeys())],
             'term_rows.*.price' => ['required', 'numeric', 'min:0'],
             'term_rows.*.discount_percent' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'term_rows.*.quota_bonus_percent' => ['nullable', 'integer', 'min:0', 'max:100'],
             'term_rows.*.is_visible' => ['nullable'],
             'default_billing_key' => ['required', 'string', Rule::in(PlanTerm::presetBillingKeys())],
         ]);
@@ -345,7 +346,7 @@ class PlanController extends Controller
     }
 
     /**
-     * @return list<array{billing_key: string, price: float, discount_percent: int|null, is_visible: bool}>
+     * @return list<array{billing_key: string, price: float, discount_percent: int|null, quota_bonus_percent: int, is_visible: bool}>
      */
     private function normalizedTermRowsFromRequest(Request $request): array
     {
@@ -362,6 +363,10 @@ class PlanController extends Controller
             $disc = ($rawD === '' || $rawD === null)
                 ? null
                 : max(0, min(100, (int) round((float) $rawD)));
+            $rawQuotaBonus = $row['quota_bonus_percent'] ?? null;
+            $quotaBonus = ($rawQuotaBonus === '' || $rawQuotaBonus === null)
+                ? PlanTerm::defaultQuotaBonusPercentFor($key)
+                : max(0, min(100, (int) round((float) $rawQuotaBonus)));
             $visible = filter_var($row['is_visible'] ?? true, FILTER_VALIDATE_BOOLEAN)
                 || (string) ($row['is_visible'] ?? '') === '1';
 
@@ -369,6 +374,7 @@ class PlanController extends Controller
                 'billing_key' => $key,
                 'price' => (float) ($row['price'] ?? 0),
                 'discount_percent' => $disc,
+                'quota_bonus_percent' => $quotaBonus,
                 'is_visible' => $visible,
             ];
         }
@@ -387,6 +393,7 @@ class PlanController extends Controller
                 (string) ($row['billing_key'] ?? '') => [
                     'price' => round((float) ($row['price'] ?? 0), 2),
                     'discount_percent' => $row['discount_percent'] === null ? null : (int) $row['discount_percent'],
+                    'quota_bonus_percent' => (int) ($row['quota_bonus_percent'] ?? PlanTerm::defaultQuotaBonusPercentFor((string) ($row['billing_key'] ?? ''))),
                     'is_visible' => (bool) ($row['is_visible'] ?? false),
                 ],
             ])
@@ -397,6 +404,7 @@ class PlanController extends Controller
                 (string) $term->billing_key => [
                     'price' => round((float) $term->price, 2),
                     'discount_percent' => $term->discount_percent === null ? null : (int) $term->discount_percent,
+                    'quota_bonus_percent' => (int) ($term->quota_bonus_percent ?? 0),
                     'is_visible' => (bool) $term->is_visible,
                 ],
             ])
@@ -1072,7 +1080,7 @@ class PlanController extends Controller
     /**
      * Billing rows for admin form: edit loads only persisted {@see Plan::$terms}; create uses one starter row.
      *
-     * @return list<array{billing_key: string, price: float, discount_percent: int|null, is_visible: bool}>
+     * @return list<array{billing_key: string, price: float, discount_percent: int|null, quota_bonus_percent: int, is_visible: bool}>
      */
     private function termRowsForAdminBillingForm(Plan $plan, bool $isEdit): array
     {
@@ -1087,6 +1095,7 @@ class PlanController extends Controller
                 'billing_key' => $t->billing_key,
                 'price' => (float) $t->price,
                 'discount_percent' => $t->discount_percent,
+                'quota_bonus_percent' => (int) ($t->quota_bonus_percent ?? 0),
                 'is_visible' => (bool) $t->is_visible,
             ])->all();
         }
@@ -1098,6 +1107,7 @@ class PlanController extends Controller
             'billing_key' => PlanTerm::BILLING_MONTHLY,
             'price' => $p,
             'discount_percent' => $d !== null ? (int) $d : null,
+            'quota_bonus_percent' => PlanTerm::defaultQuotaBonusPercentFor(PlanTerm::BILLING_MONTHLY),
             'is_visible' => true,
         ]];
     }

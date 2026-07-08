@@ -236,6 +236,7 @@ return [
     'admin_plan_carry_days_180' => '6 months',
     'admin_plan_carry_days_365' => '1 year',
     'admin_plan_discount_percent_label' => 'Discount %',
+    'admin_plan_quota_bonus_percent_label' => 'Quota bonus %',
     'admin_plan_grace_carry_discount_row_help' => 'Grace and carry-over apply when a subscription ends or renews. Discount here matches the first billing row on save.',
     'admin_plan_catalog_price_label' => 'Catalog price (₹)',
     'admin_plan_active_label' => 'Active (visible for new subscriptions)',

@@ -17,11 +17,11 @@ final class PlanQuotaCatalogFormatter
     public static function catalogLineFromPayload(
         string $featureKey,
         array $payload,
-        float $durationMultiplier = 1.0,
+        int $quotaBonusPercent = 0,
         ?string $billingDurationType = null,
     ): string {
         $label = PlanFeatureLabel::catalogLabelForPricing($featureKey, $payload);
-        $value = self::quotaValueLineOnlyFromPayload($featureKey, $payload, $durationMultiplier, $billingDurationType);
+        $value = self::quotaValueLineOnlyFromPayload($featureKey, $payload, $quotaBonusPercent, $billingDurationType);
 
         return $label.' — '.$value;
     }
@@ -34,7 +34,7 @@ final class PlanQuotaCatalogFormatter
     public static function quotaValueLineOnlyFromPayload(
         string $featureKey,
         array $payload,
-        float $durationMultiplier = 1.0,
+        int $quotaBonusPercent = 0,
         ?string $billingDurationType = null,
     ): string {
         if (PlanQuotaPolicyKeys::mirrorsPlanFeatureAsBooleanOnly($featureKey)) {
@@ -45,11 +45,11 @@ final class PlanQuotaCatalogFormatter
         }
 
         if ($featureKey === PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT) {
-            return self::whoViewedCatalogLine($payload);
+            return self::whoViewedCatalogLine($payload, $quotaBonusPercent);
         }
 
         if ($featureKey === PlanFeatureKeys::CHAT_SEND_LIMIT) {
-            return self::chatSendCatalogLine($payload, $durationMultiplier, $billingDurationType);
+            return self::chatSendCatalogLine($payload, $quotaBonusPercent, $billingDurationType);
         }
 
         $enabled = filter_var($payload['is_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)
@@ -71,13 +71,9 @@ final class PlanQuotaCatalogFormatter
             return __('subscriptions.unlimited');
         }
 
-        $mult = max(0.0, $durationMultiplier);
-        $scaled = $n;
-        if ($mult > 0 && $mult !== 1.0 && self::shouldScaleLimitForCatalog($featureKey)) {
-            if ($n !== 9999 && $n >= 0) {
-                $scaled = (int) max(0, (int) round($n * $mult));
-            }
-        }
+        $scaled = $n >= 9999
+            ? $n
+            : PlanQuotaLimitCalculator::effectiveLimit($n, $refresh, $quotaBonusPercent);
 
         return self::appendRefreshSuffix((string) $scaled, $refresh);
     }
@@ -85,7 +81,7 @@ final class PlanQuotaCatalogFormatter
     /**
      * @param  array<string, mixed>  $payload
      */
-    private static function whoViewedCatalogLine(array $payload): string
+    private static function whoViewedCatalogLine(array $payload, int $quotaBonusPercent): string
     {
         $refresh = PlanQuotaRefreshRuntime::normalizeRefreshTypeString((string) ($payload['refresh_type'] ?? ''));
         if ($refresh === PlanQuotaPolicy::REFRESH_UNLIMITED) {
@@ -102,6 +98,7 @@ final class PlanQuotaCatalogFormatter
         if ($v === 0) {
             return __('subscriptions.who_viewed_catalog_hidden');
         }
+        $v = PlanQuotaLimitCalculator::effectiveLimit($v, $refresh, $quotaBonusPercent);
 
         if ($refresh === PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST) {
             return __('subscriptions.quota_line_per_month', ['count' => $v]);
@@ -113,7 +110,7 @@ final class PlanQuotaCatalogFormatter
     /**
      * @param  array<string, mixed>  $payload
      */
-    private static function chatSendCatalogLine(array $payload, float $durationMultiplier, ?string $billingDurationType): string
+    private static function chatSendCatalogLine(array $payload, int $quotaBonusPercent, ?string $billingDurationType): string
     {
         $enabled = filter_var($payload['is_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)
             || (string) ($payload['is_enabled'] ?? '') === '1';
@@ -132,11 +129,7 @@ final class PlanQuotaCatalogFormatter
         if ($n === -1 || $n >= 9999) {
             return __('subscriptions.unlimited');
         }
-        $mult = max(0.0, $durationMultiplier);
-        $scaled = $n;
-        if ($mult > 0 && $mult !== 1.0) {
-            $scaled = (int) max(0, (int) round($n * $mult));
-        }
+        $scaled = PlanQuotaLimitCalculator::effectiveLimit($n, $refresh, $quotaBonusPercent);
         if ($refresh === PlanQuotaPolicy::REFRESH_DAILY || $refresh === 'daily') {
             return (string) $scaled.__('subscriptions.quota_line_chat_suffix_per_day');
         }
@@ -159,14 +152,4 @@ final class PlanQuotaCatalogFormatter
         };
     }
 
-    private static function shouldScaleLimitForCatalog(string $key): bool
-    {
-        return in_array($key, [
-            PlanFeatureKeys::CONTACT_VIEW_LIMIT,
-            PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH,
-            PlanFeatureKeys::INTEREST_VIEW_LIMIT,
-            'photo_blur_limit',
-            PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT,
-        ], true);
-    }
 }

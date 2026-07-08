@@ -49,6 +49,9 @@ class PlanTermFillMissingTest extends TestCase
             ['half_yearly', 'monthly', 'quarterly', 'yearly'],
             $keys
         );
+        $this->assertSame(5, (int) PlanTerm::query()->where('plan_id', $plan->id)->where('billing_key', PlanTerm::BILLING_QUARTERLY)->value('quota_bonus_percent'));
+        $this->assertSame(10, (int) PlanTerm::query()->where('plan_id', $plan->id)->where('billing_key', PlanTerm::BILLING_HALF_YEARLY)->value('quota_bonus_percent'));
+        $this->assertSame(20, (int) PlanTerm::query()->where('plan_id', $plan->id)->where('billing_key', PlanTerm::BILLING_YEARLY)->value('quota_bonus_percent'));
     }
 
     #[Test]

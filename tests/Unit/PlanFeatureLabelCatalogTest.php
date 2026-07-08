@@ -8,7 +8,7 @@ use Tests\TestCase;
 
 class PlanFeatureLabelCatalogTest extends TestCase
 {
-    public function test_scales_contact_pool_for_quarterly_vs_monthly_baseline(): void
+    public function test_contact_pool_is_not_scaled_by_quarterly_duration(): void
     {
         $out = PlanFeatureLabel::catalogFormatValue(
             PlanFeatureKeys::CONTACT_VIEW_LIMIT,
@@ -16,7 +16,7 @@ class PlanFeatureLabelCatalogTest extends TestCase
             3.0,
             'quarterly'
         );
-        $this->assertSame('90', $out);
+        $this->assertSame('30', $out);
     }
 
     public function test_daily_chat_send_not_scaled(): void

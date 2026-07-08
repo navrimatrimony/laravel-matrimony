@@ -182,6 +182,7 @@ return [
     'admin_plan_carry_days_180' => '६ महिने',
     'admin_plan_carry_days_365' => '१ वर्ष',
     'admin_plan_discount_percent_label' => 'सवलत %',
+    'admin_plan_quota_bonus_percent_label' => 'Quota bonus %',
     'admin_plan_grace_carry_discount_row_help' => 'Grace व carry-over सबस्क्रिप्शन संपताना/नूतनीकरणावर लागू. इथली सवलत जतनावर पहिल्या बिलिंग रकानेशी जुळवली जाते.',
     'admin_plan_catalog_price_label' => 'कॅटалог किंमत (₹)',
     'admin_plan_active_label' => 'सक्रिय (नवीन सबस्क्रिप्शनसाठी दिसेल)',

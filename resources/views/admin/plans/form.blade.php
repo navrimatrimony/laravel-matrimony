@@ -236,7 +236,13 @@
                 <template id="admin-plan-term-row-template">
                     @include('admin.plans.partials.plan-term-row', [
                         'i' => 999,
-                        'row' => ['billing_key' => \App\Models\PlanTerm::BILLING_MONTHLY, 'price' => 0, 'discount_percent' => null, 'is_visible' => true],
+                        'row' => [
+                            'billing_key' => \App\Models\PlanTerm::BILLING_MONTHLY,
+                            'price' => 0,
+                            'discount_percent' => null,
+                            'quota_bonus_percent' => \App\Models\PlanTerm::defaultQuotaBonusPercentFor(\App\Models\PlanTerm::BILLING_MONTHLY),
+                            'is_visible' => true,
+                        ],
                         'presetKeys' => $presetKeys,
                         'defaultBillingKeyInitial' => null,
                         'forTemplate' => true,
