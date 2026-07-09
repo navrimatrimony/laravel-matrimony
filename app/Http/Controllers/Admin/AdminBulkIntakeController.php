@@ -22,6 +22,7 @@ use App\Services\Intake\BulkIntakeIdentityHistoryService;
 use App\Services\Intake\BulkIntakeManualTranscriptService;
 use App\Services\Intake\BulkIntakeProgressPresenter;
 use App\Services\Intake\BulkIntakeReadinessService;
+use App\Services\Intake\BulkIntakeWhatsAppConsentService;
 use App\Services\Intake\IntakeOwnerAssignmentService;
 use App\Support\MobileNumber;
 use Illuminate\Http\Request;
@@ -133,7 +134,8 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeEligibilityService $eligibilityService,
         BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService,
         BulkIntakeDuplicateGateService $duplicateGateService,
-        BulkIntakeProgressPresenter $progressPresenter
+        BulkIntakeProgressPresenter $progressPresenter,
+        BulkIntakeWhatsAppConsentService $whatsappConsentService,
     )
     {
         $statusFilters = $this->bulkItemStatusFilters();
@@ -226,6 +228,23 @@ class AdminBulkIntakeController extends Controller
             fn (BulkIntakeBatchItem $item): bool => (bool) ($readyForConsentByItemId[(int) $item->id]['ready'] ?? false),
         );
         $readyCount = (int) ($screeningCounts[BulkIntakeEligibilityService::FILTER_READY] ?? 0);
+        $whatsappConsentByItemId = $statusFilteredItems
+            ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
+                (int) $item->id => [
+                    'status' => $whatsappConsentService->consentStatus($item),
+                    'status_label' => $whatsappConsentService->consentStatus($item) !== null
+                        ? $whatsappConsentService->statusLabel((string) $whatsappConsentService->consentStatus($item))
+                        : null,
+                    'can_send' => $whatsappConsentService->canSendPermission(
+                        $item,
+                        $pipelineByItemId[(int) $item->id] ?? null
+                    ),
+                ],
+            ])
+            ->all();
+        $whatsappEligibleToSendCount = collect($whatsappConsentByItemId)
+            ->filter(fn (array $consent): bool => (bool) ($consent['can_send']['allowed'] ?? false))
+            ->count();
         $displayItems = $statusFilteredItems
             ->filter(fn (BulkIntakeBatchItem $item): bool => $eligibilityService->itemMatchesPipelineFilter(
                 $screeningFilter,
@@ -255,6 +274,8 @@ class AdminBulkIntakeController extends Controller
             'screeningReviewByItemId' => $screeningReviewByItemId,
             'readyForConsentByItemId' => $readyForConsentByItemId,
             'readyCount' => $readyCount,
+            'whatsappConsentByItemId' => $whatsappConsentByItemId,
+            'whatsappEligibleToSendCount' => $whatsappEligibleToSendCount,
             'screeningFilter' => $screeningFilter,
             'primaryScreeningFilters' => $primaryScreeningFilters,
             'legacyScreeningFilters' => $legacyScreeningFilters,
@@ -812,6 +833,78 @@ class AdminBulkIntakeController extends Controller
         return redirect()
             ->back()
             ->with('success', 'Manual screening decision cleared.');
+    }
+
+    public function sendItemWhatsAppPermission(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeEligibilityService $eligibilityService,
+        BulkIntakeWhatsAppConsentService $whatsappConsentService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $pipeline = $eligibilityService->eligibleForPipeline($bulkIntakeBatchItem);
+        $result = $whatsappConsentService->sendPermission($bulkIntakeBatchItem, $request->user(), $pipeline);
+
+        if (! $result['success']) {
+            return redirect()
+                ->back()
+                ->with('error', $result['error_message'] ?? 'WhatsApp permission message could not be sent.');
+        }
+
+        return redirect()
+            ->back()
+            ->with('success', 'WhatsApp permission message queued for this eligible candidate.');
+    }
+
+    public function sendBatchWhatsAppPermission(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeEligibilityService $eligibilityService,
+        BulkIntakeWhatsAppConsentService $whatsappConsentService,
+        BulkIntakeCandidateDisplayService $candidateDisplayService,
+        BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService,
+        BulkIntakeDuplicateGateService $duplicateGateService
+    ) {
+        abort_unless($request->user() instanceof User, 403);
+
+        $items = $bulkIntakeBatch->items()
+            ->with('biodataIntake:id,parsed_json,approval_snapshot_json')
+            ->orderBy('item_sequence')
+            ->get();
+
+        $sent = 0;
+        $skipped = 0;
+        $failed = 0;
+
+        foreach ($items as $item) {
+            $duplicateHints = $duplicateHistoryHintService->hintsForItem($item);
+            $duplicateGate = $duplicateGateService->evaluateForItem($item, $duplicateHints);
+            $pipeline = $eligibilityService->eligibleForPipeline(
+                $item,
+                $candidateDisplayService->candidateForItem($item),
+                $duplicateHints,
+                $duplicateGate,
+            );
+            $gate = $whatsappConsentService->canSendPermission($item, $pipeline);
+            if (! $gate['allowed']) {
+                $skipped++;
+                continue;
+            }
+
+            $result = $whatsappConsentService->sendPermission($item, $request->user(), $pipeline);
+            if ($result['success']) {
+                $sent++;
+            } else {
+                $failed++;
+            }
+        }
+
+        return redirect()
+            ->back()
+            ->with('success', "WhatsApp permission batch finished. Sent: {$sent}, skipped: {$skipped}, failed: {$failed}.");
     }
 
     public function clearItemManualDuplicate(

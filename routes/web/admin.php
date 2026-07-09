@@ -648,6 +648,8 @@ Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('ad
         Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/clear-duplicate-block-override', [AdminBulkIntakeController::class, 'clearDuplicateBlockOverride'])->name('items.clear-duplicate-block-override');
         Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/save-screening-review', [AdminBulkIntakeController::class, 'saveItemScreeningReview'])->name('items.save-screening-review');
         Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/clear-screening-review', [AdminBulkIntakeController::class, 'clearItemScreeningReview'])->name('items.clear-screening-review');
+        Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/send-whatsapp-permission', [AdminBulkIntakeController::class, 'sendItemWhatsAppPermission'])->name('items.send-whatsapp-permission');
+        Route::post('/{bulkIntakeBatch}/send-whatsapp-permission-batch', [AdminBulkIntakeController::class, 'sendBatchWhatsAppPermission'])->name('send-whatsapp-permission-batch');
         Route::get('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/correct-candidate', [AdminBulkIntakeController::class, 'correctCandidateForm'])->name('items.correct-candidate');
         Route::get('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/evidence-image', [AdminBulkIntakeController::class, 'evidenceImage'])->name('items.evidence-image');
         Route::patch('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/correct-candidate', [AdminBulkIntakeController::class, 'saveCandidateCorrection'])->name('items.correct-candidate.update');

@@ -63,4 +63,20 @@ return [
 
     /** App Secret — used to validate X-Hub-Signature-256 on inbound webhooks when set. */
     'app_secret' => env('WHATSAPP_APP_SECRET', ''),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Bulk Intake WhatsApp Permission (Phase D)
+    |--------------------------------------------------------------------------
+    |
+    | Default driver `log` records outbound permission messages in
+    | intake_whatsapp_sessions/messages for local testing without Meta API.
+    | Set BULK_INTAKE_WHATSAPP_CONSENT_SENDER=meta when templates are ready.
+    |
+    */
+    'bulk_consent_sender' => env('BULK_INTAKE_WHATSAPP_CONSENT_SENDER', 'log'),
+    'bulk_consent_live_enabled' => filter_var(env('BULK_INTAKE_WHATSAPP_CONSENT_LIVE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+    'bulk_consent_template_name' => env('BULK_INTAKE_WHATSAPP_CONSENT_TEMPLATE_NAME', ''),
+    'bulk_consent_template_language' => env('BULK_INTAKE_WHATSAPP_CONSENT_TEMPLATE_LANGUAGE', 'mr'),
+    'bulk_consent_no_response_hours' => (int) env('BULK_INTAKE_WHATSAPP_CONSENT_NO_RESPONSE_HOURS', 72),
 ];

@@ -5,11 +5,16 @@ namespace App\Services\WhatsApp;
 use App\Models\IntakeWhatsAppMessage;
 use App\Models\IntakeWhatsAppSession;
 use App\Models\User;
+use App\Services\Intake\BulkIntakeWhatsAppConsentService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class WhatsAppInboundProcessor
 {
+    public function __construct(
+        private readonly BulkIntakeWhatsAppConsentService $bulkConsentService,
+    ) {}
+
     public function process(array $payload): array
     {
         return DB::transaction(function () use ($payload): array {
@@ -205,6 +210,12 @@ class WhatsAppInboundProcessor
             'received_at' => $this->timestampOrNull($message['timestamp'] ?? null),
         ]);
 
+        $this->bulkConsentService->processInboundReply(
+            $session,
+            $this->textBody($message, $type) ?? '',
+            $this->buttonReplyId($message, $type)
+        );
+
         return true;
     }
 
@@ -275,6 +286,16 @@ class WhatsAppInboundProcessor
         }
 
         return null;
+    }
+
+    private function buttonReplyId(array $message, string $type): ?string
+    {
+        if ($type !== IntakeWhatsAppMessage::TYPE_INTERACTIVE) {
+            return null;
+        }
+
+        return $this->stringOrNull($message['interactive']['button_reply']['id'] ?? null)
+            ?? $this->stringOrNull($message['interactive']['list_reply']['id'] ?? null);
     }
 
     /**

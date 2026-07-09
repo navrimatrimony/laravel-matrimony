@@ -34,6 +34,8 @@
     $screeningReviewByItemId = $screeningReviewByItemId ?? [];
     $readyForConsentByItemId = is_array($readyForConsentByItemId ?? null) ? $readyForConsentByItemId : [];
     $readyCount = (int) ($readyCount ?? 0);
+    $whatsappConsentByItemId = is_array($whatsappConsentByItemId ?? null) ? $whatsappConsentByItemId : [];
+    $whatsappEligibleToSendCount = (int) ($whatsappEligibleToSendCount ?? 0);
     $screeningFilter = (string) ($screeningFilter ?? 'all');
     $primaryScreeningFilters = is_array($primaryScreeningFilters ?? null) ? $primaryScreeningFilters : [];
     $legacyScreeningFilters = is_array($legacyScreeningFilters ?? null) ? $legacyScreeningFilters : [];
@@ -81,6 +83,16 @@
             <p class="mt-1 text-xs text-gray-500">Review visibility only — does not create profiles. Free parse uses existing OCR text only.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
+            @if ($whatsappEligibleToSendCount > 0)
+                <form method="POST" action="{{ route('admin.bulk-intakes.send-whatsapp-permission-batch', $batch) }}">
+                    @csrf
+                    <button
+                        type="submit"
+                        data-testid="bulk-send-whatsapp-permission-batch"
+                        class="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-100"
+                    >Send permission ({{ $whatsappEligibleToSendCount }})</button>
+                </form>
+            @endif
             <form method="POST" action="{{ route('admin.bulk-intakes.queue-free-parse', $batch) }}">
                 @csrf
                 <button type="submit" class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100">
@@ -299,6 +311,19 @@
                                     default => 'border-amber-300 bg-amber-100 text-amber-900',
                                 };
                                 $pipelineReasons = is_array($pipeline['reasons'] ?? null) ? array_slice($pipeline['reasons'], 0, 2) : [];
+                                $whatsappConsent = is_array($whatsappConsentByItemId[$item->id] ?? null) ? $whatsappConsentByItemId[$item->id] : [];
+                                $whatsappConsentStatus = (string) ($whatsappConsent['status'] ?? '');
+                                $whatsappConsentLabel = (string) ($whatsappConsent['status_label'] ?? '');
+                                $canSendWhatsAppPermission = (bool) data_get($whatsappConsent, 'can_send.allowed', false);
+                                $whatsappConsentBadgeClass = match ($whatsappConsentStatus) {
+                                    \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_CONSENT_RECEIVED => 'border-emerald-300 bg-emerald-100 text-emerald-900',
+                                    \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_PERMISSION_SENT => 'border-sky-300 bg-sky-100 text-sky-900',
+                                    \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_CONSENT_DENIED,
+                                    \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_ALREADY_MARRIED,
+                                    \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_WRONG_NUMBER,
+                                    \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_NO_RESPONSE => 'border-red-300 bg-red-100 text-red-900',
+                                    default => 'border-gray-200 bg-gray-50 text-gray-700',
+                                };
                                 $manualDuplicateReview = is_array(data_get($itemMeta, 'duplicate_review')) ? data_get($itemMeta, 'duplicate_review') : [];
                                 $manualDuplicateActive = (string) data_get($manualDuplicateReview, 'status') === 'manual_duplicate';
                                 $primaryDuplicateHint = is_array($duplicateHints[0] ?? null) ? $duplicateHints[0] : [];
@@ -501,6 +526,9 @@
                                         @elseif ($manualScreeningActive && $manualScreeningStatus === 'eligible_for_consent')
                                             <span data-testid="bulk-not-ready-for-consent-hint" class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-500">Not ready</span>
                                         @endif
+                                        @if ($whatsappConsentStatus !== '')
+                                            <span data-testid="bulk-whatsapp-consent-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $whatsappConsentBadgeClass }}">{{ $whatsappConsentLabel }}</span>
+                                        @endif
                                         @if ($exceptionBadges !== [])
                                             @foreach ($exceptionBadges as $badge)
                                                 <span @if (! empty($badge['testid'])) data-testid="{{ $badge['testid'] }}" @endif class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $badge['class'] }}">{{ $badge['label'] }}</span>
@@ -574,6 +602,17 @@
                                             <form method="POST" action="{{ route('admin.bulk-intakes.items.clear-screening-review', [$batch, $item]) }}">
                                                 @csrf
                                                 <button type="submit" class="text-left text-sm font-medium text-indigo-700 hover:text-indigo-900">Clear screening</button>
+                                            </form>
+                                        @endif
+
+                                        @if ($canSendWhatsAppPermission)
+                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.send-whatsapp-permission', [$batch, $item]) }}">
+                                                @csrf
+                                                <button
+                                                    type="submit"
+                                                    data-testid="bulk-send-whatsapp-permission"
+                                                    class="text-left text-sm font-medium text-emerald-700 hover:text-emerald-900"
+                                                >Send permission</button>
                                             </form>
                                         @endif
 
