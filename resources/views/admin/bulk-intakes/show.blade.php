@@ -30,8 +30,37 @@
     $duplicateHintsByItemId = $duplicateHintsByItemId ?? [];
     $screeningByItemId = $screeningByItemId ?? [];
     $screeningReviewByItemId = $screeningReviewByItemId ?? [];
+    $screeningFilter = (string) ($screeningFilter ?? 'all');
+    $screeningFilters = is_array($screeningFilters ?? null) ? $screeningFilters : [];
+    $screeningCounts = is_array($screeningCounts ?? null) ? $screeningCounts : [];
+    $statusFilter = (string) ($statusFilter ?? 'all');
+    $statusFilters = is_array($statusFilters ?? null) ? $statusFilters : [];
     $missingDisplay = '—';
     $highlightItemId = (int) request()->query('highlight_item', 0);
+    $buildShowUrl = static function (
+        $batch,
+        ?string $status = null,
+        ?string $screening = null,
+        ?int $highlightItem = null
+    ): string {
+        $params = ['bulkIntakeBatch' => $batch];
+        $status ??= (string) request()->query('status', 'all');
+        $screening ??= (string) request()->query('screening', 'all');
+        $highlightItem ??= (int) request()->query('highlight_item', 0);
+
+        if ($status !== '' && $status !== 'all') {
+            $params['status'] = $status;
+        }
+        if ($screening !== '' && $screening !== 'all') {
+            $params['screening'] = $screening;
+        }
+        if ($highlightItem > 0) {
+            $params['highlight_item'] = $highlightItem;
+        }
+
+        return route('admin.bulk-intakes.show', $params);
+    };
+    $hasActiveFilters = $statusFilter !== 'all' || $screeningFilter !== 'all';
 @endphp
 <div class="space-y-6">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -149,11 +178,31 @@
             <h2 class="text-lg font-semibold text-gray-900">Items</h2>
             <div class="flex flex-wrap gap-2">
                 @foreach ($statusFilters as $key => $label)
-                    <a href="{{ route('admin.bulk-intakes.show', ['bulkIntakeBatch' => $batch, 'status' => $key]) }}"
+                    <a href="{{ $buildShowUrl($batch, $key, $screeningFilter, $highlightItemId > 0 ? $highlightItemId : null) }}"
+                       data-testid="bulk-status-filter-{{ $key }}"
                        class="rounded-full border px-3 py-1 text-xs font-semibold {{ $statusFilter === $key ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300 hover:text-indigo-700' }}">
                         {{ $label }}
                     </a>
                 @endforeach
+            </div>
+        </div>
+
+        <div class="mt-4 flex flex-col gap-3">
+            <div class="flex flex-wrap items-center gap-2" data-testid="bulk-screening-filter-pills">
+                @foreach ($screeningFilters as $key => $label)
+                    <a href="{{ $buildShowUrl($batch, $statusFilter, $key, $highlightItemId > 0 ? $highlightItemId : null) }}"
+                       data-testid="bulk-screening-filter-{{ $key }}"
+                       class="rounded-full border px-3 py-1 text-xs font-semibold {{ $screeningFilter === $key ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-emerald-300 hover:text-emerald-700' }}">
+                        {{ $label }} ({{ (int) ($screeningCounts[$key] ?? 0) }})
+                    </a>
+                @endforeach
+                @if ($hasActiveFilters)
+                    <a href="{{ $buildShowUrl($batch, 'all', 'all', $highlightItemId > 0 ? $highlightItemId : null) }}"
+                       data-testid="bulk-screening-clear-filters"
+                       class="rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:border-gray-400 hover:text-gray-900">
+                        Clear filters
+                    </a>
+                @endif
             </div>
         </div>
         <p class="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">

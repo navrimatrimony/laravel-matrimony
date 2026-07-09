@@ -909,6 +909,273 @@ test('routes for hidden owner and profile actions still exist', function () {
         ->toBe(url('/admin/bulk-intakes/123/items/456/readiness'));
 });
 
+test('bulk status pending and screening manual filters work together', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+
+    $pendingManualIntake = candidateDisplayIntake([
+        'parse_status' => 'pending',
+        'parsed_json' => [],
+    ]);
+    candidateDisplayItem($batch, $pendingManualIntake, [
+        'item_status' => BulkIntakeBatchItem::STATUS_PENDING,
+        'original_filename' => 'pending-manual-screening.pdf',
+        'item_meta_json' => [
+            'screening_review' => [
+                'status' => 'needs_review',
+                'reason_key' => 'admin_followup_needed',
+                'note' => 'Pending item manual review',
+                'reviewed_by_user_id' => $admin->id,
+                'reviewed_at' => '2026-07-08T10:00:00+00:00',
+                'cleared_by_user_id' => null,
+                'cleared_at' => null,
+            ],
+        ],
+    ]);
+
+    $advisorPendingIntake = candidateDisplayIntake([
+        'parse_status' => 'pending',
+        'parsed_json' => [],
+    ]);
+    candidateDisplayItem($batch, $advisorPendingIntake, [
+        'item_status' => BulkIntakeBatchItem::STATUS_PENDING,
+        'original_filename' => 'pending-advisor-only.pdf',
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', [
+            'bulkIntakeBatch' => $batch,
+            'status' => 'pending',
+            'screening' => 'manual',
+        ]))
+        ->assertOk()
+        ->assertSee('pending-manual-screening.pdf', false)
+        ->assertDontSee('pending-advisor-only.pdf', false)
+        ->assertSee('data-testid="bulk-manual-screening-badge"', false)
+        ->assertSee('All (2)', false)
+        ->assertSee('Manual (1)', false)
+        ->assertSee('Advisor (1)', false);
+});
+
+test('manual screening bucket overrides advisor when both signals differ', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Manual Overrides Advisor Candidate',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $intake, [
+        'item_meta_json' => [
+            'screening_review' => [
+                'status' => 'eligible_for_consent',
+                'reason_key' => 'admin_verified',
+                'note' => null,
+                'reviewed_by_user_id' => $admin->id,
+                'reviewed_at' => '2026-07-08T10:00:00+00:00',
+                'cleared_by_user_id' => null,
+                'cleared_at' => null,
+            ],
+        ],
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', [
+            'bulkIntakeBatch' => $batch,
+            'screening' => 'eligible',
+        ]))
+        ->assertOk()
+        ->assertSee('Manual Overrides Advisor Candidate', false)
+        ->assertSee('data-testid="bulk-manual-screening-badge"', false)
+        ->assertSee('Eligible for consent', false);
+});
+
+test('bulk list renders screening queue pills with counts', function () {
+    $admin = candidateDisplayAdminUser();
+    [$batch] = candidateDisplayScreeningQueueFixtures($admin);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-screening-filter-pills"', false)
+        ->assertSee('data-testid="bulk-screening-filter-all"', false)
+        ->assertSee('All (6)', false)
+        ->assertSee('Eligible for consent (2)', false)
+        ->assertSee('Needs review (2)', false)
+        ->assertSee('Stopped (2)', false)
+        ->assertSee('Advisor (3)', false)
+        ->assertSee('Manual (3)', false);
+});
+
+test('bulk screening filter eligible shows only eligible items', function () {
+    $admin = candidateDisplayAdminUser();
+    [$batch] = candidateDisplayScreeningQueueFixtures($admin);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', ['bulkIntakeBatch' => $batch, 'screening' => 'eligible']))
+        ->assertOk()
+        ->assertSee('Advisor Eligible Candidate', false)
+        ->assertSee('Manual Eligible Candidate', false)
+        ->assertDontSee('Advisor Needs Review Candidate', false)
+        ->assertDontSee('Manual Needs Review Candidate', false)
+        ->assertDontSee('Advisor Stopped Candidate', false)
+        ->assertDontSee('Manual Stopped Candidate', false);
+});
+
+test('bulk screening filter needs review shows only needs review items', function () {
+    $admin = candidateDisplayAdminUser();
+    [$batch] = candidateDisplayScreeningQueueFixtures($admin);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', ['bulkIntakeBatch' => $batch, 'screening' => 'needs_review']))
+        ->assertOk()
+        ->assertSee('Advisor Needs Review Candidate', false)
+        ->assertSee('Manual Needs Review Candidate', false)
+        ->assertDontSee('Advisor Eligible Candidate', false)
+        ->assertDontSee('Manual Eligible Candidate', false)
+        ->assertDontSee('Advisor Stopped Candidate', false)
+        ->assertDontSee('Manual Stopped Candidate', false);
+});
+
+test('bulk screening filter stopped shows only stopped items', function () {
+    $admin = candidateDisplayAdminUser();
+    [$batch] = candidateDisplayScreeningQueueFixtures($admin);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', ['bulkIntakeBatch' => $batch, 'screening' => 'stopped']))
+        ->assertOk()
+        ->assertSee('Advisor Stopped Candidate', false)
+        ->assertSee('Manual Stopped Candidate', false)
+        ->assertDontSee('Advisor Eligible Candidate', false)
+        ->assertDontSee('Manual Eligible Candidate', false)
+        ->assertDontSee('Advisor Needs Review Candidate', false)
+        ->assertDontSee('Manual Needs Review Candidate', false);
+});
+
+test('bulk screening filter advisor shows only items without manual screening', function () {
+    $admin = candidateDisplayAdminUser();
+    [$batch] = candidateDisplayScreeningQueueFixtures($admin);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', ['bulkIntakeBatch' => $batch, 'screening' => 'advisor']))
+        ->assertOk()
+        ->assertSee('Advisor Eligible Candidate', false)
+        ->assertSee('Advisor Needs Review Candidate', false)
+        ->assertSee('Advisor Stopped Candidate', false)
+        ->assertDontSee('Manual Eligible Candidate', false)
+        ->assertDontSee('Manual Needs Review Candidate', false)
+        ->assertDontSee('Manual Stopped Candidate', false);
+});
+
+test('bulk screening filter manual shows only items with manual screening', function () {
+    $admin = candidateDisplayAdminUser();
+    [$batch] = candidateDisplayScreeningQueueFixtures($admin);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', ['bulkIntakeBatch' => $batch, 'screening' => 'manual']))
+        ->assertOk()
+        ->assertSee('Manual Eligible Candidate', false)
+        ->assertSee('Manual Needs Review Candidate', false)
+        ->assertSee('Manual Stopped Candidate', false)
+        ->assertDontSee('Advisor Eligible Candidate', false)
+        ->assertDontSee('Advisor Needs Review Candidate', false)
+        ->assertDontSee('Advisor Stopped Candidate', false);
+});
+
+test('bulk screening counts respect status filter dataset', function () {
+    $admin = candidateDisplayAdminUser();
+    [$batch, $pendingItem] = candidateDisplayScreeningQueueFixtures($admin, withPendingItem: true);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', ['bulkIntakeBatch' => $batch, 'status' => 'parsed']))
+        ->assertOk()
+        ->assertSee('All (6)', false)
+        ->assertSee('Eligible for consent (2)', false)
+        ->assertSee('Needs review (2)', false)
+        ->assertSee('Stopped (2)', false)
+        ->assertSee('Advisor (3)', false)
+        ->assertSee('Manual (3)', false)
+        ->assertDontSee('Pending Parse Candidate', false);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', ['bulkIntakeBatch' => $batch, 'status' => 'all']))
+        ->assertOk()
+        ->assertSee('All (7)', false)
+        ->assertSee('Pending Parse Candidate', false)
+        ->assertSee('id="bulk-item-'.$pendingItem->id.'"', false);
+});
+
+test('bulk status and screening filters work together', function () {
+    $admin = candidateDisplayAdminUser();
+    [$batch] = candidateDisplayScreeningQueueFixtures($admin, withPendingItem: true);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', [
+            'bulkIntakeBatch' => $batch,
+            'status' => 'parsed',
+            'screening' => 'eligible',
+        ]))
+        ->assertOk()
+        ->assertSee('Advisor Eligible Candidate', false)
+        ->assertSee('Manual Eligible Candidate', false)
+        ->assertDontSee('Advisor Needs Review Candidate', false)
+        ->assertDontSee('Pending Parse Candidate', false);
+});
+
+test('bulk screening filter preserves status query param in pill links', function () {
+    $admin = candidateDisplayAdminUser();
+    [$batch] = candidateDisplayScreeningQueueFixtures($admin);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', [
+            'bulkIntakeBatch' => $batch,
+            'status' => 'parsed',
+            'screening' => 'eligible',
+        ]))
+        ->assertOk()
+        ->assertSee('status=parsed', false)
+        ->assertSee('screening=needs_review', false)
+        ->assertSee('data-testid="bulk-screening-clear-filters"', false);
+});
+
+test('bulk highlight item survives screening filter', function () {
+    $admin = candidateDisplayAdminUser();
+    [$batch, , $manualEligibleItem] = candidateDisplayScreeningQueueFixtures($admin);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', [
+            'bulkIntakeBatch' => $batch,
+            'screening' => 'manual',
+            'highlight_item' => $manualEligibleItem->id,
+        ]))
+        ->assertOk()
+        ->assertSee('id="bulk-item-'.$manualEligibleItem->id.'"', false)
+        ->assertSee('background-color: #ecfdf5;', false)
+        ->assertSee('Manual Eligible Candidate', false)
+        ->assertDontSee('Advisor Eligible Candidate', false);
+});
+
+test('bulk screening clear filters link resets status and screening params', function () {
+    $admin = candidateDisplayAdminUser();
+    [$batch] = candidateDisplayScreeningQueueFixtures($admin);
+
+    $response = $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', [
+            'bulkIntakeBatch' => $batch,
+            'status' => 'parsed',
+            'screening' => 'eligible',
+        ]))
+        ->assertOk();
+
+    $clearUrl = route('admin.bulk-intakes.show', ['bulkIntakeBatch' => $batch]);
+    $response->assertSee($clearUrl, false);
+});
+
 function candidateDisplayAdminUser(): User
 {
     return User::factory()->create([
@@ -953,4 +1220,141 @@ function candidateDisplayItem(BulkIntakeBatch $batch, BiodataIntake $intake, arr
         'original_filename' => 'candidate-display.pdf',
         'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
     ], $overrides));
+}
+
+/**
+ * @return array{0: BulkIntakeBatch, 1?: BulkIntakeBatchItem, 2?: BulkIntakeBatchItem}
+ */
+function candidateDisplayScreeningQueueFixtures(User $admin, bool $withPendingItem = false): array
+{
+    $batch = candidateDisplayBatch($admin);
+
+    $advisorEligibleIntake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Advisor Eligible Candidate',
+                'primary_contact_number' => '9876543201',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $advisorEligibleIntake);
+
+    $advisorNeedsReviewIntake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Advisor Needs Review Candidate',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $advisorNeedsReviewIntake);
+
+    $advisorStoppedIntake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Advisor Stopped Candidate',
+                'primary_contact_number' => '12345',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $advisorStoppedIntake);
+
+    $manualEligibleIntake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Manual Eligible Candidate',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    $manualEligibleItem = candidateDisplayItem($batch, $manualEligibleIntake, [
+        'item_meta_json' => [
+            'screening_review' => [
+                'status' => 'eligible_for_consent',
+                'reason_key' => 'admin_verified',
+                'note' => null,
+                'reviewed_by_user_id' => $admin->id,
+                'reviewed_at' => '2026-07-08T10:00:00+00:00',
+                'cleared_by_user_id' => null,
+                'cleared_at' => null,
+            ],
+        ],
+    ]);
+
+    $manualNeedsReviewIntake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Manual Needs Review Candidate',
+                'primary_contact_number' => '9876543205',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $manualNeedsReviewIntake, [
+        'item_meta_json' => [
+            'screening_review' => [
+                'status' => 'needs_review',
+                'reason_key' => 'admin_followup_needed',
+                'note' => null,
+                'reviewed_by_user_id' => $admin->id,
+                'reviewed_at' => '2026-07-08T10:00:00+00:00',
+                'cleared_by_user_id' => null,
+                'cleared_at' => null,
+            ],
+        ],
+    ]);
+
+    $manualStoppedIntake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Manual Stopped Candidate',
+                'primary_contact_number' => '9876543206',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $manualStoppedIntake, [
+        'item_meta_json' => [
+            'screening_review' => [
+                'status' => 'stopped',
+                'reason_key' => 'not_interested',
+                'note' => null,
+                'reviewed_by_user_id' => $admin->id,
+                'reviewed_at' => '2026-07-08T10:00:00+00:00',
+                'cleared_by_user_id' => null,
+                'cleared_at' => null,
+            ],
+        ],
+    ]);
+
+    $pendingItem = null;
+    if ($withPendingItem) {
+        $pendingIntake = candidateDisplayIntake([
+            'parse_status' => 'pending',
+            'parsed_json' => [
+                'core' => [
+                    'full_name' => 'Pending Parse Candidate',
+                ],
+            ],
+        ]);
+        $pendingItem = candidateDisplayItem($batch, $pendingIntake);
+    }
+
+    return $pendingItem === null
+        ? [$batch, null, $manualEligibleItem]
+        : [$batch, $pendingItem, $manualEligibleItem];
 }

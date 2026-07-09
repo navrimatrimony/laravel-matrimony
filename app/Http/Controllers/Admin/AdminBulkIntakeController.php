@@ -14,6 +14,7 @@ use App\Services\Intake\BulkIntakeBatchService;
 use App\Services\Intake\BulkIntakeCandidateCorrectionService;
 use App\Services\Intake\BulkIntakeCandidateDisplayService;
 use App\Services\Intake\BulkIntakeCandidateScreeningAdvisorService;
+use App\Services\Intake\BulkIntakeCandidateScreeningQueueService;
 use App\Services\Intake\BulkIntakeCandidateScreeningReviewService;
 use App\Services\Intake\BulkIntakeDraftProfileBootstrapService;
 use App\Services\Intake\BulkIntakeDuplicateHistoryHintService;
@@ -130,6 +131,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeCandidateDisplayService $candidateDisplayService,
         BulkIntakeCandidateScreeningAdvisorService $screeningAdvisorService,
         BulkIntakeCandidateScreeningReviewService $screeningReviewService,
+        BulkIntakeCandidateScreeningQueueService $screeningQueueService,
         BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService,
         BulkIntakeProgressPresenter $progressPresenter
     )
@@ -139,6 +141,9 @@ class AdminBulkIntakeController extends Controller
         if (! array_key_exists($statusFilter, $statusFilters)) {
             $statusFilter = 'all';
         }
+
+        $screeningFilters = $screeningQueueService->screeningFilters();
+        $screeningFilter = $screeningQueueService->resolveScreeningFilter((string) $request->query('screening', 'all'));
 
         $bulkIntakeBatch = $batchService->refreshCounters($bulkIntakeBatch);
         $bulkIntakeBatch->load('uploadedByUser:id,name,email,mobile');
@@ -153,19 +158,18 @@ class AdminBulkIntakeController extends Controller
 
         $this->applyBulkItemStatusFilter($itemsQuery, $statusFilter);
 
-        $items = $itemsQuery->get();
-        $bulkIntakeBatch->setRelation('items', $items);
-        $candidateByItemId = $items
+        $statusFilteredItems = $itemsQuery->get();
+        $candidateByItemId = $statusFilteredItems
             ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
                 (int) $item->id => $candidateDisplayService->candidateForItem($item),
             ])
             ->all();
-        $duplicateHintsByItemId = $items
+        $duplicateHintsByItemId = $statusFilteredItems
             ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
                 (int) $item->id => $duplicateHistoryHintService->hintsForItem($item),
             ])
             ->all();
-        $screeningByItemId = $items
+        $screeningByItemId = $statusFilteredItems
             ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
                 (int) $item->id => $screeningAdvisorService->advisorForItem(
                     $item,
@@ -174,11 +178,36 @@ class AdminBulkIntakeController extends Controller
                 ),
             ])
             ->all();
-        $screeningReviewByItemId = $items
+        $screeningReviewByItemId = $statusFilteredItems
             ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
                 (int) $item->id => $screeningReviewService->activeReviewForItem($item),
             ])
             ->all();
+        $screeningCounts = $screeningQueueService->countsForItems(
+            $statusFilteredItems,
+            fn (BulkIntakeBatchItem $item): array => $screeningByItemId[(int) $item->id] ?? [
+                'decision' => 'review',
+                'label' => 'Needs review',
+                'reasons' => [],
+                'reason_codes' => [],
+                'suggested_next_action' => '',
+            ],
+            fn (BulkIntakeBatchItem $item): ?array => $screeningReviewByItemId[(int) $item->id] ?? null,
+        );
+        $displayItems = $statusFilteredItems
+            ->filter(fn (BulkIntakeBatchItem $item): bool => $screeningQueueService->itemMatchesFilter(
+                $screeningFilter,
+                $screeningReviewByItemId[(int) $item->id] ?? null,
+                $screeningByItemId[(int) $item->id] ?? [
+                    'decision' => 'review',
+                    'label' => 'Needs review',
+                    'reasons' => [],
+                    'reason_codes' => [],
+                    'suggested_next_action' => '',
+                ]
+            ))
+            ->values();
+        $bulkIntakeBatch->setRelation('items', $displayItems);
 
         $sourceContextCountsByItem = IntakeSourceContext::query()
             ->where('bulk_intake_batch_id', $bulkIntakeBatch->id)
@@ -195,6 +224,9 @@ class AdminBulkIntakeController extends Controller
             'duplicateHintsByItemId' => $duplicateHintsByItemId,
             'screeningByItemId' => $screeningByItemId,
             'screeningReviewByItemId' => $screeningReviewByItemId,
+            'screeningFilter' => $screeningFilter,
+            'screeningFilters' => $screeningFilters,
+            'screeningCounts' => $screeningCounts,
             'statusFilter' => $statusFilter,
             'statusFilters' => $statusFilters,
         ]);
