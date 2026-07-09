@@ -89,6 +89,8 @@ test('admin can open bulk candidate correction page', function () {
         ->assertSee('data-testid="bulk-correction-low-confidence-name"', false)
         ->assertSee('data-testid="bulk-correction-screening-advisor-card"', false)
         ->assertSee('data-testid="bulk-correction-screening-badge"', false)
+        ->assertSee('data-testid="bulk-correction-manual-screening-card"', false)
+        ->assertSee('Manual screening decision', false)
         ->assertSee('Screening advisor', false)
         ->assertSee('Eligible', false)
         ->assertSee('Eligible: Basic fields look ready for consent phase.', false)
@@ -101,6 +103,8 @@ test('admin can open bulk candidate correction page', function () {
     $form = strpos($html, 'id="bulk-candidate-correction-form"');
     $duplicate = strpos($html, 'data-testid="bulk-correction-duplicate-history-card"');
     $screening = strpos($html, 'data-testid="bulk-correction-screening-advisor-card"');
+    $manualScreening = strpos($html, 'data-testid="bulk-correction-manual-screening-card"');
+    $manualDuplicate = strpos($html, 'data-testid="bulk-correction-manual-duplicate-card"');
     $review = strpos($html, 'Review flag');
     $zoom = strpos($html, 'data-testid="bulk-image-zoom-toolbar"');
 
@@ -110,6 +114,8 @@ test('admin can open bulk candidate correction page', function () {
         ->and($form)->not->toBeFalse()
         ->and($duplicate)->not->toBeFalse()
         ->and($screening)->not->toBeFalse()
+        ->and($manualScreening)->not->toBeFalse()
+        ->and($manualDuplicate)->not->toBeFalse()
         ->and($review)->not->toBeFalse()
         ->and($zoom)->not->toBeFalse()
         ->and($zoom)->toBeGreaterThan($left)
@@ -119,7 +125,9 @@ test('admin can open bulk candidate correction page', function () {
         ->and($form)->toBeGreaterThan($right)
         ->and($duplicate)->toBeGreaterThan($form)
         ->and($screening)->toBeGreaterThan($duplicate)
-        ->and($review)->toBeGreaterThan($screening);
+        ->and($manualScreening)->toBeGreaterThan($screening)
+        ->and($manualDuplicate)->toBeGreaterThan($manualScreening)
+        ->and($review)->toBeGreaterThan($manualDuplicate);
 });
 
 test('admin can save seven field correction without mutating evidence or bulk item parsed data', function () {
@@ -716,6 +724,235 @@ test('non admin cannot mark or clear manual duplicate', function () {
         ->and($item->item_meta_json)->toBeNull()
         ->and($intake->raw_ocr_text)->toBe('Original non admin duplicate OCR text')
         ->and(data_get($intake->parsed_json, 'core.full_name'))->toBe('Non Admin Candidate');
+});
+
+test('admin can set eligible_for_consent screening decision', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $parsed = [
+        'core' => [
+            'full_name' => 'Eligible Screening Candidate',
+            'primary_contact_number' => '9876543210',
+        ],
+    ];
+    $approval = [
+        'core' => [
+            'full_name' => 'Reviewed Eligible Screening Candidate',
+            'primary_contact_number' => '9876543210',
+        ],
+    ];
+    $intake = candidateCorrectionIntake([
+        'raw_ocr_text' => 'Original eligible screening OCR text',
+        'parsed_json' => $parsed,
+        'approval_snapshot_json' => $approval,
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->from(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->post(route('admin.bulk-intakes.items.save-screening-review', [$batch, $item]), [
+            'status' => 'eligible_for_consent',
+            'reason_key' => 'admin_verified',
+            'note' => 'Verified by admin after correction.',
+        ])
+        ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertSessionHas('success');
+
+    $item->refresh();
+    $intake->refresh();
+
+    $screeningReview = data_get($item->item_meta_json, 'screening_review');
+
+    expect($item->item_status)->toBe(BulkIntakeBatchItem::STATUS_INTAKE_CREATED)
+        ->and($screeningReview)->toBeArray()
+        ->and(data_get($screeningReview, 'status'))->toBe('eligible_for_consent')
+        ->and(data_get($screeningReview, 'reason_key'))->toBe('admin_verified')
+        ->and(data_get($screeningReview, 'note'))->toBe('Verified by admin after correction.')
+        ->and(data_get($screeningReview, 'reviewed_by_user_id'))->toBe($admin->id)
+        ->and(data_get($screeningReview, 'reviewed_at'))->not->toBeNull()
+        ->and(data_get($screeningReview, 'cleared_by_user_id'))->toBeNull()
+        ->and(data_get($screeningReview, 'cleared_at'))->toBeNull()
+        ->and(data_get($screeningReview, 'full_name'))->toBeNull()
+        ->and(data_get($screeningReview, 'primary_contact_number'))->toBeNull()
+        ->and(data_get($screeningReview, 'candidate'))->toBeNull()
+        ->and($intake->raw_ocr_text)->toBe('Original eligible screening OCR text')
+        ->and($intake->parsed_json)->toBe($parsed)
+        ->and($intake->approval_snapshot_json)->toBe($approval);
+});
+
+test('admin can set needs_review screening decision', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $intake = candidateCorrectionIntake([
+        'raw_ocr_text' => 'Original needs review screening OCR text',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Needs Review Screening Candidate',
+            ],
+        ],
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->post(route('admin.bulk-intakes.items.save-screening-review', [$batch, $item]), [
+            'status' => 'needs_review',
+            'reason_key' => 'missing_mobile',
+            'note' => 'Mobile missing from biodata.',
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $item->refresh();
+
+    expect(data_get($item->item_meta_json, 'screening_review.status'))->toBe('needs_review')
+        ->and(data_get($item->item_meta_json, 'screening_review.reason_key'))->toBe('missing_mobile')
+        ->and($item->item_status)->toBe(BulkIntakeBatchItem::STATUS_INTAKE_CREATED);
+});
+
+test('admin can set stopped screening decision', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $intake = candidateCorrectionIntake([
+        'raw_ocr_text' => 'Original stopped screening OCR text',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Stopped Screening Candidate',
+            ],
+        ],
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->post(route('admin.bulk-intakes.items.save-screening-review', [$batch, $item]), [
+            'status' => 'stopped',
+            'reason_key' => 'not_interested',
+            'note' => 'Candidate declined.',
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $item->refresh();
+
+    expect(data_get($item->item_meta_json, 'screening_review.status'))->toBe('stopped')
+        ->and(data_get($item->item_meta_json, 'screening_review.reason_key'))->toBe('not_interested')
+        ->and($item->item_status)->toBe(BulkIntakeBatchItem::STATUS_INTAKE_CREATED);
+});
+
+test('admin can clear screening decision without changing item status or intake evidence', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $parsed = [
+        'core' => [
+            'full_name' => 'Clear Screening Candidate',
+        ],
+    ];
+    $approval = [
+        'core' => [
+            'full_name' => 'Reviewed Clear Screening Candidate',
+        ],
+    ];
+    $intake = candidateCorrectionIntake([
+        'raw_ocr_text' => 'Original clear screening OCR text',
+        'parsed_json' => $parsed,
+        'approval_snapshot_json' => $approval,
+    ]);
+    $item = candidateCorrectionItem($batch, $intake, [
+        'item_meta_json' => [
+            'existing_key' => 'keep',
+            'screening_review' => [
+                'status' => 'stopped',
+                'reason_key' => 'wrong_number',
+                'note' => 'Existing screening mark',
+                'reviewed_by_user_id' => $admin->id,
+                'reviewed_at' => '2026-07-08T10:00:00+00:00',
+                'cleared_by_user_id' => null,
+                'cleared_at' => null,
+            ],
+        ],
+    ]);
+
+    $this->actingAs($admin)
+        ->from(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->post(route('admin.bulk-intakes.items.clear-screening-review', [$batch, $item]))
+        ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertSessionHas('success');
+
+    $item->refresh();
+    $intake->refresh();
+
+    expect($item->item_status)->toBe(BulkIntakeBatchItem::STATUS_INTAKE_CREATED)
+        ->and(data_get($item->item_meta_json, 'existing_key'))->toBe('keep')
+        ->and(data_get($item->item_meta_json, 'screening_review.status'))->toBe('cleared')
+        ->and(data_get($item->item_meta_json, 'screening_review.reason_key'))->toBe('wrong_number')
+        ->and(data_get($item->item_meta_json, 'screening_review.note'))->toBe('Existing screening mark')
+        ->and(data_get($item->item_meta_json, 'screening_review.reviewed_by_user_id'))->toBe($admin->id)
+        ->and(data_get($item->item_meta_json, 'screening_review.cleared_by_user_id'))->toBe($admin->id)
+        ->and(data_get($item->item_meta_json, 'screening_review.cleared_at'))->not->toBeNull()
+        ->and($intake->raw_ocr_text)->toBe('Original clear screening OCR text')
+        ->and($intake->parsed_json)->toBe($parsed)
+        ->and($intake->approval_snapshot_json)->toBe($approval);
+});
+
+test('non admin cannot set or clear screening decision', function () {
+    $admin = candidateCorrectionAdminUser();
+    $member = User::factory()->create([
+        'is_admin' => false,
+        'admin_role' => null,
+    ]);
+    $batch = candidateCorrectionBatch($admin);
+    $intake = candidateCorrectionIntake([
+        'raw_ocr_text' => 'Original non admin screening OCR text',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Non Admin Screening Candidate',
+            ],
+        ],
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($member)
+        ->post(route('admin.bulk-intakes.items.save-screening-review', [$batch, $item]), [
+            'status' => 'needs_review',
+            'reason_key' => 'missing_mobile',
+        ])
+        ->assertForbidden();
+
+    $this->actingAs($member)
+        ->post(route('admin.bulk-intakes.items.clear-screening-review', [$batch, $item]))
+        ->assertForbidden();
+
+    $item->refresh();
+    $intake->refresh();
+
+    expect($item->item_status)->toBe(BulkIntakeBatchItem::STATUS_INTAKE_CREATED)
+        ->and($item->item_meta_json)->toBeNull()
+        ->and($intake->raw_ocr_text)->toBe('Original non admin screening OCR text')
+        ->and(data_get($intake->parsed_json, 'core.full_name'))->toBe('Non Admin Screening Candidate');
+});
+
+test('read-only screening advisor still works when no manual screening exists', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $intake = candidateCorrectionIntake([
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Advisor Only Candidate',
+                'primary_contact_number' => '9876543210',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-correction-screening-badge"', false)
+        ->assertSee('Eligible', false)
+        ->assertSee('data-testid="bulk-correction-manual-screening-form"', false)
+        ->assertSee('Save screening decision', false)
+        ->assertDontSee('data-testid="bulk-correction-manual-screening-badge"', false);
 });
 
 test('bulk candidate correction save is blocked after intake approval or lock', function () {

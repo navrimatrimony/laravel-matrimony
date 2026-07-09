@@ -14,6 +14,7 @@ use App\Services\Intake\BulkIntakeBatchService;
 use App\Services\Intake\BulkIntakeCandidateCorrectionService;
 use App\Services\Intake\BulkIntakeCandidateDisplayService;
 use App\Services\Intake\BulkIntakeCandidateScreeningAdvisorService;
+use App\Services\Intake\BulkIntakeCandidateScreeningReviewService;
 use App\Services\Intake\BulkIntakeDraftProfileBootstrapService;
 use App\Services\Intake\BulkIntakeDuplicateHistoryHintService;
 use App\Services\Intake\BulkIntakeManualTranscriptService;
@@ -128,6 +129,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeBatchService $batchService,
         BulkIntakeCandidateDisplayService $candidateDisplayService,
         BulkIntakeCandidateScreeningAdvisorService $screeningAdvisorService,
+        BulkIntakeCandidateScreeningReviewService $screeningReviewService,
         BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService,
         BulkIntakeProgressPresenter $progressPresenter
     )
@@ -172,6 +174,11 @@ class AdminBulkIntakeController extends Controller
                 ),
             ])
             ->all();
+        $screeningReviewByItemId = $items
+            ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
+                (int) $item->id => $screeningReviewService->activeReviewForItem($item),
+            ])
+            ->all();
 
         $sourceContextCountsByItem = IntakeSourceContext::query()
             ->where('bulk_intake_batch_id', $bulkIntakeBatch->id)
@@ -187,6 +194,7 @@ class AdminBulkIntakeController extends Controller
             'candidateByItemId' => $candidateByItemId,
             'duplicateHintsByItemId' => $duplicateHintsByItemId,
             'screeningByItemId' => $screeningByItemId,
+            'screeningReviewByItemId' => $screeningReviewByItemId,
             'statusFilter' => $statusFilter,
             'statusFilters' => $statusFilters,
         ]);
@@ -319,6 +327,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeBatchItem $bulkIntakeBatchItem,
         BulkIntakeCandidateCorrectionService $correctionService,
         BulkIntakeCandidateScreeningAdvisorService $screeningAdvisorService,
+        BulkIntakeCandidateScreeningReviewService $screeningReviewService,
         BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService
     ) {
         abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
@@ -340,6 +349,8 @@ class AdminBulkIntakeController extends Controller
             'canSave' => $correction['can_save'],
             'duplicateHints' => $duplicateHints,
             'screeningAdvisor' => $screeningAdvisorService->advisorForItem($bulkIntakeBatchItem, null, $duplicateHints),
+            'screeningReview' => $screeningReviewService->activeReviewForItem($bulkIntakeBatchItem),
+            'screeningReviewOptions' => BulkIntakeCandidateScreeningReviewService::REASON_KEYS_BY_STATUS,
         ]);
     }
 
@@ -630,6 +641,38 @@ class AdminBulkIntakeController extends Controller
         return redirect()
             ->back()
             ->with('success', 'Bulk intake item marked as manual duplicate.');
+    }
+
+    public function saveItemScreeningReview(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeCandidateScreeningReviewService $screeningReviewService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $screeningReviewService->saveReview($bulkIntakeBatchItem, $request->user(), $request->all());
+
+        return redirect()
+            ->back()
+            ->with('success', 'Manual screening decision saved.');
+    }
+
+    public function clearItemScreeningReview(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeCandidateScreeningReviewService $screeningReviewService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $screeningReviewService->clearReview($bulkIntakeBatchItem, $request->user());
+
+        return redirect()
+            ->back()
+            ->with('success', 'Manual screening decision cleared.');
     }
 
     public function clearItemManualDuplicate(

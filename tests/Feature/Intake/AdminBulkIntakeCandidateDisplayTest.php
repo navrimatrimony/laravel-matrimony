@@ -315,6 +315,121 @@ test('bulk list shows manual duplicate badge and clear action', function () {
         ->assertDontSee('Mark duplicate', false);
 });
 
+test('bulk list shows manual screening badge and clear action', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Manual Screening List Candidate',
+                'primary_contact_number' => '9876543210',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $intake, [
+        'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
+        'item_meta_json' => [
+            'screening_review' => [
+                'status' => 'eligible_for_consent',
+                'reason_key' => 'admin_verified',
+                'note' => 'Ready for consent outreach.',
+                'reviewed_by_user_id' => $admin->id,
+                'reviewed_at' => '2026-07-08T10:00:00+00:00',
+                'cleared_by_user_id' => null,
+                'cleared_at' => null,
+            ],
+        ],
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Manual Screening List Candidate', false)
+        ->assertSee('data-testid="bulk-manual-screening-badge"', false)
+        ->assertSee('Eligible for consent', false)
+        ->assertSee('data-testid="bulk-screening-advisor-hint"', false)
+        ->assertSee('Clear screening', false)
+        ->assertDontSee('data-testid="bulk-screening-badge"', false)
+        ->assertDontSee('Set screening', false);
+});
+
+test('bulk list shows set screening action when no manual screening exists', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Set Screening Candidate',
+                'primary_contact_number' => '9876543210',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Set screening', false)
+        ->assertSee('data-testid="bulk-screening-badge"', false)
+        ->assertSee('Eligible', false)
+        ->assertDontSee('data-testid="bulk-manual-screening-badge"', false)
+        ->assertDontSee('Clear screening', false);
+});
+
+test('manual screening badge does not change item status or intake evidence', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $parsed = [
+        'core' => [
+            'full_name' => 'Screening Evidence Candidate',
+            'primary_contact_number' => '9876543210',
+        ],
+    ];
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'raw_ocr_text' => 'Original screening evidence OCR',
+        'parsed_json' => $parsed,
+        'approval_snapshot_json' => [
+            'core' => [
+                'full_name' => 'Reviewed Screening Evidence Candidate',
+            ],
+        ],
+    ]);
+    $item = candidateDisplayItem($batch, $intake, [
+        'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
+    ]);
+
+    $this->actingAs($admin)
+        ->post(route('admin.bulk-intakes.items.save-screening-review', [$batch, $item]), [
+            'status' => 'stopped',
+            'reason_key' => 'invalid_candidate',
+            'note' => 'Not a valid matrimony candidate.',
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $item->refresh();
+    $intake->refresh();
+
+    expect($item->item_status)->toBe(BulkIntakeBatchItem::STATUS_INTAKE_CREATED)
+        ->and(data_get($item->item_meta_json, 'screening_review.status'))->toBe('stopped')
+        ->and(data_get($item->item_meta_json, 'screening_review.full_name'))->toBeNull()
+        ->and(data_get($item->item_meta_json, 'screening_review.candidate'))->toBeNull()
+        ->and($intake->raw_ocr_text)->toBe('Original screening evidence OCR')
+        ->and($intake->parsed_json)->toBe($parsed)
+        ->and($intake->approval_snapshot_json)->toBe([
+            'core' => [
+                'full_name' => 'Reviewed Screening Evidence Candidate',
+            ],
+        ]);
+});
+
 test('bulk list shows needs review screening for missing mobile', function () {
     $admin = candidateDisplayAdminUser();
     $batch = candidateDisplayBatch($admin);

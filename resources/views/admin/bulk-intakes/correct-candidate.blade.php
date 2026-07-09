@@ -30,6 +30,41 @@
         default => 'border-amber-200 bg-amber-50 text-amber-900',
     };
     $screeningReasons = is_array($screeningAdvisor['reasons'] ?? null) ? $screeningAdvisor['reasons'] : [];
+    $screeningReview = is_array($screeningReview ?? null) ? $screeningReview : null;
+    $screeningReviewOptions = is_array($screeningReviewOptions ?? null) ? $screeningReviewOptions : [];
+    $manualScreeningActive = $screeningReview !== null;
+    $manualScreeningStatus = (string) ($screeningReview['status'] ?? '');
+    $manualScreeningLabel = match ($manualScreeningStatus) {
+        'eligible_for_consent' => 'Eligible for consent',
+        'needs_review' => 'Needs review',
+        'stopped' => 'Stopped',
+        default => 'Manual screening',
+    };
+    $manualScreeningBadgeClass = match ($manualScreeningStatus) {
+        'eligible_for_consent' => 'border-emerald-200 bg-emerald-50 text-emerald-700',
+        'stopped' => 'border-red-200 bg-red-50 text-red-700',
+        default => 'border-amber-200 bg-amber-50 text-amber-800',
+    };
+    $screeningReasonLabels = [
+        'corrected_basic_fields' => 'Corrected basic fields',
+        'valid_mobile_ready' => 'Valid mobile ready',
+        'admin_verified' => 'Admin verified',
+        'missing_mobile' => 'Missing mobile',
+        'invalid_mobile' => 'Invalid mobile',
+        'dob_unclear' => 'DOB unclear',
+        'age_issue' => 'Age issue',
+        'gender_unclear' => 'Gender unclear',
+        'possible_duplicate' => 'Possible duplicate',
+        'unclear_biodata' => 'Unclear biodata',
+        'admin_followup_needed' => 'Admin follow-up needed',
+        'manual_duplicate' => 'Manual duplicate',
+        'duplicate_existing_profile' => 'Duplicate existing profile',
+        'already_married' => 'Already married',
+        'not_interested' => 'Not interested',
+        'wrong_number' => 'Wrong number',
+        'blocked_or_complaint' => 'Blocked or complaint',
+        'invalid_candidate' => 'Invalid candidate',
+    ];
     $itemMeta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
     $manualDuplicateReview = is_array(data_get($itemMeta, 'duplicate_review')) ? data_get($itemMeta, 'duplicate_review') : [];
     $manualDuplicateActive = (string) data_get($manualDuplicateReview, 'status') === 'manual_duplicate';
@@ -413,6 +448,129 @@
                             </span>
                         @endforeach
                     </div>
+                @endif
+            </div>
+
+            <div id="bulk-manual-screening-card" class="rounded-lg bg-white p-6 shadow" data-testid="bulk-correction-manual-screening-card">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900">Manual screening decision</h2>
+                        <p class="mt-1 text-sm text-gray-600">Stores only screening review metadata on this bulk item. Does not change item status.</p>
+                    </div>
+                    @if ($manualScreeningActive)
+                        <span data-testid="bulk-correction-manual-screening-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $manualScreeningBadgeClass }}">{{ $manualScreeningLabel }}</span>
+                    @endif
+                </div>
+
+                @if ($screeningReasons !== [])
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">Advisor hints</span>
+                        @foreach ($screeningReasons as $reason)
+                            <span data-testid="bulk-correction-screening-advisor-hint" class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+                                {{ $reason['label'] ?? str_replace('_', ' ', (string) ($reason['code'] ?? 'review')) }}
+                            </span>
+                        @endforeach
+                    </div>
+                @endif
+
+                @error('screening_review')
+                    <div class="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{{ $message }}</div>
+                @enderror
+                @if ($errors->has('status') || $errors->has('reason_key') || $errors->has('note'))
+                    <div class="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                        @foreach (['status', 'reason_key', 'note'] as $screeningField)
+                            @error($screeningField)
+                                <div>{{ $message }}</div>
+                            @enderror
+                        @endforeach
+                    </div>
+                @endif
+
+                @if ($manualScreeningActive)
+                    <dl class="mt-4 grid gap-3 text-sm text-gray-700 sm:grid-cols-2">
+                        <div>
+                            <dt class="font-semibold">Status</dt>
+                            <dd>{{ $manualScreeningLabel }}</dd>
+                        </div>
+                        <div>
+                            <dt class="font-semibold">Reason</dt>
+                            <dd>{{ $screeningReasonLabels[data_get($screeningReview, 'reason_key')] ?? (data_get($screeningReview, 'reason_key') ?: '-') }}</dd>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <dt class="font-semibold">Note</dt>
+                            <dd class="whitespace-pre-wrap">{{ data_get($screeningReview, 'note') ?: '-' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="font-semibold">Reviewed by</dt>
+                            <dd>#{{ data_get($screeningReview, 'reviewed_by_user_id') ?: '-' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="font-semibold">Reviewed at</dt>
+                            <dd>{{ data_get($screeningReview, 'reviewed_at') ?: '-' }}</dd>
+                        </div>
+                    </dl>
+
+                    <form method="POST" action="{{ route('admin.bulk-intakes.items.clear-screening-review', [$batch, $item]) }}" class="mt-4">
+                        @csrf
+                        <button type="submit" class="rounded-lg border border-indigo-300 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">
+                            Clear screening
+                        </button>
+                    </form>
+                @else
+                    <form method="POST" action="{{ route('admin.bulk-intakes.items.save-screening-review', [$batch, $item]) }}" class="mt-4 space-y-4" data-testid="bulk-correction-manual-screening-form">
+                        @csrf
+                        <label class="block text-sm">
+                            <span class="mb-1 block font-semibold text-gray-800">Decision</span>
+                            <select name="status" class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" data-bulk-screening-status>
+                                <option value="">Select decision</option>
+                                <option value="eligible_for_consent" @selected(old('status') === 'eligible_for_consent')>Eligible for consent</option>
+                                <option value="needs_review" @selected(old('status') === 'needs_review')>Needs review</option>
+                                <option value="stopped" @selected(old('status') === 'stopped')>Stopped</option>
+                            </select>
+                        </label>
+                        <label class="block text-sm">
+                            <span class="mb-1 block font-semibold text-gray-800">Reason</span>
+                            <select name="reason_key" class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" data-bulk-screening-reason>
+                                <option value="">Select reason (optional for eligible)</option>
+                                @foreach ($screeningReviewOptions as $statusKey => $reasonKeys)
+                                    <optgroup label="{{ match ($statusKey) { 'eligible_for_consent' => 'Eligible for consent', 'needs_review' => 'Needs review', 'stopped' => 'Stopped', default => $statusKey } }}" data-bulk-screening-reason-group="{{ $statusKey }}">
+                                        @foreach ($reasonKeys as $reasonKey)
+                                            <option value="{{ $reasonKey }}" data-bulk-screening-reason-for="{{ $statusKey }}" @selected(old('reason_key') === $reasonKey)>{{ $screeningReasonLabels[$reasonKey] ?? str_replace('_', ' ', $reasonKey) }}</option>
+                                        @endforeach
+                                    </optgroup>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label class="block text-sm">
+                            <span class="mb-1 block font-semibold text-gray-800">Note</span>
+                            <textarea name="note" rows="3" maxlength="1000" class="w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('note') }}</textarea>
+                        </label>
+                        <button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+                            Save screening decision
+                        </button>
+                    </form>
+                    <script>
+                        (() => {
+                            const form = document.querySelector('[data-testid="bulk-correction-manual-screening-form"]');
+                            if (!form) return;
+                            const statusSelect = form.querySelector('[data-bulk-screening-status]');
+                            const reasonSelect = form.querySelector('[data-bulk-screening-reason]');
+                            const syncReasonOptions = () => {
+                                const status = statusSelect.value;
+                                reasonSelect.querySelectorAll('option[data-bulk-screening-reason-for]').forEach((option) => {
+                                    const visible = !status || option.dataset.bulkScreeningReasonFor === status;
+                                    option.hidden = !visible;
+                                    option.disabled = !visible;
+                                });
+                                const selected = reasonSelect.selectedOptions[0];
+                                if (selected && selected.disabled) {
+                                    reasonSelect.value = '';
+                                }
+                            };
+                            statusSelect.addEventListener('change', syncReasonOptions);
+                            syncReasonOptions();
+                        })();
+                    </script>
                 @endif
             </div>
 

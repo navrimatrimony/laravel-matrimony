@@ -29,6 +29,7 @@
     $candidateByItemId = $candidateByItemId ?? [];
     $duplicateHintsByItemId = $duplicateHintsByItemId ?? [];
     $screeningByItemId = $screeningByItemId ?? [];
+    $screeningReviewByItemId = $screeningReviewByItemId ?? [];
     $missingDisplay = '—';
     $highlightItemId = (int) request()->query('highlight_item', 0);
 @endphp
@@ -229,6 +230,20 @@
                                     default => 'border-amber-100 bg-white text-amber-800',
                                 };
                                 $screeningReasons = is_array($screening['reasons'] ?? null) ? array_slice($screening['reasons'], 0, 2) : [];
+                                $manualScreeningReview = is_array($screeningReviewByItemId[$item->id] ?? null) ? $screeningReviewByItemId[$item->id] : null;
+                                $manualScreeningActive = $manualScreeningReview !== null;
+                                $manualScreeningStatus = (string) ($manualScreeningReview['status'] ?? '');
+                                $manualScreeningLabel = match ($manualScreeningStatus) {
+                                    'eligible_for_consent' => 'Eligible for consent',
+                                    'needs_review' => 'Needs review',
+                                    'stopped' => 'Stopped',
+                                    default => 'Manual screening',
+                                };
+                                $manualScreeningBadgeClass = match ($manualScreeningStatus) {
+                                    'eligible_for_consent' => 'border-emerald-300 bg-emerald-100 text-emerald-800',
+                                    'stopped' => 'border-red-300 bg-red-100 text-red-800',
+                                    default => 'border-amber-300 bg-amber-100 text-amber-900',
+                                };
                                 $duplicateHints = is_array($duplicateHintsByItemId[$item->id] ?? null) ? $duplicateHintsByItemId[$item->id] : [];
                                 $manualDuplicateReview = is_array(data_get($itemMeta, 'duplicate_review')) ? data_get($itemMeta, 'duplicate_review') : [];
                                 $manualDuplicateActive = (string) data_get($manualDuplicateReview, 'status') === 'manual_duplicate';
@@ -383,10 +398,17 @@
                                 </td>
                                 <td class="px-4 py-2 text-sm">
                                     <div class="flex max-w-xs flex-wrap gap-1">
-                                        <span data-testid="bulk-screening-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $screeningBadgeClass }}">{{ $screening['label'] ?? 'Needs review' }}</span>
-                                        @foreach ($screeningReasons as $screeningReason)
-                                            <span data-testid="bulk-screening-reason" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $screeningReasonChipClass }}">{{ $screeningReason['label'] ?? str_replace('_', ' ', (string) ($screeningReason['code'] ?? 'review')) }}</span>
-                                        @endforeach
+                                        @if ($manualScreeningActive)
+                                            <span data-testid="bulk-manual-screening-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $manualScreeningBadgeClass }}">{{ $manualScreeningLabel }}</span>
+                                            @foreach ($screeningReasons as $screeningReason)
+                                                <span data-testid="bulk-screening-advisor-hint" class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ $screeningReason['label'] ?? str_replace('_', ' ', (string) ($screeningReason['code'] ?? 'review')) }}</span>
+                                            @endforeach
+                                        @else
+                                            <span data-testid="bulk-screening-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $screeningBadgeClass }}">{{ $screening['label'] ?? 'Needs review' }}</span>
+                                            @foreach ($screeningReasons as $screeningReason)
+                                                <span data-testid="bulk-screening-reason" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $screeningReasonChipClass }}">{{ $screeningReason['label'] ?? str_replace('_', ' ', (string) ($screeningReason['code'] ?? 'review')) }}</span>
+                                            @endforeach
+                                        @endif
                                         @if ($exceptionBadges !== [])
                                             @foreach ($exceptionBadges as $badge)
                                                 <span @if (! empty($badge['testid'])) data-testid="{{ $badge['testid'] }}" @endif class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $badge['class'] }}">{{ $badge['label'] }}</span>
@@ -441,6 +463,15 @@
                                                 <input type="hidden" name="reason" value="{{ trim('Duplicate/history hint: '.(string) ($primaryDuplicateHint['label'] ?? 'Possible duplicate')) }}">
                                                 <button type="submit" class="text-left text-sm font-medium text-rose-700 hover:text-rose-900">Mark duplicate</button>
                                             </form>
+                                        @endif
+
+                                        @if ($manualScreeningActive)
+                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.clear-screening-review', [$batch, $item]) }}">
+                                                @csrf
+                                                <button type="submit" class="text-left text-sm font-medium text-indigo-700 hover:text-indigo-900">Clear screening</button>
+                                            </form>
+                                        @elseif ($intake)
+                                            <a href="{{ route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]).'#bulk-manual-screening-card' }}" class="font-medium text-indigo-700 hover:text-indigo-900">Set screening</a>
                                         @endif
                                     </div>
                                 </td>
