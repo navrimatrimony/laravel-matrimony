@@ -28,6 +28,7 @@
     ];
     $candidateByItemId = $candidateByItemId ?? [];
     $duplicateHintsByItemId = $duplicateHintsByItemId ?? [];
+    $duplicateGateByItemId = $duplicateGateByItemId ?? [];
     $screeningByItemId = $screeningByItemId ?? [];
     $screeningReviewByItemId = $screeningReviewByItemId ?? [];
     $readyForConsentByItemId = is_array($readyForConsentByItemId ?? null) ? $readyForConsentByItemId : [];
@@ -282,6 +283,11 @@
                                     default => 'border-amber-300 bg-amber-100 text-amber-900',
                                 };
                                 $duplicateHints = is_array($duplicateHintsByItemId[$item->id] ?? null) ? $duplicateHintsByItemId[$item->id] : [];
+                                $duplicateGate = is_array($duplicateGateByItemId[$item->id] ?? null) ? $duplicateGateByItemId[$item->id] : [];
+                                $duplicateGateBlocks = is_array($duplicateGate['blocks'] ?? null) ? $duplicateGate['blocks'] : [];
+                                $historyBlocks = is_array($duplicateGate['history_blocks'] ?? null) ? $duplicateGate['history_blocks'] : [];
+                                $duplicateAutoBlocked = (bool) ($duplicateGate['auto_blocked'] ?? false);
+                                $duplicateOverrideActive = (bool) ($duplicateGate['override_active'] ?? false);
                                 $manualDuplicateReview = is_array(data_get($itemMeta, 'duplicate_review')) ? data_get($itemMeta, 'duplicate_review') : [];
                                 $manualDuplicateActive = (string) data_get($manualDuplicateReview, 'status') === 'manual_duplicate';
                                 $primaryDuplicateHint = is_array($duplicateHints[0] ?? null) ? $duplicateHints[0] : [];
@@ -342,6 +348,30 @@
                                         'label' => (string) ($duplicateHint['label'] ?? 'Possible duplicate'),
                                         'class' => 'border-purple-200 bg-purple-50 text-purple-700',
                                         'testid' => 'bulk-duplicate-history-hint',
+                                    ];
+                                }
+                                foreach ($historyBlocks as $historyBlock) {
+                                    $exceptionBadges[] = [
+                                        'label' => 'History: '.(string) ($historyBlock['label'] ?? 'Blocked'),
+                                        'class' => 'border-red-200 bg-red-50 text-red-700',
+                                        'testid' => 'bulk-identity-history-block',
+                                    ];
+                                }
+                                foreach ($duplicateGateBlocks as $gateBlock) {
+                                    if ((string) ($gateBlock['source'] ?? '') !== 'auto_duplicate') {
+                                        continue;
+                                    }
+                                    $exceptionBadges[] = [
+                                        'label' => (string) ($gateBlock['label'] ?? 'Auto blocked'),
+                                        'class' => 'border-rose-200 bg-rose-50 text-rose-800',
+                                        'testid' => 'bulk-auto-duplicate-block',
+                                    ];
+                                }
+                                if ($duplicateOverrideActive) {
+                                    $exceptionBadges[] = [
+                                        'label' => 'Override: proceed',
+                                        'class' => 'border-sky-200 bg-sky-50 text-sky-800',
+                                        'testid' => 'bulk-duplicate-override-badge',
                                     ];
                                 }
                                 $lastError = (string) ($intake?->last_error ?? '');
@@ -504,6 +534,19 @@
                                                 @endif
                                                 <input type="hidden" name="reason" value="{{ trim('Duplicate/history hint: '.(string) ($primaryDuplicateHint['label'] ?? 'Possible duplicate')) }}">
                                                 <button type="submit" class="text-left text-sm font-medium text-rose-700 hover:text-rose-900">Mark duplicate</button>
+                                            </form>
+                                        @endif
+
+                                        @if ($duplicateAutoBlocked && ! $duplicateOverrideActive && ! $manualDuplicateActive)
+                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.override-duplicate-block', [$batch, $item]) }}">
+                                                @csrf
+                                                <input type="hidden" name="reason" value="Admin override — proceed despite auto block">
+                                                <button type="submit" data-testid="bulk-override-duplicate-block" class="text-left text-sm font-medium text-sky-700 hover:text-sky-900">Override — proceed</button>
+                                            </form>
+                                        @elseif ($duplicateOverrideActive)
+                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.clear-duplicate-block-override', [$batch, $item]) }}">
+                                                @csrf
+                                                <button type="submit" data-testid="bulk-clear-duplicate-override" class="text-left text-sm font-medium text-sky-700 hover:text-sky-900">Clear override</button>
                                             </form>
                                         @endif
 

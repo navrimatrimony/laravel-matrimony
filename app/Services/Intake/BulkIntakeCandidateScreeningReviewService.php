@@ -18,6 +18,10 @@ class BulkIntakeCandidateScreeningReviewService
 
     public const STATUS_CLEARED = 'cleared';
 
+    public function __construct(
+        private readonly BulkIntakeIdentityHistoryService $identityHistoryService,
+    ) {}
+
     /**
      * @var array<string, list<string>>
      */
@@ -43,6 +47,8 @@ class BulkIntakeCandidateScreeningReviewService
             'already_married',
             'not_interested',
             'wrong_number',
+            'do_not_suggest',
+            'no_response',
             'blocked_or_complaint',
             'invalid_candidate',
         ],
@@ -96,6 +102,15 @@ class BulkIntakeCandidateScreeningReviewService
         ];
 
         $item->forceFill(['item_meta_json' => $meta])->save();
+
+        if ($validated['status'] === self::STATUS_STOPPED && is_string($validated['reason_key'] ?? null)) {
+            $this->identityHistoryService->recordFromScreeningReview(
+                $item,
+                $actor,
+                $validated['reason_key'],
+                $validated['note'] ?? null
+            );
+        }
     }
 
     public function clearReview(BulkIntakeBatchItem $item, User $actor): void
@@ -150,6 +165,8 @@ class BulkIntakeCandidateScreeningReviewService
             'already_married' => 'Already married',
             'not_interested' => 'Not interested',
             'wrong_number' => 'Wrong number',
+            'do_not_suggest' => 'Do not suggest',
+            'no_response' => 'No response',
             'blocked_or_complaint' => 'Blocked or complaint',
             'invalid_candidate' => 'Invalid candidate',
             default => str_replace('_', ' ', $reasonKey),

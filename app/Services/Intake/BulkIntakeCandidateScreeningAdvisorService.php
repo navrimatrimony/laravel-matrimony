@@ -12,6 +12,7 @@ class BulkIntakeCandidateScreeningAdvisorService
     public function __construct(
         private readonly BulkIntakeCandidateDisplayService $candidateDisplayService,
         private readonly BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService,
+        private readonly BulkIntakeDuplicateGateService $duplicateGateService,
     ) {}
 
     /**
@@ -44,12 +45,22 @@ class BulkIntakeCandidateScreeningAdvisorService
             $eligibleCodes[] = 'no_manual_duplicate';
         }
 
-        if ($this->hasDuplicateExistingProfile($duplicateHints)) {
-            $stopCodes[] = 'duplicate_existing_profile';
-        } elseif ($duplicateHints !== []) {
-            $reviewCodes[] = 'possible_duplicate';
-        } else {
-            $eligibleCodes[] = 'no_duplicate_hint';
+        $gate = $this->duplicateGateService->evaluateForItem($item, $duplicateHints);
+        foreach ($gate['blocks'] as $block) {
+            $code = (string) ($block['code'] ?? '');
+            if ($code !== '' && ! in_array($code, $stopCodes, true)) {
+                $stopCodes[] = $code;
+            }
+        }
+
+        $duplicateStopCodes = ['duplicate_existing_profile', 'auto_duplicate_intake', 'manual_duplicate'];
+        $hasDuplicateStop = array_intersect($stopCodes, $duplicateStopCodes) !== [];
+        if (! $hasDuplicateStop) {
+            if ($duplicateHints !== []) {
+                $reviewCodes[] = 'possible_duplicate';
+            } else {
+                $eligibleCodes[] = 'no_duplicate_hint';
+            }
         }
 
         if ($this->metadataFlag($meta, 'wrong_number')) {
@@ -372,6 +383,10 @@ class BulkIntakeCandidateScreeningAdvisorService
         return match ($code) {
             'manual_duplicate' => 'Manual duplicate',
             'duplicate_existing_profile' => 'Existing profile match',
+            'auto_duplicate_intake' => 'Already seen in intake',
+            'not_interested' => 'Not interested',
+            'do_not_suggest' => 'Do not suggest',
+            'no_response' => 'No response',
             'invalid_mobile' => 'Invalid mobile',
             'wrong_number' => 'Wrong number',
             'already_married' => 'Already married',
@@ -400,6 +415,8 @@ class BulkIntakeCandidateScreeningAdvisorService
             return match ($firstReason) {
                 'manual_duplicate' => 'Stop: Manual duplicate marked.',
                 'duplicate_existing_profile' => 'Stop: Existing profile or mobile match found.',
+                'auto_duplicate_intake' => 'Stop: Same candidate already seen in another intake.',
+                'not_interested', 'do_not_suggest', 'no_response' => 'Stop: Identity history blocks this candidate.',
                 'invalid_mobile' => 'Stop: Correct mobile before consent.',
                 'wrong_number' => 'Stop: Number is already marked wrong.',
                 'already_married' => 'Stop: Candidate is already marked married.',

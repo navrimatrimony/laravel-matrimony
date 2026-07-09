@@ -19,6 +19,8 @@ test('admin bulk intake route names exist', function () {
         ->and(route('admin.bulk-intakes.items.clear-needs-review', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/clear-needs-review'))
         ->and(route('admin.bulk-intakes.items.mark-duplicate', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/mark-duplicate'))
         ->and(route('admin.bulk-intakes.items.clear-duplicate', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/clear-duplicate'))
+        ->and(route('admin.bulk-intakes.items.override-duplicate-block', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/override-duplicate-block'))
+        ->and(route('admin.bulk-intakes.items.clear-duplicate-block-override', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/clear-duplicate-block-override'))
         ->and(route('admin.bulk-intakes.items.save-screening-review', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/save-screening-review'))
         ->and(route('admin.bulk-intakes.items.clear-screening-review', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/clear-screening-review'))
         ->and(route('admin.bulk-intakes.items.correct-candidate', ['bulkIntakeBatch' => 123, 'bulkIntakeBatchItem' => 456]))->toBe(url('/admin/bulk-intakes/123/items/456/correct-candidate'))

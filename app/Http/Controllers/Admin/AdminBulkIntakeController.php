@@ -16,7 +16,9 @@ use App\Services\Intake\BulkIntakeCandidateDisplayService;
 use App\Services\Intake\BulkIntakeEligibilityService;
 use App\Services\Intake\BulkIntakeCandidateScreeningReviewService;
 use App\Services\Intake\BulkIntakeDraftProfileBootstrapService;
+use App\Services\Intake\BulkIntakeDuplicateGateService;
 use App\Services\Intake\BulkIntakeDuplicateHistoryHintService;
+use App\Services\Intake\BulkIntakeIdentityHistoryService;
 use App\Services\Intake\BulkIntakeManualTranscriptService;
 use App\Services\Intake\BulkIntakeProgressPresenter;
 use App\Services\Intake\BulkIntakeReadinessService;
@@ -130,6 +132,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeCandidateDisplayService $candidateDisplayService,
         BulkIntakeEligibilityService $eligibilityService,
         BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService,
+        BulkIntakeDuplicateGateService $duplicateGateService,
         BulkIntakeProgressPresenter $progressPresenter
     )
     {
@@ -165,6 +168,14 @@ class AdminBulkIntakeController extends Controller
         $duplicateHintsByItemId = $statusFilteredItems
             ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
                 (int) $item->id => $duplicateHistoryHintService->hintsForItem($item),
+            ])
+            ->all();
+        $duplicateGateByItemId = $statusFilteredItems
+            ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
+                (int) $item->id => $duplicateGateService->evaluateForItem(
+                    $item,
+                    $duplicateHintsByItemId[(int) $item->id] ?? []
+                ),
             ])
             ->all();
         $autoSuggestionByItemId = $statusFilteredItems
@@ -227,6 +238,7 @@ class AdminBulkIntakeController extends Controller
             'progress' => $progressPresenter->progressForBatch($bulkIntakeBatch),
             'candidateByItemId' => $candidateByItemId,
             'duplicateHintsByItemId' => $duplicateHintsByItemId,
+            'duplicateGateByItemId' => $duplicateGateByItemId,
             'autoSuggestionByItemId' => $autoSuggestionByItemId,
             'screeningByItemId' => $autoSuggestionByItemId,
             'screeningReviewByItemId' => $screeningReviewByItemId,
@@ -650,7 +662,8 @@ class AdminBulkIntakeController extends Controller
     public function markItemManualDuplicate(
         Request $request,
         BulkIntakeBatch $bulkIntakeBatch,
-        BulkIntakeBatchItem $bulkIntakeBatchItem
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeIdentityHistoryService $identityHistoryService
     ) {
         abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
         abort_unless($request->user() instanceof User, 403);
@@ -684,9 +697,70 @@ class AdminBulkIntakeController extends Controller
 
         $bulkIntakeBatchItem->forceFill(['item_meta_json' => $meta])->save();
 
+        $identityHistoryService->recordFromManualDuplicate(
+            $bulkIntakeBatchItem,
+            $request->user(),
+            trim((string) ($validated['reason'] ?? '')) !== '' ? trim((string) $validated['reason']) : null
+        );
+
         return redirect()
             ->back()
             ->with('success', 'Bulk intake item marked as manual duplicate.');
+    }
+
+    public function overrideDuplicateBlock(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $meta = is_array($bulkIntakeBatchItem->item_meta_json) ? $bulkIntakeBatchItem->item_meta_json : [];
+        $meta['duplicate_gate_override'] = [
+            'status' => BulkIntakeDuplicateGateService::OVERRIDE_PROCEED,
+            'reason' => trim((string) ($validated['reason'] ?? '')) !== '' ? trim((string) $validated['reason']) : null,
+            'overridden_by_user_id' => (int) $request->user()->id,
+            'overridden_at' => now()->toISOString(),
+            'cleared_by_user_id' => null,
+            'cleared_at' => null,
+        ];
+
+        $bulkIntakeBatchItem->forceFill(['item_meta_json' => $meta])->save();
+
+        return redirect()
+            ->back()
+            ->with('success', 'Duplicate/history auto-block overridden. Candidate can proceed to review.');
+    }
+
+    public function clearDuplicateBlockOverride(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $meta = is_array($bulkIntakeBatchItem->item_meta_json) ? $bulkIntakeBatchItem->item_meta_json : [];
+        $existing = is_array($meta['duplicate_gate_override'] ?? null) ? $meta['duplicate_gate_override'] : [];
+        $meta['duplicate_gate_override'] = [
+            'status' => 'cleared',
+            'reason' => is_string($existing['reason'] ?? null) && trim($existing['reason']) !== '' ? trim($existing['reason']) : null,
+            'overridden_by_user_id' => isset($existing['overridden_by_user_id']) ? (int) $existing['overridden_by_user_id'] : null,
+            'overridden_at' => is_string($existing['overridden_at'] ?? null) ? $existing['overridden_at'] : null,
+            'cleared_by_user_id' => (int) $request->user()->id,
+            'cleared_at' => now()->toISOString(),
+        ];
+
+        $bulkIntakeBatchItem->forceFill(['item_meta_json' => $meta])->save();
+
+        return redirect()
+            ->back()
+            ->with('success', 'Duplicate/history override cleared.');
     }
 
     public function saveItemScreeningReview(
