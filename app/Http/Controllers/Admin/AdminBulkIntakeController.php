@@ -774,9 +774,17 @@ class AdminBulkIntakeController extends Controller
 
         $screeningReviewService->saveReview($bulkIntakeBatchItem, $request->user(), $request->all());
 
+        $reasonKey = (string) $request->input('reason_key', '');
+        $message = match ($reasonKey) {
+            'already_married' => 'Recorded: already married. Same mobile/name will auto-block in future batches.',
+            'not_interested' => 'Recorded: not interested. Same identity will auto-block in future batches.',
+            'wrong_number' => 'Recorded: wrong number. Same mobile will auto-block in future batches.',
+            default => 'Manual screening decision saved.',
+        };
+
         return redirect()
             ->back()
-            ->with('success', 'Manual screening decision saved.');
+            ->with('success', $message);
     }
 
     public function clearItemScreeningReview(

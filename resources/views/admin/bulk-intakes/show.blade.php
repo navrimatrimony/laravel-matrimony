@@ -556,6 +556,28 @@
                                                 <button type="submit" class="text-left text-sm font-medium text-indigo-700 hover:text-indigo-900">Clear screening</button>
                                             </form>
                                         @endif
+
+                                        @if ($intake)
+                                            <div class="mt-1 border-t border-gray-100 pt-2">
+                                                <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-gray-400">Record history</span>
+                                                @foreach ([
+                                                    'already_married' => ['label' => 'Already married', 'testid' => 'bulk-mark-already-married'],
+                                                    'not_interested' => ['label' => 'Not interested', 'testid' => 'bulk-mark-not-interested'],
+                                                    'wrong_number' => ['label' => 'Wrong number', 'testid' => 'bulk-mark-wrong-number'],
+                                                ] as $historyReasonKey => $historyAction)
+                                                    <form method="POST" action="{{ route('admin.bulk-intakes.items.save-screening-review', [$batch, $item]) }}" class="mt-1">
+                                                        @csrf
+                                                        <input type="hidden" name="status" value="stopped">
+                                                        <input type="hidden" name="reason_key" value="{{ $historyReasonKey }}">
+                                                        <button
+                                                            type="submit"
+                                                            data-testid="{{ $historyAction['testid'] }}"
+                                                            class="text-left text-sm font-medium text-red-700 hover:text-red-900"
+                                                        >{{ $historyAction['label'] }}</button>
+                                                    </form>
+                                                @endforeach
+                                            </div>
+                                        @endif
                                     </div>
                                 </td>
                             </tr>

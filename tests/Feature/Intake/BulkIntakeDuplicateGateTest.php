@@ -255,6 +255,75 @@ test('manual duplicate mark records identity history', function () {
     expect(BulkIntakeIdentityHistory::query()->where('reason_code', 'do_not_suggest')->count())->toBe(1);
 });
 
+test('batch show renders record history actions for linked intake', function () {
+    $admin = duplicateGateAdmin();
+    $batch = duplicateGateBatch($admin);
+    $intake = duplicateGateIntake([
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'History Action Candidate',
+                'primary_contact_number' => '9876543255',
+            ],
+        ],
+    ]);
+    duplicateGateItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Record history', false)
+        ->assertSee('data-testid="bulk-mark-already-married"', false)
+        ->assertSee('data-testid="bulk-mark-not-interested"', false)
+        ->assertSee('data-testid="bulk-mark-wrong-number"', false);
+});
+
+test('admin can mark already married from batch show and future same mobile auto blocks', function () {
+    $admin = duplicateGateAdmin();
+    $batch = duplicateGateBatch($admin);
+    $sourceIntake = duplicateGateIntake([
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Source Married Candidate',
+                'primary_contact_number' => '9876543244',
+                'date_of_birth' => '1994-02-10',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    $sourceItem = duplicateGateItem($batch, $sourceIntake);
+
+    $this->actingAs($admin)
+        ->post(route('admin.bulk-intakes.items.save-screening-review', [$batch, $sourceItem]), [
+            'status' => 'stopped',
+            'reason_key' => 'already_married',
+            'note' => 'Confirmed on phone',
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    expect(BulkIntakeIdentityHistory::query()->where('reason_code', 'already_married')->count())->toBe(1);
+
+    $newIntake = duplicateGateIntake([
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Future Upload Same Mobile',
+                'primary_contact_number' => '9876543244',
+                'date_of_birth' => '1999-01-01',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    duplicateGateItem($batch, $newIntake);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Future Upload Same Mobile', false)
+        ->assertSee('data-testid="bulk-identity-history-block"', false)
+        ->assertSee('History: Already married', false)
+        ->assertSee('data-testid="bulk-override-duplicate-block"', false);
+});
+
 function duplicateGateAdmin(): User
 {
     return User::factory()->create([
