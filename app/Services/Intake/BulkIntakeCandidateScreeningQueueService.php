@@ -19,6 +19,8 @@ class BulkIntakeCandidateScreeningQueueService
 
     public const FILTER_MANUAL = 'manual';
 
+    public const FILTER_READY = 'ready';
+
     /**
      * @return array<string, string>
      */
@@ -31,6 +33,7 @@ class BulkIntakeCandidateScreeningQueueService
             self::FILTER_STOPPED => 'Stopped',
             self::FILTER_ADVISOR => 'Advisor',
             self::FILTER_MANUAL => 'Manual',
+            self::FILTER_READY => 'Ready',
         ];
     }
 
@@ -73,11 +76,19 @@ class BulkIntakeCandidateScreeningQueueService
      * @param  array<string, mixed>|null  $manualReview
      * @param  array<string, mixed>  $advisor
      */
-    public function itemMatchesFilter(string $filter, ?array $manualReview, array $advisor): bool
-    {
+    public function itemMatchesFilter(
+        string $filter,
+        ?array $manualReview,
+        array $advisor,
+        ?bool $readyForConsent = null
+    ): bool {
         $filter = $this->resolveScreeningFilter($filter);
         if ($filter === self::FILTER_ALL) {
             return true;
+        }
+
+        if ($filter === self::FILTER_READY) {
+            return $readyForConsent === true;
         }
 
         $effective = $this->effectiveScreeningForItem($manualReview, $advisor);
@@ -98,8 +109,12 @@ class BulkIntakeCandidateScreeningQueueService
      * @param  callable(BulkIntakeBatchItem): array<string, mixed>|null  $manualReviewForItem
      * @return array<string, int>
      */
-    public function countsForItems(Collection $items, callable $advisorForItem, callable $manualReviewForItem): array
-    {
+    public function countsForItems(
+        Collection $items,
+        callable $advisorForItem,
+        callable $manualReviewForItem,
+        ?callable $readyForConsentForItem = null
+    ): array {
         $counts = [
             self::FILTER_ALL => $items->count(),
             self::FILTER_ELIGIBLE => 0,
@@ -107,6 +122,7 @@ class BulkIntakeCandidateScreeningQueueService
             self::FILTER_STOPPED => 0,
             self::FILTER_ADVISOR => 0,
             self::FILTER_MANUAL => 0,
+            self::FILTER_READY => 0,
         ];
 
         foreach ($items as $item) {
@@ -123,6 +139,10 @@ class BulkIntakeCandidateScreeningQueueService
                 $counts[self::FILTER_MANUAL]++;
             } else {
                 $counts[self::FILTER_ADVISOR]++;
+            }
+
+            if ($readyForConsentForItem !== null && $readyForConsentForItem($item) === true) {
+                $counts[self::FILTER_READY]++;
             }
         }
 

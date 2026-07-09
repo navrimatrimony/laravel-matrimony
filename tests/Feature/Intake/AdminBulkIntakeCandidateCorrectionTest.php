@@ -89,6 +89,7 @@ test('admin can open bulk candidate correction page', function () {
         ->assertSee('data-testid="bulk-correction-low-confidence-name"', false)
         ->assertSee('data-testid="bulk-correction-screening-advisor-card"', false)
         ->assertSee('data-testid="bulk-correction-screening-badge"', false)
+        ->assertSee('data-testid="bulk-correction-ready-for-consent-card"', false)
         ->assertSee('data-testid="bulk-correction-manual-screening-card"', false)
         ->assertSee('Manual screening decision', false)
         ->assertSee('Screening advisor', false)
@@ -103,6 +104,7 @@ test('admin can open bulk candidate correction page', function () {
     $form = strpos($html, 'id="bulk-candidate-correction-form"');
     $duplicate = strpos($html, 'data-testid="bulk-correction-duplicate-history-card"');
     $screening = strpos($html, 'data-testid="bulk-correction-screening-advisor-card"');
+    $readyForConsent = strpos($html, 'data-testid="bulk-correction-ready-for-consent-card"');
     $manualScreening = strpos($html, 'data-testid="bulk-correction-manual-screening-card"');
     $manualDuplicate = strpos($html, 'data-testid="bulk-correction-manual-duplicate-card"');
     $review = strpos($html, 'Review flag');
@@ -114,6 +116,7 @@ test('admin can open bulk candidate correction page', function () {
         ->and($form)->not->toBeFalse()
         ->and($duplicate)->not->toBeFalse()
         ->and($screening)->not->toBeFalse()
+        ->and($readyForConsent)->not->toBeFalse()
         ->and($manualScreening)->not->toBeFalse()
         ->and($manualDuplicate)->not->toBeFalse()
         ->and($review)->not->toBeFalse()
@@ -125,7 +128,8 @@ test('admin can open bulk candidate correction page', function () {
         ->and($form)->toBeGreaterThan($right)
         ->and($duplicate)->toBeGreaterThan($form)
         ->and($screening)->toBeGreaterThan($duplicate)
-        ->and($manualScreening)->toBeGreaterThan($screening)
+        ->and($readyForConsent)->toBeGreaterThan($screening)
+        ->and($manualScreening)->toBeGreaterThan($readyForConsent)
         ->and($manualDuplicate)->toBeGreaterThan($manualScreening)
         ->and($review)->toBeGreaterThan($manualDuplicate);
 });
@@ -953,6 +957,77 @@ test('read-only screening advisor still works when no manual screening exists', 
         ->assertSee('data-testid="bulk-correction-manual-screening-form"', false)
         ->assertSee('Save screening decision', false)
         ->assertDontSee('data-testid="bulk-correction-manual-screening-badge"', false);
+});
+
+test('correction page shows ready for consent card when manual eligible and identity complete', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $intake = candidateCorrectionIntake([
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Ready Correction Candidate',
+                'primary_contact_number' => '9876543210',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    $item = candidateCorrectionItem($batch, $intake, [
+        'item_meta_json' => [
+            'screening_review' => [
+                'status' => 'eligible_for_consent',
+                'reason_key' => 'admin_verified',
+                'note' => null,
+                'reviewed_by_user_id' => $admin->id,
+                'reviewed_at' => '2026-07-08T10:00:00+00:00',
+                'cleared_by_user_id' => null,
+                'cleared_at' => null,
+            ],
+        ],
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-correction-ready-for-consent-card"', false)
+        ->assertSee('data-testid="bulk-correction-ready-for-consent-badge"', false)
+        ->assertSee('Ready', false)
+        ->assertDontSee('data-testid="bulk-correction-not-ready-for-consent-badge"', false);
+});
+
+test('correction page shows not ready reasons when eligible manual screening lacks mobile', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $intake = candidateCorrectionIntake([
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Not Ready Missing Mobile Candidate',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    $item = candidateCorrectionItem($batch, $intake, [
+        'item_meta_json' => [
+            'screening_review' => [
+                'status' => 'eligible_for_consent',
+                'reason_key' => 'corrected_basic_fields',
+                'note' => null,
+                'reviewed_by_user_id' => $admin->id,
+                'reviewed_at' => '2026-07-08T10:00:00+00:00',
+                'cleared_by_user_id' => null,
+                'cleared_at' => null,
+            ],
+        ],
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-correction-not-ready-for-consent-badge"', false)
+        ->assertSee('Not Ready', false)
+        ->assertSee('data-testid="bulk-correction-ready-for-consent-reason"', false)
+        ->assertSee('Missing mobile', false);
 });
 
 test('bulk candidate correction save is blocked after intake approval or lock', function () {

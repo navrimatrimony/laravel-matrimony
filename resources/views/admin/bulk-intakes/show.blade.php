@@ -30,6 +30,8 @@
     $duplicateHintsByItemId = $duplicateHintsByItemId ?? [];
     $screeningByItemId = $screeningByItemId ?? [];
     $screeningReviewByItemId = $screeningReviewByItemId ?? [];
+    $readyForConsentByItemId = is_array($readyForConsentByItemId ?? null) ? $readyForConsentByItemId : [];
+    $readyCount = (int) ($readyCount ?? 0);
     $screeningFilter = (string) ($screeningFilter ?? 'all');
     $screeningFilters = is_array($screeningFilters ?? null) ? $screeningFilters : [];
     $screeningCounts = is_array($screeningCounts ?? null) ? $screeningCounts : [];
@@ -187,6 +189,23 @@
             </div>
         </div>
 
+        <div class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4" data-testid="bulk-ready-for-consent-summary-card">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h3 class="text-base font-semibold text-emerald-900">Ready for Consent</h3>
+                    <p class="mt-1 text-sm text-emerald-800">
+                        <span data-testid="bulk-ready-for-consent-count">{{ $readyCount }}</span>
+                        {{ $readyCount === 1 ? 'candidate ready' : 'candidates ready' }}
+                    </p>
+                </div>
+                <a href="{{ $buildShowUrl($batch, $statusFilter, 'ready', $highlightItemId > 0 ? $highlightItemId : null) }}"
+                   data-testid="bulk-ready-for-consent-view-queue"
+                   class="inline-flex items-center rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">
+                    View Ready Queue
+                </a>
+            </div>
+        </div>
+
         <div class="mt-4 flex flex-col gap-3">
             <div class="flex flex-wrap items-center gap-2" data-testid="bulk-screening-filter-pills">
                 @foreach ($screeningFilters as $key => $label)
@@ -282,6 +301,10 @@
                                 $manualScreeningReview = is_array($screeningReviewByItemId[$item->id] ?? null) ? $screeningReviewByItemId[$item->id] : null;
                                 $manualScreeningActive = $manualScreeningReview !== null;
                                 $manualScreeningStatus = (string) ($manualScreeningReview['status'] ?? '');
+                                $readyForConsent = is_array($readyForConsentByItemId[$item->id] ?? null)
+                                    ? $readyForConsentByItemId[$item->id]
+                                    : ['ready' => false, 'reasons' => []];
+                                $isReadyForConsent = (bool) ($readyForConsent['ready'] ?? false);
                                 $manualScreeningLabel = match ($manualScreeningStatus) {
                                     'eligible_for_consent' => 'Eligible for consent',
                                     'needs_review' => 'Needs review',
@@ -457,6 +480,11 @@
                                             @foreach ($screeningReasons as $screeningReason)
                                                 <span data-testid="bulk-screening-reason" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $screeningReasonChipClass }}">{{ $screeningReason['label'] ?? str_replace('_', ' ', (string) ($screeningReason['code'] ?? 'review')) }}</span>
                                             @endforeach
+                                        @endif
+                                        @if ($isReadyForConsent)
+                                            <span data-testid="bulk-ready-for-consent-badge" class="rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">Ready for Consent</span>
+                                        @elseif ($manualScreeningActive && $manualScreeningStatus === 'eligible_for_consent')
+                                            <span data-testid="bulk-not-ready-for-consent-hint" class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-500">Not ready</span>
                                         @endif
                                         @if ($exceptionBadges !== [])
                                             @foreach ($exceptionBadges as $badge)

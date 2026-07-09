@@ -1176,6 +1176,183 @@ test('bulk screening clear filters link resets status and screening params', fun
     $response->assertSee($clearUrl, false);
 });
 
+test('eligible manual screening with mobile and identity is ready for consent', function () {
+    $admin = candidateDisplayAdminUser();
+    [$batch, $readyItem] = candidateDisplayReadyForConsentFixtures($admin);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-ready-for-consent-summary-card"', false)
+        ->assertSee('data-testid="bulk-ready-for-consent-count">1<', false)
+        ->assertSee('candidate ready', false)
+        ->assertSee('data-testid="bulk-ready-for-consent-badge"', false)
+        ->assertSee('Ready for Consent', false)
+        ->assertSee('id="bulk-item-'.$readyItem->id.'"', false);
+});
+
+test('eligible manual screening without mobile is not ready for consent', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Eligible No Mobile Candidate',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $intake, [
+        'item_meta_json' => [
+            'screening_review' => [
+                'status' => 'eligible_for_consent',
+                'reason_key' => 'corrected_basic_fields',
+                'note' => null,
+                'reviewed_by_user_id' => $admin->id,
+                'reviewed_at' => '2026-07-08T10:00:00+00:00',
+                'cleared_by_user_id' => null,
+                'cleared_at' => null,
+            ],
+        ],
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-ready-for-consent-count">0<', false)
+        ->assertSee('data-testid="bulk-not-ready-for-consent-hint"', false)
+        ->assertSee('Not ready', false)
+        ->assertDontSee('data-testid="bulk-ready-for-consent-badge"', false);
+});
+
+test('manual duplicate mark blocks ready for consent', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Duplicate Not Ready Candidate',
+                'primary_contact_number' => '9876543299',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $intake, [
+        'item_meta_json' => [
+            'screening_review' => [
+                'status' => 'eligible_for_consent',
+                'reason_key' => 'admin_verified',
+                'note' => null,
+                'reviewed_by_user_id' => $admin->id,
+                'reviewed_at' => '2026-07-08T10:00:00+00:00',
+                'cleared_by_user_id' => null,
+                'cleared_at' => null,
+            ],
+            'duplicate_review' => [
+                'status' => 'manual_duplicate',
+                'matched_biodata_intake_id' => $intake->id,
+                'matched_profile_id' => null,
+                'reason' => 'Already exists',
+                'marked_by_user_id' => $admin->id,
+                'marked_at' => '2026-07-08T10:00:00+00:00',
+                'cleared_by_user_id' => null,
+                'cleared_at' => null,
+            ],
+        ],
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-ready-for-consent-count">0<', false)
+        ->assertSee('data-testid="bulk-not-ready-for-consent-hint"', false)
+        ->assertDontSee('data-testid="bulk-ready-for-consent-badge"', false);
+});
+
+test('advisor eligible without manual screening is not ready for consent', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Advisor Only Not Ready Candidate',
+                'primary_contact_number' => '9876543298',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-ready-for-consent-count">0<', false)
+        ->assertDontSee('data-testid="bulk-ready-for-consent-badge"', false);
+});
+
+test('bulk ready screening filter shows only ready candidates', function () {
+    $admin = candidateDisplayAdminUser();
+    [$batch, $readyItem] = candidateDisplayReadyForConsentFixtures($admin);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', [
+            'bulkIntakeBatch' => $batch,
+            'screening' => 'ready',
+        ]))
+        ->assertOk()
+        ->assertSee('Ready Consent Candidate', false)
+        ->assertSee('data-testid="bulk-ready-for-consent-badge"', false)
+        ->assertDontSee('Eligible No Mobile Candidate', false)
+        ->assertDontSee('Advisor Only Not Ready Candidate', false)
+        ->assertSee('id="bulk-item-'.$readyItem->id.'"', false);
+});
+
+test('bulk ready count respects status filter dataset', function () {
+    $admin = candidateDisplayAdminUser();
+    [$batch] = candidateDisplayReadyForConsentFixtures($admin, withUnreadyPendingItem: true);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', [
+            'bulkIntakeBatch' => $batch,
+            'status' => 'parsed',
+        ]))
+        ->assertOk()
+        ->assertSee('Ready (1)', false)
+        ->assertSee('data-testid="bulk-ready-for-consent-count">1<', false);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', [
+            'bulkIntakeBatch' => $batch,
+            'status' => 'all',
+        ]))
+        ->assertOk()
+        ->assertSee('Ready (1)', false);
+});
+
+test('bulk ready filter preserves status and highlight item query params', function () {
+    $admin = candidateDisplayAdminUser();
+    [$batch, $readyItem] = candidateDisplayReadyForConsentFixtures($admin);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', [
+            'bulkIntakeBatch' => $batch,
+            'status' => 'parsed',
+            'screening' => 'ready',
+            'highlight_item' => $readyItem->id,
+        ]))
+        ->assertOk()
+        ->assertSee('status=parsed', false)
+        ->assertSee('screening=eligible', false)
+        ->assertSee('id="bulk-item-'.$readyItem->id.'"', false)
+        ->assertSee('background-color: #ecfdf5;', false);
+});
+
 function candidateDisplayAdminUser(): User
 {
     return User::factory()->create([
@@ -1357,4 +1534,98 @@ function candidateDisplayScreeningQueueFixtures(User $admin, bool $withPendingIt
     return $pendingItem === null
         ? [$batch, null, $manualEligibleItem]
         : [$batch, $pendingItem, $manualEligibleItem];
+}
+
+/**
+ * @return array{0: BulkIntakeBatch, 1: BulkIntakeBatchItem}
+ */
+function candidateDisplayReadyForConsentFixtures(User $admin, bool $withUnreadyPendingItem = false): array
+{
+    $batch = candidateDisplayBatch($admin);
+
+    $readyIntake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Ready Consent Candidate',
+                'primary_contact_number' => '9876543288',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    $readyItem = candidateDisplayItem($batch, $readyIntake, [
+        'item_meta_json' => [
+            'screening_review' => [
+                'status' => 'eligible_for_consent',
+                'reason_key' => 'admin_verified',
+                'note' => null,
+                'reviewed_by_user_id' => $admin->id,
+                'reviewed_at' => '2026-07-08T10:00:00+00:00',
+                'cleared_by_user_id' => null,
+                'cleared_at' => null,
+            ],
+        ],
+    ]);
+
+    $noMobileIntake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Eligible No Mobile Candidate',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $noMobileIntake, [
+        'item_meta_json' => [
+            'screening_review' => [
+                'status' => 'eligible_for_consent',
+                'reason_key' => 'corrected_basic_fields',
+                'note' => null,
+                'reviewed_by_user_id' => $admin->id,
+                'reviewed_at' => '2026-07-08T10:00:00+00:00',
+                'cleared_by_user_id' => null,
+                'cleared_at' => null,
+            ],
+        ],
+    ]);
+
+    $advisorOnlyIntake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Advisor Only Not Ready Candidate',
+                'primary_contact_number' => '9876543298',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $advisorOnlyIntake);
+
+    if ($withUnreadyPendingItem) {
+        $pendingIntake = candidateDisplayIntake([
+            'parse_status' => 'pending',
+            'parsed_json' => [],
+        ]);
+        candidateDisplayItem($batch, $pendingIntake, [
+            'item_status' => BulkIntakeBatchItem::STATUS_PENDING,
+            'original_filename' => 'pending-not-ready.pdf',
+            'item_meta_json' => [
+                'screening_review' => [
+                    'status' => 'eligible_for_consent',
+                    'reason_key' => 'admin_verified',
+                    'note' => null,
+                    'reviewed_by_user_id' => $admin->id,
+                    'reviewed_at' => '2026-07-08T10:00:00+00:00',
+                    'cleared_by_user_id' => null,
+                    'cleared_at' => null,
+                ],
+            ],
+        ]);
+    }
+
+    return [$batch, $readyItem];
 }

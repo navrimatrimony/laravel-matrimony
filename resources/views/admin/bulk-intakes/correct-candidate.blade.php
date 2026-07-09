@@ -30,6 +30,15 @@
         default => 'border-amber-200 bg-amber-50 text-amber-900',
     };
     $screeningReasons = is_array($screeningAdvisor['reasons'] ?? null) ? $screeningAdvisor['reasons'] : [];
+    $readyForConsent = is_array($readyForConsent ?? null) ? $readyForConsent : ['ready' => false, 'reasons' => []];
+    $isReadyForConsent = (bool) ($readyForConsent['ready'] ?? false);
+    $readyForConsentReasonLabels = [
+        'manual_screening_required' => 'Manual screening required',
+        'manual_screening_not_eligible' => 'Manual screening not eligible',
+        'manual_duplicate' => 'Manual duplicate',
+        'missing_mobile' => 'Missing mobile',
+        'missing_identity' => 'Missing identity',
+    ];
     $screeningReview = is_array($screeningReview ?? null) ? $screeningReview : null;
     $screeningReviewOptions = is_array($screeningReviewOptions ?? null) ? $screeningReviewOptions : [];
     $manualScreeningActive = $screeningReview !== null;
@@ -447,6 +456,31 @@
                                 {{ $reason['label'] ?? str_replace('_', ' ', (string) ($reason['code'] ?? 'review')) }}
                             </span>
                         @endforeach
+                    </div>
+                @endif
+            </div>
+
+            <div class="rounded-lg bg-white p-6 shadow" data-testid="bulk-correction-ready-for-consent-card">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900">Ready for Consent</h2>
+                        <p class="mt-1 text-sm text-gray-600">Read-only readiness signal for the consent phase.</p>
+                    </div>
+                    @if ($isReadyForConsent)
+                        <span data-testid="bulk-correction-ready-for-consent-badge" class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">Ready</span>
+                    @else
+                        <span data-testid="bulk-correction-not-ready-for-consent-badge" class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-600">Not Ready</span>
+                    @endif
+                </div>
+
+                @if (! $isReadyForConsent && is_array($readyForConsent['reasons'] ?? null) && $readyForConsent['reasons'] !== [])
+                    <div class="mt-4">
+                        <p class="text-sm font-semibold text-gray-700">Reasons</p>
+                        <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-600">
+                            @foreach ($readyForConsent['reasons'] as $reason)
+                                <li data-testid="bulk-correction-ready-for-consent-reason">{{ $readyForConsentReasonLabels[$reason] ?? str_replace('_', ' ', (string) $reason) }}</li>
+                            @endforeach
+                        </ul>
                     </div>
                 @endif
             </div>

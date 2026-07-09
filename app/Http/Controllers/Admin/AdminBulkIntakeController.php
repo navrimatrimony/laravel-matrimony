@@ -14,6 +14,7 @@ use App\Services\Intake\BulkIntakeBatchService;
 use App\Services\Intake\BulkIntakeCandidateCorrectionService;
 use App\Services\Intake\BulkIntakeCandidateDisplayService;
 use App\Services\Intake\BulkIntakeCandidateScreeningAdvisorService;
+use App\Services\Intake\BulkIntakeReadyForConsentService;
 use App\Services\Intake\BulkIntakeCandidateScreeningQueueService;
 use App\Services\Intake\BulkIntakeCandidateScreeningReviewService;
 use App\Services\Intake\BulkIntakeDraftProfileBootstrapService;
@@ -132,6 +133,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeCandidateScreeningAdvisorService $screeningAdvisorService,
         BulkIntakeCandidateScreeningReviewService $screeningReviewService,
         BulkIntakeCandidateScreeningQueueService $screeningQueueService,
+        BulkIntakeReadyForConsentService $readyForConsentService,
         BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService,
         BulkIntakeProgressPresenter $progressPresenter
     )
@@ -183,6 +185,15 @@ class AdminBulkIntakeController extends Controller
                 (int) $item->id => $screeningReviewService->activeReviewForItem($item),
             ])
             ->all();
+        $readyForConsentByItemId = $statusFilteredItems
+            ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
+                (int) $item->id => $readyForConsentService->readyForConsentForItem(
+                    $item,
+                    $screeningReviewByItemId[(int) $item->id] ?? null,
+                    $candidateByItemId[(int) $item->id] ?? null
+                ),
+            ])
+            ->all();
         $screeningCounts = $screeningQueueService->countsForItems(
             $statusFilteredItems,
             fn (BulkIntakeBatchItem $item): array => $screeningByItemId[(int) $item->id] ?? [
@@ -193,7 +204,9 @@ class AdminBulkIntakeController extends Controller
                 'suggested_next_action' => '',
             ],
             fn (BulkIntakeBatchItem $item): ?array => $screeningReviewByItemId[(int) $item->id] ?? null,
+            fn (BulkIntakeBatchItem $item): bool => (bool) ($readyForConsentByItemId[(int) $item->id]['ready'] ?? false),
         );
+        $readyCount = (int) ($screeningCounts[BulkIntakeCandidateScreeningQueueService::FILTER_READY] ?? 0);
         $displayItems = $statusFilteredItems
             ->filter(fn (BulkIntakeBatchItem $item): bool => $screeningQueueService->itemMatchesFilter(
                 $screeningFilter,
@@ -204,7 +217,8 @@ class AdminBulkIntakeController extends Controller
                     'reasons' => [],
                     'reason_codes' => [],
                     'suggested_next_action' => '',
-                ]
+                ],
+                (bool) ($readyForConsentByItemId[(int) $item->id]['ready'] ?? false)
             ))
             ->values();
         $bulkIntakeBatch->setRelation('items', $displayItems);
@@ -224,6 +238,8 @@ class AdminBulkIntakeController extends Controller
             'duplicateHintsByItemId' => $duplicateHintsByItemId,
             'screeningByItemId' => $screeningByItemId,
             'screeningReviewByItemId' => $screeningReviewByItemId,
+            'readyForConsentByItemId' => $readyForConsentByItemId,
+            'readyCount' => $readyCount,
             'screeningFilter' => $screeningFilter,
             'screeningFilters' => $screeningFilters,
             'screeningCounts' => $screeningCounts,
@@ -358,8 +374,10 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeBatch $bulkIntakeBatch,
         BulkIntakeBatchItem $bulkIntakeBatchItem,
         BulkIntakeCandidateCorrectionService $correctionService,
+        BulkIntakeCandidateDisplayService $candidateDisplayService,
         BulkIntakeCandidateScreeningAdvisorService $screeningAdvisorService,
         BulkIntakeCandidateScreeningReviewService $screeningReviewService,
+        BulkIntakeReadyForConsentService $readyForConsentService,
         BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService
     ) {
         abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
@@ -368,6 +386,7 @@ class AdminBulkIntakeController extends Controller
         $correction = $correctionService->correctionDataForItem($bulkIntakeBatchItem);
         abort_unless($correction['intake'] !== null, 404);
         $duplicateHints = $duplicateHistoryHintService->hintsForItem($bulkIntakeBatchItem);
+        $screeningReview = $screeningReviewService->activeReviewForItem($bulkIntakeBatchItem);
 
         return view('admin.bulk-intakes.correct-candidate', [
             'batch' => $bulkIntakeBatch,
@@ -381,7 +400,12 @@ class AdminBulkIntakeController extends Controller
             'canSave' => $correction['can_save'],
             'duplicateHints' => $duplicateHints,
             'screeningAdvisor' => $screeningAdvisorService->advisorForItem($bulkIntakeBatchItem, null, $duplicateHints),
-            'screeningReview' => $screeningReviewService->activeReviewForItem($bulkIntakeBatchItem),
+            'screeningReview' => $screeningReview,
+            'readyForConsent' => $readyForConsentService->readyForConsentForItem(
+                $bulkIntakeBatchItem,
+                $screeningReview,
+                $candidateDisplayService->candidateForItem($bulkIntakeBatchItem)
+            ),
             'screeningReviewOptions' => BulkIntakeCandidateScreeningReviewService::REASON_KEYS_BY_STATUS,
         ]);
     }
