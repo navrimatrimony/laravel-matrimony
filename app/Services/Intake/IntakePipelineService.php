@@ -195,6 +195,25 @@ class IntakePipelineService
     }
 
     /**
+     * Fast storage path for admin bulk 7-field correction only.
+     * Applies core controlled-field normalization without walking relatives, addresses,
+     * career rows, or open-place suggestion writes on large parsed snapshots.
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    public function normalizeBulkCandidateCorrectionSnapshot(array $snapshot, ?int $suggestedByUserId = null): array
+    {
+        if (! is_array($snapshot['core'] ?? null)) {
+            $snapshot['core'] = [];
+        }
+
+        $snapshot['core'] = $this->controlledFieldNormalizer->normalizeCore($snapshot['core']);
+
+        return $snapshot;
+    }
+
+    /**
      * Merge suggestion buckets into profile.pending_intake_suggestions_json (same rules as MutationService).
      *
      * @param  array<string, mixed>  $delta

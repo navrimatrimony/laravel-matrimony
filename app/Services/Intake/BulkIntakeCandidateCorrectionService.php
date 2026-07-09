@@ -115,7 +115,7 @@ class BulkIntakeCandidateCorrectionService
 
         $source = $this->sourceSnapshot($intake);
         $snapshot = $this->applyCorrection($source['snapshot'], $input);
-        $snapshot = $this->intakePipeline->normalizeSnapshotForStorage($snapshot, (int) $actor->id);
+        $snapshot = $this->intakePipeline->normalizeBulkCandidateCorrectionSnapshot($snapshot, (int) $actor->id);
 
         return $this->reviewSnapshotService->saveReviewedSnapshot($intake, $snapshot, [
             'reviewed_by_user_id' => (int) $actor->id,
