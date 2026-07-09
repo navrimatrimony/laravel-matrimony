@@ -28,6 +28,7 @@
     ];
     $candidateByItemId = $candidateByItemId ?? [];
     $duplicateHintsByItemId = $duplicateHintsByItemId ?? [];
+    $screeningByItemId = $screeningByItemId ?? [];
     $missingDisplay = '—';
     $highlightItemId = (int) request()->query('highlight_item', 0);
 @endphp
@@ -208,6 +209,26 @@
                                     'occupation_needs_review' => false,
                                     'display_warnings' => [],
                                 ];
+                                $screening = is_array($screeningByItemId[$item->id] ?? null) ? $screeningByItemId[$item->id] : [
+                                    'decision' => 'review',
+                                    'label' => 'Needs review',
+                                    'reasons' => [
+                                        ['code' => 'parsed_json_missing', 'label' => 'Parsed JSON missing'],
+                                    ],
+                                    'suggested_next_action' => 'Review: Parser output is not ready.',
+                                ];
+                                $screeningDecision = (string) ($screening['decision'] ?? 'review');
+                                $screeningBadgeClass = match ($screeningDecision) {
+                                    'eligible' => 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                                    'stop' => 'border-red-200 bg-red-50 text-red-700',
+                                    default => 'border-amber-200 bg-amber-50 text-amber-800',
+                                };
+                                $screeningReasonChipClass = match ($screeningDecision) {
+                                    'eligible' => 'border-emerald-100 bg-white text-emerald-700',
+                                    'stop' => 'border-red-100 bg-white text-red-700',
+                                    default => 'border-amber-100 bg-white text-amber-800',
+                                };
+                                $screeningReasons = is_array($screening['reasons'] ?? null) ? array_slice($screening['reasons'], 0, 2) : [];
                                 $duplicateHints = is_array($duplicateHintsByItemId[$item->id] ?? null) ? $duplicateHintsByItemId[$item->id] : [];
                                 $manualDuplicateReview = is_array(data_get($itemMeta, 'duplicate_review')) ? data_get($itemMeta, 'duplicate_review') : [];
                                 $manualDuplicateActive = (string) data_get($manualDuplicateReview, 'status') === 'manual_duplicate';
@@ -361,15 +382,17 @@
                                     @endif
                                 </td>
                                 <td class="px-4 py-2 text-sm">
-                                    @if ($exceptionBadges === [])
-                                        <span class="text-gray-400">-</span>
-                                    @else
-                                        <div class="flex max-w-xs flex-wrap gap-1">
+                                    <div class="flex max-w-xs flex-wrap gap-1">
+                                        <span data-testid="bulk-screening-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $screeningBadgeClass }}">{{ $screening['label'] ?? 'Needs review' }}</span>
+                                        @foreach ($screeningReasons as $screeningReason)
+                                            <span data-testid="bulk-screening-reason" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $screeningReasonChipClass }}">{{ $screeningReason['label'] ?? str_replace('_', ' ', (string) ($screeningReason['code'] ?? 'review')) }}</span>
+                                        @endforeach
+                                        @if ($exceptionBadges !== [])
                                             @foreach ($exceptionBadges as $badge)
                                                 <span @if (! empty($badge['testid'])) data-testid="{{ $badge['testid'] }}" @endif class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $badge['class'] }}">{{ $badge['label'] }}</span>
                                             @endforeach
-                                        </div>
-                                    @endif
+                                        @endif
+                                    </div>
                                 </td>
                                 <td class="px-4 py-2 text-sm text-gray-700">{{ (int) ($sourceContextCountsByItem[$item->id] ?? 0) }}</td>
                                 <td class="px-4 py-2 text-sm">

@@ -87,6 +87,11 @@ test('admin can open bulk candidate correction page', function () {
         ->assertSee('data-search-url="', false)
         ->assertSee('/api/location/search', false)
         ->assertSee('data-testid="bulk-correction-low-confidence-name"', false)
+        ->assertSee('data-testid="bulk-correction-screening-advisor-card"', false)
+        ->assertSee('data-testid="bulk-correction-screening-badge"', false)
+        ->assertSee('Screening advisor', false)
+        ->assertSee('Eligible', false)
+        ->assertSee('Eligible: Basic fields look ready for consent phase.', false)
         ->assertSee('Saves only the reviewed intake snapshot.', false);
 
     $html = $response->getContent();
@@ -95,6 +100,7 @@ test('admin can open bulk candidate correction page', function () {
     $right = strpos($html, 'data-testid="bulk-correction-right-form"');
     $form = strpos($html, 'id="bulk-candidate-correction-form"');
     $duplicate = strpos($html, 'data-testid="bulk-correction-duplicate-history-card"');
+    $screening = strpos($html, 'data-testid="bulk-correction-screening-advisor-card"');
     $review = strpos($html, 'Review flag');
     $zoom = strpos($html, 'data-testid="bulk-image-zoom-toolbar"');
 
@@ -103,6 +109,7 @@ test('admin can open bulk candidate correction page', function () {
         ->and($right)->not->toBeFalse()
         ->and($form)->not->toBeFalse()
         ->and($duplicate)->not->toBeFalse()
+        ->and($screening)->not->toBeFalse()
         ->and($review)->not->toBeFalse()
         ->and($zoom)->not->toBeFalse()
         ->and($zoom)->toBeGreaterThan($left)
@@ -111,7 +118,8 @@ test('admin can open bulk candidate correction page', function () {
         ->and($sourceText)->toBeLessThan($right)
         ->and($form)->toBeGreaterThan($right)
         ->and($duplicate)->toBeGreaterThan($form)
-        ->and($review)->toBeGreaterThan($duplicate);
+        ->and($screening)->toBeGreaterThan($duplicate)
+        ->and($review)->toBeGreaterThan($screening);
 });
 
 test('admin can save seven field correction without mutating evidence or bulk item parsed data', function () {

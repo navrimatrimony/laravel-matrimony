@@ -10,6 +10,26 @@
     $imagePreview = is_array($imagePreview ?? null) ? $imagePreview : ['available' => false, 'data_uri' => null, 'label' => null, 'message' => null];
     $canSave = (bool) ($canSave ?? false);
     $duplicateHints = is_array($duplicateHints ?? null) ? $duplicateHints : [];
+    $screeningAdvisor = is_array($screeningAdvisor ?? null) ? $screeningAdvisor : [
+        'decision' => 'review',
+        'label' => 'Needs review',
+        'reasons' => [
+            ['code' => 'parsed_json_missing', 'label' => 'Parsed JSON missing'],
+        ],
+        'suggested_next_action' => 'Review: Parser output is not ready.',
+    ];
+    $screeningDecision = (string) ($screeningAdvisor['decision'] ?? 'review');
+    $screeningBadgeClass = match ($screeningDecision) {
+        'eligible' => 'border-emerald-200 bg-emerald-50 text-emerald-700',
+        'stop' => 'border-red-200 bg-red-50 text-red-700',
+        default => 'border-amber-200 bg-amber-50 text-amber-800',
+    };
+    $screeningCardClass = match ($screeningDecision) {
+        'eligible' => 'border-emerald-200 bg-emerald-50 text-emerald-900',
+        'stop' => 'border-red-200 bg-red-50 text-red-900',
+        default => 'border-amber-200 bg-amber-50 text-amber-900',
+    };
+    $screeningReasons = is_array($screeningAdvisor['reasons'] ?? null) ? $screeningAdvisor['reasons'] : [];
     $itemMeta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
     $manualDuplicateReview = is_array(data_get($itemMeta, 'duplicate_review')) ? data_get($itemMeta, 'duplicate_review') : [];
     $manualDuplicateActive = (string) data_get($manualDuplicateReview, 'status') === 'manual_duplicate';
@@ -365,6 +385,32 @@
                                     @endif
                                 </dl>
                             </div>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+
+            <div class="rounded-lg bg-white p-6 shadow" data-testid="bulk-correction-screening-advisor-card">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900">Screening advisor</h2>
+                        <p class="mt-1 text-sm text-gray-600">Read-only eligibility signal for the next consent phase.</p>
+                    </div>
+                    <span data-testid="bulk-correction-screening-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $screeningBadgeClass }}">
+                        {{ $screeningAdvisor['label'] ?? 'Needs review' }}
+                    </span>
+                </div>
+
+                <div class="mt-4 rounded-lg border p-3 text-sm {{ $screeningCardClass }}">
+                    {{ $screeningAdvisor['suggested_next_action'] ?? 'Review: Check candidate fields before consent.' }}
+                </div>
+
+                @if ($screeningReasons !== [])
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        @foreach ($screeningReasons as $reason)
+                            <span data-testid="bulk-correction-screening-reason" class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
+                                {{ $reason['label'] ?? str_replace('_', ' ', (string) ($reason['code'] ?? 'review')) }}
+                            </span>
                         @endforeach
                     </div>
                 @endif

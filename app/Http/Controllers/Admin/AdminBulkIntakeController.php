@@ -13,6 +13,7 @@ use App\Services\Intake\BulkIntakeApplyPreviewService;
 use App\Services\Intake\BulkIntakeBatchService;
 use App\Services\Intake\BulkIntakeCandidateCorrectionService;
 use App\Services\Intake\BulkIntakeCandidateDisplayService;
+use App\Services\Intake\BulkIntakeCandidateScreeningAdvisorService;
 use App\Services\Intake\BulkIntakeDraftProfileBootstrapService;
 use App\Services\Intake\BulkIntakeDuplicateHistoryHintService;
 use App\Services\Intake\BulkIntakeManualTranscriptService;
@@ -126,6 +127,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeBatch $bulkIntakeBatch,
         BulkIntakeBatchService $batchService,
         BulkIntakeCandidateDisplayService $candidateDisplayService,
+        BulkIntakeCandidateScreeningAdvisorService $screeningAdvisorService,
         BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService,
         BulkIntakeProgressPresenter $progressPresenter
     )
@@ -161,6 +163,15 @@ class AdminBulkIntakeController extends Controller
                 (int) $item->id => $duplicateHistoryHintService->hintsForItem($item),
             ])
             ->all();
+        $screeningByItemId = $items
+            ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
+                (int) $item->id => $screeningAdvisorService->advisorForItem(
+                    $item,
+                    $candidateByItemId[(int) $item->id] ?? null,
+                    $duplicateHintsByItemId[(int) $item->id] ?? []
+                ),
+            ])
+            ->all();
 
         $sourceContextCountsByItem = IntakeSourceContext::query()
             ->where('bulk_intake_batch_id', $bulkIntakeBatch->id)
@@ -175,6 +186,7 @@ class AdminBulkIntakeController extends Controller
             'progress' => $progressPresenter->progressForBatch($bulkIntakeBatch),
             'candidateByItemId' => $candidateByItemId,
             'duplicateHintsByItemId' => $duplicateHintsByItemId,
+            'screeningByItemId' => $screeningByItemId,
             'statusFilter' => $statusFilter,
             'statusFilters' => $statusFilters,
         ]);
@@ -306,6 +318,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeBatch $bulkIntakeBatch,
         BulkIntakeBatchItem $bulkIntakeBatchItem,
         BulkIntakeCandidateCorrectionService $correctionService,
+        BulkIntakeCandidateScreeningAdvisorService $screeningAdvisorService,
         BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService
     ) {
         abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
@@ -313,6 +326,7 @@ class AdminBulkIntakeController extends Controller
         $bulkIntakeBatch->load('uploadedByUser:id,name,email,mobile');
         $correction = $correctionService->correctionDataForItem($bulkIntakeBatchItem);
         abort_unless($correction['intake'] !== null, 404);
+        $duplicateHints = $duplicateHistoryHintService->hintsForItem($bulkIntakeBatchItem);
 
         return view('admin.bulk-intakes.correct-candidate', [
             'batch' => $bulkIntakeBatch,
@@ -324,7 +338,8 @@ class AdminBulkIntakeController extends Controller
             'sourceTextLabel' => $correction['source_text_label'],
             'imagePreview' => $correction['image_preview'],
             'canSave' => $correction['can_save'],
-            'duplicateHints' => $duplicateHistoryHintService->hintsForItem($bulkIntakeBatchItem),
+            'duplicateHints' => $duplicateHints,
+            'screeningAdvisor' => $screeningAdvisorService->advisorForItem($bulkIntakeBatchItem, null, $duplicateHints),
         ]);
     }
 

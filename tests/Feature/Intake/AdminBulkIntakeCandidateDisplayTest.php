@@ -50,7 +50,9 @@ test('bulk list shows parsed candidate fields from linked intake', function () {
             ->assertSee('MCA', false)
             ->assertSee('Software Developer', false)
             ->assertSee('Parse: OK', false)
-            ->assertSee('Parsed JSON: Yes', false);
+            ->assertSee('Parsed JSON: Yes', false)
+            ->assertSee('data-testid="bulk-screening-badge"', false)
+            ->assertSee('Eligible', false);
     } finally {
         Carbon::setTestNow();
     }
@@ -118,6 +120,8 @@ test('bulk list prefers reviewed snapshot values and keeps parsed json presence 
             ->assertSee('Reviewed Occupation', false)
             ->assertSee('Parsed JSON: Yes', false)
             ->assertSee('data-testid="bulk-candidate-reviewed-badge"', false)
+            ->assertSee('data-testid="bulk-screening-badge"', false)
+            ->assertSee('Eligible', false)
             ->assertDontSee('Old Parsed Candidate', false)
             ->assertDontSee('Old City', false)
             ->assertDontSee('BSc', false);
@@ -181,6 +185,53 @@ test('bulk list shows reviewed snapshot height even when old confidence marks he
         ->assertSee('data-testid="bulk-candidate-reviewed-badge"', false);
 });
 
+test('bulk list shows eligible screening for valid reviewed candidate and prefers approval snapshot', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $parsed = [
+        'core' => [
+            'full_name' => 'Old Parsed Missing Mobile',
+            'date_of_birth' => 'not-a-date',
+            'gender' => null,
+        ],
+    ];
+    $approval = [
+        'core' => [
+            'full_name' => 'Reviewed Eligible Candidate',
+            'primary_contact_number' => '+91 98765 43210',
+            'date_of_birth' => '1998-04-15',
+            'gender' => 'female',
+        ],
+    ];
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'raw_ocr_text' => 'Original reviewed eligible OCR',
+        'parsed_json' => $parsed,
+        'approval_snapshot_json' => $approval,
+    ]);
+    $item = candidateDisplayItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Reviewed Eligible Candidate', false)
+        ->assertSee('Mobile: +91 98765 43210', false)
+        ->assertSee('data-testid="bulk-candidate-reviewed-badge"', false)
+        ->assertSee('data-testid="bulk-screening-badge"', false)
+        ->assertSee('Eligible', false)
+        ->assertDontSee('Mobile missing', false)
+        ->assertDontSee('DOB invalid', false)
+        ->assertDontSee('Old Parsed Missing Mobile', false);
+
+    $intake->refresh();
+    $item->refresh();
+
+    expect($intake->raw_ocr_text)->toBe('Original reviewed eligible OCR')
+        ->and($intake->parsed_json)->toBe($parsed)
+        ->and($intake->approval_snapshot_json)->toBe($approval)
+        ->and($item->item_meta_json)->toBeNull();
+});
+
 test('bulk list shows duplicate hint when same mobile exists in another intake', function () {
     $admin = candidateDisplayAdminUser();
     $batch = candidateDisplayBatch($admin);
@@ -211,6 +262,9 @@ test('bulk list shows duplicate hint when same mobile exists in another intake',
         ->assertOk()
         ->assertSee('data-testid="bulk-duplicate-history-hint"', false)
         ->assertSee('Same mobile found', false)
+        ->assertSee('data-testid="bulk-screening-badge"', false)
+        ->assertSee('Needs review', false)
+        ->assertSee('Possible duplicate', false)
         ->assertSee('Mark duplicate', false);
 
     $intake->refresh();
@@ -254,9 +308,36 @@ test('bulk list shows manual duplicate badge and clear action', function () {
         ->assertOk()
         ->assertSee('Manual Duplicate List Candidate', false)
         ->assertSee('data-testid="bulk-manual-duplicate-badge"', false)
+        ->assertSee('data-testid="bulk-screening-badge"', false)
+        ->assertSee('Stop', false)
         ->assertSee('Manual duplicate', false)
         ->assertSee('Clear duplicate', false)
         ->assertDontSee('Mark duplicate', false);
+});
+
+test('bulk list shows needs review screening for missing mobile', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Missing Mobile Candidate',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Missing Mobile Candidate', false)
+        ->assertSee('data-testid="bulk-screening-badge"', false)
+        ->assertSee('Needs review', false)
+        ->assertSee('Mobile missing', false)
+        ->assertSee('Mobile: —', false);
 });
 
 test('bulk list does not show duplicate hint for unique candidate', function () {
