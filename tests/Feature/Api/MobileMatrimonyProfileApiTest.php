@@ -23,6 +23,7 @@ use App\Services\Api\MobileProfileDisplayPresenter;
 use App\Services\ContactAccessService;
 use App\Services\FeatureUsageService;
 use App\Services\Gunamilan\GunamilanService;
+use App\Services\Matching\MatchingService;
 use App\Services\MutationService;
 use App\Services\ProfilePartnerCommunityFlagService;
 use Illuminate\Support\Facades\DB;
@@ -458,7 +459,7 @@ function mobileApiCreateValidActionProfile(
     return $profile->refresh();
 }
 
-function mobileApiAttachProfilePhoto(MatrimonyProfile $profile, string $status = 'approved'): void
+function mobileApiAttachProfilePhoto(MatrimonyProfile $profile, string $status = 'approved'): string
 {
     $fileName = 'mobile-feed-'.$profile->id.'-'.$status.'.webp';
     Storage::disk('public')->put('matrimony_photos/'.$fileName, 'fake-webp-bytes');
@@ -472,6 +473,31 @@ function mobileApiAttachProfilePhoto(MatrimonyProfile $profile, string $status =
         'approved_status' => $status,
         'watermark_detected' => false,
     ]);
+
+    return $fileName;
+}
+
+function mobileApiAssertAbsolutePhotoUrl(?string $url, string $fileName): void
+{
+    expect($url)->toBeString();
+    expect(preg_match('/^https?:\/\//', (string) $url))->toBe(1);
+    expect($url)->toContain($fileName);
+}
+
+function mobileApiAssertApprovedPhotoSummary(array $row, string $fileName): void
+{
+    $cardUrl = data_get($row, 'display.card.primary_photo_url');
+
+    mobileApiAssertAbsolutePhotoUrl($cardUrl, $fileName);
+    expect(data_get($row, 'display.card.photo_count'))->toBe(1);
+    expect(data_get($row, 'display.hero.primary_photo_url'))->toBe($cardUrl);
+    expect(data_get($row, 'display.hero.photo_count'))->toBe(1);
+    expect(data_get($row, 'display.primary_photo_url'))->toBe($cardUrl);
+    expect(data_get($row, 'display.profile_photo_url'))->toBe($cardUrl);
+    expect(data_get($row, 'display.approved_photo_url'))->toBe($cardUrl);
+    expect(data_get($row, 'primary_photo_url'))->toBe($cardUrl);
+    expect(data_get($row, 'profile_photo_url'))->toBe($cardUrl);
+    expect(data_get($row, 'approved_photo_url'))->toBe($cardUrl);
 }
 
 function mobileApiCreateComparisonProfilesAt(Location $viewerLocation, Location $targetLocation): array
@@ -3148,6 +3174,55 @@ test('MobileProfile GET api v1 matrimony profiles includes safe list card displa
     expect(mb_strtolower($displayJson))->not->toContain('contact');
 });
 
+test('MobileProfile list feeds expose approved primary photo summary consistently with detail', function () {
+    [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    $fileName = mobileApiAttachProfilePhoto($targetProfile);
+    Sanctum::actingAs($viewerUser);
+
+    $listUrls = [];
+
+    foreach (['new', 'daily', 'my_matches', 'nearby'] as $feed) {
+        $response = $this->getJson('/api/v1/matrimony-profiles?feed='.$feed);
+
+        $response->assertOk();
+        $row = collect($response->json('profiles'))->firstWhere('id', $targetProfile->id);
+        expect($row)->toBeArray();
+        mobileApiAssertApprovedPhotoSummary($row, $fileName);
+        $listUrls[] = data_get($row, 'display.card.primary_photo_url');
+    }
+
+    $detailResponse = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+    $detailResponse->assertOk();
+    $detailUrl = $detailResponse->json('display.hero.primary_photo_url');
+    mobileApiAssertAbsolutePhotoUrl($detailUrl, $fileName);
+    foreach ($listUrls as $listUrl) {
+        expect($listUrl)->toBe($detailUrl);
+    }
+});
+
+test('MobileProfile list feed does not expose pending or rejected photo rows', function () {
+    [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    mobileApiAttachProfilePhoto($targetProfile, 'pending');
+    mobileApiAttachProfilePhoto($targetProfile, 'rejected');
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles?feed=new');
+
+    $response->assertOk();
+    $row = collect($response->json('profiles'))->firstWhere('id', $targetProfile->id);
+    expect($row)->toBeArray();
+    expect(data_get($row, 'display.card.photo_count'))->toBe(0);
+    expect(data_get($row, 'display.card.primary_photo_url'))->toBeNull();
+    expect(data_get($row, 'display.hero.photo_count'))->toBe(0);
+    expect(data_get($row, 'display.hero.primary_photo_url'))->toBeNull();
+    expect(data_get($row, 'primary_photo_url'))->toBeNull();
+
+    $detailResponse = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+    $detailResponse->assertOk();
+    expect($detailResponse->json('display.hero.photo_count'))->toBe(0);
+    expect($detailResponse->json('display.hero.primary_photo_url'))->toBeNull();
+});
+
 test('MobileProfile feed new suppresses recently opened profiles from immediate discovery', function () {
     [$viewerUser, $viewerProfile, , $recentlyViewedProfile] = mobileApiProfileActionPair();
     $unopenedUser = User::factory()->create(['name' => 'Unopened Feed Target']);
@@ -3596,7 +3671,9 @@ test('MobileProfile more sections returns gender aware real sections and safe ca
     $viewerProfile = mobileApiCreateValidActionProfile($viewerUser, 'Mobile Action Viewer', 'male', $sharedLocation);
     $targetProfile = mobileApiCreateValidActionProfile($targetUser, 'Mobile Action Target', 'female', $sharedLocation);
     $sameGenderProfile = mobileApiCreateValidActionProfile($sameGenderUser, 'Mobile Same Gender Target', 'male', $sharedLocation);
+    $fileName = mobileApiAttachProfilePhoto($targetProfile);
     mobileApiAddTargetPartnerPreferences($targetProfile, $viewerProfile);
+    mobileApiAddTargetPartnerPreferences($viewerProfile, $targetProfile);
     DB::table('profile_views')->insert([
         'viewer_profile_id' => $viewerProfile->id,
         'viewed_profile_id' => $targetProfile->id,
@@ -3656,6 +3733,7 @@ test('MobileProfile more sections returns gender aware real sections and safe ca
 
     $row = collect($lookingForMe['profiles'])->firstWhere('id', $targetProfile->id);
     expect($row)->toBeArray();
+    mobileApiAssertApprovedPhotoSummary($row, $fileName);
     expect($row['display']['card'])->toHaveKeys([
         'name',
         'age',
@@ -3669,6 +3747,9 @@ test('MobileProfile more sections returns gender aware real sections and safe ca
 
     $recentlyViewed = $sections->firstWhere('key', 'recently_viewed');
     expect(collect($recentlyViewed['profiles'])->pluck('id')->all())->toContain($targetProfile->id);
+    $recentlyViewedRow = collect($recentlyViewed['profiles'])->firstWhere('id', $targetProfile->id);
+    expect($recentlyViewedRow)->toBeArray();
+    mobileApiAssertApprovedPhotoSummary($recentlyViewedRow, $fileName);
 
     $nearby = $sections->firstWhere('key', 'nearby');
     expect($nearby['title_en'])->toBe('Nearby Brides');
@@ -3679,6 +3760,7 @@ test('MobileProfile more sections returns gender aware real sections and safe ca
 
     $nearbyRow = collect($nearby['profiles'])->firstWhere('id', $targetProfile->id);
     expect($nearbyRow)->toBeArray();
+    mobileApiAssertApprovedPhotoSummary($nearbyRow, $fileName);
     expect($nearbyRow['display']['card'])->toHaveKeys([
         'name',
         'age',
@@ -3726,6 +3808,41 @@ test('MobileProfile more sections labels female viewer target as groom', functio
     expect($sections->firstWhere('key', 'nearby')['title_en'])->toBe('Nearby Grooms');
     expect($sections->firstWhere('key', 'nearby')['title_mr'])->toBe('जवळचे वर');
     expect($sections->firstWhere('key', 'you_may_like')['title_mr'])->toBe('तुम्हाला आवडू शकणाऱ्या वर');
+});
+
+test('MobileProfile more sections matching and nearby nested rows expose approved photo summary', function () {
+    [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    $fileName = mobileApiAttachProfilePhoto($targetProfile);
+
+    $this->mock(MatchingService::class, function ($mock) use ($targetProfile): void {
+        $mock->shouldReceive('findMatchesForTab')
+            ->withAnyArgs()
+            ->andReturnUsing(function (MatrimonyProfile $profile, string $tab, int $limit = 24, bool $withExplain = false) use ($targetProfile) {
+                unset($profile, $limit, $withExplain);
+                if (! in_array($tab, [MatchingService::TAB_PERFECT, MatchingService::TAB_NEAR], true)) {
+                    return collect();
+                }
+
+                return collect([[
+                    'profile' => $targetProfile,
+                    'score' => $tab === MatchingService::TAB_PERFECT ? 96 : 84,
+                ]]);
+            });
+    });
+
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/more-sections');
+
+    $response->assertOk();
+    $sections = collect($response->json('sections'));
+    foreach (['matching_my_preference', 'nearby'] as $sectionKey) {
+        $section = $sections->firstWhere('key', $sectionKey);
+        expect($section)->toBeArray();
+        $row = collect($section['profiles'])->firstWhere('id', $targetProfile->id);
+        expect($row)->toBeArray();
+        mobileApiAssertApprovedPhotoSummary($row, $fileName);
+    }
 });
 
 test('MobileProfile more sections locked recent visitors does not leak visitor identity', function () {
@@ -3796,6 +3913,7 @@ test('MobileProfile more sections full recent visitors access returns safe profi
     $visitorUser = User::factory()->create(['name' => 'Full Access Visitor User']);
     $ownerProfile = mobileApiCreateValidActionProfile($ownerUser, 'Full Access Owner Profile', 'male');
     $visitorProfile = mobileApiCreateValidActionProfile($visitorUser, 'Full Access Visitor Profile', 'female');
+    $fileName = mobileApiAttachProfilePhoto($visitorProfile);
     DB::table('profile_views')->insert([
         'viewer_profile_id' => $visitorProfile->id,
         'viewed_profile_id' => $ownerProfile->id,
@@ -3829,6 +3947,7 @@ test('MobileProfile more sections full recent visitors access returns safe profi
     $row = collect($recentVisitors['rows'])->firstWhere('mode', 'profile');
     expect($row)->toBeArray();
     expect($row['profile']['id'])->toBe($visitorProfile->id);
+    mobileApiAssertApprovedPhotoSummary($row['profile'], $fileName);
     expect($row['profile']['display']['card'])->toHaveKey('name');
     expect($row['profile']['display']['actions'])->toHaveKey('can_send_interest');
 

@@ -1841,6 +1841,8 @@ class MatrimonyProfileApiController extends Controller
         $profiles = $profiles->map(function ($profile) use ($presenter, $viewer) {
             $hints = $profile->residenceLocationHierarchyHints();
             $geo = $profile->residenceGeoAddressIds();
+            $display = $presenter->forListCard($profile, $viewer);
+            $primaryPhotoUrl = $display['card']['primary_photo_url'] ?? null;
 
             return [
                 'id' => $profile->id,
@@ -1856,9 +1858,12 @@ class MatrimonyProfileApiController extends Controller
                 'district_id' => $geo['district_id'],
                 'taluka_id' => $hints['taluka_id'] !== '' ? (int) $hints['taluka_id'] : null,
                 'profile_photo' => ($profile->profile_photo && $profile->photo_approved !== false) ? $profile->profile_photo : null,
+                'primary_photo_url' => $primaryPhotoUrl,
+                'profile_photo_url' => $primaryPhotoUrl,
+                'approved_photo_url' => $primaryPhotoUrl,
                 'created_at' => $profile->created_at,
                 'updated_at' => $profile->updated_at,
-                'display' => $presenter->forListCard($profile, $viewer),
+                'display' => $display,
             ];
         });
 

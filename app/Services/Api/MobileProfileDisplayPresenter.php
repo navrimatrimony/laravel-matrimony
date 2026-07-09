@@ -176,6 +176,10 @@ class MobileProfileDisplayPresenter
         $viewerProfile = $viewer?->matrimonyProfile;
         $age = $this->age($profile);
         [$photoCount, $primaryPhotoUrl] = $this->visiblePhotoSummary($profile);
+        $photoSummary = [
+            'photo_count' => $photoCount,
+            'primary_photo_url' => $primaryPhotoUrl,
+        ];
 
         return [
             'card' => [
@@ -189,11 +193,15 @@ class MobileProfileDisplayPresenter
                 'location_label' => $this->cleanLocation(ProfileDisplayCopy::profileResidenceDisplayLine($profile)),
                 'verified' => $this->isVerified($profile),
                 'premium' => $this->isPremium($profile),
-                'photo_count' => $photoCount,
-                'primary_photo_url' => $primaryPhotoUrl,
+                'photo_count' => $photoSummary['photo_count'],
+                'primary_photo_url' => $photoSummary['primary_photo_url'],
                 'comparison_label' => $this->comparisonLabel($profile),
                 'has_astro' => $profile->horoscope !== null,
             ],
+            'hero' => $photoSummary,
+            'primary_photo_url' => $primaryPhotoUrl,
+            'profile_photo_url' => $primaryPhotoUrl,
+            'approved_photo_url' => $primaryPhotoUrl,
             'actions' => $this->actions($profile, $viewerProfile),
         ];
     }

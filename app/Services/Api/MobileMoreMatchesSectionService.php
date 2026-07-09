@@ -522,10 +522,7 @@ class MobileMoreMatchesSectionService
             ->unique(fn (MatrimonyProfile $profile): int => (int) $profile->id)
             ->take(self::SECTION_LIMIT)
             ->map(function (MatrimonyProfile $profile) use ($viewer, $metaById): array {
-                $row = [
-                    'id' => (int) $profile->id,
-                    'display' => $this->presenter->forListCard($profile, $viewer),
-                ];
+                $row = $this->profileRowPayload($profile, $viewer);
                 $meta = $metaById->get((int) $profile->id, []);
                 foreach (['section_score', 'viewed_at', 'viewed_at_human'] as $key) {
                     if (array_key_exists($key, $meta) && $meta[$key] !== null) {
@@ -566,10 +563,7 @@ class MobileMoreMatchesSectionService
                 continue;
             }
 
-            $payload = [
-                'id' => (int) $profile->id,
-                'display' => $this->presenter->forListCard($profile, $viewer),
-            ];
+            $payload = $this->profileRowPayload($profile, $viewer);
             if ($view->created_at !== null) {
                 $payload['viewed_at'] = $view->created_at->toIso8601String();
                 $payload['viewed_at_human'] = $view->created_at->diffForHumans();
@@ -579,6 +573,26 @@ class MobileMoreMatchesSectionService
         }
 
         return array_values($rows);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function profileRowPayload(MatrimonyProfile $profile, ?User $viewer): array
+    {
+        $display = $this->presenter->forListCard($profile, $viewer);
+        $primaryPhotoUrl = $display['card']['primary_photo_url']
+            ?? $display['hero']['primary_photo_url']
+            ?? $display['primary_photo_url']
+            ?? null;
+
+        return [
+            'id' => (int) $profile->id,
+            'primary_photo_url' => $primaryPhotoUrl,
+            'profile_photo_url' => $primaryPhotoUrl,
+            'approved_photo_url' => $primaryPhotoUrl,
+            'display' => $display,
+        ];
     }
 
     /**
