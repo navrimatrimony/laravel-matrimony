@@ -150,24 +150,205 @@ class BulkIntakeDuplicateGateService
             }
 
             $fieldMatch = $this->fieldMatchEvaluator->evaluate($currentIntake, $reference);
-            if (! (bool) ($fieldMatch['duplicate_field_match_eligible'] ?? false)) {
+
+            if ($type === 'same_mobile') {
+                if (! (bool) ($fieldMatch['duplicate_field_match_eligible'] ?? false)) {
+                    continue;
+                }
+
+                $blocks[] = [
+                    'code' => 'auto_duplicate_intake',
+                    'label' => 'Same mobile — already seen',
+                    'source' => 'auto_duplicate',
+                ];
                 continue;
             }
 
-            $score = is_numeric($fieldMatch['duplicate_field_match_score'] ?? null)
-                ? (float) $fieldMatch['duplicate_field_match_score']
-                : 0.0;
-
-            if ($type === 'same_mobile' || $score >= 0.66) {
+            if ($type === 'same_name_dob' && $this->confirmsNameDobAsDuplicate($currentIntake, $reference, $fieldMatch)) {
                 $blocks[] = [
                     'code' => 'auto_duplicate_intake',
-                    'label' => $type === 'same_mobile' ? 'Same mobile — already seen' : 'Same identity — already seen',
+                    'label' => 'Same identity — already seen',
                     'source' => 'auto_duplicate',
                 ];
             }
         }
 
         return $blocks;
+    }
+
+    /**
+     * Double-check filter: same name + DOB alone is not enough.
+     * Requires secondary confirmation via mobile, or gender plus height/education.
+     *
+     * @param  array<string, mixed>  $fieldMatch
+     */
+    public function confirmsNameDobAsDuplicate(BiodataIntake $current, BiodataIntake $reference, array $fieldMatch): bool
+    {
+        if (($fieldMatch['current_reference_name_match'] ?? '') !== 'yes') {
+            return false;
+        }
+
+        if (($fieldMatch['current_reference_dob_match'] ?? '') !== 'yes') {
+            return false;
+        }
+
+        if (($fieldMatch['current_reference_contact_match'] ?? '') === 'yes') {
+            return true;
+        }
+
+        if ($this->genderMatches($current, $reference) && (
+            $this->educationMatches($current, $reference)
+            || $this->heightMatches($current, $reference)
+        )) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $fieldMatch
+     * @return array{confirmed: bool, secondary_matches: list<string>}
+     */
+    public function nameDobDuplicateConfirmation(BiodataIntake $current, BiodataIntake $reference, array $fieldMatch): array
+    {
+        $secondary = [];
+
+        if (($fieldMatch['current_reference_contact_match'] ?? '') === 'yes') {
+            $secondary[] = 'mobile';
+        }
+        if ($this->genderMatches($current, $reference)) {
+            $secondary[] = 'gender';
+        }
+        if ($this->educationMatches($current, $reference)) {
+            $secondary[] = 'education';
+        }
+        if ($this->heightMatches($current, $reference)) {
+            $secondary[] = 'height';
+        }
+
+        return [
+            'confirmed' => $this->confirmsNameDobAsDuplicate($current, $reference, $fieldMatch),
+            'secondary_matches' => $secondary,
+        ];
+    }
+
+    private function genderMatches(BiodataIntake $current, BiodataIntake $reference): bool
+    {
+        $currentGender = strtolower((string) ($this->snapshotScalar($current, [
+            'core.gender',
+            'gender',
+            'candidate.gender',
+        ]) ?? ''));
+        $referenceGender = strtolower((string) ($this->snapshotScalar($reference, [
+            'core.gender',
+            'gender',
+            'candidate.gender',
+        ]) ?? ''));
+
+        return in_array($currentGender, ['male', 'female'], true)
+            && $currentGender === $referenceGender;
+    }
+
+    private function educationMatches(BiodataIntake $current, BiodataIntake $reference): bool
+    {
+        $current = $this->normalizeCompareText($this->snapshotScalar($current, [
+            'core.highest_education',
+            'core.education',
+            'education_history.0.degree',
+        ]));
+        $reference = $this->normalizeCompareText($this->snapshotScalar($reference, [
+            'core.highest_education',
+            'core.education',
+            'education_history.0.degree',
+        ]));
+
+        return $current !== null && $reference !== null && $current === $reference;
+    }
+
+    private function heightMatches(BiodataIntake $current, BiodataIntake $reference): bool
+    {
+        $currentCm = $this->heightCm($current);
+        $referenceCm = $this->heightCm($reference);
+
+        return $currentCm !== null && $referenceCm !== null && $currentCm === $referenceCm;
+    }
+
+    private function heightCm(BiodataIntake $intake): ?int
+    {
+        $cm = $this->snapshotScalar($intake, ['core.height_cm', 'height_cm']);
+        if (is_numeric($cm)) {
+            return (int) $cm;
+        }
+
+        $text = $this->normalizeCompareText($this->snapshotScalar($intake, [
+            'core.height',
+            'core.height_text',
+            'height',
+        ]));
+        if ($text === null) {
+            return null;
+        }
+
+        if (preg_match('/(\d+)\s*(?:ft|feet|f)/i', $text, $feet) === 1) {
+            $inches = 0;
+            if (preg_match('/(\d+)\s*(?:in|inch)/i', $text, $inchMatch) === 1) {
+                $inches = (int) $inchMatch[1];
+            }
+
+            return (int) round((((int) $feet[1] * 12) + $inches) * 2.54);
+        }
+
+        if (preg_match('/(\d{3})/', $text, $digits) === 1) {
+            return (int) $digits[1];
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<string>  $paths
+     */
+    private function snapshotScalar(BiodataIntake $intake, array $paths): mixed
+    {
+        $data = $this->snapshotData($intake);
+        foreach ($paths as $path) {
+            $value = data_get($data, $path);
+            if (is_scalar($value) && trim((string) $value) !== '') {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function snapshotData(BiodataIntake $intake): array
+    {
+        $approval = is_array($intake->approval_snapshot_json) ? $intake->approval_snapshot_json : [];
+        if ($approval !== []) {
+            return $approval;
+        }
+
+        return is_array($intake->parsed_json) ? $intake->parsed_json : [];
+    }
+
+    private function normalizeCompareText(mixed $value): ?string
+    {
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $value = strtolower(trim((string) $value));
+        if ($value === '') {
+            return null;
+        }
+
+        $value = preg_replace('/\s+/', ' ', $value) ?? $value;
+
+        return trim($value);
     }
 
     /**

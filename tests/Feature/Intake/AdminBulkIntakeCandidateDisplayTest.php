@@ -990,6 +990,7 @@ test('manual screening bucket overrides advisor when both signals differ', funct
         'parsed_json' => [
             'core' => [
                 'full_name' => 'Manual Overrides Advisor Candidate',
+                'primary_contact_number' => '9876543211',
                 'date_of_birth' => '1998-04-15',
                 'gender' => 'female',
             ],
@@ -1348,8 +1349,8 @@ test('bulk ready count respects status filter dataset', function () {
             'status' => 'parsed',
         ]))
         ->assertOk()
-        ->assertSee('Ready (1)', false)
-        ->assertSee('data-testid="bulk-ready-for-consent-count">1<', false);
+        ->assertSee('data-testid="bulk-ready-for-consent-count">1<', false)
+        ->assertSee('Ready for consent (1)', false);
 
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', [
@@ -1357,7 +1358,7 @@ test('bulk ready count respects status filter dataset', function () {
             'status' => 'all',
         ]))
         ->assertOk()
-        ->assertSee('Ready (1)', false);
+        ->assertSee('Ready for consent (1)', false);
 });
 
 test('bulk ready filter preserves status and highlight item query params', function () {
@@ -1474,6 +1475,7 @@ function candidateDisplayScreeningQueueFixtures(User $admin, bool $withPendingIt
         'parsed_json' => [
             'core' => [
                 'full_name' => 'Manual Eligible Candidate',
+                'primary_contact_number' => '9876543202',
                 'date_of_birth' => '1998-04-15',
                 'gender' => 'female',
             ],

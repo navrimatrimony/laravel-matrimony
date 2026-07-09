@@ -208,18 +208,28 @@ class AdminBulkIntakeController extends Controller
             'reason_codes' => [],
             'suggested_next_action' => '',
         ];
-        $screeningCounts = $eligibilityService->countsForItems(
+        $pipelineByItemId = $statusFilteredItems
+            ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
+                (int) $item->id => $eligibilityService->eligibleForPipeline(
+                    $item,
+                    $candidateByItemId[(int) $item->id] ?? null,
+                    $duplicateHintsByItemId[(int) $item->id] ?? [],
+                    $duplicateGateByItemId[(int) $item->id] ?? null,
+                    $screeningReviewByItemId[(int) $item->id] ?? null,
+                    $autoSuggestionByItemId[(int) $item->id] ?? $defaultAutoSuggestion,
+                ),
+            ])
+            ->all();
+        $screeningCounts = $eligibilityService->countsFromPipeline(
             $statusFilteredItems,
-            fn (BulkIntakeBatchItem $item): array => $autoSuggestionByItemId[(int) $item->id] ?? $defaultAutoSuggestion,
-            fn (BulkIntakeBatchItem $item): ?array => $screeningReviewByItemId[(int) $item->id] ?? null,
+            $pipelineByItemId,
             fn (BulkIntakeBatchItem $item): bool => (bool) ($readyForConsentByItemId[(int) $item->id]['ready'] ?? false),
         );
         $readyCount = (int) ($screeningCounts[BulkIntakeEligibilityService::FILTER_READY] ?? 0);
         $displayItems = $statusFilteredItems
-            ->filter(fn (BulkIntakeBatchItem $item): bool => $eligibilityService->itemMatchesFilter(
+            ->filter(fn (BulkIntakeBatchItem $item): bool => $eligibilityService->itemMatchesPipelineFilter(
                 $screeningFilter,
-                $screeningReviewByItemId[(int) $item->id] ?? null,
-                $autoSuggestionByItemId[(int) $item->id] ?? $defaultAutoSuggestion,
+                $pipelineByItemId[(int) $item->id] ?? $eligibilityService->eligibleForPipeline($item),
                 (bool) ($readyForConsentByItemId[(int) $item->id]['ready'] ?? false)
             ))
             ->values();
@@ -239,6 +249,7 @@ class AdminBulkIntakeController extends Controller
             'candidateByItemId' => $candidateByItemId,
             'duplicateHintsByItemId' => $duplicateHintsByItemId,
             'duplicateGateByItemId' => $duplicateGateByItemId,
+            'pipelineByItemId' => $pipelineByItemId,
             'autoSuggestionByItemId' => $autoSuggestionByItemId,
             'screeningByItemId' => $autoSuggestionByItemId,
             'screeningReviewByItemId' => $screeningReviewByItemId,

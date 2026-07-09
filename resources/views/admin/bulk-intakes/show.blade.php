@@ -29,6 +29,7 @@
     $candidateByItemId = $candidateByItemId ?? [];
     $duplicateHintsByItemId = $duplicateHintsByItemId ?? [];
     $duplicateGateByItemId = $duplicateGateByItemId ?? [];
+    $pipelineByItemId = $pipelineByItemId ?? [];
     $screeningByItemId = $screeningByItemId ?? [];
     $screeningReviewByItemId = $screeningReviewByItemId ?? [];
     $readyForConsentByItemId = is_array($readyForConsentByItemId ?? null) ? $readyForConsentByItemId : [];
@@ -165,6 +166,7 @@
         </div>
 
         <div class="mt-3 flex flex-col gap-3" data-testid="bulk-ready-for-consent-summary-card">
+            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Eligibility gate</p>
             <div class="flex flex-wrap items-center gap-2" data-testid="bulk-screening-filter-pills">
                 @foreach ($primaryScreeningFilters as $key => $label)
                     <a href="{{ $buildShowUrl($batch, $statusFilter, $key, $highlightItemId > 0 ? $highlightItemId : null) }}"
@@ -288,6 +290,15 @@
                                 $historyBlocks = is_array($duplicateGate['history_blocks'] ?? null) ? $duplicateGate['history_blocks'] : [];
                                 $duplicateAutoBlocked = (bool) ($duplicateGate['auto_blocked'] ?? false);
                                 $duplicateOverrideActive = (bool) ($duplicateGate['override_active'] ?? false);
+                                $pipeline = is_array($pipelineByItemId[$item->id] ?? null) ? $pipelineByItemId[$item->id] : [];
+                                $pipelineBucket = (string) ($pipeline['bucket'] ?? 'needs_check');
+                                $pipelineSource = (string) ($pipeline['source'] ?? 'auto');
+                                $pipelineBadgeClass = match ($pipelineBucket) {
+                                    'eligible' => 'border-emerald-300 bg-emerald-100 text-emerald-800',
+                                    'blocked' => 'border-red-300 bg-red-100 text-red-800',
+                                    default => 'border-amber-300 bg-amber-100 text-amber-900',
+                                };
+                                $pipelineReasons = is_array($pipeline['reasons'] ?? null) ? array_slice($pipeline['reasons'], 0, 2) : [];
                                 $manualDuplicateReview = is_array(data_get($itemMeta, 'duplicate_review')) ? data_get($itemMeta, 'duplicate_review') : [];
                                 $manualDuplicateActive = (string) data_get($manualDuplicateReview, 'status') === 'manual_duplicate';
                                 $primaryDuplicateHint = is_array($duplicateHints[0] ?? null) ? $duplicateHints[0] : [];
@@ -465,6 +476,15 @@
                                 </td>
                                 <td class="px-4 py-2 text-sm">
                                     <div class="flex max-w-xs flex-wrap gap-1">
+                                        <span data-testid="bulk-pipeline-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $pipelineBadgeClass }}">
+                                            {{ $pipeline['bucket_label'] ?? 'Needs check' }}
+                                            @if ($pipelineSource === 'override')
+                                                <span class="font-normal">· override</span>
+                                            @endif
+                                        </span>
+                                        @foreach ($pipelineReasons as $pipelineReason)
+                                            <span data-testid="bulk-pipeline-reason" class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ $pipelineReason['label'] ?? str_replace('_', ' ', (string) ($pipelineReason['code'] ?? '')) }}</span>
+                                        @endforeach
                                         @if ($manualScreeningActive)
                                             <span data-testid="bulk-manual-screening-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $manualScreeningBadgeClass }}">{{ $manualScreeningLabel }}</span>
                                             @foreach ($screeningReasons as $screeningReason)
