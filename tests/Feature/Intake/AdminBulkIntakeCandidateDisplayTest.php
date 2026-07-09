@@ -58,6 +58,31 @@ test('bulk list shows parsed candidate fields from linked intake', function () {
     }
 });
 
+test('bulk list shows all mobiles comma separated from ocr and parsed sources', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'raw_ocr_text' => "नाव : OCR Candidate\nमोबाईल : 9123456789 / 9988776655",
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'OCR Mobile Candidate',
+                'primary_contact_number' => '9876543210',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $intake);
+
+    $candidate = app(BulkIntakeCandidateDisplayService::class)->candidateForIntake($intake);
+
+    expect($candidate['mobile'])->toBe('9876543210, 9123456789, 9988776655');
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Mobile: 9876543210, 9123456789, 9988776655', false);
+});
+
 test('bulk list prefers reviewed snapshot values and keeps parsed json presence separate', function () {
     Carbon::setTestNow(Carbon::parse('2026-07-07 12:00:00'));
 
@@ -215,7 +240,7 @@ test('bulk list shows eligible screening for valid reviewed candidate and prefer
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
         ->assertSee('Reviewed Eligible Candidate', false)
-        ->assertSee('Mobile: +91 98765 43210', false)
+        ->assertSee('Mobile: 9876543210', false)
         ->assertSee('data-testid="bulk-candidate-reviewed-badge"', false)
         ->assertSee('data-testid="bulk-screening-badge"', false)
         ->assertSee('Eligible', false)
@@ -356,7 +381,7 @@ test('bulk list shows manual screening badge and clear action', function () {
         ->assertDontSee('Set override', false);
 });
 
-test('bulk list shows set screening action when no manual screening exists', function () {
+test('bulk list does not show set override action when no manual screening exists', function () {
     $admin = candidateDisplayAdminUser();
     $batch = candidateDisplayBatch($admin);
     $intake = candidateDisplayIntake([
@@ -375,7 +400,7 @@ test('bulk list shows set screening action when no manual screening exists', fun
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('Set override', false)
+        ->assertDontSee('Set override', false)
         ->assertSee('data-testid="bulk-screening-badge"', false)
         ->assertSee('Eligible', false)
         ->assertDontSee('data-testid="bulk-manual-screening-badge"', false)
@@ -611,7 +636,7 @@ test('bulk list explains queued and pending free parse states', function () {
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('Candidate fields appear after free parse completes. Manual transcript is only needed if OCR/free parse fails.', false)
+        ->assertSee('Candidate fields appear after free parse. Manual transcript only if OCR/free parse fails.', false)
         ->assertSee('Free parse queued', false)
         ->assertSee('Waiting for free parse', false)
         ->assertSee('Mobile: —', false);

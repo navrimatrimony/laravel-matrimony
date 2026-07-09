@@ -6,13 +6,13 @@ use App\Models\BiodataIntake;
 use App\Models\BiodataIntakeOcrAttempt;
 use App\Models\BulkIntakeBatchItem;
 use App\Models\User;
-use App\Support\MobileNumber;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class BulkIntakeDuplicateHistoryHintService
 {
     public function __construct(
+        private readonly BulkIntakeCandidateMobileCollector $mobileCollector,
         private readonly IntakeDuplicateFieldMatchEvaluator $fieldMatchEvaluator,
     ) {}
 
@@ -27,7 +27,7 @@ class BulkIntakeDuplicateHistoryHintService
         }
 
         $hints = [];
-        $mobile = $this->snapshotMobile($intake);
+        $mobiles = $this->snapshotMobiles($intake);
         $name = $this->normalizeName($this->snapshotName($intake));
         $dob = $this->normalizeDate($this->snapshotDob($intake));
 
@@ -35,7 +35,7 @@ class BulkIntakeDuplicateHistoryHintService
             $hints[] = $hint;
         }
 
-        if ($mobile !== null) {
+        foreach ($mobiles as $mobile) {
             $mobileMatch = $this->matchingIntakeByMobile($intake, $mobile);
             if ($mobileMatch instanceof BiodataIntake) {
                 $hints[] = $this->hint(
@@ -203,7 +203,7 @@ class BulkIntakeDuplicateHistoryHintService
     private function matchingIntakeByMobile(BiodataIntake $current, string $mobile): ?BiodataIntake
     {
         foreach ($this->candidateReferenceIntakes($current) as $reference) {
-            if ($this->snapshotMobile($reference) === $mobile) {
+            if (in_array($mobile, $this->snapshotMobiles($reference), true)) {
                 return $reference;
             }
         }
@@ -369,35 +369,12 @@ class BulkIntakeDuplicateHistoryHintService
         return is_array($intake->parsed_json) ? $intake->parsed_json : [];
     }
 
-    private function snapshotMobile(BiodataIntake $intake): ?string
+    /**
+     * @return list<string>
+     */
+    private function snapshotMobiles(BiodataIntake $intake): array
     {
-        $data = $this->snapshotData($intake);
-        $candidate = data_get($data, 'core.primary_contact_number')
-            ?? data_get($data, 'core.mobile')
-            ?? data_get($data, 'core.mobile_number')
-            ?? data_get($data, 'candidate.primary_contact_number');
-
-        if ($candidate !== null) {
-            return MobileNumber::normalize($candidate);
-        }
-
-        $contacts = data_get($data, 'contacts');
-        if (! is_array($contacts)) {
-            return null;
-        }
-
-        foreach ($contacts as $contact) {
-            if (! is_array($contact)) {
-                continue;
-            }
-            $phone = $contact['phone_number'] ?? $contact['mobile_number'] ?? $contact['phone'] ?? null;
-            $normalized = MobileNumber::normalize($phone);
-            if ($normalized !== null) {
-                return $normalized;
-            }
-        }
-
-        return null;
+        return $this->mobileCollector->collectFromSources($this->snapshotData($intake));
     }
 
     private function snapshotName(BiodataIntake $intake): mixed

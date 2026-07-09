@@ -87,14 +87,6 @@ test('admin can open bulk candidate correction page', function () {
         ->assertSee('data-search-url="', false)
         ->assertSee('/api/location/search', false)
         ->assertSee('data-testid="bulk-correction-low-confidence-name"', false)
-        ->assertSee('data-testid="bulk-correction-screening-advisor-card"', false)
-        ->assertSee('data-testid="bulk-correction-screening-badge"', false)
-        ->assertSee('data-testid="bulk-correction-ready-for-consent-card"', false)
-        ->assertSee('data-testid="bulk-correction-manual-screening-card"', false)
-        ->assertSee('Admin override', false)
-        ->assertSee('Auto suggestion', false)
-        ->assertSee('Eligible', false)
-        ->assertSee('Eligible: Basic fields look ready for consent phase.', false)
         ->assertSee('Saves only the reviewed intake snapshot.', false);
 
     $html = $response->getContent();
@@ -102,36 +94,46 @@ test('admin can open bulk candidate correction page', function () {
     $sourceText = strpos($html, 'Last parse input text');
     $right = strpos($html, 'data-testid="bulk-correction-right-form"');
     $form = strpos($html, 'id="bulk-candidate-correction-form"');
-    $duplicate = strpos($html, 'data-testid="bulk-correction-duplicate-history-card"');
-    $screening = strpos($html, 'data-testid="bulk-correction-screening-advisor-card"');
-    $readyForConsent = strpos($html, 'data-testid="bulk-correction-ready-for-consent-card"');
-    $manualScreening = strpos($html, 'data-testid="bulk-correction-manual-screening-card"');
-    $manualDuplicate = strpos($html, 'data-testid="bulk-correction-manual-duplicate-card"');
-    $review = strpos($html, 'Review flag');
     $zoom = strpos($html, 'data-testid="bulk-image-zoom-toolbar"');
 
     expect($left)->not->toBeFalse()
         ->and($sourceText)->not->toBeFalse()
         ->and($right)->not->toBeFalse()
         ->and($form)->not->toBeFalse()
-        ->and($duplicate)->not->toBeFalse()
-        ->and($screening)->not->toBeFalse()
-        ->and($readyForConsent)->not->toBeFalse()
-        ->and($manualScreening)->not->toBeFalse()
-        ->and($manualDuplicate)->not->toBeFalse()
-        ->and($review)->not->toBeFalse()
         ->and($zoom)->not->toBeFalse()
         ->and($zoom)->toBeGreaterThan($left)
         ->and($zoom)->toBeLessThan($right)
         ->and($sourceText)->toBeGreaterThan($left)
         ->and($sourceText)->toBeLessThan($right)
         ->and($form)->toBeGreaterThan($right)
-        ->and($duplicate)->toBeGreaterThan($form)
-        ->and($screening)->toBeGreaterThan($duplicate)
-        ->and($readyForConsent)->toBeGreaterThan($screening)
-        ->and($manualScreening)->toBeGreaterThan($readyForConsent)
-        ->and($manualDuplicate)->toBeGreaterThan($manualScreening)
-        ->and($review)->toBeGreaterThan($manualDuplicate);
+        ->and($response->getContent())->toContain('items/'.$item->id.'/evidence-image');
+});
+
+test('admin can save comma separated mobiles and stores all contact numbers', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $intake = candidateCorrectionIntake([
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Multi Mobile Candidate',
+            ],
+        ],
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->patch(route('admin.bulk-intakes.items.correct-candidate.update', [$batch, $item]), [
+            'name' => 'Multi Mobile Candidate',
+            'mobile' => '9876543210, 9123456789',
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $intake->refresh();
+
+    expect(data_get($intake->approval_snapshot_json, 'core.primary_contact_number'))->toBe('9876543210')
+        ->and(data_get($intake->approval_snapshot_json, 'core.all_contact_numbers'))->toBe(['9876543210', '9123456789'])
+        ->and(data_get($intake->approval_snapshot_json, 'contacts.0.phone_number'))->toBe('9876543210');
 });
 
 test('admin can save seven field correction without mutating evidence or bulk item parsed data', function () {
@@ -516,7 +518,7 @@ test('bulk candidate correction page renders validation warnings for suspicious 
         ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
         ->assertOk()
         ->assertSee('data-testid="bulk-correction-warning-mobile"', false)
-        ->assertSee('Mobile does not normalize to a valid 10 digit Indian number.', false)
+        ->assertSee('Mobile does not normalize to valid 10 digit Indian number(s).', false)
         ->assertSee('data-testid="bulk-correction-warning-date_of_birth"', false)
         ->assertSee('Age is below 18 and should be reviewed.', false)
         ->assertSee('data-testid="bulk-correction-warning-height"', false)
@@ -525,7 +527,7 @@ test('bulk candidate correction page renders validation warnings for suspicious 
         ->assertSee('Select Male, Female, or Unknown.', false);
 });
 
-test('bulk candidate correction page renders read only duplicate history hints without mutating evidence', function () {
+test('bulk candidate correction page does not render screening or duplicate cards', function () {
     $admin = candidateCorrectionAdminUser();
     $batch = candidateCorrectionBatch($admin);
     candidateCorrectionIntake([
@@ -554,12 +556,12 @@ test('bulk candidate correction page renders read only duplicate history hints w
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
         ->assertOk()
-        ->assertSee('data-testid="bulk-correction-duplicate-history-card"', false)
-        ->assertSee('Duplicate / history hints', false)
-        ->assertSee('data-testid="bulk-correction-duplicate-history-hint"', false)
-        ->assertSee('Same mobile found', false)
-        ->assertSee('Matched intake', false)
-        ->assertDontSee('9876543210', false);
+        ->assertDontSee('data-testid="bulk-correction-duplicate-history-card"', false)
+        ->assertDontSee('data-testid="bulk-correction-screening-advisor-card"', false)
+        ->assertDontSee('data-testid="bulk-correction-ready-for-consent-card"', false)
+        ->assertDontSee('data-testid="bulk-correction-manual-screening-card"', false)
+        ->assertDontSee('data-testid="bulk-correction-manual-duplicate-card"', false)
+        ->assertDontSee('Review flag', false);
 
     $intake->refresh();
     $item->refresh();
@@ -599,12 +601,12 @@ test('admin can mark item manual duplicate from correction page without mutating
     $item = candidateCorrectionItem($batch, $intake);
 
     $this->actingAs($admin)
-        ->from(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->from(route('admin.bulk-intakes.show', $batch))
         ->post(route('admin.bulk-intakes.items.mark-duplicate', [$batch, $item]), [
             'matched_biodata_intake_id' => $matched->id,
             'reason' => 'Same biodata was uploaded before.',
         ])
-        ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertRedirect(route('admin.bulk-intakes.show', $batch))
         ->assertSessionHas('success');
 
     $item->refresh();
@@ -630,10 +632,9 @@ test('admin can mark item manual duplicate from correction page without mutating
         ->and($intake->approval_snapshot_json)->toBe($approval);
 
     $this->actingAs($admin)
-        ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('data-testid="bulk-correction-manual-duplicate-card"', false)
-        ->assertSee('data-testid="bulk-correction-manual-duplicate-badge"', false)
+        ->assertSee('data-testid="bulk-manual-duplicate-badge"', false)
         ->assertSee('Manual duplicate', false)
         ->assertSee('Clear duplicate', false);
 });
@@ -673,9 +674,9 @@ test('admin can clear manual duplicate without changing item status or intake ev
     ]);
 
     $this->actingAs($admin)
-        ->from(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->from(route('admin.bulk-intakes.show', $batch))
         ->post(route('admin.bulk-intakes.items.clear-duplicate', [$batch, $item]))
-        ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertRedirect(route('admin.bulk-intakes.show', $batch))
         ->assertSessionHas('success');
 
     $item->refresh();
@@ -753,13 +754,13 @@ test('admin can set eligible_for_consent screening decision', function () {
     $item = candidateCorrectionItem($batch, $intake);
 
     $this->actingAs($admin)
-        ->from(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->from(route('admin.bulk-intakes.show', $batch))
         ->post(route('admin.bulk-intakes.items.save-screening-review', [$batch, $item]), [
             'status' => 'eligible_for_consent',
             'reason_key' => 'admin_verified',
             'note' => 'Verified by admin after correction.',
         ])
-        ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertRedirect(route('admin.bulk-intakes.show', $batch))
         ->assertSessionHas('success');
 
     $item->refresh();
@@ -876,9 +877,9 @@ test('admin can clear screening decision without changing item status or intake 
     ]);
 
     $this->actingAs($admin)
-        ->from(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->from(route('admin.bulk-intakes.show', $batch))
         ->post(route('admin.bulk-intakes.items.clear-screening-review', [$batch, $item]))
-        ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertRedirect(route('admin.bulk-intakes.show', $batch))
         ->assertSessionHas('success');
 
     $item->refresh();
@@ -934,7 +935,7 @@ test('non admin cannot set or clear screening decision', function () {
         ->and(data_get($intake->parsed_json, 'core.full_name'))->toBe('Non Admin Screening Candidate');
 });
 
-test('read-only screening advisor still works when no manual screening exists', function () {
+test('read-only screening advisor still works on batch show when no manual screening exists', function () {
     $admin = candidateCorrectionAdminUser();
     $batch = candidateCorrectionBatch($admin);
     $intake = candidateCorrectionIntake([
@@ -950,16 +951,14 @@ test('read-only screening advisor still works when no manual screening exists', 
     $item = candidateCorrectionItem($batch, $intake);
 
     $this->actingAs($admin)
-        ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('data-testid="bulk-correction-screening-badge"', false)
+        ->assertSee('data-testid="bulk-screening-badge"', false)
         ->assertSee('Eligible', false)
-        ->assertSee('data-testid="bulk-correction-manual-screening-form"', false)
-        ->assertSee('Save screening decision', false)
-        ->assertDontSee('data-testid="bulk-correction-manual-screening-badge"', false);
+        ->assertDontSee('data-testid="bulk-manual-screening-badge"', false);
 });
 
-test('correction page shows ready for consent card when manual eligible and identity complete', function () {
+test('batch show displays ready for consent badge when manual eligible and identity complete', function () {
     $admin = candidateCorrectionAdminUser();
     $batch = candidateCorrectionBatch($admin);
     $intake = candidateCorrectionIntake([
@@ -987,15 +986,14 @@ test('correction page shows ready for consent card when manual eligible and iden
     ]);
 
     $this->actingAs($admin)
-        ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('data-testid="bulk-correction-ready-for-consent-card"', false)
-        ->assertSee('data-testid="bulk-correction-ready-for-consent-badge"', false)
-        ->assertSee('Ready', false)
-        ->assertDontSee('data-testid="bulk-correction-not-ready-for-consent-badge"', false);
+        ->assertSee('data-testid="bulk-ready-for-consent-badge"', false)
+        ->assertSee('Ready for Consent', false)
+        ->assertSee('id="bulk-item-'.$item->id.'"', false);
 });
 
-test('correction page shows not ready reasons when eligible manual screening lacks mobile', function () {
+test('batch show hides ready badge when eligible manual screening lacks mobile', function () {
     $admin = candidateCorrectionAdminUser();
     $batch = candidateCorrectionBatch($admin);
     $intake = candidateCorrectionIntake([
@@ -1007,7 +1005,7 @@ test('correction page shows not ready reasons when eligible manual screening lac
             ],
         ],
     ]);
-    $item = candidateCorrectionItem($batch, $intake, [
+    candidateCorrectionItem($batch, $intake, [
         'item_meta_json' => [
             'screening_review' => [
                 'status' => 'eligible_for_consent',
@@ -1022,12 +1020,9 @@ test('correction page shows not ready reasons when eligible manual screening lac
     ]);
 
     $this->actingAs($admin)
-        ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('data-testid="bulk-correction-not-ready-for-consent-badge"', false)
-        ->assertSee('Not Ready', false)
-        ->assertSee('data-testid="bulk-correction-ready-for-consent-reason"', false)
-        ->assertSee('Missing mobile', false);
+        ->assertDontSee('data-testid="bulk-ready-for-consent-badge"', false);
 });
 
 test('bulk candidate correction save is blocked after intake approval or lock', function () {

@@ -66,13 +66,27 @@
     };
     $hasActiveFilters = $statusFilter !== 'all' || $screeningFilter !== 'all';
 @endphp
-<div class="space-y-6">
+<div class="space-y-4">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="text-2xl font-bold text-gray-900">Bulk Intake #{{ $batch->id }}</h1>
-            <p class="mt-1 text-sm text-gray-600">{{ $batch->batch_name ?: 'Untitled batch' }}</p>
+            <p class="mt-1 text-sm text-gray-600">
+                {{ $batch->batch_name ?: 'Untitled batch' }}
+                · {{ $batch->batch_status }}
+                · {{ $batch->uploadedByUser?->name ?? 'Unknown uploader' }}
+                · {{ $batch->created_at?->format('d-m-Y H:i') ?? '-' }}
+            </p>
+            <p class="mt-1 text-xs text-gray-500">Review visibility only — does not create profiles. Free parse uses existing OCR text only.</p>
         </div>
-        <a href="{{ route('admin.bulk-intakes.index') }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">Back to bulk intakes</a>
+        <div class="flex flex-wrap items-center gap-2">
+            <form method="POST" action="{{ route('admin.bulk-intakes.queue-free-parse', $batch) }}">
+                @csrf
+                <button type="submit" class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100">
+                    Queue free parse
+                </button>
+            </form>
+            <a href="{{ route('admin.bulk-intakes.index') }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">Back to bulk intakes</a>
+        </div>
     </div>
 
     @include('admin.intake._tabs')
@@ -84,34 +98,12 @@
         <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{{ session('error') }}</div>
     @endif
 
-    <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-        This page is review visibility only. It does not create, approve, claim, or apply profiles.
-    </div>
-
-    <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p>This queues parser from existing OCR/raw text only. Paid Sarvam/OpenAI vision extraction is not called.</p>
-            <form method="POST" action="{{ route('admin.bulk-intakes.queue-free-parse', $batch) }}">
-                @csrf
-                <button type="submit" class="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600">
-                    Queue free parse for pending items
-                </button>
-            </form>
-        </div>
-    </div>
-
-    <div class="rounded-lg bg-white p-6 shadow">
-        <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-                <h2 class="text-lg font-semibold text-gray-900">Background processing</h2>
-                <p class="mt-1 text-sm text-gray-600">{{ $progress['user_message'] }}</p>
-            </div>
-            <span class="inline-flex w-fit rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase text-indigo-700">
-                {{ $progress['active_work_label'] }}
-            </span>
-        </div>
-
-        <div class="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-6">
+    <details class="rounded-lg bg-white p-4 shadow">
+        <summary class="cursor-pointer text-sm font-semibold text-gray-900">
+            Background processing · {{ $progress['percent_done'] }}% done · ETA {{ $progress['approx_eta_label'] }}
+        </summary>
+        <p class="mt-2 text-xs text-gray-600">{{ $progress['user_message'] }}</p>
+        <div class="mt-3 grid gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
             @foreach ([
                 'Total items' => $progress['total'],
                 'Pending' => $progress['pending'],
@@ -126,60 +118,40 @@
                 'Last activity' => $progress['last_activity_at'] ?: $missingDisplay,
                 'Failed jobs' => $progress['failed_jobs_count'],
             ] as $label => $value)
-                <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-                    <p class="text-xs font-semibold uppercase text-gray-500">{{ $label }}</p>
-                    <p class="mt-1 text-sm font-semibold text-gray-900">{{ $value }}</p>
+                <div class="rounded border border-gray-200 bg-gray-50 px-3 py-2">
+                    <p class="font-semibold uppercase text-gray-500">{{ $label }}</p>
+                    <p class="mt-0.5 font-semibold text-gray-900">{{ $value }}</p>
                 </div>
             @endforeach
         </div>
 
         @if (! empty($progress['error_summary']))
-            <div class="mt-4 flex flex-wrap gap-2">
+            <div class="mt-3 flex flex-wrap gap-2">
                 @foreach ($progress['error_summary'] as $errorSummaryLine)
-                    <span class="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">{{ $errorSummaryLine }}</span>
+                    <span class="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700">{{ $errorSummaryLine }}</span>
                 @endforeach
             </div>
         @endif
 
         @if (! empty($progress['worker_warning']))
-            <div class="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm font-medium text-amber-900">
+            <div class="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs font-medium text-amber-900">
                 {{ $progress['worker_warning'] }}
             </div>
         @endif
-    </div>
+    </details>
 
-    <div class="rounded-lg bg-white p-6 shadow">
-        <dl class="grid gap-4 text-sm md:grid-cols-3">
-            <div>
-                <dt class="font-semibold text-gray-700">Status</dt>
-                <dd class="mt-1 text-gray-600">{{ $batch->batch_status }}</dd>
+    <div class="rounded-lg bg-white p-4 shadow">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div class="flex flex-wrap items-center gap-3">
+                <h2 class="text-lg font-semibold text-gray-900">Items</h2>
+                <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+                    <span data-testid="bulk-ready-for-consent-count">{{ $readyCount }}</span>
+                    {{ $readyCount === 1 ? 'candidate ready' : 'candidates ready' }}
+                    <a href="{{ $buildShowUrl($batch, $statusFilter, 'ready', $highlightItemId > 0 ? $highlightItemId : null) }}"
+                       data-testid="bulk-ready-for-consent-view-queue"
+                       class="text-emerald-900 underline hover:no-underline">View queue</a>
+                </span>
             </div>
-            <div>
-                <dt class="font-semibold text-gray-700">Uploader</dt>
-                <dd class="mt-1 text-gray-600">{{ $batch->uploaded_by_actor_type ?: '-' }} · {{ $batch->uploadedByUser?->name ?? '-' }}{{ $batch->uploadedByUser?->email ? ' · '.$batch->uploadedByUser->email : '' }}</dd>
-            </div>
-            <div>
-                <dt class="font-semibold text-gray-700">Created</dt>
-                <dd class="mt-1 text-gray-600">{{ $batch->created_at?->format('d-m-Y H:i') ?? '-' }}</dd>
-            </div>
-            <div>
-                <dt class="font-semibold text-gray-700">Completed</dt>
-                <dd class="mt-1 text-gray-600">{{ $batch->completed_at?->format('d-m-Y H:i') ?? '-' }}</dd>
-            </div>
-            <div>
-                <dt class="font-semibold text-gray-700">Files</dt>
-                <dd class="mt-1 text-gray-600">{{ $batch->total_files }}</dd>
-            </div>
-            <div>
-                <dt class="font-semibold text-gray-700">Texts</dt>
-                <dd class="mt-1 text-gray-600">{{ $batch->total_texts }}</dd>
-            </div>
-        </dl>
-    </div>
-
-    <div class="rounded-lg bg-white p-6 shadow">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <h2 class="text-lg font-semibold text-gray-900">Items</h2>
             <div class="flex flex-wrap gap-2">
                 @foreach ($statusFilters as $key => $label)
                     <a href="{{ $buildShowUrl($batch, $key, $screeningFilter, $highlightItemId > 0 ? $highlightItemId : null) }}"
@@ -191,24 +163,7 @@
             </div>
         </div>
 
-        <div class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4" data-testid="bulk-ready-for-consent-summary-card">
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <h3 class="text-base font-semibold text-emerald-900">Ready for Consent</h3>
-                    <p class="mt-1 text-sm text-emerald-800">
-                        <span data-testid="bulk-ready-for-consent-count">{{ $readyCount }}</span>
-                        {{ $readyCount === 1 ? 'candidate ready' : 'candidates ready' }}
-                    </p>
-                </div>
-                <a href="{{ $buildShowUrl($batch, $statusFilter, 'ready', $highlightItemId > 0 ? $highlightItemId : null) }}"
-                   data-testid="bulk-ready-for-consent-view-queue"
-                   class="inline-flex items-center rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">
-                    View Ready Queue
-                </a>
-            </div>
-        </div>
-
-        <div class="mt-4 flex flex-col gap-3">
+        <div class="mt-3 flex flex-col gap-3" data-testid="bulk-ready-for-consent-summary-card">
             <div class="flex flex-wrap items-center gap-2" data-testid="bulk-screening-filter-pills">
                 @foreach ($primaryScreeningFilters as $key => $label)
                     <a href="{{ $buildShowUrl($batch, $statusFilter, $key, $highlightItemId > 0 ? $highlightItemId : null) }}"
@@ -238,11 +193,7 @@
                 </div>
             @endif
         </div>
-        <p class="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-            Current stage: candidate extraction and review. Owner assignment and profile creation are later steps.
-            Candidate fields appear after free parse completes. Manual transcript is only needed if OCR/free parse fails.
-            Bulk processing runs in background. You can leave this page open and refresh later.
-        </p>
+        <p class="mt-2 text-xs text-gray-500">Candidate fields appear after free parse. Manual transcript only if OCR/free parse fails.</p>
 
         @if ($batch->items->isEmpty())
             <p class="mt-3 text-sm text-gray-600">No items found for this filter.</p>
@@ -561,8 +512,6 @@
                                                 @csrf
                                                 <button type="submit" class="text-left text-sm font-medium text-indigo-700 hover:text-indigo-900">Clear screening</button>
                                             </form>
-                                        @elseif ($intake)
-                                            <a href="{{ route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]).'#bulk-manual-screening-card' }}" class="font-medium text-indigo-700 hover:text-indigo-900">Set override</a>
                                         @endif
                                     </div>
                                 </td>

@@ -87,7 +87,7 @@ class BulkIntakeCandidateDisplayService
 
         $result = [
             'full_name' => $name['value'],
-            'mobile' => $this->mobile($display),
+            'mobile' => $this->mobileDisplay($display, $intake),
             'date_of_birth' => $dobAge['date_of_birth'],
             'age' => $dobAge['age'],
             'height' => $height['value'],
@@ -470,44 +470,16 @@ class BulkIntakeCandidateDisplayService
     /**
      * @param  array<string, mixed>  $parsed
      */
-    private function mobile(array $parsed): ?string
+    private function mobileDisplay(array $parsed, ?BiodataIntake $intake): ?string
     {
-        $mobile = $this->firstString($parsed, [
-            'core.primary_contact_number',
-            'core.mobile',
-            'core.user_contact_1',
-            'core.contact_number',
-            'primary_contact_number',
-            'mobile',
-            'user_contact_1',
-            'contact_number',
-        ]);
-        if ($mobile !== null) {
-            return $mobile;
+        $ocrSource = null;
+        if ($intake !== null) {
+            $parseInput = trim((string) ($intake->last_parse_input_text ?? ''));
+            $rawOcr = trim((string) ($intake->raw_ocr_text ?? ''));
+            $ocrSource = $parseInput !== '' ? $parseInput : ($rawOcr !== '' ? $rawOcr : null);
         }
 
-        $contacts = $parsed['contacts'] ?? [];
-        if (! is_array($contacts)) {
-            return null;
-        }
-
-        foreach ($contacts as $contact) {
-            if (! is_array($contact)) {
-                continue;
-            }
-
-            $mobile = $this->firstString($contact, [
-                'phone_number',
-                'number',
-                'mobile',
-                'contact_number',
-            ]);
-            if ($mobile !== null) {
-                return $mobile;
-            }
-        }
-
-        return null;
+        return app(BulkIntakeCandidateMobileCollector::class)->displayFromSources($parsed, $ocrSource);
     }
 
     /**

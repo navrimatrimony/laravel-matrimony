@@ -367,17 +367,12 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeBatch $bulkIntakeBatch,
         BulkIntakeBatchItem $bulkIntakeBatchItem,
         BulkIntakeCandidateCorrectionService $correctionService,
-        BulkIntakeCandidateDisplayService $candidateDisplayService,
-        BulkIntakeEligibilityService $eligibilityService,
-        BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService
     ) {
         abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
 
         $bulkIntakeBatch->load('uploadedByUser:id,name,email,mobile');
         $correction = $correctionService->correctionDataForItem($bulkIntakeBatchItem);
         abort_unless($correction['intake'] !== null, 404);
-        $duplicateHints = $duplicateHistoryHintService->hintsForItem($bulkIntakeBatchItem);
-        $screeningReview = $eligibilityService->activeOverrideForItem($bulkIntakeBatchItem);
 
         return view('admin.bulk-intakes.correct-candidate', [
             'batch' => $bulkIntakeBatch,
@@ -389,25 +384,20 @@ class AdminBulkIntakeController extends Controller
             'sourceTextLabel' => $correction['source_text_label'],
             'imagePreview' => $correction['image_preview'],
             'canSave' => $correction['can_save'],
-            'duplicateHints' => $duplicateHints,
-            'screeningAdvisor' => $eligibilityService->autoSuggestionForItem($bulkIntakeBatchItem, null, $duplicateHints),
-            'screeningReview' => $screeningReview,
-            'readyForConsent' => $eligibilityService->readyForConsentForItem(
-                $bulkIntakeBatchItem,
-                $screeningReview,
-                $candidateDisplayService->candidateForItem($bulkIntakeBatchItem)
-            ),
-            'readyForConsentReasonLabels' => collect([
-                'manual_screening_required',
-                'manual_screening_not_eligible',
-                'manual_duplicate',
-                'missing_mobile',
-                'missing_identity',
-            ])->mapWithKeys(fn (string $reason): array => [
-                $reason => $eligibilityService->readyReasonLabel($reason),
-            ])->all(),
-            'screeningReviewOptions' => BulkIntakeCandidateScreeningReviewService::REASON_KEYS_BY_STATUS,
         ]);
+    }
+
+    public function evidenceImage(
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeCandidateCorrectionService $correctionService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+
+        $response = $correctionService->evidenceImageResponse($bulkIntakeBatchItem);
+        abort_unless($response !== null, 404);
+
+        return $response;
     }
 
     public function saveCandidateCorrection(
@@ -422,7 +412,7 @@ class AdminBulkIntakeController extends Controller
 
         $validated = $request->validate([
             'name' => ['nullable', 'string', 'max:255'],
-            'mobile' => ['nullable', 'string', 'max:32'],
+            'mobile' => ['nullable', 'string', 'max:128'],
             'date_of_birth' => ['nullable', 'string', 'max:40'],
             'height' => ['nullable', 'string', 'max:40'],
             'height_cm' => ['nullable', 'integer', 'min:120', 'max:220'],

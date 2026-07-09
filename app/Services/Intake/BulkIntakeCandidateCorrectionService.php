@@ -6,7 +6,6 @@ use App\Models\BiodataIntake;
 use App\Models\BulkIntakeBatchItem;
 use App\Models\User;
 use App\Services\Ocr\OcrNormalize;
-use App\Support\MobileNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -17,6 +16,7 @@ class BulkIntakeCandidateCorrectionService
 
     public function __construct(
         private readonly BulkIntakeCandidateDisplayService $candidateDisplayService,
+        private readonly BulkIntakeCandidateMobileCollector $mobileCollector,
         private readonly IntakeHumanReviewSnapshotService $reviewSnapshotService,
         private readonly IntakePipelineService $intakePipeline,
     ) {}
@@ -28,7 +28,7 @@ class BulkIntakeCandidateCorrectionService
      *     source_snapshot_source: string,
      *     source_text: string|null,
      *     source_text_label: string,
-     *     image_preview: array{available: bool, data_uri: string|null, label: string|null, message: string|null},
+     *     image_preview: array{available: bool, url: string|null, data_uri: string|null, label: string|null, message: string|null},
      *     can_save: bool
      * }
      */
@@ -50,9 +50,18 @@ class BulkIntakeCandidateCorrectionService
         $source = $this->sourceSnapshot($intake);
         $snapshot = $source['snapshot'];
         $candidate = $this->candidateDisplayService->candidateForIntake($intake);
+        $mobileDisplay = $this->mobileCollector->displayFromSources(
+            $snapshot,
+            $this->stringOrNull($intake->last_parse_input_text) ?? $this->stringOrNull($intake->raw_ocr_text)
+        ) ?? $this->snapshotText($snapshot, [
+            'core.primary_contact_number',
+            'core.mobile',
+            'primary_contact_number',
+            'mobile',
+        ]) ?? $candidate['mobile'];
         $fields = [
             $this->field('name', 'Name', $this->snapshotText($snapshot, ['core.full_name']) ?? $candidate['full_name'], ['full_name', 'core.full_name'], 'text'),
-            $this->field('mobile', 'Mobile', $this->snapshotMobile($snapshot) ?? $candidate['mobile'], ['primary_contact_number', 'core.primary_contact_number', 'phone_number', 'contacts.0.phone_number'], 'tel'),
+            $this->field('mobile', 'Mobile', $mobileDisplay, ['primary_contact_number', 'core.primary_contact_number', 'phone_number', 'contacts.0.phone_number'], 'tel'),
             $this->field('date_of_birth', 'DOB', $this->snapshotText($snapshot, ['core.date_of_birth', 'date_of_birth']) ?? $candidate['date_of_birth'], ['date_of_birth', 'core.date_of_birth'], 'text'),
             $this->field('height', 'Height', $this->snapshotHeight($snapshot) ?? $candidate['height'], ['height_cm', 'core.height_cm', 'height', 'core.height'], 'text'),
             $this->field('gender', 'Gender', $this->snapshotGender($snapshot) ?? $candidate['gender'], ['gender', 'core.gender', 'gender_id', 'core.gender_id'], 'select'),
@@ -183,7 +192,13 @@ class BulkIntakeCandidateCorrectionService
     {
         $snapshot['core'] = is_array($snapshot['core'] ?? null) ? $snapshot['core'] : [];
         $snapshot['core']['full_name'] = $this->nullableText($input['name'] ?? null);
-        $snapshot['core']['primary_contact_number'] = $this->normalizedMobile($input['mobile'] ?? null);
+        $mobiles = $this->normalizedMobiles($input['mobile'] ?? null);
+        $snapshot['core']['primary_contact_number'] = $mobiles[0] ?? null;
+        if ($mobiles !== []) {
+            $snapshot['core']['all_contact_numbers'] = $mobiles;
+        } elseif (array_key_exists('all_contact_numbers', $snapshot['core'])) {
+            unset($snapshot['core']['all_contact_numbers']);
+        }
         $snapshot['core']['date_of_birth'] = $this->normalizedDate($input['date_of_birth'] ?? null);
         $heightText = $this->stringOrNull($input['height'] ?? null);
         $heightCm = $this->normalizedHeightCm($heightText, $heightText === null ? ($input['height_cm'] ?? null) : null);
@@ -200,7 +215,7 @@ class BulkIntakeCandidateCorrectionService
             $snapshot['core']['address_line'] = $location;
         }
 
-        return $this->applyPrimaryContact($snapshot, $snapshot['core']['primary_contact_number']);
+        return $this->applyPrimaryContact($snapshot, $mobiles[0] ?? null);
     }
 
     /**
@@ -286,10 +301,13 @@ class BulkIntakeCandidateCorrectionService
             return [];
         }
 
-        $mobile = MobileNumber::normalize(OcrNormalize::normalizeDigits($text));
+        $mobiles = $this->mobileCollector->parseInput($text);
+        if ($mobiles !== []) {
+            return [];
+        }
 
-        return $mobile === null
-            ? ['Mobile does not normalize to a valid 10 digit Indian number.']
+        return preg_match('/\d/', $text) === 1
+            ? ['Mobile does not normalize to valid 10 digit Indian number(s).']
             : [];
     }
 
@@ -476,35 +494,6 @@ class BulkIntakeCandidateCorrectionService
     /**
      * @param  array<string, mixed>  $snapshot
      */
-    private function snapshotMobile(array $snapshot): ?string
-    {
-        $mobile = $this->snapshotText($snapshot, [
-            'core.primary_contact_number',
-            'core.mobile',
-            'primary_contact_number',
-            'mobile',
-        ]);
-        if ($mobile !== null) {
-            return $mobile;
-        }
-
-        $contacts = is_array($snapshot['contacts'] ?? null) ? $snapshot['contacts'] : [];
-        foreach ($contacts as $contact) {
-            if (! is_array($contact)) {
-                continue;
-            }
-            $mobile = $this->snapshotText($contact, ['phone_number', 'number', 'mobile', 'contact_number']);
-            if ($mobile !== null) {
-                return $mobile;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * @param  array<string, mixed>  $snapshot
-     */
     private function snapshotHeight(array $snapshot): ?string
     {
         $heightText = $this->snapshotText($snapshot, ['core.height', 'height']);
@@ -576,56 +565,78 @@ class BulkIntakeCandidateCorrectionService
         ];
     }
 
+    public function evidenceImageResponse(BulkIntakeBatchItem $item): ?\Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        $intake = $this->intakeForItem($item);
+        if (! $intake instanceof BiodataIntake) {
+            return null;
+        }
+
+        $relativePath = $this->evidenceImagePath($item, $intake);
+        if ($relativePath === null) {
+            return null;
+        }
+
+        $absolutePath = Storage::disk('local')->path($relativePath);
+        $mime = @mime_content_type($absolutePath);
+
+        return response()->file($absolutePath, is_string($mime) ? [
+            'Content-Type' => $mime,
+            'Cache-Control' => 'private, max-age=3600',
+        ] : [
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
     /**
-     * @return array{available: bool, data_uri: string|null, label: string|null, message: string|null}
+     * @return array{available: bool, url: string|null, data_uri: string|null, label: string|null, message: string|null}
      */
     private function imagePreview(BulkIntakeBatchItem $item, BiodataIntake $intake): array
     {
-        $relativePath = $this->stringOrNull($intake->file_path) ?? $this->stringOrNull($item->source_file_path);
+        $relativePath = $this->evidenceImagePath($item, $intake);
         if ($relativePath === null) {
-            return $this->emptyImagePreview('No uploaded image file is linked to this item.');
-        }
-
-        $extension = strtolower(pathinfo($relativePath, PATHINFO_EXTENSION));
-        if (! in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
-            return $this->emptyImagePreview('Original file is not a browser-previewable image.');
+            return $this->emptyImagePreview('No browser-previewable image is linked to this item.');
         }
 
         if (! Storage::disk('local')->exists($relativePath)) {
             return $this->emptyImagePreview('Original image file is not available on local storage.');
         }
 
-        $absolutePath = Storage::disk('local')->path($relativePath);
-        $size = @filesize($absolutePath);
-        if ($size === false || $size > 5 * 1024 * 1024) {
-            return $this->emptyImagePreview('Original image preview is skipped because the file is too large.');
-        }
-
-        $mime = @mime_content_type($absolutePath);
-        if (! is_string($mime) || ! in_array($mime, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
-            return $this->emptyImagePreview('Original file MIME type is not supported for inline preview.');
-        }
-
-        $bytes = @file_get_contents($absolutePath);
-        if (! is_string($bytes) || $bytes === '') {
-            return $this->emptyImagePreview('Original image file could not be read for preview.');
-        }
-
         return [
             'available' => true,
-            'data_uri' => 'data:'.$mime.';base64,'.base64_encode($bytes),
+            'url' => route('admin.bulk-intakes.items.evidence-image', [
+                'bulkIntakeBatch' => $item->bulk_intake_batch_id,
+                'bulkIntakeBatchItem' => $item->id,
+            ]),
+            'data_uri' => null,
             'label' => $intake->original_filename ?: $item->original_filename ?: basename($relativePath),
             'message' => null,
         ];
     }
 
+    private function evidenceImagePath(BulkIntakeBatchItem $item, BiodataIntake $intake): ?string
+    {
+        $relativePath = $this->stringOrNull($intake->file_path) ?? $this->stringOrNull($item->source_file_path);
+        if ($relativePath === null) {
+            return null;
+        }
+
+        $extension = strtolower(pathinfo($relativePath, PATHINFO_EXTENSION));
+        if (! in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+            return null;
+        }
+
+        return $relativePath;
+    }
+
     /**
-     * @return array{available: bool, data_uri: string|null, label: string|null, message: string|null}
+     * @return array{available: bool, url: string|null, data_uri: string|null, label: string|null, message: string|null}
      */
     private function emptyImagePreview(string $message): array
     {
         return [
             'available' => false,
+            'url' => null,
             'data_uri' => null,
             'label' => null,
             'message' => $message,
@@ -647,21 +658,24 @@ class BulkIntakeCandidateCorrectionService
         return $text !== null ? mb_substr($text, 0, 255, 'UTF-8') : null;
     }
 
-    private function normalizedMobile(mixed $value): ?string
+    /**
+     * @return list<string>
+     */
+    private function normalizedMobiles(mixed $value): array
     {
         $text = $this->stringOrNull($value);
         if ($text === null) {
-            return null;
+            return [];
         }
 
-        $mobile = MobileNumber::normalize(OcrNormalize::normalizeDigits($text));
-        if ($mobile === null) {
+        $mobiles = $this->mobileCollector->parseInput($text);
+        if ($mobiles === [] && preg_match('/\d/', $text) === 1) {
             throw ValidationException::withMessages([
-                'mobile' => 'Enter a valid 10 digit mobile number.',
+                'mobile' => 'Enter valid 10 digit mobile number(s), comma-separated if more than one.',
             ]);
         }
 
-        return $mobile;
+        return $mobiles;
     }
 
     private function normalizedDate(mixed $value): ?string
