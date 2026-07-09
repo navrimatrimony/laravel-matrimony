@@ -91,8 +91,8 @@ test('admin can open bulk candidate correction page', function () {
         ->assertSee('data-testid="bulk-correction-screening-badge"', false)
         ->assertSee('data-testid="bulk-correction-ready-for-consent-card"', false)
         ->assertSee('data-testid="bulk-correction-manual-screening-card"', false)
-        ->assertSee('Manual screening decision', false)
-        ->assertSee('Screening advisor', false)
+        ->assertSee('Admin override', false)
+        ->assertSee('Auto suggestion', false)
         ->assertSee('Eligible', false)
         ->assertSee('Eligible: Basic fields look ready for consent phase.', false)
         ->assertSee('Saves only the reviewed intake snapshot.', false);

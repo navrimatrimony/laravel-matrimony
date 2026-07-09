@@ -33,7 +33,9 @@
     $readyForConsentByItemId = is_array($readyForConsentByItemId ?? null) ? $readyForConsentByItemId : [];
     $readyCount = (int) ($readyCount ?? 0);
     $screeningFilter = (string) ($screeningFilter ?? 'all');
-    $screeningFilters = is_array($screeningFilters ?? null) ? $screeningFilters : [];
+    $primaryScreeningFilters = is_array($primaryScreeningFilters ?? null) ? $primaryScreeningFilters : [];
+    $legacyScreeningFilters = is_array($legacyScreeningFilters ?? null) ? $legacyScreeningFilters : [];
+    $screeningFilters = is_array($screeningFilters ?? null) ? $screeningFilters : array_merge($primaryScreeningFilters, $legacyScreeningFilters);
     $screeningCounts = is_array($screeningCounts ?? null) ? $screeningCounts : [];
     $statusFilter = (string) ($statusFilter ?? 'all');
     $statusFilters = is_array($statusFilters ?? null) ? $statusFilters : [];
@@ -116,7 +118,7 @@
                 'Processing' => $progress['processing'],
                 'Parse queued' => $progress['parse_queued'],
                 'Parsed' => $progress['parsed'],
-                'Needs review' => $progress['needs_review'],
+                'Needs check' => $progress['needs_review'],
                 'Failed' => $progress['failed'],
                 'Percent done' => $progress['percent_done'].'%',
                 'Approx ETA' => $progress['approx_eta_label'],
@@ -208,7 +210,7 @@
 
         <div class="mt-4 flex flex-col gap-3">
             <div class="flex flex-wrap items-center gap-2" data-testid="bulk-screening-filter-pills">
-                @foreach ($screeningFilters as $key => $label)
+                @foreach ($primaryScreeningFilters as $key => $label)
                     <a href="{{ $buildShowUrl($batch, $statusFilter, $key, $highlightItemId > 0 ? $highlightItemId : null) }}"
                        data-testid="bulk-screening-filter-{{ $key }}"
                        class="rounded-full border px-3 py-1 text-xs font-semibold {{ $screeningFilter === $key ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-emerald-300 hover:text-emerald-700' }}">
@@ -223,6 +225,18 @@
                     </a>
                 @endif
             </div>
+            @if ($legacyScreeningFilters !== [])
+                <div class="flex flex-wrap items-center gap-2" data-testid="bulk-screening-legacy-filter-pills">
+                    <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">More filters</span>
+                    @foreach ($legacyScreeningFilters as $key => $label)
+                        <a href="{{ $buildShowUrl($batch, $statusFilter, $key, $highlightItemId > 0 ? $highlightItemId : null) }}"
+                           data-testid="bulk-screening-filter-{{ $key }}"
+                           class="rounded-full border border-dashed px-3 py-1 text-xs font-semibold {{ $screeningFilter === $key ? 'border-indigo-600 bg-indigo-50 text-indigo-800' : 'border-gray-300 bg-white text-gray-600 hover:border-indigo-300 hover:text-indigo-700' }}">
+                            {{ $label }} ({{ (int) ($screeningCounts[$key] ?? 0) }})
+                        </a>
+                    @endforeach
+                </div>
+            @endif
         </div>
         <p class="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
             Current stage: candidate extraction and review. Owner assignment and profile creation are later steps.
@@ -306,10 +320,10 @@
                                     : ['ready' => false, 'reasons' => []];
                                 $isReadyForConsent = (bool) ($readyForConsent['ready'] ?? false);
                                 $manualScreeningLabel = match ($manualScreeningStatus) {
-                                    'eligible_for_consent' => 'Eligible for consent',
-                                    'needs_review' => 'Needs review',
-                                    'stopped' => 'Stopped',
-                                    default => 'Manual screening',
+                                    'eligible_for_consent' => 'Override: Eligible',
+                                    'needs_review' => 'Override: Needs check',
+                                    'stopped' => 'Override: Blocked',
+                                    default => 'Override',
                                 };
                                 $manualScreeningBadgeClass = match ($manualScreeningStatus) {
                                     'eligible_for_consent' => 'border-emerald-300 bg-emerald-100 text-emerald-800',
@@ -548,7 +562,7 @@
                                                 <button type="submit" class="text-left text-sm font-medium text-indigo-700 hover:text-indigo-900">Clear screening</button>
                                             </form>
                                         @elseif ($intake)
-                                            <a href="{{ route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]).'#bulk-manual-screening-card' }}" class="font-medium text-indigo-700 hover:text-indigo-900">Set screening</a>
+                                            <a href="{{ route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]).'#bulk-manual-screening-card' }}" class="font-medium text-indigo-700 hover:text-indigo-900">Set override</a>
                                         @endif
                                     </div>
                                 </td>

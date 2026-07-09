@@ -349,11 +349,11 @@ test('bulk list shows manual screening badge and clear action', function () {
         ->assertOk()
         ->assertSee('Manual Screening List Candidate', false)
         ->assertSee('data-testid="bulk-manual-screening-badge"', false)
-        ->assertSee('Eligible for consent', false)
+        ->assertSee('Override: Eligible', false)
         ->assertSee('data-testid="bulk-screening-advisor-hint"', false)
         ->assertSee('Clear screening', false)
         ->assertDontSee('data-testid="bulk-screening-badge"', false)
-        ->assertDontSee('Set screening', false);
+        ->assertDontSee('Set override', false);
 });
 
 test('bulk list shows set screening action when no manual screening exists', function () {
@@ -375,7 +375,7 @@ test('bulk list shows set screening action when no manual screening exists', fun
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('Set screening', false)
+        ->assertSee('Set override', false)
         ->assertSee('data-testid="bulk-screening-badge"', false)
         ->assertSee('Eligible', false)
         ->assertDontSee('data-testid="bulk-manual-screening-badge"', false)
@@ -953,8 +953,8 @@ test('bulk status pending and screening manual filters work together', function 
         ->assertDontSee('pending-advisor-only.pdf', false)
         ->assertSee('data-testid="bulk-manual-screening-badge"', false)
         ->assertSee('All (2)', false)
-        ->assertSee('Manual (1)', false)
-        ->assertSee('Advisor (1)', false);
+        ->assertSee('Override set (1)', false)
+        ->assertSee('Advisor only (1)', false);
 });
 
 test('manual screening bucket overrides advisor when both signals differ', function () {
@@ -992,7 +992,7 @@ test('manual screening bucket overrides advisor when both signals differ', funct
         ->assertOk()
         ->assertSee('Manual Overrides Advisor Candidate', false)
         ->assertSee('data-testid="bulk-manual-screening-badge"', false)
-        ->assertSee('Eligible for consent', false);
+        ->assertSee('Override: Eligible', false);
 });
 
 test('bulk list renders screening queue pills with counts', function () {
@@ -1005,11 +1005,11 @@ test('bulk list renders screening queue pills with counts', function () {
         ->assertSee('data-testid="bulk-screening-filter-pills"', false)
         ->assertSee('data-testid="bulk-screening-filter-all"', false)
         ->assertSee('All (6)', false)
-        ->assertSee('Eligible for consent (2)', false)
-        ->assertSee('Needs review (2)', false)
-        ->assertSee('Stopped (2)', false)
-        ->assertSee('Advisor (3)', false)
-        ->assertSee('Manual (3)', false);
+        ->assertSee('Eligible (2)', false)
+        ->assertSee('Needs check (2)', false)
+        ->assertSee('Blocked (2)', false)
+        ->assertSee('Advisor only (3)', false)
+        ->assertSee('Override set (3)', false);
 });
 
 test('bulk screening filter eligible shows only eligible items', function () {
@@ -1095,11 +1095,11 @@ test('bulk screening counts respect status filter dataset', function () {
         ->get(route('admin.bulk-intakes.show', ['bulkIntakeBatch' => $batch, 'status' => 'parsed']))
         ->assertOk()
         ->assertSee('All (6)', false)
-        ->assertSee('Eligible for consent (2)', false)
-        ->assertSee('Needs review (2)', false)
-        ->assertSee('Stopped (2)', false)
-        ->assertSee('Advisor (3)', false)
-        ->assertSee('Manual (3)', false)
+        ->assertSee('Eligible (2)', false)
+        ->assertSee('Needs check (2)', false)
+        ->assertSee('Blocked (2)', false)
+        ->assertSee('Advisor only (3)', false)
+        ->assertSee('Override set (3)', false)
         ->assertDontSee('Pending Parse Candidate', false);
 
     $this->actingAs($admin)
@@ -1139,7 +1139,7 @@ test('bulk screening filter preserves status query param in pill links', functio
         ]))
         ->assertOk()
         ->assertSee('status=parsed', false)
-        ->assertSee('screening=needs_review', false)
+        ->assertSee('screening=needs_check', false)
         ->assertSee('data-testid="bulk-screening-clear-filters"', false);
 });
 

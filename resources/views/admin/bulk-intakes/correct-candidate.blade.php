@@ -32,9 +32,9 @@
     $screeningReasons = is_array($screeningAdvisor['reasons'] ?? null) ? $screeningAdvisor['reasons'] : [];
     $readyForConsent = is_array($readyForConsent ?? null) ? $readyForConsent : ['ready' => false, 'reasons' => []];
     $isReadyForConsent = (bool) ($readyForConsent['ready'] ?? false);
-    $readyForConsentReasonLabels = [
-        'manual_screening_required' => 'Manual screening required',
-        'manual_screening_not_eligible' => 'Manual screening not eligible',
+    $readyForConsentReasonLabels = is_array($readyForConsentReasonLabels ?? null) ? $readyForConsentReasonLabels : [
+        'manual_screening_required' => 'Admin override required',
+        'manual_screening_not_eligible' => 'Admin override not eligible',
         'manual_duplicate' => 'Manual duplicate',
         'missing_mobile' => 'Missing mobile',
         'missing_identity' => 'Missing identity',
@@ -44,10 +44,10 @@
     $manualScreeningActive = $screeningReview !== null;
     $manualScreeningStatus = (string) ($screeningReview['status'] ?? '');
     $manualScreeningLabel = match ($manualScreeningStatus) {
-        'eligible_for_consent' => 'Eligible for consent',
-        'needs_review' => 'Needs review',
-        'stopped' => 'Stopped',
-        default => 'Manual screening',
+        'eligible_for_consent' => 'Override: Eligible',
+        'needs_review' => 'Override: Needs check',
+        'stopped' => 'Override: Blocked',
+        default => 'Override',
     };
     $manualScreeningBadgeClass = match ($manualScreeningStatus) {
         'eligible_for_consent' => 'border-emerald-200 bg-emerald-50 text-emerald-700',
@@ -437,8 +437,8 @@
             <div class="rounded-lg bg-white p-6 shadow" data-testid="bulk-correction-screening-advisor-card">
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                        <h2 class="text-lg font-semibold text-gray-900">Screening advisor</h2>
-                        <p class="mt-1 text-sm text-gray-600">Read-only eligibility signal for the next consent phase.</p>
+                        <h2 class="text-lg font-semibold text-gray-900">Auto suggestion</h2>
+                        <p class="mt-1 text-sm text-gray-600">Read-only automatic eligibility signal from parsed data and duplicate hints.</p>
                     </div>
                     <span data-testid="bulk-correction-screening-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $screeningBadgeClass }}">
                         {{ $screeningAdvisor['label'] ?? 'Needs review' }}
@@ -488,8 +488,8 @@
             <div id="bulk-manual-screening-card" class="rounded-lg bg-white p-6 shadow" data-testid="bulk-correction-manual-screening-card">
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                        <h2 class="text-lg font-semibold text-gray-900">Manual screening decision</h2>
-                        <p class="mt-1 text-sm text-gray-600">Stores only screening review metadata on this bulk item. Does not change item status.</p>
+                        <h2 class="text-lg font-semibold text-gray-900">Admin override</h2>
+                        <p class="mt-1 text-sm text-gray-600">Optional manual decision that overrides the auto suggestion. Stores only screening review metadata on this bulk item.</p>
                     </div>
                     @if ($manualScreeningActive)
                         <span data-testid="bulk-correction-manual-screening-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $manualScreeningBadgeClass }}">{{ $manualScreeningLabel }}</span>
@@ -498,7 +498,7 @@
 
                 @if ($screeningReasons !== [])
                     <div class="mt-4 flex flex-wrap gap-2">
-                        <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">Advisor hints</span>
+                        <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">Auto hints</span>
                         @foreach ($screeningReasons as $reason)
                             <span data-testid="bulk-correction-screening-advisor-hint" class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-600">
                                 {{ $reason['label'] ?? str_replace('_', ' ', (string) ($reason['code'] ?? 'review')) }}

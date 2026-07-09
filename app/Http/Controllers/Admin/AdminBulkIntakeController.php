@@ -13,9 +13,7 @@ use App\Services\Intake\BulkIntakeApplyPreviewService;
 use App\Services\Intake\BulkIntakeBatchService;
 use App\Services\Intake\BulkIntakeCandidateCorrectionService;
 use App\Services\Intake\BulkIntakeCandidateDisplayService;
-use App\Services\Intake\BulkIntakeCandidateScreeningAdvisorService;
-use App\Services\Intake\BulkIntakeReadyForConsentService;
-use App\Services\Intake\BulkIntakeCandidateScreeningQueueService;
+use App\Services\Intake\BulkIntakeEligibilityService;
 use App\Services\Intake\BulkIntakeCandidateScreeningReviewService;
 use App\Services\Intake\BulkIntakeDraftProfileBootstrapService;
 use App\Services\Intake\BulkIntakeDuplicateHistoryHintService;
@@ -130,10 +128,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeBatch $bulkIntakeBatch,
         BulkIntakeBatchService $batchService,
         BulkIntakeCandidateDisplayService $candidateDisplayService,
-        BulkIntakeCandidateScreeningAdvisorService $screeningAdvisorService,
-        BulkIntakeCandidateScreeningReviewService $screeningReviewService,
-        BulkIntakeCandidateScreeningQueueService $screeningQueueService,
-        BulkIntakeReadyForConsentService $readyForConsentService,
+        BulkIntakeEligibilityService $eligibilityService,
         BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService,
         BulkIntakeProgressPresenter $progressPresenter
     )
@@ -144,8 +139,9 @@ class AdminBulkIntakeController extends Controller
             $statusFilter = 'all';
         }
 
-        $screeningFilters = $screeningQueueService->screeningFilters();
-        $screeningFilter = $screeningQueueService->resolveScreeningFilter((string) $request->query('screening', 'all'));
+        $primaryScreeningFilters = $eligibilityService->primaryScreeningFilters();
+        $legacyScreeningFilters = $eligibilityService->legacyScreeningFilters();
+        $screeningFilter = $eligibilityService->resolveScreeningFilter((string) $request->query('screening', 'all'));
 
         $bulkIntakeBatch = $batchService->refreshCounters($bulkIntakeBatch);
         $bulkIntakeBatch->load('uploadedByUser:id,name,email,mobile');
@@ -171,9 +167,9 @@ class AdminBulkIntakeController extends Controller
                 (int) $item->id => $duplicateHistoryHintService->hintsForItem($item),
             ])
             ->all();
-        $screeningByItemId = $statusFilteredItems
+        $autoSuggestionByItemId = $statusFilteredItems
             ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
-                (int) $item->id => $screeningAdvisorService->advisorForItem(
+                (int) $item->id => $eligibilityService->autoSuggestionForItem(
                     $item,
                     $candidateByItemId[(int) $item->id] ?? null,
                     $duplicateHintsByItemId[(int) $item->id] ?? []
@@ -182,42 +178,37 @@ class AdminBulkIntakeController extends Controller
             ->all();
         $screeningReviewByItemId = $statusFilteredItems
             ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
-                (int) $item->id => $screeningReviewService->activeReviewForItem($item),
+                (int) $item->id => $eligibilityService->activeOverrideForItem($item),
             ])
             ->all();
         $readyForConsentByItemId = $statusFilteredItems
             ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
-                (int) $item->id => $readyForConsentService->readyForConsentForItem(
+                (int) $item->id => $eligibilityService->readyForConsentForItem(
                     $item,
                     $screeningReviewByItemId[(int) $item->id] ?? null,
                     $candidateByItemId[(int) $item->id] ?? null
                 ),
             ])
             ->all();
-        $screeningCounts = $screeningQueueService->countsForItems(
+        $defaultAutoSuggestion = [
+            'decision' => 'review',
+            'label' => 'Needs check',
+            'reasons' => [],
+            'reason_codes' => [],
+            'suggested_next_action' => '',
+        ];
+        $screeningCounts = $eligibilityService->countsForItems(
             $statusFilteredItems,
-            fn (BulkIntakeBatchItem $item): array => $screeningByItemId[(int) $item->id] ?? [
-                'decision' => 'review',
-                'label' => 'Needs review',
-                'reasons' => [],
-                'reason_codes' => [],
-                'suggested_next_action' => '',
-            ],
+            fn (BulkIntakeBatchItem $item): array => $autoSuggestionByItemId[(int) $item->id] ?? $defaultAutoSuggestion,
             fn (BulkIntakeBatchItem $item): ?array => $screeningReviewByItemId[(int) $item->id] ?? null,
             fn (BulkIntakeBatchItem $item): bool => (bool) ($readyForConsentByItemId[(int) $item->id]['ready'] ?? false),
         );
-        $readyCount = (int) ($screeningCounts[BulkIntakeCandidateScreeningQueueService::FILTER_READY] ?? 0);
+        $readyCount = (int) ($screeningCounts[BulkIntakeEligibilityService::FILTER_READY] ?? 0);
         $displayItems = $statusFilteredItems
-            ->filter(fn (BulkIntakeBatchItem $item): bool => $screeningQueueService->itemMatchesFilter(
+            ->filter(fn (BulkIntakeBatchItem $item): bool => $eligibilityService->itemMatchesFilter(
                 $screeningFilter,
                 $screeningReviewByItemId[(int) $item->id] ?? null,
-                $screeningByItemId[(int) $item->id] ?? [
-                    'decision' => 'review',
-                    'label' => 'Needs review',
-                    'reasons' => [],
-                    'reason_codes' => [],
-                    'suggested_next_action' => '',
-                ],
+                $autoSuggestionByItemId[(int) $item->id] ?? $defaultAutoSuggestion,
                 (bool) ($readyForConsentByItemId[(int) $item->id]['ready'] ?? false)
             ))
             ->values();
@@ -236,12 +227,14 @@ class AdminBulkIntakeController extends Controller
             'progress' => $progressPresenter->progressForBatch($bulkIntakeBatch),
             'candidateByItemId' => $candidateByItemId,
             'duplicateHintsByItemId' => $duplicateHintsByItemId,
-            'screeningByItemId' => $screeningByItemId,
+            'autoSuggestionByItemId' => $autoSuggestionByItemId,
+            'screeningByItemId' => $autoSuggestionByItemId,
             'screeningReviewByItemId' => $screeningReviewByItemId,
             'readyForConsentByItemId' => $readyForConsentByItemId,
             'readyCount' => $readyCount,
             'screeningFilter' => $screeningFilter,
-            'screeningFilters' => $screeningFilters,
+            'primaryScreeningFilters' => $primaryScreeningFilters,
+            'legacyScreeningFilters' => $legacyScreeningFilters,
             'screeningCounts' => $screeningCounts,
             'statusFilter' => $statusFilter,
             'statusFilters' => $statusFilters,
@@ -375,9 +368,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeBatchItem $bulkIntakeBatchItem,
         BulkIntakeCandidateCorrectionService $correctionService,
         BulkIntakeCandidateDisplayService $candidateDisplayService,
-        BulkIntakeCandidateScreeningAdvisorService $screeningAdvisorService,
-        BulkIntakeCandidateScreeningReviewService $screeningReviewService,
-        BulkIntakeReadyForConsentService $readyForConsentService,
+        BulkIntakeEligibilityService $eligibilityService,
         BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService
     ) {
         abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
@@ -386,7 +377,7 @@ class AdminBulkIntakeController extends Controller
         $correction = $correctionService->correctionDataForItem($bulkIntakeBatchItem);
         abort_unless($correction['intake'] !== null, 404);
         $duplicateHints = $duplicateHistoryHintService->hintsForItem($bulkIntakeBatchItem);
-        $screeningReview = $screeningReviewService->activeReviewForItem($bulkIntakeBatchItem);
+        $screeningReview = $eligibilityService->activeOverrideForItem($bulkIntakeBatchItem);
 
         return view('admin.bulk-intakes.correct-candidate', [
             'batch' => $bulkIntakeBatch,
@@ -399,13 +390,22 @@ class AdminBulkIntakeController extends Controller
             'imagePreview' => $correction['image_preview'],
             'canSave' => $correction['can_save'],
             'duplicateHints' => $duplicateHints,
-            'screeningAdvisor' => $screeningAdvisorService->advisorForItem($bulkIntakeBatchItem, null, $duplicateHints),
+            'screeningAdvisor' => $eligibilityService->autoSuggestionForItem($bulkIntakeBatchItem, null, $duplicateHints),
             'screeningReview' => $screeningReview,
-            'readyForConsent' => $readyForConsentService->readyForConsentForItem(
+            'readyForConsent' => $eligibilityService->readyForConsentForItem(
                 $bulkIntakeBatchItem,
                 $screeningReview,
                 $candidateDisplayService->candidateForItem($bulkIntakeBatchItem)
             ),
+            'readyForConsentReasonLabels' => collect([
+                'manual_screening_required',
+                'manual_screening_not_eligible',
+                'manual_duplicate',
+                'missing_mobile',
+                'missing_identity',
+            ])->mapWithKeys(fn (string $reason): array => [
+                $reason => $eligibilityService->readyReasonLabel($reason),
+            ])->all(),
             'screeningReviewOptions' => BulkIntakeCandidateScreeningReviewService::REASON_KEYS_BY_STATUS,
         ]);
     }
@@ -828,7 +828,7 @@ class AdminBulkIntakeController extends Controller
             'parse_queued' => 'Parse Queued',
             'parsed' => 'Parsed',
             'parse_error' => 'Parse Error',
-            'needs_review' => 'Needs Review',
+            'needs_review' => 'Parse review',
             'failed' => 'Failed',
         ];
     }

@@ -5,70 +5,55 @@ namespace App\Services\Intake;
 use App\Models\BulkIntakeBatchItem;
 use Illuminate\Support\Collection;
 
+/**
+ * @deprecated Use BulkIntakeEligibilityService. Kept for backward compatibility.
+ */
 class BulkIntakeCandidateScreeningQueueService
 {
-    public const FILTER_ALL = 'all';
+    public const FILTER_ALL = BulkIntakeEligibilityService::FILTER_ALL;
 
-    public const FILTER_ELIGIBLE = 'eligible';
+    public const FILTER_ELIGIBLE = BulkIntakeEligibilityService::FILTER_ELIGIBLE;
 
-    public const FILTER_NEEDS_REVIEW = 'needs_review';
+    public const FILTER_NEEDS_REVIEW = BulkIntakeEligibilityService::FILTER_NEEDS_REVIEW;
 
-    public const FILTER_STOPPED = 'stopped';
+    public const FILTER_STOPPED = BulkIntakeEligibilityService::FILTER_STOPPED;
 
-    public const FILTER_ADVISOR = 'advisor';
+    public const FILTER_ADVISOR = BulkIntakeEligibilityService::FILTER_ADVISOR;
 
-    public const FILTER_MANUAL = 'manual';
+    public const FILTER_MANUAL = BulkIntakeEligibilityService::FILTER_MANUAL;
 
-    public const FILTER_READY = 'ready';
+    public const FILTER_READY = BulkIntakeEligibilityService::FILTER_READY;
+
+    public function __construct(
+        private readonly BulkIntakeEligibilityService $eligibilityService,
+    ) {}
 
     /**
      * @return array<string, string>
      */
     public function screeningFilters(): array
     {
-        return [
-            self::FILTER_ALL => 'All',
-            self::FILTER_ELIGIBLE => 'Eligible for consent',
-            self::FILTER_NEEDS_REVIEW => 'Needs review',
-            self::FILTER_STOPPED => 'Stopped',
-            self::FILTER_ADVISOR => 'Advisor',
-            self::FILTER_MANUAL => 'Manual',
-            self::FILTER_READY => 'Ready',
-        ];
+        return $this->eligibilityService->allScreeningFilterLabels();
     }
 
     public function resolveScreeningFilter(string $value): string
     {
-        return array_key_exists($value, $this->screeningFilters())
-            ? $value
-            : self::FILTER_ALL;
+        return $this->eligibilityService->resolveScreeningFilter($value);
     }
 
     /**
      * @param  array<string, mixed>|null  $manualReview
      * @param  array<string, mixed>  $advisor
-     * @return array{
-     *     bucket: string,
-     *     source: string,
-     *     has_manual: bool
-     * }
+     * @return array{bucket: string, source: string, has_manual: bool}
      */
     public function effectiveScreeningForItem(?array $manualReview, array $advisor): array
     {
-        $hasManual = $this->hasActiveManualReview($manualReview);
-
-        if ($hasManual) {
-            return [
-                'bucket' => $this->manualStatusToBucket((string) ($manualReview['status'] ?? '')),
-                'source' => 'manual',
-                'has_manual' => true,
-            ];
-        }
+        $effective = $this->eligibilityService->effectiveEligibilityForItem($manualReview, $advisor);
 
         return [
-            'bucket' => $this->advisorDecisionToBucket($advisor),
-            'source' => 'advisor',
-            'has_manual' => false,
+            'bucket' => $this->legacyBucketKey((string) $effective['bucket']),
+            'source' => $effective['source'] === 'override' ? 'manual' : 'advisor',
+            'has_manual' => $effective['has_override'],
         ];
     }
 
@@ -82,25 +67,7 @@ class BulkIntakeCandidateScreeningQueueService
         array $advisor,
         ?bool $readyForConsent = null
     ): bool {
-        $filter = $this->resolveScreeningFilter($filter);
-        if ($filter === self::FILTER_ALL) {
-            return true;
-        }
-
-        if ($filter === self::FILTER_READY) {
-            return $readyForConsent === true;
-        }
-
-        $effective = $this->effectiveScreeningForItem($manualReview, $advisor);
-
-        return match ($filter) {
-            self::FILTER_ELIGIBLE => $effective['bucket'] === self::FILTER_ELIGIBLE,
-            self::FILTER_NEEDS_REVIEW => $effective['bucket'] === self::FILTER_NEEDS_REVIEW,
-            self::FILTER_STOPPED => $effective['bucket'] === self::FILTER_STOPPED,
-            self::FILTER_ADVISOR => ! $effective['has_manual'],
-            self::FILTER_MANUAL => $effective['has_manual'],
-            default => true,
-        };
+        return $this->eligibilityService->itemMatchesFilter($filter, $manualReview, $advisor, $readyForConsent);
     }
 
     /**
@@ -115,38 +82,12 @@ class BulkIntakeCandidateScreeningQueueService
         callable $manualReviewForItem,
         ?callable $readyForConsentForItem = null
     ): array {
-        $counts = [
-            self::FILTER_ALL => $items->count(),
-            self::FILTER_ELIGIBLE => 0,
-            self::FILTER_NEEDS_REVIEW => 0,
-            self::FILTER_STOPPED => 0,
-            self::FILTER_ADVISOR => 0,
-            self::FILTER_MANUAL => 0,
-            self::FILTER_READY => 0,
-        ];
-
-        foreach ($items as $item) {
-            $effective = $this->effectiveScreeningForItem(
-                $manualReviewForItem($item),
-                $advisorForItem($item)
-            );
-
-            if (array_key_exists($effective['bucket'], $counts)) {
-                $counts[$effective['bucket']]++;
-            }
-
-            if ($effective['has_manual']) {
-                $counts[self::FILTER_MANUAL]++;
-            } else {
-                $counts[self::FILTER_ADVISOR]++;
-            }
-
-            if ($readyForConsentForItem !== null && $readyForConsentForItem($item) === true) {
-                $counts[self::FILTER_READY]++;
-            }
-        }
-
-        return $counts;
+        return $this->eligibilityService->countsForItems(
+            $items,
+            $advisorForItem,
+            $manualReviewForItem,
+            $readyForConsentForItem
+        );
     }
 
     /**
@@ -154,35 +95,15 @@ class BulkIntakeCandidateScreeningQueueService
      */
     public function hasActiveManualReview(?array $manualReview): bool
     {
-        if ($manualReview === null) {
-            return false;
-        }
-
-        return in_array((string) ($manualReview['status'] ?? ''), [
-            BulkIntakeCandidateScreeningReviewService::STATUS_ELIGIBLE,
-            BulkIntakeCandidateScreeningReviewService::STATUS_NEEDS_REVIEW,
-            BulkIntakeCandidateScreeningReviewService::STATUS_STOPPED,
-        ], true);
+        return $this->eligibilityService->hasActiveOverride($manualReview);
     }
 
-    /**
-     * @param  array<string, mixed>  $advisor
-     */
-    private function advisorDecisionToBucket(array $advisor): string
+    private function legacyBucketKey(string $bucket): string
     {
-        return match ((string) ($advisor['decision'] ?? 'review')) {
-            'eligible' => self::FILTER_ELIGIBLE,
-            'stop' => self::FILTER_STOPPED,
-            default => self::FILTER_NEEDS_REVIEW,
-        };
-    }
-
-    private function manualStatusToBucket(string $status): string
-    {
-        return match ($status) {
-            BulkIntakeCandidateScreeningReviewService::STATUS_ELIGIBLE => self::FILTER_ELIGIBLE,
-            BulkIntakeCandidateScreeningReviewService::STATUS_STOPPED => self::FILTER_STOPPED,
-            default => self::FILTER_NEEDS_REVIEW,
+        return match ($bucket) {
+            BulkIntakeEligibilityService::FILTER_BLOCKED => self::FILTER_STOPPED,
+            BulkIntakeEligibilityService::FILTER_NEEDS_CHECK => self::FILTER_NEEDS_REVIEW,
+            default => $bucket,
         };
     }
 }
