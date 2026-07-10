@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Intake\BulkIntakeCandidateCorrectionService;
 use App\Services\Intake\BulkIntakePublicRegistrationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class BulkIntakePublicRegistrationController extends Controller
 {
@@ -23,6 +25,23 @@ class BulkIntakePublicRegistrationController extends Controller
             'token' => $token,
             'payload' => $payload,
         ]);
+    }
+
+    public function photo(
+        string $token,
+        BulkIntakePublicRegistrationService $registrationService,
+        BulkIntakeCandidateCorrectionService $correctionService
+    ): BinaryFileResponse {
+        $item = $registrationService->itemForToken($token);
+        abort_unless($item !== null, 404);
+
+        $gate = $registrationService->accessGate($item);
+        abort_unless($gate['allowed'], 403);
+
+        $response = $correctionService->evidenceImageResponse($item);
+        abort_unless($response !== null, 404);
+
+        return $response;
     }
 
     public function store(string $token, Request $request, BulkIntakePublicRegistrationService $registrationService): RedirectResponse

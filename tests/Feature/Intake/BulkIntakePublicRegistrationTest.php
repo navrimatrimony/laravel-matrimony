@@ -17,12 +17,15 @@ test('public registration page opens with token after consent received', functio
     $this->get($url)
         ->assertOk()
         ->assertSee('बायोडाटा नोंदणी पुष्टी')
-        ->assertSee('Registration Candidate');
+        ->assertSee('Registration Candidate')
+        ->assertSee('व्यवसाय')
+        ->assertDontSee('खालील माहिती तपासा');
 });
 
 test('public registration save stores cm height and marks registration complete', function () {
     $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
     $masters = registrationMasterIds();
+    $career = registrationCareerMasters();
     $service = app(BulkIntakePublicRegistrationService::class);
     $url = $service->publicUrl($item);
 
@@ -38,8 +41,8 @@ test('public registration save stores cm height and marks registration complete'
         'caste_id' => $masters['caste_id'],
         'location' => 'Pune',
         'education' => 'B.E. Computer',
-        'working_with' => 'private_company',
-        'occupation' => 'Software Engineer',
+        'working_with_type_id' => $career['working_with_type_id'],
+        'occupation_master_id' => $career['occupation_master_id'],
     ])->assertRedirect($url);
 
     $item->refresh();
@@ -48,6 +51,7 @@ test('public registration save stores cm height and marks registration complete'
         ->and(data_get($intake->approval_snapshot_json, 'core.full_name'))->toBe('Updated Candidate')
         ->and((int) data_get($intake->approval_snapshot_json, 'core.height_cm'))->toBe(170)
         ->and((string) data_get($intake->approval_snapshot_json, 'core.height'))->toBe("5'7\"")
+        ->and((int) data_get($intake->approval_snapshot_json, 'core.occupation_master_id'))->toBe($career['occupation_master_id'])
         ->and(app(BulkIntakeRegistrationService::class)->registrationStatus($item))
         ->toBe(BulkIntakeRegistrationService::STATUS_REGISTRATION_COMPLETE);
 });

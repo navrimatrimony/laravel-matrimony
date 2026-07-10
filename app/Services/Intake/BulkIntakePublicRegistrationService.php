@@ -7,17 +7,29 @@ use App\Models\BulkIntakeBatchItem;
 use App\Models\MasterGender;
 use App\Models\MasterMaritalStatus;
 use App\Models\MasterMotherTongue;
+use App\Models\OccupationMaster;
 use App\Models\Religion;
 use App\Models\Caste;
+use App\Models\WorkingWithType;
 use App\Support\HeightDisplay;
 use App\Support\MobileNumber;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class BulkIntakePublicRegistrationService
 {
     private const TOKEN_BYTES = 32;
+
+    /** @var list<string> */
+    private const OCCUPATION_EXEMPT_SLUGS = [
+        'not_working',
+        'unemployed',
+        'home_maker',
+        'retired',
+        'student',
+    ];
 
     public function __construct(
         private readonly BulkIntakeCandidateDisplayService $candidateDisplayService,
@@ -96,7 +108,10 @@ class BulkIntakePublicRegistrationService
      *     marital_statuses: list<array{id: int, label: string}>,
      *     religions: list<array{id: int, label: string}>,
      *     castes: list<array{id: int, label: string}>,
-     *     working_with_options: list<array{value: string, label: string}>,
+     *     working_with_options: list<array{id: int, slug: string, label: string}>,
+     *     occupations: list<array{id: int, label: string, working_with_type_id: int|null}>,
+     *     occupation_exempt_slugs: list<string>,
+     *     photo_preview: array{available: bool, url: string|null, label: string|null, message: string|null},
      *     registration_complete: bool
      * }
      */
@@ -113,6 +128,7 @@ class BulkIntakePublicRegistrationService
         $core = is_array($snapshot['core'] ?? null) ? $snapshot['core'] : [];
         $candidate = $this->candidateDisplayService->candidateForItem($item);
         $heightCm = $this->heightCmFromCore($core);
+        $token = $this->ensureToken($item);
 
         return [
             'item' => $item,
@@ -129,8 +145,8 @@ class BulkIntakePublicRegistrationService
                 'caste_id' => $this->intOrNull($core['caste_id'] ?? null),
                 'location' => $candidate['city'] ?? $core['city_text'] ?? $core['address_line'] ?? null,
                 'education' => $candidate['education'] ?? $core['highest_education'] ?? null,
-                'working_with' => $this->stringOrNull($core['working_with'] ?? null),
-                'occupation' => $candidate['occupation'] ?? $this->occupationText($core),
+                'working_with_type_id' => $this->workingWithTypeIdFromCore($core),
+                'occupation_master_id' => $this->occupationMasterIdFromCore($core),
                 'company_name' => $this->stringOrNull($core['company_name'] ?? null),
                 'annual_income' => $this->stringOrNull($core['annual_income'] ?? $core['income_amount'] ?? null),
             ],
@@ -141,6 +157,9 @@ class BulkIntakePublicRegistrationService
             'religions' => $this->religionOptions(),
             'castes' => $this->casteOptions(),
             'working_with_options' => $this->workingWithOptions(),
+            'occupations' => $this->occupationOptions(),
+            'occupation_exempt_slugs' => self::OCCUPATION_EXEMPT_SLUGS,
+            'photo_preview' => $this->biodataPhotoPreview($item, $intake, $token),
             'registration_complete' => $this->registrationComplete($item),
         ];
     }
@@ -176,16 +195,38 @@ class BulkIntakePublicRegistrationService
             'caste_id' => ['required', 'integer', 'exists:master_castes,id'],
             'location' => ['required', 'string', 'max:255'],
             'education' => ['required', 'string', 'max:255'],
-            'working_with' => ['required', 'string', 'max:64'],
-            'occupation' => ['required_unless:working_with,not_working,unemployed,home_maker,retired', 'nullable', 'string', 'max:255'],
+            'working_with_type_id' => ['required', 'integer', 'exists:working_with_types,id'],
+            'occupation_master_id' => ['nullable', 'integer', 'exists:master_occupations,id'],
             'company_name' => ['nullable', 'string', 'max:255'],
             'annual_income' => ['nullable', 'string', 'max:64'],
+        ], [
+            'full_name.required' => 'नाव आवश्यक आहे.',
+            'mobile.required' => 'मोबाईल नंबर आवश्यक आहे.',
+            'date_of_birth.required' => 'जन्मतारीख आवश्यक आहे.',
+            'height_cm.required' => 'उंची निवडा.',
+            'gender.required' => 'लिंग निवडा.',
+            'mother_tongue_id.required' => 'मातृभाषा निवडा.',
+            'marital_status_id.required' => 'वैवाहिक स्थिती निवडा.',
+            'religion_id.required' => 'धर्म निवडा.',
+            'caste_id.required' => 'जात निवडा.',
+            'location.required' => 'ठिकाण भरा.',
+            'education.required' => 'शिक्षण भरा.',
+            'working_with_type_id.required' => 'कामाचा प्रकार निवडा.',
+            'occupation_master_id.exists' => 'व्यवसाय यादीतून निवडा.',
         ])->validate();
+
+        $workingWithType = WorkingWithType::query()->find((int) $validated['working_with_type_id']);
+        $workingWithSlug = $this->stringOrNull($workingWithType?->slug);
+        if (! $this->isOccupationExempt($workingWithSlug) && empty($validated['occupation_master_id'])) {
+            throw ValidationException::withMessages([
+                'occupation_master_id' => 'कृपया व्यवसाय निवडा.',
+            ]);
+        }
 
         $mobile = MobileNumber::normalize($validated['mobile']);
         if ($mobile === null) {
             throw ValidationException::withMessages([
-                'mobile' => 'Enter a valid 10-digit mobile number.',
+                'mobile' => 'वैध १० अंकी मोबाईल नंबर भरा.',
             ]);
         }
 
@@ -245,14 +286,24 @@ class BulkIntakePublicRegistrationService
         $snapshot['core']['city_text'] = trim((string) $input['location']);
         $snapshot['core']['address_line'] = trim((string) $input['location']);
         $snapshot['core']['highest_education'] = trim((string) $input['education']);
-        $snapshot['core']['working_with'] = trim((string) $input['working_with']);
+        $snapshot['core']['working_with_type_id'] = (int) $input['working_with_type_id'];
+
+        $workingWithType = WorkingWithType::query()->find((int) $input['working_with_type_id']);
+        $snapshot['core']['working_with'] = $this->stringOrNull($workingWithType?->slug) ?? '';
         $snapshot['core']['company_name'] = $this->stringOrNull($input['company_name'] ?? null);
         $snapshot['core']['annual_income'] = $this->stringOrNull($input['annual_income'] ?? null);
 
-        $occupation = $this->stringOrNull($input['occupation'] ?? null);
-        if ($occupation !== null) {
-            $snapshot['core']['occupation_title'] = $occupation;
-            $snapshot['core']['occupation'] = $occupation;
+        $occupationMasterId = $this->intOrNull($input['occupation_master_id'] ?? null);
+        if ($occupationMasterId !== null) {
+            $occupation = OccupationMaster::query()->find($occupationMasterId);
+            $snapshot['core']['occupation_master_id'] = $occupationMasterId;
+            $title = $occupation ? $this->preferredLabel($occupation, 'name_mr', 'name') : null;
+            if ($title !== '') {
+                $snapshot['core']['occupation_title'] = $title;
+                $snapshot['core']['occupation'] = $title;
+            }
+        } else {
+            unset($snapshot['core']['occupation_master_id'], $snapshot['core']['occupation_title'], $snapshot['core']['occupation']);
         }
 
         $snapshot = $this->intakePipeline->normalizeBulkCandidateCorrectionSnapshot($snapshot);
@@ -463,17 +514,153 @@ class BulkIntakePublicRegistrationService
     }
 
     /**
-     * @return list<array{value: string, label: string}>
+     * @return list<array{id: int, slug: string, label: string}>
      */
     private function workingWithOptions(): array
     {
+        return WorkingWithType::query()
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (WorkingWithType $row): array => [
+                'id' => (int) $row->id,
+                'slug' => (string) ($row->slug ?? ''),
+                'label' => $this->preferredLabel($row, 'name_mr', 'name'),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<array{id: int, label: string, working_with_type_id: int|null}>
+     */
+    private function occupationOptions(): array
+    {
+        return OccupationMaster::query()
+            ->with('category')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get()
+            ->map(function (OccupationMaster $row): array {
+                $workingWithTypeId = $row->category?->legacy_working_with_type_id;
+
+                return [
+                    'id' => (int) $row->id,
+                    'label' => $this->preferredLabel($row, 'name_mr', 'name'),
+                    'working_with_type_id' => is_numeric($workingWithTypeId) ? (int) $workingWithTypeId : null,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array{available: bool, url: string|null, label: string|null, message: string|null}
+     */
+    private function biodataPhotoPreview(BulkIntakeBatchItem $item, BiodataIntake $intake, string $token): array
+    {
+        $relativePath = $this->previewableImagePath($item, $intake);
+        if ($relativePath === null) {
+            return [
+                'available' => false,
+                'url' => null,
+                'label' => null,
+                'message' => 'बायोडाटा फोटो उपलब्ध नाही.',
+            ];
+        }
+
+        if (! Storage::disk('local')->exists($relativePath)) {
+            return [
+                'available' => false,
+                'url' => null,
+                'label' => null,
+                'message' => 'बायोडाटा फाइल सापडली नाही.',
+            ];
+        }
+
         return [
-            ['value' => 'private_company', 'label' => 'खाजगी नोकरी'],
-            ['value' => 'government', 'label' => 'शासकीय नोकरी'],
-            ['value' => 'business', 'label' => 'व्यवसाय'],
-            ['value' => 'self_employed', 'label' => 'स्वयंरोजगार'],
-            ['value' => 'not_working', 'label' => 'काम करत नाही'],
+            'available' => true,
+            'url' => route('bulk-intake.register.photo', ['token' => $token]),
+            'label' => $intake->original_filename ?: $item->original_filename ?: basename($relativePath),
+            'message' => null,
         ];
+    }
+
+    private function previewableImagePath(BulkIntakeBatchItem $item, BiodataIntake $intake): ?string
+    {
+        $relativePath = $this->stringOrNull($intake->file_path) ?? $this->stringOrNull($item->source_file_path);
+        if ($relativePath === null) {
+            return null;
+        }
+
+        $extension = strtolower(pathinfo($relativePath, PATHINFO_EXTENSION));
+        if (! in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+            return null;
+        }
+
+        return $relativePath;
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function workingWithTypeIdFromCore(array $core): ?int
+    {
+        if (isset($core['working_with_type_id']) && is_numeric($core['working_with_type_id'])) {
+            return (int) $core['working_with_type_id'];
+        }
+
+        $slug = $this->normalizeWorkingWithSlug($core['working_with'] ?? null);
+        if ($slug === null) {
+            return null;
+        }
+
+        $row = WorkingWithType::query()->where('slug', $slug)->first();
+
+        return $row ? (int) $row->id : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function occupationMasterIdFromCore(array $core): ?int
+    {
+        if (isset($core['occupation_master_id']) && is_numeric($core['occupation_master_id'])) {
+            return (int) $core['occupation_master_id'];
+        }
+
+        $text = $this->occupationText($core);
+        if ($text === null) {
+            return null;
+        }
+
+        $row = OccupationMaster::query()
+            ->where('name', $text)
+            ->orWhere('name_mr', $text)
+            ->orWhere('normalized_name', mb_strtolower($text, 'UTF-8'))
+            ->first();
+
+        return $row ? (int) $row->id : null;
+    }
+
+    private function normalizeWorkingWithSlug(mixed $value): ?string
+    {
+        $slug = $this->stringOrNull($value);
+        if ($slug === null) {
+            return null;
+        }
+
+        return match ($slug) {
+            'government' => 'government_public_sector',
+            'business', 'self_employed' => 'business_self_employed',
+            default => $slug,
+        };
+    }
+
+    private function isOccupationExempt(?string $workingWithSlug): bool
+    {
+        return in_array((string) $workingWithSlug, self::OCCUPATION_EXEMPT_SLUGS, true);
     }
 
     private function normalizedGenderLabel(mixed $value): ?string

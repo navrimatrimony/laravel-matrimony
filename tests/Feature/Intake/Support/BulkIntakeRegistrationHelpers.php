@@ -53,6 +53,32 @@ function registrationItem(BulkIntakeBatch $batch, BiodataIntake $intake, array $
     ], $overrides));
 }
 
+function registrationCareerMasters(): array
+{
+    $workingWithType = \App\Models\WorkingWithType::query()->firstOrCreate(
+        ['slug' => 'private_company'],
+        ['name' => 'Private Company', 'name_mr' => 'खाजगी कंपनी', 'sort_order' => 10, 'is_active' => true]
+    );
+    $category = \App\Models\OccupationCategory::query()->firstOrCreate(
+        ['name' => 'Test Occupation Category'],
+        ['legacy_working_with_type_id' => $workingWithType->id, 'sort_order' => 1]
+    );
+    $occupation = \App\Models\OccupationMaster::query()->firstOrCreate(
+        ['name' => 'Software Engineer'],
+        [
+            'name_mr' => 'सॉफ्टवेअर अभियंता',
+            'normalized_name' => 'software engineer',
+            'category_id' => $category->id,
+            'sort_order' => 1,
+        ]
+    );
+
+    return [
+        'working_with_type_id' => (int) $workingWithType->id,
+        'occupation_master_id' => (int) $occupation->id,
+    ];
+}
+
 /**
  * @return array{gender_id: int, mother_tongue_id: int, marital_status_id: int, religion_id: int, caste_id: int}
  */
