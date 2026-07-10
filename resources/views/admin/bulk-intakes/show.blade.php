@@ -724,8 +724,8 @@
                                                 @if ($whatsappManualTestEnabled && $registrationWhatsAppShareUrl !== '')
                                                     <a href="{{ $registrationWhatsAppShareUrl }}" target="_blank" rel="noopener" data-testid="bulk-open-registration-whatsapp-test" class="mt-2 inline-flex text-sm font-medium text-emerald-700 hover:text-emerald-900">Open summary on WhatsApp</a>
                                                 @endif
-                                                @if ($intake)
-                                                    <a href="{{ route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]) }}" data-testid="bulk-registration-web-edit" class="mt-2 block text-sm font-medium text-indigo-700 hover:text-indigo-900">वेबवर सर्व edit करा</a>
+                                                @if ($consentReceived && ($registrationSummary['public_url'] ?? '') !== '')
+                                                    <a href="{{ $registrationSummary['public_url'] }}" target="_blank" rel="noopener" data-testid="bulk-registration-web-edit" class="mt-2 block text-sm font-medium text-indigo-700 hover:text-indigo-900">वेबवर सर्व edit करा (user link)</a>
                                                 @endif
                                                 @if ($canSimulateRegistrationComplete)
                                                     <form method="POST" action="{{ route('admin.bulk-intakes.items.simulate-registration-complete', [$batch, $item]) }}" class="mt-2">

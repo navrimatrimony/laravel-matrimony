@@ -4,7 +4,13 @@ namespace App\Services\Intake;
 
 use App\Contracts\Intake\BulkIntakeWhatsAppConsentSender;
 use App\Models\BulkIntakeBatchItem;
+use App\Models\Caste;
+use App\Models\MasterGender;
+use App\Models\MasterMaritalStatus;
+use App\Models\MasterMotherTongue;
+use App\Models\Religion;
 use App\Models\User;
+use App\Support\HeightDisplay;
 use App\Support\MobileNumber;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -33,6 +39,7 @@ class BulkIntakeRegistrationService
         private readonly BulkIntakeCandidateDisplayService $candidateDisplayService,
         private readonly BulkIntakeWhatsAppConsentService $whatsappConsentService,
         private readonly BulkIntakeWhatsAppConsentSender $whatsappSender,
+        private readonly BulkIntakePublicRegistrationService $publicRegistrationService,
     ) {}
 
     /**
@@ -86,42 +93,48 @@ class BulkIntakeRegistrationService
         ];
     }
 
+    public function publicRegistrationUrl(BulkIntakeBatchItem $item): string
+    {
+        return $this->publicRegistrationService->publicUrl($item);
+    }
+
     /**
      * @return array{
      *     fields: list<array{key: string, label: string, value: string|null, status: string, icon: string}>,
+     *     registration_fields: list<array{key: string, label: string, value: string|null, status: string, icon: string}>,
      *     path: string,
      *     path_label: string,
      *     warning_count: int,
      *     reviewed_snapshot_present: bool,
-     *     display_source: string
+     *     display_source: string,
+     *     public_url: string
      * }
      */
     public function summaryForItem(BulkIntakeBatchItem $item): array
     {
         $candidate = $this->candidateDisplayService->candidateForItem($item);
         $reviewed = (bool) ($candidate['reviewed_snapshot_present'] ?? false);
-        $fields = [
-            $this->summaryField('full_name', 'नाव', $candidate['full_name'] ?? null, (bool) ($candidate['name_needs_review'] ?? false), $reviewed),
-            $this->summaryField('gender', 'लिंग', $candidate['gender'] ?? null, false, $reviewed),
-            $this->summaryField('date_of_birth', 'जन्मतारीख', $this->dobDisplay($candidate), (bool) ($candidate['dob_needs_review'] ?? false), $reviewed),
-            $this->summaryField('height', 'उंची', $candidate['height'] ?? null, (bool) ($candidate['height_needs_review'] ?? false), $reviewed),
-            $this->summaryField('education', 'शिक्षण', $candidate['education'] ?? null, (bool) ($candidate['education_needs_review'] ?? false), $reviewed),
-            $this->summaryField('city', 'ठिकाण', $candidate['city'] ?? null, false, $reviewed),
-            $this->summaryField('mobile', 'मोबाईल', $candidate['mobile'] ?? null, false, $reviewed),
-        ];
+        $registrationFields = $this->registrationFieldsForItem($item, $candidate, $reviewed);
+        $previewKeys = BulkIntakeRegistrationFieldCatalog::SUMMARY_PREVIEW_KEYS;
+        $fields = array_values(array_filter(
+            $registrationFields,
+            fn (array $field): bool => in_array((string) ($field['key'] ?? ''), $previewKeys, true)
+        ));
 
-        $warningCount = collect($fields)
+        $warningCount = collect($registrationFields)
             ->filter(fn (array $field): bool => in_array((string) ($field['status'] ?? ''), [self::FIELD_NEEDS_CHECK, self::FIELD_MISSING], true))
             ->count();
         $path = $this->pathForWarningCount($warningCount);
 
         return [
             'fields' => $fields,
+            'registration_fields' => $registrationFields,
             'path' => $path,
             'path_label' => $this->pathLabel($path),
             'warning_count' => $warningCount,
             'reviewed_snapshot_present' => $reviewed,
             'display_source' => (string) ($candidate['display_source'] ?? 'parsed_json'),
+            'public_url' => $this->publicRegistrationUrl($item),
         ];
     }
 
@@ -151,8 +164,10 @@ class BulkIntakeRegistrationService
         $lines[] = '';
         $lines[] = $this->pathInstructionLine((string) $summary['path']);
         $lines[] = '';
+        $lines[] = 'वेबवर सर्व माहिती एकाच पानावर पहा/बदला:';
+        $lines[] = (string) ($summary['public_url'] ?? $this->publicRegistrationUrl($item));
+        $lines[] = '';
         $lines[] = 'इतर पर्याय:';
-        $lines[] = '• वेबवर सर्व edit करा';
         $lines[] = '• App/Website वरून नोंदणी';
         $lines[] = '• रिकामा form WhatsApp वर मागवा';
 
@@ -300,7 +315,12 @@ class BulkIntakeRegistrationService
     private function persistSummarySent(BulkIntakeBatchItem $item, User $actor, array $summary, ?int $sessionId): void
     {
         $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
-        $meta['registration'] = [
+        $existing = is_array($meta['registration'] ?? null) ? $meta['registration'] : [];
+        $publicToken = trim((string) ($existing['public_token'] ?? ''));
+        if ($publicToken === '') {
+            $publicToken = $this->publicRegistrationService->ensureToken($item);
+        }
+        $meta['registration'] = array_merge($existing, [
             'status' => self::STATUS_SUMMARY_SENT,
             'path' => (string) $summary['path'],
             'warning_count' => (int) $summary['warning_count'],
@@ -310,7 +330,8 @@ class BulkIntakeRegistrationService
             'intake_whatsapp_session_id' => $sessionId,
             'completed_at' => null,
             'completed_via' => null,
-        ];
+            'public_token' => $publicToken,
+        ]);
 
         $item->forceFill(['item_meta_json' => $meta])->save();
     }
@@ -332,12 +353,152 @@ class BulkIntakeRegistrationService
         return null;
     }
 
+    /**
+     * @param  array<string, mixed>  $candidate
+     * @return list<array{key: string, label: string, value: string|null, status: string, icon: string}>
+     */
+    private function registrationFieldsForItem(BulkIntakeBatchItem $item, array $candidate, bool $reviewed): array
+    {
+        $core = $this->snapshotCore($item);
+        $notWorking = in_array((string) ($core['working_with'] ?? ''), ['not_working', 'unemployed', 'home_maker', 'retired'], true);
+
+        $rows = [
+            $this->summaryField('full_name', BulkIntakeRegistrationFieldCatalog::label('full_name'), $candidate['full_name'] ?? null, (bool) ($candidate['name_needs_review'] ?? false), $reviewed),
+            $this->summaryField('mobile', BulkIntakeRegistrationFieldCatalog::label('mobile'), $candidate['mobile'] ?? null, false, $reviewed),
+            $this->summaryField('date_of_birth', BulkIntakeRegistrationFieldCatalog::label('date_of_birth'), $this->dobDisplay($candidate), (bool) ($candidate['dob_needs_review'] ?? false), $reviewed),
+            $this->summaryField('height_cm', BulkIntakeRegistrationFieldCatalog::label('height_cm'), $this->heightDisplayValue($core, $candidate), (bool) ($candidate['height_needs_review'] ?? false), $reviewed),
+            $this->summaryField('gender', BulkIntakeRegistrationFieldCatalog::label('gender'), $candidate['gender'] ?? null, false, $reviewed),
+            $this->summaryField('mother_tongue', BulkIntakeRegistrationFieldCatalog::label('mother_tongue'), $this->motherTongueLabel($core), false, $reviewed),
+            $this->summaryField('marital_status', BulkIntakeRegistrationFieldCatalog::label('marital_status'), $this->maritalStatusLabel($core), false, $reviewed),
+            $this->summaryField('religion', BulkIntakeRegistrationFieldCatalog::label('religion'), $this->religionLabel($core), false, $reviewed),
+            $this->summaryField('caste', BulkIntakeRegistrationFieldCatalog::label('caste'), $this->casteLabel($core), false, $reviewed),
+            $this->summaryField('location', BulkIntakeRegistrationFieldCatalog::label('location'), $candidate['city'] ?? null, false, $reviewed),
+            $this->summaryField('education', BulkIntakeRegistrationFieldCatalog::label('education'), $candidate['education'] ?? null, (bool) ($candidate['education_needs_review'] ?? false), $reviewed),
+            $this->summaryField('working_with', BulkIntakeRegistrationFieldCatalog::label('working_with'), $this->workingWithLabel($core), false, $reviewed),
+            $this->summaryField('occupation', BulkIntakeRegistrationFieldCatalog::label('occupation'), $notWorking ? '—' : ($candidate['occupation'] ?? null), (bool) ($candidate['occupation_needs_review'] ?? false), $reviewed, $notWorking),
+        ];
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     * @param  array<string, mixed>  $candidate
+     */
+    private function heightDisplayValue(array $core, array $candidate): ?string
+    {
+        $heightCm = $core['height_cm'] ?? null;
+        if (is_numeric($heightCm)) {
+            $cm = (int) round((float) $heightCm);
+            if ($cm >= 120 && $cm <= 220) {
+                return HeightDisplay::formatFeetInches($cm);
+            }
+        }
+
+        $text = is_string($candidate['height'] ?? null) ? trim($candidate['height']) : null;
+
+        return $text !== '' ? $text : null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function snapshotCore(BulkIntakeBatchItem $item): array
+    {
+        $item->loadMissing('biodataIntake');
+        $intake = $item->biodataIntake;
+        if (! $intake) {
+            return [];
+        }
+
+        $snapshot = is_array($intake->approval_snapshot_json) && $intake->approval_snapshot_json !== []
+            ? $intake->approval_snapshot_json
+            : (is_array($intake->parsed_json) ? $intake->parsed_json : []);
+
+        return is_array($snapshot['core'] ?? null) ? $snapshot['core'] : [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function motherTongueLabel(array $core): ?string
+    {
+        $id = $core['mother_tongue_id'] ?? null;
+        if (! is_numeric($id)) {
+            return null;
+        }
+        $row = MasterMotherTongue::query()->find((int) $id);
+
+        return $row ? (string) ($row->label_mr ?: $row->label_en ?: $row->label) : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function maritalStatusLabel(array $core): ?string
+    {
+        $id = $core['marital_status_id'] ?? null;
+        if (! is_numeric($id)) {
+            return null;
+        }
+        $row = MasterMaritalStatus::query()->find((int) $id);
+
+        return $row ? (string) ($row->label_mr ?: $row->label_en ?: $row->label ?: $row->key) : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function religionLabel(array $core): ?string
+    {
+        $id = $core['religion_id'] ?? null;
+        if (! is_numeric($id)) {
+            return null;
+        }
+        $row = Religion::query()->find((int) $id);
+
+        return $row ? (string) ($row->label_mr ?: $row->label_en ?: $row->label) : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function casteLabel(array $core): ?string
+    {
+        $id = $core['caste_id'] ?? null;
+        if (! is_numeric($id)) {
+            return null;
+        }
+        $row = Caste::query()->find((int) $id);
+
+        return $row ? (string) ($row->label_mr ?: $row->label_en ?: $row->label) : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function workingWithLabel(array $core): ?string
+    {
+        $value = trim((string) ($core['working_with'] ?? ''));
+
+        return match ($value) {
+            'private_company' => 'खाजगी नोकरी',
+            'government' => 'शासकीय नोकरी',
+            'business' => 'व्यवसाय',
+            'self_employed' => 'स्वयंरोजगार',
+            'not_working' => 'काम करत नाही',
+            '' => null,
+            default => $value,
+        };
+    }
+
     private function summaryField(
         string $key,
         string $label,
         mixed $value,
         bool $needsReview,
-        bool $reviewedSnapshotPresent
+        bool $reviewedSnapshotPresent,
+        bool $optionalWhenPresent = false
     ): array {
         $value = is_string($value) ? trim($value) : null;
         if ($value === '') {
@@ -345,6 +506,7 @@ class BulkIntakeRegistrationService
         }
 
         $status = match (true) {
+            $optionalWhenPresent => self::FIELD_OK,
             $value === null => self::FIELD_MISSING,
             $needsReview && ! $reviewedSnapshotPresent => self::FIELD_NEEDS_CHECK,
             default => self::FIELD_OK,

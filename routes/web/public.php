@@ -138,6 +138,11 @@ Route::get('/share/profile/{id}', [PublicProfileShareController::class, 'show'])
     ->whereNumber('id')
     ->name('profile.share.public');
 
+Route::get('/register/biodata/{token}', [\App\Http\Controllers\BulkIntakePublicRegistrationController::class, 'show'])
+    ->name('bulk-intake.register.show');
+Route::post('/register/biodata/{token}', [\App\Http\Controllers\BulkIntakePublicRegistrationController::class, 'store'])
+    ->name('bulk-intake.register.store');
+
 // Local-only smoke route (not exposed in production)
 if (app()->environment('local')) {
     Route::get('/phase5-test', function () {

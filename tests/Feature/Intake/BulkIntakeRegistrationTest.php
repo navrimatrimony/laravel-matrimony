@@ -11,6 +11,8 @@ use Illuminate\Validation\ValidationException;
 
 uses(RefreshDatabase::class);
 
+require __DIR__.'/Support/BulkIntakeRegistrationHelpers.php';
+
 test('registration summary is blocked until consent received', function () {
     $admin = registrationAdmin();
     $item = registrationEligibleItem();
@@ -20,7 +22,7 @@ test('registration summary is blocked until consent received', function () {
 });
 
 test('consent received candidate gets fast path when all fields look ready', function () {
-    $item = registrationConsentReceivedItem();
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
 
     $summary = app(BulkIntakeRegistrationService::class)->summaryForItem($item);
 
@@ -32,11 +34,11 @@ test('consent received candidate gets fast path when all fields look ready', fun
 test('missing mobile marks targeted or full registration path', function () {
     $item = registrationEligibleItem([
         'parsed_json' => [
-            'core' => [
+            'core' => array_merge(registrationCompleteParsedJson()['parsed_json']['core'], [
                 'full_name' => 'Missing Mobile Registration',
-                'date_of_birth' => '1998-04-15',
-                'gender' => 'female',
-            ],
+                'primary_contact_number' => null,
+                'all_contact_numbers' => [],
+            ]),
         ],
     ]);
     $item = registrationMarkConsentReceived($item);
@@ -66,7 +68,7 @@ test('admin can send registration summary after consent received', function () {
 
 test('fast path registration complete can be simulated after summary sent', function () {
     $admin = registrationAdmin();
-    $item = registrationConsentReceivedItem();
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
     $registrationService = app(BulkIntakeRegistrationService::class);
     $registrationService->sendRegistrationSummary($item, $admin);
 
@@ -84,7 +86,7 @@ test('fast path registration complete can be simulated after summary sent', func
 
 test('batch show renders registration summary block after consent received', function () {
     $admin = registrationAdmin();
-    $item = registrationConsentReceivedItem();
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
     $batch = BulkIntakeBatch::query()->findOrFail((int) $item->bulk_intake_batch_id);
 
     $this->actingAs($admin)
@@ -98,103 +100,27 @@ test('batch show renders registration summary block after consent received', fun
 });
 
 test('registration summary message uses display text not raw codes', function () {
-    $item = registrationConsentReceivedItem();
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
     $message = app(BulkIntakeRegistrationService::class)->buildSummaryMessage($item);
 
     expect($message)->toContain('✓ नाव:')
         ->and($message)->not->toContain('gender_id')
-        ->and($message)->toContain('नोंदणी पूर्ण करा');
+        ->and($message)->toContain('नोंदणी पूर्ण करा')
+        ->and($message)->toContain('/register/biodata/');
 });
 
-function registrationAdmin(): User
-{
-    return User::factory()->create([
-        'is_admin' => true,
-        'admin_role' => 'super_admin',
-    ]);
-}
-
-function registrationBatch(User $admin): BulkIntakeBatch
-{
-    return BulkIntakeBatch::create([
-        'uploaded_by_user_id' => $admin->id,
-        'uploaded_by_actor_type' => BulkIntakeBatch::ACTOR_ADMIN,
-        'source_surface' => BulkIntakeBatch::SURFACE_ADMIN_PANEL,
-        'batch_name' => 'Registration batch',
-        'batch_status' => BulkIntakeBatch::STATUS_COMPLETED,
-    ]);
-}
-
-function registrationIntake(array $overrides = []): BiodataIntake
-{
-    return BiodataIntake::create(array_merge([
-        'uploaded_by' => null,
-        'raw_ocr_text' => 'Registration OCR',
-        'parsed_json' => [],
-        'intake_status' => 'uploaded',
-        'parse_status' => 'parsed',
-        'parser_version' => 'rules_only',
-        'snapshot_schema_version' => 1,
-        'approved_by_user' => false,
-        'intake_locked' => false,
-    ], $overrides));
-}
-
-function registrationItem(BulkIntakeBatch $batch, BiodataIntake $intake, array $overrides = []): BulkIntakeBatchItem
-{
-    return BulkIntakeBatchItem::create(array_merge([
-        'bulk_intake_batch_id' => $batch->id,
-        'biodata_intake_id' => $intake->id,
-        'item_sequence' => ((int) BulkIntakeBatchItem::where('bulk_intake_batch_id', $batch->id)->max('item_sequence')) + 1,
-        'input_type' => BulkIntakeBatchItem::INPUT_FILE,
-        'original_filename' => 'registration.pdf',
-        'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
-    ], $overrides));
-}
-
-function registrationEligibleItem(array $intakeOverrides = [], array $itemOverrides = []): BulkIntakeBatchItem
-{
-    $admin = registrationAdmin();
-    $batch = registrationBatch($admin);
-    $intake = registrationIntake(array_merge([
+test('registration summary shows height in feet and inches not raw cm', function () {
+    $item = registrationConsentReceivedItem([
         'parsed_json' => [
-            'core' => [
-                'full_name' => 'Registration Candidate',
-                'primary_contact_number' => '9876543301',
-                'date_of_birth' => '1998-04-15',
-                'gender' => 'female',
-                'height_cm' => 165,
-                'highest_education' => 'B.E. Computer',
-                'city' => 'Pune',
-            ],
+            'core' => array_merge(registrationCompleteParsedJson()['parsed_json']['core'], [
+                'height_cm' => 170,
+            ]),
         ],
-    ], $intakeOverrides));
-
-    return registrationItem($batch, $intake, $itemOverrides);
-}
-
-function registrationConsentReceivedItem(array $intakeOverrides = [], array $itemOverrides = []): BulkIntakeBatchItem
-{
-    $admin = registrationAdmin();
-    $item = registrationEligibleItem($intakeOverrides, $itemOverrides);
-    $consentService = app(BulkIntakeWhatsAppConsentService::class);
-    $consentService->sendPermission($item, $admin);
-    $sessionId = (int) (data_get($item->fresh()->item_meta_json, 'whatsapp_consent.intake_whatsapp_session_id') ?? 0);
-    $session = \App\Models\IntakeWhatsAppSession::query()->findOrFail($sessionId);
-    $consentService->processInboundReply($session, 'हो', BulkIntakeWhatsAppConsentService::REPLY_YES);
-
-    return $item->fresh();
-}
-
-function registrationMarkConsentReceived(BulkIntakeBatchItem $item): BulkIntakeBatchItem
-{
-    $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
-    $meta['whatsapp_consent'] = array_merge(is_array($meta['whatsapp_consent'] ?? null) ? $meta['whatsapp_consent'] : [], [
-        'status' => BulkIntakeWhatsAppConsentService::STATUS_CONSENT_RECEIVED,
-        'reply_choice' => BulkIntakeWhatsAppConsentService::REPLY_YES,
-        'reply_at' => now()->toISOString(),
     ]);
-    $item->forceFill(['item_meta_json' => $meta])->save();
 
-    return $item->fresh();
-}
+    $summary = app(BulkIntakeRegistrationService::class)->summaryForItem($item);
+    $heightField = collect($summary['fields'])->firstWhere('key', 'height_cm');
+
+    expect($heightField['value'] ?? null)->toBe("5'7\"")
+        ->and($heightField['value'] ?? '')->not->toContain('170 cm');
+});

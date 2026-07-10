@@ -8,6 +8,7 @@ use App\Models\MasterGender;
 use App\Models\OccupationCustom;
 use App\Models\OccupationMaster;
 use App\Services\Ocr\OcrNormalize;
+use App\Support\HeightDisplay;
 use Illuminate\Support\Carbon;
 
 class BulkIntakeCandidateDisplayService
@@ -423,11 +424,7 @@ class BulkIntakeCandidateDisplayService
 
     private function heightDisplayFromCm(float $heightCm): string
     {
-        $totalInches = (int) round($heightCm / 2.54);
-        $feet = intdiv($totalInches, 12);
-        $inches = $totalInches % 12;
-
-        return $feet.' ft '.$inches.' in';
+        return HeightDisplay::formatFeetInches((int) round($heightCm));
     }
 
     private function heightCmFromText(string $value): ?float
