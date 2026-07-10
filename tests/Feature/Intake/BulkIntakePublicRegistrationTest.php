@@ -37,7 +37,7 @@ test('public registration page opens with token after consent received', functio
         ->and($payload['prefer_marathi_labels'] ?? false)->toBeTrue();
 });
 
-test('public registration keeps income empty and hides premature completion banner when already marked complete', function () {
+test('public registration shows biodata income and hides premature completion banner when already marked complete', function () {
     $item = registrationConsentReceivedItem(registrationCompleteParsedJson([
         'parsed_json' => [
             'core' => [
@@ -62,12 +62,8 @@ test('public registration keeps income empty and hides premature completion bann
         ->assertDontSee('नोंदणी पूर्ण झाली आहे')
         ->assertSee('Test Company Pvt Ltd');
 
-    expect($payload['profile']->annual_income)->toBeNull()
-        ->and($payload['profile']->income_amount)->toBeNull()
-        ->and($payload['profile']->income_value_type)->toBe('range')
-        ->and((int) $payload['profile']->income_min_amount)->toBe(100000)
-        ->and((int) $payload['profile']->income_max_amount)->toBe(125000)
-        ->and($payload['profile']->income_private)->toBeTrue()
+    expect((string) $payload['profile']->annual_income)->toBe('600000')
+        ->and((string) $payload['profile']->income_amount)->toBe('600000')
         ->and($payload['profile']->company_name)->toBe('Test Company Pvt Ltd');
 });
 

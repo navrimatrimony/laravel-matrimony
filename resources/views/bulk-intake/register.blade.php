@@ -35,21 +35,6 @@
     $selectClass = $inputClass . ' pr-10';
     $labelClass = 'block text-sm font-medium text-gray-800';
     $sectionClass = 'rounded-xl border border-gray-200 bg-white/95 p-4 shadow-sm backdrop-blur-sm sm:p-5';
-    $preferMarathiLabels = (bool) ($payload['prefer_marathi_labels'] ?? false);
-    $incomePeriodOptions = $preferMarathiLabels
-        ? [
-            ['value' => 'annual', 'label' => 'वार्षिक'],
-            ['value' => 'monthly', 'label' => 'मासिक'],
-        ]
-        : null;
-    $incomeValueTypeOptions = $preferMarathiLabels
-        ? [
-            ['value' => 'exact', 'label' => 'नेमके'],
-            ['value' => 'approximate', 'label' => 'अंदाजे उत्पन्न'],
-            ['value' => 'range', 'label' => 'श्रेणी'],
-            ['value' => 'undisclosed', 'label' => 'न सांगणे'],
-        ]
-        : null;
 @endphp
 
 @section('content')
@@ -218,11 +203,8 @@
                     <x-income-engine
                         label="उत्पन्न"
                         name-prefix="income"
-                        empty-value-type-default="range"
                         :profile="$profile"
                         :currencies="$currencies"
-                        :period-options="$incomePeriodOptions"
-                        :value-type-options="$incomeValueTypeOptions"
                     />
                 </div>
             </section>
