@@ -382,7 +382,7 @@ class BulkIntakePublicRegistrationService
             ->get()
             ->map(fn (MasterGender $row): array => [
                 'id' => (int) $row->id,
-                'label' => (string) ($row->label_mr ?: $row->label_en ?: $row->label ?: $row->key),
+                'label' => $this->preferredLabel($row, 'label_mr', 'label', 'key'),
                 'key' => (string) ($row->key ?? ''),
             ])
             ->values()
@@ -396,11 +396,12 @@ class BulkIntakePublicRegistrationService
     {
         return MasterMotherTongue::query()
             ->where('is_active', true)
-            ->orderBy('label_en')
+            ->orderBy('sort_order')
+            ->orderBy('label')
             ->get()
             ->map(fn (MasterMotherTongue $row): array => [
                 'id' => (int) $row->id,
-                'label' => (string) ($row->label_mr ?: $row->label_en ?: $row->label),
+                'label' => $this->preferredLabel($row, 'label_mr', 'label', 'key'),
             ])
             ->values()
             ->all();
@@ -417,7 +418,7 @@ class BulkIntakePublicRegistrationService
             ->get()
             ->map(fn (MasterMaritalStatus $row): array => [
                 'id' => (int) $row->id,
-                'label' => (string) ($row->label_mr ?: $row->label_en ?: $row->label ?: $row->key),
+                'label' => $this->preferredLabel($row, 'label_mr', 'label', 'key'),
             ])
             ->values()
             ->all();
@@ -432,11 +433,11 @@ class BulkIntakePublicRegistrationService
             ->where(function ($q): void {
                 $q->where('is_active', true)->orWhereNull('is_active');
             })
-            ->orderBy('label_en')
+            ->orderBy('label')
             ->get()
             ->map(fn (Religion $row): array => [
                 'id' => (int) $row->id,
-                'label' => (string) ($row->label_mr ?: $row->label_en ?: $row->label),
+                'label' => $this->preferredLabel($row, 'label_mr', 'label_en', 'label', 'key'),
             ])
             ->values()
             ->all();
@@ -451,11 +452,11 @@ class BulkIntakePublicRegistrationService
             ->where(function ($q): void {
                 $q->where('is_active', true)->orWhereNull('is_active');
             })
-            ->orderBy('label_en')
+            ->orderBy('label')
             ->get()
             ->map(fn (Caste $row): array => [
                 'id' => (int) $row->id,
-                'label' => (string) ($row->label_mr ?: $row->label_en ?: $row->label),
+                'label' => $this->preferredLabel($row, 'label_mr', 'label_en', 'label', 'key'),
             ])
             ->values()
             ->all();
@@ -526,5 +527,17 @@ class BulkIntakePublicRegistrationService
         $text = trim((string) $value);
 
         return $text !== '' ? $text : null;
+    }
+
+    private function preferredLabel(object $row, string ...$attributes): string
+    {
+        foreach ($attributes as $attribute) {
+            $value = $row->{$attribute} ?? null;
+            if (is_string($value) && trim($value) !== '') {
+                return trim($value);
+            }
+        }
+
+        return '';
     }
 }

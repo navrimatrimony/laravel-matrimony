@@ -39,8 +39,12 @@ class BulkIntakeRegistrationService
         private readonly BulkIntakeCandidateDisplayService $candidateDisplayService,
         private readonly BulkIntakeWhatsAppConsentService $whatsappConsentService,
         private readonly BulkIntakeWhatsAppConsentSender $whatsappSender,
-        private readonly BulkIntakePublicRegistrationService $publicRegistrationService,
     ) {}
+
+    private function publicRegistrationService(): BulkIntakePublicRegistrationService
+    {
+        return app(BulkIntakePublicRegistrationService::class);
+    }
 
     /**
      * @return array<string, mixed>|null
@@ -95,7 +99,7 @@ class BulkIntakeRegistrationService
 
     public function publicRegistrationUrl(BulkIntakeBatchItem $item): string
     {
-        return $this->publicRegistrationService->publicUrl($item);
+        return $this->publicRegistrationService()->publicUrl($item);
     }
 
     /**
@@ -318,7 +322,7 @@ class BulkIntakeRegistrationService
         $existing = is_array($meta['registration'] ?? null) ? $meta['registration'] : [];
         $publicToken = trim((string) ($existing['public_token'] ?? ''));
         if ($publicToken === '') {
-            $publicToken = $this->publicRegistrationService->ensureToken($item);
+            $publicToken = $this->publicRegistrationService()->ensureToken($item);
         }
         $meta['registration'] = array_merge($existing, [
             'status' => self::STATUS_SUMMARY_SENT,
