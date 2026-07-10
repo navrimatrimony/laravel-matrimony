@@ -1,5 +1,8 @@
 <?php
 
+use App\Models\EducationDegree;
+use App\Models\MasterDiet;
+use App\Models\OccupationMaster;
 use App\Models\BulkIntakeBatch;
 use App\Models\BulkIntakeBatchItem;
 use App\Services\Intake\BulkIntakePublicRegistrationService;
@@ -269,11 +272,18 @@ test('public registration preferences save to snapshot and finish on done page',
         'profile_photo' => $photo,
     ]);
 
+    $allEducationIds = EducationDegree::query()->pluck('id')->map(fn ($id) => (int) $id)->all();
+    $allOccupationIds = OccupationMaster::query()->pluck('id')->map(fn ($id) => (int) $id)->all();
+    $allDietIds = MasterDiet::query()->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all();
+
     $this->post(route('bulk-intake.register.preferences.store', ['token' => $token]), [
         'preferred_age_min' => 24,
         'preferred_age_max' => 32,
         'preferred_religion_ids' => [$masters['religion_id']],
         'preferred_caste_ids' => [$masters['caste_id']],
+        'preferred_education_degree_ids' => $allEducationIds,
+        'preferred_occupation_master_ids' => $allOccupationIds,
+        'preferred_diet_ids' => $allDietIds,
         'preferred_income_min' => 0,
         'preferred_income_max' => 50000000,
     ])->assertRedirect(route('bulk-intake.register.done', ['token' => $token]));
@@ -350,8 +360,20 @@ test('bulk registration preferences default education occupation income and diet
         ->and($defaults['preferred_age_min'])->not->toBeNull();
 
     $payload = $service->preferencesPayload($item->fresh());
-    expect($payload['preferredEducationDegreeIds'])->toBe([])
-        ->and($payload['preferredOccupationMasterIds'])->toBe([])
-        ->and($payload['preferredDietIds'])->toBe([])
+    $allEducationIds = EducationDegree::query()->pluck('id')->map(fn ($id) => (int) $id)->all();
+    $allOccupationIds = OccupationMaster::query()->pluck('id')->map(fn ($id) => (int) $id)->all();
+    $allDietIds = MasterDiet::query()->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+    expect($payload['bulkPreferencesEducationOpenToAll'] ?? false)->toBeTrue()
+        ->and($payload['bulkPreferencesOccupationOpenToAll'] ?? false)->toBeTrue()
+        ->and($payload['bulkPreferencesDietOpenToAll'] ?? false)->toBeTrue()
+        ->and($payload['preferredEducationDegreeIds'])->toBe($allEducationIds)
+        ->and($payload['preferredOccupationMasterIds'])->toBe($allOccupationIds)
+        ->and($payload['preferredDietIds'])->toBe($allDietIds)
         ->and($payload['preferenceCriteria']->preferred_income_min ?? null)->toBeNull();
+
+    $this->get(route('bulk-intake.register.preferences', ['token' => $token]))
+        ->assertOk()
+        ->assertSee('कोणतीही शैक्षणिक पात्रता चालेल')
+        ->assertSee('कोणतीही उत्पन्न श्रेणी');
 });

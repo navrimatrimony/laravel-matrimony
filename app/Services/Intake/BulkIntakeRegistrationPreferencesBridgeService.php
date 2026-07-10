@@ -4,8 +4,10 @@ namespace App\Services\Intake;
 
 use App\Models\BulkIntakeBatchItem;
 use App\Models\City;
+use App\Models\EducationDegree;
 use App\Models\Location;
 use App\Models\OccupationCategory;
+use App\Models\OccupationMaster;
 use App\Services\PartnerPreferenceNavService;
 use App\Services\PartnerPreferencePresetService;
 use App\Services\PartnerPreferenceSnapshotBuilder;
@@ -141,6 +143,24 @@ class BulkIntakeRegistrationPreferencesBridgeService
         $preferredDistrictIds = array_values(array_unique(array_map('intval', $preferredDistrictIds)));
         $preferredTalukaIds = array_values(array_unique(array_map('intval', $preferredTalukaIds)));
 
+        $storedEducationIds = $this->intIds($prefs['preferred_education_degree_ids'] ?? []);
+        $storedOccupationIds = $this->intIds($prefs['preferred_occupation_master_ids'] ?? []);
+        $storedDietIds = $this->intIds($prefs['preferred_diet_ids'] ?? []);
+
+        $educationOpenToAll = $storedEducationIds === [];
+        $occupationOpenToAll = $storedOccupationIds === [];
+        $dietOpenToAll = $storedDietIds === [];
+
+        if ($educationOpenToAll) {
+            $preferredEducationDegreeIds = $this->allActiveEducationDegreeIds();
+        }
+        if ($occupationOpenToAll) {
+            $preferredOccupationMasterIds = $this->allActiveOccupationMasterIds();
+        }
+        if ($dietOpenToAll) {
+            $preferredDietIds = $this->allActiveDietIds();
+        }
+
         $data = [
             'profile' => $profile,
             'preferencePreset' => $wasCompletelyEmpty ? ($bulkDefaults['preference_preset'] ?? 'balanced') : 'custom',
@@ -238,6 +258,9 @@ class BulkIntakeRegistrationPreferencesBridgeService
             'interestedInIntercaste' => false,
             'bulkIntakePreferencesMode' => true,
             'bulkPreferencesIncomeOpenToAll' => true,
+            'bulkPreferencesEducationOpenToAll' => $educationOpenToAll,
+            'bulkPreferencesOccupationOpenToAll' => $occupationOpenToAll,
+            'bulkPreferencesDietOpenToAll' => $dietOpenToAll,
             'partnerPrefTabMode' => true,
             'currentSection' => 'full',
         ];
@@ -288,12 +311,104 @@ class BulkIntakeRegistrationPreferencesBridgeService
      */
     private function normalizeBulkOpenToAllOnSave(array $row): array
     {
+        $row['preferred_education_degree_ids'] = $this->collapseIfAllSelected(
+            $row['preferred_education_degree_ids'] ?? [],
+            $this->allActiveEducationDegreeIds(),
+        );
+        $row['preferred_occupation_master_ids'] = $this->collapseIfAllSelected(
+            $row['preferred_occupation_master_ids'] ?? [],
+            $this->allActiveOccupationMasterIds(),
+        );
+        $row['preferred_diet_ids'] = $this->collapseIfAllSelected(
+            $row['preferred_diet_ids'] ?? [],
+            $this->allActiveDietIds(),
+        );
+        $row['preferred_mother_tongue_ids'] = $this->collapseIfAllSelected(
+            $row['preferred_mother_tongue_ids'] ?? [],
+            $this->allActiveMotherTongueIds(),
+        );
+
         if ($this->isIncomeOpenToAll($row['preferred_income_min'] ?? null, $row['preferred_income_max'] ?? null)) {
             $row['preferred_income_min'] = null;
             $row['preferred_income_max'] = null;
         }
 
         return $row;
+    }
+
+    /**
+     * @param  array<int, int>  $posted
+     * @param  array<int, int>  $allActive
+     * @return array<int, int>
+     */
+    private function collapseIfAllSelected(array $posted, array $allActive): array
+    {
+        $posted = $this->intIds($posted);
+        $allActive = $this->intIds($allActive);
+        if ($posted === [] || $allActive === []) {
+            return $posted;
+        }
+
+        $sortedPosted = $posted;
+        $sortedAll = $allActive;
+        sort($sortedPosted);
+        sort($sortedAll);
+
+        return $sortedPosted === $sortedAll ? [] : $posted;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function allActiveEducationDegreeIds(): array
+    {
+        return EducationDegree::query()
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function allActiveOccupationMasterIds(): array
+    {
+        if (! Schema::hasTable('master_occupations')) {
+            return [];
+        }
+
+        return OccupationMaster::query()
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function allActiveDietIds(): array
+    {
+        return \App\Models\MasterDiet::query()
+            ->where('is_active', true)
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function allActiveMotherTongueIds(): array
+    {
+        return \App\Models\MasterMotherTongue::query()
+            ->where('is_active', true)
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
     }
 
     private function isIncomeOpenToAll(mixed $min, mixed $max): bool

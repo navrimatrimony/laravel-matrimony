@@ -25,7 +25,11 @@
     @endphp
     <div id="partner-pref-ec-qual" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 p-3 space-y-2 scroll-mt-4">
         <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ __('wizard.pref_qualification_label') }}</h4>
-        <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.pref_qualification_hint') }}</p>
+        @if (! empty($bulkPreferencesEducationOpenToAll))
+            <p class="text-xs font-medium text-emerald-700">कोणतीही शैक्षणिक पात्रता चालेल (सर्व निवडलेले)</p>
+        @else
+            <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.pref_qualification_hint') }}</p>
+        @endif
         <input type="search" id="partner-ec-education-filter" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm" placeholder="{{ __('wizard.filter_locations') }}" autocomplete="off">
         <div class="max-h-72 overflow-y-auto rounded border border-gray-200 dark:border-gray-600 p-2 bg-white dark:bg-gray-800/60">
             <div id="partner-ec-education-chips" class="space-y-3">
@@ -76,7 +80,11 @@
     @endphp
     <div id="partner-pref-ec-occupation" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 p-3 space-y-2 scroll-mt-4">
         <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ __('wizard.partner_pref_occupation_heading') }}</h4>
-        <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.partner_pref_occupation_intro') }}</p>
+        @if (! empty($bulkPreferencesOccupationOpenToAll))
+            <p class="text-xs font-medium text-emerald-700">कोणताही व्यवसाय चालेल (सर्व निवडलेले)</p>
+        @else
+            <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.partner_pref_occupation_intro') }}</p>
+        @endif
         <input type="search" id="partner-ec-occupation-filter" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm" placeholder="{{ __('wizard.filter_locations') }}" autocomplete="off">
         <div class="max-h-72 overflow-y-auto rounded border border-gray-200 dark:border-gray-600 p-2 bg-white dark:bg-gray-800/60">
             <div id="partner-ec-occupation-chips" class="space-y-3">
@@ -121,8 +129,18 @@
     {{-- 3) Annual income (existing min/max rupees) --}}
     <div id="partner-pref-ec-income" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 p-3 space-y-2 scroll-mt-4">
         <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ __('wizard.pref_annual_income_label') }}</h4>
-        <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.pref_annual_income_hint') }}</p>
-        <p id="partner-income-range-label" class="text-base font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums" aria-live="polite">{{ $incomeFmtLakh($incMinLakhs) }} – {{ $incomeFmtLakh($incMaxLakhs) }}</p>
+        @if (! empty($bulkPreferencesIncomeOpenToAll))
+            <p class="text-xs font-medium text-emerald-700">कोणतीही उत्पन्न श्रेणी चालेल</p>
+        @else
+            <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.pref_annual_income_hint') }}</p>
+        @endif
+        <p id="partner-income-range-label" class="text-base font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums" aria-live="polite">
+            @if (! empty($bulkPreferencesIncomeOpenToAll))
+                कोणतीही उत्पन्न श्रेणी
+            @else
+                {{ $incomeFmtLakh($incMinLakhs) }} – {{ $incomeFmtLakh($incMaxLakhs) }}
+            @endif
+        </p>
         <div class="partner-income-slider relative h-10 px-0.5">
             <div class="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-gray-200 dark:bg-gray-600 pointer-events-none"></div>
             <div id="partner-income-range-fill" class="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-indigo-500 pointer-events-none" style="left: 0%; width: 0%"></div>

@@ -1,6 +1,10 @@
 <div class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 p-3 space-y-2">
     <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ __('wizard.partner_pref_partner_diet_heading') }}</h4>
-    <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.partner_pref_partner_diet_hint') }}</p>
+    @if (! empty($bulkPreferencesDietOpenToAll))
+        <p class="text-xs font-medium text-emerald-700">कोणताही आहार चालेल (सर्व निवडलेले)</p>
+    @else
+        <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.partner_pref_partner_diet_hint') }}</p>
+    @endif
     <input type="search" id="partner-pref-diet-filter" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm" placeholder="{{ __('wizard.filter_locations') }}" autocomplete="off">
     <div class="max-h-32 overflow-y-auto rounded border border-gray-200 dark:border-gray-600 p-2 bg-white dark:bg-gray-800/60">
         <div id="partner-pref-diet-chips" class="flex flex-wrap gap-2 content-start">
