@@ -72,11 +72,35 @@ function registrationCareerMasters(): array
             'sort_order' => 1,
         ]
     );
+    $degreeCategory = \App\Models\EducationCategory::query()->firstOrCreate(
+        ['slug' => 'graduation'],
+        ['name' => 'Graduation', 'sort_order' => 10]
+    );
+    $degree = \App\Models\EducationDegree::query()->firstOrCreate(
+        ['code' => 'BE-COMP'],
+        ['code_mr' => 'बी.ई. कॉम्प्युटर', 'category_id' => $degreeCategory->id, 'sort_order' => 10]
+    );
 
     return [
         'working_with_type_id' => (int) $workingWithType->id,
         'occupation_master_id' => (int) $occupation->id,
+        'education_degree_id' => (int) $degree->id,
     ];
+}
+
+function registrationLocationId(): int
+{
+    (new \Database\Seeders\MinimalLocationSeeder)->run();
+
+    return (int) \App\Models\City::query()->where('name', 'Pune City')->value('id');
+}
+
+function registrationIncomeCurrencyId(): int
+{
+    return (int) (\App\Models\MasterIncomeCurrency::query()->firstOrCreate(
+        ['code' => 'INR'],
+        ['is_active' => true, 'is_default' => true, 'symbol' => '₹']
+    )->id);
 }
 
 /**

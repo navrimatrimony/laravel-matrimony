@@ -26,12 +26,12 @@ test('public registration page opens with token after consent received', functio
         ->assertOk()
         ->assertSee('बायोडाटा नोंदणी पुष्टी')
         ->assertSee('अनुजा महादेव पाटील')
-        ->assertSee('व्यवसाय')
-        ->assertDontSee('बायोडाटा फोटो')
-        ->assertDontSee('खालील माहिती तपासा');
+        ->assertSee('occupation-engine-root', false)
+        ->assertSee('location-typeahead-wrapper', false)
+        ->assertSee('education-multiselect-root-bulk-registration-education', false);
 
     $payload = app(BulkIntakePublicRegistrationService::class)->formPayload($item->fresh());
-    expect($payload['fields']['mother_tongue_id'] ?? null)->toBe($masters['mother_tongue_id']);
+    expect($payload['mother_tongue_id'] ?? null)->toBe($masters['mother_tongue_id']);
 });
 
 test('public registration save stores cm height and marks registration complete', function () {
@@ -46,15 +46,25 @@ test('public registration save stores cm height and marks registration complete'
         'mobile' => '9876543301',
         'date_of_birth' => '1998-04-15',
         'height_cm' => 170,
-        'gender' => 'female',
+        'gender_id' => $masters['gender_id'],
         'mother_tongue_id' => $masters['mother_tongue_id'],
         'marital_status_id' => $masters['marital_status_id'],
         'religion_id' => $masters['religion_id'],
         'caste_id' => $masters['caste_id'],
-        'location' => 'Pune',
-        'education' => 'B.E. Computer',
-        'working_with_type_id' => $career['working_with_type_id'],
+        'location_id' => registrationLocationId(),
+        'education_degree_ids' => [$career['education_degree_id']],
         'occupation_master_id' => $career['occupation_master_id'],
+        'income_period' => 'annual',
+        'income_value_type' => 'exact',
+        'income_amount' => '500000',
+        'income_currency_id' => registrationIncomeCurrencyId(),
+        'marriages' => [[
+            'marriage_year' => '',
+            'divorce_year' => '',
+            'separation_year' => '',
+            'spouse_death_year' => '',
+            'divorce_status' => '',
+        ]],
     ])->assertRedirect($url);
 
     $item->refresh();
@@ -63,6 +73,7 @@ test('public registration save stores cm height and marks registration complete'
         ->and(data_get($intake->approval_snapshot_json, 'core.full_name'))->toBe('Updated Candidate')
         ->and((int) data_get($intake->approval_snapshot_json, 'core.height_cm'))->toBe(170)
         ->and((string) data_get($intake->approval_snapshot_json, 'core.height'))->toBe("5'7\"")
+        ->and((int) data_get($intake->approval_snapshot_json, 'core.location_id'))->toBe(registrationLocationId())
         ->and((int) data_get($intake->approval_snapshot_json, 'core.occupation_master_id'))->toBe($career['occupation_master_id'])
         ->and(app(BulkIntakeRegistrationService::class)->registrationStatus($item))
         ->toBe(BulkIntakeRegistrationService::STATUS_REGISTRATION_COMPLETE);

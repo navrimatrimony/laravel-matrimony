@@ -1,18 +1,36 @@
 @extends('layouts.bulk-register')
 
 @php
-    $fields = is_array($payload['fields'] ?? null) ? $payload['fields'] : [];
-    $heightCm = $payload['height_cm'] ?? null;
-    $genders = is_array($payload['genders'] ?? null) ? $payload['genders'] : [];
+    $profile = $payload['profile'];
+    $genders = $payload['genders'] ?? collect();
     $motherTongues = is_array($payload['mother_tongues'] ?? null) ? $payload['mother_tongues'] : [];
-    $maritalStatuses = is_array($payload['marital_statuses'] ?? null) ? $payload['marital_statuses'] : [];
-    $religions = is_array($payload['religions'] ?? null) ? $payload['religions'] : [];
-    $castes = is_array($payload['castes'] ?? null) ? $payload['castes'] : [];
-    $workingWithOptions = is_array($payload['working_with_options'] ?? null) ? $payload['working_with_options'] : [];
-    $occupations = is_array($payload['occupations'] ?? null) ? $payload['occupations'] : [];
-    $occupationExemptSlugs = is_array($payload['occupation_exempt_slugs'] ?? null) ? $payload['occupation_exempt_slugs'] : [];
+    $maritalStatuses = $payload['marital_statuses'] ?? collect();
+    $profileMarriages = $payload['profile_marriages'] ?? collect();
+    $profileChildren = $payload['profile_children'] ?? collect();
+    $childLivingWithOptions = $payload['child_living_with_options'] ?? collect();
+    $currencies = $payload['currencies'] ?? collect();
+    $residenceHints = is_array($payload['residence_hints'] ?? null) ? $payload['residence_hints'] : [];
+    $residenceDisplay = is_string($payload['residence_display'] ?? null) ? $payload['residence_display'] : '';
+    $mobile = is_string($payload['mobile'] ?? null) ? $payload['mobile'] : '';
+    $motherTongueId = $payload['mother_tongue_id'] ?? $profile->mother_tongue_id ?? null;
     $registrationComplete = (bool) ($payload['registration_complete'] ?? false);
     $candidateName = is_string($payload['candidate_name'] ?? null) ? $payload['candidate_name'] : null;
+
+    $dobValue = old('date_of_birth');
+    if (! is_string($dobValue) || $dobValue === '') {
+        $dobRaw = $profile->date_of_birth ?? null;
+        if ($dobRaw instanceof \DateTimeInterface) {
+            $dobValue = $dobRaw->format('Y-m-d');
+        } elseif (is_string($dobRaw) && trim($dobRaw) !== '') {
+            try {
+                $dobValue = \Carbon\Carbon::parse($dobRaw)->format('Y-m-d');
+            } catch (\Throwable $e) {
+                $dobValue = $dobRaw;
+            }
+        } else {
+            $dobValue = '';
+        }
+    }
 
     $inputClass = 'mt-1 block w-full rounded-xl border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500';
     $selectClass = $inputClass . ' pr-10';
@@ -21,35 +39,7 @@
 @endphp
 
 @section('content')
-<div
-    x-data="{
-        workingWithTypeId: @js((string) old('working_with_type_id', $fields['working_with_type_id'] ?? '')),
-        occupationMasterId: @js((string) old('occupation_master_id', $fields['occupation_master_id'] ?? '')),
-        occupations: @js($occupations),
-        exemptSlugs: @js($occupationExemptSlugs),
-        workingWithTypes: @js($workingWithOptions),
-        selectedSlug() {
-            const match = this.workingWithTypes.find((row) => String(row.id) === String(this.workingWithTypeId));
-            return match ? match.slug : '';
-        },
-        occupationRequired() {
-            return !this.exemptSlugs.includes(this.selectedSlug());
-        },
-        filteredOccupations() {
-            if (!this.workingWithTypeId) {
-                return [];
-            }
-            return this.occupations.filter((row) => String(row.working_with_type_id) === String(this.workingWithTypeId));
-        },
-        onWorkingWithChange() {
-            const stillValid = this.filteredOccupations().some((row) => String(row.id) === String(this.occupationMasterId));
-            if (!stillValid) {
-                this.occupationMasterId = '';
-            }
-        }
-    }"
-    class="mx-auto w-full max-w-5xl"
->
+<div class="mx-auto w-full max-w-5xl">
     <div class="{{ $sectionClass }}">
         <div class="border-b border-gray-100 pb-5">
             <h1 class="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">बायोडाटा नोंदणी पुष्टी</h1>
@@ -81,50 +71,53 @@
             </div>
         @endif
 
-        <form method="POST" action="{{ route('bulk-intake.register.store', ['token' => $token]) }}" class="mt-6 space-y-8">
+        <form method="POST" action="{{ route('bulk-intake.register.store', ['token' => $token]) }}" id="bulk-registration-form" class="mt-6 space-y-8">
             @csrf
 
             <section>
                 <h2 class="text-sm font-semibold uppercase tracking-wide text-violet-700">मूलभूत माहिती</h2>
-                <div class="mt-4 grid gap-4 md:grid-cols-2">
-                    <div class="md:col-span-2">
+                <div class="mt-4 space-y-4">
+                    <div>
                         <label class="{{ $labelClass }}">नाव</label>
-                        <input type="text" name="full_name" value="{{ old('full_name', $fields['full_name'] ?? '') }}" required class="{{ $inputClass }} @error('full_name') border-red-400 @enderror">
+                        <input type="text" name="full_name" value="{{ old('full_name', $profile->full_name) }}" required class="{{ $inputClass }} @error('full_name') border-red-400 @enderror">
                         @error('full_name')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                     </div>
 
-                    <div>
-                        <label class="{{ $labelClass }}">मोबाईल</label>
-                        <input type="tel" name="mobile" value="{{ old('mobile', $fields['mobile'] ?? '') }}" required class="{{ $inputClass }} @error('mobile') border-red-400 @enderror">
-                        @error('mobile')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <div>
+                            <label class="{{ $labelClass }}">मोबाईल</label>
+                            <input type="tel" name="mobile" value="{{ old('mobile', $mobile) }}" required class="{{ $inputClass }} @error('mobile') border-red-400 @enderror">
+                            @error('mobile')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                        </div>
+
+                        <div>
+                            <label class="{{ $labelClass }}">जन्मतारीख</label>
+                            <input type="date" name="date_of_birth" value="{{ $dobValue }}" required class="{{ $inputClass }} @error('date_of_birth') border-red-400 @enderror">
+                            @error('date_of_birth')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                        </div>
                     </div>
 
-                    <div>
-                        <label class="{{ $labelClass }}">जन्मतारीख</label>
-                        <input type="date" name="date_of_birth" value="{{ old('date_of_birth', $fields['date_of_birth'] ?? '') }}" required class="{{ $inputClass }} @error('date_of_birth') border-red-400 @enderror">
-                        @error('date_of_birth')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
-                    </div>
-
-                    <div class="md:col-span-2">
-                        <x-profile.height-picker
-                            :value="old('height_cm', $heightCm)"
-                            label="उंची (फूट/इंच)"
-                            :required="true"
-                        />
-                        @error('height_cm')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
-                    </div>
-
-                    <div>
-                        <label class="{{ $labelClass }}">लिंग</label>
-                        <select name="gender" required class="{{ $selectClass }} @error('gender') border-red-400 @enderror">
-                            <option value="">निवडा</option>
+                    <div
+                        x-data="{ genderId: {{ (int) old('gender_id', $profile->gender_id) ?: 'null' }} }"
+                    >
+                        <label class="{{ $labelClass }}">लिंग <span class="text-red-600">*</span></label>
+                        <input type="hidden" name="gender_id" :value="genderId">
+                        <div class="mt-2 flex overflow-hidden rounded-xl border border-gray-300 bg-gray-50">
                             @foreach ($genders as $gender)
-                                <option value="{{ $gender['key'] ?? $gender['id'] }}" @selected((string) old('gender', $fields['gender'] ?? '') === (string) ($gender['key'] ?? $gender['id']))>
-                                    {{ $gender['label'] }}
-                                </option>
+                                @php
+                                    $selectedBg = $gender->key === 'male' ? 'bg-blue-600' : 'bg-pink-500';
+                                @endphp
+                                <button
+                                    type="button"
+                                    class="flex-1 px-4 py-3 text-sm font-semibold text-gray-600 transition"
+                                    :class="genderId == {{ $gender->id }} ? '{{ $selectedBg }} text-white' : 'hover:bg-white'"
+                                    @click="genderId = {{ $gender->id }}"
+                                >
+                                    {{ $gender->key === 'male' ? 'पुरुष' : 'स्त्री' }}
+                                </button>
                             @endforeach
-                        </select>
-                        @error('gender')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                        </div>
+                        @error('gender_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                     </div>
 
                     <div>
@@ -132,126 +125,95 @@
                         <select name="mother_tongue_id" required class="{{ $selectClass }} @error('mother_tongue_id') border-red-400 @enderror">
                             <option value="">निवडा</option>
                             @foreach ($motherTongues as $option)
-                                <option value="{{ $option['id'] }}" @selected((string) old('mother_tongue_id', $fields['mother_tongue_id'] ?? '') === (string) $option['id'])>
+                                <option value="{{ $option['id'] }}" @selected((string) old('mother_tongue_id', $motherTongueId) === (string) $option['id'])>
                                     {{ $option['label'] }}
                                 </option>
                             @endforeach
                         </select>
                         @error('mother_tongue_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                     </div>
+
+                    <div>
+                        <x-profile.height-picker
+                            :value="old('height_cm', $profile->height_cm)"
+                            label="उंची (फूट/इंच)"
+                            :required="true"
+                        />
+                        @error('height_cm')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <h2 class="text-sm font-semibold uppercase tracking-wide text-violet-700">वैवाहिक स्थिती</h2>
+                <div class="mt-4">
+                    @include('matrimony.profile.wizard.sections.marital_engine', [
+                        'namePrefix' => '',
+                        'profile' => $profile,
+                        'maritalStatuses' => $maritalStatuses,
+                        'profileMarriages' => $profileMarriages,
+                        'profileChildren' => $profileChildren,
+                        'childLivingWithOptions' => $childLivingWithOptions,
+                        'hideStatusDetailsOptional' => true,
+                    ])
                 </div>
             </section>
 
             <section>
                 <h2 class="text-sm font-semibold uppercase tracking-wide text-violet-700">समुदाय व ठिकाण</h2>
-                <div class="mt-4 grid gap-4 md:grid-cols-2">
-                    <div>
-                        <label class="{{ $labelClass }}">वैवाहिक स्थिती</label>
-                        <select name="marital_status_id" required class="{{ $selectClass }} @error('marital_status_id') border-red-400 @enderror">
-                            <option value="">निवडा</option>
-                            @foreach ($maritalStatuses as $option)
-                                <option value="{{ $option['id'] }}" @selected((string) old('marital_status_id', $fields['marital_status_id'] ?? '') === (string) $option['id'])>
-                                    {{ $option['label'] }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('marital_status_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
-                    </div>
+                <div class="mt-4 space-y-4">
+                    <x-profile.religion-caste-selector :profile="$profile" :show-subcaste="false" />
 
                     <div>
-                        <label class="{{ $labelClass }}">धर्म</label>
-                        <select name="religion_id" required class="{{ $selectClass }} @error('religion_id') border-red-400 @enderror">
-                            <option value="">निवडा</option>
-                            @foreach ($religions as $option)
-                                <option value="{{ $option['id'] }}" @selected((string) old('religion_id', $fields['religion_id'] ?? '') === (string) $option['id'])>
-                                    {{ $option['label'] }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('religion_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
-                    </div>
-
-                    <div class="md:col-span-2">
-                        <label class="{{ $labelClass }}">जात</label>
-                        <select name="caste_id" required class="{{ $selectClass }} @error('caste_id') border-red-400 @enderror">
-                            <option value="">निवडा</option>
-                            @foreach ($castes as $option)
-                                <option value="{{ $option['id'] }}" @selected((string) old('caste_id', $fields['caste_id'] ?? '') === (string) $option['id'])>
-                                    {{ $option['label'] }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('caste_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
-                    </div>
-
-                    <div class="md:col-span-2">
                         <label class="{{ $labelClass }}">ठिकाण</label>
-                        <input type="text" name="location" value="{{ old('location', $fields['location'] ?? '') }}" required class="{{ $inputClass }} @error('location') border-red-400 @enderror">
-                        @error('location')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                        <x-profile.location-typeahead
+                            context="residence"
+                            mode="simple"
+                            :noBorder="true"
+                            :value="old('location_input', $residenceDisplay)"
+                            placeholder="शहर किंवा गाव शोधा"
+                            :dataLocationId="$residenceHints['location_id'] ?? ''"
+                            :dataCountryId="$residenceHints['country_id'] ?? ''"
+                            :dataStateId="$residenceHints['state_id'] ?? ''"
+                            :dataDistrictId="$residenceHints['district_id'] ?? ''"
+                            :dataTalukaId="$residenceHints['taluka_id'] ?? ''"
+                            label=""
+                        />
+                        @error('location_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                        @error('location_input')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                     </div>
                 </div>
             </section>
 
             <section>
                 <h2 class="text-sm font-semibold uppercase tracking-wide text-violet-700">शिक्षण व करिअर</h2>
-                <div class="mt-4 grid gap-4 md:grid-cols-2">
-                    <div class="md:col-span-2">
-                        <label class="{{ $labelClass }}">शिक्षण</label>
-                        <input type="text" name="education" value="{{ old('education', $fields['education'] ?? '') }}" required class="{{ $inputClass }} @error('education') border-red-400 @enderror">
-                        @error('education')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                <div class="mt-4 space-y-5">
+                    <x-education-multiselect-engine
+                        :profile="$profile"
+                        form-selector="#bulk-registration-form"
+                        suffix="bulk-registration-education"
+                    />
+
+                    <div class="rounded-xl border border-gray-200 bg-white p-4">
+                        <x-occupation-search-engine
+                            :profile="$profile"
+                            form-selector="#bulk-registration-form"
+                        />
                     </div>
 
-                    <div>
-                        <label class="{{ $labelClass }}">कामाचा प्रकार</label>
-                        <select
-                            name="working_with_type_id"
-                            required
-                            class="{{ $selectClass }} @error('working_with_type_id') border-red-400 @enderror"
-                            x-model="workingWithTypeId"
-                            @change="onWorkingWithChange()"
-                        >
-                            <option value="">निवडा</option>
-                            @foreach ($workingWithOptions as $option)
-                                <option value="{{ $option['id'] }}" @selected((string) old('working_with_type_id', $fields['working_with_type_id'] ?? '') === (string) $option['id'])>
-                                    {{ $option['label'] }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('working_with_type_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
-                    </div>
-
-                    <div>
-                        <label class="{{ $labelClass }}">
-                            व्यवसाय
-                            <span class="font-normal text-gray-500" x-show="!occupationRequired()">(ऐच्छिक)</span>
-                            <span class="font-normal text-red-600" x-show="occupationRequired()">*</span>
-                        </label>
-                        <select
-                            name="occupation_master_id"
-                            class="{{ $selectClass }} @error('occupation_master_id') border-red-400 @enderror"
-                            x-model="occupationMasterId"
-                            :disabled="!workingWithTypeId || !occupationRequired()"
-                            :required="occupationRequired()"
-                        >
-                            <option value="">निवडा</option>
-                            <template x-for="row in filteredOccupations()" :key="row.id">
-                                <option :value="row.id" x-text="row.label" :selected="String(row.id) === String(occupationMasterId)"></option>
-                            </template>
-                        </select>
-                        <p class="mt-1 text-xs text-gray-500" x-show="workingWithTypeId && occupationRequired() && filteredOccupations().length === 0">
-                            या कामाच्या प्रकारासाठी व्यवसाय यादी उपलब्ध नाही. कृपया प्रशासकाशी संपर्क साधा.
-                        </p>
-                        @error('occupation_master_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                    <div class="rounded-xl border border-gray-200 bg-white p-4">
+                        <x-income-engine
+                            label="उत्पन्न"
+                            name-prefix="income"
+                            empty-value-type-default="approximate"
+                            :profile="$profile"
+                            :currencies="$currencies"
+                        />
                     </div>
 
                     <div>
                         <label class="{{ $labelClass }}">कंपनी <span class="font-normal text-gray-500">(ऐच्छिक)</span></label>
-                        <input type="text" name="company_name" value="{{ old('company_name', $fields['company_name'] ?? '') }}" class="{{ $inputClass }}">
-                    </div>
-
-                    <div>
-                        <label class="{{ $labelClass }}">उत्पन्न <span class="font-normal text-gray-500">(ऐच्छिक)</span></label>
-                        <input type="text" name="annual_income" value="{{ old('annual_income', $fields['annual_income'] ?? '') }}" class="{{ $inputClass }}">
+                        <input type="text" name="company_name" value="{{ old('company_name', $profile->company_name) }}" class="{{ $inputClass }}">
                     </div>
                 </div>
             </section>
@@ -264,4 +226,12 @@
         </form>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (window.LocationTypeahead && window.LocationTypeahead.init) {
+        window.LocationTypeahead.init();
+    }
+});
+</script>
 @endsection

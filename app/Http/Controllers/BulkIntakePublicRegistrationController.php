@@ -33,7 +33,7 @@ class BulkIntakePublicRegistrationController extends Controller
         $gate = $registrationService->accessGate($item);
         abort_unless($gate['allowed'], 403);
 
-        $registrationService->save($item, $request->all());
+        $registrationService->save($item, $request);
 
         return redirect()
             ->route('bulk-intake.register.show', ['token' => $token])

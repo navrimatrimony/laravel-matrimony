@@ -15,7 +15,13 @@
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700&display=swap" rel="stylesheet" />
 
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
+        @vite([
+            'resources/css/app.css',
+            'resources/js/app.js',
+            'resources/js/profile/location-typeahead.js',
+            'resources/js/profile/religion-caste-selector.js',
+            'resources/js/matrimony/occupation-engine-entry.js',
+        ])
     </head>
     <body class="font-sans text-gray-900 antialiased">
         <div class="relative min-h-screen overflow-hidden bg-slate-100">
