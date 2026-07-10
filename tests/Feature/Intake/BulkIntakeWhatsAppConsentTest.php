@@ -182,7 +182,8 @@ test('manual whatsapp share url contains permission message text', function () {
     $url = $service->buildManualTestWhatsAppShareUrl($item);
 
     expect($url)->toContain('api.whatsapp.com/send')
-        ->and($url)->toContain(urlencode('नवरी-नवरा मॅट्रिमोनी'));
+        ->and($url)->toContain(urlencode('नवरी मिळे नवऱ्याला विवाहसंस्था'))
+        ->and($url)->toContain(urlencode('१. हो, जरूर पाठवा'));
 });
 
 test('not interested reply blocks future eligible item with same mobile in pipeline', function () {

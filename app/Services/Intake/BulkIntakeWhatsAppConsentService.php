@@ -227,24 +227,53 @@ class BulkIntakeWhatsAppConsentService
     }
 
     /**
-     * @return list<array{id: string, title: string}>
+     * @return list<array{id: string, title: string, emoji: string, meta_title: string}>
      */
     public function permissionButtons(): array
     {
         return [
-            ['id' => self::REPLY_YES, 'title' => 'हो'],
-            ['id' => self::REPLY_NO, 'title' => 'नको'],
-            ['id' => self::REPLY_ALREADY_MARRIED, 'title' => 'लग्न झाले'],
-            ['id' => self::REPLY_WRONG_NUMBER, 'title' => 'चुकीचा नंबर'],
+            [
+                'id' => self::REPLY_YES,
+                'title' => '१. हो, जरूर पाठवा',
+                'emoji' => '📄',
+                'meta_title' => 'हो, पाठवा',
+            ],
+            [
+                'id' => self::REPLY_NO,
+                'title' => '२. आता आवश्यकता नाही',
+                'emoji' => '❌',
+                'meta_title' => 'आवश्यकता नाही',
+            ],
+            [
+                'id' => self::REPLY_ALREADY_MARRIED,
+                'title' => '३. लग्न आधीच जमले आहे',
+                'emoji' => '🎉',
+                'meta_title' => 'लग्न जमले',
+            ],
+            [
+                'id' => self::REPLY_WRONG_NUMBER,
+                'title' => '४. हा नंबर चुकीचा आहे',
+                'emoji' => '📞',
+                'meta_title' => 'चुकीचा नंबर',
+            ],
         ];
     }
 
     public function buildPermissionMessage(BulkIntakeBatchItem $item): string
     {
         $candidate = $this->candidateDisplayService->candidateForItem($item);
-        $relativeLabel = $this->relativeLabel((string) ($candidate['gender'] ?? ''));
+        $gender = (string) ($candidate['gender'] ?? '');
+        $relativePhrase = $this->relativePhrase($gender);
+        $pronouns = $this->pronounPhrases($gender);
 
-        return 'नमस्कार, आम्ही नवरी-नवरा मॅट्रिमोनी आहोत. तुमच्या '.$relativeLabel.' चा biodata मिळाला. योग्य स्थळे सुचवू का? परवानगी द्या.';
+        return implode("\n\n", [
+            "नमस्कार! 'नवरी मिळे नवऱ्याला विवाहसंस्था' परिवारात आपले स्वागत आहे. ✨",
+            'तुमच्या '.$relativePhrase.' बायोडाटा आमच्याकडे आला आहे. '
+            .$pronouns['possessive'].' शिक्षण आणि अपेक्षेला अनुरूप अशी अनेक उत्तम स्थळे आमच्याकडे उपलब्ध आहेत. '
+            .$pronouns['dative'].' अनुरुप स्थळे शोधण्यात मदत करणे ही आमच्यासाठी आनंदाची गोष्ट असेल. '
+            .'आम्ही तुम्हाला काही चांगली स्थळे पाठवण्यास सुरुवात करू का?',
+            'तुमची परवानगी देण्यासाठी खालीलपैकी योग्य पर्याय निवडा:',
+        ]);
     }
 
     public function isLiveMetaSendingEnabled(): bool
@@ -278,16 +307,19 @@ class BulkIntakeWhatsAppConsentService
     {
         $body = $this->buildPermissionMessage($item);
         $buttons = $this->permissionButtons();
-        $buttonLine = implode('  |  ', array_map(
-            static fn (array $button): string => '[ '.(string) ($button['title'] ?? '').' ]',
+        $optionLines = array_map(
+            static fn (array $button): string => trim(
+                (string) ($button['emoji'] ?? '').' [ '.(string) ($button['title'] ?? '').' ]'
+            ),
             $buttons
-        ));
-        $shareText = $body."\n\nकृपया एक पर्याय निवडा:\n".$buttonLine;
+        );
+        $buttonBlock = implode("\n", $optionLines);
+        $shareText = $body."\n\n".$buttonBlock;
 
         return [
             'body' => $body,
             'buttons' => $buttons,
-            'button_line' => $buttonLine,
+            'button_line' => $buttonBlock,
             'share_text' => $shareText,
         ];
     }
@@ -414,12 +446,30 @@ class BulkIntakeWhatsAppConsentService
         }
 
         return match ($text) {
-            'हो', 'ho', 'yes', 'y' => self::REPLY_YES,
-            'नको', 'nako', 'no', 'n' => self::REPLY_NO,
-            'लग्न झाले', 'लग्न झालं', 'already married', 'married', 'already_married' => self::REPLY_ALREADY_MARRIED,
-            'चुकीचा नंबर', 'चुकीचा नंबर आहे', 'wrong number', 'wrong_number', 'wrong' => self::REPLY_WRONG_NUMBER,
-            default => null,
+            'हो', 'ho', 'yes', 'y', 'हो, जरूर पाठवा', '१. हो, जरूर पाठवा', 'हो जरूर पाठवा' => self::REPLY_YES,
+            'नको', 'nako', 'no', 'n', 'आता आवश्यकता नाही', '२. आता आवश्यकता नाही' => self::REPLY_NO,
+            'लग्न झाले', 'लग्न झालं', 'already married', 'married', 'already_married', 'लग्न आधीच जमले आहे', '३. लग्न आधीच जमले आहे' => self::REPLY_ALREADY_MARRIED,
+            'चुकीचा नंबर', 'चुकीचा नंबर आहे', 'wrong number', 'wrong_number', 'wrong', 'हा नंबर चुकीचा आहे', '४. हा नंबर चुकीचा आहे' => self::REPLY_WRONG_NUMBER,
+            default => $this->resolveReplyChoiceFromPartialText($text),
         };
+    }
+
+    private function resolveReplyChoiceFromPartialText(string $text): ?string
+    {
+        if (str_contains($text, 'हो') && str_contains($text, 'पाठव')) {
+            return self::REPLY_YES;
+        }
+        if (str_contains($text, 'आवश्यकता नाही')) {
+            return self::REPLY_NO;
+        }
+        if (str_contains($text, 'लग्न') && (str_contains($text, 'जमले') || str_contains($text, 'झाल'))) {
+            return self::REPLY_ALREADY_MARRIED;
+        }
+        if (str_contains($text, 'चुकीचा') && str_contains($text, 'नंबर')) {
+            return self::REPLY_WRONG_NUMBER;
+        }
+
+        return null;
     }
 
     /**
@@ -580,6 +630,36 @@ class BulkIntakeWhatsAppConsentService
         $mobile = MobileNumber::normalize((string) ($candidate['mobile'] ?? ''));
 
         return $mobile;
+    }
+
+    private function relativePhrase(string $gender): string
+    {
+        return match (strtolower(trim($gender))) {
+            'male', 'पुरुष', 'm' => 'लाडक्या मुलाचा (चिरंजीवांचा)',
+            'female', 'स्त्री', 'f' => 'लाडक्या मुलीचा (चिरंजीवांचा)',
+            default => 'लाडक्या चिरंजीवांचा',
+        };
+    }
+
+    /**
+     * @return array{possessive: string, dative: string}
+     */
+    private function pronounPhrases(string $gender): array
+    {
+        return match (strtolower(trim($gender))) {
+            'male', 'पुरुष', 'm' => [
+                'possessive' => 'त्याच्या',
+                'dative' => 'त्याला',
+            ],
+            'female', 'स्त्री', 'f' => [
+                'possessive' => 'तिच्या',
+                'dative' => 'तिला',
+            ],
+            default => [
+                'possessive' => 'त्यांच्या',
+                'dative' => 'त्यांना',
+            ],
+        };
     }
 
     private function relativeLabel(string $gender): string

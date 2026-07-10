@@ -649,23 +649,29 @@
                                             </div>
                                         @endif
 
-                                        @if ($canSimulateWhatsAppReply)
+                                        @if ($canSimulateWhatsAppReply && is_array($manualWhatsAppPreview['buttons'] ?? null))
                                             <div class="mt-1 border-t border-gray-100 pt-2">
                                                 <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-gray-400">Simulate user reply</span>
-                                                @foreach ([
-                                                    \App\Services\Intake\BulkIntakeWhatsAppConsentService::REPLY_YES => ['label' => 'हो', 'testid' => 'bulk-simulate-whatsapp-yes'],
-                                                    \App\Services\Intake\BulkIntakeWhatsAppConsentService::REPLY_NO => ['label' => 'नको', 'testid' => 'bulk-simulate-whatsapp-no'],
-                                                    \App\Services\Intake\BulkIntakeWhatsAppConsentService::REPLY_ALREADY_MARRIED => ['label' => 'लग्न झाले', 'testid' => 'bulk-simulate-whatsapp-married'],
-                                                    \App\Services\Intake\BulkIntakeWhatsAppConsentService::REPLY_WRONG_NUMBER => ['label' => 'चुकीचा नंबर', 'testid' => 'bulk-simulate-whatsapp-wrong'],
-                                                ] as $simulateReplyChoice => $simulateReplyAction)
+                                                @foreach ($manualWhatsAppPreview['buttons'] as $simulateButton)
+                                                    @php
+                                                        $simulateReplyChoice = (string) ($simulateButton['id'] ?? '');
+                                                        $simulateReplyLabel = trim(((string) ($simulateButton['emoji'] ?? '')).' '.((string) ($simulateButton['title'] ?? '')));
+                                                        $simulateReplyTestId = match ($simulateReplyChoice) {
+                                                            \App\Services\Intake\BulkIntakeWhatsAppConsentService::REPLY_YES => 'bulk-simulate-whatsapp-yes',
+                                                            \App\Services\Intake\BulkIntakeWhatsAppConsentService::REPLY_NO => 'bulk-simulate-whatsapp-no',
+                                                            \App\Services\Intake\BulkIntakeWhatsAppConsentService::REPLY_ALREADY_MARRIED => 'bulk-simulate-whatsapp-married',
+                                                            \App\Services\Intake\BulkIntakeWhatsAppConsentService::REPLY_WRONG_NUMBER => 'bulk-simulate-whatsapp-wrong',
+                                                            default => 'bulk-simulate-whatsapp-reply',
+                                                        };
+                                                    @endphp
                                                     <form method="POST" action="{{ route('admin.bulk-intakes.items.simulate-whatsapp-consent-reply', [$batch, $item]) }}" class="mt-1">
                                                         @csrf
                                                         <input type="hidden" name="reply_choice" value="{{ $simulateReplyChoice }}">
                                                         <button
                                                             type="submit"
-                                                            data-testid="{{ $simulateReplyAction['testid'] }}"
+                                                            data-testid="{{ $simulateReplyTestId }}"
                                                             class="text-left text-sm font-medium text-indigo-700 hover:text-indigo-900"
-                                                        >{{ $simulateReplyAction['label'] }}</button>
+                                                        >{{ $simulateReplyLabel }}</button>
                                                     </form>
                                                 @endforeach
                                             </div>
