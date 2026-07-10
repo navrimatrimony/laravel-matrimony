@@ -80,9 +80,15 @@
     };
     $incMinLakhs = $rupeesToLakhs($oldCriteria['preferred_income_min'] ?? null);
     $incMaxLakhs = $rupeesToLakhs($oldCriteria['preferred_income_max'] ?? null);
+    $bulkPreferencesIncomeOpenToAll = ! empty($bulkIntakePreferencesMode) && ! empty($bulkPreferencesIncomeOpenToAll);
     if ($incMinLakhs === null && $incMaxLakhs === null) {
-        $incMinLakhs = 3;
-        $incMaxLakhs = 25;
+        if ($bulkPreferencesIncomeOpenToAll) {
+            $incMinLakhs = 0;
+            $incMaxLakhs = 500;
+        } else {
+            $incMinLakhs = 3;
+            $incMaxLakhs = 25;
+        }
     } elseif ($incMinLakhs === null) {
         $incMinLakhs = max(0, $incMaxLakhs - 15);
     } elseif ($incMaxLakhs === null) {

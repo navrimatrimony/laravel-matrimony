@@ -15,9 +15,50 @@ use Illuminate\Support\Facades\Schema;
 
 class BulkIntakeRegistrationPreferencesBridgeService
 {
+    private const INCOME_OPEN_MIN_LAKHS = 0;
+
+    private const INCOME_OPEN_MAX_LAKHS = 500;
+
     public function __construct(
         private readonly BulkIntakeRegistrationFormBridgeService $formBridge,
     ) {}
+
+    /**
+     * Bulk biodata registration: only fill clear-cut fields from own profile.
+     * Education, occupation, income, diet, and other ambiguous pivots stay open to all.
+     *
+     * @return array<string, mixed>
+     */
+    public function suggestForBulkRegistration(\App\Models\MatrimonyProfile $profile): array
+    {
+        $full = PartnerPreferenceSuggestionService::suggestForProfile($profile);
+
+        return [
+            'preferred_age_min' => $full['preferred_age_min'] ?? null,
+            'preferred_age_max' => $full['preferred_age_max'] ?? null,
+            'preferred_height_min_cm' => $full['preferred_height_min_cm'] ?? null,
+            'preferred_height_max_cm' => $full['preferred_height_max_cm'] ?? null,
+            'preferred_religion_ids' => $this->intIds($full['preferred_religion_ids'] ?? []),
+            'preferred_caste_ids' => $this->intIds($full['preferred_caste_ids'] ?? []),
+            'preferred_country_ids' => $this->intIds($full['preferred_country_ids'] ?? []),
+            'preferred_state_ids' => $this->intIds($full['preferred_state_ids'] ?? []),
+            'preferred_district_ids' => $this->intIds($full['preferred_district_ids'] ?? []),
+            'preferred_taluka_ids' => $this->intIds($full['preferred_taluka_ids'] ?? []),
+            'preferred_marital_status_id' => $full['preferred_marital_status_id'] ?? null,
+            'preferred_marital_status_ids' => $this->intIds($full['preferred_marital_status_ids'] ?? []),
+            'preferred_income_min' => null,
+            'preferred_income_max' => null,
+            'preferred_education_degree_ids' => [],
+            'preferred_occupation_master_ids' => [],
+            'preferred_diet_ids' => [],
+            'preferred_mother_tongue_ids' => [],
+            'willing_to_relocate' => null,
+            'marriage_type_preference_id' => null,
+            'partner_profile_with_children' => null,
+            'preferred_profile_managed_by' => null,
+            'preference_preset' => 'balanced',
+        ];
+    }
 
     /**
      * @return array<string, mixed>
@@ -26,6 +67,7 @@ class BulkIntakeRegistrationPreferencesBridgeService
     {
         $profile = $this->formBridge->profileFromSnapshot($snapshot, $item);
         $prefs = is_array($snapshot['preferences'] ?? null) ? $snapshot['preferences'] : [];
+        $bulkDefaults = $this->suggestForBulkRegistration($profile);
 
         $criteria = $this->criteriaFromPreferencesRow($prefs);
         $preferredReligionIds = $this->intIds($prefs['preferred_religion_ids'] ?? []);
@@ -39,8 +81,6 @@ class BulkIntakeRegistrationPreferencesBridgeService
         $preferredDietIds = $this->intIds($prefs['preferred_diet_ids'] ?? []);
         $preferredMaritalStatusIdsFromDb = $this->intIds($prefs['preferred_marital_status_ids'] ?? []);
 
-        $suggestions = PartnerPreferenceSuggestionService::suggestForProfile($profile);
-
         $wasCompletelyEmpty = ! $criteria && $preferredReligionIds === [] && $preferredCasteIds === []
             && $preferredDistrictIds === [] && $preferredCountryIds === [] && $preferredStateIds === []
             && $preferredTalukaIds === [] && $preferredEducationDegreeIds === []
@@ -48,30 +88,45 @@ class BulkIntakeRegistrationPreferencesBridgeService
             && $preferredMaritalStatusIdsFromDb === []
             && ($criteria?->preferred_marital_status_id ?? null) === null;
 
-        $merged = PartnerPreferenceSuggestionService::mergePartnerPreferencesForDisplay(
-            $profile,
-            $criteria,
-            $preferredReligionIds,
-            $preferredCasteIds,
-            $preferredCountryIds,
-            $preferredStateIds,
-            $preferredDistrictIds,
-            $preferredTalukaIds,
-            $preferredDietIds,
-            $preferredMaritalStatusIdsFromDb,
-        );
+        if ($wasCompletelyEmpty) {
+            $criteria = $this->criteriaFromPreferencesRow($bulkDefaults);
+            $preferredReligionIds = $this->intIds($bulkDefaults['preferred_religion_ids'] ?? []);
+            $preferredCasteIds = $this->intIds($bulkDefaults['preferred_caste_ids'] ?? []);
+            $preferredCountryIds = $this->intIds($bulkDefaults['preferred_country_ids'] ?? []);
+            $preferredStateIds = $this->intIds($bulkDefaults['preferred_state_ids'] ?? []);
+            $preferredDistrictIds = $this->intIds($bulkDefaults['preferred_district_ids'] ?? []);
+            $preferredTalukaIds = $this->intIds($bulkDefaults['preferred_taluka_ids'] ?? []);
+            $preferredEducationDegreeIds = [];
+            $preferredOccupationMasterIds = [];
+            $preferredDietIds = [];
+            $preferredMaritalStatusIdsMerged = $this->intIds($bulkDefaults['preferred_marital_status_ids'] ?? []);
+        } else {
+            $merged = PartnerPreferenceSuggestionService::mergePartnerPreferencesForDisplay(
+                $profile,
+                $criteria,
+                $preferredReligionIds,
+                $preferredCasteIds,
+                $preferredCountryIds,
+                $preferredStateIds,
+                $preferredDistrictIds,
+                $preferredTalukaIds,
+                [],
+                $preferredMaritalStatusIdsFromDb,
+            );
 
-        $criteria = $merged['criteria'];
-        $preferredReligionIds = $merged['preferredReligionIds'];
-        $preferredCasteIds = $merged['preferredCasteIds'];
-        $preferredCountryIds = $merged['preferredCountryIds'];
-        $preferredStateIds = $merged['preferredStateIds'];
-        $preferredDistrictIds = $merged['preferredDistrictIds'];
-        $preferredTalukaIds = $merged['preferredTalukaIds'];
-        $preferredDietIds = $merged['preferredDietIds'];
-        $preferredMaritalStatusIdsMerged = $merged['preferredMaritalStatusIds'] ?? [];
+            $criteria = $merged['criteria'];
+            $preferredReligionIds = $merged['preferredReligionIds'];
+            $preferredCasteIds = $merged['preferredCasteIds'];
+            $preferredCountryIds = $merged['preferredCountryIds'];
+            $preferredStateIds = $merged['preferredStateIds'];
+            $preferredDistrictIds = $merged['preferredDistrictIds'];
+            $preferredTalukaIds = $merged['preferredTalukaIds'];
+            $preferredMaritalStatusIdsMerged = $merged['preferredMaritalStatusIds'] ?? [];
+        }
 
-        $base = $suggestions;
+        $criteria = $this->criteriaWithOpenIncome($criteria);
+
+        $base = $bulkDefaults;
         $base['preferred_income_min'] = null;
         $base['preferred_income_max'] = null;
         if (! empty($base['preferred_city_id'])) {
@@ -88,7 +143,7 @@ class BulkIntakeRegistrationPreferencesBridgeService
 
         $data = [
             'profile' => $profile,
-            'preferencePreset' => $wasCompletelyEmpty ? ($suggestions['preference_preset'] ?? 'balanced') : 'custom',
+            'preferencePreset' => $wasCompletelyEmpty ? ($bulkDefaults['preference_preset'] ?? 'balanced') : 'custom',
             'preferencePresetDefaults' => [
                 'traditional' => PartnerPreferencePresetService::applyPreset('traditional', $base),
                 'balanced' => PartnerPreferencePresetService::applyPreset('balanced', $base),
@@ -182,6 +237,7 @@ class BulkIntakeRegistrationPreferencesBridgeService
             'allMaritalStatuses' => \App\Models\MasterMaritalStatus::where('is_active', true)->orderBy('label')->get(),
             'interestedInIntercaste' => false,
             'bulkIntakePreferencesMode' => true,
+            'bulkPreferencesIncomeOpenToAll' => true,
             'partnerPrefTabMode' => true,
             'currentSection' => 'full',
         ];
@@ -219,9 +275,50 @@ class BulkIntakeRegistrationPreferencesBridgeService
      */
     public function buildPreferencesSnapshotFromRequest(Request $request): array
     {
+        $row = PartnerPreferenceSnapshotBuilder::validateAndBuildRow($request);
+
         return [
-            'preferences' => PartnerPreferenceSnapshotBuilder::validateAndBuildRow($request),
+            'preferences' => $this->normalizeBulkOpenToAllOnSave($row),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function normalizeBulkOpenToAllOnSave(array $row): array
+    {
+        if ($this->isIncomeOpenToAll($row['preferred_income_min'] ?? null, $row['preferred_income_max'] ?? null)) {
+            $row['preferred_income_min'] = null;
+            $row['preferred_income_max'] = null;
+        }
+
+        return $row;
+    }
+
+    private function isIncomeOpenToAll(mixed $min, mixed $max): bool
+    {
+        if ($min === null && $max === null) {
+            return true;
+        }
+
+        $minLakhs = $min === null || $min === '' ? null : (int) round((float) $min / 100000);
+        $maxLakhs = $max === null || $max === '' ? null : (int) round((float) $max / 100000);
+
+        return $minLakhs === self::INCOME_OPEN_MIN_LAKHS
+            && $maxLakhs === self::INCOME_OPEN_MAX_LAKHS;
+    }
+
+    private function criteriaWithOpenIncome(?object $criteria): ?object
+    {
+        if ($criteria === null) {
+            return null;
+        }
+
+        $criteria->preferred_income_min = null;
+        $criteria->preferred_income_max = null;
+
+        return $criteria;
     }
 
     /**

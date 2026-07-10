@@ -274,15 +274,84 @@ test('public registration preferences save to snapshot and finish on done page',
         'preferred_age_max' => 32,
         'preferred_religion_ids' => [$masters['religion_id']],
         'preferred_caste_ids' => [$masters['caste_id']],
+        'preferred_income_min' => 0,
+        'preferred_income_max' => 50000000,
     ])->assertRedirect(route('bulk-intake.register.done', ['token' => $token]));
 
     $intake = $item->fresh()->biodataIntake?->fresh();
     expect($intake)->not->toBeNull()
         ->and((int) data_get($intake->approval_snapshot_json, 'preferences.preferred_age_min'))->toBe(24)
         ->and((int) data_get($intake->approval_snapshot_json, 'preferences.preferred_age_max'))->toBe(32)
+        ->and(data_get($intake->approval_snapshot_json, 'preferences.preferred_income_min'))->toBeNull()
+        ->and(data_get($intake->approval_snapshot_json, 'preferences.preferred_income_max'))->toBeNull()
+        ->and(data_get($intake->approval_snapshot_json, 'preferences.preferred_education_degree_ids'))->toBe([])
+        ->and(data_get($intake->approval_snapshot_json, 'preferences.preferred_occupation_master_ids'))->toBe([])
+        ->and(data_get($intake->approval_snapshot_json, 'preferences.preferred_diet_ids'))->toBe([])
         ->and(data_get($item->fresh()->item_meta_json, 'registration.preferences_completed_at'))->not->toBeNull();
 
     $this->get(route('bulk-intake.register.done', ['token' => $token]))
         ->assertOk()
         ->assertSee('नोंदणी पूर्ण झाली');
+});
+
+test('bulk registration preferences default education occupation income and diet to open to all', function () {
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
+    $service = app(BulkIntakePublicRegistrationService::class);
+    $bridge = app(\App\Services\Intake\BulkIntakeRegistrationPreferencesBridgeService::class);
+    $token = $service->ensureToken($item);
+    $masters = registrationMasterIds();
+    $career = registrationCareerMasters();
+
+    $this->post(route('bulk-intake.register.store', ['token' => $token]), [
+        'full_name' => 'Open Prefs Candidate',
+        'mobile' => '9876543301',
+        'date_of_birth' => '1998-04-15',
+        'height_cm' => 165,
+        'gender_id' => $masters['gender_id'],
+        'mother_tongue_id' => $masters['mother_tongue_id'],
+        'marital_status_id' => $masters['marital_status_id'],
+        'religion_id' => $masters['religion_id'],
+        'caste_id' => $masters['caste_id'],
+        'location_id' => registrationLocationId(),
+        'education_degree_ids' => [$career['education_degree_id']],
+        'occupation_master_id' => $career['occupation_master_id'],
+        'income_period' => 'annual',
+        'income_value_type' => 'exact',
+        'income_amount' => '500000',
+        'income_currency_id' => registrationIncomeCurrencyId(),
+        'marriages' => [[
+            'marriage_year' => '',
+            'divorce_year' => '',
+            'separation_year' => '',
+            'spouse_death_year' => '',
+            'divorce_status' => '',
+        ]],
+    ]);
+
+    $photo = \Illuminate\Http\UploadedFile::fake()->image('candidate.jpg', 640, 800);
+    $this->post(route('bulk-intake.register.photo.store', ['token' => $token]), [
+        'profile_photo' => $photo,
+    ]);
+
+    $intake = $item->fresh()->biodataIntake?->fresh();
+    $snapshot = is_array($intake?->approval_snapshot_json) ? $intake->approval_snapshot_json : [];
+    $defaults = $bridge->suggestForBulkRegistration(
+        app(\App\Services\Intake\BulkIntakeRegistrationFormBridgeService::class)->profileFromSnapshot($snapshot, $item->fresh())
+    );
+
+    expect($defaults['preferred_education_degree_ids'])->toBe([])
+        ->and($defaults['preferred_occupation_master_ids'])->toBe([])
+        ->and($defaults['preferred_diet_ids'])->toBe([])
+        ->and($defaults['preferred_mother_tongue_ids'])->toBe([])
+        ->and($defaults['preferred_income_min'])->toBeNull()
+        ->and($defaults['preferred_income_max'])->toBeNull()
+        ->and($defaults['preferred_religion_ids'])->toBe([$masters['religion_id']])
+        ->and($defaults['preferred_caste_ids'])->toBe([$masters['caste_id']])
+        ->and($defaults['preferred_age_min'])->not->toBeNull();
+
+    $payload = $service->preferencesPayload($item->fresh());
+    expect($payload['preferredEducationDegreeIds'])->toBe([])
+        ->and($payload['preferredOccupationMasterIds'])->toBe([])
+        ->and($payload['preferredDietIds'])->toBe([])
+        ->and($payload['preferenceCriteria']->preferred_income_min ?? null)->toBeNull();
 });

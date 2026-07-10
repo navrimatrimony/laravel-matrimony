@@ -12,7 +12,7 @@
             @if (! empty($candidate_name))
                 <p class="mt-0.5 text-base font-semibold text-violet-800">{{ $candidate_name }}</p>
             @endif
-            <p class="mt-2 text-sm text-gray-600">तुम्हाला कोणत्या प्रकारची जोडीदार अपेक्षित आहे ते निवडा.</p>
+            <p class="mt-2 text-sm text-gray-600">आम्ही तुमच्या नोंदणी माहितीवर आधारित प्राधान्ये भरले आहेत. शिक्षण, व्यवसाय, उत्पन्न आणि आहार — सर्वांसाठी खुले ठेवले आहेत. फक्त तपासा आणि पुष्टी करा.</p>
         </div>
 
         @if ($errors->any())
