@@ -138,6 +138,154 @@ class MetaWhatsAppCloudService
     }
 
     /**
+     * Future bulk-intake permission message via interactive reply buttons.
+     * Wire MetaBulkIntakeWhatsAppConsentSender to this when template + live mode are ready.
+     *
+     * @param  list<array{id: string, title: string}>  $buttons
+     */
+    public function sendBulkConsentInteractive(string $mobileDigits, string $body, array $buttons): bool
+    {
+        if (! $this->isCoreConfigured()) {
+            return false;
+        }
+
+        $to = $this->formatRecipientE164Digits($mobileDigits);
+        if ($to === '' || $buttons === []) {
+            return false;
+        }
+
+        $version = config('whatsapp.graph_version', 'v22.0');
+        $phoneNumberId = config('whatsapp.phone_number_id');
+        $url = sprintf('https://graph.facebook.com/%s/%s/messages', $version, $phoneNumberId);
+
+        $replyButtons = [];
+        foreach (array_slice($buttons, 0, 3) as $button) {
+            if (! is_array($button)) {
+                continue;
+            }
+            $id = trim((string) ($button['id'] ?? ''));
+            $title = trim((string) ($button['title'] ?? ''));
+            if ($id === '' || $title === '') {
+                continue;
+            }
+            $replyButtons[] = [
+                'type' => 'reply',
+                'reply' => [
+                    'id' => $id,
+                    'title' => mb_substr($title, 0, 20),
+                ],
+            ];
+        }
+
+        if ($replyButtons === []) {
+            return false;
+        }
+
+        $payload = [
+            'messaging_product' => 'whatsapp',
+            'recipient_type' => 'individual',
+            'to' => $to,
+            'type' => 'interactive',
+            'interactive' => [
+                'type' => 'button',
+                'body' => ['text' => $body],
+                'action' => ['buttons' => $replyButtons],
+            ],
+        ];
+
+        $response = Http::withToken((string) config('whatsapp.access_token'))
+            ->timeout((int) config('whatsapp.http_timeout', 15))
+            ->acceptJson()
+            ->asJson()
+            ->post($url, $payload);
+
+        if (! $response->successful()) {
+            Log::warning('whatsapp_bulk_consent_interactive_failed', [
+                'status' => $response->status(),
+                'body' => $response->json(),
+            ]);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Future bulk-intake permission message via interactive reply buttons.
+     * Wire MetaBulkIntakeWhatsAppConsentSender to this when live mode is ready.
+     *
+     * @param  list<array{id: string, title: string}>  $buttons
+     */
+    public function sendBulkConsentInteractive(string $mobileDigits, string $body, array $buttons): bool
+    {
+        if (! $this->isCoreConfigured()) {
+            return false;
+        }
+
+        $to = $this->formatRecipientE164Digits($mobileDigits);
+        if ($to === '' || $buttons === []) {
+            return false;
+        }
+
+        $version = config('whatsapp.graph_version', 'v22.0');
+        $phoneNumberId = config('whatsapp.phone_number_id');
+        $url = sprintf('https://graph.facebook.com/%s/%s/messages', $version, $phoneNumberId);
+
+        $replyButtons = [];
+        foreach (array_slice($buttons, 0, 3) as $button) {
+            if (! is_array($button)) {
+                continue;
+            }
+            $id = trim((string) ($button['id'] ?? ''));
+            $title = trim((string) ($button['title'] ?? ''));
+            if ($id === '' || $title === '') {
+                continue;
+            }
+            $replyButtons[] = [
+                'type' => 'reply',
+                'reply' => [
+                    'id' => $id,
+                    'title' => mb_substr($title, 0, 20),
+                ],
+            ];
+        }
+
+        if ($replyButtons === []) {
+            return false;
+        }
+
+        $payload = [
+            'messaging_product' => 'whatsapp',
+            'recipient_type' => 'individual',
+            'to' => $to,
+            'type' => 'interactive',
+            'interactive' => [
+                'type' => 'button',
+                'body' => ['text' => $body],
+                'action' => ['buttons' => $replyButtons],
+            ],
+        ];
+
+        $response = Http::withToken((string) config('whatsapp.access_token'))
+            ->timeout((int) config('whatsapp.http_timeout', 15))
+            ->acceptJson()
+            ->asJson()
+            ->post($url, $payload);
+
+        if (! $response->successful()) {
+            Log::warning('whatsapp_bulk_consent_interactive_failed', [
+                'status' => $response->status(),
+                'body' => $response->json(),
+            ]);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * @return list<array{type: string, text: string}>
      */
     private function buildBodyParametersFromJsonOrSingle(string $rawJson, string $singleFallback): array

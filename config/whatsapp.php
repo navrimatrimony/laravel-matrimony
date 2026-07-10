@@ -79,4 +79,10 @@ return [
     'bulk_consent_template_name' => env('BULK_INTAKE_WHATSAPP_CONSENT_TEMPLATE_NAME', ''),
     'bulk_consent_template_language' => env('BULK_INTAKE_WHATSAPP_CONSENT_TEMPLATE_LANGUAGE', 'mr'),
     'bulk_consent_no_response_hours' => (int) env('BULK_INTAKE_WHATSAPP_CONSENT_NO_RESPONSE_HOURS', 72),
+
+    /**
+     * When Meta live sending is off, allow admin manual WhatsApp preview (wa.me)
+     * and dashboard reply simulation for end-to-end UX testing.
+     */
+    'bulk_consent_manual_test_enabled' => filter_var(env('BULK_INTAKE_WHATSAPP_CONSENT_MANUAL_TEST_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
 ];

@@ -139,7 +139,9 @@ test('batch show renders send permission action and consent badge after send', f
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
         ->assertSee('data-testid="bulk-send-whatsapp-permission"', false)
-        ->assertSee('data-testid="bulk-send-whatsapp-permission-batch"', false);
+        ->assertSee('data-testid="bulk-send-whatsapp-permission-batch"', false)
+        ->assertSee('data-testid="bulk-whatsapp-manual-test-banner"', false)
+        ->assertSee('data-testid="bulk-open-whatsapp-manual-test"', false);
 
     app(BulkIntakeWhatsAppConsentService::class)->sendPermission($item, $admin);
 
@@ -148,7 +150,39 @@ test('batch show renders send permission action and consent badge after send', f
         ->assertOk()
         ->assertSee('data-testid="bulk-whatsapp-consent-badge"', false)
         ->assertSee('Permission sent', false)
+        ->assertSee('data-testid="bulk-open-whatsapp-manual-test"', false)
+        ->assertSee('data-testid="bulk-simulate-whatsapp-yes"', false)
+        ->assertSee('data-testid="bulk-simulate-whatsapp-no"', false)
         ->assertDontSee('data-testid="bulk-send-whatsapp-permission"', false);
+});
+
+test('admin can simulate whatsapp user reply from batch show', function () {
+    $admin = whatsappConsentAdmin();
+    $item = whatsappConsentEligibleItem();
+    $service = app(BulkIntakeWhatsAppConsentService::class);
+    $service->sendPermission($item, $admin);
+
+    $this->actingAs($admin)
+        ->post(route('admin.bulk-intakes.items.simulate-whatsapp-consent-reply', [
+            'bulkIntakeBatch' => $item->bulk_intake_batch_id,
+            'bulkIntakeBatchItem' => $item->id,
+        ]), [
+            'reply_choice' => BulkIntakeWhatsAppConsentService::REPLY_YES,
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    expect($service->consentStatus($item->fresh()))
+        ->toBe(BulkIntakeWhatsAppConsentService::STATUS_CONSENT_RECEIVED);
+});
+
+test('manual whatsapp share url contains permission message text', function () {
+    $item = whatsappConsentEligibleItem();
+    $service = app(BulkIntakeWhatsAppConsentService::class);
+    $url = $service->buildManualTestWhatsAppShareUrl($item);
+
+    expect($url)->toContain('api.whatsapp.com/send')
+        ->and($url)->toContain(urlencode('नवरी-नवरा मॅट्रिमोनी'));
 });
 
 test('not interested reply blocks future eligible item with same mobile in pipeline', function () {

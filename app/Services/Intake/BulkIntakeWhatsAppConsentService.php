@@ -247,6 +247,141 @@ class BulkIntakeWhatsAppConsentService
         return 'नमस्कार, आम्ही नवरी-नवरा मॅट्रिमोनी आहोत. तुमच्या '.$relativeLabel.' चा biodata मिळाला. योग्य स्थळे सुचवू का? परवानगी द्या.';
     }
 
+    public function isLiveMetaSendingEnabled(): bool
+    {
+        $sender = strtolower(trim((string) config('whatsapp.bulk_consent_sender', 'log')));
+
+        return (bool) config('whatsapp.bulk_consent_live_enabled', false)
+            && in_array($sender, ['meta', 'cloud_api', 'meta_cloud'], true)
+            && trim((string) config('whatsapp.access_token', '')) !== ''
+            && trim((string) config('whatsapp.phone_number_id', '')) !== '';
+    }
+
+    public function isManualWhatsAppTestEnabled(): bool
+    {
+        if (! (bool) config('whatsapp.bulk_consent_manual_test_enabled', true)) {
+            return false;
+        }
+
+        return ! $this->isLiveMetaSendingEnabled();
+    }
+
+    /**
+     * @return array{
+     *     body: string,
+     *     buttons: list<array{id: string, title: string}>,
+     *     button_line: string,
+     *     share_text: string
+     * }
+     */
+    public function buildManualTestPreview(BulkIntakeBatchItem $item): array
+    {
+        $body = $this->buildPermissionMessage($item);
+        $buttons = $this->permissionButtons();
+        $buttonLine = implode('  |  ', array_map(
+            static fn (array $button): string => '[ '.(string) ($button['title'] ?? '').' ]',
+            $buttons
+        ));
+        $shareText = $body."\n\nकृपया एक पर्याय निवडा:\n".$buttonLine;
+
+        return [
+            'body' => $body,
+            'buttons' => $buttons,
+            'button_line' => $buttonLine,
+            'share_text' => $shareText,
+        ];
+    }
+
+    public function buildManualTestWhatsAppShareUrl(BulkIntakeBatchItem $item): string
+    {
+        $preview = $this->buildManualTestPreview($item);
+
+        return 'https://api.whatsapp.com/send?'.http_build_query([
+            'text' => $preview['share_text'],
+        ]);
+    }
+
+    public function canSimulateUserReply(BulkIntakeBatchItem $item): bool
+    {
+        if (! $this->isManualWhatsAppTestEnabled()) {
+            return false;
+        }
+
+        if ($this->consentStatus($item) !== self::STATUS_PERMISSION_SENT) {
+            return false;
+        }
+
+        $sessionId = (int) ($this->consentPayload($item)['intake_whatsapp_session_id'] ?? 0);
+
+        return $sessionId > 0;
+    }
+
+    /**
+     * @return array{processed: bool, item_id: int|null, status: string|null}
+     */
+    public function simulateUserReply(BulkIntakeBatchItem $item, string $replyChoice, User $actor): array
+    {
+        if (! $this->isManualWhatsAppTestEnabled()) {
+            throw ValidationException::withMessages([
+                'whatsapp_consent' => 'Manual WhatsApp reply simulation is disabled while live Meta sending is active.',
+            ]);
+        }
+
+        if ($this->consentStatus($item) !== self::STATUS_PERMISSION_SENT) {
+            throw ValidationException::withMessages([
+                'whatsapp_consent' => 'WhatsApp permission must be sent before simulating a user reply.',
+            ]);
+        }
+
+        $allowedChoices = [
+            self::REPLY_YES,
+            self::REPLY_NO,
+            self::REPLY_ALREADY_MARRIED,
+            self::REPLY_WRONG_NUMBER,
+        ];
+        if (! in_array($replyChoice, $allowedChoices, true)) {
+            throw ValidationException::withMessages([
+                'reply_choice' => 'Invalid simulated WhatsApp reply choice.',
+            ]);
+        }
+
+        $sessionId = (int) ($this->consentPayload($item)['intake_whatsapp_session_id'] ?? 0);
+        if ($sessionId <= 0) {
+            throw ValidationException::withMessages([
+                'whatsapp_consent' => 'Linked WhatsApp session is missing for this permission message.',
+            ]);
+        }
+
+        $session = IntakeWhatsAppSession::query()->findOrFail($sessionId);
+        $button = collect($this->permissionButtons())->firstWhere('id', $replyChoice);
+        $buttonTitle = is_array($button) ? (string) ($button['title'] ?? $replyChoice) : $replyChoice;
+
+        $result = $this->processInboundReply($session, $buttonTitle, $replyChoice);
+        if (! $result['processed']) {
+            throw ValidationException::withMessages([
+                'whatsapp_consent' => 'Simulated WhatsApp reply could not be processed.',
+            ]);
+        }
+
+        $freshItem = $item->fresh();
+        $meta = is_array($freshItem?->item_meta_json) ? $freshItem->item_meta_json : [];
+        $consent = is_array($meta['whatsapp_consent'] ?? null) ? $meta['whatsapp_consent'] : [];
+        $meta['whatsapp_consent'] = array_merge($consent, [
+            'simulated_reply_by_user_id' => (int) $actor->id,
+            'simulated_reply_at' => now()->toISOString(),
+        ]);
+        $freshItem?->forceFill(['item_meta_json' => $meta])->save();
+
+        return $result;
+    }
+
+    public function sendModeLabel(): string
+    {
+        return $this->isLiveMetaSendingEnabled()
+            ? 'Live Meta WhatsApp'
+            : 'Manual test mode (Meta API not live)';
+    }
+
     public function statusLabel(string $status): string
     {
         return match ($status) {

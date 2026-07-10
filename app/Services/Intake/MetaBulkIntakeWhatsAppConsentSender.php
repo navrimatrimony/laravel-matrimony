@@ -30,6 +30,10 @@ class MetaBulkIntakeWhatsAppConsentSender implements BulkIntakeWhatsAppConsentSe
         }
 
         $templateName = trim((string) config('whatsapp.bulk_consent_template_name', ''));
+        if ($templateName !== '' && $this->cloudService->sendBulkConsentInteractive($normalizedMobile, $body, array_slice($buttons, 0, 3))) {
+            return WhatsAppSendResult::success('meta-interactive-'.md5($normalizedMobile.'|'.$body));
+        }
+
         if (! $this->cloudService->canSendEngagementTemplate() && $templateName === '') {
             return WhatsAppSendResult::failure(
                 'bulk_consent_not_configured',
@@ -37,10 +41,13 @@ class MetaBulkIntakeWhatsAppConsentSender implements BulkIntakeWhatsAppConsentSe
             );
         }
 
-        // Template + interactive button wiring will be added when Meta API is available.
+        if ($templateName !== '' && $this->cloudService->sendEngagementTemplate($normalizedMobile, $body)) {
+            return WhatsAppSendResult::success('meta-template-'.md5($normalizedMobile.'|'.$templateName));
+        }
+
         return WhatsAppSendResult::failure(
-            'bulk_consent_meta_not_implemented',
-            'Meta bulk consent sender is not wired yet. Use log sender for testing.'
+            'bulk_consent_meta_send_failed',
+            'Meta bulk consent message could not be sent. Check template approval and credentials.'
         );
     }
 }

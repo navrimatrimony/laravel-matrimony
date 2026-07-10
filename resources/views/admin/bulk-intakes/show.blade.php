@@ -36,6 +36,8 @@
     $readyCount = (int) ($readyCount ?? 0);
     $whatsappConsentByItemId = is_array($whatsappConsentByItemId ?? null) ? $whatsappConsentByItemId : [];
     $whatsappEligibleToSendCount = (int) ($whatsappEligibleToSendCount ?? 0);
+    $whatsappManualTestEnabled = (bool) ($whatsappManualTestEnabled ?? false);
+    $whatsappSendModeLabel = (string) ($whatsappSendModeLabel ?? '');
     $screeningFilter = (string) ($screeningFilter ?? 'all');
     $primaryScreeningFilters = is_array($primaryScreeningFilters ?? null) ? $primaryScreeningFilters : [];
     $legacyScreeningFilters = is_array($legacyScreeningFilters ?? null) ? $legacyScreeningFilters : [];
@@ -110,6 +112,18 @@
     @endif
     @if (session('error'))
         <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{{ session('error') }}</div>
+    @endif
+
+    @if ($whatsappManualTestEnabled)
+        <div data-testid="bulk-whatsapp-manual-test-banner" class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+            <p class="font-semibold">{{ $whatsappSendModeLabel }}</p>
+            <p class="mt-1 text-xs text-sky-800">
+                Meta API key नसल्यामुळे message phone वर automatic जात नाही. प्रत्येक eligible row वर
+                <strong>Send permission</strong> → <strong>Open on my WhatsApp</strong> → message तुमच्या phone वर पहा.
+                नंतर <strong>Simulate user reply</strong> बटणांनी user ने काय केले ते test करा.
+                Meta API key टाकल्यावर हेच Send permission automatic live होईल.
+            </p>
+        </div>
     @endif
 
     <details class="rounded-lg bg-white p-4 shadow">
@@ -315,6 +329,9 @@
                                 $whatsappConsentStatus = (string) ($whatsappConsent['status'] ?? '');
                                 $whatsappConsentLabel = (string) ($whatsappConsent['status_label'] ?? '');
                                 $canSendWhatsAppPermission = (bool) data_get($whatsappConsent, 'can_send.allowed', false);
+                                $canSimulateWhatsAppReply = (bool) ($whatsappConsent['can_simulate_reply'] ?? false);
+                                $manualWhatsAppPreview = is_array($whatsappConsent['manual_preview'] ?? null) ? $whatsappConsent['manual_preview'] : null;
+                                $manualWhatsAppShareUrl = (string) ($whatsappConsent['manual_whatsapp_share_url'] ?? '');
                                 $whatsappConsentBadgeClass = match ($whatsappConsentStatus) {
                                     \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_CONSENT_RECEIVED => 'border-emerald-300 bg-emerald-100 text-emerald-900',
                                     \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_PERMISSION_SENT => 'border-sky-300 bg-sky-100 text-sky-900',
@@ -614,6 +631,44 @@
                                                     class="text-left text-sm font-medium text-emerald-700 hover:text-emerald-900"
                                                 >Send permission</button>
                                             </form>
+                                        @endif
+
+                                        @if ($whatsappManualTestEnabled && ($canSendWhatsAppPermission || $whatsappConsentStatus === \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_PERMISSION_SENT) && $manualWhatsAppPreview)
+                                            <div class="mt-1 rounded-md border border-sky-100 bg-sky-50 p-2">
+                                                <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-sky-700">WhatsApp test</span>
+                                                <p data-testid="bulk-whatsapp-message-preview" class="whitespace-pre-wrap text-xs text-sky-900">{{ $manualWhatsAppPreview['share_text'] ?? '' }}</p>
+                                                @if ($manualWhatsAppShareUrl !== '')
+                                                    <a
+                                                        href="{{ $manualWhatsAppShareUrl }}"
+                                                        target="_blank"
+                                                        rel="noopener"
+                                                        data-testid="bulk-open-whatsapp-manual-test"
+                                                        class="mt-2 inline-flex text-sm font-medium text-emerald-700 hover:text-emerald-900"
+                                                    >Open on my WhatsApp</a>
+                                                @endif
+                                            </div>
+                                        @endif
+
+                                        @if ($canSimulateWhatsAppReply)
+                                            <div class="mt-1 border-t border-gray-100 pt-2">
+                                                <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-gray-400">Simulate user reply</span>
+                                                @foreach ([
+                                                    \App\Services\Intake\BulkIntakeWhatsAppConsentService::REPLY_YES => ['label' => 'हो', 'testid' => 'bulk-simulate-whatsapp-yes'],
+                                                    \App\Services\Intake\BulkIntakeWhatsAppConsentService::REPLY_NO => ['label' => 'नको', 'testid' => 'bulk-simulate-whatsapp-no'],
+                                                    \App\Services\Intake\BulkIntakeWhatsAppConsentService::REPLY_ALREADY_MARRIED => ['label' => 'लग्न झाले', 'testid' => 'bulk-simulate-whatsapp-married'],
+                                                    \App\Services\Intake\BulkIntakeWhatsAppConsentService::REPLY_WRONG_NUMBER => ['label' => 'चुकीचा नंबर', 'testid' => 'bulk-simulate-whatsapp-wrong'],
+                                                ] as $simulateReplyChoice => $simulateReplyAction)
+                                                    <form method="POST" action="{{ route('admin.bulk-intakes.items.simulate-whatsapp-consent-reply', [$batch, $item]) }}" class="mt-1">
+                                                        @csrf
+                                                        <input type="hidden" name="reply_choice" value="{{ $simulateReplyChoice }}">
+                                                        <button
+                                                            type="submit"
+                                                            data-testid="{{ $simulateReplyAction['testid'] }}"
+                                                            class="text-left text-sm font-medium text-indigo-700 hover:text-indigo-900"
+                                                        >{{ $simulateReplyAction['label'] }}</button>
+                                                    </form>
+                                                @endforeach
+                                            </div>
                                         @endif
 
                                         @if ($intake)

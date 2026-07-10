@@ -228,6 +228,7 @@ class AdminBulkIntakeController extends Controller
             fn (BulkIntakeBatchItem $item): bool => (bool) ($readyForConsentByItemId[(int) $item->id]['ready'] ?? false),
         );
         $readyCount = (int) ($screeningCounts[BulkIntakeEligibilityService::FILTER_READY] ?? 0);
+        $manualWhatsAppTestEnabled = $whatsappConsentService->isManualWhatsAppTestEnabled();
         $whatsappConsentByItemId = $statusFilteredItems
             ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
                 (int) $item->id => [
@@ -239,6 +240,13 @@ class AdminBulkIntakeController extends Controller
                         $item,
                         $pipelineByItemId[(int) $item->id] ?? null
                     ),
+                    'can_simulate_reply' => $whatsappConsentService->canSimulateUserReply($item),
+                    'manual_preview' => $manualWhatsAppTestEnabled
+                        ? $whatsappConsentService->buildManualTestPreview($item)
+                        : null,
+                    'manual_whatsapp_share_url' => $manualWhatsAppTestEnabled
+                        ? $whatsappConsentService->buildManualTestWhatsAppShareUrl($item)
+                        : null,
                 ],
             ])
             ->all();
@@ -276,6 +284,8 @@ class AdminBulkIntakeController extends Controller
             'readyCount' => $readyCount,
             'whatsappConsentByItemId' => $whatsappConsentByItemId,
             'whatsappEligibleToSendCount' => $whatsappEligibleToSendCount,
+            'whatsappManualTestEnabled' => $manualWhatsAppTestEnabled,
+            'whatsappSendModeLabel' => $whatsappConsentService->sendModeLabel(),
             'screeningFilter' => $screeningFilter,
             'primaryScreeningFilters' => $primaryScreeningFilters,
             'legacyScreeningFilters' => $legacyScreeningFilters,
@@ -854,9 +864,44 @@ class AdminBulkIntakeController extends Controller
                 ->with('error', $result['error_message'] ?? 'WhatsApp permission message could not be sent.');
         }
 
+        $successMessage = $whatsappConsentService->isLiveMetaSendingEnabled()
+            ? 'WhatsApp permission message sent to the candidate mobile.'
+            : 'Permission marked as sent. Use “Open on my WhatsApp” below to preview the message on your phone, then simulate the user reply.';
+
         return redirect()
             ->back()
-            ->with('success', 'WhatsApp permission message queued for this eligible candidate.');
+            ->with('success', $successMessage);
+    }
+
+    public function simulateItemWhatsAppConsentReply(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeWhatsAppConsentService $whatsappConsentService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $validated = $request->validate([
+            'reply_choice' => ['required', 'string', Rule::in([
+                BulkIntakeWhatsAppConsentService::REPLY_YES,
+                BulkIntakeWhatsAppConsentService::REPLY_NO,
+                BulkIntakeWhatsAppConsentService::REPLY_ALREADY_MARRIED,
+                BulkIntakeWhatsAppConsentService::REPLY_WRONG_NUMBER,
+            ])],
+        ]);
+
+        $result = $whatsappConsentService->simulateUserReply(
+            $bulkIntakeBatchItem,
+            (string) $validated['reply_choice'],
+            $request->user()
+        );
+
+        $label = $whatsappConsentService->statusLabel((string) ($result['status'] ?? ''));
+
+        return redirect()
+            ->back()
+            ->with('success', 'Simulated WhatsApp user reply recorded: '.$label.'.');
     }
 
     public function sendBatchWhatsAppPermission(
