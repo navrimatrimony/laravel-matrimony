@@ -22,6 +22,7 @@ use App\Services\Intake\BulkIntakeIdentityHistoryService;
 use App\Services\Intake\BulkIntakeManualTranscriptService;
 use App\Services\Intake\BulkIntakeProgressPresenter;
 use App\Services\Intake\BulkIntakeReadinessService;
+use App\Services\Intake\BulkIntakeRegistrationService;
 use App\Services\Intake\BulkIntakeWhatsAppConsentService;
 use App\Services\Intake\IntakeOwnerAssignmentService;
 use App\Support\MobileNumber;
@@ -136,6 +137,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeDuplicateGateService $duplicateGateService,
         BulkIntakeProgressPresenter $progressPresenter,
         BulkIntakeWhatsAppConsentService $whatsappConsentService,
+        BulkIntakeRegistrationService $registrationService,
     )
     {
         $statusFilters = $this->bulkItemStatusFilters();
@@ -253,6 +255,22 @@ class AdminBulkIntakeController extends Controller
         $whatsappEligibleToSendCount = collect($whatsappConsentByItemId)
             ->filter(fn (array $consent): bool => (bool) ($consent['can_send']['allowed'] ?? false))
             ->count();
+        $registrationByItemId = $statusFilteredItems
+            ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
+                (int) $item->id => [
+                    'status' => $registrationService->registrationStatus($item),
+                    'status_label' => $registrationService->registrationStatus($item) !== null
+                        ? $registrationService->statusLabel((string) $registrationService->registrationStatus($item))
+                        : null,
+                    'summary' => $registrationService->summaryForItem($item),
+                    'can_send_summary' => $registrationService->canSendRegistrationSummary($item),
+                    'can_simulate_complete' => $registrationService->canSimulateRegistrationComplete($item),
+                    'manual_whatsapp_share_url' => $registrationService->isManualWhatsAppTestEnabled()
+                        ? $registrationService->buildManualTestWhatsAppShareUrl($item)
+                        : null,
+                ],
+            ])
+            ->all();
         $displayItems = $statusFilteredItems
             ->filter(fn (BulkIntakeBatchItem $item): bool => $eligibilityService->itemMatchesPipelineFilter(
                 $screeningFilter,
@@ -286,6 +304,7 @@ class AdminBulkIntakeController extends Controller
             'whatsappEligibleToSendCount' => $whatsappEligibleToSendCount,
             'whatsappManualTestEnabled' => $manualWhatsAppTestEnabled,
             'whatsappSendModeLabel' => $whatsappConsentService->sendModeLabel(),
+            'registrationByItemId' => $registrationByItemId,
             'screeningFilter' => $screeningFilter,
             'primaryScreeningFilters' => $primaryScreeningFilters,
             'legacyScreeningFilters' => $legacyScreeningFilters,
@@ -902,6 +921,48 @@ class AdminBulkIntakeController extends Controller
         return redirect()
             ->back()
             ->with('success', 'Simulated WhatsApp user reply recorded: '.$label.'.');
+    }
+
+    public function sendItemRegistrationSummary(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeRegistrationService $registrationService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $result = $registrationService->sendRegistrationSummary($bulkIntakeBatchItem, $request->user());
+
+        if (! $result['success']) {
+            return redirect()
+                ->back()
+                ->with('error', $result['error_message'] ?? 'Registration summary could not be sent.');
+        }
+
+        $message = $registrationService->isManualWhatsAppTestEnabled()
+            ? 'Registration summary marked as sent. Use “Open summary on WhatsApp” to preview on your phone.'
+            : 'Registration summary sent to candidate mobile.';
+
+        return redirect()
+            ->back()
+            ->with('success', $message);
+    }
+
+    public function simulateItemRegistrationComplete(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeRegistrationService $registrationService
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $registrationService->simulateRegistrationComplete($bulkIntakeBatchItem, $request->user());
+
+        return redirect()
+            ->back()
+            ->with('success', 'Simulated fast-path registration completion recorded.');
     }
 
     public function sendBatchWhatsAppPermission(

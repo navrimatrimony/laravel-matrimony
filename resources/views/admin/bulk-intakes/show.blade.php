@@ -38,6 +38,7 @@
     $whatsappEligibleToSendCount = (int) ($whatsappEligibleToSendCount ?? 0);
     $whatsappManualTestEnabled = (bool) ($whatsappManualTestEnabled ?? false);
     $whatsappSendModeLabel = (string) ($whatsappSendModeLabel ?? '');
+    $registrationByItemId = is_array($registrationByItemId ?? null) ? $registrationByItemId : [];
     $screeningFilter = (string) ($screeningFilter ?? 'all');
     $primaryScreeningFilters = is_array($primaryScreeningFilters ?? null) ? $primaryScreeningFilters : [];
     $legacyScreeningFilters = is_array($legacyScreeningFilters ?? null) ? $legacyScreeningFilters : [];
@@ -332,6 +333,27 @@
                                 $canSimulateWhatsAppReply = (bool) ($whatsappConsent['can_simulate_reply'] ?? false);
                                 $manualWhatsAppPreview = is_array($whatsappConsent['manual_preview'] ?? null) ? $whatsappConsent['manual_preview'] : null;
                                 $manualWhatsAppShareUrl = (string) ($whatsappConsent['manual_whatsapp_share_url'] ?? '');
+                                $registration = is_array($registrationByItemId[$item->id] ?? null) ? $registrationByItemId[$item->id] : [];
+                                $registrationStatus = (string) ($registration['status'] ?? '');
+                                $registrationStatusLabel = (string) ($registration['status_label'] ?? '');
+                                $registrationSummary = is_array($registration['summary'] ?? null) ? $registration['summary'] : [];
+                                $registrationPath = (string) ($registrationSummary['path'] ?? '');
+                                $registrationPathLabel = (string) ($registrationSummary['path_label'] ?? '');
+                                $canSendRegistrationSummary = (bool) data_get($registration, 'can_send_summary.allowed', false);
+                                $canSimulateRegistrationComplete = (bool) ($registration['can_simulate_complete'] ?? false);
+                                $registrationWhatsAppShareUrl = (string) ($registration['manual_whatsapp_share_url'] ?? '');
+                                $consentReceived = $whatsappConsentStatus === \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_CONSENT_RECEIVED;
+                                $registrationBadgeClass = match ($registrationStatus) {
+                                    \App\Services\Intake\BulkIntakeRegistrationService::STATUS_REGISTRATION_COMPLETE => 'border-emerald-300 bg-emerald-100 text-emerald-900',
+                                    \App\Services\Intake\BulkIntakeRegistrationService::STATUS_SUMMARY_SENT => 'border-violet-300 bg-violet-100 text-violet-900',
+                                    default => 'border-gray-200 bg-gray-50 text-gray-700',
+                                };
+                                $registrationPathBadgeClass = match ($registrationPath) {
+                                    \App\Services\Intake\BulkIntakeRegistrationService::PATH_FAST => 'border-emerald-200 bg-emerald-50 text-emerald-800',
+                                    \App\Services\Intake\BulkIntakeRegistrationService::PATH_TARGETED => 'border-amber-200 bg-amber-50 text-amber-900',
+                                    \App\Services\Intake\BulkIntakeRegistrationService::PATH_FULL => 'border-red-200 bg-red-50 text-red-800',
+                                    default => 'border-gray-200 bg-gray-50 text-gray-700',
+                                };
                                 $whatsappConsentBadgeClass = match ($whatsappConsentStatus) {
                                     \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_CONSENT_RECEIVED => 'border-emerald-300 bg-emerald-100 text-emerald-900',
                                     \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_PERMISSION_SENT => 'border-sky-300 bg-sky-100 text-sky-900',
@@ -546,6 +568,12 @@
                                         @if ($whatsappConsentStatus !== '')
                                             <span data-testid="bulk-whatsapp-consent-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $whatsappConsentBadgeClass }}">{{ $whatsappConsentLabel }}</span>
                                         @endif
+                                        @if ($consentReceived && $registrationPath !== '')
+                                            <span data-testid="bulk-registration-path-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $registrationPathBadgeClass }}">{{ $registrationPathLabel }}</span>
+                                        @endif
+                                        @if ($registrationStatus !== '')
+                                            <span data-testid="bulk-registration-status-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $registrationBadgeClass }}">{{ $registrationStatusLabel }}</span>
+                                        @endif
                                         @if ($exceptionBadges !== [])
                                             @foreach ($exceptionBadges as $badge)
                                                 <span @if (! empty($badge['testid'])) data-testid="{{ $badge['testid'] }}" @endif class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $badge['class'] }}">{{ $badge['label'] }}</span>
@@ -674,6 +702,37 @@
                                                         >{{ $simulateReplyLabel }}</button>
                                                     </form>
                                                 @endforeach
+                                            </div>
+                                        @endif
+
+                                        @if ($consentReceived)
+                                            <div class="mt-1 rounded-md border border-violet-100 bg-violet-50 p-2">
+                                                <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-violet-700">Registration (Phase E)</span>
+                                                @if (is_array($registrationSummary['fields'] ?? null))
+                                                    <div data-testid="bulk-registration-summary-preview" class="space-y-0.5 text-xs text-violet-900">
+                                                        @foreach ($registrationSummary['fields'] as $summaryField)
+                                                            <div>{{ $summaryField['icon'] ?? '⚠' }} {{ $summaryField['label'] ?? '' }}: {{ $summaryField['value'] ?? '—' }}</div>
+                                                        @endforeach
+                                                    </div>
+                                                @endif
+                                                @if ($canSendRegistrationSummary)
+                                                    <form method="POST" action="{{ route('admin.bulk-intakes.items.send-registration-summary', [$batch, $item]) }}" class="mt-2">
+                                                        @csrf
+                                                        <button type="submit" data-testid="bulk-send-registration-summary" class="text-left text-sm font-medium text-violet-700 hover:text-violet-900">Send registration summary</button>
+                                                    </form>
+                                                @endif
+                                                @if ($whatsappManualTestEnabled && $registrationWhatsAppShareUrl !== '')
+                                                    <a href="{{ $registrationWhatsAppShareUrl }}" target="_blank" rel="noopener" data-testid="bulk-open-registration-whatsapp-test" class="mt-2 inline-flex text-sm font-medium text-emerald-700 hover:text-emerald-900">Open summary on WhatsApp</a>
+                                                @endif
+                                                @if ($intake)
+                                                    <a href="{{ route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]) }}" data-testid="bulk-registration-web-edit" class="mt-2 block text-sm font-medium text-indigo-700 hover:text-indigo-900">वेबवर सर्व edit करा</a>
+                                                @endif
+                                                @if ($canSimulateRegistrationComplete)
+                                                    <form method="POST" action="{{ route('admin.bulk-intakes.items.simulate-registration-complete', [$batch, $item]) }}" class="mt-2">
+                                                        @csrf
+                                                        <button type="submit" data-testid="bulk-simulate-registration-complete" class="text-left text-sm font-medium text-emerald-700 hover:text-emerald-900">नोंदणी पूर्ण करा (simulate)</button>
+                                                    </form>
+                                                @endif
                                             </div>
                                         @endif
 
