@@ -27,11 +27,11 @@
         <div class="relative min-h-screen overflow-hidden bg-slate-100">
             @if ($guestBackgroundImageUrl)
                 <div
-                    class="absolute inset-0 bg-cover bg-center bg-no-repeat scale-105"
+                    class="absolute inset-0 bg-contain bg-center bg-no-repeat"
                     style="background-image: url('{{ $guestBackgroundImageUrl }}');"
                     aria-hidden="true"
                 ></div>
-                <div class="absolute inset-0 bg-white/35" aria-hidden="true"></div>
+                <div class="absolute inset-0 bg-white/15" aria-hidden="true"></div>
             @endif
 
             <div class="relative z-10 min-h-screen px-4 py-6 sm:px-6 lg:px-8">

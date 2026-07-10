@@ -18,6 +18,9 @@ class BulkIntakePublicRegistrationController extends Controller
         abort_unless($gate['allowed'], 403, $registrationService->accessDeniedMessage((string) $gate['reason']));
 
         $payload = $registrationService->formPayload($item);
+        if ($payload['prefer_marathi_labels'] ?? false) {
+            app()->setLocale('mr');
+        }
 
         return view('bulk-intake.register', [
             'token' => $token,

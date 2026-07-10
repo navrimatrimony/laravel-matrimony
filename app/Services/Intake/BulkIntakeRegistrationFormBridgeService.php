@@ -15,6 +15,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\Religion;
 use App\Models\Caste;
 use App\Services\EducationService;
+use App\Services\Location\LocationNormalizationService;
 use App\Services\OccupationService;
 use App\Support\HeightDisplay;
 use App\Support\MobileNumber;
@@ -50,18 +51,30 @@ class BulkIntakeRegistrationFormBridgeService
      */
     public function viewContext(BulkIntakeBatchItem $item, array $snapshot, ?string $candidateName, ?string $mobile): array
     {
+        $intake = $item->biodataIntake;
+        if (! $intake instanceof BiodataIntake) {
+            throw ValidationException::withMessages([
+                'registration' => 'Linked biodata intake is missing.',
+            ]);
+        }
+
         $core = is_array($snapshot['core'] ?? null) ? $snapshot['core'] : [];
-        $profile = $this->profileFromSnapshot($snapshot, $item);
+        $preferMarathiLabels = $this->biodataLooksMarathi($intake, $core);
+        $profile = $this->profileForRegistrationView($this->profileFromSnapshot($snapshot, $item));
+        if ($preferMarathiLabels && $profile->occupationMaster && filled($profile->occupationMaster->name_mr)) {
+            $profile->occupationMaster->name = (string) $profile->occupationMaster->name_mr;
+        }
 
         return [
             'profile' => $profile,
+            'prefer_marathi_labels' => $preferMarathiLabels,
             'genders' => MasterGender::query()
                 ->where('is_active', true)
                 ->whereIn('key', ['male', 'female'])
                 ->orderByRaw("CASE WHEN `key` = 'male' THEN 1 ELSE 2 END")
                 ->get(),
-            'mother_tongues' => $this->motherTongueOptions(),
-            'marital_statuses' => $this->maritalStatuses(),
+            'mother_tongues' => $this->motherTongueOptions($preferMarathiLabels),
+            'marital_statuses' => $this->maritalStatuses($preferMarathiLabels),
             'profile_marriages' => $this->marriagesCollection($snapshot),
             'profile_children' => $this->childrenCollection($snapshot),
             'child_living_with_options' => $this->childLivingWithOptions(),
@@ -219,8 +232,44 @@ class BulkIntakeRegistrationFormBridgeService
     }
 
     /**
-     * @param  array<string, mixed>  $core
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
      */
+    public function prepareDisplaySnapshot(array $snapshot, BiodataIntake $intake): array
+    {
+        if ($snapshot === []) {
+            return ['core' => []];
+        }
+
+        $snapshot = $this->intakePipeline->normalizeApprovedSnapshot($snapshot, null);
+        $snapshot = $this->backfillRegistrationCoreFromSnapshot($snapshot);
+
+        return $snapshot;
+    }
+
+    public function biodataLooksMarathi(BiodataIntake $intake, array $core): bool
+    {
+        $samples = array_filter([
+            is_string($intake->raw_ocr_text ?? null) ? $intake->raw_ocr_text : null,
+            is_string($core['full_name'] ?? null) ? $core['full_name'] : null,
+            is_string($core['highest_education'] ?? null) ? $core['highest_education'] : null,
+            is_string($core['city_text'] ?? null) ? $core['city_text'] : null,
+            is_string($core['address_line'] ?? null) ? $core['address_line'] : null,
+        ], fn (?string $value): bool => is_string($value) && trim($value) !== '');
+
+        $text = implode(' ', $samples);
+        if ($text === '') {
+            return false;
+        }
+
+        $devanagari = preg_match_all('/\p{Devanagari}/u', $text, $devanagariMatches);
+        $latin = preg_match_all('/\p{Latin}/u', $text, $latinMatches);
+        $devanagariCount = $devanagari === false ? 0 : $devanagari;
+        $latinCount = $latin === false ? 0 : $latin;
+
+        return $devanagariCount >= 8 && $devanagariCount >= $latinCount;
+    }
+
     public function resolveMotherTongueId(BiodataIntake $intake, array $core): ?int
     {
         $existing = $this->intOrNull($core['mother_tongue_id'] ?? null);
@@ -336,10 +385,143 @@ class BulkIntakeRegistrationFormBridgeService
         }
     }
 
+    private function profileForRegistrationView(MatrimonyProfile $profile): MatrimonyProfile
+    {
+        $profile->forceFill([
+            'annual_income' => null,
+            'income_period' => null,
+            'income_value_type' => null,
+            'income_amount' => null,
+            'income_min_amount' => null,
+            'income_max_amount' => null,
+            'income_currency_id' => null,
+            'income_private' => false,
+            'income_range_id' => null,
+        ]);
+
+        return $profile;
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    private function backfillRegistrationCoreFromSnapshot(array $snapshot): array
+    {
+        if (! is_array($snapshot['core'] ?? null)) {
+            $snapshot['core'] = [];
+        }
+
+        $core = &$snapshot['core'];
+
+        if (empty($core['location_id'])) {
+            $core['location_id'] = $this->resolveResidenceLocationId($snapshot);
+        }
+
+        $career = is_array($snapshot['career_history'] ?? null) ? ($snapshot['career_history'][0] ?? null) : null;
+        if (is_array($career)) {
+            foreach ([
+                'occupation_master_id' => 'occupation_master_id',
+                'occupation_custom_id' => 'occupation_custom_id',
+                'company_name' => 'company_name',
+                'working_with_type_id' => 'working_with_type_id',
+                'profession_id' => 'profession_id',
+            ] as $coreKey => $careerKey) {
+                if (empty($core[$coreKey]) && ! empty($career[$careerKey])) {
+                    $core[$coreKey] = $career[$careerKey];
+                }
+            }
+            if (empty($core['occupation_title']) && ! empty($career['occupation_title'])) {
+                $core['occupation_title'] = $career['occupation_title'];
+            }
+        }
+
+        if (empty($core['occupation_master_id'])) {
+            $occupationText = trim((string) ($core['occupation_title'] ?? $core['occupation'] ?? $core['job'] ?? ''));
+            if ($occupationText !== '') {
+                $occupation = app(OccupationService::class)->findOccupationMasterForIntake($occupationText);
+                if ($occupation !== null) {
+                    $core['occupation_master_id'] = (int) $occupation->id;
+                }
+            }
+        }
+
+        if ($this->stringOrNull($core['highest_education'] ?? null) === null) {
+            $educationHistory = is_array($snapshot['education_history'] ?? null) ? $snapshot['education_history'] : [];
+            $parts = [];
+            foreach ($educationHistory as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                $degree = trim((string) ($row['degree'] ?? $row['qualification'] ?? ''));
+                if ($degree !== '') {
+                    $parts[] = $degree;
+                }
+            }
+            if ($parts !== []) {
+                $core['highest_education'] = implode(', ', array_values(array_unique($parts)));
+            }
+        }
+
+        if ($this->stringOrNull($core['company_name'] ?? null) === null) {
+            foreach (['company', 'employer', 'organization'] as $companyKey) {
+                $company = trim((string) ($core[$companyKey] ?? ''));
+                if ($company !== '') {
+                    $core['company_name'] = $company;
+                    break;
+                }
+            }
+        }
+
+        return $snapshot;
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function resolveResidenceLocationId(array $snapshot): ?int
+    {
+        $core = is_array($snapshot['core'] ?? null) ? $snapshot['core'] : [];
+        $existing = $this->intOrNull($core['location_id'] ?? null);
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $addresses = is_array($snapshot['addresses'] ?? null) ? $snapshot['addresses'] : [];
+        foreach ($addresses as $address) {
+            if (! is_array($address)) {
+                continue;
+            }
+            $locationId = $this->intOrNull($address['location_id'] ?? $address['city_id'] ?? null);
+            if ($locationId !== null) {
+                return $locationId;
+            }
+        }
+
+        foreach ([
+            $core['city_text'] ?? null,
+            $core['city'] ?? null,
+            $core['address_line'] ?? null,
+            $core['location_input'] ?? null,
+        ] as $candidate) {
+            $text = is_string($candidate) ? trim($candidate) : '';
+            if ($text === '' || str_contains($text, ',')) {
+                continue;
+            }
+            $resolved = app(LocationNormalizationService::class)->normalizeFromText($text);
+            $locationId = $resolved['location_id'] ?? $resolved['city_id'] ?? null;
+            if (($resolved['confidence'] ?? 0.0) >= 0.80 && ($resolved['matched'] ?? false) && $locationId !== null) {
+                return (int) $locationId;
+            }
+        }
+
+        return null;
+    }
+
     /**
      * @return Collection<int, MasterMaritalStatus>
      */
-    private function maritalStatuses(): Collection
+    private function maritalStatuses(bool $preferMarathiLabels): Collection
     {
         $keys = ['never_married', 'divorced', 'annulled', 'separated', 'widowed'];
         $rows = MasterMaritalStatus::query()
@@ -352,7 +534,16 @@ class BulkIntakeRegistrationFormBridgeService
             ->values();
 
         if ($rows->isEmpty()) {
-            return MasterMaritalStatus::query()->where('is_active', true)->orderBy('id')->get();
+            $rows = MasterMaritalStatus::query()->where('is_active', true)->orderBy('id')->get();
+        }
+
+        if ($preferMarathiLabels) {
+            $rows->each(function (MasterMaritalStatus $status): void {
+                $translated = __('wizard.'.$status->key);
+                if ($translated !== 'wizard.'.$status->key) {
+                    $status->label = $translated;
+                }
+            });
         }
 
         return $rows;
@@ -383,7 +574,7 @@ class BulkIntakeRegistrationFormBridgeService
     /**
      * @return list<array{id: int, label: string}>
      */
-    private function motherTongueOptions(): array
+    private function motherTongueOptions(bool $preferMarathiLabels): array
     {
         return MasterMotherTongue::query()
             ->where('is_active', true)
@@ -392,36 +583,12 @@ class BulkIntakeRegistrationFormBridgeService
             ->get()
             ->map(fn (MasterMotherTongue $row): array => [
                 'id' => (int) $row->id,
-                'label' => $this->preferredLabel($row, 'label_mr', 'label', 'key'),
+                'label' => $preferMarathiLabels
+                    ? $this->preferredLabel($row, 'label_mr', 'label', 'key')
+                    : $this->preferredLabel($row, 'label_en', 'label', 'key'),
             ])
             ->values()
             ->all();
-    }
-
-    /**
-     * @param  array<string, mixed>  $core
-     */
-    private function biodataLooksMarathi(BiodataIntake $intake, array $core): bool
-    {
-        $samples = array_filter([
-            is_string($intake->raw_ocr_text ?? null) ? $intake->raw_ocr_text : null,
-            is_string($core['full_name'] ?? null) ? $core['full_name'] : null,
-            is_string($core['highest_education'] ?? null) ? $core['highest_education'] : null,
-            is_string($core['city_text'] ?? null) ? $core['city_text'] : null,
-            is_string($core['address_line'] ?? null) ? $core['address_line'] : null,
-        ], fn (?string $value): bool => is_string($value) && trim($value) !== '');
-
-        $text = implode(' ', $samples);
-        if ($text === '') {
-            return false;
-        }
-
-        $devanagari = preg_match_all('/\p{Devanagari}/u', $text, $devanagariMatches);
-        $latin = preg_match_all('/\p{Latin}/u', $text, $latinMatches);
-        $devanagariCount = $devanagari === false ? 0 : $devanagari;
-        $latinCount = $latin === false ? 0 : $latin;
-
-        return $devanagariCount >= 8 && $devanagariCount >= $latinCount;
     }
 
     /**

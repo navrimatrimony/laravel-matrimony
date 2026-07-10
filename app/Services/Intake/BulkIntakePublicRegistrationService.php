@@ -91,6 +91,7 @@ class BulkIntakePublicRegistrationService
         }
 
         $snapshot = $this->sourceSnapshot($intake);
+        $snapshot = $this->formBridge->prepareDisplaySnapshot($snapshot, $intake);
         $core = is_array($snapshot['core'] ?? null) ? $snapshot['core'] : [];
         $candidate = $this->candidateDisplayService->candidateForItem($item);
         $motherTongueId = $this->formBridge->resolveMotherTongueId($intake, $core);
@@ -112,7 +113,6 @@ class BulkIntakePublicRegistrationService
                 'item' => $item,
                 'intake' => $intake,
                 'mother_tongue_id' => $motherTongueId,
-                'registration_complete' => $this->registrationComplete($item),
             ],
         );
     }
@@ -199,13 +199,5 @@ class BulkIntakePublicRegistrationService
             'snapshot_locked' => 'This registration can no longer be edited.',
             default => 'Registration link is not available.',
         };
-    }
-
-    private function registrationComplete(BulkIntakeBatchItem $item): bool
-    {
-        $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
-        $status = (string) (data_get($meta, 'registration.status') ?? '');
-
-        return $status === BulkIntakeRegistrationService::STATUS_REGISTRATION_COMPLETE;
     }
 }

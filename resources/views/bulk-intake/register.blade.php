@@ -13,7 +13,6 @@
     $residenceDisplay = is_string($payload['residence_display'] ?? null) ? $payload['residence_display'] : '';
     $mobile = is_string($payload['mobile'] ?? null) ? $payload['mobile'] : '';
     $motherTongueId = $payload['mother_tongue_id'] ?? $profile->mother_tongue_id ?? null;
-    $registrationComplete = (bool) ($payload['registration_complete'] ?? false);
     $candidateName = is_string($payload['candidate_name'] ?? null) ? $payload['candidate_name'] : null;
 
     $dobValue = old('date_of_birth');
@@ -51,12 +50,6 @@
         @if (session('success'))
             <div class="mt-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
                 {{ session('success') }}
-            </div>
-        @endif
-
-        @if ($registrationComplete)
-            <div class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                नोंदणी पूर्ण झाली आहे. गरज असल्यास खाली माहिती पुन्हा बदलू शकता.
             </div>
         @endif
 
@@ -201,19 +194,19 @@
                         />
                     </div>
 
+                    <div>
+                        <label class="{{ $labelClass }}">कंपनी <span class="font-normal text-gray-500">(ऐच्छिक)</span></label>
+                        <input type="text" name="company_name" value="{{ old('company_name', $profile->company_name) }}" class="{{ $inputClass }}">
+                    </div>
+
                     <div class="rounded-xl border border-gray-200 bg-white p-4">
                         <x-income-engine
                             label="उत्पन्न"
                             name-prefix="income"
-                            empty-value-type-default="approximate"
+                            empty-value-type-default="undisclosed"
                             :profile="$profile"
                             :currencies="$currencies"
                         />
-                    </div>
-
-                    <div>
-                        <label class="{{ $labelClass }}">कंपनी <span class="font-normal text-gray-500">(ऐच्छिक)</span></label>
-                        <input type="text" name="company_name" value="{{ old('company_name', $profile->company_name) }}" class="{{ $inputClass }}">
                     </div>
                 </div>
             </section>
