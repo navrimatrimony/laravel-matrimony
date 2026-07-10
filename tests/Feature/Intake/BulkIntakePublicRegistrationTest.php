@@ -11,16 +11,27 @@ uses(RefreshDatabase::class);
 require __DIR__.'/Support/BulkIntakeRegistrationHelpers.php';
 
 test('public registration page opens with token after consent received', function () {
-    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson([
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'अनुजा महादेव पाटील',
+                'primary_contact_number' => '9876543301',
+            ],
+        ],
+    ]));
+    $masters = registrationMasterIds();
     $url = app(BulkIntakePublicRegistrationService::class)->publicUrl($item);
 
     $this->get($url)
         ->assertOk()
         ->assertSee('बायोडाटा नोंदणी पुष्टी')
-        ->assertSee('Registration Candidate')
+        ->assertSee('अनुजा महादेव पाटील')
         ->assertSee('व्यवसाय')
         ->assertDontSee('बायोडाटा फोटो')
         ->assertDontSee('खालील माहिती तपासा');
+
+    $payload = app(BulkIntakePublicRegistrationService::class)->formPayload($item->fresh());
+    expect($payload['fields']['mother_tongue_id'] ?? null)->toBe($masters['mother_tongue_id']);
 });
 
 test('public registration save stores cm height and marks registration complete', function () {

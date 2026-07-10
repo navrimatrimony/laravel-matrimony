@@ -110,7 +110,6 @@ class BulkIntakePublicRegistrationService
      *     working_with_options: list<array{id: int, slug: string, label: string}>,
      *     occupations: list<array{id: int, label: string, working_with_type_id: int|null}>,
      *     occupation_exempt_slugs: list<string>,
-     *     candidate_photo: array{available: bool, url: string|null},
      *     registration_complete: bool
      * }
      */
@@ -127,7 +126,6 @@ class BulkIntakePublicRegistrationService
         $core = is_array($snapshot['core'] ?? null) ? $snapshot['core'] : [];
         $candidate = $this->candidateDisplayService->candidateForItem($item);
         $heightCm = $this->heightCmFromCore($core);
-        $token = $this->ensureToken($item);
 
         return [
             'item' => $item,
@@ -138,7 +136,7 @@ class BulkIntakePublicRegistrationService
                 'mobile' => $candidate['mobile'] ?? $core['primary_contact_number'] ?? null,
                 'date_of_birth' => $core['date_of_birth'] ?? $candidate['date_of_birth'] ?? null,
                 'gender' => $this->genderValue($core),
-                'mother_tongue_id' => $this->intOrNull($core['mother_tongue_id'] ?? null),
+                'mother_tongue_id' => $this->resolveMotherTongueId($intake, $core),
                 'marital_status_id' => $this->intOrNull($core['marital_status_id'] ?? null),
                 'religion_id' => $this->intOrNull($core['religion_id'] ?? null),
                 'caste_id' => $this->intOrNull($core['caste_id'] ?? null),
@@ -158,7 +156,6 @@ class BulkIntakePublicRegistrationService
             'working_with_options' => $this->workingWithOptions(),
             'occupations' => $this->occupationOptions(),
             'occupation_exempt_slugs' => self::OCCUPATION_EXEMPT_SLUGS,
-            'candidate_photo' => $this->candidatePhotoPreview($intake, $token),
             'registration_complete' => $this->registrationComplete($item),
         ];
     }
@@ -555,22 +552,54 @@ class BulkIntakePublicRegistrationService
     }
 
     /**
-     * @return array{available: bool, url: string|null}
+     * @param  array<string, mixed>  $core
      */
-    private function candidatePhotoPreview(BiodataIntake $intake, string $token): array
+    private function resolveMotherTongueId(BiodataIntake $intake, array $core): ?int
     {
-        $cropService = app(IntakePhotoCandidateCropService::class);
-        if (! $cropService->exists($intake)) {
-            return [
-                'available' => false,
-                'url' => null,
-            ];
+        $existing = $this->intOrNull($core['mother_tongue_id'] ?? null);
+        if ($existing !== null) {
+            return $existing;
         }
 
-        return [
-            'available' => true,
-            'url' => route('bulk-intake.register.candidate-photo', ['token' => $token]),
-        ];
+        if (! $this->biodataLooksMarathi($intake, $core)) {
+            return null;
+        }
+
+        $marathi = MasterMotherTongue::query()
+            ->where('is_active', true)
+            ->where(function ($query): void {
+                $query->where('key', 'marathi')->orWhere('label', 'Marathi');
+            })
+            ->orderBy('sort_order')
+            ->first();
+
+        return $marathi ? (int) $marathi->id : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function biodataLooksMarathi(BiodataIntake $intake, array $core): bool
+    {
+        $samples = array_filter([
+            is_string($intake->raw_ocr_text ?? null) ? $intake->raw_ocr_text : null,
+            is_string($core['full_name'] ?? null) ? $core['full_name'] : null,
+            is_string($core['highest_education'] ?? null) ? $core['highest_education'] : null,
+            is_string($core['city_text'] ?? null) ? $core['city_text'] : null,
+            is_string($core['address_line'] ?? null) ? $core['address_line'] : null,
+        ], fn (?string $value): bool => is_string($value) && trim($value) !== '');
+
+        $text = implode(' ', $samples);
+        if ($text === '') {
+            return false;
+        }
+
+        $devanagari = preg_match_all('/\p{Devanagari}/u', $text, $devanagariMatches);
+        $latin = preg_match_all('/\p{Latin}/u', $text, $latinMatches);
+        $devanagariCount = $devanagari === false ? 0 : $devanagari;
+        $latinCount = $latin === false ? 0 : $latin;
+
+        return $devanagariCount >= 8 && $devanagariCount >= $latinCount;
     }
 
     /**

@@ -140,8 +140,6 @@ Route::get('/share/profile/{id}', [PublicProfileShareController::class, 'show'])
 
 Route::get('/register/biodata/{token}', [\App\Http\Controllers\BulkIntakePublicRegistrationController::class, 'show'])
     ->name('bulk-intake.register.show');
-Route::get('/register/biodata/{token}/candidate-photo', [\App\Http\Controllers\BulkIntakePublicRegistrationController::class, 'candidatePhoto'])
-    ->name('bulk-intake.register.candidate-photo');
 Route::post('/register/biodata/{token}', [\App\Http\Controllers\BulkIntakePublicRegistrationController::class, 'store'])
     ->name('bulk-intake.register.store');
 

@@ -11,7 +11,6 @@
     $workingWithOptions = is_array($payload['working_with_options'] ?? null) ? $payload['working_with_options'] : [];
     $occupations = is_array($payload['occupations'] ?? null) ? $payload['occupations'] : [];
     $occupationExemptSlugs = is_array($payload['occupation_exempt_slugs'] ?? null) ? $payload['occupation_exempt_slugs'] : [];
-    $candidatePhoto = is_array($payload['candidate_photo'] ?? null) ? $payload['candidate_photo'] : [];
     $registrationComplete = (bool) ($payload['registration_complete'] ?? false);
     $candidateName = is_string($payload['candidate_name'] ?? null) ? $payload['candidate_name'] : null;
 
@@ -52,24 +51,11 @@
     class="mx-auto w-full max-w-5xl"
 >
     <div class="{{ $sectionClass }}">
-        <div class="flex flex-col gap-4 border-b border-gray-100 pb-5 sm:flex-row sm:items-center">
-            @if (!empty($candidatePhoto['available']) && !empty($candidatePhoto['url']))
-                <div class="shrink-0 self-start">
-                    <img
-                        src="{{ $candidatePhoto['url'] }}"
-                        alt="{{ $candidateName ?? 'उमेदवार फोटो' }}"
-                        class="h-28 w-28 rounded-2xl border-2 border-violet-100 object-cover shadow-sm sm:h-32 sm:w-32"
-                        loading="lazy"
-                    >
-                </div>
+        <div class="border-b border-gray-100 pb-5">
+            <h1 class="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">बायोडाटा नोंदणी पुष्टी</h1>
+            @if ($candidateName)
+                <p class="mt-1 text-lg font-semibold text-violet-800">{{ $candidateName }}</p>
             @endif
-
-            <div class="min-w-0 flex-1">
-                <h1 class="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">बायोडाटा नोंदणी पुष्टी</h1>
-                @if ($candidateName)
-                    <p class="mt-1 text-lg font-semibold text-violet-800">{{ $candidateName }}</p>
-                @endif
-            </div>
         </div>
 
         @if (session('success'))
