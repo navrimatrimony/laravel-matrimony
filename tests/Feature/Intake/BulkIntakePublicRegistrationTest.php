@@ -19,6 +19,7 @@ test('public registration page opens with token after consent received', functio
         ->assertSee('बायोडाटा नोंदणी पुष्टी')
         ->assertSee('Registration Candidate')
         ->assertSee('व्यवसाय')
+        ->assertDontSee('बायोडाटा फोटो')
         ->assertDontSee('खालील माहिती तपासा');
 });
 

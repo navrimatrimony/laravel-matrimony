@@ -14,7 +14,6 @@ use App\Models\WorkingWithType;
 use App\Support\HeightDisplay;
 use App\Support\MobileNumber;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -111,7 +110,7 @@ class BulkIntakePublicRegistrationService
      *     working_with_options: list<array{id: int, slug: string, label: string}>,
      *     occupations: list<array{id: int, label: string, working_with_type_id: int|null}>,
      *     occupation_exempt_slugs: list<string>,
-     *     photo_preview: array{available: bool, url: string|null, label: string|null, message: string|null},
+     *     candidate_photo: array{available: bool, url: string|null},
      *     registration_complete: bool
      * }
      */
@@ -159,7 +158,7 @@ class BulkIntakePublicRegistrationService
             'working_with_options' => $this->workingWithOptions(),
             'occupations' => $this->occupationOptions(),
             'occupation_exempt_slugs' => self::OCCUPATION_EXEMPT_SLUGS,
-            'photo_preview' => $this->biodataPhotoPreview($item, $intake, $token),
+            'candidate_photo' => $this->candidatePhotoPreview($intake, $token),
             'registration_complete' => $this->registrationComplete($item),
         ];
     }
@@ -556,50 +555,22 @@ class BulkIntakePublicRegistrationService
     }
 
     /**
-     * @return array{available: bool, url: string|null, label: string|null, message: string|null}
+     * @return array{available: bool, url: string|null}
      */
-    private function biodataPhotoPreview(BulkIntakeBatchItem $item, BiodataIntake $intake, string $token): array
+    private function candidatePhotoPreview(BiodataIntake $intake, string $token): array
     {
-        $relativePath = $this->previewableImagePath($item, $intake);
-        if ($relativePath === null) {
+        $cropService = app(IntakePhotoCandidateCropService::class);
+        if (! $cropService->exists($intake)) {
             return [
                 'available' => false,
                 'url' => null,
-                'label' => null,
-                'message' => 'बायोडाटा फोटो उपलब्ध नाही.',
-            ];
-        }
-
-        if (! Storage::disk('local')->exists($relativePath)) {
-            return [
-                'available' => false,
-                'url' => null,
-                'label' => null,
-                'message' => 'बायोडाटा फाइल सापडली नाही.',
             ];
         }
 
         return [
             'available' => true,
-            'url' => route('bulk-intake.register.photo', ['token' => $token]),
-            'label' => $intake->original_filename ?: $item->original_filename ?: basename($relativePath),
-            'message' => null,
+            'url' => route('bulk-intake.register.candidate-photo', ['token' => $token]),
         ];
-    }
-
-    private function previewableImagePath(BulkIntakeBatchItem $item, BiodataIntake $intake): ?string
-    {
-        $relativePath = $this->stringOrNull($intake->file_path) ?? $this->stringOrNull($item->source_file_path);
-        if ($relativePath === null) {
-            return null;
-        }
-
-        $extension = strtolower(pathinfo($relativePath, PATHINFO_EXTENSION));
-        if (! in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
-            return null;
-        }
-
-        return $relativePath;
     }
 
     /**

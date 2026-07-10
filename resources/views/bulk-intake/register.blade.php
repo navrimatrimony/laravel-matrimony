@@ -11,14 +11,14 @@
     $workingWithOptions = is_array($payload['working_with_options'] ?? null) ? $payload['working_with_options'] : [];
     $occupations = is_array($payload['occupations'] ?? null) ? $payload['occupations'] : [];
     $occupationExemptSlugs = is_array($payload['occupation_exempt_slugs'] ?? null) ? $payload['occupation_exempt_slugs'] : [];
-    $photoPreview = is_array($payload['photo_preview'] ?? null) ? $payload['photo_preview'] : [];
+    $candidatePhoto = is_array($payload['candidate_photo'] ?? null) ? $payload['candidate_photo'] : [];
     $registrationComplete = (bool) ($payload['registration_complete'] ?? false);
     $candidateName = is_string($payload['candidate_name'] ?? null) ? $payload['candidate_name'] : null;
 
     $inputClass = 'mt-1 block w-full rounded-xl border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500';
     $selectClass = $inputClass . ' pr-10';
     $labelClass = 'block text-sm font-medium text-gray-800';
-    $sectionClass = 'rounded-2xl border border-gray-200 bg-white/95 p-5 shadow-sm backdrop-blur-sm sm:p-6';
+    $sectionClass = 'rounded-2xl border border-gray-200 bg-white/95 p-5 shadow-sm backdrop-blur-sm sm:p-8';
 @endphp
 
 @section('content')
@@ -49,37 +49,27 @@
             }
         }
     }"
-    class="grid gap-6 lg:grid-cols-[minmax(240px,320px)_minmax(0,1fr)] lg:items-start"
+    class="mx-auto w-full max-w-5xl"
 >
-    <aside class="lg:sticky lg:top-6">
-        <div class="{{ $sectionClass }}">
-            <h2 class="text-base font-semibold text-gray-900">बायोडाटा फोटो</h2>
-            @if (!empty($photoPreview['available']) && !empty($photoPreview['url']))
-                <div class="mt-4 overflow-hidden rounded-xl border border-violet-100 bg-gray-50 shadow-inner">
+    <div class="{{ $sectionClass }}">
+        <div class="flex flex-col gap-4 border-b border-gray-100 pb-5 sm:flex-row sm:items-center">
+            @if (!empty($candidatePhoto['available']) && !empty($candidatePhoto['url']))
+                <div class="shrink-0 self-start">
                     <img
-                        src="{{ $photoPreview['url'] }}"
-                        alt="{{ $photoPreview['label'] ?? 'बायोडाटा' }}"
-                        class="max-h-[70vh] w-full object-contain"
+                        src="{{ $candidatePhoto['url'] }}"
+                        alt="{{ $candidateName ?? 'उमेदवार फोटो' }}"
+                        class="h-28 w-28 rounded-2xl border-2 border-violet-100 object-cover shadow-sm sm:h-32 sm:w-32"
                         loading="lazy"
                     >
                 </div>
-                @if (!empty($photoPreview['label']))
-                    <p class="mt-2 text-xs text-gray-500">{{ $photoPreview['label'] }}</p>
-                @endif
-            @else
-                <div class="mt-4 flex min-h-48 items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 text-center text-sm text-gray-500">
-                    {{ $photoPreview['message'] ?? 'बायोडाटा फोटो उपलब्ध नाही.' }}
-                </div>
             @endif
-        </div>
-    </aside>
 
-    <div class="{{ $sectionClass }}">
-        <div class="border-b border-gray-100 pb-4">
-            <h1 class="text-2xl font-bold tracking-tight text-gray-900">बायोडाटा नोंदणी पुष्टी</h1>
-            @if ($candidateName)
-                <p class="mt-1 text-base font-semibold text-violet-800">{{ $candidateName }}</p>
-            @endif
+            <div class="min-w-0 flex-1">
+                <h1 class="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">बायोडाटा नोंदणी पुष्टी</h1>
+                @if ($candidateName)
+                    <p class="mt-1 text-lg font-semibold text-violet-800">{{ $candidateName }}</p>
+                @endif
+            </div>
         </div>
 
         @if (session('success'))
@@ -110,8 +100,8 @@
 
             <section>
                 <h2 class="text-sm font-semibold uppercase tracking-wide text-violet-700">मूलभूत माहिती</h2>
-                <div class="mt-4 grid gap-4 sm:grid-cols-2">
-                    <div class="sm:col-span-2">
+                <div class="mt-4 grid gap-4 md:grid-cols-2">
+                    <div class="md:col-span-2">
                         <label class="{{ $labelClass }}">नाव</label>
                         <input type="text" name="full_name" value="{{ old('full_name', $fields['full_name'] ?? '') }}" required class="{{ $inputClass }} @error('full_name') border-red-400 @enderror">
                         @error('full_name')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
@@ -129,7 +119,7 @@
                         @error('date_of_birth')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                     </div>
 
-                    <div class="sm:col-span-2">
+                    <div class="md:col-span-2">
                         <x-profile.height-picker
                             :value="old('height_cm', $heightCm)"
                             label="उंची (फूट/इंच)"
@@ -168,7 +158,7 @@
 
             <section>
                 <h2 class="text-sm font-semibold uppercase tracking-wide text-violet-700">समुदाय व ठिकाण</h2>
-                <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                <div class="mt-4 grid gap-4 md:grid-cols-2">
                     <div>
                         <label class="{{ $labelClass }}">वैवाहिक स्थिती</label>
                         <select name="marital_status_id" required class="{{ $selectClass }} @error('marital_status_id') border-red-400 @enderror">
@@ -195,7 +185,7 @@
                         @error('religion_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                     </div>
 
-                    <div class="sm:col-span-2">
+                    <div class="md:col-span-2">
                         <label class="{{ $labelClass }}">जात</label>
                         <select name="caste_id" required class="{{ $selectClass }} @error('caste_id') border-red-400 @enderror">
                             <option value="">निवडा</option>
@@ -208,7 +198,7 @@
                         @error('caste_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                     </div>
 
-                    <div class="sm:col-span-2">
+                    <div class="md:col-span-2">
                         <label class="{{ $labelClass }}">ठिकाण</label>
                         <input type="text" name="location" value="{{ old('location', $fields['location'] ?? '') }}" required class="{{ $inputClass }} @error('location') border-red-400 @enderror">
                         @error('location')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
@@ -218,8 +208,8 @@
 
             <section>
                 <h2 class="text-sm font-semibold uppercase tracking-wide text-violet-700">शिक्षण व करिअर</h2>
-                <div class="mt-4 grid gap-4 sm:grid-cols-2">
-                    <div class="sm:col-span-2">
+                <div class="mt-4 grid gap-4 md:grid-cols-2">
+                    <div class="md:col-span-2">
                         <label class="{{ $labelClass }}">शिक्षण</label>
                         <input type="text" name="education" value="{{ old('education', $fields['education'] ?? '') }}" required class="{{ $inputClass }} @error('education') border-red-400 @enderror">
                         @error('education')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror

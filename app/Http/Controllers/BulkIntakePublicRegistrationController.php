@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\Intake\BulkIntakeCandidateCorrectionService;
 use App\Services\Intake\BulkIntakePublicRegistrationService;
+use App\Services\Intake\IntakePhotoCandidateCropService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -27,10 +27,10 @@ class BulkIntakePublicRegistrationController extends Controller
         ]);
     }
 
-    public function photo(
+    public function candidatePhoto(
         string $token,
         BulkIntakePublicRegistrationService $registrationService,
-        BulkIntakeCandidateCorrectionService $correctionService
+        IntakePhotoCandidateCropService $candidateCrop
     ): BinaryFileResponse {
         $item = $registrationService->itemForToken($token);
         abort_unless($item !== null, 404);
@@ -38,10 +38,14 @@ class BulkIntakePublicRegistrationController extends Controller
         $gate = $registrationService->accessGate($item);
         abort_unless($gate['allowed'], 403);
 
-        $response = $correctionService->evidenceImageResponse($item);
-        abort_unless($response !== null, 404);
+        $item->loadMissing('biodataIntake');
+        $intake = $item->biodataIntake;
+        abort_unless($intake !== null && $candidateCrop->exists($intake), 404);
 
-        return $response;
+        return response()->file($candidateCrop->absolutePath($intake), [
+            'Content-Type' => 'image/jpeg',
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
     }
 
     public function store(string $token, Request $request, BulkIntakePublicRegistrationService $registrationService): RedirectResponse
