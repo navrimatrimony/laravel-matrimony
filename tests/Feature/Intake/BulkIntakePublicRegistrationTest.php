@@ -64,6 +64,10 @@ test('public registration keeps income empty and hides premature completion bann
 
     expect($payload['profile']->annual_income)->toBeNull()
         ->and($payload['profile']->income_amount)->toBeNull()
+        ->and($payload['profile']->income_value_type)->toBe('range')
+        ->and((int) $payload['profile']->income_min_amount)->toBe(100000)
+        ->and((int) $payload['profile']->income_max_amount)->toBe(125000)
+        ->and($payload['profile']->income_private)->toBeTrue()
         ->and($payload['profile']->company_name)->toBe('Test Company Pvt Ltd');
 });
 

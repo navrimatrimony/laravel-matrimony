@@ -23,27 +23,27 @@
             'resources/js/matrimony/occupation-engine-entry.js',
         ])
     </head>
-    <body class="font-sans text-gray-900 antialiased">
-        <div class="relative min-h-screen overflow-hidden bg-slate-100">
-            @if ($guestBackgroundImageUrl)
-                <div
-                    class="absolute inset-0 bg-contain bg-center bg-no-repeat"
-                    style="background-image: url('{{ $guestBackgroundImageUrl }}');"
-                    aria-hidden="true"
-                ></div>
-                <div class="absolute inset-0 bg-white/15" aria-hidden="true"></div>
-            @endif
+    <body class="font-sans text-gray-900 antialiased bg-slate-100">
+        @if ($guestBackgroundImageUrl)
+            <div
+                class="pointer-events-none fixed inset-0 -z-20 bg-contain bg-center bg-no-repeat"
+                style="background-image: url('{{ $guestBackgroundImageUrl }}');"
+                aria-hidden="true"
+            ></div>
+            <div class="pointer-events-none fixed inset-0 -z-10 bg-white/20" aria-hidden="true"></div>
+        @endif
 
-            <div class="relative z-10 min-h-screen px-4 py-6 sm:px-6 lg:px-8">
+        <div class="relative min-h-screen">
+            <div class="px-3 py-4 sm:px-4 sm:py-5">
                 @include('partials.laravel-validation-payload')
 
-                <div class="mx-auto mb-6 flex max-w-6xl items-center justify-center">
-                    <a href="/" class="inline-flex items-center gap-3 rounded-xl bg-white/90 px-4 py-2 shadow-sm ring-1 ring-violet-100 backdrop-blur-sm">
-                        <x-application-logo class="h-12 w-12 fill-current text-violet-700" />
+                <div class="mx-auto mb-3 flex max-w-2xl items-center justify-center">
+                    <a href="/" class="inline-flex items-center gap-2 rounded-lg bg-white/90 px-3 py-1.5 shadow-sm ring-1 ring-violet-100 backdrop-blur-sm">
+                        <x-application-logo class="h-9 w-9 fill-current text-violet-700" />
                     </a>
                 </div>
 
-                <div class="mx-auto w-full max-w-6xl">
+                <div class="mx-auto w-full max-w-2xl">
                     @yield('content')
                 </div>
             </div>

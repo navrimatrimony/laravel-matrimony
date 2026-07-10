@@ -387,16 +387,18 @@ class BulkIntakeRegistrationFormBridgeService
 
     private function profileForRegistrationView(MatrimonyProfile $profile): MatrimonyProfile
     {
+        $hasSavedIncome = $this->stringOrNull($profile->income_value_type ?? null) !== null;
+
         $profile->forceFill([
             'annual_income' => null,
-            'income_period' => null,
-            'income_value_type' => null,
             'income_amount' => null,
-            'income_min_amount' => null,
-            'income_max_amount' => null,
-            'income_currency_id' => null,
-            'income_private' => false,
             'income_range_id' => null,
+            'income_period' => $hasSavedIncome ? $profile->income_period : 'annual',
+            'income_value_type' => $hasSavedIncome ? $profile->income_value_type : 'range',
+            'income_min_amount' => $hasSavedIncome ? $profile->income_min_amount : 100000,
+            'income_max_amount' => $hasSavedIncome ? $profile->income_max_amount : 125000,
+            'income_currency_id' => $hasSavedIncome ? $profile->income_currency_id : null,
+            'income_private' => $hasSavedIncome ? (bool) $profile->income_private : true,
         ]);
 
         return $profile;

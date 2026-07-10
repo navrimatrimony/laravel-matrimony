@@ -31,19 +31,34 @@
         }
     }
 
-    $inputClass = 'mt-1 block w-full rounded-xl border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500';
+    $inputClass = 'mt-1 block w-full rounded-lg border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500';
     $selectClass = $inputClass . ' pr-10';
     $labelClass = 'block text-sm font-medium text-gray-800';
-    $sectionClass = 'rounded-2xl border border-gray-200 bg-white/95 p-5 shadow-sm backdrop-blur-sm sm:p-8';
+    $sectionClass = 'rounded-xl border border-gray-200 bg-white/95 p-4 shadow-sm backdrop-blur-sm sm:p-5';
+    $preferMarathiLabels = (bool) ($payload['prefer_marathi_labels'] ?? false);
+    $incomePeriodOptions = $preferMarathiLabels
+        ? [
+            ['value' => 'annual', 'label' => 'वार्षिक'],
+            ['value' => 'monthly', 'label' => 'मासिक'],
+        ]
+        : null;
+    $incomeValueTypeOptions = $preferMarathiLabels
+        ? [
+            ['value' => 'exact', 'label' => 'नेमके'],
+            ['value' => 'approximate', 'label' => 'अंदाजे उत्पन्न'],
+            ['value' => 'range', 'label' => 'श्रेणी'],
+            ['value' => 'undisclosed', 'label' => 'न सांगणे'],
+        ]
+        : null;
 @endphp
 
 @section('content')
-<div class="mx-auto w-full max-w-5xl">
+<div class="mx-auto w-full max-w-2xl">
     <div class="{{ $sectionClass }}">
-        <div class="border-b border-gray-100 pb-5">
-            <h1 class="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">बायोडाटा नोंदणी पुष्टी</h1>
+        <div class="border-b border-gray-100 pb-3">
+            <h1 class="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">बायोडाटा नोंदणी पुष्टी</h1>
             @if ($candidateName)
-                <p class="mt-1 text-lg font-semibold text-violet-800">{{ $candidateName }}</p>
+                <p class="mt-0.5 text-base font-semibold text-violet-800">{{ $candidateName }}</p>
             @endif
         </div>
 
@@ -64,19 +79,19 @@
             </div>
         @endif
 
-        <form method="POST" action="{{ route('bulk-intake.register.store', ['token' => $token]) }}" id="bulk-registration-form" class="mt-6 space-y-8">
+        <form method="POST" action="{{ route('bulk-intake.register.store', ['token' => $token]) }}" id="bulk-registration-form" class="mt-4 space-y-4">
             @csrf
 
             <section>
-                <h2 class="text-sm font-semibold uppercase tracking-wide text-violet-700">मूलभूत माहिती</h2>
-                <div class="mt-4 space-y-4">
+                <h2 class="text-xs font-semibold uppercase tracking-wide text-violet-700">मूलभूत माहिती</h2>
+                <div class="mt-2 space-y-2.5">
                     <div>
                         <label class="{{ $labelClass }}">नाव</label>
                         <input type="text" name="full_name" value="{{ old('full_name', $profile->full_name) }}" required class="{{ $inputClass }} @error('full_name') border-red-400 @enderror">
                         @error('full_name')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                     </div>
 
-                    <div class="grid gap-4 md:grid-cols-2">
+                    <div class="grid gap-2.5 md:grid-cols-2">
                         <div>
                             <label class="{{ $labelClass }}">मोबाईल</label>
                             <input type="tel" name="mobile" value="{{ old('mobile', $mobile) }}" required class="{{ $inputClass }} @error('mobile') border-red-400 @enderror">
@@ -95,14 +110,14 @@
                     >
                         <label class="{{ $labelClass }}">लिंग <span class="text-red-600">*</span></label>
                         <input type="hidden" name="gender_id" :value="genderId">
-                        <div class="mt-2 flex overflow-hidden rounded-xl border border-gray-300 bg-gray-50">
+                        <div class="mt-1.5 flex overflow-hidden rounded-lg border border-gray-300 bg-gray-50">
                             @foreach ($genders as $gender)
                                 @php
                                     $selectedBg = $gender->key === 'male' ? 'bg-blue-600' : 'bg-pink-500';
                                 @endphp
                                 <button
                                     type="button"
-                                    class="flex-1 px-4 py-3 text-sm font-semibold text-gray-600 transition"
+                                    class="flex-1 px-3 py-2 text-sm font-semibold text-gray-600 transition"
                                     :class="genderId == {{ $gender->id }} ? '{{ $selectedBg }} text-white' : 'hover:bg-white'"
                                     @click="genderId = {{ $gender->id }}"
                                 >
@@ -113,33 +128,35 @@
                         @error('gender_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                     </div>
 
-                    <div>
-                        <label class="{{ $labelClass }}">मातृभाषा</label>
-                        <select name="mother_tongue_id" required class="{{ $selectClass }} @error('mother_tongue_id') border-red-400 @enderror">
-                            <option value="">निवडा</option>
-                            @foreach ($motherTongues as $option)
-                                <option value="{{ $option['id'] }}" @selected((string) old('mother_tongue_id', $motherTongueId) === (string) $option['id'])>
-                                    {{ $option['label'] }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('mother_tongue_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
-                    </div>
+                    <div class="grid gap-2.5 md:grid-cols-2">
+                        <div>
+                            <label class="{{ $labelClass }}">मातृभाषा</label>
+                            <select name="mother_tongue_id" required class="{{ $selectClass }} @error('mother_tongue_id') border-red-400 @enderror">
+                                <option value="">निवडा</option>
+                                @foreach ($motherTongues as $option)
+                                    <option value="{{ $option['id'] }}" @selected((string) old('mother_tongue_id', $motherTongueId) === (string) $option['id'])>
+                                        {{ $option['label'] }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('mother_tongue_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                        </div>
 
-                    <div>
-                        <x-profile.height-picker
-                            :value="old('height_cm', $profile->height_cm)"
-                            label="उंची (फूट/इंच)"
-                            :required="true"
-                        />
-                        @error('height_cm')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                        <div>
+                            <x-profile.height-picker
+                                :value="old('height_cm', $profile->height_cm)"
+                                label="उंची (फूट/इंच)"
+                                :required="true"
+                            />
+                            @error('height_cm')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                        </div>
                     </div>
                 </div>
             </section>
 
             <section>
-                <h2 class="text-sm font-semibold uppercase tracking-wide text-violet-700">वैवाहिक स्थिती</h2>
-                <div class="mt-4">
+                <h2 class="text-xs font-semibold uppercase tracking-wide text-violet-700">वैवाहिक स्थिती</h2>
+                <div class="mt-2 bulk-register-marital-compact">
                     @include('matrimony.profile.wizard.sections.marital_engine', [
                         'namePrefix' => '',
                         'profile' => $profile,
@@ -153,8 +170,8 @@
             </section>
 
             <section>
-                <h2 class="text-sm font-semibold uppercase tracking-wide text-violet-700">समुदाय व ठिकाण</h2>
-                <div class="mt-4 space-y-4">
+                <h2 class="text-xs font-semibold uppercase tracking-wide text-violet-700">समुदाय व ठिकाण</h2>
+                <div class="mt-2 space-y-2.5">
                     <x-profile.religion-caste-selector :profile="$profile" :show-subcaste="false" />
 
                     <div>
@@ -179,46 +196,61 @@
             </section>
 
             <section>
-                <h2 class="text-sm font-semibold uppercase tracking-wide text-violet-700">शिक्षण व करिअर</h2>
-                <div class="mt-4 space-y-5">
+                <h2 class="text-xs font-semibold uppercase tracking-wide text-violet-700">शिक्षण व करिअर</h2>
+                <div class="mt-2 space-y-3">
                     <x-education-multiselect-engine
                         :profile="$profile"
                         form-selector="#bulk-registration-form"
                         suffix="bulk-registration-education"
                     />
 
-                    <div class="rounded-xl border border-gray-200 bg-white p-4">
-                        <x-occupation-search-engine
-                            :profile="$profile"
-                            form-selector="#bulk-registration-form"
-                        />
-                    </div>
+                    <x-occupation-search-engine
+                        :profile="$profile"
+                        form-selector="#bulk-registration-form"
+                        :compact="true"
+                    />
 
                     <div>
                         <label class="{{ $labelClass }}">कंपनी <span class="font-normal text-gray-500">(ऐच्छिक)</span></label>
                         <input type="text" name="company_name" value="{{ old('company_name', $profile->company_name) }}" class="{{ $inputClass }}">
                     </div>
 
-                    <div class="rounded-xl border border-gray-200 bg-white p-4">
-                        <x-income-engine
-                            label="उत्पन्न"
-                            name-prefix="income"
-                            empty-value-type-default="undisclosed"
-                            :profile="$profile"
-                            :currencies="$currencies"
-                        />
-                    </div>
+                    <x-income-engine
+                        label="उत्पन्न"
+                        name-prefix="income"
+                        empty-value-type-default="range"
+                        :profile="$profile"
+                        :currencies="$currencies"
+                        :period-options="$incomePeriodOptions"
+                        :value-type-options="$incomeValueTypeOptions"
+                    />
                 </div>
             </section>
 
             <div class="border-t border-gray-100 pt-2">
-                <button type="submit" class="inline-flex w-full items-center justify-center rounded-xl bg-violet-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-violet-800 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 sm:w-auto">
+                <button type="submit" class="inline-flex w-full items-center justify-center rounded-lg bg-violet-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-800 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 sm:w-auto">
                     नोंदणी माहिती जतन करा
                 </button>
             </div>
         </form>
     </div>
 </div>
+
+<style>
+    .bulk-register-marital-compact .border.rounded-lg.p-4 {
+        padding: 0.75rem;
+    }
+    .bulk-register-marital-compact .space-y-7 {
+        row-gap: 0.75rem;
+    }
+    .bulk-register-marital-compact h2.text-lg {
+        display: none;
+    }
+    .bulk-register-marital-compact .income-engine {
+        border-radius: 0.75rem;
+        box-shadow: none;
+    }
+</style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
