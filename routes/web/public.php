@@ -142,6 +142,18 @@ Route::get('/register/biodata/{token}', [\App\Http\Controllers\BulkIntakePublicR
     ->name('bulk-intake.register.show');
 Route::post('/register/biodata/{token}', [\App\Http\Controllers\BulkIntakePublicRegistrationController::class, 'store'])
     ->name('bulk-intake.register.store');
+Route::get('/register/biodata/{token}/complete', [\App\Http\Controllers\BulkIntakePublicRegistrationController::class, 'complete'])
+    ->name('bulk-intake.register.complete');
+Route::post('/register/biodata/{token}/photo', [\App\Http\Controllers\BulkIntakePublicRegistrationController::class, 'storePhoto'])
+    ->name('bulk-intake.register.photo.store');
+Route::get('/register/biodata/{token}/photo/candidate', [\App\Http\Controllers\BulkIntakePublicRegistrationController::class, 'photoCandidate'])
+    ->name('bulk-intake.register.photo.candidate');
+Route::get('/register/biodata/{token}/preferences', [\App\Http\Controllers\BulkIntakePublicRegistrationController::class, 'preferences'])
+    ->name('bulk-intake.register.preferences');
+Route::post('/register/biodata/{token}/preferences', [\App\Http\Controllers\BulkIntakePublicRegistrationController::class, 'storePreferences'])
+    ->name('bulk-intake.register.preferences.store');
+Route::get('/register/biodata/{token}/done', [\App\Http\Controllers\BulkIntakePublicRegistrationController::class, 'done'])
+    ->name('bulk-intake.register.done');
 
 // Local-only smoke route (not exposed in production)
 if (app()->environment('local')) {

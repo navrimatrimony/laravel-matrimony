@@ -1,9 +1,10 @@
-@extends('layouts.app')
+@extends($photoUploadLayout ?? 'layouts.app')
 
 @section('content')
 @php
     $photoTargetQuery = isset($photoTargetQuery) && is_array($photoTargetQuery) ? $photoTargetQuery : [];
     $suchakAccountPhotoUpload = ! empty($suchakAccountPhotoUpload);
+    $bulkRegistrationPhotoStep = ! empty($bulkRegistrationPhotoStep);
     $photoUploadAction = $photoUploadAction ?? route('matrimony.profile.store-photo');
     $photoUploadBackUrl = $photoUploadBackUrl ?? null;
     $photoUploadTitle = $photoUploadTitle ?? __('photo.upload_your_photo');
@@ -109,6 +110,17 @@ body.upload-landscape .upload-gallery-col {
             $photoLimitReached = isset($photoLimitReached) ? (bool) $photoLimitReached : ($currentPhotoCount >= $photoMaxPerProfile);
         @endphp
 
+        @if ($bulkRegistrationPhotoStep)
+            @if (session('success'))
+                <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; text-align: left;">
+                    <p style="margin: 0; font-weight: 700; color: #065f46; font-size: 14px;">{{ session('success') }}</p>
+                </div>
+            @endif
+            @if (! empty($candidate_name))
+                <p style="text-align: center; font-size: 16px; font-weight: 600; color: #5b21b6; margin: 0 0 16px 0;">{{ $candidate_name }}</p>
+            @endif
+        @endif
+
         {{-- Success / error: layouts/app.blade.php (dismissible flash). Warning kept here (no layout slot). --}}
 
         @if (session('warning'))
@@ -136,6 +148,7 @@ body.upload-landscape .upload-gallery-col {
             </div>
         @endif
 
+        @if (! $bulkRegistrationPhotoStep)
         {{-- Progress Steps --}}
         <div style="display: flex; justify-content: center; align-items: center; gap: 12px; margin-bottom: 32px;">
             <div style="display: flex; align-items: center; gap: 8px;">
@@ -148,13 +161,14 @@ body.upload-landscape .upload-gallery-col {
                 <span style="font-size: 14px; color: #4f46e5; font-weight: 600;">{{ __('photo.upload_photo') }}</span>
             </div>
         </div>
+        @endif
 
         <div id="uploadManagerTwoCol">
             {{-- Main Card --}}
             <div class="upload-main-col" style="background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 32px 24px; text-align: center;">
 
             {{-- Real rejection only (pending review must not use this banner — see photo_rejected_at) --}}
-            @if (! empty($profile->photo_rejection_reason) && $profile->photo_rejected_at)
+            @if ($profile && ! empty($profile->photo_rejection_reason) && $profile->photo_rejected_at)
                 <div style="margin-bottom: 24px; padding: 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; text-align: left;">
                     <p style="font-weight: 600; margin: 0 0 8px 0; color: #991b1b; font-size: 14px;">{{ __('photo.previous_photo_removed') }}</p>
                     <p style="margin: 0; color: #7f1d1d; font-size: 13px;"><strong>{{ __('common.reason') }}:</strong> {{ $profile->photo_rejection_reason }}</p>

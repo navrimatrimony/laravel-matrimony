@@ -37,7 +37,22 @@ test('public registration page opens with token after consent received', functio
         ->and($payload['prefer_marathi_labels'] ?? false)->toBeTrue();
 });
 
-test('public registration shows biodata income and hides premature completion banner when already marked complete', function () {
+test('public registration redirects completed item away from editable form', function () {
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
+    $service = app(BulkIntakePublicRegistrationService::class);
+    $token = $service->ensureToken($item);
+    $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
+    $meta['registration'] = array_merge(is_array($meta['registration'] ?? null) ? $meta['registration'] : [], [
+        'status' => BulkIntakeRegistrationService::STATUS_REGISTRATION_COMPLETE,
+        'completed_via' => 'public_web_form',
+    ]);
+    $item->forceFill(['item_meta_json' => $meta])->save();
+
+    $this->get(route('bulk-intake.register.show', ['token' => $token]))
+        ->assertRedirect(route('bulk-intake.register.complete', ['token' => $token]));
+});
+
+test('public registration shows biodata income accurately on form', function () {
     $item = registrationConsentReceivedItem(registrationCompleteParsedJson([
         'parsed_json' => [
             'core' => [
@@ -47,20 +62,8 @@ test('public registration shows biodata income and hides premature completion ba
             ],
         ],
     ]));
-    $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
-    $meta['registration'] = array_merge(is_array($meta['registration'] ?? null) ? $meta['registration'] : [], [
-        'status' => BulkIntakeRegistrationService::STATUS_REGISTRATION_COMPLETE,
-        'completed_via' => 'public_web_form',
-    ]);
-    $item->forceFill(['item_meta_json' => $meta])->save();
 
-    $url = app(BulkIntakePublicRegistrationService::class)->publicUrl($item->fresh());
     $payload = app(BulkIntakePublicRegistrationService::class)->formPayload($item->fresh());
-
-    $this->get($url)
-        ->assertOk()
-        ->assertDontSee('नोंदणी पूर्ण झाली आहे')
-        ->assertSee('Test Company Pvt Ltd');
 
     expect((string) $payload['profile']->annual_income)->toBe('600000')
         ->and((string) $payload['profile']->income_amount)->toBe('600000')
@@ -125,7 +128,7 @@ test('public registration save stores cm height and marks registration complete'
             'spouse_death_year' => '',
             'divorce_status' => '',
         ]],
-    ])->assertRedirect($url);
+    ])->assertRedirect(route('bulk-intake.register.complete', ['token' => app(BulkIntakePublicRegistrationService::class)->ensureToken($item->fresh())]));
 
     $item->refresh();
     $intake = $item->biodataIntake?->fresh();
@@ -137,4 +140,149 @@ test('public registration save stores cm height and marks registration complete'
         ->and((int) data_get($intake->approval_snapshot_json, 'core.occupation_master_id'))->toBe($career['occupation_master_id'])
         ->and(app(BulkIntakeRegistrationService::class)->registrationStatus($item))
         ->toBe(BulkIntakeRegistrationService::STATUS_REGISTRATION_COMPLETE);
+});
+
+test('public registration complete page shows success and photo upload after form save', function () {
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
+    $service = app(BulkIntakePublicRegistrationService::class);
+    $token = $service->ensureToken($item);
+    $masters = registrationMasterIds();
+    $career = registrationCareerMasters();
+
+    $this->post(route('bulk-intake.register.store', ['token' => $token]), [
+        'full_name' => 'Photo Flow Candidate',
+        'mobile' => '9876543301',
+        'date_of_birth' => '1998-04-15',
+        'height_cm' => 165,
+        'gender_id' => $masters['gender_id'],
+        'mother_tongue_id' => $masters['mother_tongue_id'],
+        'marital_status_id' => $masters['marital_status_id'],
+        'religion_id' => $masters['religion_id'],
+        'caste_id' => $masters['caste_id'],
+        'location_id' => registrationLocationId(),
+        'education_degree_ids' => [$career['education_degree_id']],
+        'occupation_master_id' => $career['occupation_master_id'],
+        'income_period' => 'annual',
+        'income_value_type' => 'exact',
+        'income_amount' => '500000',
+        'income_currency_id' => registrationIncomeCurrencyId(),
+        'marriages' => [[
+            'marriage_year' => '',
+            'divorce_year' => '',
+            'separation_year' => '',
+            'spouse_death_year' => '',
+            'divorce_status' => '',
+        ]],
+    ])->assertRedirect(route('bulk-intake.register.complete', ['token' => $token]));
+
+    $this->get(route('bulk-intake.register.complete', ['token' => $token]))
+        ->assertOk()
+        ->assertSee('प्रोफाइल फोटो')
+        ->assertSee('नोंदणी माहिती जतन झाली');
+});
+
+test('public registration photo upload stores candidate and opens preferences', function () {
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
+    $service = app(BulkIntakePublicRegistrationService::class);
+    $token = $service->ensureToken($item);
+    $masters = registrationMasterIds();
+    $career = registrationCareerMasters();
+
+    $this->post(route('bulk-intake.register.store', ['token' => $token]), [
+        'full_name' => 'Prefs Flow Candidate',
+        'mobile' => '9876543301',
+        'date_of_birth' => '1998-04-15',
+        'height_cm' => 165,
+        'gender_id' => $masters['gender_id'],
+        'mother_tongue_id' => $masters['mother_tongue_id'],
+        'marital_status_id' => $masters['marital_status_id'],
+        'religion_id' => $masters['religion_id'],
+        'caste_id' => $masters['caste_id'],
+        'location_id' => registrationLocationId(),
+        'education_degree_ids' => [$career['education_degree_id']],
+        'occupation_master_id' => $career['occupation_master_id'],
+        'income_period' => 'annual',
+        'income_value_type' => 'exact',
+        'income_amount' => '500000',
+        'income_currency_id' => registrationIncomeCurrencyId(),
+        'marriages' => [[
+            'marriage_year' => '',
+            'divorce_year' => '',
+            'separation_year' => '',
+            'spouse_death_year' => '',
+            'divorce_status' => '',
+        ]],
+    ]);
+
+    $photo = \Illuminate\Http\UploadedFile::fake()->image('candidate.jpg', 640, 800);
+
+    $this->post(route('bulk-intake.register.photo.store', ['token' => $token]), [
+        'profile_photo' => $photo,
+    ])->assertRedirect(route('bulk-intake.register.preferences', ['token' => $token]));
+
+    $item->refresh();
+    $intake = $item->biodataIntake?->fresh();
+    expect($intake)->not->toBeNull()
+        ->and(data_get($item->item_meta_json, 'registration.photo_completed_at'))->not->toBeNull()
+        ->and(app(\App\Services\Intake\IntakePhotoCandidateCropService::class)->exists($intake))->toBeTrue();
+
+    $this->get(route('bulk-intake.register.preferences', ['token' => $token]))
+        ->assertOk()
+        ->assertSee('जोडीदार प्राधान्ये');
+});
+
+test('public registration preferences save to snapshot and finish on done page', function () {
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
+    $service = app(BulkIntakePublicRegistrationService::class);
+    $token = $service->ensureToken($item);
+    $masters = registrationMasterIds();
+    $career = registrationCareerMasters();
+
+    $this->post(route('bulk-intake.register.store', ['token' => $token]), [
+        'full_name' => 'Done Flow Candidate',
+        'mobile' => '9876543301',
+        'date_of_birth' => '1998-04-15',
+        'height_cm' => 165,
+        'gender_id' => $masters['gender_id'],
+        'mother_tongue_id' => $masters['mother_tongue_id'],
+        'marital_status_id' => $masters['marital_status_id'],
+        'religion_id' => $masters['religion_id'],
+        'caste_id' => $masters['caste_id'],
+        'location_id' => registrationLocationId(),
+        'education_degree_ids' => [$career['education_degree_id']],
+        'occupation_master_id' => $career['occupation_master_id'],
+        'income_period' => 'annual',
+        'income_value_type' => 'exact',
+        'income_amount' => '500000',
+        'income_currency_id' => registrationIncomeCurrencyId(),
+        'marriages' => [[
+            'marriage_year' => '',
+            'divorce_year' => '',
+            'separation_year' => '',
+            'spouse_death_year' => '',
+            'divorce_status' => '',
+        ]],
+    ]);
+
+    $photo = \Illuminate\Http\UploadedFile::fake()->image('candidate.jpg', 640, 800);
+    $this->post(route('bulk-intake.register.photo.store', ['token' => $token]), [
+        'profile_photo' => $photo,
+    ]);
+
+    $this->post(route('bulk-intake.register.preferences.store', ['token' => $token]), [
+        'preferred_age_min' => 24,
+        'preferred_age_max' => 32,
+        'preferred_religion_ids' => [$masters['religion_id']],
+        'preferred_caste_ids' => [$masters['caste_id']],
+    ])->assertRedirect(route('bulk-intake.register.done', ['token' => $token]));
+
+    $intake = $item->fresh()->biodataIntake?->fresh();
+    expect($intake)->not->toBeNull()
+        ->and((int) data_get($intake->approval_snapshot_json, 'preferences.preferred_age_min'))->toBe(24)
+        ->and((int) data_get($intake->approval_snapshot_json, 'preferences.preferred_age_max'))->toBe(32)
+        ->and(data_get($item->fresh()->item_meta_json, 'registration.preferences_completed_at'))->not->toBeNull();
+
+    $this->get(route('bulk-intake.register.done', ['token' => $token]))
+        ->assertOk()
+        ->assertSee('नोंदणी पूर्ण झाली');
 });

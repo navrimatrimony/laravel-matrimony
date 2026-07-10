@@ -110,8 +110,12 @@
 @endphp
 @php
     $partnerPrefTabMode = ($currentSection ?? '') === 'full';
+    $bulkIntakePreferencesMode = ! empty($bulkIntakePreferencesMode);
     $activePref = $partnerPrefTabMode ? 'basics' : ($partnerPrefSection ?? 'basics');
-    $partnerPrefPanelVisible = function (string $slug) use ($partnerPrefTabMode, $activePref): bool {
+    $partnerPrefPanelVisible = function (string $slug) use ($partnerPrefTabMode, $activePref, $bulkIntakePreferencesMode): bool {
+        if ($bulkIntakePreferencesMode) {
+            return true;
+        }
         if ($partnerPrefTabMode) {
             return $slug === 'basics';
         }
@@ -957,7 +961,7 @@
         @include('matrimony.profile.wizard.partials.partner_pref_family_managed')
     </div>
 
-    @if (! $partnerPrefTabMode)
+    @if (! $partnerPrefTabMode && ! $bulkIntakePreferencesMode)
     @php
         $prefOrder = ['basics', 'community', 'location', 'education', 'lifestyle', 'family'];
         $pi = array_search($activePref, $prefOrder, true);

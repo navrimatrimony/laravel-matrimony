@@ -65,6 +65,24 @@ final class IntakePhotoCandidateCropService
             throw new \InvalidArgumentException('intake_source_not_image');
         }
 
+        $this->saveProcessedUploadBinary($intake, $file);
+    }
+
+    /**
+     * Public bulk registration: accept a cropped upload regardless of biodata file type.
+     *
+     * @throws \InvalidArgumentException|\RuntimeException
+     */
+    public function saveFromRegistrationUpload(BiodataIntake $intake, UploadedFile $file): void
+    {
+        $this->saveProcessedUploadBinary($intake, $file);
+    }
+
+    /**
+     * @throws \InvalidArgumentException|\RuntimeException
+     */
+    private function saveProcessedUploadBinary(BiodataIntake $intake, UploadedFile $file): void
+    {
         $realPath = $file->getRealPath();
         if ($realPath === false || ! is_readable($realPath)) {
             throw new \InvalidArgumentException('candidate_upload_not_readable');
