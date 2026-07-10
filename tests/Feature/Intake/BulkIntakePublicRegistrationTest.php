@@ -67,6 +67,33 @@ test('public registration shows biodata income and hides premature completion ba
         ->and($payload['profile']->company_name)->toBe('Test Company Pvt Ltd');
 });
 
+test('public registration resolves religion caste occupation and education from biodata text', function () {
+    $masters = registrationMasterIds();
+    $career = registrationCareerMasters();
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson([
+        'parsed_json' => [
+            'core' => [
+                'religion' => 'Hindu',
+                'caste' => 'Maratha',
+                'marital_status' => 'never_married',
+                'highest_education' => 'B.E. Computer',
+                'occupation' => 'Software Engineer',
+                'working_with' => 'private_company',
+                'community' => 'Hindu - Maratha',
+            ],
+        ],
+    ]));
+
+    $payload = app(BulkIntakePublicRegistrationService::class)->formPayload($item->fresh());
+    $profile = $payload['profile'];
+
+    expect((int) $profile->religion_id)->toBe($masters['religion_id'])
+        ->and((int) $profile->caste_id)->toBe($masters['caste_id'])
+        ->and((int) $profile->marital_status_id)->toBe($masters['marital_status_id'])
+        ->and((int) $profile->occupation_master_id)->toBe($career['occupation_master_id'])
+        ->and((string) $profile->highest_education)->toContain('B.E');
+});
+
 test('public registration save stores cm height and marks registration complete', function () {
     $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
     $masters = registrationMasterIds();

@@ -12,8 +12,10 @@ use App\Models\MasterIncomeCurrency;
 use App\Models\MasterMaritalStatus;
 use App\Models\MasterMotherTongue;
 use App\Models\MatrimonyProfile;
+use App\Models\OccupationMaster;
 use App\Models\Religion;
 use App\Models\Caste;
+use App\Models\WorkingWithType;
 use App\Services\EducationService;
 use App\Services\Location\LocationNormalizationService;
 use App\Services\OccupationService;
@@ -220,15 +222,52 @@ class BulkIntakeRegistrationFormBridgeService
 
         if ($profile->religion_id) {
             $profile->setRelation('religion', Religion::query()->find($profile->religion_id));
+        } elseif ($this->stringOrNull($core['religion'] ?? null) !== null) {
+            $profile->setAttribute('religion_label', $this->stringOrNull($core['religion'] ?? null));
         }
         if ($profile->caste_id) {
             $profile->setRelation('caste', Caste::query()->find($profile->caste_id));
+        } elseif ($this->stringOrNull($core['caste'] ?? null) !== null) {
+            $profile->setAttribute('caste_label', $this->stringOrNull($core['caste'] ?? null));
         }
         if ($profile->occupation_master_id) {
             $profile->loadMissing(['occupationMaster.category.workingWithType']);
         }
 
         return $profile;
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    public function mergeCandidatePreviewIntoSnapshot(array $snapshot, BiodataIntake $intake): array
+    {
+        if (! is_array($snapshot['core'] ?? null)) {
+            $snapshot['core'] = [];
+        }
+
+        $candidate = app(BulkIntakeCandidateDisplayService::class)->candidateForIntake($intake);
+        $core = &$snapshot['core'];
+
+        $this->fillCoreIfEmpty($core, 'full_name', $candidate['full_name'] ?? null);
+        $this->fillCoreIfEmpty($core, 'primary_contact_number', $candidate['mobile'] ?? null);
+        $this->fillCoreIfEmpty($core, 'date_of_birth', $candidate['date_of_birth'] ?? null);
+        $this->fillCoreIfEmpty($core, 'highest_education', $candidate['education'] ?? null);
+        $this->fillCoreIfEmpty($core, 'occupation', $candidate['occupation'] ?? null);
+        $this->fillCoreIfEmpty($core, 'occupation_title', $candidate['occupation'] ?? null);
+        $this->fillCoreIfEmpty($core, 'city_text', $candidate['city'] ?? null);
+        $this->fillCoreIfEmpty($core, 'city', $candidate['city'] ?? null);
+
+        if ($this->stringOrNull($core['gender'] ?? null) === null && is_string($candidate['gender'] ?? null)) {
+            $core['gender'] = strtolower(trim($candidate['gender']));
+        }
+
+        if (empty($core['height_cm']) && is_string($candidate['height'] ?? null) && trim($candidate['height']) !== '') {
+            $core['height'] = trim($candidate['height']);
+        }
+
+        return $snapshot;
     }
 
     /**
@@ -423,6 +462,13 @@ class BulkIntakeRegistrationFormBridgeService
             $occupationText = trim((string) ($core['occupation_title'] ?? $core['occupation'] ?? $core['job'] ?? ''));
             if ($occupationText !== '') {
                 $occupation = app(OccupationService::class)->findOccupationMasterForIntake($occupationText);
+                if ($occupation === null) {
+                    $needle = mb_strtolower($occupationText);
+                    $occupation = OccupationMaster::query()
+                        ->whereRaw('LOWER(TRIM(name)) = ?', [$needle])
+                        ->orWhereRaw('LOWER(TRIM(normalized_name)) = ?', [$needle])
+                        ->first();
+                }
                 if ($occupation !== null) {
                     $core['occupation_master_id'] = (int) $occupation->id;
                 }
@@ -456,7 +502,76 @@ class BulkIntakeRegistrationFormBridgeService
             }
         }
 
+        $this->backfillIncomeFields($core);
+        $this->backfillWorkingWithTypeId($core);
+
         return $snapshot;
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function backfillIncomeFields(array &$core): void
+    {
+        $raw = $core['income_amount'] ?? $core['annual_income'] ?? null;
+        if ($raw === null || $raw === '') {
+            return;
+        }
+
+        $digits = is_numeric($raw)
+            ? (string) (int) round((float) $raw)
+            : preg_replace('/\D+/', '', (string) $raw);
+        if ($digits === '') {
+            return;
+        }
+
+        if ($this->stringOrNull($core['income_value_type'] ?? null) === null) {
+            $core['income_period'] = $this->stringOrNull($core['income_period'] ?? null) ?? 'annual';
+            $core['income_value_type'] = 'exact';
+        }
+        if (empty($core['income_amount'])) {
+            $core['income_amount'] = $digits;
+        }
+        if (empty($core['annual_income'])) {
+            $core['annual_income'] = $digits;
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function backfillWorkingWithTypeId(array &$core): void
+    {
+        if ($this->intOrNull($core['working_with_type_id'] ?? null) !== null) {
+            return;
+        }
+
+        $workingWith = $this->stringOrNull($core['working_with'] ?? null);
+        if ($workingWith === null) {
+            return;
+        }
+
+        $row = WorkingWithType::query()
+            ->where('slug', $workingWith)
+            ->orWhere('name', $workingWith)
+            ->first();
+        if ($row !== null) {
+            $core['working_with_type_id'] = (int) $row->id;
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function fillCoreIfEmpty(array &$core, string $key, mixed $value): void
+    {
+        if ($this->stringOrNull($core[$key] ?? null) !== null) {
+            return;
+        }
+        $text = $this->stringOrNull($value);
+        if ($text !== null) {
+            $core[$key] = $text;
+        }
     }
 
     /**

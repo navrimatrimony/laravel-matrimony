@@ -91,6 +91,7 @@ class BulkIntakePublicRegistrationService
         }
 
         $snapshot = $this->sourceSnapshot($intake);
+        $snapshot = $this->formBridge->mergeCandidatePreviewIntoSnapshot($snapshot, $intake);
         $snapshot = $this->formBridge->prepareDisplaySnapshot($snapshot, $intake);
         $core = is_array($snapshot['core'] ?? null) ? $snapshot['core'] : [];
         $candidate = $this->candidateDisplayService->candidateForItem($item);
