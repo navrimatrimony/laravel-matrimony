@@ -87,6 +87,10 @@ class BulkIntakeCandidateCorrectionService
         return [
             'intake' => $intake,
             'fields' => $fields,
+            'correction_profile' => app(BulkIntakeRegistrationFormBridgeService::class)->profileFromSnapshot(
+                $this->intakePipeline->normalizeBulkCandidateCorrectionSnapshot($snapshot, null),
+                $item,
+            ),
             'source_snapshot_source' => $source['source'],
             'source_text' => $sourceText['text'],
             'source_text_label' => $sourceText['label'],
@@ -215,7 +219,50 @@ class BulkIntakeCandidateCorrectionService
             $snapshot['core']['address_line'] = $location;
         }
 
+        $this->applyCommunityAndOccupationCorrection($snapshot, $input);
+
         return $this->applyPrimaryContact($snapshot, $mobiles[0] ?? null);
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     */
+    private function applyCommunityAndOccupationCorrection(array &$snapshot, array $input): void
+    {
+        foreach ([
+            'religion_id',
+            'caste_id',
+            'sub_caste_id',
+            'occupation_master_id',
+            'occupation_custom_id',
+            'working_with_type_id',
+            'profession_id',
+            'location_id',
+        ] as $idKey) {
+            if (! array_key_exists($idKey, $input)) {
+                continue;
+            }
+            $value = $input[$idKey];
+            if ($value === null || $value === '') {
+                unset($snapshot['core'][$idKey]);
+
+                continue;
+            }
+            if (is_numeric($value)) {
+                $snapshot['core'][$idKey] = (int) $value;
+            }
+        }
+
+        $occupationTitle = $this->nullableText($input['occupation_title'] ?? $input['occupation'] ?? null);
+        if ($occupationTitle !== null) {
+            $snapshot['core']['occupation_title'] = $occupationTitle;
+            $snapshot['core']['occupation'] = $occupationTitle;
+        }
+
+        $companyName = $this->nullableText($input['company_name'] ?? null);
+        if ($companyName !== null) {
+            $snapshot['core']['company_name'] = $companyName;
+        }
     }
 
     /**

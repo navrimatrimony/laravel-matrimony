@@ -280,7 +280,8 @@ class BulkIntakeRegistrationFormBridgeService
             return ['core' => []];
         }
 
-        $snapshot = $this->intakePipeline->normalizeApprovedSnapshot($snapshot, null);
+        // Fast path: avoid full normalizeApprovedSnapshot on large OCR snapshots (prevents origin timeouts).
+        $snapshot = $this->intakePipeline->normalizeBulkCandidateCorrectionSnapshot($snapshot, null);
         $snapshot = $this->backfillRegistrationCoreFromSnapshot($snapshot);
 
         return $snapshot;

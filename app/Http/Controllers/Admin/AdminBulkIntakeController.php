@@ -465,6 +465,7 @@ class AdminBulkIntakeController extends Controller
             'sourceTextLabel' => $correction['source_text_label'],
             'imagePreview' => $correction['image_preview'],
             'canSave' => $correction['can_save'],
+            'correctionProfile' => $correction['correction_profile'] ?? null,
         ]);
     }
 
@@ -486,7 +487,8 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeBatch $bulkIntakeBatch,
         BulkIntakeBatchItem $bulkIntakeBatchItem,
         BulkIntakeCandidateCorrectionService $correctionService,
-        EducationService $educationService
+        EducationService $educationService,
+        \App\Services\OccupationService $occupationService,
     ) {
         abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
         abort_unless($request->user() instanceof User, 403);
@@ -507,6 +509,15 @@ class AdminBulkIntakeController extends Controller
             'location' => ['nullable', 'string', 'max:255'],
             'location_input' => ['nullable', 'string', 'max:255'],
             'location_id' => ['nullable', 'integer', 'min:1'],
+            'religion_id' => ['nullable', 'integer', 'min:1'],
+            'caste_id' => ['nullable', 'integer', 'min:1'],
+            'sub_caste_id' => ['nullable', 'integer', 'min:1'],
+            'occupation_master_id' => ['nullable', 'integer', 'min:1'],
+            'occupation_custom_id' => ['nullable', 'integer', 'min:1'],
+            'working_with_type_id' => ['nullable', 'integer', 'min:1'],
+            'profession_id' => ['nullable', 'integer', 'min:1'],
+            'occupation_title' => ['nullable', 'string', 'max:255'],
+            'company_name' => ['nullable', 'string', 'max:255'],
             'after_save' => ['nullable', Rule::in(['stay'])],
         ]);
 
@@ -514,7 +525,25 @@ class AdminBulkIntakeController extends Controller
             $validated['education'] = $request->input('highest_education');
         }
 
-        $correctionService->saveCorrection($bulkIntakeBatchItem, $request->user(), $validated);
+        if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'occupation_master_id')) {
+            $occupationService->mergeOccupationIntoRequest($request);
+        }
+
+        $correctionService->saveCorrection($bulkIntakeBatchItem, $request->user(), array_merge(
+            $validated,
+            $request->only([
+                'religion_id',
+                'caste_id',
+                'sub_caste_id',
+                'occupation_master_id',
+                'occupation_custom_id',
+                'working_with_type_id',
+                'profession_id',
+                'occupation_title',
+                'company_name',
+                'location_id',
+            ]),
+        ));
 
         if (($validated['after_save'] ?? null) === 'stay') {
             return redirect()

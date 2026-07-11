@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
 
+require __DIR__.'/Support/BulkIntakeRegistrationHelpers.php';
+
 test('admin can open bulk candidate correction page', function () {
     Storage::disk('local')->put(
         'testing/candidate-correction.png',
@@ -83,6 +85,8 @@ test('admin can open bulk candidate correction page', function () {
         ->assertSee('data-zoom-action="out"', false)
         ->assertSee('education-multiselect-root-bulk-correction-education-', false)
         ->assertSee('location-typeahead-wrapper', false)
+        ->assertSee('religion-caste-component', false)
+        ->assertSee('occupation-engine-root', false)
         ->assertSee('data-display-sync-name="location"', false)
         ->assertSee('data-search-url="', false)
         ->assertSee('/api/location/search', false)
@@ -216,7 +220,7 @@ test('admin can save seven field correction without mutating evidence or bulk it
         ->assertSee('Corrected Candidate', false)
         ->assertSee('Mobile: 9876543210', false)
         ->assertSee('1998-04-15', false)
-        ->assertSee('5 ft 6 in', false)
+        ->assertSee("5'6\"")
         ->assertDontSee('168 cm', false)
         ->assertSee('Gender: Female', false)
         ->assertSee('MCA', false)
@@ -1023,6 +1027,55 @@ test('batch show hides ready badge when eligible manual screening lacks mobile',
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
         ->assertDontSee('data-testid="bulk-ready-for-consent-badge"', false);
+});
+
+test('admin can save religion caste and occupation correction into reviewed snapshot', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $masters = registrationMasterIds();
+    $career = registrationCareerMasters();
+    $parsed = [
+        'core' => [
+            'full_name' => 'Community Candidate',
+            'primary_contact_number' => '9876543210',
+            'date_of_birth' => '1998-04-15',
+            'gender' => 'female',
+            'highest_education' => 'BCom',
+            'city_text' => 'Pune',
+        ],
+    ];
+    $intake = candidateCorrectionIntake([
+        'parsed_json' => $parsed,
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->patch(route('admin.bulk-intakes.items.correct-candidate.update', [$batch, $item]), [
+            'name' => 'Community Candidate',
+            'mobile' => '9876543210',
+            'date_of_birth' => '1998-04-15',
+            'gender' => 'female',
+            'education' => 'BCom',
+            'location' => 'Pune',
+            'religion_id' => $masters['religion_id'],
+            'caste_id' => $masters['caste_id'],
+            'occupation_master_id' => $career['occupation_master_id'],
+            'working_with_type_id' => $career['working_with_type_id'],
+            'occupation_title' => 'Software Engineer',
+            'company_name' => 'Test Company',
+            'after_save' => 'stay',
+        ])
+        ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]));
+
+    $intake->refresh();
+
+    expect(data_get($intake->approval_snapshot_json, 'core.religion_id'))->toBe($masters['religion_id'])
+        ->and(data_get($intake->approval_snapshot_json, 'core.caste_id'))->toBe($masters['caste_id'])
+        ->and(data_get($intake->approval_snapshot_json, 'core.occupation_master_id'))->toBe($career['occupation_master_id'])
+        ->and(data_get($intake->approval_snapshot_json, 'core.working_with_type_id'))->toBe($career['working_with_type_id'])
+        ->and(data_get($intake->approval_snapshot_json, 'core.occupation_title'))->toBe('Software Engineer')
+        ->and(data_get($intake->approval_snapshot_json, 'core.company_name'))->toBe('Test Company')
+        ->and($intake->parsed_json)->toBe($parsed);
 });
 
 test('bulk candidate correction save is blocked after intake approval or lock', function () {

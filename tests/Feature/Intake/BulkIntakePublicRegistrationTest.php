@@ -41,6 +41,50 @@ test('public registration page opens with token after consent received', functio
         ->and($payload['prefer_marathi_labels'] ?? false)->toBeTrue();
 });
 
+test('public registration form loads quickly with large relative snapshot without full normalization timeout', function () {
+    $relatives = [];
+    for ($i = 1; $i <= 80; $i++) {
+        $relatives[] = [
+            'relation_type' => 'uncle',
+            'contact_name' => 'Relative '.$i,
+            'phone_number' => '98765'.str_pad((string) $i, 5, '0', STR_PAD_LEFT),
+            'address_line' => 'Address line '.$i.' Pune Maharashtra India',
+        ];
+    }
+
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson([
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Large Snapshot Candidate',
+                'primary_contact_number' => '9876543301',
+            ],
+            'relatives' => $relatives,
+            'contacts' => array_merge([
+                [
+                    'phone_number' => '9876543301',
+                    'relation_type' => 'self',
+                    'contact_name' => 'Large Snapshot Candidate',
+                    'is_primary' => 1,
+                ],
+            ], $relatives),
+        ],
+        'raw_ocr_text' => str_repeat('मराठी बायोडाटा शिक्षण उंची ', 200),
+    ]));
+    $url = app(BulkIntakePublicRegistrationService::class)->publicUrl($item);
+
+    $startedAt = microtime(true);
+
+    $this->get($url)
+        ->assertOk()
+        ->assertSee('बायोडाटा नोंदणी पुष्टी')
+        ->assertSee('Large Snapshot Candidate');
+
+    expect(microtime(true) - $startedAt)->toBeLessThan(8.0);
+
+    $payload = app(BulkIntakePublicRegistrationService::class)->formPayload($item->fresh());
+    expect($payload['candidate_name'] ?? null)->toBe('Large Snapshot Candidate');
+});
+
 test('public registration redirects completed item away from editable form', function () {
     $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
     $service = app(BulkIntakePublicRegistrationService::class);

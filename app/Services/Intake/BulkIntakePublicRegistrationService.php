@@ -57,6 +57,7 @@ class BulkIntakePublicRegistrationService
         }
 
         return BulkIntakeBatchItem::query()
+            ->with('biodataIntake')
             ->where('item_meta_json->registration->public_token', $token)
             ->first();
     }

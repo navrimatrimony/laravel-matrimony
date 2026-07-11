@@ -22,7 +22,11 @@
 @endphp
 
 @once
-    @vite(['resources/js/profile/location-typeahead.js'])
+    @vite([
+        'resources/js/profile/location-typeahead.js',
+        'resources/js/profile/religion-caste-selector.js',
+        'resources/js/matrimony/occupation-engine-entry.js',
+    ])
 @endonce
 
 <style>
@@ -305,6 +309,18 @@
                             @endif
                         </div>
                     @endforeach
+
+                    @if ($correctionProfile instanceof \App\Models\MatrimonyProfile)
+                        <div class="space-y-4 border-t border-gray-100 pt-4">
+                            <h3 class="text-sm font-semibold text-gray-900">Community &amp; occupation</h3>
+                            <x-profile.religion-caste-selector :profile="$correctionProfile" :show-subcaste="true" />
+                            <x-occupation-search-engine
+                                :profile="$correctionProfile"
+                                form-selector="#bulk-candidate-correction-form"
+                                :compact="true"
+                            />
+                        </div>
+                    @endif
 
                     <div class="flex flex-wrap items-center gap-3 pt-2">
                         <button type="submit" @disabled(! $canSave) class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
