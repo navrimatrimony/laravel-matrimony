@@ -152,6 +152,22 @@ Route::get('/register/biodata/{token}/preferences', [\App\Http\Controllers\BulkI
     ->name('bulk-intake.register.preferences');
 Route::post('/register/biodata/{token}/preferences', [\App\Http\Controllers\BulkIntakePublicRegistrationController::class, 'storePreferences'])
     ->name('bulk-intake.register.preferences.store');
+Route::get('/register/biodata/{token}/email', [\App\Http\Controllers\BulkIntakeRegistrationAccountController::class, 'email'])
+    ->name('bulk-intake.register.email');
+Route::post('/register/biodata/{token}/email/google', [\App\Http\Controllers\BulkIntakeRegistrationAccountController::class, 'verifyGoogleEmail'])
+    ->name('bulk-intake.register.email.google');
+Route::post('/register/biodata/{token}/email/otp/send', [\App\Http\Controllers\BulkIntakeRegistrationAccountController::class, 'sendEmailOtp'])
+    ->name('bulk-intake.register.email.otp.send');
+Route::post('/register/biodata/{token}/email/otp/verify', [\App\Http\Controllers\BulkIntakeRegistrationAccountController::class, 'verifyEmailOtp'])
+    ->name('bulk-intake.register.email.otp.verify');
+Route::post('/register/biodata/{token}/email/skip', [\App\Http\Controllers\BulkIntakeRegistrationAccountController::class, 'skipEmail'])
+    ->name('bulk-intake.register.email.skip');
+Route::get('/register/biodata/{token}/password', [\App\Http\Controllers\BulkIntakeRegistrationAccountController::class, 'password'])
+    ->name('bulk-intake.register.password');
+Route::post('/register/biodata/{token}/password', [\App\Http\Controllers\BulkIntakeRegistrationAccountController::class, 'storePassword'])
+    ->name('bulk-intake.register.password.store');
+Route::post('/register/biodata/{token}/password/skip', [\App\Http\Controllers\BulkIntakeRegistrationAccountController::class, 'skipPassword'])
+    ->name('bulk-intake.register.password.skip');
 Route::get('/register/biodata/{token}/done', [\App\Http\Controllers\BulkIntakePublicRegistrationController::class, 'done'])
     ->name('bulk-intake.register.done');
 

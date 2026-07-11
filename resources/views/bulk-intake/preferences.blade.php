@@ -6,6 +6,8 @@
 
 @section('content')
 <div class="mx-auto w-full max-w-2xl">
+    @include('bulk-intake.partials.registration-progress', ['current' => 'preferences'])
+
     <div class="{{ $sectionClass }}">
         <div class="border-b border-gray-100 pb-3">
             <h1 class="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">जोडीदार प्राधान्ये</h1>
@@ -32,7 +34,7 @@
 
             <div class="mt-6 flex justify-end border-t border-gray-100 pt-4">
                 <button type="submit" class="inline-flex items-center rounded-lg bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2">
-                    प्राधान्ये जतन करा आणि पूर्ण करा
+                    प्राधान्ये जतन करा आणि पुढे जा
                 </button>
             </div>
         </form>

@@ -50,6 +50,7 @@ return [
 
     'google' => [
         'client_ids' => array_values(array_filter(array_map('trim', explode(',', (string) env('GOOGLE_CLIENT_IDS', ''))))),
+        'web_client_id' => env('GOOGLE_WEB_CLIENT_ID'),
     ],
 
     'openai' => [

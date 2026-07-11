@@ -4,6 +4,7 @@ namespace App\Services\Intake;
 
 use App\Models\BiodataIntake;
 use App\Models\BulkIntakeBatchItem;
+use App\Support\MobileNumber;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -225,6 +226,14 @@ class BulkIntakePublicRegistrationService
         }
         if (! $this->isPreferencesComplete($item)) {
             return 'bulk-intake.register.preferences';
+        }
+
+        $accountSetup = app(BulkIntakeRegistrationAccountSetupService::class);
+        if (! $accountSetup->isEmailStepComplete($item)) {
+            return 'bulk-intake.register.email';
+        }
+        if (! $accountSetup->isPasswordStepComplete($item)) {
+            return 'bulk-intake.register.password';
         }
 
         return 'bulk-intake.register.done';

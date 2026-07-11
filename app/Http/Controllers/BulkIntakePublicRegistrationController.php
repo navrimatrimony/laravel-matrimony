@@ -2,13 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Services\Intake\BulkIntakePublicRegistrationService;
-use App\Services\Intake\BulkIntakeRegistrationProfileApplyService;
+use App\Services\Intake\BulkIntakeRegistrationAccountSetupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -68,7 +66,7 @@ class BulkIntakePublicRegistrationController extends Controller
             return redirect()->route('bulk-intake.register.preferences', ['token' => $token]);
         }
         if ($registrationService->isPreferencesComplete($item)) {
-            return redirect()->route('bulk-intake.register.done', ['token' => $token]);
+            return redirect()->route($registrationService->nextStepRouteName($item), ['token' => $token]);
         }
 
         app()->setLocale('mr');
@@ -153,7 +151,7 @@ class BulkIntakePublicRegistrationController extends Controller
             return redirect()->route('bulk-intake.register.complete', ['token' => $token]);
         }
         if ($registrationService->isPreferencesComplete($item)) {
-            return redirect()->route('bulk-intake.register.done', ['token' => $token]);
+            return redirect()->route($registrationService->nextStepRouteName($item), ['token' => $token]);
         }
 
         app()->setLocale('mr');
@@ -172,8 +170,8 @@ class BulkIntakePublicRegistrationController extends Controller
         $registrationService->savePreferences($item, $request);
 
         return redirect()
-            ->route('bulk-intake.register.done', ['token' => $token])
-            ->with('success', 'जोडीदार प्राधान्ये जतन झाली. नोंदणी पूर्ण झाली!');
+            ->route($registrationService->nextStepRouteName($item->fresh()), ['token' => $token])
+            ->with('success', 'जोडीदार प्राधान्ये जतन झाली. आता ईमेल जोडा.');
     }
 
     public function done(string $token, BulkIntakePublicRegistrationService $registrationService): View|RedirectResponse
@@ -188,13 +186,15 @@ class BulkIntakePublicRegistrationController extends Controller
             return redirect()->route($registrationService->nextStepRouteName($item), ['token' => $token]);
         }
 
-        $profile = app(BulkIntakeRegistrationProfileApplyService::class)->profileForItem($item);
-        if ($profile !== null && (int) ($profile->user_id ?? 0) > 0 && ! Auth::check()) {
-            $user = User::query()->find((int) $profile->user_id);
-            if ($user instanceof User && ! $user->isAnyAdmin()) {
-                Auth::login($user);
-            }
+        $accountSetup = app(BulkIntakeRegistrationAccountSetupService::class);
+        if (! $accountSetup->isEmailStepComplete($item)) {
+            return redirect()->route('bulk-intake.register.email', ['token' => $token]);
         }
+        if (! $accountSetup->isPasswordStepComplete($item)) {
+            return redirect()->route('bulk-intake.register.password', ['token' => $token]);
+        }
+
+        $accountSetup->ensureAuthenticated($item);
 
         app()->setLocale('mr');
         $payload = $registrationService->completePayload($item, $token);

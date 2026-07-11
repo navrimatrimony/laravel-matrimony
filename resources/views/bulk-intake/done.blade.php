@@ -7,6 +7,8 @@
 
 @section('content')
 <div class="mx-auto w-full max-w-2xl">
+    @include('bulk-intake.partials.registration-progress', ['current' => 'done'])
+
     <div class="{{ $sectionClass }}">
         <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-3xl text-green-700">
             ✓

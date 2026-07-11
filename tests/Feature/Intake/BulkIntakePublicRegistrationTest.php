@@ -393,7 +393,13 @@ test('public registration preferences save to snapshot and finish on done page',
         'preferred_diet_ids' => $allDietIds,
         'preferred_income_min' => 0,
         'preferred_income_max' => 50000000,
-    ])->assertRedirect(route('bulk-intake.register.done', ['token' => $token]));
+    ])->assertRedirect(route('bulk-intake.register.email', ['token' => $token]));
+
+    $this->post(route('bulk-intake.register.email.skip', ['token' => $token]))
+        ->assertRedirect(route('bulk-intake.register.password', ['token' => $token]));
+
+    $this->post(route('bulk-intake.register.password.skip', ['token' => $token]))
+        ->assertRedirect(route('bulk-intake.register.done', ['token' => $token]));
 
     $intake = $item->fresh()->biodataIntake?->fresh();
     expect($intake)->not->toBeNull()
@@ -495,4 +501,172 @@ test('bulk registration preferences default education occupation income and diet
         ->assertOk()
         ->assertSee('कोणतीही शैक्षणिक पात्रता चालेल')
         ->assertSee('कोणतीही उत्पन्न श्रेणी');
+});
+
+test('bulk registration google email verification advances to password step', function () {
+    Illuminate\Support\Facades\Config::set('services.google.web_client_id', 'web-client-id');
+    Illuminate\Support\Facades\Config::set('services.google.client_ids', ['web-client-id']);
+    Illuminate\Support\Facades\Http::fake([
+        'oauth2.googleapis.com/tokeninfo*' => Illuminate\Support\Facades\Http::response([
+            'aud' => 'web-client-id',
+            'email' => 'verified@example.com',
+            'email_verified' => 'true',
+        ], 200),
+    ]);
+
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
+    $service = app(BulkIntakePublicRegistrationService::class);
+    $token = $service->ensureToken($item);
+    $masters = registrationMasterIds();
+    $career = registrationCareerMasters();
+
+    $this->post(route('bulk-intake.register.store', ['token' => $token]), [
+        'full_name' => 'Google Email Candidate',
+        'mobile' => '9876543301',
+        'date_of_birth' => '1998-04-15',
+        'height_cm' => 165,
+        'gender_id' => $masters['gender_id'],
+        'mother_tongue_id' => $masters['mother_tongue_id'],
+        'marital_status_id' => $masters['marital_status_id'],
+        'religion_id' => $masters['religion_id'],
+        'caste_id' => $masters['caste_id'],
+        'location_id' => registrationLocationId(),
+        'education_degree_ids' => [$career['education_degree_id']],
+        'occupation_master_id' => $career['occupation_master_id'],
+        'income_period' => 'annual',
+        'income_value_type' => 'exact',
+        'income_amount' => '500000',
+        'income_currency_id' => registrationIncomeCurrencyId(),
+        'marriages' => [[
+            'marriage_year' => '',
+            'divorce_year' => '',
+            'separation_year' => '',
+            'spouse_death_year' => '',
+            'divorce_status' => '',
+        ]],
+    ]);
+
+    $photo = \Illuminate\Http\UploadedFile::fake()->image('candidate.jpg', 640, 800);
+    $this->post(route('bulk-intake.register.photo.store', ['token' => $token]), [
+        'profile_photo' => $photo,
+    ]);
+
+    $allEducationIds = EducationDegree::query()->pluck('id')->map(fn ($id) => (int) $id)->all();
+    $allOccupationIds = OccupationMaster::query()->pluck('id')->map(fn ($id) => (int) $id)->all();
+    $allDietIds = MasterDiet::query()->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+    $this->post(route('bulk-intake.register.preferences.store', ['token' => $token]), [
+        'preferred_age_min' => 24,
+        'preferred_age_max' => 32,
+        'preferred_religion_ids' => [$masters['religion_id']],
+        'preferred_caste_ids' => [$masters['caste_id']],
+        'preferred_education_degree_ids' => $allEducationIds,
+        'preferred_occupation_master_ids' => $allOccupationIds,
+        'preferred_diet_ids' => $allDietIds,
+        'preferred_income_min' => 0,
+        'preferred_income_max' => 50000000,
+    ]);
+
+    $this->get(route('bulk-intake.register.email', ['token' => $token]))
+        ->assertOk()
+        ->assertSee('Google खाते निवडा')
+        ->assertSee('bulk-registration-google-button', false);
+
+    $this->post(route('bulk-intake.register.email.google', ['token' => $token]), [
+        'email' => 'verified@example.com',
+        'id_token' => 'google-id-token',
+    ])->assertRedirect(route('bulk-intake.register.password', ['token' => $token]));
+
+    $profile = app(\App\Services\Intake\BulkIntakeRegistrationProfileApplyService::class)->profileForItem($item->fresh());
+    $user = \App\Models\User::query()->find((int) $profile->user_id);
+    expect($user)->not->toBeNull()
+        ->and($user->email)->toBe('verified@example.com')
+        ->and($user->email_verified_at)->not->toBeNull()
+        ->and(data_get($item->fresh()->item_meta_json, 'registration.email_step_completed_via'))->toBe('google');
+});
+
+test('bulk registration email otp and password set complete account setup', function () {
+    Illuminate\Support\Facades\Mail::fake();
+
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson([
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Password Flow Candidate',
+                'primary_contact_number' => '9876543322',
+            ],
+        ],
+    ]));
+    $service = app(BulkIntakePublicRegistrationService::class);
+    $accountSetup = app(\App\Services\Intake\BulkIntakeRegistrationAccountSetupService::class);
+    $token = $service->ensureToken($item);
+    $masters = registrationMasterIds();
+    $career = registrationCareerMasters();
+
+    $this->post(route('bulk-intake.register.store', ['token' => $token]), [
+        'full_name' => 'Password Flow Candidate',
+        'mobile' => '9876543322',
+        'date_of_birth' => '1998-04-15',
+        'height_cm' => 165,
+        'gender_id' => $masters['gender_id'],
+        'mother_tongue_id' => $masters['mother_tongue_id'],
+        'marital_status_id' => $masters['marital_status_id'],
+        'religion_id' => $masters['religion_id'],
+        'caste_id' => $masters['caste_id'],
+        'location_id' => registrationLocationId(),
+        'education_degree_ids' => [$career['education_degree_id']],
+        'occupation_master_id' => $career['occupation_master_id'],
+        'income_period' => 'annual',
+        'income_value_type' => 'exact',
+        'income_amount' => '500000',
+        'income_currency_id' => registrationIncomeCurrencyId(),
+        'marriages' => [[
+            'marriage_year' => '',
+            'divorce_year' => '',
+            'separation_year' => '',
+            'spouse_death_year' => '',
+            'divorce_status' => '',
+        ]],
+    ]);
+
+    $photo = \Illuminate\Http\UploadedFile::fake()->image('candidate.jpg', 640, 800);
+    $this->post(route('bulk-intake.register.photo.store', ['token' => $token]), [
+        'profile_photo' => $photo,
+    ]);
+
+    $allEducationIds = EducationDegree::query()->pluck('id')->map(fn ($id) => (int) $id)->all();
+    $allOccupationIds = OccupationMaster::query()->pluck('id')->map(fn ($id) => (int) $id)->all();
+    $allDietIds = MasterDiet::query()->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+    $this->post(route('bulk-intake.register.preferences.store', ['token' => $token]), [
+        'preferred_age_min' => 24,
+        'preferred_age_max' => 32,
+        'preferred_religion_ids' => [$masters['religion_id']],
+        'preferred_caste_ids' => [$masters['caste_id']],
+        'preferred_education_degree_ids' => $allEducationIds,
+        'preferred_occupation_master_ids' => $allOccupationIds,
+        'preferred_diet_ids' => $allDietIds,
+        'preferred_income_min' => 0,
+        'preferred_income_max' => 50000000,
+    ]);
+
+    $freshItem = $item->fresh();
+    $accountSetup->ensureAuthenticated($freshItem);
+    $otpResult = $accountSetup->sendEmailOtp($freshItem, 'otpuser@example.com', $token, request());
+
+    $this->post(route('bulk-intake.register.email.otp.verify', ['token' => $token]), [
+        'otp' => $otpResult['debug_otp'],
+    ])->assertRedirect(route('bulk-intake.register.password', ['token' => $token]));
+
+    $profile = app(\App\Services\Intake\BulkIntakeRegistrationProfileApplyService::class)->profileForItem($item->fresh());
+    $user = \App\Models\User::query()->find((int) $profile->user_id);
+    expect($user?->email)->toBe('otpuser@example.com')
+        ->and($user?->email_verified_at)->not->toBeNull();
+
+    $this->post(route('bulk-intake.register.password.store', ['token' => $token]), [
+        'password' => 'SecurePass123!',
+        'password_confirmation' => 'SecurePass123!',
+    ])->assertRedirect(route('bulk-intake.register.done', ['token' => $token]));
+
+    expect(Illuminate\Support\Facades\Hash::check('SecurePass123!', $user->fresh()->password))->toBeTrue()
+        ->and(data_get($item->fresh()->item_meta_json, 'registration.password_step_completed_via'))->toBe('public_web_form');
 });
