@@ -42,8 +42,10 @@ class BulkIntakeIdentityHistoryService
     /**
      * @return list<array<string, mixed>>
      */
-    public function blockingHistoriesForItem(BulkIntakeBatchItem $item): array
-    {
+    public function blockingHistoriesForItem(
+        BulkIntakeBatchItem $item,
+        bool $includeSelfSourcedHistories = false,
+    ): array {
         $identity = $this->identityKeysFromItem($item);
         if ($identity['mobiles'] === [] && ($identity['name'] === null || $identity['dob'] === null)) {
             return [];
@@ -76,7 +78,7 @@ class BulkIntakeIdentityHistoryService
             ->latest('id')
             ->limit(10);
 
-        if ($item->id !== null) {
+        if (! $includeSelfSourcedHistories && $item->id !== null) {
             $query->where(function ($excludeCurrent) use ($item): void {
                 $excludeCurrent
                     ->whereNull('source_bulk_intake_batch_item_id')

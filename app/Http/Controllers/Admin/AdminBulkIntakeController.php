@@ -19,6 +19,7 @@ use App\Services\Intake\BulkIntakeCandidateScreeningReviewService;
 use App\Services\Intake\BulkIntakeDraftProfileBootstrapService;
 use App\Services\Intake\BulkIntakeDuplicateGateService;
 use App\Services\Intake\BulkIntakeDuplicateHistoryHintService;
+use App\Services\Intake\BulkIntakeDuplicateVerificationService;
 use App\Services\Intake\BulkIntakeIdentityHistoryService;
 use App\Services\Intake\BulkIntakeManualTranscriptService;
 use App\Services\Intake\BulkIntakeProgressPresenter;
@@ -137,6 +138,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeEligibilityService $eligibilityService,
         BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService,
         BulkIntakeDuplicateGateService $duplicateGateService,
+        BulkIntakeDuplicateVerificationService $duplicateVerificationService,
         BulkIntakeProgressPresenter $progressPresenter,
         BulkIntakeWhatsAppConsentService $whatsappConsentService,
         BulkIntakeCandidateContactPlanService $contactPlanService,
@@ -184,6 +186,11 @@ class AdminBulkIntakeController extends Controller
                     $item,
                     $duplicateHintsByItemId[(int) $item->id] ?? []
                 ),
+            ])
+            ->all();
+        $duplicateVerificationByItemId = $statusFilteredItems
+            ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
+                (int) $item->id => $duplicateVerificationService->verificationForItem($item),
             ])
             ->all();
         $autoSuggestionByItemId = $statusFilteredItems
@@ -312,6 +319,7 @@ class AdminBulkIntakeController extends Controller
             'candidateByItemId' => $candidateByItemId,
             'duplicateHintsByItemId' => $duplicateHintsByItemId,
             'duplicateGateByItemId' => $duplicateGateByItemId,
+            'duplicateVerificationByItemId' => $duplicateVerificationByItemId,
             'pipelineByItemId' => $pipelineByItemId,
             'autoSuggestionByItemId' => $autoSuggestionByItemId,
             'screeningByItemId' => $autoSuggestionByItemId,

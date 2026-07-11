@@ -29,6 +29,7 @@
     $candidateByItemId = $candidateByItemId ?? [];
     $duplicateHintsByItemId = $duplicateHintsByItemId ?? [];
     $duplicateGateByItemId = $duplicateGateByItemId ?? [];
+    $duplicateVerificationByItemId = $duplicateVerificationByItemId ?? [];
     $pipelineByItemId = $pipelineByItemId ?? [];
     $screeningByItemId = $screeningByItemId ?? [];
     $screeningReviewByItemId = $screeningReviewByItemId ?? [];
@@ -316,6 +317,7 @@
                                     default => 'border-amber-300 bg-amber-100 text-amber-900',
                                 };
                                 $duplicateHints = is_array($duplicateHintsByItemId[$item->id] ?? null) ? $duplicateHintsByItemId[$item->id] : [];
+                                $duplicateVerification = is_array($duplicateVerificationByItemId[$item->id] ?? null) ? $duplicateVerificationByItemId[$item->id] : [];
                                 $duplicateGate = is_array($duplicateGateByItemId[$item->id] ?? null) ? $duplicateGateByItemId[$item->id] : [];
                                 $duplicateGateBlocks = is_array($duplicateGate['blocks'] ?? null) ? $duplicateGate['blocks'] : [];
                                 $historyBlocks = is_array($duplicateGate['history_blocks'] ?? null) ? $duplicateGate['history_blocks'] : [];
@@ -411,7 +413,9 @@
                                 };
                                 $manualDuplicateReview = is_array(data_get($itemMeta, 'duplicate_review')) ? data_get($itemMeta, 'duplicate_review') : [];
                                 $manualDuplicateActive = (string) data_get($manualDuplicateReview, 'status') === 'manual_duplicate';
-                                $primaryDuplicateHint = is_array($duplicateHints[0] ?? null) ? $duplicateHints[0] : [];
+                                $primaryDuplicateHint = is_array($duplicateVerification['primary'] ?? null)
+                                    ? $duplicateVerification['primary']
+                                    : (is_array($duplicateHints[0] ?? null) ? $duplicateHints[0] : []);
                                 $hasParsedJson = (bool) ($candidate['parsed_json_present'] ?? false);
                                 $usesReviewedSnapshot = ($candidate['display_source'] ?? null) === 'approval_snapshot_json';
                                 $parseStatus = (string) ($candidate['parse_status'] ?? $intake?->parse_status ?? '');
@@ -468,11 +472,13 @@
                                         'testid' => 'bulk-manual-duplicate-badge',
                                     ];
                                 }
-                                foreach (array_slice($duplicateHints, 0, 2) as $duplicateHint) {
+                                foreach (array_slice($duplicateVerification['hints'] ?? $duplicateHints, 0, 2) as $duplicateHint) {
+                                    $dupBadgeLabel = (string) ($duplicateHint['reason_label_mr'] ?? $duplicateHint['label'] ?? 'Possible duplicate');
                                     $exceptionBadges[] = [
-                                        'label' => (string) ($duplicateHint['label'] ?? 'Possible duplicate'),
+                                        'label' => $dupBadgeLabel,
                                         'class' => 'border-purple-200 bg-purple-50 text-purple-700',
                                         'testid' => 'bulk-duplicate-history-hint',
+                                        'title' => (string) ($duplicateHint['matched']['journey_label'] ?? ''),
                                     ];
                                 }
                                 foreach ($historyBlocks as $historyBlock) {
@@ -656,7 +662,7 @@
                                         @endif
                                         @if ($exceptionBadges !== [])
                                             @foreach ($exceptionBadges as $badge)
-                                                <span @if (! empty($badge['testid'])) data-testid="{{ $badge['testid'] }}" @endif class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $badge['class'] }}">{{ $badge['label'] }}</span>
+                                                <span @if (! empty($badge['testid'])) data-testid="{{ $badge['testid'] }}" @endif @if (! empty($badge['title'])) title="{{ $badge['title'] }}" @endif class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $badge['class'] }}">{{ $badge['label'] }}</span>
                                             @endforeach
                                         @endif
                                     </div>
@@ -689,6 +695,10 @@
                                                 @csrf
                                                 <button type="submit" class="text-left text-sm font-medium text-amber-700 hover:text-amber-900">Mark needs review</button>
                                             </form>
+                                        @endif
+
+                                        @if (($duplicateVerification['has_hints'] ?? false) && $duplicateHints !== [])
+                                            @include('admin.bulk-intakes.partials.item-duplicate-verify-panel')
                                         @endif
 
                                         @if ($manualDuplicateActive)
@@ -788,6 +798,33 @@
     });
 
     document.querySelectorAll('dialog[id^="bulk-wa-panel-"]').forEach(function (dialog) {
+        dialog.addEventListener('click', function (event) {
+            if (event.target === dialog && typeof dialog.close === 'function') {
+                dialog.close();
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-bulk-dup-open]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var dialogId = button.getAttribute('data-bulk-dup-open');
+            var dialog = dialogId ? document.getElementById(dialogId) : null;
+            if (dialog && typeof dialog.showModal === 'function') {
+                dialog.showModal();
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-bulk-dup-close]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var dialog = button.closest('dialog');
+            if (dialog && typeof dialog.close === 'function') {
+                dialog.close();
+            }
+        });
+    });
+
+    document.querySelectorAll('dialog[id^="bulk-dup-panel-"]').forEach(function (dialog) {
         dialog.addEventListener('click', function (event) {
             if (event.target === dialog && typeof dialog.close === 'function') {
                 dialog.close();
