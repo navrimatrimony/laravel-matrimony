@@ -20,6 +20,7 @@ class BulkIntakePublicRegistrationService
         private readonly IntakeHumanReviewSnapshotService $reviewSnapshotService,
         private readonly BulkIntakeRegistrationFormBridgeService $formBridge,
         private readonly BulkIntakeRegistrationPreferencesBridgeService $preferencesBridge,
+        private readonly BulkIntakeRegistrationProfileApplyService $profileApplyService,
         private readonly IntakePhotoCandidateCropService $photoCandidateCropService,
     ) {}
 
@@ -147,6 +148,9 @@ class BulkIntakePublicRegistrationService
             'approval_status' => IntakeHumanReviewSnapshotService::STATUS_REVIEWED,
         ]);
 
+        $mobile = trim((string) $request->input('mobile', ''));
+        $this->profileApplyService->applyFormRegistration($item, $intake, $snapshot, $mobile);
+
         $this->markRegistrationComplete($item);
 
         return $intake->refresh();
@@ -264,6 +268,8 @@ class BulkIntakePublicRegistrationService
             ]);
         }
 
+        $this->profileApplyService->applyRegistrationPhoto($intake, $item);
+
         $this->markPhotoComplete($item);
 
         return $intake->refresh();
@@ -341,6 +347,15 @@ class BulkIntakePublicRegistrationService
             'approval_policy' => IntakeHumanReviewSnapshotService::POLICY_PHASE2C_PROFILE_USER_REVIEW_V1,
             'approval_status' => IntakeHumanReviewSnapshotService::STATUS_REVIEWED,
         ]);
+
+        $profile = $this->profileApplyService->profileForItem($item);
+        if ($profile instanceof \App\Models\MatrimonyProfile) {
+            $this->profileApplyService->applyRegistrationPreferences(
+                $item,
+                $prefsSnapshot,
+                (int) ($profile->user_id ?? 0),
+            );
+        }
 
         $this->markPreferencesComplete($item);
 

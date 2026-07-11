@@ -2,6 +2,7 @@
 
 use App\Models\EducationDegree;
 use App\Models\MasterDiet;
+use App\Models\MatrimonyProfile;
 use App\Models\OccupationMaster;
 use App\Models\BulkIntakeBatch;
 use App\Models\BulkIntakeBatchItem;
@@ -142,7 +143,14 @@ test('public registration save stores cm height and marks registration complete'
         ->and((int) data_get($intake->approval_snapshot_json, 'core.location_id'))->toBe(registrationLocationId())
         ->and((int) data_get($intake->approval_snapshot_json, 'core.occupation_master_id'))->toBe($career['occupation_master_id'])
         ->and(app(BulkIntakeRegistrationService::class)->registrationStatus($item))
-        ->toBe(BulkIntakeRegistrationService::STATUS_REGISTRATION_COMPLETE);
+        ->toBe(BulkIntakeRegistrationService::STATUS_REGISTRATION_COMPLETE)
+        ->and($intake->matrimony_profile_id)->not->toBeNull();
+
+    $profile = MatrimonyProfile::query()->find((int) $intake->matrimony_profile_id);
+    expect($profile)->not->toBeNull()
+        ->and($profile->full_name)->toBe('Updated Candidate')
+        ->and((int) $profile->height_cm)->toBe(170)
+        ->and($profile->lifecycle_state)->toBe('draft');
 });
 
 test('public registration complete page shows success and photo upload after form save', function () {
@@ -297,7 +305,14 @@ test('public registration preferences save to snapshot and finish on done page',
         ->and(data_get($intake->approval_snapshot_json, 'preferences.preferred_education_degree_ids'))->toBe([])
         ->and(data_get($intake->approval_snapshot_json, 'preferences.preferred_occupation_master_ids'))->toBe([])
         ->and(data_get($intake->approval_snapshot_json, 'preferences.preferred_diet_ids'))->toBe([])
-        ->and(data_get($item->fresh()->item_meta_json, 'registration.preferences_completed_at'))->not->toBeNull();
+        ->and(data_get($item->fresh()->item_meta_json, 'registration.preferences_completed_at'))->not->toBeNull()
+        ->and($intake->matrimony_profile_id)->not->toBeNull();
+
+    $profile = MatrimonyProfile::query()->find((int) $intake->matrimony_profile_id);
+    expect($profile)->not->toBeNull()
+        ->and($profile->preferenceCriteria)->not->toBeNull()
+        ->and((int) $profile->preferenceCriteria->preferred_age_min)->toBe(24)
+        ->and((int) $profile->preferenceCriteria->preferred_age_max)->toBe(32);
 
     $this->get(route('bulk-intake.register.done', ['token' => $token]))
         ->assertOk()
