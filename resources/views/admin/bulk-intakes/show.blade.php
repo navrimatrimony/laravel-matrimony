@@ -496,24 +496,9 @@
                                         </span>
                                     @endif
                                     @if (($contactPlan['suchak_count'] ?? 0) > 0)
-                                        <span data-testid="bulk-suchak-directory-count" class="mt-1 block text-[11px] font-semibold text-violet-800">
-                                            सूचक संदर्भ (message नाही):
+                                        <span data-testid="bulk-suchak-directory-count" class="mt-1 block text-[11px] text-violet-800">
+                                            Suchak reference: {{ $contactPlan['suchak_count'] }} (not messaged)
                                         </span>
-                                        <ul data-testid="bulk-suchak-directory-list" class="mt-0.5 list-none space-y-0.5 pl-0 text-[11px] text-violet-900">
-                                            @foreach (is_array($contactPlan['suchak_directory'] ?? null) ? $contactPlan['suchak_directory'] : [] as $suchakEntry)
-                                                <li>
-                                                    @if (!empty($suchakEntry['name']))
-                                                        {{ $suchakEntry['name'] }}
-                                                    @else
-                                                        सूचक
-                                                    @endif
-                                                    @if (!empty($suchakEntry['village']))
-                                                        — {{ $suchakEntry['village'] }}
-                                                    @endif
-                                                    — {{ $suchakEntry['mobile'] ?? $missingDisplay }}
-                                                </li>
-                                            @endforeach
-                                        </ul>
                                     @endif
                                 </td>
                                 <td class="px-4 py-2 text-sm text-gray-700">
@@ -699,9 +684,6 @@
                                             <div class="mt-1 rounded-md border border-sky-100 bg-sky-50 p-2">
                                                 <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-sky-700">WhatsApp test</span>
                                                 <p data-testid="bulk-whatsapp-message-preview" class="whitespace-pre-wrap text-xs text-sky-900">{{ $manualWhatsAppPreview['share_text'] ?? '' }}</p>
-                                                @if ($canSendWhatsAppPermission && $whatsappConsentStatus !== \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_PERMISSION_SENT)
-                                                    <p class="mt-2 text-[11px] text-sky-800">आधी <strong>Send permission</strong> करा. मग खाली «हो» सिम्युलेट बटण दिसेल.</p>
-                                                @endif
                                                 @if ($manualWhatsAppShareUrl !== '')
                                                     <a
                                                         href="{{ $manualWhatsAppShareUrl }}"
@@ -742,18 +724,6 @@
                                             </div>
                                         @endif
 
-                                        @if (($registrationSummary['public_url'] ?? '') !== '')
-                                            <div class="mt-1 rounded-md border border-indigo-100 bg-indigo-50 p-2">
-                                                <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-indigo-700">Profile edit link</span>
-                                                @if ($consentReceived)
-                                                    <a href="{{ $registrationSummary['public_url'] }}" target="_blank" rel="noopener" data-testid="bulk-registration-web-edit" class="block break-all text-sm font-medium text-indigo-700 hover:text-indigo-900">वेबवर सर्व edit करा (user link)</a>
-                                                @else
-                                                    <p class="text-[11px] text-indigo-900">Consent «हो» मिळाल्यानंतर user ला हा link पाठवला जाईल:</p>
-                                                    <span data-testid="bulk-registration-web-edit-pending" class="mt-1 block break-all text-xs text-indigo-800">{{ $registrationSummary['public_url'] }}</span>
-                                                @endif
-                                            </div>
-                                        @endif
-
                                         @if ($consentReceived)
                                             <div class="mt-1 rounded-md border border-violet-100 bg-violet-50 p-2">
                                                 <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-violet-700">Registration (Phase E)</span>
@@ -772,6 +742,9 @@
                                                 @endif
                                                 @if ($whatsappManualTestEnabled && $registrationWhatsAppShareUrl !== '')
                                                     <a href="{{ $registrationWhatsAppShareUrl }}" target="_blank" rel="noopener" data-testid="bulk-open-registration-whatsapp-test" class="mt-2 inline-flex text-sm font-medium text-emerald-700 hover:text-emerald-900">Open summary on WhatsApp</a>
+                                                @endif
+                                                @if ($consentReceived && ($registrationSummary['public_url'] ?? '') !== '')
+                                                    <a href="{{ $registrationSummary['public_url'] }}" target="_blank" rel="noopener" data-testid="bulk-registration-web-edit" class="mt-2 block text-sm font-medium text-indigo-700 hover:text-indigo-900">वेबवर सर्व edit करा (user link)</a>
                                                 @endif
                                                 @if ($canSimulateRegistrationComplete)
                                                     <form method="POST" action="{{ route('admin.bulk-intakes.items.simulate-registration-complete', [$batch, $item]) }}" class="mt-2">
