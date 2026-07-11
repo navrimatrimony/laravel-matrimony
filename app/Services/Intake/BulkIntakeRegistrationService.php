@@ -173,6 +173,26 @@ class BulkIntakeRegistrationService
         $lines[] = '';
         $lines[] = 'हे बरोबर आहे का?';
         $lines[] = 'खालील बटणे निवडा 👇';
+        $lines[] = '';
+        $lines[] = $this->buildSummaryEscapeFooter($item);
+
+        return implode("\n", $lines);
+    }
+
+    public function buildSummaryEscapeFooter(BulkIntakeBatchItem $item): string
+    {
+        $summary = $this->summaryForItem($item);
+        $publicUrl = trim((string) ($summary['public_url'] ?? ''));
+
+        $lines = [
+            'इतर पर्याय:',
+        ];
+
+        if ($publicUrl !== '') {
+            $lines[] = '• वेबवर सर्व edit: '.$publicUrl;
+        }
+
+        $lines[] = '• रिकामा form WhatsApp वर — “रिकामा form” असे उत्तर द्या';
 
         return implode("\n", $lines);
     }

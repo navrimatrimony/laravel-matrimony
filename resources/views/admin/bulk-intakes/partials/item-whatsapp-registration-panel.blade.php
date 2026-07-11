@@ -110,7 +110,10 @@
                 @endif
                 @if ($canSimulateRegistrationReply && $registrationNeedsFieldValueText)
                     <div class="mt-2 border-t border-violet-100 pt-2">
-                        <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-violet-700">Simulate corrected value</span>
+                        <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-violet-700">Simulate field reply</span>
+                        @if ($registrationFieldValueHint !== '')
+                            <p class="mb-1 text-[10px] text-violet-700">{{ $registrationFieldValueHint }}</p>
+                        @endif
                         <form method="POST" action="{{ route('admin.bulk-intakes.items.simulate-registration-reply', [$batch, $item]) }}" class="mt-1 space-y-2">
                             @csrf
                             <input
@@ -118,7 +121,7 @@
                                 name="reply_text"
                                 data-testid="bulk-simulate-registration-field-value"
                                 class="w-full rounded-md border border-violet-200 px-2 py-1 text-sm"
-                                placeholder="योग्य माहिती लिहा (उदा. Pune)"
+                                placeholder="योग्य माहिती लिहा"
                                 maxlength="500"
                                 required
                             >
@@ -147,6 +150,7 @@
                                     \App\Services\Intake\BulkIntakeWhatsAppRegistrationConversationService::BTN_SUMMARY_OK => 'bulk-simulate-registration-yes',
                                     \App\Services\Intake\BulkIntakeWhatsAppRegistrationConversationService::BTN_SUMMARY_EDIT => 'bulk-simulate-registration-edit',
                                     \App\Services\Intake\BulkIntakeWhatsAppRegistrationConversationService::BTN_SUMMARY_LATER => 'bulk-simulate-registration-later',
+                                    \App\Services\Intake\BulkIntakeWhatsAppRegistrationConversationService::BTN_BLANK_FORM_REQUEST => 'bulk-simulate-registration-blank-form',
                                     \App\Services\Intake\BulkIntakeWhatsAppRegistrationConversationService::BTN_PHOTO_USE => 'bulk-simulate-registration-photo-use',
                                     \App\Services\Intake\BulkIntakeWhatsAppRegistrationConversationService::BTN_PHOTO_NEW => 'bulk-simulate-registration-photo-new',
                                     default => 'bulk-simulate-registration-reply',

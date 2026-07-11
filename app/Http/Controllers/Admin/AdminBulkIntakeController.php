@@ -278,6 +278,7 @@ class AdminBulkIntakeController extends Controller
                     'can_simulate_photo' => $registrationConversationService->canSimulatePhotoReceived($item),
                     'simulate_buttons' => $registrationConversationService->simulateButtonsForItem($item),
                     'needs_field_value_text' => $registrationConversationService->needsFieldValueText($item),
+                    'field_value_hint' => $registrationConversationService->fieldValuePromptHint($item),
                     'flow_step_label' => $registrationConversationService->flowStepLabel($item),
                     'manual_preview' => $registrationService->isManualWhatsAppTestEnabled()
                         ? $registrationService->buildManualTestPreview($item)

@@ -26,6 +26,8 @@ class BulkIntakeWhatsAppRegistrationConversationService
 
     public const STEP_AWAITING_FIELD_VALUE = 'awaiting_field_value';
 
+    public const STEP_AWAITING_BLANK_FORM_VALUE = 'awaiting_blank_form_value';
+
     public const STEP_AWAITING_PHOTO = 'awaiting_photo';
 
     public const STEP_DEFERRED = 'deferred';
@@ -37,6 +39,8 @@ class BulkIntakeWhatsAppRegistrationConversationService
     public const BTN_SUMMARY_EDIT = 'reg_summary_edit';
 
     public const BTN_SUMMARY_LATER = 'reg_summary_later';
+
+    public const BTN_BLANK_FORM_REQUEST = 'reg_blank_form';
 
     public const BTN_PHOTO_USE = 'reg_photo_use';
 
@@ -52,6 +56,7 @@ class BulkIntakeWhatsAppRegistrationConversationService
         private readonly IntakePhotoCandidateCropService $photoCandidateCropService,
         private readonly BulkIntakeCandidateContactPlanService $contactPlanService,
         private readonly MetaWhatsAppCloudService $metaWhatsAppCloudService,
+        private readonly BulkIntakeWhatsAppBlankFormWizardService $blankFormWizard,
     ) {}
 
     /**
@@ -76,8 +81,15 @@ class BulkIntakeWhatsAppRegistrationConversationService
         }
 
         if ($step === self::STEP_DEFERRED) {
-            $this->persistFlowStep($item, self::STEP_AWAITING_SUMMARY_CONFIRM);
-            $step = self::STEP_AWAITING_SUMMARY_CONFIRM;
+            $flow = $this->flowMeta($item);
+            $resume = trim((string) ($flow['resume_step'] ?? ''));
+            if ($resume === self::STEP_AWAITING_BLANK_FORM_VALUE) {
+                $this->persistFlowStep($item, self::STEP_AWAITING_BLANK_FORM_VALUE);
+                $step = self::STEP_AWAITING_BLANK_FORM_VALUE;
+            } else {
+                $this->persistFlowStep($item, self::STEP_AWAITING_SUMMARY_CONFIRM);
+                $step = self::STEP_AWAITING_SUMMARY_CONFIRM;
+            }
         }
 
         if ($messageType === IntakeWhatsAppMessage::TYPE_IMAGE && $mediaId !== null && $step === self::STEP_AWAITING_PHOTO) {
@@ -85,7 +97,7 @@ class BulkIntakeWhatsAppRegistrationConversationService
         }
 
         $choice = $this->resolveChoice($replyText, $buttonId, $step, $item);
-        if ($choice === null && $step !== self::STEP_AWAITING_FIELD_VALUE) {
+        if ($choice === null && ! in_array($step, [self::STEP_AWAITING_FIELD_VALUE, self::STEP_AWAITING_BLANK_FORM_VALUE], true)) {
             return ['processed' => false, 'item_id' => (int) $item->id, 'step' => $step];
         }
 
@@ -97,6 +109,7 @@ class BulkIntakeWhatsAppRegistrationConversationService
                 self::STEP_AWAITING_SUMMARY_CONFIRM => $this->handleSummaryConfirm($locked, $session, (string) $choice),
                 self::STEP_AWAITING_FIELD_PICK => $this->handleFieldPick($locked, $session, (string) $choice),
                 self::STEP_AWAITING_FIELD_VALUE => $this->handleFieldValue($locked, $session, trim($replyText)),
+                self::STEP_AWAITING_BLANK_FORM_VALUE => $this->handleBlankFormValue($locked, $session, trim($replyText)),
                 self::STEP_AWAITING_PHOTO => $this->handlePhotoChoice($locked, $session, (string) $choice),
                 default => ['processed' => false, 'item_id' => (int) $locked->id, 'step' => $step],
             };
@@ -112,8 +125,219 @@ class BulkIntakeWhatsAppRegistrationConversationService
             self::BTN_SUMMARY_OK => $this->advanceToPhotoStep($item, $session),
             self::BTN_SUMMARY_EDIT => $this->beginCorrectionFlow($item, $session),
             self::BTN_SUMMARY_LATER => $this->deferFlow($item, $session),
+            self::BTN_BLANK_FORM_REQUEST => $this->beginBlankFormFlow($item, $session),
             default => ['processed' => false, 'item_id' => (int) $item->id, 'step' => self::STEP_AWAITING_SUMMARY_CONFIRM],
         };
+    }
+
+    /**
+     * @return array{processed: bool, item_id: int|null, step: string|null, notice?: string}
+     */
+    private function beginBlankFormFlow(BulkIntakeBatchItem $item, IntakeWhatsAppSession $session): array
+    {
+        $this->initializeBlankFormSnapshot($item);
+
+        $this->sendText(
+            $session,
+            $item,
+            "ठीक आहे 👍\nआता रिकामा form भरूया — एक एक प्रश्न.\nOCR माहिती वापरत नाही; तुम्ही दिलेली माहितीच वापरली जाईल.",
+            'registration_blank_form_start',
+        );
+
+        $this->persistFlowStep($item, self::STEP_AWAITING_BLANK_FORM_VALUE, [
+            'mode' => 'blank_form',
+            'blank_form_index' => 0,
+            'blank_form_completed_keys' => [],
+            'blank_form_failures' => [],
+            'resume_step' => self::STEP_AWAITING_BLANK_FORM_VALUE,
+        ]);
+
+        $freshItem = $item->fresh() ?? $item;
+        $this->sendBlankFormPrompt($freshItem, $session);
+
+        return $this->processedResult($freshItem, self::STEP_AWAITING_BLANK_FORM_VALUE, 'रिकामा form सुरू झाला — पहिला प्रश्न पाठवला.');
+    }
+
+    /**
+     * @return array{processed: bool, item_id: int|null, step: string|null, notice?: string}
+     */
+    private function handleBlankFormValue(BulkIntakeBatchItem $item, IntakeWhatsAppSession $session, string $value): array
+    {
+        if ($value === '') {
+            return ['processed' => false, 'item_id' => (int) $item->id, 'step' => self::STEP_AWAITING_BLANK_FORM_VALUE];
+        }
+
+        if ($this->resolveChoice($value, null, self::STEP_AWAITING_BLANK_FORM_VALUE, $item) === self::BTN_SUMMARY_LATER) {
+            return $this->deferFlow($item, $session);
+        }
+
+        $flow = $this->flowMeta($item);
+        $index = max(0, (int) ($flow['blank_form_index'] ?? 0));
+        $fieldKeys = $this->blankFormWizard->fieldKeys();
+        $fieldKey = (string) ($fieldKeys[$index] ?? '');
+        if ($fieldKey === '') {
+            return $this->advanceToPhotoStep($item, $session);
+        }
+
+        $validation = $this->blankFormWizard->validateField($fieldKey, $value);
+        if (! $validation['valid']) {
+            return $this->handleBlankFormValidationFailure(
+                $item,
+                $session,
+                $fieldKey,
+                (string) ($validation['error'] ?? 'माहिती चुकीची आहे.'),
+            );
+        }
+
+        $intake = $this->intakeForItem($item);
+        if (! $intake instanceof BiodataIntake) {
+            return ['processed' => false, 'item_id' => (int) $item->id, 'step' => self::STEP_AWAITING_BLANK_FORM_VALUE];
+        }
+
+        $snapshot = $this->sourceSnapshot($intake);
+        if (! is_array($snapshot['core'] ?? null)) {
+            $snapshot['core'] = [];
+        }
+
+        $this->blankFormWizard->applyToCore($snapshot['core'], $fieldKey, (string) ($validation['normalized'] ?? $value));
+
+        $this->reviewSnapshotService->saveReviewedSnapshot($intake, $snapshot, [
+            'reviewed_by_user_id' => null,
+            'review_actor_type' => IntakeHumanReviewSnapshotService::ACTOR_PROFILE_USER,
+            'review_surface' => IntakeHumanReviewSnapshotService::SURFACE_API,
+            'approval_policy' => IntakeHumanReviewSnapshotService::POLICY_PHASE2C_PROFILE_USER_REVIEW_V1,
+            'approval_status' => IntakeHumanReviewSnapshotService::STATUS_REVIEWED,
+        ]);
+
+        $completed = is_array($flow['blank_form_completed_keys'] ?? null) ? $flow['blank_form_completed_keys'] : [];
+        $completed[] = $fieldKey;
+        $nextIndex = $index + 1;
+        $label = BulkIntakeRegistrationFieldCatalog::label($fieldKey);
+        $total = $this->blankFormWizard->totalFields();
+
+        if ($nextIndex >= $total) {
+            $this->sendText(
+                $session,
+                $item,
+                "✅ {$label} जतन झाले.\n\nसर्व माहिती पूर्ण झाली. आता फोटो पाठवूया.",
+                'registration_blank_form_complete',
+            );
+
+            $this->persistFlowStep($item, self::STEP_AWAITING_BLANK_FORM_VALUE, [
+                'blank_form_index' => $nextIndex,
+                'blank_form_completed_keys' => $completed,
+                'blank_form_failures' => [],
+            ]);
+
+            return $this->advanceToPhotoStep($item->fresh() ?? $item, $session);
+        }
+
+        $this->persistFlowStep($item, self::STEP_AWAITING_BLANK_FORM_VALUE, [
+            'blank_form_index' => $nextIndex,
+            'blank_form_completed_keys' => $completed,
+            'blank_form_failures' => [],
+        ]);
+
+        $this->sendText(
+            $session,
+            $item,
+            "✅ {$label} जतन झाले.",
+            'registration_blank_form_field_saved',
+            ['field_key' => $fieldKey],
+        );
+
+        $freshItem = $item->fresh() ?? $item;
+        $this->sendBlankFormPrompt($freshItem, $session);
+
+        return $this->processedResult($freshItem, self::STEP_AWAITING_BLANK_FORM_VALUE);
+    }
+
+    /**
+     * @return array{processed: bool, item_id: int|null, step: string|null, notice?: string}
+     */
+    private function handleBlankFormValidationFailure(
+        BulkIntakeBatchItem $item,
+        IntakeWhatsAppSession $session,
+        string $fieldKey,
+        string $error,
+    ): array {
+        $flow = $this->flowMeta($item);
+        $failures = is_array($flow['blank_form_failures'] ?? null) ? $flow['blank_form_failures'] : [];
+        $count = (int) ($failures[$fieldKey] ?? 0) + 1;
+        $failures[$fieldKey] = $count;
+
+        $this->persistFlowStep($item, self::STEP_AWAITING_BLANK_FORM_VALUE, [
+            'blank_form_failures' => $failures,
+        ]);
+
+        if ($count >= BulkIntakeWhatsAppBlankFormWizardService::MAX_FAILURES_PER_FIELD) {
+            $summary = $this->registrationService->summaryForItem($item);
+            $url = trim((string) ($summary['public_url'] ?? ''));
+            $label = BulkIntakeRegistrationFieldCatalog::label($fieldKey);
+            $body = "⚠ {$label} WhatsApp वर ३ वेळा चुकीचे आले.\n\n";
+            if ($url !== '') {
+                $body .= "कृपया वेब form वरून ही माहिती भरा:\n{$url}";
+            } else {
+                $body .= 'कृपया admin शी संपर्क साधा.';
+            }
+
+            $this->sendText($session, $item, $body, 'registration_blank_form_web_fallback', [
+                'field_key' => $fieldKey,
+            ]);
+
+            return $this->processedResult(
+                $item,
+                self::STEP_AWAITING_BLANK_FORM_VALUE,
+                "{$label} — ३ वेळा चुकीचे; वेब form सुचवला.",
+            );
+        }
+
+        $this->sendText(
+            $session,
+            $item,
+            "⚠ {$error}\n\nकृपया पुन्हा पाठवा.",
+            'registration_blank_form_invalid',
+            ['field_key' => $fieldKey],
+        );
+
+        return $this->processedResult($item, self::STEP_AWAITING_BLANK_FORM_VALUE, $error);
+    }
+
+    private function sendBlankFormPrompt(BulkIntakeBatchItem $item, IntakeWhatsAppSession $session): void
+    {
+        $flow = $this->flowMeta($item);
+        $index = max(0, (int) ($flow['blank_form_index'] ?? 0));
+        $fieldKeys = $this->blankFormWizard->fieldKeys();
+        $fieldKey = (string) ($fieldKeys[$index] ?? '');
+        if ($fieldKey === '') {
+            return;
+        }
+
+        $this->sendText(
+            $session,
+            $item,
+            $this->blankFormWizard->promptForField($fieldKey, $index, $this->blankFormWizard->totalFields()),
+            'registration_blank_form_prompt',
+            ['field_key' => $fieldKey, 'blank_form_index' => $index],
+        );
+    }
+
+    private function initializeBlankFormSnapshot(BulkIntakeBatchItem $item): void
+    {
+        $intake = $this->intakeForItem($item);
+        if (! $intake instanceof BiodataIntake) {
+            return;
+        }
+
+        $snapshot = ['core' => []];
+
+        $this->reviewSnapshotService->saveReviewedSnapshot($intake, $snapshot, [
+            'reviewed_by_user_id' => null,
+            'review_actor_type' => IntakeHumanReviewSnapshotService::ACTOR_PROFILE_USER,
+            'review_surface' => IntakeHumanReviewSnapshotService::SURFACE_API,
+            'approval_policy' => IntakeHumanReviewSnapshotService::POLICY_PHASE2C_PROFILE_USER_REVIEW_V1,
+            'approval_status' => IntakeHumanReviewSnapshotService::STATUS_REVIEWED,
+        ]);
     }
 
     /**
@@ -441,13 +665,18 @@ class BulkIntakeWhatsAppRegistrationConversationService
      */
     private function deferFlow(BulkIntakeBatchItem $item, IntakeWhatsAppSession $session): array
     {
+        $currentStep = $this->flowStep($item) ?? self::STEP_AWAITING_SUMMARY_CONFIRM;
+
         $this->sendText(
             $session,
             $item,
             "ठीक आहे 👍\nजेव्हा वेळ मिळेल तेव्हा पुन्हा या संदेशावर उत्तर द्या.",
             'registration_deferred',
         );
-        $this->persistFlowStep($item, self::STEP_DEFERRED, ['deferred_at' => now()->toISOString()]);
+        $this->persistFlowStep($item, self::STEP_DEFERRED, [
+            'deferred_at' => now()->toISOString(),
+            'resume_step' => $currentStep,
+        ]);
 
         return ['processed' => true, 'item_id' => (int) $item->id, 'step' => self::STEP_DEFERRED];
     }
@@ -792,6 +1021,7 @@ class BulkIntakeWhatsAppRegistrationConversationService
             'हो, बरोबर', 'हो बरोबर', 'बरोबर', 'yes', 'ok', '१. हो, बरोबर', '✅ १. हो, बरोबर' => self::BTN_SUMMARY_OK,
             'काही चुकीचे', 'चुकीचे', 'edit', '२. चुकीचे', '✏️ २. चुकीचे' => self::BTN_SUMMARY_EDIT,
             'नंतर', 'नंतर करेन', 'later', '३. नंतर', '⏰ ३. नंतर' => self::BTN_SUMMARY_LATER,
+            'रिकामा form', 'रिकामा फॉर्म', 'blank form', 'रिकाम form', '४. रिकामा form', '📝 रिकामा form' => self::BTN_BLANK_FORM_REQUEST,
             'हो वापरा', 'वापरा', '१. हो वापरा', '✅ १. हो वापरा' => self::BTN_PHOTO_USE,
             'नवीन पाठवा', 'नवीन फोटो', '२. नवीन पाठवा', '📷 २. नवीन पाठवा' => self::BTN_PHOTO_NEW,
             default => null,
@@ -900,6 +1130,7 @@ class BulkIntakeWhatsAppRegistrationConversationService
             self::STEP_AWAITING_PHOTO => 'पुढची पायरी: फोटो.',
             self::STEP_AWAITING_FIELD_PICK => 'पुढची पायरी: बदलायचे field निवडा.',
             self::STEP_AWAITING_FIELD_VALUE => 'पुढची पायरी: योग्य माहिती लिहा.',
+            self::STEP_AWAITING_BLANK_FORM_VALUE => 'पुढची पायरी: रिकामा form — माहिती लिहा.',
             self::STEP_DEFERRED => 'नोंदणी नंतरासाठी थांबवली.',
             default => 'प्रतिसाद नोंदवला.',
         };
@@ -957,7 +1188,30 @@ class BulkIntakeWhatsAppRegistrationConversationService
 
     public function needsFieldValueText(BulkIntakeBatchItem $item): bool
     {
-        return $this->activeFlowStep($item) === self::STEP_AWAITING_FIELD_VALUE;
+        return in_array($this->activeFlowStep($item), [
+            self::STEP_AWAITING_FIELD_VALUE,
+            self::STEP_AWAITING_BLANK_FORM_VALUE,
+        ], true);
+    }
+
+    public function fieldValuePromptHint(BulkIntakeBatchItem $item): string
+    {
+        if ($this->activeFlowStep($item) === self::STEP_AWAITING_BLANK_FORM_VALUE) {
+            $flow = $this->flowMeta($item);
+            $index = max(0, (int) ($flow['blank_form_index'] ?? 0));
+            $fieldKey = (string) ($this->blankFormWizard->fieldKeys()[$index] ?? '');
+
+            return $fieldKey !== ''
+                ? BulkIntakeRegistrationFieldCatalog::label($fieldKey).' — blank form'
+                : 'Blank form value';
+        }
+
+        $flow = $this->flowMeta($item);
+        $fieldKey = (string) ($flow['editing_field_key'] ?? '');
+
+        return $fieldKey !== ''
+            ? BulkIntakeRegistrationFieldCatalog::label($fieldKey)
+            : 'Corrected value';
     }
 
     public function flowStepLabel(BulkIntakeBatchItem $item): string
@@ -966,6 +1220,7 @@ class BulkIntakeWhatsAppRegistrationConversationService
             self::STEP_AWAITING_SUMMARY_CONFIRM => 'Summary confirm',
             self::STEP_AWAITING_FIELD_PICK => 'Pick field to correct',
             self::STEP_AWAITING_FIELD_VALUE => 'Type corrected value',
+            self::STEP_AWAITING_BLANK_FORM_VALUE => 'Blank form — type field value',
             self::STEP_AWAITING_PHOTO => 'Photo step',
             self::STEP_DEFERRED => 'Deferred (resume)',
             self::STEP_COMPLETED => 'Completed',
@@ -985,7 +1240,13 @@ class BulkIntakeWhatsAppRegistrationConversationService
         $step = $this->activeFlowStep($item);
 
         if (in_array($step, [self::STEP_AWAITING_SUMMARY_CONFIRM, self::STEP_DEFERRED], true)) {
-            return $this->registrationService->summaryInteractiveButtons();
+            return array_merge($this->registrationService->summaryInteractiveButtons(), [
+                [
+                    'id' => self::BTN_BLANK_FORM_REQUEST,
+                    'title' => '📝 रिकामा form',
+                    'meta_title' => 'रिकामा form',
+                ],
+            ]);
         }
 
         if ($step === self::STEP_AWAITING_FIELD_PICK) {
@@ -1019,11 +1280,11 @@ class BulkIntakeWhatsAppRegistrationConversationService
         $session = IntakeWhatsAppSession::query()->findOrFail($this->registrationSessionId($item));
         $step = $this->activeFlowStep($item);
 
-        if ($step === self::STEP_AWAITING_FIELD_VALUE) {
+        if ($step === self::STEP_AWAITING_FIELD_VALUE || $step === self::STEP_AWAITING_BLANK_FORM_VALUE) {
             $text = trim((string) $replyText);
             if ($text === '') {
                 throw ValidationException::withMessages([
-                    'reply_text' => 'Enter the corrected field value to simulate the WhatsApp text reply.',
+                    'reply_text' => 'Enter the field value to simulate the WhatsApp text reply.',
                 ]);
             }
 

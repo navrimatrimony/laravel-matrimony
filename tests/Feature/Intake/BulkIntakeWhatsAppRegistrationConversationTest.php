@@ -40,8 +40,8 @@ test('registration summary message uses professional whatsapp format with step l
     expect($message)->toContain('पायरी १/४')
         ->and($message)->toContain('✓ नाव:')
         ->and($message)->toContain('खालील बटणे निवडा')
-        ->and($message)->not->toContain('नोंदणी पूर्ण करा')
-        ->and($message)->not->toContain('/register/biodata/');
+        ->and($message)->toContain('रिकामा form')
+        ->and($message)->not->toContain('नोंदणी पूर्ण करा');
 });
 
 test('summary ok advances whatsapp flow to photo step', function () {
@@ -114,6 +114,80 @@ test('full edit path sends web link when user taps edit on summary', function ()
     expect($outbound?->text_body)->toContain('/register/biodata/');
 });
 
+test('blank form request starts field by field wizard', function () {
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
+    $session = registrationSummarySession($item);
+    $conversation = app(BulkIntakeWhatsAppRegistrationConversationService::class);
+
+    $result = $conversation->processInbound(
+        $session,
+        'रिकामा form',
+        BulkIntakeWhatsAppRegistrationConversationService::BTN_BLANK_FORM_REQUEST,
+    );
+
+    expect($result['processed'])->toBeTrue()
+        ->and($result['step'])->toBe(BulkIntakeWhatsAppRegistrationConversationService::STEP_AWAITING_BLANK_FORM_VALUE);
+
+    $flow = data_get($item->fresh()->item_meta_json, 'registration.whatsapp_flow');
+    expect($flow['mode'] ?? null)->toBe('blank_form')
+        ->and((int) ($flow['blank_form_index'] ?? -1))->toBe(0);
+});
+
+test('blank form wizard validates mobile and advances on valid reply', function () {
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
+    $session = registrationSummarySession($item);
+    $conversation = app(BulkIntakeWhatsAppRegistrationConversationService::class);
+
+    $conversation->processInbound($session, '', BulkIntakeWhatsAppRegistrationConversationService::BTN_BLANK_FORM_REQUEST);
+
+    $bad = $conversation->processInbound($session, 'अ');
+    expect($bad['processed'])->toBeTrue()
+        ->and($bad['step'])->toBe(BulkIntakeWhatsAppRegistrationConversationService::STEP_AWAITING_BLANK_FORM_VALUE);
+    expect((int) data_get($item->fresh()->item_meta_json, 'registration.whatsapp_flow.blank_form_index'))->toBe(0);
+
+    $conversation->processInbound($session, 'सचिन रामदास शिंदे');
+    expect((int) data_get($item->fresh()->item_meta_json, 'registration.whatsapp_flow.blank_form_index'))->toBe(1);
+
+    $conversation->processInbound($session, '9664444909');
+    expect((int) data_get($item->fresh()->item_meta_json, 'registration.whatsapp_flow.blank_form_index'))->toBe(2);
+});
+
+test('blank form wizard completes all required fields and reaches photo step', function () {
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
+    $session = registrationSummarySession($item);
+    $conversation = app(BulkIntakeWhatsAppRegistrationConversationService::class);
+
+    $conversation->processInbound($session, '', BulkIntakeWhatsAppRegistrationConversationService::BTN_BLANK_FORM_REQUEST);
+
+    $values = [
+        'सचिन रामदास शिंदे',
+        '9664444909',
+        '09-09-1987',
+        '5 ft 8 in',
+        'पुरुष',
+        'मराठी',
+        'अविवाहित',
+        'हिंदू',
+        'मराठा',
+        'Pimpalgaon Siddhanath, Junnar, Pune',
+        'B.Com.',
+        'खाजगी नोकरी',
+        'Met Operator',
+    ];
+
+    foreach ($values as $value) {
+        $conversation->processInbound($session, $value);
+    }
+
+    expect(data_get($item->fresh()->item_meta_json, 'registration.whatsapp_flow.step'))
+        ->toBe(BulkIntakeWhatsAppRegistrationConversationService::STEP_AWAITING_PHOTO);
+
+    $core = $item->fresh()->biodataIntake?->approval_snapshot_json['core'] ?? [];
+    expect($core['full_name'] ?? null)->toBe('सचिन रामदास शिंदे')
+        ->and($core['primary_contact_number'] ?? null)->toBe('9664444909')
+        ->and($core['occupation'] ?? null)->toBe('Met Operator');
+});
+
 test('registration manual share preview includes text button lines', function () {
     $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
     $preview = app(BulkIntakeRegistrationService::class)->buildManualTestPreview($item);
@@ -121,7 +195,8 @@ test('registration manual share preview includes text button lines', function ()
     expect($preview['share_text'])->toContain('पायरी १/४')
         ->and($preview['share_text'])->toContain('[✅ १. हो, बरोबर]')
         ->and($preview['share_text'])->toContain('[✏️ २. चुकीचे]')
-        ->and($preview['share_text'])->toContain('[⏰ ३. नंतर]');
+        ->and($preview['share_text'])->toContain('[⏰ ३. नंतर]')
+        ->and($preview['share_text'])->toContain('रिकामा form');
 });
 
 test('admin can simulate registration summary yes reply from batch show', function () {

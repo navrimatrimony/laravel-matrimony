@@ -383,6 +383,7 @@
                                 $canSimulateRegistrationPhoto = (bool) ($registration['can_simulate_photo'] ?? false);
                                 $registrationSimulateButtons = is_array($registration['simulate_buttons'] ?? null) ? $registration['simulate_buttons'] : [];
                                 $registrationNeedsFieldValueText = (bool) ($registration['needs_field_value_text'] ?? false);
+                                $registrationFieldValueHint = (string) ($registration['field_value_hint'] ?? '');
                                 $registrationFlowStepLabel = (string) ($registration['flow_step_label'] ?? '');
                                 $registrationManualPreview = is_array($registration['manual_preview'] ?? null) ? $registration['manual_preview'] : null;
                                 $registrationWhatsAppShareUrl = (string) ($registration['manual_whatsapp_share_url'] ?? '');
