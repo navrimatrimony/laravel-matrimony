@@ -286,7 +286,9 @@ test('public registration complete page shows success and photo upload after for
     $this->get(route('bulk-intake.register.complete', ['token' => $token]))
         ->assertOk()
         ->assertSee('प्रोफाइल फोटो')
-        ->assertSee('नोंदणी माहिती जतन झाली');
+        ->assertSee('नोंदणी माहिती जतन झाली')
+        ->assertDontSee('Total photos used', false)
+        ->assertDontSee('Clean photos (passing scan)', false);
 });
 
 test('public registration photo upload stores candidate and opens preferences', function () {

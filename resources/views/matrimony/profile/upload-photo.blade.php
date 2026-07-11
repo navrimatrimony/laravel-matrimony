@@ -85,6 +85,11 @@ body.upload-landscape .upload-gallery-col {
     max-height: none;
     overflow: visible;
 }
+
+@if ($bulkRegistrationPhotoStep)
+#uploadManagerPage { max-width: 100% !important; width: 100% !important; padding: 0 4px; box-sizing: border-box; }
+.upload-main-col { overflow: hidden; max-width: 100%; box-sizing: border-box; word-break: break-word; }
+@endif
 </style>
 
 <div style="min-height: 80vh; background: linear-gradient(135deg, #fdf2f8 0%, #f5f3ff 50%, #eff6ff 100%); padding: 40px 16px;">
@@ -216,18 +221,19 @@ body.upload-landscape .upload-gallery-col {
                     <input type="hidden" name="from" value="onboarding">
                 @endif
 
-                {{-- Premium summary strip --}}
-                <div style="margin: 0 0 20px 0; padding: 14px 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 14px; text-align: left;">
+                {{-- Premium summary strip (profile manager only; hidden on bulk registration / suchak) --}}
+                @if (! $suchakAccountPhotoUpload)
+                <div style="margin: 0 0 20px 0; padding: 14px 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 14px; text-align: left; overflow: hidden;">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
-                        <div>
+                        <div style="min-width: 0;">
                             <div style="font-size: 12px; color: #6b7280; font-weight: 700;">Total photos used</div>
                             <div style="font-size: 16px; color: #111827; font-weight: 950;">{{ $currentPhotoCount }} / {{ $photoMaxPerProfile }} photos</div>
                         </div>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; max-width: 100%;">
                             <div style="padding: 7px 10px; border-radius: 999px; background: #ffffff; border: 1px solid #e5e7eb; color: #374151; font-size: 12px; font-weight: 800;">
                                 Remaining: {{ $photoSlotsRemaining }}
                             </div>
-                            <div style="padding: 7px 10px; border-radius: 999px; background: #ffffff; border: 1px solid #e5e7eb; color: #374151; font-size: 12px; font-weight: 800;">
+                            <div style="padding: 7px 10px; border-radius: 999px; background: #ffffff; border: 1px solid #e5e7eb; color: #374151; font-size: 12px; font-weight: 800; max-width: 100%; overflow-wrap: anywhere;">
                                 @if (! $photoApprovalRequired)
                                     Clean photos (passing scan) can go live without admin; flagged photos stay pending
                                 @else
@@ -237,6 +243,7 @@ body.upload-landscape .upload-gallery-col {
                         </div>
                     </div>
                 </div>
+                @endif
 
                 {{-- Step 1: Photo Upload Area --}}
                 <div id="stepChoose" style="display: block;">
@@ -254,9 +261,9 @@ body.upload-landscape .upload-gallery-col {
                     </label>
                     <p style="font-size: 13px; color: {{ $photoLimitReached ? '#92400e' : '#6b7280' }}; font-weight: 700; margin: 0 0 8px 0;">
                         @if ($photoLimitReached)
-                            Delete one photo to upload another
+                            {{ $bulkRegistrationPhotoStep ? 'नवीन फोटो अपलोड करण्यापूर्वी जुना फोटो काढा.' : 'Delete one photo to upload another' }}
                         @else
-                            {{ __('photo.click_to_upload') }}
+                            {{ $bulkRegistrationPhotoStep ? 'फोटो अपलोड करण्यासाठी क्लिक करा' : __('photo.click_to_upload') }}
                         @endif
                     </p>
                     <input type="file" name="profile_photo" id="profile_photo_input" {{ $photoLimitReached ? 'disabled' : 'required' }} {{ $allowMultiplePhotos ? 'multiple' : '' }} accept="image/jpeg,image/png,image/webp" style="display: none;">
@@ -284,13 +291,21 @@ body.upload-landscape .upload-gallery-col {
                 </div>
 
                 <p style="font-size: 13px; color: #9ca3af; margin: 0 0 24px 0;">
-                    {{ $suchakAccountPhotoUpload ? __('suchak.status.photo_upload_help') : __('photo.clear_face_jpg_png_max_2mb') }}
+                    @if ($bulkRegistrationPhotoStep)
+                        स्पष्ट JPG, PNG किंवा WebP फोटो crop करून upload करा. कमाल {{ isset($photoMaxUploadKb) ? (int) round($photoMaxUploadKb / 1024) : 8 }} MB.
+                    @else
+                        {{ $suchakAccountPhotoUpload ? __('suchak.status.photo_upload_help') : __('photo.clear_face_jpg_png_max_2mb') }}
+                    @endif
                 </p>
 
                 {{-- Trust indicator --}}
                 <div style="background: #fef3c7; border-radius: 8px; padding: 12px 16px; margin-bottom: 24px;">
                     <p style="margin: 0; font-size: 13px; color: #92400e;">
-                        {!! $suchakAccountPhotoUpload ? e(__('suchak.status.photo_review_note')) : __('photo.profiles_with_photos_get_more_interests_html') !!}
+                        @if ($bulkRegistrationPhotoStep)
+                            हा फोटो सार्वजनिक प्रोफाइलवर दाखवण्यापूर्वी review केला जाईल.
+                        @else
+                            {!! $suchakAccountPhotoUpload ? e(__('suchak.status.photo_review_note')) : __('photo.profiles_with_photos_get_more_interests_html') !!}
+                        @endif
                     </p>
                 </div>
 
