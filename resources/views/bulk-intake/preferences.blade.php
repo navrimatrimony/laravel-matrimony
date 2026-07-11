@@ -6,8 +6,6 @@
 
 @section('content')
 <div class="mx-auto w-full max-w-2xl">
-    @include('bulk-intake.partials.registration-progress', ['current' => 'preferences'])
-
     <div class="{{ $sectionClass }}">
         <div class="border-b border-gray-100 pb-3">
             <h1 class="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">जोडीदार प्राधान्ये</h1>

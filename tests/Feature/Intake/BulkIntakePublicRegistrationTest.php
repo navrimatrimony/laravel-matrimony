@@ -570,7 +570,7 @@ test('bulk registration google email verification advances to password step', fu
     $this->get(route('bulk-intake.register.email', ['token' => $token]))
         ->assertOk()
         ->assertSee('Google खाते निवडा')
-        ->assertSee('bulk-registration-google-button', false);
+        ->assertSee('g_id_signin', false);
 
     $this->post(route('bulk-intake.register.email.google', ['token' => $token]), [
         'email' => 'verified@example.com',

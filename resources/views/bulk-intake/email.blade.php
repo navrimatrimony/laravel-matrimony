@@ -8,8 +8,6 @@
 
 @section('content')
 <div class="mx-auto w-full max-w-2xl">
-    @include('bulk-intake.partials.registration-progress', ['current' => 'email'])
-
     <div class="{{ $sectionClass }}">
         <div class="border-b border-gray-100 pb-4">
             <h1 class="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">तुमचा ईमेल जोडा</h1>
@@ -48,10 +46,27 @@
                     <div class="min-w-0 flex-1">
                         <h2 class="text-sm font-semibold text-gray-900">Google खाते निवडा</h2>
                         <p class="mt-1 text-sm text-gray-600">
-                            तुमच्या ब्राउझरमध्ये login असलेली Google accounts दिसतील. एक निवडा — ईमेल आपोआप verify होईल.
+                            खालील बटण दाबा. तुमच्या ब्राउझरमध्ये login असलेली Google accounts दिसतील. एक निवडा — ईमेल आपोआप verify होईल.
                         </p>
-                        <div class="mt-4 flex min-h-[44px] items-center">
-                            <div id="bulk-registration-google-button" class="w-full max-w-xs"></div>
+                        <div class="mt-4 min-h-[44px]">
+                            <div
+                                id="g_id_onload"
+                                data-client_id="{{ $google_client_id }}"
+                                data-context="signup"
+                                data-ux_mode="popup"
+                                data-callback="handleBulkRegistrationGoogleCredential"
+                                data-auto_prompt="false"
+                            ></div>
+                            <div
+                                class="g_id_signin w-full"
+                                data-type="standard"
+                                data-shape="pill"
+                                data-theme="outline"
+                                data-text="continue_with"
+                                data-size="large"
+                                data-logo_alignment="left"
+                                data-width="320"
+                            ></div>
                         </div>
                         <p id="bulk-registration-google-status" class="mt-2 hidden text-sm text-violet-700"></p>
                     </div>
@@ -147,88 +162,54 @@
         </div>
     </div>
 </div>
-@endsection
 
 @if ($google_sign_in_configured ?? false)
-    @push('head')
-        <script src="https://accounts.google.com/gsi/client" async defer></script>
-    @endpush
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+        (function () {
+            var form = document.getElementById('bulk-registration-google-form');
+            var emailInput = document.getElementById('bulk-registration-google-email');
+            var tokenInput = document.getElementById('bulk-registration-google-id-token');
+            var statusEl = document.getElementById('bulk-registration-google-status');
+            var submitting = false;
 
-    @push('scripts')
-        <script>
-            (function () {
-                var clientId = @json($google_client_id);
-                var form = document.getElementById('bulk-registration-google-form');
-                var emailInput = document.getElementById('bulk-registration-google-email');
-                var tokenInput = document.getElementById('bulk-registration-google-id-token');
-                var statusEl = document.getElementById('bulk-registration-google-status');
-                var buttonMount = document.getElementById('bulk-registration-google-button');
-                var submitting = false;
+            function decodeJwtPayload(token) {
+                try {
+                    var base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+                    var json = decodeURIComponent(atob(base64).split('').map(function (char) {
+                        return '%' + ('00' + char.charCodeAt(0).toString(16)).slice(-2);
+                    }).join(''));
+                    return JSON.parse(json);
+                } catch (error) {
+                    return null;
+                }
+            }
 
-                function decodeJwtPayload(token) {
-                    try {
-                        var base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-                        var json = decodeURIComponent(atob(base64).split('').map(function (char) {
-                            return '%' + ('00' + char.charCodeAt(0).toString(16)).slice(-2);
-                        }).join(''));
-                        return JSON.parse(json);
-                    } catch (error) {
-                        return null;
-                    }
+            function setStatus(message) {
+                if (!statusEl) return;
+                statusEl.textContent = message;
+                statusEl.classList.remove('hidden');
+            }
+
+            window.handleBulkRegistrationGoogleCredential = function (response) {
+                if (!response || !response.credential || submitting || !form) {
+                    return;
                 }
 
-                function setStatus(message) {
-                    if (!statusEl) return;
-                    statusEl.textContent = message;
-                    statusEl.classList.remove('hidden');
+                var payload = decodeJwtPayload(response.credential);
+                var email = payload && payload.email ? String(payload.email) : '';
+                if (!email) {
+                    setStatus('Google ईमेल मिळाला नाही. कृपया OTP वापरा.');
+                    return;
                 }
 
-                window.handleBulkRegistrationGoogleCredential = function (response) {
-                    if (!response || !response.credential || submitting) {
-                        return;
-                    }
-
-                    var payload = decodeJwtPayload(response.credential);
-                    var email = payload && payload.email ? String(payload.email) : '';
-                    if (!email) {
-                        setStatus('Google ईमेल मिळाला नाही. कृपया OTP वापरा.');
-                        return;
-                    }
-
-                    submitting = true;
-                    setStatus('Google ईमेल verify होत आहे…');
-                    emailInput.value = email;
-                    tokenInput.value = response.credential;
-                    form.submit();
-                };
-
-                function initGoogleButton() {
-                    if (!window.google || !google.accounts || !google.accounts.id || !buttonMount) {
-                        window.setTimeout(initGoogleButton, 120);
-                        return;
-                    }
-
-                    google.accounts.id.initialize({
-                        client_id: clientId,
-                        callback: window.handleBulkRegistrationGoogleCredential,
-                        auto_select: false,
-                        cancel_on_tap_outside: true,
-                    });
-
-                    google.accounts.id.renderButton(buttonMount, {
-                        type: 'standard',
-                        theme: 'outline',
-                        size: 'large',
-                        text: 'continue_with',
-                        shape: 'pill',
-                        logo_alignment: 'left',
-                        width: Math.min(320, buttonMount.offsetWidth || 320),
-                        locale: 'mr',
-                    });
-                }
-
-                initGoogleButton();
-            })();
-        </script>
-    @endpush
+                submitting = true;
+                setStatus('Google ईमेल verify होत आहे…');
+                emailInput.value = email;
+                tokenInput.value = response.credential;
+                form.submit();
+            };
+        })();
+    </script>
 @endif
+@endsection
