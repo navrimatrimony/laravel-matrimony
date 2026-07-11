@@ -327,26 +327,40 @@
             });
         }
 
-        function syncReligionFromVisible() {
+        function syncReligionFromVisible(preserveDependents) {
             if (!religionInput || !religionHidden) return;
             const q = religionInput.value.trim();
             if (!q) {
+                if (preserveDependents && religionHidden.value) {
+                    return;
+                }
                 religionHidden.value = '';
-                onReligionChange();
+                if (!preserveDependents) {
+                    onReligionChange();
+                }
                 return;
             }
             const hit = findExactOption(religionOptions, q);
             if (hit) {
                 religionHidden.value = String(hit.id);
                 religionInput.value = hit.label;
+                if (preserveDependents) {
+                    if (casteInput) {
+                        casteInput.disabled = false;
+                    }
+                    return;
+                }
                 onReligionChange();
             }
         }
 
-        function syncCasteFromVisible() {
+        function syncCasteFromVisible(preserveExisting) {
             if (!casteInput || !casteHidden) return;
             const q = casteInput.value.trim();
             if (!q) {
+                if (preserveExisting && casteHidden.value) {
+                    return;
+                }
                 casteHidden.value = '';
                 if (subHidden) subHidden.value = '';
                 if (subInput) {
@@ -364,8 +378,8 @@
         }
 
         function syncAllFromVisible() {
-            syncReligionFromVisible();
-            syncCasteFromVisible();
+            syncReligionFromVisible(true);
+            syncCasteFromVisible(true);
         }
 
         const form = root.closest('form');

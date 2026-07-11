@@ -4,9 +4,12 @@ namespace App\Services\Intake;
 
 use App\Models\BiodataIntake;
 use App\Models\BulkIntakeBatchItem;
+use App\Models\Caste;
 use App\Models\MasterGender;
 use App\Models\OccupationCustom;
 use App\Models\OccupationMaster;
+use App\Models\Religion;
+use App\Models\SubCaste;
 use App\Services\Ocr\OcrNormalize;
 use App\Support\HeightDisplay;
 use Illuminate\Support\Carbon;
@@ -26,6 +29,9 @@ class BulkIntakeCandidateDisplayService
      *     city: string|null,
      *     education: string|null,
      *     occupation: string|null,
+     *     religion: string|null,
+     *     caste: string|null,
+     *     sub_caste: string|null,
      *     parse_status: string|null,
      *     parsed_json_present: bool,
      *     display_source: string,
@@ -56,6 +62,9 @@ class BulkIntakeCandidateDisplayService
      *     city: string|null,
      *     education: string|null,
      *     occupation: string|null,
+     *     religion: string|null,
+     *     caste: string|null,
+     *     sub_caste: string|null,
      *     parse_status: string|null,
      *     parsed_json_present: bool,
      *     display_source: string,
@@ -85,6 +94,9 @@ class BulkIntakeCandidateDisplayService
         $height = $this->height($display, $warnings, $reviewedSnapshotPresent);
         $education = $this->safeDisplayField($this->educationRaw($display), 'education', $warnings);
         $occupation = $this->safeDisplayField($this->occupationRaw($display), 'occupation', $warnings);
+        $religion = $this->safeDisplayField($this->communityLabelRaw($display, 'religion'), 'religion', $warnings);
+        $caste = $this->safeDisplayField($this->communityLabelRaw($display, 'caste'), 'caste', $warnings);
+        $subCaste = $this->safeDisplayField($this->communityLabelRaw($display, 'sub_caste'), 'sub_caste', $warnings);
 
         $result = [
             'full_name' => $name['value'],
@@ -96,6 +108,9 @@ class BulkIntakeCandidateDisplayService
             'city' => $this->city($display),
             'education' => $education['value'],
             'occupation' => $occupation['value'],
+            'religion' => $religion['value'],
+            'caste' => $caste['value'],
+            'sub_caste' => $subCaste['value'],
             'parse_status' => $intake?->parse_status,
             'parsed_json_present' => $parsed !== [],
             'display_source' => $displaySource,
@@ -627,18 +642,6 @@ class BulkIntakeCandidateDisplayService
      */
     private function occupationRaw(array $parsed): ?string
     {
-        $occupation = $this->firstString($parsed, [
-            'core.occupation',
-            'core.occupation_title',
-            'core.occupation_custom',
-            'occupation',
-            'occupation_title',
-            'occupation_custom',
-        ]);
-        if ($occupation !== null) {
-            return $occupation;
-        }
-
         $occupationMasterId = $this->intValue(data_get($parsed, 'core.occupation_master_id'));
         if ($occupationMasterId !== null) {
             $row = OccupationMaster::query()->find($occupationMasterId);
@@ -651,6 +654,18 @@ class BulkIntakeCandidateDisplayService
             $row = OccupationCustom::query()->find($occupationCustomId);
 
             return $row ? (string) ($row->raw_name ?? $row->normalized_name ?? $occupationCustomId) : (string) $occupationCustomId;
+        }
+
+        $occupation = $this->firstString($parsed, [
+            'core.occupation',
+            'core.occupation_title',
+            'core.occupation_custom',
+            'occupation',
+            'occupation_title',
+            'occupation_custom',
+        ]);
+        if ($occupation !== null) {
+            return $occupation;
         }
 
         $rows = $parsed['career_history'] ?? [];
@@ -670,6 +685,31 @@ class BulkIntakeCandidateDisplayService
         }
 
         return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $parsed
+     */
+    private function communityLabelRaw(array $parsed, string $field): ?string
+    {
+        $idKey = $field === 'sub_caste' ? 'sub_caste_id' : $field.'_id';
+        $id = $this->intValue(data_get($parsed, 'core.'.$idKey));
+        if ($id !== null) {
+            $row = match ($field) {
+                'religion' => Religion::query()->find($id),
+                'caste' => Caste::query()->find($id),
+                'sub_caste' => SubCaste::query()->find($id),
+                default => null,
+            };
+            if ($row !== null) {
+                return (string) ($row->display_label ?? $row->label ?? $row->label_mr ?? $id);
+            }
+        }
+
+        return $this->firstString($parsed, [
+            'core.'.$field,
+            $field,
+        ]);
     }
 
     /**
@@ -877,6 +917,9 @@ class BulkIntakeCandidateDisplayService
      *     city: string|null,
      *     education: string|null,
      *     occupation: string|null,
+     *     religion: string|null,
+     *     caste: string|null,
+     *     sub_caste: string|null,
      *     parse_status: string|null,
      *     parsed_json_present: bool,
      *     display_source: string,

@@ -1042,6 +1042,7 @@ test('admin can save religion caste and occupation correction into reviewed snap
             'gender' => 'female',
             'highest_education' => 'BCom',
             'city_text' => 'Pune',
+            'occupation_title' => 'Old OCR Occupation',
         ],
     ];
     $intake = candidateCorrectionIntake([
@@ -1073,9 +1074,17 @@ test('admin can save religion caste and occupation correction into reviewed snap
         ->and(data_get($intake->approval_snapshot_json, 'core.caste_id'))->toBe($masters['caste_id'])
         ->and(data_get($intake->approval_snapshot_json, 'core.occupation_master_id'))->toBe($career['occupation_master_id'])
         ->and(data_get($intake->approval_snapshot_json, 'core.working_with_type_id'))->toBe($career['working_with_type_id'])
-        ->and(data_get($intake->approval_snapshot_json, 'core.occupation_title'))->toBe('Software Engineer')
+        ->and(data_get($intake->approval_snapshot_json, 'core.occupation_title'))->toBe('सॉफ्टवेअर अभियंता')
         ->and(data_get($intake->approval_snapshot_json, 'core.company_name'))->toBe('Test Company')
         ->and($intake->parsed_json)->toBe($parsed);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Religion: Hindu', false)
+        ->assertSee('Caste: Maratha', false)
+        ->assertSee('सॉफ्टवेअर अभियंता', false)
+        ->assertDontSee('Old OCR Occupation', false);
 });
 
 test('bulk candidate correction save is blocked after intake approval or lock', function () {

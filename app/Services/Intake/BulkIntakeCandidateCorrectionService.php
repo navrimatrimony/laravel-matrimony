@@ -263,6 +263,27 @@ class BulkIntakeCandidateCorrectionService
         if ($companyName !== null) {
             $snapshot['core']['company_name'] = $companyName;
         }
+
+        $occupationMasterId = $this->intOrNull($snapshot['core']['occupation_master_id'] ?? null);
+        if ($occupationMasterId !== null) {
+            $occupationMaster = \App\Models\OccupationMaster::query()->find($occupationMasterId);
+            if ($occupationMaster !== null) {
+                $label = trim((string) ($occupationMaster->name_mr ?: $occupationMaster->name ?: ''));
+                if ($label !== '') {
+                    $snapshot['core']['occupation_title'] = $label;
+                    $snapshot['core']['occupation'] = $label;
+                }
+            }
+        }
+    }
+
+    private function intOrNull(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return is_numeric($value) ? (int) $value : null;
     }
 
     /**

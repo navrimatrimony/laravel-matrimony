@@ -261,6 +261,9 @@
                                     'city' => null,
                                     'education' => null,
                                     'occupation' => null,
+                                    'religion' => null,
+                                    'caste' => null,
+                                    'sub_caste' => null,
                                     'parse_status' => $intake?->parse_status,
                                     'parsed_json_present' => false,
                                     'display_source' => 'parsed_json',
@@ -527,6 +530,20 @@
                                             <span class="ml-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">review</span>
                                         @endif
                                     </span>
+                                    @if (($candidate['religion'] ?? null) || ($candidate['caste'] ?? null) || ($candidate['sub_caste'] ?? null))
+                                        <span class="mt-1 block text-xs text-gray-500">
+                                            @if ($candidate['religion'] ?? null)
+                                                Religion: {{ $candidate['religion'] }}
+                                            @endif
+                                            @if ($candidate['caste'] ?? null)
+                                                @if ($candidate['religion'] ?? null) · @endif
+                                                Caste: {{ $candidate['caste'] }}
+                                            @endif
+                                            @if ($candidate['sub_caste'] ?? null)
+                                                · Sub: {{ $candidate['sub_caste'] }}
+                                            @endif
+                                        </span>
+                                    @endif
                                 </td>
                                 <td class="px-4 py-2 text-sm">
                                     @if ($intake)
