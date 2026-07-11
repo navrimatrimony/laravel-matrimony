@@ -144,6 +144,34 @@ test('admin can simulate registration summary yes reply from batch show', functi
         ->toBe(BulkIntakeWhatsAppRegistrationConversationService::STEP_AWAITING_PHOTO);
 });
 
+test('admin can simulate registration photo and complete flow', function () {
+    $admin = registrationAdmin();
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
+    $batch = BulkIntakeBatch::query()->findOrFail((int) $item->bulk_intake_batch_id);
+    app(BulkIntakeRegistrationService::class)->sendRegistrationSummary($item, $admin);
+
+    $this->actingAs($admin)
+        ->post(route('admin.bulk-intakes.items.simulate-registration-reply', [
+            'bulkIntakeBatch' => $batch->id,
+            'bulkIntakeBatchItem' => $item->id,
+        ]), [
+            'reply_choice' => BulkIntakeWhatsAppRegistrationConversationService::BTN_SUMMARY_OK,
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $this->actingAs($admin)
+        ->post(route('admin.bulk-intakes.items.simulate-registration-photo', [
+            'bulkIntakeBatch' => $batch->id,
+            'bulkIntakeBatchItem' => $item->id,
+        ]))
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    expect(app(BulkIntakeRegistrationService::class)->registrationStatus($item->fresh()))
+        ->toBe(BulkIntakeRegistrationService::STATUS_REGISTRATION_COMPLETE);
+});
+
 test('bulk registration does not replace logged-in admin session', function () {
     $admin = registrationAdmin();
     $item = registrationConsentReceivedItem(registrationCompleteParsedJson());

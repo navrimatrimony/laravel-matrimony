@@ -275,6 +275,7 @@ class AdminBulkIntakeController extends Controller
                     'can_send_summary' => $registrationService->canSendRegistrationSummary($item),
                     'can_simulate_complete' => $registrationService->canSimulateRegistrationComplete($item),
                     'can_simulate_reply' => $registrationConversationService->canSimulateReply($item),
+                    'can_simulate_photo' => $registrationConversationService->canSimulatePhotoReceived($item),
                     'simulate_buttons' => $registrationConversationService->simulateButtonsForItem($item),
                     'needs_field_value_text' => $registrationConversationService->needsFieldValueText($item),
                     'flow_step_label' => $registrationConversationService->flowStepLabel($item),
@@ -1032,12 +1033,28 @@ class AdminBulkIntakeController extends Controller
             isset($validated['reply_text']) ? trim((string) $validated['reply_text']) : null,
         );
 
-        $step = (string) ($result['step'] ?? '');
-        $label = $step !== '' ? str_replace('_', ' ', $step) : 'processed';
+        return redirect()
+            ->back()
+            ->with('success', $registrationConversationService->flashMessageForResult($result));
+    }
+
+    public function simulateItemRegistrationPhoto(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeWhatsAppRegistrationConversationService $registrationConversationService,
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $result = $registrationConversationService->simulatePhotoReceived(
+            $bulkIntakeBatchItem,
+            $request->user(),
+        );
 
         return redirect()
             ->back()
-            ->with('success', 'Simulated registration WhatsApp reply recorded. Next step: '.$label.'.');
+            ->with('success', $registrationConversationService->flashMessageForResult($result));
     }
 
     public function sendBatchWhatsAppPermission(

@@ -290,7 +290,11 @@ class BulkIntakeWhatsAppRegistrationConversationService
                 'registration_photo_use_failed',
             );
 
-            return ['processed' => true, 'item_id' => (int) $item->id, 'step' => self::STEP_AWAITING_PHOTO];
+            return $this->processedResult(
+                $item,
+                self::STEP_AWAITING_PHOTO,
+                'बायोडाट्यातील फोटो वापरता आला नाही. नवीन फोटो पाठवा किंवा “Simulate photo sent” वापरा.',
+            );
         }
 
         if (! $this->photoCandidateCropService->exists($intake)) {
@@ -301,7 +305,11 @@ class BulkIntakeWhatsAppRegistrationConversationService
                 'registration_photo_missing',
             );
 
-            return ['processed' => true, 'item_id' => (int) $item->id, 'step' => self::STEP_AWAITING_PHOTO];
+            return $this->processedResult(
+                $item,
+                self::STEP_AWAITING_PHOTO,
+                'बायोडाट्यात वापरण्यासाठी फोटो नाही. Admin test साठी “Simulate photo sent” वापरा किंवा “नवीन पाठवा” निवडा.',
+            );
         }
 
         return $this->finalizeRegistration($item, $session);
@@ -425,7 +433,7 @@ class BulkIntakeWhatsAppRegistrationConversationService
 
         $this->sendText($session, $item, implode("\n", $lines), 'registration_complete');
 
-        return ['processed' => true, 'item_id' => (int) $item->id, 'step' => self::STEP_COMPLETED];
+        return $this->processedResult($item, self::STEP_COMPLETED, '🎉 नोंदणी पूर्ण झाली. Profile तयार झाला.');
     }
 
     /**
@@ -827,6 +835,101 @@ class BulkIntakeWhatsAppRegistrationConversationService
     private function isLiveMetaSendingEnabled(): bool
     {
         return (bool) config('whatsapp.bulk_consent_live_enabled', false);
+    }
+
+    public function canSimulatePhotoReceived(BulkIntakeBatchItem $item): bool
+    {
+        if (! $this->canSimulateReply($item)) {
+            return false;
+        }
+
+        if ($this->activeFlowStep($item) !== self::STEP_AWAITING_PHOTO) {
+            return false;
+        }
+
+        $intake = $this->intakeForItem($item);
+
+        return $intake instanceof BiodataIntake;
+    }
+
+    /**
+     * @return array{processed: bool, item_id: int|null, step: string|null, notice?: string}
+     */
+    public function simulatePhotoReceived(BulkIntakeBatchItem $item, User $actor): array
+    {
+        if (! $this->canSimulatePhotoReceived($item)) {
+            throw ValidationException::withMessages([
+                'registration' => 'Photo simulation is only available during the photo step.',
+            ]);
+        }
+
+        $session = IntakeWhatsAppSession::query()->findOrFail($this->registrationSessionId($item));
+        $intake = $this->intakeForItem($item);
+        if (! $intake instanceof BiodataIntake) {
+            throw ValidationException::withMessages([
+                'registration' => 'Linked biodata intake is missing.',
+            ]);
+        }
+
+        $this->photoCandidateCropService->saveFromBinary($intake, $this->testJpegBytes());
+        $result = $this->finalizeRegistration($item, $session);
+
+        $freshItem = $item->fresh();
+        $meta = is_array($freshItem?->item_meta_json) ? $freshItem->item_meta_json : [];
+        $registration = is_array($meta['registration'] ?? null) ? $meta['registration'] : [];
+        $flow = is_array($registration['whatsapp_flow'] ?? null) ? $registration['whatsapp_flow'] : [];
+        $registration['whatsapp_flow'] = array_merge($flow, [
+            'simulated_photo_by_user_id' => (int) $actor->id,
+            'simulated_photo_at' => now()->toISOString(),
+        ]);
+        $meta['registration'] = $registration;
+        $freshItem?->forceFill(['item_meta_json' => $meta])->save();
+
+        return $result;
+    }
+
+    public function flashMessageForResult(array $result): string
+    {
+        $notice = trim((string) ($result['notice'] ?? ''));
+        if ($notice !== '') {
+            return $notice;
+        }
+
+        return match ((string) ($result['step'] ?? '')) {
+            self::STEP_COMPLETED => 'नोंदणी पूर्ण झाली.',
+            self::STEP_AWAITING_PHOTO => 'पुढची पायरी: फोटो.',
+            self::STEP_AWAITING_FIELD_PICK => 'पुढची पायरी: बदलायचे field निवडा.',
+            self::STEP_AWAITING_FIELD_VALUE => 'पुढची पायरी: योग्य माहिती लिहा.',
+            self::STEP_DEFERRED => 'नोंदणी नंतरासाठी थांबवली.',
+            default => 'प्रतिसाद नोंदवला.',
+        };
+    }
+
+    /**
+     * @return array{processed: bool, item_id: int|null, step: string|null, notice?: string}
+     */
+    private function processedResult(BulkIntakeBatchItem $item, string $step, ?string $notice = null): array
+    {
+        $result = [
+            'processed' => true,
+            'item_id' => (int) $item->id,
+            'step' => $step,
+        ];
+        if ($notice !== null && trim($notice) !== '') {
+            $result['notice'] = trim($notice);
+        }
+
+        return $result;
+    }
+
+    private function testJpegBytes(): string
+    {
+        $image = imagecreatetruecolor(120, 120);
+        ob_start();
+        imagejpeg($image, null, 90);
+        imagedestroy($image);
+
+        return (string) ob_get_clean();
     }
 
     public function isManualTestEnabled(): bool

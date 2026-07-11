@@ -380,6 +380,7 @@
                                 $canSendRegistrationSummary = (bool) data_get($registration, 'can_send_summary.allowed', false);
                                 $canSimulateRegistrationComplete = (bool) ($registration['can_simulate_complete'] ?? false);
                                 $canSimulateRegistrationReply = (bool) ($registration['can_simulate_reply'] ?? false);
+                                $canSimulateRegistrationPhoto = (bool) ($registration['can_simulate_photo'] ?? false);
                                 $registrationSimulateButtons = is_array($registration['simulate_buttons'] ?? null) ? $registration['simulate_buttons'] : [];
                                 $registrationNeedsFieldValueText = (bool) ($registration['needs_field_value_text'] ?? false);
                                 $registrationFlowStepLabel = (string) ($registration['flow_step_label'] ?? '');
@@ -728,150 +729,8 @@
                                             </form>
                                         @endif
 
-                                        @if ($canSendWhatsAppPermission)
-                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.send-whatsapp-permission', [$batch, $item]) }}">
-                                                @csrf
-                                                <button
-                                                    type="submit"
-                                                    data-testid="bulk-send-whatsapp-permission"
-                                                    class="text-left text-sm font-medium text-emerald-700 hover:text-emerald-900"
-                                                >Send permission</button>
-                                            </form>
-                                        @endif
-
-                                        @if ($whatsappManualTestEnabled && ($canSendWhatsAppPermission || $whatsappConsentStatus === \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_PERMISSION_SENT) && $manualWhatsAppPreview)
-                                            <div class="mt-1 rounded-md border border-sky-100 bg-sky-50 p-2">
-                                                <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-sky-700">WhatsApp test</span>
-                                                <p data-testid="bulk-whatsapp-message-preview" class="whitespace-pre-wrap text-xs text-sky-900">{{ $manualWhatsAppPreview['share_text'] ?? '' }}</p>
-                                                @if ($manualWhatsAppShareUrl !== '')
-                                                    <a
-                                                        href="{{ $manualWhatsAppShareUrl }}"
-                                                        target="_blank"
-                                                        rel="noopener"
-                                                        data-testid="bulk-open-whatsapp-manual-test"
-                                                        class="mt-2 inline-flex text-sm font-medium text-emerald-700 hover:text-emerald-900"
-                                                    >Open on my WhatsApp</a>
-                                                @endif
-                                            </div>
-                                        @endif
-
-                                        @if ($canSimulateWhatsAppReply && is_array($manualWhatsAppPreview['buttons'] ?? null))
-                                            <div class="mt-1 border-t border-gray-100 pt-2">
-                                                <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-gray-400">Simulate user reply</span>
-                                                @foreach ($manualWhatsAppPreview['buttons'] as $simulateButton)
-                                                    @php
-                                                        $simulateReplyChoice = (string) ($simulateButton['id'] ?? '');
-                                                        $simulateReplyLabel = trim(((string) ($simulateButton['emoji'] ?? '')).' '.((string) ($simulateButton['title'] ?? '')));
-                                                        $simulateReplyTestId = match ($simulateReplyChoice) {
-                                                            \App\Services\Intake\BulkIntakeWhatsAppConsentService::REPLY_YES => 'bulk-simulate-whatsapp-yes',
-                                                            \App\Services\Intake\BulkIntakeWhatsAppConsentService::REPLY_NO => 'bulk-simulate-whatsapp-no',
-                                                            \App\Services\Intake\BulkIntakeWhatsAppConsentService::REPLY_ALREADY_MARRIED => 'bulk-simulate-whatsapp-married',
-                                                            \App\Services\Intake\BulkIntakeWhatsAppConsentService::REPLY_WRONG_NUMBER => 'bulk-simulate-whatsapp-wrong',
-                                                            default => 'bulk-simulate-whatsapp-reply',
-                                                        };
-                                                    @endphp
-                                                    <form method="POST" action="{{ route('admin.bulk-intakes.items.simulate-whatsapp-consent-reply', [$batch, $item]) }}" class="mt-1">
-                                                        @csrf
-                                                        <input type="hidden" name="reply_choice" value="{{ $simulateReplyChoice }}">
-                                                        <button
-                                                            type="submit"
-                                                            data-testid="{{ $simulateReplyTestId }}"
-                                                            class="text-left text-sm font-medium text-indigo-700 hover:text-indigo-900"
-                                                        >{{ $simulateReplyLabel }}</button>
-                                                    </form>
-                                                @endforeach
-                                            </div>
-                                        @endif
-
-                                        @if ($consentReceived)
-                                            <div class="mt-1 rounded-md border border-violet-100 bg-violet-50 p-2">
-                                                <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-violet-700">Registration (Phase E)</span>
-                                                @if (is_array($registrationSummary['fields'] ?? null))
-                                                    <div data-testid="bulk-registration-summary-preview" class="space-y-0.5 text-xs text-violet-900">
-                                                        @foreach ($registrationSummary['fields'] as $summaryField)
-                                                            <div>{{ $summaryField['icon'] ?? '⚠' }} {{ $summaryField['label'] ?? '' }}: {{ $summaryField['value'] ?? '—' }}</div>
-                                                        @endforeach
-                                                    </div>
-                                                @endif
-                                                @if ($canSendRegistrationSummary)
-                                                    <form method="POST" action="{{ route('admin.bulk-intakes.items.send-registration-summary', [$batch, $item]) }}" class="mt-2">
-                                                        @csrf
-                                                        <button type="submit" data-testid="bulk-send-registration-summary" class="text-left text-sm font-medium text-violet-700 hover:text-violet-900">Send registration summary</button>
-                                                    </form>
-                                                @endif
-                                                @if ($whatsappManualTestEnabled && $registrationManualPreview)
-                                                    <div class="mt-2 rounded-md border border-sky-100 bg-sky-50 p-2">
-                                                        <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-sky-700">Registration WhatsApp test</span>
-                                                        @if ($registrationStatus === \App\Services\Intake\BulkIntakeRegistrationService::STATUS_SUMMARY_SENT && $registrationFlowStepLabel !== '')
-                                                            <p class="mb-1 text-[10px] font-medium text-sky-800">Flow step: {{ $registrationFlowStepLabel }}</p>
-                                                        @endif
-                                                        <p data-testid="bulk-registration-whatsapp-message-preview" class="whitespace-pre-wrap text-xs text-sky-900">{{ $registrationManualPreview['share_text'] ?? '' }}</p>
-                                                        @if ($registrationWhatsAppShareUrl !== '')
-                                                            <a
-                                                                href="{{ $registrationWhatsAppShareUrl }}"
-                                                                target="_blank"
-                                                                rel="noopener"
-                                                                data-testid="bulk-open-registration-whatsapp-test"
-                                                                class="mt-2 inline-flex text-sm font-medium text-emerald-700 hover:text-emerald-900"
-                                                            >Open summary on WhatsApp</a>
-                                                        @endif
-                                                    </div>
-                                                @endif
-                                                @if ($canSimulateRegistrationReply && $registrationNeedsFieldValueText)
-                                                    <div class="mt-2 border-t border-violet-100 pt-2">
-                                                        <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-violet-700">Simulate corrected value</span>
-                                                        <form method="POST" action="{{ route('admin.bulk-intakes.items.simulate-registration-reply', [$batch, $item]) }}" class="mt-1 space-y-2">
-                                                            @csrf
-                                                            <input
-                                                                type="text"
-                                                                name="reply_text"
-                                                                data-testid="bulk-simulate-registration-field-value"
-                                                                class="w-full rounded-md border border-violet-200 px-2 py-1 text-sm"
-                                                                placeholder="योग्य माहिती लिहा (उदा. Pune)"
-                                                                maxlength="500"
-                                                                required
-                                                            >
-                                                            <button type="submit" data-testid="bulk-simulate-registration-field-value-submit" class="text-left text-sm font-medium text-indigo-700 hover:text-indigo-900">पाठवा (simulate)</button>
-                                                        </form>
-                                                    </div>
-                                                @elseif ($canSimulateRegistrationReply && $registrationSimulateButtons !== [])
-                                                    <div class="mt-2 border-t border-violet-100 pt-2">
-                                                        <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-violet-700">Simulate registration reply</span>
-                                                        @foreach ($registrationSimulateButtons as $registrationSimulateButton)
-                                                            @php
-                                                                $registrationReplyChoice = (string) ($registrationSimulateButton['id'] ?? '');
-                                                                $registrationReplyLabel = trim((string) ($registrationSimulateButton['title'] ?? $registrationReplyChoice));
-                                                                $registrationReplyTestId = match ($registrationReplyChoice) {
-                                                                    \App\Services\Intake\BulkIntakeWhatsAppRegistrationConversationService::BTN_SUMMARY_OK => 'bulk-simulate-registration-yes',
-                                                                    \App\Services\Intake\BulkIntakeWhatsAppRegistrationConversationService::BTN_SUMMARY_EDIT => 'bulk-simulate-registration-edit',
-                                                                    \App\Services\Intake\BulkIntakeWhatsAppRegistrationConversationService::BTN_SUMMARY_LATER => 'bulk-simulate-registration-later',
-                                                                    \App\Services\Intake\BulkIntakeWhatsAppRegistrationConversationService::BTN_PHOTO_USE => 'bulk-simulate-registration-photo-use',
-                                                                    \App\Services\Intake\BulkIntakeWhatsAppRegistrationConversationService::BTN_PHOTO_NEW => 'bulk-simulate-registration-photo-new',
-                                                                    default => 'bulk-simulate-registration-reply',
-                                                                };
-                                                            @endphp
-                                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.simulate-registration-reply', [$batch, $item]) }}" class="mt-1">
-                                                                @csrf
-                                                                <input type="hidden" name="reply_choice" value="{{ $registrationReplyChoice }}">
-                                                                <button
-                                                                    type="submit"
-                                                                    data-testid="{{ $registrationReplyTestId }}"
-                                                                    class="text-left text-sm font-medium text-indigo-700 hover:text-indigo-900"
-                                                                >{{ $registrationReplyLabel }}</button>
-                                                            </form>
-                                                        @endforeach
-                                                    </div>
-                                                @endif
-                                                @if ($consentReceived && ($registrationSummary['public_url'] ?? '') !== '')
-                                                    <a href="{{ $registrationSummary['public_url'] }}" target="_blank" rel="noopener" data-testid="bulk-registration-web-edit" class="mt-2 block text-sm font-medium text-indigo-700 hover:text-indigo-900">वेबवर सर्व edit करा (user link)</a>
-                                                @endif
-                                                @if ($canSimulateRegistrationComplete)
-                                                    <form method="POST" action="{{ route('admin.bulk-intakes.items.simulate-registration-complete', [$batch, $item]) }}" class="mt-2">
-                                                        @csrf
-                                                        <button type="submit" data-testid="bulk-simulate-registration-complete" class="text-left text-sm font-medium text-emerald-700 hover:text-emerald-900">नोंदणी पूर्ण करा (simulate)</button>
-                                                    </form>
-                                                @endif
-                                            </div>
+                                        @if ($canSendWhatsAppPermission || $whatsappConsentStatus !== '' || $consentReceived)
+                                            @include('admin.bulk-intakes.partials.item-whatsapp-registration-panel')
                                         @endif
 
                                         @if ($intake)
@@ -905,4 +764,35 @@
         @endif
     </div>
 </div>
+
+<script>
+(function () {
+    document.querySelectorAll('[data-bulk-wa-open]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var dialogId = button.getAttribute('data-bulk-wa-open');
+            var dialog = dialogId ? document.getElementById(dialogId) : null;
+            if (dialog && typeof dialog.showModal === 'function') {
+                dialog.showModal();
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-bulk-wa-close]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var dialog = button.closest('dialog');
+            if (dialog && typeof dialog.close === 'function') {
+                dialog.close();
+            }
+        });
+    });
+
+    document.querySelectorAll('dialog[id^="bulk-wa-panel-"]').forEach(function (dialog) {
+        dialog.addEventListener('click', function (event) {
+            if (event.target === dialog && typeof dialog.close === 'function') {
+                dialog.close();
+            }
+        });
+    });
+})();
+</script>
 @endsection
