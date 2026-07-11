@@ -132,6 +132,7 @@ class BulkIntakeRegistrationService
 
         return [
             'fields' => $fields,
+            'whatsapp_fields' => $this->whatsappSummaryFields($item, $registrationFields),
             'registration_fields' => $registrationFields,
             'path' => $path,
             'path_label' => $this->pathLabel($path),
@@ -154,28 +155,105 @@ class BulkIntakeRegistrationService
     public function buildSummaryMessage(BulkIntakeBatchItem $item): string
     {
         $summary = $this->summaryForItem($item);
+        $candidate = $this->candidateDisplayService->candidateForItem($item);
+        $name = trim((string) ($candidate['full_name'] ?? ''));
+        $greeting = $name !== '' ? 'नमस्कार '.$name.' जी 🙏' : 'नमस्कार 🙏';
+
         $lines = [
-            'धन्यवाद! तुमची परवानगी मिळाली. ✨',
-            'खाली बायोडाटा सारांश आहे — कृपया तपासा:',
+            $greeting,
+            'नवरी मिळे नवऱ्याला — पायरी १/४: बायोडाटा सारांश',
             '',
         ];
 
-        foreach ($summary['fields'] as $field) {
+        foreach ($summary['whatsapp_fields'] as $field) {
             $value = trim((string) ($field['value'] ?? ''));
             $lines[] = ($field['icon'] ?? '⚠').' '.($field['label'] ?? '').': '.($value !== '' ? $value : '—');
         }
 
         $lines[] = '';
-        $lines[] = $this->pathInstructionLine((string) $summary['path']);
-        $lines[] = '';
-        $lines[] = 'वेबवर सर्व माहिती एकाच पानावर पहा/बदला:';
-        $lines[] = (string) ($summary['public_url'] ?? $this->publicRegistrationUrl($item));
-        $lines[] = '';
-        $lines[] = 'इतर पर्याय:';
-        $lines[] = '• App/Website वरून नोंदणी';
-        $lines[] = '• रिकामा form WhatsApp वर मागवा';
+        $lines[] = 'हे बरोबर आहे का?';
+        $lines[] = 'खालील बटणे निवडा 👇';
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * @return list<array{id: string, title: string, meta_title: string}>
+     */
+    public function summaryInteractiveButtons(): array
+    {
+        return [
+            [
+                'id' => BulkIntakeWhatsAppRegistrationConversationService::BTN_SUMMARY_OK,
+                'title' => '✅ १. हो, बरोबर',
+                'meta_title' => 'हो, बरोबर',
+            ],
+            [
+                'id' => BulkIntakeWhatsAppRegistrationConversationService::BTN_SUMMARY_EDIT,
+                'title' => '✏️ २. चुकीचे',
+                'meta_title' => 'काही चुकीचे',
+            ],
+            [
+                'id' => BulkIntakeWhatsAppRegistrationConversationService::BTN_SUMMARY_LATER,
+                'title' => '⏰ ३. नंतर',
+                'meta_title' => 'नंतर करेन',
+            ],
+        ];
+    }
+
+    /**
+     * @param  list<array{key: string, label: string, value: string|null, status: string, icon: string}>  $registrationFields
+     * @return list<array{key: string, label: string, value: string|null, status: string, icon: string}>
+     */
+    public function whatsappSummaryFields(BulkIntakeBatchItem $item, array $registrationFields): array
+    {
+        $keys = BulkIntakeRegistrationFieldCatalog::WHATSAPP_SUMMARY_KEYS;
+        $fields = array_values(array_filter(
+            $registrationFields,
+            fn (array $field): bool => in_array((string) ($field['key'] ?? ''), $keys, true)
+        ));
+
+        $activeMobile = app(BulkIntakeCandidateContactPlanService::class)->activeMobile($item);
+        if ($activeMobile !== null) {
+            foreach ($fields as $index => $field) {
+                if (($field['key'] ?? '') === 'mobile') {
+                    $fields[$index]['value'] = $activeMobile;
+                }
+            }
+        }
+
+        return $fields;
+    }
+
+    /**
+     * @return list<array{key: string, label: string, value: string|null, status: string, icon: string}>
+     */
+    public function warningFieldsForItem(BulkIntakeBatchItem $item): array
+    {
+        $summary = $this->summaryForItem($item);
+
+        return array_values(array_filter(
+            $summary['registration_fields'],
+            fn (array $field): bool => in_array((string) ($field['status'] ?? ''), [self::FIELD_NEEDS_CHECK, self::FIELD_MISSING], true)
+        ));
+    }
+
+    public function markRegistrationCompleteViaWhatsApp(BulkIntakeBatchItem $item): void
+    {
+        DB::transaction(function () use ($item): void {
+            /** @var BulkIntakeBatchItem $locked */
+            $locked = BulkIntakeBatchItem::query()->whereKey($item->id)->lockForUpdate()->firstOrFail();
+            $meta = is_array($locked->item_meta_json) ? $locked->item_meta_json : [];
+            $existing = is_array($meta['registration'] ?? null) ? $meta['registration'] : [];
+
+            $meta['registration'] = array_merge($existing, [
+                'status' => self::STATUS_REGISTRATION_COMPLETE,
+                'completed_at' => now()->toISOString(),
+                'completed_via' => 'whatsapp_flow',
+            ]);
+
+            $locked->forceFill(['item_meta_json' => $meta])->save();
+        });
     }
 
     public function buildManualTestWhatsAppShareUrl(BulkIntakeBatchItem $item): string
@@ -212,7 +290,7 @@ class BulkIntakeRegistrationService
 
         $summary = $this->summaryForItem($item);
         $body = $this->buildSummaryMessage($item);
-        $sendResult = $this->whatsappSender->sendPermissionMessage($mobile, $body, [], [
+        $sendResult = $this->whatsappSender->sendPermissionMessage($mobile, $body, $this->summaryInteractiveButtons(), [
             'bulk_intake_batch_item_id' => (int) $item->id,
             'bulk_intake_batch_id' => (int) $item->bulk_intake_batch_id,
             'biodata_intake_id' => $item->biodata_intake_id ? (int) $item->biodata_intake_id : null,
@@ -332,6 +410,10 @@ class BulkIntakeRegistrationService
             'summary_sent_at' => now()->toISOString(),
             'summary_sent_by_user_id' => (int) $actor->id,
             'intake_whatsapp_session_id' => $sessionId,
+            'whatsapp_flow' => [
+                'step' => BulkIntakeWhatsAppRegistrationConversationService::STEP_AWAITING_SUMMARY_CONFIRM,
+                'started_at' => now()->toISOString(),
+            ],
             'completed_at' => null,
             'completed_via' => null,
             'public_token' => $publicToken,

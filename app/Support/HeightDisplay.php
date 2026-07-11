@@ -67,4 +67,25 @@ final class HeightDisplay
 
         return [$feet, $inches];
     }
+
+    /**
+     * Parse display strings like 5'7" into canonical centimetres.
+     */
+    public static function parseFeetInchesString(string $value): ?int
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+
+        if (preg_match("/(\d+)\s*['′]\s*(\d+)/u", $value, $matches) === 1) {
+            $feet = (int) $matches[1];
+            $inches = (int) $matches[2];
+            $cm = (int) round(($feet * 12 + $inches) * 2.54);
+
+            return ($cm >= 120 && $cm <= 220) ? $cm : null;
+        }
+
+        return null;
+    }
 }

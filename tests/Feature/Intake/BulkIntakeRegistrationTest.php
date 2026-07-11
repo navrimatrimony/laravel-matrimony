@@ -105,8 +105,8 @@ test('registration summary message uses display text not raw codes', function ()
 
     expect($message)->toContain('✓ नाव:')
         ->and($message)->not->toContain('gender_id')
-        ->and($message)->toContain('नोंदणी पूर्ण करा')
-        ->and($message)->toContain('/register/biodata/');
+        ->and($message)->toContain('पायरी १/४')
+        ->and($message)->toContain('खालील बटणे निवडा');
 });
 
 test('registration summary shows height in feet and inches not raw cm', function () {

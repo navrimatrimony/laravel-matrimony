@@ -79,6 +79,48 @@ final class IntakePhotoCandidateCropService
     }
 
     /**
+     * WhatsApp inbound image bytes (no UploadedFile wrapper).
+     *
+     * @throws \InvalidArgumentException|\RuntimeException
+     */
+    public function saveFromBinary(BiodataIntake $intake, string $binary, ?string $mimeType = null): void
+    {
+        if ($binary === '') {
+            throw new \InvalidArgumentException('candidate_upload_empty');
+        }
+
+        $info = @getimagesizefromstring($binary);
+        if (! is_array($info)) {
+            throw new \InvalidArgumentException('candidate_upload_invalid_image');
+        }
+
+        $width = (int) ($info[0] ?? 0);
+        $height = (int) ($info[1] ?? 0);
+        $type = (int) ($info[2] ?? 0);
+        if ($width < 80 || $height < 80 || $width > 5000 || $height > 5000) {
+            throw new \InvalidArgumentException('candidate_upload_dimensions_out_of_range');
+        }
+
+        $image = match ($type) {
+            IMAGETYPE_JPEG,
+            IMAGETYPE_PNG,
+            IMAGETYPE_WEBP,
+            IMAGETYPE_GIF,
+            IMAGETYPE_BMP => @imagecreatefromstring($binary),
+            default => false,
+        };
+        if ($image === false) {
+            throw new \InvalidArgumentException('candidate_upload_unsupported_image');
+        }
+
+        if (! imageistruecolor($image) && function_exists('imagepalettetotruecolor')) {
+            imagepalettetotruecolor($image);
+        }
+
+        $this->saveAsJpeg($intake, $image);
+    }
+
+    /**
      * @throws \InvalidArgumentException|\RuntimeException
      */
     private function saveProcessedUploadBinary(BiodataIntake $intake, UploadedFile $file): void

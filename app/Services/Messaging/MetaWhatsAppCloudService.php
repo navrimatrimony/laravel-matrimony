@@ -211,6 +211,163 @@ class MetaWhatsAppCloudService
         return true;
     }
 
+    public function sendTextMessage(string $mobileDigits, string $body): bool
+    {
+        if (! $this->isCoreConfigured()) {
+            return false;
+        }
+
+        $to = $this->formatRecipientE164Digits($mobileDigits);
+        $body = trim($body);
+        if ($to === '' || $body === '') {
+            return false;
+        }
+
+        return $this->postMessagePayload($to, [
+            'type' => 'text',
+            'text' => ['body' => $body],
+        ]);
+    }
+
+    /**
+     * @param  list<array{id: string, title: string, description?: string}>  $rows
+     */
+    public function sendInteractiveList(string $mobileDigits, string $body, string $buttonLabel, array $rows): bool
+    {
+        if (! $this->isCoreConfigured()) {
+            return false;
+        }
+
+        $to = $this->formatRecipientE164Digits($mobileDigits);
+        $body = trim($body);
+        $buttonLabel = trim($buttonLabel);
+        if ($to === '' || $body === '' || $buttonLabel === '' || $rows === []) {
+            return false;
+        }
+
+        $listRows = [];
+        foreach (array_slice($rows, 0, 10) as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $id = trim((string) ($row['id'] ?? ''));
+            $title = trim((string) ($row['title'] ?? ''));
+            if ($id === '' || $title === '') {
+                continue;
+            }
+            $entry = [
+                'id' => $id,
+                'title' => mb_substr($title, 0, 24),
+            ];
+            $description = trim((string) ($row['description'] ?? ''));
+            if ($description !== '') {
+                $entry['description'] = mb_substr($description, 0, 72);
+            }
+            $listRows[] = $entry;
+        }
+
+        if ($listRows === []) {
+            return false;
+        }
+
+        return $this->postMessagePayload($to, [
+            'type' => 'interactive',
+            'interactive' => [
+                'type' => 'list',
+                'body' => ['text' => $body],
+                'action' => [
+                    'button' => mb_substr($buttonLabel, 0, 20),
+                    'sections' => [[
+                        'title' => 'माहिती',
+                        'rows' => $listRows,
+                    ]],
+                ],
+            ],
+        ]);
+    }
+
+    public function downloadMediaBinary(string $mediaId): ?string
+    {
+        if (! $this->isCoreConfigured()) {
+            return null;
+        }
+
+        $mediaId = trim($mediaId);
+        if ($mediaId === '') {
+            return null;
+        }
+
+        $version = config('whatsapp.graph_version', 'v22.0');
+        $metaUrl = sprintf('https://graph.facebook.com/%s/%s', $version, $mediaId);
+        $metaResponse = Http::withToken((string) config('whatsapp.access_token'))
+            ->timeout((int) config('whatsapp.http_timeout', 15))
+            ->acceptJson()
+            ->get($metaUrl, ['fields' => 'url,mime_type']);
+
+        if (! $metaResponse->successful()) {
+            Log::warning('whatsapp_media_meta_failed', [
+                'status' => $metaResponse->status(),
+                'body' => $metaResponse->json(),
+            ]);
+
+            return null;
+        }
+
+        $downloadUrl = trim((string) data_get($metaResponse->json(), 'url', ''));
+        if ($downloadUrl === '') {
+            return null;
+        }
+
+        $binaryResponse = Http::withToken((string) config('whatsapp.access_token'))
+            ->timeout((int) config('whatsapp.http_timeout', 15))
+            ->get($downloadUrl);
+
+        if (! $binaryResponse->successful()) {
+            Log::warning('whatsapp_media_download_failed', [
+                'status' => $binaryResponse->status(),
+            ]);
+
+            return null;
+        }
+
+        $binary = $binaryResponse->body();
+
+        return is_string($binary) && $binary !== '' ? $binary : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $message
+     */
+    private function postMessagePayload(string $to, array $message): bool
+    {
+        $version = config('whatsapp.graph_version', 'v22.0');
+        $phoneNumberId = config('whatsapp.phone_number_id');
+        $url = sprintf('https://graph.facebook.com/%s/%s/messages', $version, $phoneNumberId);
+
+        $payload = array_merge([
+            'messaging_product' => 'whatsapp',
+            'recipient_type' => 'individual',
+            'to' => $to,
+        ], $message);
+
+        $response = Http::withToken((string) config('whatsapp.access_token'))
+            ->timeout((int) config('whatsapp.http_timeout', 15))
+            ->acceptJson()
+            ->asJson()
+            ->post($url, $payload);
+
+        if (! $response->successful()) {
+            Log::warning('whatsapp_message_send_failed', [
+                'status' => $response->status(),
+                'body' => $response->json(),
+            ]);
+
+            return false;
+        }
+
+        return true;
+    }
+
     /**
      * @return list<array{type: string, text: string}>
      */

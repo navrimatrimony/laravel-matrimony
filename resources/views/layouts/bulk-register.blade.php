@@ -22,6 +22,7 @@
             'resources/js/profile/religion-caste-selector.js',
             'resources/js/matrimony/occupation-engine-entry.js',
         ])
+        @stack('head')
     </head>
     <body class="font-sans text-gray-900 antialiased bg-slate-100">
         @if ($guestBackgroundImageUrl)
@@ -48,5 +49,6 @@
                 </div>
             </div>
         </div>
+        @stack('scripts')
     </body>
 </html>

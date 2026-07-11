@@ -39,6 +39,20 @@ final class BulkIntakeRegistrationFieldCatalog
     ];
 
     /** @var list<string> */
+    public const WHATSAPP_SUMMARY_KEYS = [
+        'full_name',
+        'mobile',
+        'date_of_birth',
+        'height_cm',
+        'gender',
+        'location',
+        'education',
+        'religion',
+        'caste',
+        'occupation',
+    ];
+
+    /** @var list<string> */
     public const DEFERRED_KEYS = [
         'sub_caste',
         'company_name',

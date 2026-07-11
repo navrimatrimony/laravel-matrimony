@@ -3,6 +3,7 @@
 namespace App\Services\Intake;
 
 use App\Models\BulkIntakeBatchItem;
+use App\Models\MatrimonyProfile;
 use App\Models\City;
 use App\Models\EducationDegree;
 use App\Models\Location;
@@ -24,6 +25,16 @@ class BulkIntakeRegistrationPreferencesBridgeService
     public function __construct(
         private readonly BulkIntakeRegistrationFormBridgeService $formBridge,
     ) {}
+
+    /**
+     * @return array{preferences: array<string, mixed>}
+     */
+    public function defaultPreferencesSnapshot(MatrimonyProfile $profile): array
+    {
+        return [
+            'preferences' => $this->suggestForBulkRegistration($profile),
+        ];
+    }
 
     /**
      * Bulk biodata registration: only fill clear-cut fields from own profile.

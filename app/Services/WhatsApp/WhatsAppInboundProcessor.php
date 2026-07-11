@@ -6,6 +6,7 @@ use App\Models\IntakeWhatsAppMessage;
 use App\Models\IntakeWhatsAppSession;
 use App\Models\User;
 use App\Services\Intake\BulkIntakeWhatsAppConsentService;
+use App\Services\Intake\BulkIntakeWhatsAppRegistrationConversationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -13,6 +14,7 @@ class WhatsAppInboundProcessor
 {
     public function __construct(
         private readonly BulkIntakeWhatsAppConsentService $bulkConsentService,
+        private readonly BulkIntakeWhatsAppRegistrationConversationService $registrationConversationService,
     ) {}
 
     public function process(array $payload): array
@@ -210,11 +212,22 @@ class WhatsAppInboundProcessor
             'received_at' => $this->timestampOrNull($message['timestamp'] ?? null),
         ]);
 
-        $this->bulkConsentService->processInboundReply(
+        $registrationResult = $this->registrationConversationService->processInbound(
             $session,
             $this->textBody($message, $type) ?? '',
-            $this->buttonReplyId($message, $type)
+            $this->buttonReplyId($message, $type),
+            $type,
+            $media['id'],
+            $media['mime_type'],
         );
+
+        if (! $registrationResult['processed']) {
+            $this->bulkConsentService->processInboundReply(
+                $session,
+                $this->textBody($message, $type) ?? '',
+                $this->buttonReplyId($message, $type)
+            );
+        }
 
         return true;
     }
