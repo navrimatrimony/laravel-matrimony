@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Services\Intake\BulkIntakePublicRegistrationService;
+use App\Services\Intake\BulkIntakeRegistrationProfileApplyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -183,6 +186,14 @@ class BulkIntakePublicRegistrationController extends Controller
 
         if (! $registrationService->isPreferencesComplete($item)) {
             return redirect()->route($registrationService->nextStepRouteName($item), ['token' => $token]);
+        }
+
+        $profile = app(BulkIntakeRegistrationProfileApplyService::class)->profileForItem($item);
+        if ($profile !== null && (int) ($profile->user_id ?? 0) > 0 && ! Auth::check()) {
+            $user = User::query()->find((int) $profile->user_id);
+            if ($user instanceof User && ! $user->isAnyAdmin()) {
+                Auth::login($user);
+            }
         }
 
         app()->setLocale('mr');

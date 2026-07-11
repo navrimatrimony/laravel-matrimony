@@ -415,7 +415,12 @@ test('public registration preferences save to snapshot and finish on done page',
 
     $this->get(route('bulk-intake.register.done', ['token' => $token]))
         ->assertOk()
-        ->assertSee('नोंदणी पूर्ण झाली');
+        ->assertSee('नोंदणी पूर्ण झाली')
+        ->assertDontSee('आमचा प्रतिनिधी लवकरच तुमच्याशी संपर्क साधेल.')
+        ->assertSee('डॅशबोर्डवर पुनर्निर्देशित होत आहात')
+        ->assertSee('bulk-registration-redirect-countdown', false);
+
+    expect(auth()->id())->toBe((int) $profile->user_id);
 });
 
 test('bulk registration preferences default education occupation income and diet to open to all', function () {

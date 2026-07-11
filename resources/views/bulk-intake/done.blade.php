@@ -2,6 +2,7 @@
 
 @php
     $sectionClass = 'rounded-xl border border-gray-200 bg-white/95 p-4 shadow-sm backdrop-blur-sm sm:p-5 text-center';
+    $redirectDelaySeconds = max(1, (int) ($redirect_delay_seconds ?? 4));
 @endphp
 
 @section('content')
@@ -26,7 +27,49 @@
                 <img src="{{ $photo_preview_url }}" alt="प्रोफाइल फोटो" class="h-40 w-32 rounded-xl border border-gray-200 object-cover shadow-sm">
             </div>
         @endif
-        <p class="mt-6 text-xs text-gray-500">आमचा प्रतिनिधी लवकरच तुमच्याशी संपर्क साधेल.</p>
+        @if (! empty($dashboard_url))
+            <p class="mt-6 text-xs text-gray-500">
+                <span id="bulk-registration-redirect-countdown">{{ $redirectDelaySeconds }}</span> सेकंदात डॅशबोर्डवर पुनर्निर्देशित होत आहात…
+            </p>
+        @endif
     </div>
 </div>
+
+@if (! empty($dashboard_url))
+    <script>
+        (function () {
+            var redirectUrl = @json($dashboard_url);
+            var remainingSeconds = {{ $redirectDelaySeconds }};
+            var countdownEl = document.getElementById('bulk-registration-redirect-countdown');
+            var redirectTimerId = null;
+            var countdownTimerId = null;
+
+            function redirectToDashboard() {
+                if (redirectTimerId) {
+                    clearTimeout(redirectTimerId);
+                }
+                if (countdownTimerId) {
+                    clearInterval(countdownTimerId);
+                }
+                window.location.href = redirectUrl;
+            }
+
+            redirectTimerId = window.setTimeout(redirectToDashboard, remainingSeconds * 1000);
+
+            if (countdownEl) {
+                countdownTimerId = window.setInterval(function () {
+                    remainingSeconds -= 1;
+                    if (remainingSeconds <= 0) {
+                        countdownEl.textContent = '0';
+                        if (countdownTimerId) {
+                            clearInterval(countdownTimerId);
+                        }
+                        return;
+                    }
+                    countdownEl.textContent = String(remainingSeconds);
+                }, 1000);
+            }
+        })();
+    </script>
+@endif
 @endsection

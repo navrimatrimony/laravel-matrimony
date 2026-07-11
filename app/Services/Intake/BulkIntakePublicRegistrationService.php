@@ -272,6 +272,8 @@ class BulkIntakePublicRegistrationService
             'photo_preview_url' => $this->photoCandidateCropService->exists($intake)
                 ? route('bulk-intake.register.photo.candidate', ['token' => $token])
                 : null,
+            'dashboard_url' => route('dashboard'),
+            'redirect_delay_seconds' => 4,
         ];
     }
 
