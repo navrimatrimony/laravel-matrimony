@@ -194,10 +194,16 @@ class BulkIntakePublicRegistrationController extends Controller
             return redirect()->route('bulk-intake.register.password', ['token' => $token]);
         }
 
-        $accountSetup->ensureAuthenticated($item);
+        if (! $accountSetup->isAdminPreviewSession()) {
+            $accountSetup->ensureAuthenticated($item);
+        }
 
         app()->setLocale('mr');
         $payload = $registrationService->completePayload($item, $token);
+        if ($accountSetup->isAdminPreviewSession()) {
+            $payload['dashboard_url'] = null;
+            $payload['redirect_delay_seconds'] = 0;
+        }
 
         return view('bulk-intake.done', $payload);
     }

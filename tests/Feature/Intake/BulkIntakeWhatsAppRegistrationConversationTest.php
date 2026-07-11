@@ -3,6 +3,7 @@
 use App\Models\BulkIntakeBatchItem;
 use App\Models\IntakeWhatsAppSession;
 use App\Models\MatrimonyProfile;
+use App\Services\Intake\BulkIntakeRegistrationAccountSetupService;
 use App\Services\Intake\BulkIntakeRegistrationService;
 use App\Services\Intake\BulkIntakeWhatsAppRegistrationConversationService;
 use App\Services\Intake\IntakePhotoCandidateCropService;
@@ -110,4 +111,21 @@ test('full edit path sends web link when user taps edit on summary', function ()
         ->first();
 
     expect($outbound?->text_body)->toContain('/register/biodata/');
+});
+
+test('bulk registration does not replace logged-in admin session', function () {
+    $admin = registrationAdmin();
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
+    $session = registrationSummarySession($item);
+    $conversation = app(BulkIntakeWhatsAppRegistrationConversationService::class);
+    $intake = $item->biodataIntake;
+
+    $conversation->processInbound($session, '', BulkIntakeWhatsAppRegistrationConversationService::BTN_SUMMARY_OK);
+    app(IntakePhotoCandidateCropService::class)->saveFromBinary($intake, registrationTinyJpegBytes());
+    $conversation->processInbound($session, '', BulkIntakeWhatsAppRegistrationConversationService::BTN_PHOTO_USE);
+
+    $this->actingAs($admin);
+    app(BulkIntakeRegistrationAccountSetupService::class)->ensureAuthenticated($item->fresh());
+
+    expect((int) auth()->id())->toBe((int) $admin->id);
 });

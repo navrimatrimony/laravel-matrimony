@@ -48,11 +48,30 @@ class BulkIntakeRegistrationAccountSetupService
             ]);
         }
 
+        if ($this->shouldPreserveCurrentAdminSession()) {
+            return $user;
+        }
+
         if (! Auth::check() || (int) Auth::id() !== (int) $user->id) {
             Auth::login($user);
         }
 
         return $user;
+    }
+
+    /**
+     * Admin bulk-intake testing must not hijack the browser session.
+     */
+    public function isAdminPreviewSession(): bool
+    {
+        return $this->shouldPreserveCurrentAdminSession();
+    }
+
+    private function shouldPreserveCurrentAdminSession(): bool
+    {
+        $current = Auth::user();
+
+        return $current instanceof User && $current->isAnyAdmin();
     }
 
     public function isEmailStepComplete(BulkIntakeBatchItem $item, ?User $user = null): bool
