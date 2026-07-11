@@ -52,8 +52,9 @@ test('identity history auto blocks candidate with same mobile', function () {
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('data-testid="bulk-screening-badge"', false)
-        ->assertSee('Stop', false)
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
+        ->assertSee('Blocked', false)
+        ->assertDontSee('data-testid="bulk-screening-badge"', false)
         ->assertSee('Already married', false)
         ->assertSee('data-testid="bulk-identity-history-block"', false)
         ->assertSee('data-testid="bulk-override-duplicate-block"', false);
@@ -164,8 +165,9 @@ test('same mobile with matching identity auto stops instead of only review', fun
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('data-testid="bulk-screening-badge"', false)
-        ->assertSee('Stop', false)
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
+        ->assertSee('Blocked', false)
+        ->assertDontSee('data-testid="bulk-screening-badge"', false)
         ->assertSee('data-testid="bulk-auto-duplicate-block"', false)
         ->assertSee('Same mobile', false);
 });
@@ -198,9 +200,10 @@ test('same mobile with different identity stays needs review not auto stop', fun
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('data-testid="bulk-screening-badge"', false)
-        ->assertSee('Needs review', false)
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
+        ->assertSee('Needs check', false)
         ->assertSee('Possible duplicate', false)
+        ->assertDontSee('data-testid="bulk-screening-badge"', false)
         ->assertDontSee('data-testid="bulk-auto-duplicate-block"', false);
 });
 

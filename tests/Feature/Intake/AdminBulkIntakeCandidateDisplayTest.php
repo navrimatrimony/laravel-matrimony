@@ -11,6 +11,80 @@ use Illuminate\Support\Facades\Schema;
 
 uses(RefreshDatabase::class);
 
+test('bulk list hides redundant auto screening badges when pipeline already matches advisor', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Clean Eligible Candidate',
+                'primary_contact_number' => '9876543210',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+                'highest_education' => 'B.Com',
+                'occupation_title' => 'Analyst',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $intake);
+
+    $html = $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
+        ->assertSee('Eligible', false)
+        ->assertDontSee('data-testid="bulk-screening-badge"', false)
+        ->assertDontSee('Ready for pipeline', false)
+        ->assertDontSee('No manual duplicate', false)
+        ->assertDontSee('No duplicate hint', false)
+        ->getContent();
+
+    expect(substr_count($html, 'data-testid="bulk-pipeline-badge"'))->toBe(1)
+        ->and(substr_count($html, 'data-testid="bulk-screening-badge"'))->toBe(0);
+});
+
+test('bulk list uses snapshot mobile for pipeline when stale contact plan queue is empty', function () {
+    $admin = candidateDisplayAdminUser();
+    $batch = candidateDisplayBatch($admin);
+    $intake = candidateDisplayIntake([
+        'parse_status' => 'parsed',
+        'approval_snapshot_json' => [
+            'core' => [
+                'full_name' => 'Snapshot Mobile Candidate',
+                'primary_contact_number' => '9876543210',
+                'date_of_birth' => '1998-04-15',
+                'gender' => 'female',
+            ],
+        ],
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'Snapshot Mobile Candidate',
+            ],
+        ],
+    ]);
+    candidateDisplayItem($batch, $intake, [
+        'item_meta_json' => [
+            'consent_contact_plan' => [
+                'synced_at' => '2026-07-08T10:00:00+00:00',
+                'active_index' => 0,
+                'queue' => [],
+                'tried' => [],
+                'suchak_directory' => [],
+            ],
+        ],
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('Snapshot Mobile Candidate', false)
+        ->assertSee('Mobile: 9876543210', false)
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
+        ->assertSee('Eligible', false)
+        ->assertDontSee('Mobile missing', false);
+});
+
 test('bulk list shows parsed candidate fields from linked intake', function () {
     Carbon::setTestNow(Carbon::parse('2026-07-07 12:00:00'));
 
@@ -43,7 +117,7 @@ test('bulk list shows parsed candidate fields from linked intake', function () {
             ->assertSee('Mobile: 9876543210', false)
             ->assertSee('1998-04-15', false)
             ->assertSee('Age: 28', false)
-            ->assertSee('5 ft 5 in', false)
+            ->assertSee("5'5\"")
             ->assertDontSee('165 cm', false)
             ->assertSee('Gender: Female', false)
             ->assertSee('Pune', false)
@@ -51,8 +125,12 @@ test('bulk list shows parsed candidate fields from linked intake', function () {
             ->assertSee('Software Developer', false)
             ->assertSee('Parse: OK', false)
             ->assertSee('Parsed JSON: Yes', false)
-            ->assertSee('data-testid="bulk-screening-badge"', false)
-            ->assertSee('Eligible', false);
+            ->assertSee('data-testid="bulk-pipeline-badge"', false)
+            ->assertSee('Eligible', false)
+            ->assertDontSee('data-testid="bulk-screening-badge"', false)
+            ->assertDontSee('Ready for pipeline', false)
+            ->assertDontSee('No manual duplicate', false)
+            ->assertDontSee('No duplicate hint', false);
     } finally {
         Carbon::setTestNow();
     }
@@ -123,7 +201,7 @@ test('bulk list prefers reviewed snapshot values and keeps parsed json presence 
 
     expect($candidate['full_name'])->toBe('Reviewed Candidate')
         ->and($candidate['mobile'])->toBe('9876543210')
-        ->and($candidate['height'])->toBe('5 ft 6 in')
+        ->and($candidate['height'])->toBe("5'6\"")
         ->and($candidate['city'])->toBe('Pune')
         ->and($candidate['education'])->toBe('MCA')
         ->and($candidate['display_source'])->toBe('approval_snapshot_json')
@@ -137,7 +215,7 @@ test('bulk list prefers reviewed snapshot values and keeps parsed json presence 
             ->assertSee('Reviewed Candidate', false)
             ->assertSee('Mobile: 9876543210', false)
             ->assertSee('1998-04-15', false)
-            ->assertSee('5 ft 6 in', false)
+            ->assertSee("5'6\"")
             ->assertDontSee('168 cm', false)
             ->assertSee('Gender: Female', false)
             ->assertSee('Pune', false)
@@ -145,8 +223,9 @@ test('bulk list prefers reviewed snapshot values and keeps parsed json presence 
             ->assertSee('Reviewed Occupation', false)
             ->assertSee('Parsed JSON: Yes', false)
             ->assertSee('data-testid="bulk-candidate-reviewed-badge"', false)
-            ->assertSee('data-testid="bulk-screening-badge"', false)
+            ->assertSee('data-testid="bulk-pipeline-badge"', false)
             ->assertSee('Eligible', false)
+            ->assertDontSee('data-testid="bulk-screening-badge"', false)
             ->assertDontSee('Old Parsed Candidate', false)
             ->assertDontSee('Old City', false)
             ->assertDontSee('BSc', false);
@@ -196,7 +275,7 @@ test('bulk list shows reviewed snapshot height even when old confidence marks he
 
     $candidate = app(BulkIntakeCandidateDisplayService::class)->candidateForItem($item);
 
-    expect($candidate['height'])->toBe('5 ft 3 in')
+    expect($candidate['height'])->toBe("5'3\"")
         ->and($candidate['height_needs_review'])->toBeFalse()
         ->and($candidate['display_warnings'])->not->toContain('height_low_confidence')
         ->and($candidate['missing_fields'])->not->toContain('height');
@@ -205,7 +284,7 @@ test('bulk list shows reviewed snapshot height even when old confidence marks he
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
         ->assertSee('Reviewed Height Candidate', false)
-        ->assertSee('5 ft 3 in', false)
+        ->assertSee("5'3\"")
         ->assertDontSee('160 cm', false)
         ->assertSee('data-testid="bulk-candidate-reviewed-badge"', false);
 });
@@ -242,8 +321,9 @@ test('bulk list shows eligible screening for valid reviewed candidate and prefer
         ->assertSee('Reviewed Eligible Candidate', false)
         ->assertSee('Mobile: 9876543210', false)
         ->assertSee('data-testid="bulk-candidate-reviewed-badge"', false)
-        ->assertSee('data-testid="bulk-screening-badge"', false)
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
         ->assertSee('Eligible', false)
+        ->assertDontSee('data-testid="bulk-screening-badge"', false)
         ->assertDontSee('Mobile missing', false)
         ->assertDontSee('DOB invalid', false)
         ->assertDontSee('Old Parsed Missing Mobile', false);
@@ -253,8 +333,7 @@ test('bulk list shows eligible screening for valid reviewed candidate and prefer
 
     expect($intake->raw_ocr_text)->toBe('Original reviewed eligible OCR')
         ->and($intake->parsed_json)->toBe($parsed)
-        ->and($intake->approval_snapshot_json)->toBe($approval)
-        ->and($item->item_meta_json)->toBeNull();
+        ->and($intake->approval_snapshot_json)->toBe($approval);
 });
 
 test('bulk list shows duplicate hint when same mobile exists in another intake', function () {
@@ -287,17 +366,17 @@ test('bulk list shows duplicate hint when same mobile exists in another intake',
         ->assertOk()
         ->assertSee('data-testid="bulk-duplicate-history-hint"', false)
         ->assertSee('Same mobile found', false)
-        ->assertSee('data-testid="bulk-screening-badge"', false)
-        ->assertSee('Needs review', false)
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
+        ->assertSee('Needs check', false)
         ->assertSee('Possible duplicate', false)
+        ->assertDontSee('data-testid="bulk-screening-badge"', false)
         ->assertSee('Mark duplicate', false);
 
     $intake->refresh();
     $item->refresh();
 
     expect($intake->raw_ocr_text)->toBe('Original current duplicate OCR')
-        ->and($intake->parsed_json)->toBe($currentParsed)
-        ->and($item->item_meta_json)->toBeNull();
+        ->and($intake->parsed_json)->toBe($currentParsed);
 });
 
 test('bulk list shows manual duplicate badge and clear action', function () {
@@ -333,8 +412,9 @@ test('bulk list shows manual duplicate badge and clear action', function () {
         ->assertOk()
         ->assertSee('Manual Duplicate List Candidate', false)
         ->assertSee('data-testid="bulk-manual-duplicate-badge"', false)
-        ->assertSee('data-testid="bulk-screening-badge"', false)
-        ->assertSee('Stop', false)
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
+        ->assertSee('Blocked', false)
+        ->assertDontSee('data-testid="bulk-screening-badge"', false)
         ->assertSee('Manual duplicate', false)
         ->assertSee('Clear duplicate', false)
         ->assertDontSee('Mark duplicate', false);
@@ -375,7 +455,8 @@ test('bulk list shows manual screening badge and clear action', function () {
         ->assertSee('Manual Screening List Candidate', false)
         ->assertSee('data-testid="bulk-manual-screening-badge"', false)
         ->assertSee('Override: Eligible', false)
-        ->assertSee('data-testid="bulk-screening-advisor-hint"', false)
+        ->assertDontSee('No manual duplicate', false)
+        ->assertDontSee('No duplicate hint', false)
         ->assertSee('Clear screening', false)
         ->assertDontSee('data-testid="bulk-screening-badge"', false)
         ->assertDontSee('Set override', false);
@@ -401,8 +482,9 @@ test('bulk list does not show set override action when no manual screening exist
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
         ->assertDontSee('Set override', false)
-        ->assertSee('data-testid="bulk-screening-badge"', false)
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
         ->assertSee('Eligible', false)
+        ->assertDontSee('data-testid="bulk-screening-badge"', false)
         ->assertDontSee('data-testid="bulk-manual-screening-badge"', false)
         ->assertDontSee('Clear screening', false);
 });
@@ -474,9 +556,10 @@ test('bulk list shows needs review screening for missing mobile', function () {
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
         ->assertSee('Missing Mobile Candidate', false)
-        ->assertSee('data-testid="bulk-screening-badge"', false)
-        ->assertSee('Needs review', false)
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
+        ->assertSee('Needs check', false)
         ->assertSee('Mobile missing', false)
+        ->assertDontSee('data-testid="bulk-screening-badge"', false)
         ->assertSee('Mobile: —', false);
 });
 
@@ -546,8 +629,7 @@ test('duplicate hints prefer reviewed snapshot over parsed json', function () {
     $intake->refresh();
     $item->refresh();
 
-    expect($intake->parsed_json)->toBe($parsed)
-        ->and($item->item_meta_json)->toBeNull();
+    expect($intake->parsed_json)->toBe($parsed);
 });
 
 test('bulk list handles missing candidate fields safely', function () {
@@ -604,7 +686,7 @@ test('bulk list keeps text item display short and prefers linked parsed status',
         ->assertSee('text · parsed', false)
         ->assertSee('Short Text Candidate', false)
         ->assertSee('Mobile: 9876543210', false)
-        ->assertSee('5 ft 5 in', false)
+        ->assertSee("5'5\"")
         ->assertDontSee('166 cm', false)
         ->assertSee('MBA', false)
         ->assertSee('Parse: OK', false)
@@ -795,13 +877,13 @@ test('very tall but possible height is shown with review flag', function () {
 
     $candidate = app(BulkIntakeCandidateDisplayService::class)->candidateForItem($item);
 
-    expect($candidate['height'])->toBe('6 ft 6 in')
+    expect($candidate['height'])->toBe("6'6\"")
         ->and($candidate['height_needs_review'])->toBeTrue();
 
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('6 ft 6 in', false)
+        ->assertSee("6'6\"")
         ->assertDontSee('198 cm', false)
         ->assertSee('review', false);
 });

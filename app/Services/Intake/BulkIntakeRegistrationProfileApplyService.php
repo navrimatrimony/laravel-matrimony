@@ -136,15 +136,41 @@ class BulkIntakeRegistrationProfileApplyService
 
     private function assertConsentMobileMatches(BulkIntakeBatchItem $item, string $submittedMobile): void
     {
-        $candidate = $this->candidateDisplayService->candidateForItem($item);
-        $consentMobile = MobileNumber::normalize((string) ($candidate['mobile'] ?? ''));
-        $formMobile = MobileNumber::normalize($submittedMobile);
+        $consentMobile = $this->consentMobileForItem($item);
+        $formMobile = $this->normalizeSubmittedMobile($submittedMobile);
 
         if ($consentMobile === null || $formMobile === null || $consentMobile !== $formMobile) {
             throw ValidationException::withMessages([
                 'mobile' => 'मोबाईल क्रमांक WhatsApp परवानगीच्या नंबरशी जुळला पाहिजे.',
             ]);
         }
+    }
+
+    private function consentMobileForItem(BulkIntakeBatchItem $item): ?string
+    {
+        $active = app(BulkIntakeCandidateContactPlanService::class)->activeMobile($item);
+        if ($active !== null) {
+            return $active;
+        }
+
+        $candidate = $this->candidateDisplayService->candidateForItem($item);
+        $collector = app(BulkIntakeCandidateMobileCollector::class);
+        $fromDisplay = $collector->parseInput((string) ($candidate['mobile'] ?? ''));
+
+        return $fromDisplay[0] ?? MobileNumber::normalize((string) ($candidate['mobile'] ?? ''));
+    }
+
+    private function normalizeSubmittedMobile(string $submittedMobile): ?string
+    {
+        $direct = MobileNumber::normalize($submittedMobile);
+        if ($direct !== null) {
+            return $direct;
+        }
+
+        $collector = app(BulkIntakeCandidateMobileCollector::class);
+        $parsed = $collector->parseInput($submittedMobile);
+
+        return $parsed[0] ?? null;
     }
 
     private function resolveOwnerUser(

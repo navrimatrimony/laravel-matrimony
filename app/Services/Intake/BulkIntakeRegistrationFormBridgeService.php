@@ -15,6 +15,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\OccupationMaster;
 use App\Models\Religion;
 use App\Models\Caste;
+use App\Models\SubCaste;
 use App\Models\WorkingWithType;
 use App\Services\EducationService;
 use App\Services\Location\LocationNormalizationService;
@@ -93,7 +94,7 @@ class BulkIntakeRegistrationFormBridgeService
      */
     public function buildSnapshotFromRequest(Request $request, BulkIntakeBatchItem $item, BiodataIntake $intake): array
     {
-        $mobile = MobileNumber::normalize((string) $request->input('mobile', ''));
+        $mobile = $this->normalizeRegistrationMobile((string) $request->input('mobile', ''));
         if ($mobile === null) {
             throw ValidationException::withMessages([
                 'mobile' => 'वैध १० अंकी मोबाईल नंबर भरा.',
@@ -181,6 +182,24 @@ class BulkIntakeRegistrationFormBridgeService
     }
 
     /**
+     * Trim OCR/bulk snapshot to the keys needed for governed profile apply (avoids heavy entity sync on POST).
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    public function registrationApplySnapshot(array $snapshot): array
+    {
+        $slim = [];
+        foreach (['core', 'marriages', 'children', 'education_history', 'career_history'] as $key) {
+            if (array_key_exists($key, $snapshot)) {
+                $slim[$key] = $snapshot[$key];
+            }
+        }
+
+        return $slim;
+    }
+
+    /**
      * @param  array<string, mixed>  $snapshot
      */
     public function profileFromSnapshot(array $snapshot, BulkIntakeBatchItem $item): MatrimonyProfile
@@ -229,6 +248,11 @@ class BulkIntakeRegistrationFormBridgeService
             $profile->setRelation('caste', Caste::query()->find($profile->caste_id));
         } elseif ($this->stringOrNull($core['caste'] ?? null) !== null) {
             $profile->setAttribute('caste_label', $this->stringOrNull($core['caste'] ?? null));
+        }
+        if ($profile->sub_caste_id) {
+            $profile->setRelation('subCaste', SubCaste::query()->find($profile->sub_caste_id));
+        } elseif ($this->stringOrNull($core['sub_caste'] ?? null) !== null) {
+            $profile->setAttribute('subcaste_label', $this->stringOrNull($core['sub_caste'] ?? null));
         }
         if ($profile->occupation_master_id) {
             $profile->loadMissing(['occupationMaster.category.workingWithType']);
@@ -744,6 +768,18 @@ class BulkIntakeRegistrationFormBridgeService
     private function intOrNull(mixed $value): ?int
     {
         return is_numeric($value) ? (int) $value : null;
+    }
+
+    private function normalizeRegistrationMobile(string $rawMobile): ?string
+    {
+        $direct = MobileNumber::normalize($rawMobile);
+        if ($direct !== null) {
+            return $direct;
+        }
+
+        $parsed = app(BulkIntakeCandidateMobileCollector::class)->parseInput($rawMobile);
+
+        return $parsed[0] ?? null;
     }
 
     private function stringOrNull(mixed $value): ?string

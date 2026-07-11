@@ -42,6 +42,10 @@ class BulkIntakePublicRegistrationController extends Controller
         $gate = $registrationService->accessGate($item);
         abort_unless($gate['allowed'], 403);
 
+        if ($registrationService->isRegistrationFormComplete($item)) {
+            return redirect()->route($registrationService->nextStepRouteName($item), ['token' => $token]);
+        }
+
         $registrationService->save($item, $request);
 
         return redirect()

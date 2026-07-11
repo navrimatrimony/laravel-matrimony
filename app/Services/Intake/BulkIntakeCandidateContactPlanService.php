@@ -93,9 +93,15 @@ class BulkIntakeCandidateContactPlanService
             return $this->syncForItem($item->fresh());
         }
 
-        $plan = $this->readPlanMeta($item);
+        $persisted = $this->readPlanMeta($item);
+        if (is_array($persisted)) {
+            $queue = is_array($persisted['queue'] ?? null) ? $persisted['queue'] : [];
+            if ($queue !== []) {
+                return $persisted;
+            }
+        }
 
-        return is_array($plan) ? $plan : $this->composePlan($item);
+        return $this->composePlan($item);
     }
 
     public function activeMobile(BulkIntakeBatchItem $item, bool $refresh = false): ?string
@@ -107,7 +113,24 @@ class BulkIntakeCandidateContactPlanService
 
     public function hasUsableMobile(BulkIntakeBatchItem $item): bool
     {
-        return $this->activeMobile($item) !== null;
+        if ($this->activeMobile($item) !== null) {
+            return true;
+        }
+
+        $item->loadMissing('biodataIntake');
+        $intake = $item->biodataIntake;
+        if (! $intake instanceof BiodataIntake) {
+            return false;
+        }
+
+        $snapshot = $this->sourceSnapshot($intake);
+        $ocrText = $this->ocrText($intake);
+        $mobile = app(BulkIntakeCandidateMobileCollector::class)->displayFromSources(
+            $snapshot,
+            $ocrText !== '' ? $ocrText : null,
+        );
+
+        return MobileNumber::normalize(is_string($mobile) ? $mobile : null) !== null;
     }
 
     /**

@@ -106,21 +106,50 @@ class BulkIntakePublicRegistrationService
             $snapshot['core'] = $core;
         }
 
-        $mobile = $candidate['mobile'] ?? $core['primary_contact_number'] ?? null;
+        $mobile = $this->registrationMobileForItem($item, $candidate, $core);
 
         return array_merge(
             $this->formBridge->viewContext(
                 $item,
                 $snapshot,
                 is_string($candidate['full_name'] ?? null) ? $candidate['full_name'] : null,
-                is_string($mobile) ? $mobile : null,
+                $mobile,
             ),
             [
                 'item' => $item,
                 'intake' => $intake,
                 'mother_tongue_id' => $motherTongueId,
+                'consent_mobile' => $mobile,
+                'consent_mobile_locked' => $mobile !== null,
             ],
         );
+    }
+
+    /**
+     * WhatsApp consent active mobile for registration (single 10-digit), not comma-separated display list.
+     *
+     * @param  array<string, mixed>  $candidate
+     * @param  array<string, mixed>  $core
+     */
+    private function registrationMobileForItem(BulkIntakeBatchItem $item, array $candidate, array $core): ?string
+    {
+        $active = app(BulkIntakeCandidateContactPlanService::class)->activeMobile($item);
+        if ($active !== null) {
+            return $active;
+        }
+
+        $collector = app(BulkIntakeCandidateMobileCollector::class);
+        $fromDisplay = $collector->parseInput((string) ($candidate['mobile'] ?? ''));
+        if ($fromDisplay !== []) {
+            return $fromDisplay[0];
+        }
+
+        $fromCore = $collector->parseInput((string) ($core['primary_contact_number'] ?? ''));
+        if ($fromCore !== []) {
+            return $fromCore[0];
+        }
+
+        return MobileNumber::normalize((string) ($core['primary_contact_number'] ?? ''));
     }
 
     public function save(BulkIntakeBatchItem $item, Request $request): BiodataIntake
@@ -150,7 +179,12 @@ class BulkIntakePublicRegistrationService
         ]);
 
         $mobile = trim((string) $request->input('mobile', ''));
-        $this->profileApplyService->applyFormRegistration($item, $intake, $snapshot, $mobile);
+        $this->profileApplyService->applyFormRegistration(
+            $item,
+            $intake,
+            $this->formBridge->registrationApplySnapshot($snapshot),
+            $mobile,
+        );
 
         $this->markRegistrationComplete($item);
 

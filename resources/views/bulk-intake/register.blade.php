@@ -12,8 +12,11 @@
     $residenceHints = is_array($payload['residence_hints'] ?? null) ? $payload['residence_hints'] : [];
     $residenceDisplay = is_string($payload['residence_display'] ?? null) ? $payload['residence_display'] : '';
     $mobile = is_string($payload['mobile'] ?? null) ? $payload['mobile'] : '';
+    $consentMobileLocked = (bool) ($payload['consent_mobile_locked'] ?? false);
     $motherTongueId = $payload['mother_tongue_id'] ?? $profile->mother_tongue_id ?? null;
     $candidateName = is_string($payload['candidate_name'] ?? null) ? $payload['candidate_name'] : null;
+    $showSubcaste = (bool) ($profile->sub_caste_id ?? null)
+        || trim((string) ($profile->subcaste_label ?? '')) !== '';
 
     $dobValue = old('date_of_birth');
     if (! is_string($dobValue) || $dobValue === '') {
@@ -79,7 +82,10 @@
                     <div class="grid gap-2.5 md:grid-cols-2">
                         <div>
                             <label class="{{ $labelClass }}">मोबाईल</label>
-                            <input type="tel" name="mobile" value="{{ old('mobile', $mobile) }}" required class="{{ $inputClass }} @error('mobile') border-red-400 @enderror">
+                            <input type="tel" name="mobile" value="{{ old('mobile', $mobile) }}" required @if ($consentMobileLocked) readonly @endif class="{{ $inputClass }} @if ($consentMobileLocked) bg-gray-50 @endif @error('mobile') border-red-400 @enderror">
+                            @if ($consentMobileLocked)
+                                <p class="mt-1 text-xs text-gray-500">WhatsApp परवानगी या नंबरवर मिळाली — हा नंबर बदलता येत नाही.</p>
+                            @endif
                             @error('mobile')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                         </div>
 
@@ -157,7 +163,7 @@
             <section>
                 <h2 class="text-xs font-semibold uppercase tracking-wide text-violet-700">समुदाय व ठिकाण</h2>
                 <div class="mt-2 space-y-2.5">
-                    <x-profile.religion-caste-selector :profile="$profile" :show-subcaste="false" />
+                    <x-profile.religion-caste-selector :profile="$profile" :show-subcaste="$showSubcaste" />
 
                     <div>
                         <label class="{{ $labelClass }}">ठिकाण</label>

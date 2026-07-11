@@ -41,6 +41,59 @@ test('public registration page opens with token after consent received', functio
         ->and($payload['prefer_marathi_labels'] ?? false)->toBeTrue();
 });
 
+test('public registration form uses whatsapp consent mobile when biodata lists multiple numbers', function () {
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson([
+        'parsed_json' => [
+            'core' => [
+                'full_name' => 'सचिन रामदास शिंदे',
+                'primary_contact_number' => '9664444909',
+                'all_contact_numbers' => ['9664444909', '9820655506'],
+            ],
+        ],
+        'raw_ocr_text' => 'संपर्क 9664444909 9820655506',
+    ]));
+    $service = app(BulkIntakePublicRegistrationService::class);
+    $token = $service->ensureToken($item);
+    $masters = registrationMasterIds();
+    $career = registrationCareerMasters();
+
+    $payload = $service->formPayload($item->fresh());
+    expect($payload['mobile'])->toBe('9664444909')
+        ->and($payload['consent_mobile_locked'] ?? false)->toBeTrue();
+
+    $this->get($service->publicUrl($item))
+        ->assertOk()
+        ->assertSee('9664444909', false)
+        ->assertDontSee('9664444909, 9820655506', false)
+        ->assertSee('WhatsApp परवानगी', false);
+
+    $this->post(route('bulk-intake.register.store', ['token' => $token]), [
+        'full_name' => 'सचिन रामदास शिंदे',
+        'mobile' => '9664444909',
+        'date_of_birth' => '1987-09-09',
+        'height_cm' => 173,
+        'gender_id' => $masters['gender_id'],
+        'mother_tongue_id' => $masters['mother_tongue_id'],
+        'marital_status_id' => $masters['marital_status_id'],
+        'religion_id' => $masters['religion_id'],
+        'caste_id' => $masters['caste_id'],
+        'location_id' => registrationLocationId(),
+        'education_degree_ids' => [$career['education_degree_id']],
+        'occupation_master_id' => $career['occupation_master_id'],
+        'income_period' => 'annual',
+        'income_value_type' => 'exact',
+        'income_amount' => '500000',
+        'income_currency_id' => registrationIncomeCurrencyId(),
+        'marriages' => [[
+            'marriage_year' => '',
+            'divorce_year' => '',
+            'separation_year' => '',
+            'spouse_death_year' => '',
+            'divorce_status' => '',
+        ]],
+    ])->assertRedirect(route('bulk-intake.register.complete', ['token' => $token]));
+});
+
 test('public registration form loads quickly with large relative snapshot without full normalization timeout', function () {
     $relatives = [];
     for ($i = 1; $i <= 80; $i++) {

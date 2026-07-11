@@ -484,14 +484,24 @@ class BulkIntakeCandidateDisplayService
      */
     private function mobileForDisplay(?BulkIntakeBatchItem $item, array $parsed, ?BiodataIntake $intake): ?string
     {
-        if ($item instanceof BulkIntakeBatchItem) {
-            $list = app(BulkIntakeCandidateContactPlanService::class)->consentMobileDisplayList($item);
-            if ($list !== []) {
-                return implode(', ', $list);
-            }
+        $collectorMobile = $this->mobileDisplay($parsed, $intake);
+
+        if (! $item instanceof BulkIntakeBatchItem) {
+            return $collectorMobile;
         }
 
-        return $this->mobileDisplay($parsed, $intake);
+        $list = app(BulkIntakeCandidateContactPlanService::class)->consentMobileDisplayList($item);
+        if ($list === []) {
+            return $collectorMobile;
+        }
+
+        $collectorParts = array_values(array_filter(array_map(
+            static fn (string $part): string => trim($part),
+            explode(',', (string) $collectorMobile),
+        ), static fn (string $part): bool => $part !== ''));
+        $merged = array_values(array_unique(array_merge($list, $collectorParts)));
+
+        return $merged !== [] ? implode(', ', $merged) : $collectorMobile;
     }
 
     /**

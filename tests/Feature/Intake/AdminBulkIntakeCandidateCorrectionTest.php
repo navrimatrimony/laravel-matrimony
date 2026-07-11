@@ -957,8 +957,9 @@ test('read-only screening advisor still works on batch show when no manual scree
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('data-testid="bulk-screening-badge"', false)
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
         ->assertSee('Eligible', false)
+        ->assertDontSee('data-testid="bulk-screening-badge"', false)
         ->assertDontSee('data-testid="bulk-manual-screening-badge"', false);
 });
 

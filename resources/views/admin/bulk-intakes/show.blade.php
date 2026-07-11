@@ -330,6 +330,39 @@
                                     default => 'border-amber-300 bg-amber-100 text-amber-900',
                                 };
                                 $pipelineReasons = is_array($pipeline['reasons'] ?? null) ? array_slice($pipeline['reasons'], 0, 2) : [];
+                                $advisorPositiveReasonCodes = [
+                                    'valid_mobile',
+                                    'basic_fields_present',
+                                    'no_duplicate_hint',
+                                    'no_manual_duplicate',
+                                    'age_in_range_or_dob_missing_but_not_blocked',
+                                ];
+                                $autoScreeningAlignsWithPipeline = ! $manualScreeningActive && (
+                                    ($pipelineBucket === 'eligible' && $screeningDecision === 'eligible')
+                                    || ($pipelineBucket === 'needs_check' && $screeningDecision === 'review')
+                                    || ($pipelineBucket === 'blocked' && $screeningDecision === 'stop')
+                                );
+                                $showAutoScreeningBadge = ! $manualScreeningActive && ! $autoScreeningAlignsWithPipeline;
+                                $visiblePipelineReasons = array_values(array_filter(
+                                    $pipelineReasons,
+                                    static function (array $reason) use ($pipelineBucket): bool {
+                                        $code = (string) ($reason['code'] ?? '');
+
+                                        return ! ($pipelineBucket === 'eligible' && $code === 'pipeline_ready');
+                                    },
+                                ));
+                                $visibleScreeningReasons = $manualScreeningActive
+                                    ? array_values(array_filter(
+                                        $screeningReasons,
+                                        static function (array $reason) use ($manualScreeningStatus, $advisorPositiveReasonCodes): bool {
+                                            if ($manualScreeningStatus !== 'eligible_for_consent') {
+                                                return true;
+                                            }
+
+                                            return ! in_array((string) ($reason['code'] ?? ''), $advisorPositiveReasonCodes, true);
+                                        },
+                                    ))
+                                    : ($showAutoScreeningBadge ? $screeningReasons : []);
                                 $whatsappConsent = is_array($whatsappConsentByItemId[$item->id] ?? null) ? $whatsappConsentByItemId[$item->id] : [];
                                 $contactPlan = is_array($contactPlanByItemId[$item->id] ?? null) ? $contactPlanByItemId[$item->id] : [];
                                 $whatsappConsentStatus = (string) ($whatsappConsent['status'] ?? '');
@@ -414,8 +447,12 @@
                                 if ($hasEmptyOcrFailure) {
                                     $exceptionBadges[] = ['label' => 'OCR failed / no text extracted', 'class' => 'border-red-200 bg-red-50 text-red-700'];
                                 }
-                                if ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_NEEDS_REVIEW) {
-                                    $exceptionBadges[] = ['label' => 'Needs review', 'class' => 'border-amber-200 bg-amber-50 text-amber-800'];
+                                if ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_NEEDS_REVIEW && $pipelineBucket !== 'needs_check') {
+                                    $exceptionBadges[] = [
+                                        'label' => 'Admin flagged',
+                                        'class' => 'border-amber-200 bg-amber-50 text-amber-800',
+                                        'testid' => 'bulk-item-needs-review-flag',
+                                    ];
                                 }
                                 if ($manualDuplicateActive) {
                                     $exceptionBadges[] = [
@@ -582,17 +619,17 @@
                                                 <span class="font-normal">· override</span>
                                             @endif
                                         </span>
-                                        @foreach ($pipelineReasons as $pipelineReason)
+                                        @foreach ($visiblePipelineReasons as $pipelineReason)
                                             <span data-testid="bulk-pipeline-reason" class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ $pipelineReason['label'] ?? str_replace('_', ' ', (string) ($pipelineReason['code'] ?? '')) }}</span>
                                         @endforeach
                                         @if ($manualScreeningActive)
                                             <span data-testid="bulk-manual-screening-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $manualScreeningBadgeClass }}">{{ $manualScreeningLabel }}</span>
-                                            @foreach ($screeningReasons as $screeningReason)
+                                            @foreach ($visibleScreeningReasons as $screeningReason)
                                                 <span data-testid="bulk-screening-advisor-hint" class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ $screeningReason['label'] ?? str_replace('_', ' ', (string) ($screeningReason['code'] ?? 'review')) }}</span>
                                             @endforeach
-                                        @else
+                                        @elseif ($showAutoScreeningBadge)
                                             <span data-testid="bulk-screening-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $screeningBadgeClass }}">{{ $screening['label'] ?? 'Needs review' }}</span>
-                                            @foreach ($screeningReasons as $screeningReason)
+                                            @foreach ($visibleScreeningReasons as $screeningReason)
                                                 <span data-testid="bulk-screening-reason" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $screeningReasonChipClass }}">{{ $screeningReason['label'] ?? str_replace('_', ' ', (string) ($screeningReason['code'] ?? 'review')) }}</span>
                                             @endforeach
                                         @endif

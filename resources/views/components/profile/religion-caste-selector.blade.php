@@ -16,9 +16,9 @@
         return ($placeholderNotFound !== null && $v === $placeholderNotFound)
             || ($placeholderSelectRequired !== null && $v === $placeholderSelectRequired);
     };
-    $relLabel = old('religion_label', $profile->religion?->label ?? $profile->religion_label ?? '');
-    $casteLabel = old('caste_label', $profile->caste?->label ?? $profile->caste_label ?? '');
-    $subLabel = old('subcaste_label', $profile->subCaste?->label ?? $profile->subcaste_label ?? '');
+    $relLabel = old('religion_label', $profile->religion?->display_label ?? $profile->religion_label ?? '');
+    $casteLabel = old('caste_label', $profile->caste?->display_label ?? $profile->caste_label ?? '');
+    $subLabel = old('subcaste_label', $profile->subCaste?->display_label ?? $profile->subcaste_label ?? '');
     $relDisplay = ($isIntake && $isPh($relLabel)) ? '' : $relLabel;
     $casteDisplay = ($isIntake && $isPh($casteLabel)) ? '' : $casteLabel;
     $subDisplay = ($isIntake && $isPh($subLabel)) ? '' : $subLabel;
