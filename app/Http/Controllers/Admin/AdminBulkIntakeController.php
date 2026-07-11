@@ -25,6 +25,7 @@ use App\Services\Intake\BulkIntakeProgressPresenter;
 use App\Services\Intake\BulkIntakeReadinessService;
 use App\Services\Intake\BulkIntakeRegistrationService;
 use App\Services\Intake\BulkIntakeWhatsAppConsentService;
+use App\Services\Intake\BulkIntakeWhatsAppRegistrationConversationService;
 use App\Services\Intake\IntakeOwnerAssignmentService;
 use App\Support\MobileNumber;
 use Illuminate\Http\Request;
@@ -140,6 +141,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeWhatsAppConsentService $whatsappConsentService,
         BulkIntakeCandidateContactPlanService $contactPlanService,
         BulkIntakeRegistrationService $registrationService,
+        BulkIntakeWhatsAppRegistrationConversationService $registrationConversationService,
     )
     {
         $statusFilters = $this->bulkItemStatusFilters();
@@ -272,6 +274,13 @@ class AdminBulkIntakeController extends Controller
                     'summary' => $registrationService->summaryForItem($item),
                     'can_send_summary' => $registrationService->canSendRegistrationSummary($item),
                     'can_simulate_complete' => $registrationService->canSimulateRegistrationComplete($item),
+                    'can_simulate_reply' => $registrationConversationService->canSimulateReply($item),
+                    'simulate_buttons' => $registrationConversationService->simulateButtonsForItem($item),
+                    'needs_field_value_text' => $registrationConversationService->needsFieldValueText($item),
+                    'flow_step_label' => $registrationConversationService->flowStepLabel($item),
+                    'manual_preview' => $registrationService->isManualWhatsAppTestEnabled()
+                        ? $registrationService->buildManualTestPreview($item)
+                        : null,
                     'manual_whatsapp_share_url' => $registrationService->isManualWhatsAppTestEnabled()
                         ? $registrationService->buildManualTestWhatsAppShareUrl($item)
                         : null,
@@ -1000,6 +1009,35 @@ class AdminBulkIntakeController extends Controller
         return redirect()
             ->back()
             ->with('success', 'Simulated fast-path registration completion recorded.');
+    }
+
+    public function simulateItemRegistrationReply(
+        Request $request,
+        BulkIntakeBatch $bulkIntakeBatch,
+        BulkIntakeBatchItem $bulkIntakeBatchItem,
+        BulkIntakeWhatsAppRegistrationConversationService $registrationConversationService,
+    ) {
+        abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
+        abort_unless($request->user() instanceof User, 403);
+
+        $validated = $request->validate([
+            'reply_choice' => ['nullable', 'string', 'max:120'],
+            'reply_text' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $result = $registrationConversationService->simulateReply(
+            $bulkIntakeBatchItem,
+            trim((string) ($validated['reply_choice'] ?? '')),
+            $request->user(),
+            isset($validated['reply_text']) ? trim((string) $validated['reply_text']) : null,
+        );
+
+        $step = (string) ($result['step'] ?? '');
+        $label = $step !== '' ? str_replace('_', ' ', $step) : 'processed';
+
+        return redirect()
+            ->back()
+            ->with('success', 'Simulated registration WhatsApp reply recorded. Next step: '.$label.'.');
     }
 
     public function sendBatchWhatsAppPermission(

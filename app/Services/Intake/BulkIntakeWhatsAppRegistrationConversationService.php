@@ -8,10 +8,12 @@ use App\Models\BulkIntakeBatchItem;
 use App\Models\IntakeWhatsAppMessage;
 use App\Models\IntakeWhatsAppSession;
 use App\Models\MatrimonyProfile;
+use App\Models\User;
 use App\Services\Messaging\MetaWhatsAppCloudService;
 use App\Support\HeightDisplay;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /**
  * WhatsApp-first bulk registration conversation after summary is sent.
@@ -825,5 +827,178 @@ class BulkIntakeWhatsAppRegistrationConversationService
     private function isLiveMetaSendingEnabled(): bool
     {
         return (bool) config('whatsapp.bulk_consent_live_enabled', false);
+    }
+
+    public function isManualTestEnabled(): bool
+    {
+        return $this->registrationService->isManualWhatsAppTestEnabled();
+    }
+
+    public function canSimulateReply(BulkIntakeBatchItem $item): bool
+    {
+        if (! $this->isManualTestEnabled()) {
+            return false;
+        }
+
+        if ($this->registrationService->registrationStatus($item) === BulkIntakeRegistrationService::STATUS_REGISTRATION_COMPLETE) {
+            return false;
+        }
+
+        $status = $this->registrationService->registrationStatus($item);
+        if (! in_array($status, [BulkIntakeRegistrationService::STATUS_SUMMARY_SENT], true)) {
+            return false;
+        }
+
+        return $this->registrationSessionId($item) > 0;
+    }
+
+    public function needsFieldValueText(BulkIntakeBatchItem $item): bool
+    {
+        return $this->activeFlowStep($item) === self::STEP_AWAITING_FIELD_VALUE;
+    }
+
+    public function flowStepLabel(BulkIntakeBatchItem $item): string
+    {
+        return match ($this->activeFlowStep($item)) {
+            self::STEP_AWAITING_SUMMARY_CONFIRM => 'Summary confirm',
+            self::STEP_AWAITING_FIELD_PICK => 'Pick field to correct',
+            self::STEP_AWAITING_FIELD_VALUE => 'Type corrected value',
+            self::STEP_AWAITING_PHOTO => 'Photo step',
+            self::STEP_DEFERRED => 'Deferred (resume)',
+            self::STEP_COMPLETED => 'Completed',
+            default => 'Not started',
+        };
+    }
+
+    /**
+     * @return list<array{id: string, title: string, meta_title?: string}>
+     */
+    public function simulateButtonsForItem(BulkIntakeBatchItem $item): array
+    {
+        if (! $this->canSimulateReply($item)) {
+            return [];
+        }
+
+        $step = $this->activeFlowStep($item);
+
+        if (in_array($step, [self::STEP_AWAITING_SUMMARY_CONFIRM, self::STEP_DEFERRED], true)) {
+            return $this->registrationService->summaryInteractiveButtons();
+        }
+
+        if ($step === self::STEP_AWAITING_FIELD_PICK) {
+            return $this->fieldPickSimulateButtons($item);
+        }
+
+        if ($step === self::STEP_AWAITING_PHOTO) {
+            return $this->photoButtons();
+        }
+
+        return [];
+    }
+
+    /**
+     * @return array{processed: bool, item_id: int|null, step: string|null}
+     */
+    public function simulateReply(BulkIntakeBatchItem $item, string $replyChoice, User $actor, ?string $replyText = null): array
+    {
+        if (! $this->isManualTestEnabled()) {
+            throw ValidationException::withMessages([
+                'registration' => 'Manual WhatsApp registration simulation is disabled while live Meta sending is active.',
+            ]);
+        }
+
+        if (! $this->canSimulateReply($item)) {
+            throw ValidationException::withMessages([
+                'registration' => 'Registration summary must be sent before simulating user replies.',
+            ]);
+        }
+
+        $session = IntakeWhatsAppSession::query()->findOrFail($this->registrationSessionId($item));
+        $step = $this->activeFlowStep($item);
+
+        if ($step === self::STEP_AWAITING_FIELD_VALUE) {
+            $text = trim((string) $replyText);
+            if ($text === '') {
+                throw ValidationException::withMessages([
+                    'reply_text' => 'Enter the corrected field value to simulate the WhatsApp text reply.',
+                ]);
+            }
+
+            $result = $this->processInbound($session, $text, null);
+        } else {
+            $allowedIds = array_map(
+                fn (array $button): string => (string) ($button['id'] ?? ''),
+                $this->simulateButtonsForItem($item)
+            );
+            if (! in_array($replyChoice, $allowedIds, true)) {
+                throw ValidationException::withMessages([
+                    'reply_choice' => 'Invalid simulated registration reply choice.',
+                ]);
+            }
+
+            $button = collect($this->simulateButtonsForItem($item))->firstWhere('id', $replyChoice);
+            $buttonTitle = is_array($button) ? (string) ($button['meta_title'] ?? $button['title'] ?? $replyChoice) : $replyChoice;
+            $result = $this->processInbound($session, $buttonTitle, $replyChoice);
+        }
+
+        if (! $result['processed']) {
+            throw ValidationException::withMessages([
+                'registration' => 'Simulated registration WhatsApp reply could not be processed.',
+            ]);
+        }
+
+        $freshItem = $item->fresh();
+        $meta = is_array($freshItem?->item_meta_json) ? $freshItem->item_meta_json : [];
+        $registration = is_array($meta['registration'] ?? null) ? $meta['registration'] : [];
+        $flow = is_array($registration['whatsapp_flow'] ?? null) ? $registration['whatsapp_flow'] : [];
+        $registration['whatsapp_flow'] = array_merge($flow, [
+            'simulated_reply_by_user_id' => (int) $actor->id,
+            'simulated_reply_at' => now()->toISOString(),
+            'simulated_reply_choice' => $replyChoice !== '' ? $replyChoice : 'text_reply',
+        ]);
+        $meta['registration'] = $registration;
+        $freshItem?->forceFill(['item_meta_json' => $meta])->save();
+
+        return $result;
+    }
+
+    private function activeFlowStep(BulkIntakeBatchItem $item): string
+    {
+        $step = $this->flowStep($item);
+
+        return $step ?? self::STEP_AWAITING_SUMMARY_CONFIRM;
+    }
+
+    private function registrationSessionId(BulkIntakeBatchItem $item): int
+    {
+        $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
+        $registration = is_array($meta['registration'] ?? null) ? $meta['registration'] : [];
+
+        return (int) ($registration['intake_whatsapp_session_id'] ?? 0);
+    }
+
+    /**
+     * @return list<array{id: string, title: string, meta_title: string}>
+     */
+    private function fieldPickSimulateButtons(BulkIntakeBatchItem $item): array
+    {
+        $warningFields = $this->registrationService->warningFieldsForItem($item);
+        $fields = $warningFields !== [] ? $warningFields : $this->registrationService->summaryForItem($item)['whatsapp_fields'];
+        $buttons = [];
+
+        foreach (array_slice($fields, 0, 10) as $field) {
+            $key = (string) ($field['key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+            $label = (string) ($field['label'] ?? $key);
+            $buttons[] = [
+                'id' => 'reg_field_'.$key,
+                'title' => '✏️ '.$label.' बदला',
+                'meta_title' => $label.' बदला',
+            ];
+        }
+
+        return $buttons;
     }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\BulkIntakeBatch;
 use App\Models\BulkIntakeBatchItem;
 use App\Models\IntakeWhatsAppSession;
 use App\Models\MatrimonyProfile;
@@ -111,6 +112,36 @@ test('full edit path sends web link when user taps edit on summary', function ()
         ->first();
 
     expect($outbound?->text_body)->toContain('/register/biodata/');
+});
+
+test('registration manual share preview includes text button lines', function () {
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
+    $preview = app(BulkIntakeRegistrationService::class)->buildManualTestPreview($item);
+
+    expect($preview['share_text'])->toContain('पायरी १/४')
+        ->and($preview['share_text'])->toContain('[✅ १. हो, बरोबर]')
+        ->and($preview['share_text'])->toContain('[✏️ २. चुकीचे]')
+        ->and($preview['share_text'])->toContain('[⏰ ३. नंतर]');
+});
+
+test('admin can simulate registration summary yes reply from batch show', function () {
+    $admin = registrationAdmin();
+    $item = registrationConsentReceivedItem(registrationCompleteParsedJson());
+    $batch = \App\Models\BulkIntakeBatch::query()->findOrFail((int) $item->bulk_intake_batch_id);
+    app(BulkIntakeRegistrationService::class)->sendRegistrationSummary($item, $admin);
+
+    $this->actingAs($admin)
+        ->post(route('admin.bulk-intakes.items.simulate-registration-reply', [
+            'bulkIntakeBatch' => $batch->id,
+            'bulkIntakeBatchItem' => $item->id,
+        ]), [
+            'reply_choice' => BulkIntakeWhatsAppRegistrationConversationService::BTN_SUMMARY_OK,
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    expect(data_get($item->fresh()->item_meta_json, 'registration.whatsapp_flow.step'))
+        ->toBe(BulkIntakeWhatsAppRegistrationConversationService::STEP_AWAITING_PHOTO);
 });
 
 test('bulk registration does not replace logged-in admin session', function () {

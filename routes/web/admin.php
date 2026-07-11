@@ -651,6 +651,7 @@ Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('ad
         Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/send-whatsapp-permission', [AdminBulkIntakeController::class, 'sendItemWhatsAppPermission'])->name('items.send-whatsapp-permission');
         Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/simulate-whatsapp-consent-reply', [AdminBulkIntakeController::class, 'simulateItemWhatsAppConsentReply'])->name('items.simulate-whatsapp-consent-reply');
         Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/send-registration-summary', [AdminBulkIntakeController::class, 'sendItemRegistrationSummary'])->name('items.send-registration-summary');
+        Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/simulate-registration-reply', [AdminBulkIntakeController::class, 'simulateItemRegistrationReply'])->name('items.simulate-registration-reply');
         Route::post('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/simulate-registration-complete', [AdminBulkIntakeController::class, 'simulateItemRegistrationComplete'])->name('items.simulate-registration-complete');
         Route::post('/{bulkIntakeBatch}/send-whatsapp-permission-batch', [AdminBulkIntakeController::class, 'sendBatchWhatsAppPermission'])->name('send-whatsapp-permission-batch');
         Route::get('/{bulkIntakeBatch}/items/{bulkIntakeBatchItem}/correct-candidate', [AdminBulkIntakeController::class, 'correctCandidateForm'])->name('items.correct-candidate');

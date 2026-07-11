@@ -258,9 +258,40 @@ class BulkIntakeRegistrationService
 
     public function buildManualTestWhatsAppShareUrl(BulkIntakeBatchItem $item): string
     {
+        $preview = $this->buildManualTestPreview($item);
+
         return 'https://api.whatsapp.com/send?'.http_build_query([
-            'text' => $this->buildSummaryMessage($item),
+            'text' => $preview['share_text'],
         ]);
+    }
+
+    /**
+     * Manual WhatsApp share preview — body plus text button lines for phone UI preview.
+     *
+     * @return array{
+     *     body: string,
+     *     buttons: list<array{id: string, title: string, meta_title: string}>,
+     *     button_line: string,
+     *     share_text: string
+     * }
+     */
+    public function buildManualTestPreview(BulkIntakeBatchItem $item): array
+    {
+        $body = $this->buildSummaryMessage($item);
+        $buttons = $this->summaryInteractiveButtons();
+        $optionLines = array_map(
+            static fn (array $button): string => '['.trim((string) ($button['title'] ?? '')).']',
+            $buttons
+        );
+        $buttonBlock = implode("\n", $optionLines);
+        $shareText = $body."\n\n".$buttonBlock;
+
+        return [
+            'body' => $body,
+            'buttons' => $buttons,
+            'button_line' => $buttonBlock,
+            'share_text' => $shareText,
+        ];
     }
 
     /**
