@@ -37,27 +37,24 @@
     #galleryOrder { grid-template-columns: repeat(1, minmax(0, 1fr)) !important; }
 }
 
-/* Mobile landscape: show upload panel + gallery side-by-side, same height. */
+/* Mobile landscape: profile photo manager only (not bulk biodata registration). */
+@if (! $bulkRegistrationPhotoStep)
 @media (orientation: landscape) and (max-width: 900px) {
     #uploadManagerPage { max-width: none !important; width: 70vw !important; padding: 0 12px; }
     #uploadManagerTwoCol { display: flex; gap: 16px; align-items: stretch; }
     .upload-main-col { flex: 1; min-width: 0; }
     .upload-gallery-col { flex: 1; min-width: 0; margin-top: 0 !important; }
-    /* Avoid inner scrollbars; let the page scroll naturally. */
     .upload-main-col, .upload-gallery-col { max-height: none; overflow: visible; }
 }
 
-/* Fallback for browsers that do not reliably expose `orientation`. */
 @media (max-width: 900px) and (min-aspect-ratio: 1/1) {
     #uploadManagerPage { max-width: none !important; width: 70vw !important; padding: 0 12px; }
     #uploadManagerTwoCol { display: flex; gap: 16px; align-items: stretch; }
     .upload-main-col { flex: 1; min-width: 0; }
     .upload-gallery-col { flex: 1; min-width: 0; margin-top: 0 !important; }
-    /* Avoid inner scrollbars; let the page scroll naturally. */
     .upload-main-col, .upload-gallery-col { max-height: none; overflow: visible; }
 }
 
-/* Fallback: browsers that do not expose reliable orientation. */
 body.upload-landscape #uploadManagerPage {
     max-width: none !important;
     width: 70vw !important;
@@ -85,14 +82,41 @@ body.upload-landscape .upload-gallery-col {
     max-height: none;
     overflow: visible;
 }
+@endif
 
 @if ($bulkRegistrationPhotoStep)
-#uploadManagerPage { max-width: 100% !important; width: 100% !important; padding: 0 4px; box-sizing: border-box; }
-.upload-main-col { overflow: hidden; max-width: 100%; box-sizing: border-box; word-break: break-word; }
+.bulk-registration-photo-step {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    box-sizing: border-box;
+}
+.bulk-registration-photo-step #uploadManagerPage,
+body.upload-landscape .bulk-registration-photo-step #uploadManagerPage {
+    max-width: 520px !important;
+    width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding: 0 !important;
+    box-sizing: border-box;
+}
+.bulk-registration-photo-step #uploadManagerTwoCol {
+    display: block !important;
+}
+.bulk-registration-photo-step .upload-main-col {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+}
+.bulk-registration-photo-step #cropperWrap,
+.bulk-registration-photo-step #cropperWrap .cropper-container {
+    max-width: 100% !important;
+    width: min(320px, 100%) !important;
+}
 @endif
 </style>
 
-<div style="min-height: 80vh; background: linear-gradient(135deg, #fdf2f8 0%, #f5f3ff 50%, #eff6ff 100%); padding: 40px 16px;">
+<div @if ($bulkRegistrationPhotoStep) class="bulk-registration-photo-step" style="width: 100%; max-width: 100%; overflow-x: hidden; box-sizing: border-box;" @else style="min-height: 80vh; background: linear-gradient(135deg, #fdf2f8 0%, #f5f3ff 50%, #eff6ff 100%); padding: 40px 16px;" @endif>
     @if (!empty($fromOnboarding))
         <div style="max-width: 520px; margin: 0 auto 16px auto; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
             <a href="{{ route('matrimony.onboarding.show', ['step' => 4]) }}"
