@@ -282,7 +282,7 @@ class BulkIntakeWhatsAppConsentService
 
         return implode("\n\n", [
             "नमस्कार! 'नवरी मिळे नवऱ्याला विवाहसंस्था' परिवारात आपले स्वागत आहे. ✨",
-            'तुमच्या '.$relativePhrase.' बायोडाटा आमच्याकडे आला आहे. '
+            $relativePhrase.' बायोडाटा आमच्याकडे आला आहे. '
             .$pronouns['possessive'].' शिक्षण आणि अपेक्षेला अनुरूप अशी अनेक उत्तम स्थळे आमच्याकडे उपलब्ध आहेत. '
             .$pronouns['dative'].' अनुरुप स्थळे शोधण्यात मदत करणे ही आमच्यासाठी आनंदाची गोष्ट असेल. '
             .'आम्ही तुम्हाला काही चांगली स्थळे पाठवण्यास सुरुवात करू का?',
@@ -702,9 +702,9 @@ class BulkIntakeWhatsAppConsentService
     private function relativePhrase(string $gender): string
     {
         return match (strtolower(trim($gender))) {
-            'male', 'पुरुष', 'm' => 'लाडक्या मुलाचा (चिरंजीवांचा)',
-            'female', 'स्त्री', 'f' => 'लाडक्या मुलीचा (चिरंजीवांचा)',
-            default => 'लाडक्या चिरंजीवांचा',
+            'male', 'पुरुष', 'm' => 'आपल्या चिरंजीवाचा',
+            'female', 'स्त्री', 'f' => 'आपल्या कन्येचा',
+            default => 'आपल्या चिरंजीवाचा',
         };
     }
 
