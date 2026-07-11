@@ -31,6 +31,7 @@ class BulkIntakeEligibilityService
 
     public function __construct(
         private readonly BulkIntakeCandidateDisplayService $candidateDisplayService,
+        private readonly BulkIntakeCandidateContactPlanService $contactPlanService,
         private readonly BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService,
         private readonly BulkIntakeDuplicateGateService $duplicateGateService,
         private readonly IntakeDuplicateFieldMatchEvaluator $fieldMatchEvaluator,
@@ -151,7 +152,7 @@ class BulkIntakeEligibilityService
             $bucket = $this->overrideStatusToBucket((string) ($manualReview['status'] ?? ''));
             $reasonCodes = [(string) ($manualReview['reason_key'] ?? 'admin_override')];
             $eligible = $bucket === self::FILTER_ELIGIBLE
-                && $this->hasUsableMobile($candidate)
+                && $this->contactPlanService->hasUsableMobile($item)
                 && $this->hasBasicIdentity($candidate);
 
             if ($bucket === self::FILTER_ELIGIBLE && ! $eligible) {
@@ -212,7 +213,7 @@ class BulkIntakeEligibilityService
         }
 
         $needsCheckCodes = [];
-        if (! $this->hasUsableMobile($candidate)) {
+        if (! $this->contactPlanService->hasUsableMobile($item)) {
             $needsCheckCodes[] = 'missing_mobile';
         }
         if (! $this->hasBasicIdentity($candidate)) {
@@ -445,7 +446,7 @@ class BulkIntakeEligibilityService
             $reasons[] = 'manual_duplicate';
         }
 
-        if (! $this->hasUsableMobile($candidate)) {
+        if (! $this->contactPlanService->hasUsableMobile($item)) {
             $reasons[] = 'missing_mobile';
         }
 
@@ -631,14 +632,6 @@ class BulkIntakeEligibilityService
         $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
 
         return (string) data_get($meta, 'duplicate_review.status') === 'manual_duplicate';
-    }
-
-    /**
-     * @param  array<string, mixed>  $candidate
-     */
-    private function hasUsableMobile(array $candidate): bool
-    {
-        return MobileNumber::normalize($candidate['mobile'] ?? null) !== null;
     }
 
     /**

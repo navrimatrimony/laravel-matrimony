@@ -66,7 +66,7 @@ test('no reply marks no response history', function () {
     $service->markNoResponse($item->fresh());
 
     $item->refresh();
-    expect($service->consentStatus($item))->toBe(BulkIntakeWhatsAppConsentService::STATUS_NO_RESPONSE);
+    expect($service->consentStatus($item))->toBe(BulkIntakeWhatsAppConsentService::STATUS_CONTACTS_EXHAUSTED);
 
     $history = BulkIntakeIdentityHistory::query()
         ->where('reason_code', BulkIntakeIdentityHistory::REASON_NO_RESPONSE)

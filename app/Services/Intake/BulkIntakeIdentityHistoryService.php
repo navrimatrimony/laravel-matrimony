@@ -6,6 +6,7 @@ use App\Models\BiodataIntake;
 use App\Models\BulkIntakeBatchItem;
 use App\Models\BulkIntakeIdentityHistory;
 use App\Models\User;
+use App\Support\MobileNumber;
 
 class BulkIntakeIdentityHistoryService
 {
@@ -128,14 +129,16 @@ class BulkIntakeIdentityHistoryService
         string $reasonCode,
         string $sourceType,
         ?User $actor = null,
-        ?string $note = null
+        ?string $note = null,
+        ?string $normalizedMobile = null,
     ): BulkIntakeIdentityHistory {
         $identity = $this->identityKeysFromItem($item);
         $intakeId = $item->biodata_intake_id ? (int) $item->biodata_intake_id : null;
+        $mobile = MobileNumber::normalize($normalizedMobile) ?? ($identity['mobiles'][0] ?? null);
 
         return BulkIntakeIdentityHistory::query()->create([
             'reason_code' => $reasonCode,
-            'normalized_mobile' => $identity['mobiles'][0] ?? null,
+            'normalized_mobile' => $mobile,
             'normalized_name' => $identity['name'],
             'normalized_dob' => $identity['dob'],
             'normalized_gender' => $identity['gender'],

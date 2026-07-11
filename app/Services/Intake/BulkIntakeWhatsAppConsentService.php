@@ -26,6 +26,8 @@ class BulkIntakeWhatsAppConsentService
 
     public const STATUS_NO_RESPONSE = 'no_response';
 
+    public const STATUS_CONTACTS_EXHAUSTED = 'contacts_exhausted';
+
     public const REPLY_YES = 'yes';
 
     public const REPLY_NO = 'no';
@@ -41,13 +43,22 @@ class BulkIntakeWhatsAppConsentService
         self::STATUS_CONSENT_RECEIVED,
         self::STATUS_CONSENT_DENIED,
         self::STATUS_ALREADY_MARRIED,
-        self::STATUS_WRONG_NUMBER,
-        self::STATUS_NO_RESPONSE,
+        self::STATUS_CONTACTS_EXHAUSTED,
+    ];
+
+    /**
+     * Statuses that block a new send until the contact queue advances.
+     *
+     * @var list<string>
+     */
+    public const AWAITING_REPLY_STATUSES = [
+        self::STATUS_PERMISSION_SENT,
     ];
 
     public function __construct(
         private readonly BulkIntakeEligibilityService $eligibilityService,
         private readonly BulkIntakeCandidateDisplayService $candidateDisplayService,
+        private readonly BulkIntakeCandidateContactPlanService $contactPlanService,
         private readonly BulkIntakeIdentityHistoryService $identityHistoryService,
         private readonly BulkIntakeWhatsAppConsentSender $sender,
     ) {}
@@ -84,12 +95,13 @@ class BulkIntakeWhatsAppConsentService
         }
 
         $status = $this->consentStatus($item);
-        if ($status === self::STATUS_PERMISSION_SENT) {
+        if (in_array($status, self::AWAITING_REPLY_STATUSES, true)) {
             $reasons[] = 'permission_already_sent';
         } elseif ($status !== null && in_array($status, self::TERMINAL_STATUSES, true)) {
             $reasons[] = 'consent_already_finalized';
         }
 
+        $this->contactPlanService->syncForItem($item);
         $mobile = $this->recipientMobile($item);
         if ($mobile === null) {
             $reasons[] = 'missing_mobile';
@@ -209,21 +221,23 @@ class BulkIntakeWhatsAppConsentService
             return;
         }
 
-        $this->persistConsentStatus(
-            $item,
-            self::STATUS_NO_RESPONSE,
-            null,
-            null,
-            'No WhatsApp response before expiry.'
-        );
+        $sentMobile = $this->lastSentMobile($item);
+        $this->recordAttemptHistory($item, BulkIntakeIdentityHistory::REASON_NO_RESPONSE, 'WhatsApp permission message had no response.', $sentMobile, $actor);
 
-        $this->identityHistoryService->recordForItem(
-            $item->fresh(),
-            BulkIntakeIdentityHistory::REASON_NO_RESPONSE,
-            BulkIntakeIdentityHistory::SOURCE_WHATSAPP_REPLY,
-            $actor,
-            'WhatsApp permission message had no response.'
-        );
+        $advance = $this->contactPlanService->advanceAfterAttemptFailure($item, self::STATUS_NO_RESPONSE);
+        if ($advance['exhausted']) {
+            $this->persistConsentStatus(
+                $item,
+                self::STATUS_CONTACTS_EXHAUSTED,
+                null,
+                null,
+                'All consent contacts exhausted after no response.'
+            );
+
+            return;
+        }
+
+        $this->clearConsentForNextContact($item, self::STATUS_NO_RESPONSE);
     }
 
     /**
@@ -421,8 +435,9 @@ class BulkIntakeWhatsAppConsentService
             self::STATUS_CONSENT_RECEIVED => 'Consent received',
             self::STATUS_CONSENT_DENIED => 'Consent denied',
             self::STATUS_ALREADY_MARRIED => 'Already married',
-            self::STATUS_WRONG_NUMBER => 'Wrong number',
-            self::STATUS_NO_RESPONSE => 'No response',
+            self::STATUS_WRONG_NUMBER => 'Wrong number (retrying next contact)',
+            self::STATUS_NO_RESPONSE => 'No response (retrying next contact)',
+            self::STATUS_CONTACTS_EXHAUSTED => 'All contacts exhausted',
             default => str_replace('_', ' ', $status),
         };
     }
@@ -512,13 +527,29 @@ class BulkIntakeWhatsAppConsentService
                 $this->recordBlockingReplyHistory($item, BulkIntakeIdentityHistory::REASON_ALREADY_MARRIED, $note);
                 $this->markSessionConsent($session, IntakeWhatsAppSession::CONSENT_DENIED);
             }),
-            self::REPLY_WRONG_NUMBER => tap(self::STATUS_WRONG_NUMBER, function () use ($item, $note, $session): void {
-                $this->persistConsentStatus($item, self::STATUS_WRONG_NUMBER, self::REPLY_WRONG_NUMBER, $session, $note);
-                $this->recordBlockingReplyHistory($item, BulkIntakeIdentityHistory::REASON_WRONG_NUMBER, $note);
-                $this->markSessionConsent($session, IntakeWhatsAppSession::CONSENT_DENIED);
-            }),
+            self::REPLY_WRONG_NUMBER => $this->handleWrongNumberReply($item, $note, $session),
             default => $this->consentStatus($item) ?? self::STATUS_PERMISSION_SENT,
         };
+    }
+
+    private function handleWrongNumberReply(
+        BulkIntakeBatchItem $item,
+        string $note,
+        IntakeWhatsAppSession $session,
+    ): string {
+        $sentMobile = $this->lastSentMobile($item);
+        $this->recordAttemptHistory($item, BulkIntakeIdentityHistory::REASON_WRONG_NUMBER, $note, $sentMobile, null);
+        $this->markSessionConsent($session, IntakeWhatsAppSession::CONSENT_DENIED);
+        $advance = $this->contactPlanService->advanceAfterAttemptFailure($item, self::STATUS_WRONG_NUMBER);
+        if ($advance['exhausted']) {
+            $this->persistConsentStatus($item, self::STATUS_CONTACTS_EXHAUSTED, self::REPLY_WRONG_NUMBER, $session, $note);
+
+            return self::STATUS_CONTACTS_EXHAUSTED;
+        }
+
+        $this->clearConsentForNextContact($item, self::STATUS_WRONG_NUMBER);
+
+        return (string) ($this->consentStatus($item->fresh()) ?? self::STATUS_WRONG_NUMBER);
     }
 
     private function recordBlockingReplyHistory(BulkIntakeBatchItem $item, string $reasonCode, string $note): void
@@ -561,6 +592,7 @@ class BulkIntakeWhatsAppConsentService
         $meta['whatsapp_consent'] = [
             'status' => self::STATUS_PERMISSION_SENT,
             'sent_at' => now()->toISOString(),
+            'sent_to_mobile' => $this->recipientMobile($item),
             'sent_by_user_id' => (int) $actor->id,
             'reply_at' => null,
             'reply_choice' => null,
@@ -626,10 +658,45 @@ class BulkIntakeWhatsAppConsentService
 
     private function recipientMobile(BulkIntakeBatchItem $item): ?string
     {
-        $candidate = $this->candidateDisplayService->candidateForItem($item);
-        $mobile = MobileNumber::normalize((string) ($candidate['mobile'] ?? ''));
+        return $this->contactPlanService->activeMobile($item);
+    }
 
-        return $mobile;
+    private function lastSentMobile(BulkIntakeBatchItem $item): ?string
+    {
+        $mobile = MobileNumber::normalize((string) ($this->consentPayload($item)['sent_to_mobile'] ?? ''));
+
+        return $mobile ?? $this->recipientMobile($item);
+    }
+
+    private function recordAttemptHistory(
+        BulkIntakeBatchItem $item,
+        string $reasonCode,
+        string $note,
+        ?string $mobile,
+        ?User $actor,
+    ): void {
+        $this->identityHistoryService->recordForItem(
+            $item,
+            $reasonCode,
+            BulkIntakeIdentityHistory::SOURCE_WHATSAPP_REPLY,
+            $actor,
+            $note,
+            $mobile,
+        );
+    }
+
+    private function clearConsentForNextContact(BulkIntakeBatchItem $item, string $lastOutcome): void
+    {
+        $item->refresh();
+        $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
+        $existing = is_array($meta['whatsapp_consent'] ?? null) ? $meta['whatsapp_consent'] : [];
+        unset($existing['status'], $existing['intake_whatsapp_session_id'], $existing['intake_whatsapp_message_id'], $existing['provider_message_id']);
+        $meta['whatsapp_consent'] = array_merge($existing, [
+            'last_outcome' => $lastOutcome,
+            'last_outcome_at' => now()->toISOString(),
+            'awaiting_next_contact' => true,
+        ]);
+        $item->forceFill(['item_meta_json' => $meta])->save();
     }
 
     private function relativePhrase(string $gender): string

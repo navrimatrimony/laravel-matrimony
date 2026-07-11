@@ -35,6 +35,7 @@
     $readyForConsentByItemId = is_array($readyForConsentByItemId ?? null) ? $readyForConsentByItemId : [];
     $readyCount = (int) ($readyCount ?? 0);
     $whatsappConsentByItemId = is_array($whatsappConsentByItemId ?? null) ? $whatsappConsentByItemId : [];
+    $contactPlanByItemId = is_array($contactPlanByItemId ?? null) ? $contactPlanByItemId : [];
     $whatsappEligibleToSendCount = (int) ($whatsappEligibleToSendCount ?? 0);
     $whatsappManualTestEnabled = (bool) ($whatsappManualTestEnabled ?? false);
     $whatsappSendModeLabel = (string) ($whatsappSendModeLabel ?? '');
@@ -327,6 +328,7 @@
                                 };
                                 $pipelineReasons = is_array($pipeline['reasons'] ?? null) ? array_slice($pipeline['reasons'], 0, 2) : [];
                                 $whatsappConsent = is_array($whatsappConsentByItemId[$item->id] ?? null) ? $whatsappConsentByItemId[$item->id] : [];
+                                $contactPlan = is_array($contactPlanByItemId[$item->id] ?? null) ? $contactPlanByItemId[$item->id] : [];
                                 $whatsappConsentStatus = (string) ($whatsappConsent['status'] ?? '');
                                 $whatsappConsentLabel = (string) ($whatsappConsent['status_label'] ?? '');
                                 $canSendWhatsAppPermission = (bool) data_get($whatsappConsent, 'can_send.allowed', false);
@@ -361,6 +363,7 @@
                                     \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_ALREADY_MARRIED,
                                     \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_WRONG_NUMBER,
                                     \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_NO_RESPONSE => 'border-red-300 bg-red-100 text-red-900',
+                                    \App\Services\Intake\BulkIntakeWhatsAppConsentService::STATUS_CONTACTS_EXHAUSTED => 'border-red-300 bg-red-100 text-red-900',
                                     default => 'border-gray-200 bg-gray-50 text-gray-700',
                                 };
                                 $manualDuplicateReview = is_array(data_get($itemMeta, 'duplicate_review')) ? data_get($itemMeta, 'duplicate_review') : [];
@@ -481,6 +484,22 @@
                                         <span class="ml-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">review</span>
                                     @endif
                                     <span class="block text-xs text-gray-500">Mobile: {{ $candidate['mobile'] ?? $missingDisplay }}</span>
+                                    @if (!empty($contactPlan['active_mobile']))
+                                        <span data-testid="bulk-contact-plan-active" class="mt-1 block text-[11px] text-sky-800">
+                                            WhatsApp queue: {{ $contactPlan['active_mobile'] }}
+                                            @if (!empty($contactPlan['active_role_label']))
+                                                ({{ $contactPlan['active_role_label'] }})
+                                            @endif
+                                            @if (($contactPlan['queue_total'] ?? 0) > 1)
+                                                — {{ $contactPlan['active_position'] ?? 0 }}/{{ $contactPlan['queue_total'] }}
+                                            @endif
+                                        </span>
+                                    @endif
+                                    @if (($contactPlan['suchak_count'] ?? 0) > 0)
+                                        <span data-testid="bulk-suchak-directory-count" class="mt-1 block text-[11px] text-violet-800">
+                                            Suchak reference: {{ $contactPlan['suchak_count'] }} (not messaged)
+                                        </span>
+                                    @endif
                                 </td>
                                 <td class="px-4 py-2 text-sm text-gray-700">
                                     <span class="font-medium">{{ $candidate['date_of_birth'] ?? $missingDisplay }}</span>

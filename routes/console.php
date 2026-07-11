@@ -27,6 +27,12 @@ Schedule::call(function (): void {
     app(MonitoringService::class)->evaluateAlerts();
 })->everyMinute()->name('payments:evaluate-alerts');
 
+Schedule::command('bulk-intake:whatsapp-consent-no-response')
+    ->hourly()
+    ->name('bulk-intake-whatsapp-consent-no-response')
+    ->withoutOverlapping(30)
+    ->onOneServer();
+
 /*
 | Phase 4+ productionization governance schedules (deterministic, lock-safe).
 */

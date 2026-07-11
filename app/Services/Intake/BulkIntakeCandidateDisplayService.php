@@ -42,7 +42,7 @@ class BulkIntakeCandidateDisplayService
      */
     public function candidateForItem(BulkIntakeBatchItem $item): array
     {
-        return $this->candidateForIntake($this->intakeForDisplay($item));
+        return $this->candidateForIntake($this->intakeForDisplay($item), $item);
     }
 
     /**
@@ -70,7 +70,7 @@ class BulkIntakeCandidateDisplayService
      *     display_warnings: list<string>
      * }
      */
-    public function candidateForIntake(?BiodataIntake $intake): array
+    public function candidateForIntake(?BiodataIntake $intake, ?BulkIntakeBatchItem $item = null): array
     {
         $parsed = is_array($intake?->parsed_json) ? $intake->parsed_json : [];
         $reviewed = is_array($intake?->approval_snapshot_json) ? $intake->approval_snapshot_json : [];
@@ -88,7 +88,7 @@ class BulkIntakeCandidateDisplayService
 
         $result = [
             'full_name' => $name['value'],
-            'mobile' => $this->mobileDisplay($display, $intake),
+            'mobile' => $this->mobileForDisplay($item, $display, $intake),
             'date_of_birth' => $dobAge['date_of_birth'],
             'age' => $dobAge['age'],
             'height' => $height['value'],
@@ -462,6 +462,21 @@ class BulkIntakeCandidateDisplayService
         }
 
         return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $parsed
+     */
+    private function mobileForDisplay(?BulkIntakeBatchItem $item, array $parsed, ?BiodataIntake $intake): ?string
+    {
+        if ($item instanceof BulkIntakeBatchItem) {
+            $list = app(BulkIntakeCandidateContactPlanService::class)->consentMobileDisplayList($item);
+            if ($list !== []) {
+                return implode(', ', $list);
+            }
+        }
+
+        return $this->mobileDisplay($parsed, $intake);
     }
 
     /**

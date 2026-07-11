@@ -13,6 +13,7 @@ class BulkIntakeCandidateScreeningAdvisorService
         private readonly BulkIntakeCandidateDisplayService $candidateDisplayService,
         private readonly BulkIntakeDuplicateHistoryHintService $duplicateHistoryHintService,
         private readonly BulkIntakeDuplicateGateService $duplicateGateService,
+        private readonly BulkIntakeCandidateContactPlanService $contactPlanService,
     ) {}
 
     /**
@@ -72,7 +73,11 @@ class BulkIntakeCandidateScreeningAdvisorService
 
         $mobile = $this->snapshotMobile($snapshot);
         if ($mobile['raw'] === null) {
-            $reviewCodes[] = 'missing_mobile';
+            if ($this->contactPlanService->hasUsableMobile($item)) {
+                $eligibleCodes[] = 'valid_mobile';
+            } else {
+                $reviewCodes[] = 'missing_mobile';
+            }
         } elseif ($mobile['normalized'] === null) {
             $stopCodes[] = 'invalid_mobile';
         } else {

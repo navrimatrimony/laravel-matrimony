@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\EducationService;
 use App\Services\Intake\BulkIntakeApplyPreviewService;
 use App\Services\Intake\BulkIntakeBatchService;
+use App\Services\Intake\BulkIntakeCandidateContactPlanService;
 use App\Services\Intake\BulkIntakeCandidateCorrectionService;
 use App\Services\Intake\BulkIntakeCandidateDisplayService;
 use App\Services\Intake\BulkIntakeEligibilityService;
@@ -137,6 +138,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeDuplicateGateService $duplicateGateService,
         BulkIntakeProgressPresenter $progressPresenter,
         BulkIntakeWhatsAppConsentService $whatsappConsentService,
+        BulkIntakeCandidateContactPlanService $contactPlanService,
         BulkIntakeRegistrationService $registrationService,
     )
     {
@@ -255,6 +257,11 @@ class AdminBulkIntakeController extends Controller
         $whatsappEligibleToSendCount = collect($whatsappConsentByItemId)
             ->filter(fn (array $consent): bool => (bool) ($consent['can_send']['allowed'] ?? false))
             ->count();
+        $contactPlanByItemId = $statusFilteredItems
+            ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
+                (int) $item->id => $contactPlanService->adminSummary($item),
+            ])
+            ->all();
         $registrationByItemId = $statusFilteredItems
             ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
                 (int) $item->id => [
@@ -301,6 +308,7 @@ class AdminBulkIntakeController extends Controller
             'readyForConsentByItemId' => $readyForConsentByItemId,
             'readyCount' => $readyCount,
             'whatsappConsentByItemId' => $whatsappConsentByItemId,
+            'contactPlanByItemId' => $contactPlanByItemId,
             'whatsappEligibleToSendCount' => $whatsappEligibleToSendCount,
             'whatsappManualTestEnabled' => $manualWhatsAppTestEnabled,
             'whatsappSendModeLabel' => $whatsappConsentService->sendModeLabel(),
