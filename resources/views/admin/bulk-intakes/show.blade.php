@@ -31,10 +31,8 @@
     $duplicateGateByItemId = $duplicateGateByItemId ?? [];
     $duplicateVerificationByItemId = $duplicateVerificationByItemId ?? [];
     $pipelineByItemId = $pipelineByItemId ?? [];
-    $screeningByItemId = $screeningByItemId ?? [];
     $screeningReviewByItemId = $screeningReviewByItemId ?? [];
-    $readyForConsentByItemId = is_array($readyForConsentByItemId ?? null) ? $readyForConsentByItemId : [];
-    $readyCount = (int) ($readyCount ?? 0);
+    $eligiblePipelineCount = (int) ($eligiblePipelineCount ?? 0);
     $whatsappConsentByItemId = is_array($whatsappConsentByItemId ?? null) ? $whatsappConsentByItemId : [];
     $contactPlanByItemId = is_array($contactPlanByItemId ?? null) ? $contactPlanByItemId : [];
     $whatsappEligibleToSendCount = (int) ($whatsappEligibleToSendCount ?? 0);
@@ -43,8 +41,6 @@
     $registrationByItemId = is_array($registrationByItemId ?? null) ? $registrationByItemId : [];
     $screeningFilter = (string) ($screeningFilter ?? 'all');
     $primaryScreeningFilters = is_array($primaryScreeningFilters ?? null) ? $primaryScreeningFilters : [];
-    $legacyScreeningFilters = is_array($legacyScreeningFilters ?? null) ? $legacyScreeningFilters : [];
-    $screeningFilters = is_array($screeningFilters ?? null) ? $screeningFilters : array_merge($primaryScreeningFilters, $legacyScreeningFilters);
     $screeningCounts = is_array($screeningCounts ?? null) ? $screeningCounts : [];
     $statusFilter = (string) ($statusFilter ?? 'all');
     $statusFilters = is_array($statusFilters ?? null) ? $statusFilters : [];
@@ -176,11 +172,11 @@
             <div class="flex flex-wrap items-center gap-3">
                 <h2 class="text-lg font-semibold text-gray-900">Items</h2>
                 <span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
-                    <span data-testid="bulk-ready-for-consent-count">{{ $readyCount }}</span>
-                    {{ $readyCount === 1 ? 'candidate ready' : 'candidates ready' }}
-                    <a href="{{ $buildShowUrl($batch, $statusFilter, 'ready', $highlightItemId > 0 ? $highlightItemId : null) }}"
-                       data-testid="bulk-ready-for-consent-view-queue"
-                       class="text-emerald-900 underline hover:no-underline">View queue</a>
+                    <span data-testid="bulk-eligible-pipeline-count">{{ $eligiblePipelineCount }}</span>
+                    {{ $eligiblePipelineCount === 1 ? 'eligible for WhatsApp' : 'eligible for WhatsApp' }}
+                    <a href="{{ $buildShowUrl($batch, $statusFilter, 'eligible', $highlightItemId > 0 ? $highlightItemId : null) }}"
+                       data-testid="bulk-eligible-pipeline-view"
+                       class="text-emerald-900 underline hover:no-underline">View eligible</a>
                 </span>
             </div>
             <div class="flex flex-wrap gap-2">
@@ -194,7 +190,7 @@
             </div>
         </div>
 
-        <div class="mt-3 flex flex-col gap-3" data-testid="bulk-ready-for-consent-summary-card">
+        <div class="mt-3 flex flex-col gap-3" data-testid="bulk-eligibility-summary-card">
             <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Eligibility gate</p>
             <div class="flex flex-wrap items-center gap-2" data-testid="bulk-screening-filter-pills">
                 @foreach ($primaryScreeningFilters as $key => $label)
@@ -212,18 +208,6 @@
                     </a>
                 @endif
             </div>
-            @if ($legacyScreeningFilters !== [])
-                <div class="flex flex-wrap items-center gap-2" data-testid="bulk-screening-legacy-filter-pills">
-                    <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">More filters</span>
-                    @foreach ($legacyScreeningFilters as $key => $label)
-                        <a href="{{ $buildShowUrl($batch, $statusFilter, $key, $highlightItemId > 0 ? $highlightItemId : null) }}"
-                           data-testid="bulk-screening-filter-{{ $key }}"
-                           class="rounded-full border border-dashed px-3 py-1 text-xs font-semibold {{ $screeningFilter === $key ? 'border-indigo-600 bg-indigo-50 text-indigo-800' : 'border-gray-300 bg-white text-gray-600 hover:border-indigo-300 hover:text-indigo-700' }}">
-                            {{ $label }} ({{ (int) ($screeningCounts[$key] ?? 0) }})
-                        </a>
-                    @endforeach
-                </div>
-            @endif
         </div>
         <p class="mt-2 text-xs text-gray-500">Candidate fields appear after free parse. Manual transcript only if OCR/free parse fails.</p>
 
@@ -278,44 +262,8 @@
                                     'occupation_needs_review' => false,
                                     'display_warnings' => [],
                                 ];
-                                $screening = is_array($screeningByItemId[$item->id] ?? null) ? $screeningByItemId[$item->id] : [
-                                    'decision' => 'review',
-                                    'label' => 'Needs review',
-                                    'reasons' => [
-                                        ['code' => 'parsed_json_missing', 'label' => 'Parsed JSON missing'],
-                                    ],
-                                    'suggested_next_action' => 'Review: Parser output is not ready.',
-                                ];
-                                $screeningDecision = (string) ($screening['decision'] ?? 'review');
-                                $screeningBadgeClass = match ($screeningDecision) {
-                                    'eligible' => 'border-emerald-200 bg-emerald-50 text-emerald-700',
-                                    'stop' => 'border-red-200 bg-red-50 text-red-700',
-                                    default => 'border-amber-200 bg-amber-50 text-amber-800',
-                                };
-                                $screeningReasonChipClass = match ($screeningDecision) {
-                                    'eligible' => 'border-emerald-100 bg-white text-emerald-700',
-                                    'stop' => 'border-red-100 bg-white text-red-700',
-                                    default => 'border-amber-100 bg-white text-amber-800',
-                                };
-                                $screeningReasons = is_array($screening['reasons'] ?? null) ? array_slice($screening['reasons'], 0, 2) : [];
                                 $manualScreeningReview = is_array($screeningReviewByItemId[$item->id] ?? null) ? $screeningReviewByItemId[$item->id] : null;
                                 $manualScreeningActive = $manualScreeningReview !== null;
-                                $manualScreeningStatus = (string) ($manualScreeningReview['status'] ?? '');
-                                $readyForConsent = is_array($readyForConsentByItemId[$item->id] ?? null)
-                                    ? $readyForConsentByItemId[$item->id]
-                                    : ['ready' => false, 'reasons' => []];
-                                $isReadyForConsent = (bool) ($readyForConsent['ready'] ?? false);
-                                $manualScreeningLabel = match ($manualScreeningStatus) {
-                                    'eligible_for_consent' => 'Override: Eligible',
-                                    'needs_review' => 'Override: Needs check',
-                                    'stopped' => 'Override: Blocked',
-                                    default => 'Override',
-                                };
-                                $manualScreeningBadgeClass = match ($manualScreeningStatus) {
-                                    'eligible_for_consent' => 'border-emerald-300 bg-emerald-100 text-emerald-800',
-                                    'stopped' => 'border-red-300 bg-red-100 text-red-800',
-                                    default => 'border-amber-300 bg-amber-100 text-amber-900',
-                                };
                                 $duplicateHints = is_array($duplicateHintsByItemId[$item->id] ?? null) ? $duplicateHintsByItemId[$item->id] : [];
                                 $duplicateVerification = is_array($duplicateVerificationByItemId[$item->id] ?? null) ? $duplicateVerificationByItemId[$item->id] : [];
                                 $duplicateGate = is_array($duplicateGateByItemId[$item->id] ?? null) ? $duplicateGateByItemId[$item->id] : [];
@@ -332,19 +280,6 @@
                                     default => 'border-amber-300 bg-amber-100 text-amber-900',
                                 };
                                 $pipelineReasons = is_array($pipeline['reasons'] ?? null) ? array_slice($pipeline['reasons'], 0, 2) : [];
-                                $advisorPositiveReasonCodes = [
-                                    'valid_mobile',
-                                    'basic_fields_present',
-                                    'no_duplicate_hint',
-                                    'no_manual_duplicate',
-                                    'age_in_range_or_dob_missing_but_not_blocked',
-                                ];
-                                $autoScreeningAlignsWithPipeline = ! $manualScreeningActive && (
-                                    ($pipelineBucket === 'eligible' && $screeningDecision === 'eligible')
-                                    || ($pipelineBucket === 'needs_check' && $screeningDecision === 'review')
-                                    || ($pipelineBucket === 'blocked' && $screeningDecision === 'stop')
-                                );
-                                $showAutoScreeningBadge = ! $manualScreeningActive && ! $autoScreeningAlignsWithPipeline;
                                 $visiblePipelineReasons = array_values(array_filter(
                                     $pipelineReasons,
                                     static function (array $reason) use ($pipelineBucket): bool {
@@ -353,18 +288,6 @@
                                         return ! ($pipelineBucket === 'eligible' && $code === 'pipeline_ready');
                                     },
                                 ));
-                                $visibleScreeningReasons = $manualScreeningActive
-                                    ? array_values(array_filter(
-                                        $screeningReasons,
-                                        static function (array $reason) use ($manualScreeningStatus, $advisorPositiveReasonCodes): bool {
-                                            if ($manualScreeningStatus !== 'eligible_for_consent') {
-                                                return true;
-                                            }
-
-                                            return ! in_array((string) ($reason['code'] ?? ''), $advisorPositiveReasonCodes, true);
-                                        },
-                                    ))
-                                    : ($showAutoScreeningBadge ? $screeningReasons : []);
                                 $whatsappConsent = is_array($whatsappConsentByItemId[$item->id] ?? null) ? $whatsappConsentByItemId[$item->id] : [];
                                 $contactPlan = is_array($contactPlanByItemId[$item->id] ?? null) ? $contactPlanByItemId[$item->id] : [];
                                 $whatsappConsentStatus = (string) ($whatsappConsent['status'] ?? '');
@@ -635,22 +558,6 @@
                                         @foreach ($visiblePipelineReasons as $pipelineReason)
                                             <span data-testid="bulk-pipeline-reason" class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ $pipelineReason['label'] ?? str_replace('_', ' ', (string) ($pipelineReason['code'] ?? '')) }}</span>
                                         @endforeach
-                                        @if ($manualScreeningActive)
-                                            <span data-testid="bulk-manual-screening-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $manualScreeningBadgeClass }}">{{ $manualScreeningLabel }}</span>
-                                            @foreach ($visibleScreeningReasons as $screeningReason)
-                                                <span data-testid="bulk-screening-advisor-hint" class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ $screeningReason['label'] ?? str_replace('_', ' ', (string) ($screeningReason['code'] ?? 'review')) }}</span>
-                                            @endforeach
-                                        @elseif ($showAutoScreeningBadge)
-                                            <span data-testid="bulk-screening-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $screeningBadgeClass }}">{{ $screening['label'] ?? 'Needs review' }}</span>
-                                            @foreach ($visibleScreeningReasons as $screeningReason)
-                                                <span data-testid="bulk-screening-reason" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $screeningReasonChipClass }}">{{ $screeningReason['label'] ?? str_replace('_', ' ', (string) ($screeningReason['code'] ?? 'review')) }}</span>
-                                            @endforeach
-                                        @endif
-                                        @if ($isReadyForConsent)
-                                            <span data-testid="bulk-ready-for-consent-badge" class="rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">Ready for Consent</span>
-                                        @elseif ($manualScreeningActive && $manualScreeningStatus === 'eligible_for_consent')
-                                            <span data-testid="bulk-not-ready-for-consent-hint" class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-500">Not ready</span>
-                                        @endif
                                         @if ($whatsappConsentStatus !== '')
                                             <span data-testid="bulk-whatsapp-consent-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $whatsappConsentBadgeClass }}">{{ $whatsappConsentLabel }}</span>
                                         @endif
@@ -736,7 +643,7 @@
                                         @if ($manualScreeningActive)
                                             <form method="POST" action="{{ route('admin.bulk-intakes.items.clear-screening-review', [$batch, $item]) }}">
                                                 @csrf
-                                                <button type="submit" class="text-left text-sm font-medium text-indigo-700 hover:text-indigo-900">Clear screening</button>
+                                                <button type="submit" class="text-left text-sm font-medium text-indigo-700 hover:text-indigo-900">Clear override</button>
                                             </form>
                                         @endif
 

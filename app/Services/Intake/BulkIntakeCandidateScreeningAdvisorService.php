@@ -7,6 +7,9 @@ use App\Models\BulkIntakeBatchItem;
 use App\Support\MobileNumber;
 use Illuminate\Support\Carbon;
 
+/**
+ * @deprecated Phase R — internal advisor module for BulkIntakeEligibilityService only.
+ */
 class BulkIntakeCandidateScreeningAdvisorService
 {
     public function __construct(

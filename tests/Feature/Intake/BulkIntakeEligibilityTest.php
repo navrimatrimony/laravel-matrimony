@@ -196,8 +196,9 @@ test('batch show renders three primary eligibility filters and pipeline badge', 
         ->assertSee('data-testid="bulk-screening-filter-eligible"', false)
         ->assertSee('data-testid="bulk-screening-filter-blocked"', false)
         ->assertSee('data-testid="bulk-screening-filter-needs_check"', false)
-        ->assertSee('More filters', false)
-        ->assertSee('data-testid="bulk-screening-filter-ready"', false)
+        ->assertSee('data-testid="bulk-eligibility-summary-card"', false)
+        ->assertDontSee('More filters', false)
+        ->assertDontSee('data-testid="bulk-screening-legacy-filter-pills"', false)
         ->assertSee('data-testid="bulk-pipeline-badge"', false)
         ->assertSee('Eligible', false);
 });

@@ -55,17 +55,13 @@ class BulkIntakeEligibilityService
     }
 
     /**
-     * Legacy/advanced filters — still supported via query params.
+     * @deprecated Phase R — legacy pills removed from UI. Bookmarked query params still resolve.
      *
      * @return array<string, string>
      */
     public function legacyScreeningFilters(): array
     {
-        return [
-            self::FILTER_READY => 'Ready for consent',
-            self::FILTER_ADVISOR => 'Advisor only',
-            self::FILTER_MANUAL => 'Override set',
-        ];
+        return [];
     }
 
     /**
@@ -81,12 +77,19 @@ class BulkIntakeEligibilityService
         $value = match ($value) {
             self::FILTER_STOPPED => self::FILTER_BLOCKED,
             self::FILTER_NEEDS_REVIEW => self::FILTER_NEEDS_CHECK,
+            self::FILTER_READY => self::FILTER_ELIGIBLE,
             default => $value,
         };
 
-        return array_key_exists($value, $this->allScreeningFilterLabels())
-            ? $value
-            : self::FILTER_ALL;
+        if (array_key_exists($value, $this->primaryScreeningFilters())) {
+            return $value;
+        }
+
+        if (in_array($value, [self::FILTER_ADVISOR, self::FILTER_MANUAL], true)) {
+            return $value;
+        }
+
+        return self::FILTER_ALL;
     }
 
     /**
@@ -148,6 +151,17 @@ class BulkIntakeEligibilityService
         $manualReview ??= $this->screeningReviewService->activeReviewForItem($item);
         $autoSuggestion ??= $this->screeningAdvisorService->advisorForItem($item, $candidate, $duplicateHints);
 
+        if ($this->hasManualDuplicateMark($item)) {
+            return $this->pipelineResult(
+                false,
+                self::FILTER_BLOCKED,
+                'auto',
+                false,
+                $this->reasonsFromCodes(['manual_duplicate']),
+                ['manual_duplicate'],
+            );
+        }
+
         if ($this->hasActiveOverride($manualReview)) {
             $bucket = $this->overrideStatusToBucket((string) ($manualReview['status'] ?? ''));
             $reasonCodes = [(string) ($manualReview['reason_key'] ?? 'admin_override')];
@@ -183,17 +197,6 @@ class BulkIntakeEligibilityService
                 false,
                 $this->reasonsFromCodes($reasonCodes !== [] ? $reasonCodes : ['blocked_by_gate']),
                 $reasonCodes !== [] ? $reasonCodes : ['blocked_by_gate'],
-            );
-        }
-
-        if ($this->hasManualDuplicateMark($item)) {
-            return $this->pipelineResult(
-                false,
-                self::FILTER_BLOCKED,
-                'auto',
-                false,
-                $this->reasonsFromCodes(['manual_duplicate']),
-                ['manual_duplicate'],
             );
         }
 
@@ -289,15 +292,11 @@ class BulkIntakeEligibilityService
     /**
      * @param  array<string, mixed>  $pipeline
      */
-    public function itemMatchesPipelineFilter(string $filter, array $pipeline, ?bool $readyForConsent = null): bool
+    public function itemMatchesPipelineFilter(string $filter, array $pipeline): bool
     {
         $filter = $this->resolveScreeningFilter($filter);
         if ($filter === self::FILTER_ALL) {
             return true;
-        }
-
-        if ($filter === self::FILTER_READY) {
-            return $readyForConsent === true;
         }
 
         if ($filter === self::FILTER_ADVISOR) {
@@ -345,24 +344,17 @@ class BulkIntakeEligibilityService
     /**
      * @param  Collection<int, BulkIntakeBatchItem>  $items
      * @param  array<int, array<string, mixed>>  $pipelineByItemId
-     * @param  callable(BulkIntakeBatchItem): bool|null  $readyForConsentForItem
      * @return array<string, int>
      */
     public function countsFromPipeline(
         Collection $items,
         array $pipelineByItemId,
-        ?callable $readyForConsentForItem = null
     ): array {
         $counts = [
             self::FILTER_ALL => $items->count(),
             self::FILTER_ELIGIBLE => 0,
             self::FILTER_BLOCKED => 0,
             self::FILTER_NEEDS_CHECK => 0,
-            self::FILTER_READY => 0,
-            self::FILTER_ADVISOR => 0,
-            self::FILTER_MANUAL => 0,
-            self::FILTER_STOPPED => 0,
-            self::FILTER_NEEDS_REVIEW => 0,
         ];
 
         foreach ($items as $item) {
@@ -375,20 +367,8 @@ class BulkIntakeEligibilityService
                 $counts[self::FILTER_ELIGIBLE]++;
             } elseif ($bucket === self::FILTER_BLOCKED) {
                 $counts[self::FILTER_BLOCKED]++;
-                $counts[self::FILTER_STOPPED]++;
             } elseif ($bucket === self::FILTER_NEEDS_CHECK) {
                 $counts[self::FILTER_NEEDS_CHECK]++;
-                $counts[self::FILTER_NEEDS_REVIEW]++;
-            }
-
-            if (($pipeline['has_override'] ?? false) === true) {
-                $counts[self::FILTER_MANUAL]++;
-            } else {
-                $counts[self::FILTER_ADVISOR]++;
-            }
-
-            if ($readyForConsentForItem !== null && $readyForConsentForItem($item) === true) {
-                $counts[self::FILTER_READY]++;
             }
         }
 
@@ -420,7 +400,7 @@ class BulkIntakeEligibilityService
             );
         }
 
-        return $this->countsFromPipeline($items, $pipelineByItemId, $readyForConsentForItem);
+        return $this->countsFromPipeline($items, $pipelineByItemId);
     }
 
     /**
@@ -433,43 +413,26 @@ class BulkIntakeEligibilityService
         ?array $manualReview,
         ?array $candidate = null
     ): array {
-        $candidate ??= $this->candidateDisplayService->candidateForItem($item);
-        $reasons = [];
+        $pipeline = $this->eligibleForPipeline($item, $candidate, null, null, $manualReview);
 
-        if (! $this->hasActiveOverride($manualReview)) {
-            $reasons[] = 'manual_screening_required';
-        } elseif ((string) ($manualReview['status'] ?? '') !== BulkIntakeCandidateScreeningReviewService::STATUS_ELIGIBLE) {
-            $reasons[] = 'manual_screening_not_eligible';
-        }
-
-        if ($this->hasManualDuplicateMark($item)) {
-            $reasons[] = 'manual_duplicate';
-        }
-
-        if (! $this->contactPlanService->hasUsableMobile($item)) {
-            $reasons[] = 'missing_mobile';
-        }
-
-        if (! $this->hasBasicIdentity($candidate)) {
-            $reasons[] = 'missing_identity';
+        if ($pipeline['eligible']) {
+            return [
+                'ready' => true,
+                'reasons' => [],
+            ];
         }
 
         return [
-            'ready' => $reasons === [],
-            'reasons' => $reasons,
+            'ready' => false,
+            'reasons' => is_array($pipeline['reason_codes'] ?? null)
+                ? array_values(array_map('strval', $pipeline['reason_codes']))
+                : [],
         ];
     }
 
     public function readyReasonLabel(string $reason): string
     {
-        return match ($reason) {
-            'manual_screening_required' => 'Admin override required',
-            'manual_screening_not_eligible' => 'Admin override not eligible',
-            'manual_duplicate' => 'Manual duplicate',
-            'missing_mobile' => 'Missing mobile',
-            'missing_identity' => 'Missing identity',
-            default => str_replace('_', ' ', $reason),
-        };
+        return $this->pipelineReasonLabel($reason);
     }
 
     /**

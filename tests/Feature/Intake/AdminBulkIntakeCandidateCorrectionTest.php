@@ -963,7 +963,7 @@ test('read-only screening advisor still works on batch show when no manual scree
         ->assertDontSee('data-testid="bulk-manual-screening-badge"', false);
 });
 
-test('batch show displays ready for consent badge when manual eligible and identity complete', function () {
+test('batch show displays pipeline eligible badge when override and identity complete', function () {
     $admin = candidateCorrectionAdminUser();
     $batch = candidateCorrectionBatch($admin);
     $intake = candidateCorrectionIntake([
@@ -993,12 +993,12 @@ test('batch show displays ready for consent badge when manual eligible and ident
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('data-testid="bulk-ready-for-consent-badge"', false)
-        ->assertSee('Ready for Consent', false)
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
+        ->assertSee('Eligible', false)
         ->assertSee('id="bulk-item-'.$item->id.'"', false);
 });
 
-test('batch show hides ready badge when eligible manual screening lacks mobile', function () {
+test('batch show shows needs check when override eligible lacks mobile', function () {
     $admin = candidateCorrectionAdminUser();
     $batch = candidateCorrectionBatch($admin);
     $intake = candidateCorrectionIntake([
@@ -1027,6 +1027,8 @@ test('batch show hides ready badge when eligible manual screening lacks mobile',
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
+        ->assertSee('Needs check', false)
+        ->assertSee('Override set but mobile/identity missing', false)
         ->assertDontSee('data-testid="bulk-ready-for-consent-badge"', false);
 });
 

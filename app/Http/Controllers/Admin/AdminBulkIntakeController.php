@@ -153,7 +153,6 @@ class AdminBulkIntakeController extends Controller
         }
 
         $primaryScreeningFilters = $eligibilityService->primaryScreeningFilters();
-        $legacyScreeningFilters = $eligibilityService->legacyScreeningFilters();
         $screeningFilter = $eligibilityService->resolveScreeningFilter((string) $request->query('screening', 'all'));
 
         $bulkIntakeBatch = $batchService->refreshCounters($bulkIntakeBatch);
@@ -207,15 +206,6 @@ class AdminBulkIntakeController extends Controller
                 (int) $item->id => $eligibilityService->activeOverrideForItem($item),
             ])
             ->all();
-        $readyForConsentByItemId = $statusFilteredItems
-            ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
-                (int) $item->id => $eligibilityService->readyForConsentForItem(
-                    $item,
-                    $screeningReviewByItemId[(int) $item->id] ?? null,
-                    $candidateByItemId[(int) $item->id] ?? null
-                ),
-            ])
-            ->all();
         $defaultAutoSuggestion = [
             'decision' => 'review',
             'label' => 'Needs check',
@@ -238,9 +228,8 @@ class AdminBulkIntakeController extends Controller
         $screeningCounts = $eligibilityService->countsFromPipeline(
             $statusFilteredItems,
             $pipelineByItemId,
-            fn (BulkIntakeBatchItem $item): bool => (bool) ($readyForConsentByItemId[(int) $item->id]['ready'] ?? false),
         );
-        $readyCount = (int) ($screeningCounts[BulkIntakeEligibilityService::FILTER_READY] ?? 0);
+        $eligiblePipelineCount = (int) ($screeningCounts[BulkIntakeEligibilityService::FILTER_ELIGIBLE] ?? 0);
         $manualWhatsAppTestEnabled = $whatsappConsentService->isManualWhatsAppTestEnabled();
         $whatsappConsentByItemId = $statusFilteredItems
             ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
@@ -300,7 +289,6 @@ class AdminBulkIntakeController extends Controller
             ->filter(fn (BulkIntakeBatchItem $item): bool => $eligibilityService->itemMatchesPipelineFilter(
                 $screeningFilter,
                 $pipelineByItemId[(int) $item->id] ?? $eligibilityService->eligibleForPipeline($item),
-                (bool) ($readyForConsentByItemId[(int) $item->id]['ready'] ?? false)
             ))
             ->values();
         $bulkIntakeBatch->setRelation('items', $displayItems);
@@ -321,11 +309,8 @@ class AdminBulkIntakeController extends Controller
             'duplicateGateByItemId' => $duplicateGateByItemId,
             'duplicateVerificationByItemId' => $duplicateVerificationByItemId,
             'pipelineByItemId' => $pipelineByItemId,
-            'autoSuggestionByItemId' => $autoSuggestionByItemId,
-            'screeningByItemId' => $autoSuggestionByItemId,
             'screeningReviewByItemId' => $screeningReviewByItemId,
-            'readyForConsentByItemId' => $readyForConsentByItemId,
-            'readyCount' => $readyCount,
+            'eligiblePipelineCount' => $eligiblePipelineCount,
             'whatsappConsentByItemId' => $whatsappConsentByItemId,
             'contactPlanByItemId' => $contactPlanByItemId,
             'whatsappEligibleToSendCount' => $whatsappEligibleToSendCount,
@@ -334,7 +319,6 @@ class AdminBulkIntakeController extends Controller
             'registrationByItemId' => $registrationByItemId,
             'screeningFilter' => $screeningFilter,
             'primaryScreeningFilters' => $primaryScreeningFilters,
-            'legacyScreeningFilters' => $legacyScreeningFilters,
             'screeningCounts' => $screeningCounts,
             'statusFilter' => $statusFilter,
             'statusFilters' => $statusFilters,
@@ -896,7 +880,7 @@ class AdminBulkIntakeController extends Controller
             'already_married' => 'Recorded: already married. Same mobile/name will auto-block in future batches.',
             'not_interested' => 'Recorded: not interested. Same identity will auto-block in future batches.',
             'wrong_number' => 'Recorded: wrong number. Same mobile will auto-block in future batches.',
-            default => 'Manual screening decision saved.',
+            default => 'Admin override saved.',
         };
 
         return redirect()
@@ -917,7 +901,7 @@ class AdminBulkIntakeController extends Controller
 
         return redirect()
             ->back()
-            ->with('success', 'Manual screening decision cleared.');
+            ->with('success', 'Admin override cleared.');
     }
 
     public function sendItemWhatsAppPermission(

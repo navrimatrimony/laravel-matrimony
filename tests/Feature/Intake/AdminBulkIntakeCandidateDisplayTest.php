@@ -454,13 +454,13 @@ test('bulk list shows manual screening badge and clear action', function () {
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
         ->assertSee('Manual Screening List Candidate', false)
-        ->assertSee('data-testid="bulk-manual-screening-badge"', false)
-        ->assertSee('Override: Eligible', false)
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
+        ->assertSee('Eligible', false)
+        ->assertSee('· override', false)
         ->assertDontSee('No manual duplicate', false)
         ->assertDontSee('No duplicate hint', false)
-        ->assertSee('Clear screening', false)
-        ->assertDontSee('data-testid="bulk-screening-badge"', false)
-        ->assertDontSee('Set override', false);
+        ->assertSee('Clear override', false)
+        ->assertDontSee('data-testid="bulk-screening-badge"', false);
 });
 
 test('bulk list does not show set override action when no manual screening exists', function () {
@@ -1059,10 +1059,8 @@ test('bulk status pending and screening manual filters work together', function 
         ->assertOk()
         ->assertSee('pending-manual-screening.pdf', false)
         ->assertDontSee('pending-advisor-only.pdf', false)
-        ->assertSee('data-testid="bulk-manual-screening-badge"', false)
-        ->assertSee('All (2)', false)
-        ->assertSee('Override set (1)', false)
-        ->assertSee('Advisor only (1)', false);
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
+        ->assertSee('All (2)', false);
 });
 
 test('manual screening bucket overrides advisor when both signals differ', function () {
@@ -1100,8 +1098,10 @@ test('manual screening bucket overrides advisor when both signals differ', funct
         ]))
         ->assertOk()
         ->assertSee('Manual Overrides Advisor Candidate', false)
-        ->assertSee('data-testid="bulk-manual-screening-badge"', false)
-        ->assertSee('Override: Eligible', false);
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
+        ->assertSee('Eligible', false)
+        ->assertSee('· override', false)
+        ->assertDontSee('data-testid="bulk-screening-badge"', false);
 });
 
 test('bulk list renders screening queue pills with counts', function () {
@@ -1117,8 +1117,9 @@ test('bulk list renders screening queue pills with counts', function () {
         ->assertSee('Eligible (2)', false)
         ->assertSee('Needs check (2)', false)
         ->assertSee('Blocked (2)', false)
-        ->assertSee('Advisor only (3)', false)
-        ->assertSee('Override set (3)', false);
+        ->assertDontSee('Advisor only', false)
+        ->assertDontSee('Override set', false)
+        ->assertDontSee('More filters', false);
 });
 
 test('bulk screening filter eligible shows only eligible items', function () {
@@ -1207,8 +1208,8 @@ test('bulk screening counts respect status filter dataset', function () {
         ->assertSee('Eligible (2)', false)
         ->assertSee('Needs check (2)', false)
         ->assertSee('Blocked (2)', false)
-        ->assertSee('Advisor only (3)', false)
-        ->assertSee('Override set (3)', false)
+        ->assertDontSee('Advisor only', false)
+        ->assertDontSee('Override set', false)
         ->assertDontSee('Pending Parse Candidate', false);
 
     $this->actingAs($admin)
@@ -1285,22 +1286,22 @@ test('bulk screening clear filters link resets status and screening params', fun
     $response->assertSee($clearUrl, false);
 });
 
-test('eligible manual screening with mobile and identity is ready for consent', function () {
+test('pipeline eligible candidate with mobile and identity appears in eligible summary', function () {
     $admin = candidateDisplayAdminUser();
     [$batch, $readyItem] = candidateDisplayReadyForConsentFixtures($admin);
 
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('data-testid="bulk-ready-for-consent-summary-card"', false)
-        ->assertSee('data-testid="bulk-ready-for-consent-count">1<', false)
-        ->assertSee('candidate ready', false)
-        ->assertSee('data-testid="bulk-ready-for-consent-badge"', false)
-        ->assertSee('Ready for Consent', false)
+        ->assertSee('data-testid="bulk-eligibility-summary-card"', false)
+        ->assertSee('data-testid="bulk-eligible-pipeline-count">2<', false)
+        ->assertSee('eligible for WhatsApp', false)
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
+        ->assertSee('Eligible', false)
         ->assertSee('id="bulk-item-'.$readyItem->id.'"', false);
 });
 
-test('eligible manual screening without mobile is not ready for consent', function () {
+test('override eligible without mobile stays needs check in pipeline', function () {
     $admin = candidateDisplayAdminUser();
     $batch = candidateDisplayBatch($admin);
     $intake = candidateDisplayIntake([
@@ -1330,13 +1331,13 @@ test('eligible manual screening without mobile is not ready for consent', functi
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('data-testid="bulk-ready-for-consent-count">0<', false)
-        ->assertSee('data-testid="bulk-not-ready-for-consent-hint"', false)
-        ->assertSee('Not ready', false)
+        ->assertSee('data-testid="bulk-eligible-pipeline-count">0<', false)
+        ->assertSee('Needs check', false)
+        ->assertSee('Override set but mobile/identity missing', false)
         ->assertDontSee('data-testid="bulk-ready-for-consent-badge"', false);
 });
 
-test('manual duplicate mark blocks ready for consent', function () {
+test('manual duplicate mark blocks pipeline eligibility', function () {
     $admin = candidateDisplayAdminUser();
     $batch = candidateDisplayBatch($admin);
     $intake = candidateDisplayIntake([
@@ -1377,12 +1378,12 @@ test('manual duplicate mark blocks ready for consent', function () {
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('data-testid="bulk-ready-for-consent-count">0<', false)
-        ->assertSee('data-testid="bulk-not-ready-for-consent-hint"', false)
+        ->assertSee('data-testid="bulk-eligible-pipeline-count">0<', false)
+        ->assertSee('Blocked', false)
         ->assertDontSee('data-testid="bulk-ready-for-consent-badge"', false);
 });
 
-test('advisor eligible without manual screening is not ready for consent', function () {
+test('advisor eligible without manual override is pipeline eligible', function () {
     $admin = candidateDisplayAdminUser();
     $batch = candidateDisplayBatch($admin);
     $intake = candidateDisplayIntake([
@@ -1401,11 +1402,13 @@ test('advisor eligible without manual screening is not ready for consent', funct
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('data-testid="bulk-ready-for-consent-count">0<', false)
-        ->assertDontSee('data-testid="bulk-ready-for-consent-badge"', false);
+        ->assertSee('data-testid="bulk-eligible-pipeline-count">1<', false)
+        ->assertSee('Advisor Only Not Ready Candidate', false)
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
+        ->assertSee('Eligible', false);
 });
 
-test('bulk ready screening filter shows only ready candidates', function () {
+test('bulk ready query param maps to eligible filter', function () {
     $admin = candidateDisplayAdminUser();
     [$batch, $readyItem] = candidateDisplayReadyForConsentFixtures($admin);
 
@@ -1416,13 +1419,14 @@ test('bulk ready screening filter shows only ready candidates', function () {
         ]))
         ->assertOk()
         ->assertSee('Ready Consent Candidate', false)
-        ->assertSee('data-testid="bulk-ready-for-consent-badge"', false)
+        ->assertSee('Advisor Only Not Ready Candidate', false)
+        ->assertSee('data-testid="bulk-pipeline-badge"', false)
+        ->assertSee('Eligible', false)
         ->assertDontSee('Eligible No Mobile Candidate', false)
-        ->assertDontSee('Advisor Only Not Ready Candidate', false)
         ->assertSee('id="bulk-item-'.$readyItem->id.'"', false);
 });
 
-test('bulk ready count respects status filter dataset', function () {
+test('bulk eligible count respects status filter dataset', function () {
     $admin = candidateDisplayAdminUser();
     [$batch] = candidateDisplayReadyForConsentFixtures($admin, withUnreadyPendingItem: true);
 
@@ -1432,8 +1436,8 @@ test('bulk ready count respects status filter dataset', function () {
             'status' => 'parsed',
         ]))
         ->assertOk()
-        ->assertSee('data-testid="bulk-ready-for-consent-count">1<', false)
-        ->assertSee('Ready for consent (1)', false);
+        ->assertSee('data-testid="bulk-eligible-pipeline-count">2<', false)
+        ->assertSee('Eligible (2)', false);
 
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', [
@@ -1441,7 +1445,8 @@ test('bulk ready count respects status filter dataset', function () {
             'status' => 'all',
         ]))
         ->assertOk()
-        ->assertSee('Ready for consent (1)', false);
+        ->assertSee('data-testid="bulk-eligible-pipeline-count">2<', false)
+        ->assertSee('Eligible (2)', false);
 });
 
 test('bulk ready filter preserves status and highlight item query params', function () {

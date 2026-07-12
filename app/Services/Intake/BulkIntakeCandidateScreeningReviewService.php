@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Admin override decisions stored on bulk items (item_meta_json.screening_review).
+ */
 class BulkIntakeCandidateScreeningReviewService
 {
     public const STATUS_ELIGIBLE = 'eligible_for_consent';
