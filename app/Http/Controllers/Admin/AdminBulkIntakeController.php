@@ -285,11 +285,30 @@ class AdminBulkIntakeController extends Controller
                 ],
             ])
             ->all();
+        $batchCoachSummary = $this->batchCoachSummaryForItems(
+            $statusFilteredItems,
+            $pipelineByItemId,
+            $duplicateHintsByItemId,
+            $screeningCounts,
+        );
+        $pipelineBucketPriority = [
+            BulkIntakeEligibilityService::FILTER_NEEDS_CHECK => 0,
+            BulkIntakeEligibilityService::FILTER_BLOCKED => 1,
+            BulkIntakeEligibilityService::FILTER_ELIGIBLE => 2,
+        ];
         $displayItems = $statusFilteredItems
             ->filter(fn (BulkIntakeBatchItem $item): bool => $eligibilityService->itemMatchesPipelineFilter(
                 $screeningFilter,
                 $pipelineByItemId[(int) $item->id] ?? $eligibilityService->eligibleForPipeline($item),
             ))
+            ->sortBy(function (BulkIntakeBatchItem $item) use ($pipelineByItemId, $pipelineBucketPriority): array {
+                $bucket = (string) (($pipelineByItemId[(int) $item->id] ?? [])['bucket'] ?? BulkIntakeEligibilityService::FILTER_NEEDS_CHECK);
+
+                return [
+                    $pipelineBucketPriority[$bucket] ?? 9,
+                    (int) $item->item_sequence,
+                ];
+            })
             ->values();
         $bulkIntakeBatch->setRelation('items', $displayItems);
 
@@ -309,6 +328,8 @@ class AdminBulkIntakeController extends Controller
             'duplicateGateByItemId' => $duplicateGateByItemId,
             'duplicateVerificationByItemId' => $duplicateVerificationByItemId,
             'pipelineByItemId' => $pipelineByItemId,
+            'autoSuggestionByItemId' => $autoSuggestionByItemId,
+            'batchCoachSummary' => $batchCoachSummary,
             'screeningReviewByItemId' => $screeningReviewByItemId,
             'eligiblePipelineCount' => $eligiblePipelineCount,
             'whatsappConsentByItemId' => $whatsappConsentByItemId,
@@ -1185,6 +1206,76 @@ class AdminBulkIntakeController extends Controller
     /**
      * @return array<string, string>
      */
+    /**
+     * @param  \Illuminate\Support\Collection<int, BulkIntakeBatchItem>  $items
+     * @param  array<int, array<string, mixed>>  $pipelineByItemId
+     * @param  array<int, list<array<string, mixed>>>  $duplicateHintsByItemId
+     * @param  array<string, int>  $screeningCounts
+     * @return array{
+     *     total: int,
+     *     needs_check: int,
+     *     eligible: int,
+     *     blocked: int,
+     *     missing_mobile: int,
+     *     duplicate_hints: int,
+     *     history_blocks: int,
+     *     action_hint: string
+     * }
+     */
+    private function batchCoachSummaryForItems(
+        $items,
+        array $pipelineByItemId,
+        array $duplicateHintsByItemId,
+        array $screeningCounts,
+    ): array {
+        $summary = [
+            'total' => $items->count(),
+            'needs_check' => (int) ($screeningCounts[BulkIntakeEligibilityService::FILTER_NEEDS_CHECK] ?? 0),
+            'eligible' => (int) ($screeningCounts[BulkIntakeEligibilityService::FILTER_ELIGIBLE] ?? 0),
+            'blocked' => (int) ($screeningCounts[BulkIntakeEligibilityService::FILTER_BLOCKED] ?? 0),
+            'missing_mobile' => 0,
+            'duplicate_hints' => 0,
+            'history_blocks' => 0,
+            'action_hint' => '',
+        ];
+
+        foreach ($items as $item) {
+            $itemId = (int) $item->id;
+            $reasonCodes = is_array($pipelineByItemId[$itemId]['reason_codes'] ?? null)
+                ? $pipelineByItemId[$itemId]['reason_codes']
+                : [];
+            if (in_array('missing_mobile', $reasonCodes, true)) {
+                $summary['missing_mobile']++;
+            }
+            if (($duplicateHintsByItemId[$itemId] ?? []) !== []) {
+                $summary['duplicate_hints']++;
+            }
+            if (in_array('already_married', $reasonCodes, true)
+                || in_array('wrong_number', $reasonCodes, true)
+                || in_array('manual_duplicate', $reasonCodes, true)
+                || in_array('auto_duplicate_intake', $reasonCodes, true)
+                || in_array('duplicate_existing_profile', $reasonCodes, true)) {
+                $summary['history_blocks']++;
+            }
+        }
+
+        if ($summary['eligible'] > 0) {
+            $summary['action_hint'] = $summary['eligible'].' WhatsApp साठी तयार — Eligible filter पहा.';
+        } elseif ($summary['missing_mobile'] > 0) {
+            $summary['action_hint'] = 'आधी '.$summary['missing_mobile'].' उमेदवारांना mobile भरा.';
+        } elseif ($summary['duplicate_hints'] > 0) {
+            $summary['action_hint'] = $summary['duplicate_hints'].' duplicate hint — तपासा.';
+        } elseif ($summary['blocked'] > 0) {
+            $summary['action_hint'] = $summary['blocked'].' थांबवले — history/duplicate पहा.';
+        } elseif ($summary['needs_check'] > 0) {
+            $summary['action_hint'] = $summary['needs_check'].' तपासणी बाकी.';
+        } else {
+            $summary['action_hint'] = 'सर्व items पाहिले.';
+        }
+
+        return $summary;
+    }
+
     private function bulkItemStatusFilters(): array
     {
         return [
@@ -1197,6 +1288,7 @@ class AdminBulkIntakeController extends Controller
             'parse_error' => 'Parse Error',
             'needs_review' => 'Parse review',
             'failed' => 'Failed',
+            'unclaimed' => 'Unclaimed',
         ];
     }
 
@@ -1211,6 +1303,7 @@ class AdminBulkIntakeController extends Controller
             'parse_error' => $query->whereHas('biodataIntake', fn ($intakeQuery) => $intakeQuery->where('parse_status', 'error')),
             'needs_review' => $query->where('item_status', BulkIntakeBatchItem::STATUS_NEEDS_REVIEW),
             'failed' => $query->where('item_status', BulkIntakeBatchItem::STATUS_FAILED),
+            'unclaimed' => $query->whereHas('biodataIntake', fn ($intakeQuery) => $intakeQuery->whereNull('uploaded_by')),
             default => null,
         };
     }

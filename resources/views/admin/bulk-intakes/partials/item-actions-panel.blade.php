@@ -1,14 +1,79 @@
 @php
     $actionsDialogId = 'bulk-actions-panel-'.(int) $item->id;
+    $dupPanelDialogId = 'bulk-dup-panel-'.(int) $item->id;
+    $waPanelDialogId = 'bulk-wa-panel-'.(int) $item->id;
     $actionsCandidateName = trim((string) ($candidate['full_name'] ?? $item->original_filename ?? 'Candidate'));
+    $primaryAction = match (true) {
+        $canSendWhatsAppPermission => [
+            'kind' => 'wa',
+            'label' => 'WhatsApp पाठवा',
+            'testid' => 'bulk-primary-send-whatsapp',
+        ],
+        in_array('missing_mobile', $pipelineReasonCodes ?? [], true) && $intake => [
+            'kind' => 'link',
+            'label' => 'मोबाईल भरा',
+            'url' => route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]),
+            'testid' => 'bulk-primary-fill-mobile',
+        ],
+        in_array('override_missing_requirements', $pipelineReasonCodes ?? [], true) && $intake => [
+            'kind' => 'link',
+            'label' => 'मोबाईल भरा',
+            'url' => route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]),
+            'testid' => 'bulk-primary-fill-mobile',
+        ],
+        ($duplicateVerification['has_hints'] ?? false) && $duplicateHints !== [] => [
+            'kind' => 'dup',
+            'label' => 'Duplicate पहा',
+            'testid' => 'bulk-primary-verify-duplicate',
+        ],
+        $canAddManualTranscript ?? false => [
+            'kind' => 'link',
+            'label' => 'Manual transcript',
+            'url' => route('admin.bulk-intakes.items.manual-transcript', [$batch, $item]),
+            'testid' => 'bulk-primary-manual-transcript',
+        ],
+        $intake => [
+            'kind' => 'link',
+            'label' => 'Correct candidate',
+            'url' => route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]),
+            'testid' => 'bulk-primary-correct-candidate',
+        ],
+        default => [
+            'kind' => 'more',
+            'label' => 'कृती',
+            'testid' => 'bulk-primary-more-actions',
+        ],
+    };
 @endphp
+
+@if (($primaryAction['kind'] ?? '') === 'link')
+    <a
+        href="{{ $primaryAction['url'] }}"
+        data-testid="{{ $primaryAction['testid'] }}"
+        class="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-900 hover:bg-emerald-100"
+    >{{ $primaryAction['label'] }}</a>
+@elseif (($primaryAction['kind'] ?? '') === 'wa')
+    <button
+        type="button"
+        data-bulk-wa-open="{{ $waPanelDialogId }}"
+        data-testid="{{ $primaryAction['testid'] }}"
+        class="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-900 hover:bg-emerald-100"
+    >{{ $primaryAction['label'] }}</button>
+@elseif (($primaryAction['kind'] ?? '') === 'dup')
+    <button
+        type="button"
+        data-bulk-dup-open="{{ $dupPanelDialogId }}"
+        data-testid="{{ $primaryAction['testid'] }}"
+        class="rounded-md border border-purple-300 bg-purple-50 px-2 py-1 text-[11px] font-semibold text-purple-900 hover:bg-purple-100"
+    >{{ $primaryAction['label'] }}</button>
+@endif
 
 <button
     type="button"
     data-bulk-actions-open="{{ $actionsDialogId }}"
     data-testid="bulk-open-actions-panel"
-    class="rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-800 hover:bg-indigo-100"
->Actions</button>
+    class="rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+>अधिक कृती</button>
 
 <dialog id="{{ $actionsDialogId }}" class="w-[min(520px,95vw)] max-h-[90vh] rounded-xl border border-gray-200 bg-white p-0 shadow-xl backdrop:bg-black/40">
     <div class="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3">
