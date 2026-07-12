@@ -214,21 +214,15 @@
         @if ($batch->items->isEmpty())
             <p class="mt-3 text-sm text-gray-600">No items found for this filter.</p>
         @else
-            <div class="mt-4 overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
+            <div class="mt-4 w-full" data-testid="bulk-items-compact-table">
+                <table class="w-full table-fixed divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Seq</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">File/Text</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Candidate</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">DOB / Age</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Height / Gender</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">City</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Education / Occupation</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Parse</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Exceptions</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Source</th>
-                            <th class="px-4 py-2 text-left text-xs font-semibold uppercase text-gray-500">Actions</th>
+                            <th class="w-10 px-2 py-2 text-left text-xs font-semibold uppercase text-gray-500">#</th>
+                            <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Candidate</th>
+                            <th class="hidden w-28 px-2 py-2 text-left text-xs font-semibold uppercase text-gray-500 sm:table-cell">Parse</th>
+                            <th class="w-32 px-2 py-2 text-left text-xs font-semibold uppercase text-gray-500">Pipeline</th>
+                            <th class="w-28 px-2 py-2 text-right text-xs font-semibold uppercase text-gray-500">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 bg-white">
@@ -438,240 +432,180 @@
                                     || $hasEmptyOcrFailure
                                 );
                                 $isHighlightedItem = $highlightItemId === (int) $item->id;
+                                $detailsRowId = 'bulk-item-details-'.(int) $item->id;
+                                $extraStatusChipCount = count($visiblePipelineReasons)
+                                    + ($whatsappConsentStatus !== '' ? 1 : 0)
+                                    + ($consentReceived && $registrationPath !== '' ? 1 : 0)
+                                    + ($registrationStatus !== '' ? 1 : 0)
+                                    + count($exceptionBadges);
                             @endphp
                             <tr id="bulk-item-{{ $item->id }}" @if ($isHighlightedItem) style="background-color: #ecfdf5;" @endif>
-                                <td class="px-4 py-2 text-sm text-gray-900">{{ $item->item_sequence }}</td>
-                                <td class="px-4 py-2 text-sm text-gray-700">
-                                    <span class="font-medium">{{ $itemDisplayLabel }}</span>
-                                    <span class="block text-xs text-gray-500">{{ $item->input_type }} · {{ $itemDisplayStatus }}</span>
-                                    @if ($textPreview)
-                                        <span class="block max-w-xs truncate text-xs text-gray-400">{{ $textPreview }}</span>
-                                    @endif
-                                    @if ($item->failure_code)
-                                        <span class="block max-w-xs truncate text-xs text-red-700" title="{{ $item->failure_message }}">{{ $item->failure_code }}: {{ $item->failure_message }}</span>
-                                    @endif
+                                <td class="px-2 py-2 text-sm text-gray-900">{{ $item->item_sequence }}</td>
+                                <td class="px-3 py-2 text-sm text-gray-700">
+                                    <span class="block truncate font-medium" title="{{ $candidate['full_name'] ?? $missingDisplay }}">{{ $candidate['full_name'] ?? $missingDisplay }}</span>
+                                    <span class="block truncate text-xs text-gray-500">Mobile: {{ $candidate['mobile'] ?? $missingDisplay }}</span>
+                                    <span class="block truncate text-xs text-gray-400" title="{{ $itemDisplayLabel }}">{{ $itemDisplayLabel }}</span>
+                                    <button
+                                        type="button"
+                                        data-bulk-details-toggle="{{ $detailsRowId }}"
+                                        data-testid="bulk-toggle-item-details"
+                                        class="mt-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"
+                                    >Details ▾</button>
                                 </td>
-                                <td class="px-4 py-2 text-sm text-gray-700">
-                                    <span class="font-medium">{{ $candidate['full_name'] ?? $missingDisplay }}</span>
-                                    @if ($usesReviewedSnapshot)
-                                        <span data-testid="bulk-candidate-reviewed-badge" class="ml-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">Reviewed</span>
-                                    @endif
-                                    @if (($candidate['name_needs_review'] ?? false))
-                                        <span class="ml-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">review</span>
-                                    @endif
-                                    <span class="block text-xs text-gray-500">Mobile: {{ $candidate['mobile'] ?? $missingDisplay }}</span>
-                                    @if (!empty($contactPlan['active_mobile']))
-                                        <span data-testid="bulk-contact-plan-active" class="mt-1 block text-[11px] text-sky-800">
-                                            WhatsApp queue: {{ $contactPlan['active_mobile'] }}
-                                            @if (!empty($contactPlan['active_role_label']))
-                                                ({{ $contactPlan['active_role_label'] }})
-                                            @endif
-                                            @if (($contactPlan['queue_total'] ?? 0) > 1)
-                                                — {{ $contactPlan['active_position'] ?? 0 }}/{{ $contactPlan['queue_total'] }}
-                                            @endif
-                                        </span>
-                                    @endif
-                                    @if (($contactPlan['suchak_count'] ?? 0) > 0)
-                                        <span data-testid="bulk-suchak-directory-count" class="mt-1 block text-[11px] text-violet-800">
-                                            Suchak reference: {{ $contactPlan['suchak_count'] }} (not messaged)
-                                        </span>
-                                    @endif
-                                </td>
-                                <td class="px-4 py-2 text-sm text-gray-700">
-                                    <span class="font-medium">{{ $candidate['date_of_birth'] ?? $missingDisplay }}</span>
-                                    @if (($candidate['dob_needs_review'] ?? false))
-                                        <span class="ml-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">review</span>
-                                    @endif
-                                    <span class="block text-xs text-gray-500">Age: {{ $candidate['age'] ?? $missingDisplay }}</span>
-                                </td>
-                                <td class="px-4 py-2 text-sm text-gray-700">
-                                    <span class="font-medium">{{ $candidate['height'] ?? $missingDisplay }}</span>
-                                    @if (($candidate['height_needs_review'] ?? false))
-                                        <span class="ml-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">review</span>
-                                    @endif
-                                    <span class="block text-xs text-gray-500">Gender: {{ $candidate['gender'] ?? $missingDisplay }}</span>
-                                </td>
-                                <td class="px-4 py-2 text-sm text-gray-700">{{ $candidate['city'] ?? $missingDisplay }}</td>
-                                <td class="px-4 py-2 text-sm text-gray-700">
-                                    <span class="font-medium">{{ $candidate['education'] ?? $missingDisplay }}</span>
-                                    @if (($candidate['education_needs_review'] ?? false))
-                                        <span class="ml-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">review</span>
-                                    @endif
-                                    <span class="block text-xs text-gray-500">
-                                        {{ $candidate['occupation'] ?? $missingDisplay }}
-                                        @if (($candidate['occupation_needs_review'] ?? false))
-                                            <span class="ml-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">review</span>
-                                        @endif
-                                    </span>
-                                    @if (($candidate['religion'] ?? null) || ($candidate['caste'] ?? null) || ($candidate['sub_caste'] ?? null))
-                                        <span class="mt-1 block text-xs text-gray-500">
-                                            @if ($candidate['religion'] ?? null)
-                                                Religion: {{ $candidate['religion'] }}
-                                            @endif
-                                            @if ($candidate['caste'] ?? null)
-                                                @if ($candidate['religion'] ?? null) · @endif
-                                                Caste: {{ $candidate['caste'] }}
-                                            @endif
-                                            @if ($candidate['sub_caste'] ?? null)
-                                                · Sub: {{ $candidate['sub_caste'] }}
-                                            @endif
-                                        </span>
-                                    @endif
-                                </td>
-                                <td class="px-4 py-2 text-sm">
+                                <td class="hidden px-2 py-2 text-sm text-gray-700 sm:table-cell">
                                     @if ($intake)
                                         <a href="{{ route('admin.biodata-intakes.show', $intake) }}" class="font-medium text-indigo-600 hover:text-indigo-800">#{{ $intake->id }}</a>
                                         @if ($parseStatus === 'parsed' && $hasParsedJson)
-                                            <span class="block text-xs font-medium text-green-700">Parse: OK</span>
+                                            <span class="block text-xs font-medium text-green-700">OK</span>
                                         @elseif ($hasEmptyOcrFailure)
-                                            <span class="block text-xs font-medium text-red-700">OCR failed: no text extracted</span>
+                                            <span class="block text-xs font-medium text-red-700">OCR fail</span>
                                         @elseif ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_PARSE_QUEUED)
-                                            <span class="block text-xs font-medium text-amber-700">Free parse queued</span>
-                                        @elseif ($parseStatus === 'pending')
-                                            <span class="block text-xs text-gray-500">Waiting for free parse</span>
+                                            <span class="block text-xs font-medium text-amber-700">Queued</span>
                                         @else
-                                            <span class="block text-xs text-gray-500">Parse: {{ $parseStatus !== '' ? $parseStatus : $missingDisplay }}</span>
-                                        @endif
-                                        <span class="block text-xs text-gray-500">Parsed JSON: {{ $hasParsedJson ? 'Yes' : 'No' }}</span>
-                                        @if ($intake->last_error)
-                                            <span class="block max-w-xs truncate text-xs text-red-700" title="{{ $intake->last_error }}">{{ \Illuminate\Support\Str::limit((string) $intake->last_error, 90) }}</span>
+                                            <span class="block text-xs text-gray-500">{{ $parseStatus !== '' ? $parseStatus : $itemDisplayStatus }}</span>
                                         @endif
                                     @else
-                                        @if ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_PENDING)
-                                            <span class="text-gray-500">Waiting for background processing</span>
-                                        @elseif ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_PROCESSING)
-                                            <span class="text-amber-700">OCR/parse preparation running</span>
-                                        @else
-                                            <span class="text-red-700">Missing linked intake</span>
-                                        @endif
-                                        <span class="block text-xs text-gray-500">Parsed JSON: No</span>
+                                        <span class="text-xs text-gray-500">{{ $itemDisplayStatus }}</span>
                                     @endif
                                 </td>
-                                <td class="px-4 py-2 text-sm">
-                                    <div class="flex max-w-xs flex-wrap gap-1">
-                                        <span data-testid="bulk-pipeline-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $pipelineBadgeClass }}">
+                                <td class="px-2 py-2 text-sm">
+                                    <div class="flex flex-wrap gap-1">
+                                        <span data-testid="bulk-pipeline-badge" class="rounded-full border px-2 py-0.5 text-[11px] font-semibold {{ $pipelineBadgeClass }}">
                                             {{ $pipeline['bucket_label'] ?? 'Needs check' }}
                                             @if ($pipelineSource === 'override')
                                                 <span class="font-normal">· override</span>
                                             @endif
                                         </span>
-                                        @foreach ($visiblePipelineReasons as $pipelineReason)
-                                            <span data-testid="bulk-pipeline-reason" class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ $pipelineReason['label'] ?? str_replace('_', ' ', (string) ($pipelineReason['code'] ?? '')) }}</span>
-                                        @endforeach
-                                        @if ($whatsappConsentStatus !== '')
-                                            <span data-testid="bulk-whatsapp-consent-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $whatsappConsentBadgeClass }}">{{ $whatsappConsentLabel }}</span>
-                                        @endif
-                                        @if ($consentReceived && $registrationPath !== '')
-                                            <span data-testid="bulk-registration-path-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $registrationPathBadgeClass }}">{{ $registrationPathLabel }}</span>
-                                        @endif
-                                        @if ($registrationStatus !== '')
-                                            <span data-testid="bulk-registration-status-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $registrationBadgeClass }}">{{ $registrationStatusLabel }}</span>
-                                        @endif
-                                        @if ($exceptionBadges !== [])
-                                            @foreach ($exceptionBadges as $badge)
-                                                <span @if (! empty($badge['testid'])) data-testid="{{ $badge['testid'] }}" @endif @if (! empty($badge['title'])) title="{{ $badge['title'] }}" @endif class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $badge['class'] }}">{{ $badge['label'] }}</span>
-                                            @endforeach
+                                        @if ($extraStatusChipCount > 0)
+                                            <button
+                                                type="button"
+                                                data-bulk-details-toggle="{{ $detailsRowId }}"
+                                                class="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-600 hover:bg-gray-100"
+                                            >+{{ $extraStatusChipCount }}</button>
                                         @endif
                                     </div>
                                 </td>
-                                <td class="px-4 py-2 text-sm text-gray-700">{{ (int) ($sourceContextCountsByItem[$item->id] ?? 0) }}</td>
-                                <td class="px-4 py-2 text-sm">
-                                    <div class="flex min-w-40 flex-col gap-2">
-                                        @if ($intake)
-                                            <a href="{{ route('admin.biodata-intakes.show', $intake) }}" class="font-medium text-indigo-600 hover:text-indigo-800">Open intake review</a>
-                                            <a href="{{ route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]) }}" class="font-medium text-emerald-700 hover:text-emerald-900">Correct candidate</a>
-                                        @endif
-                                        @if ($canAddManualTranscript)
-                                            <a href="{{ route('admin.bulk-intakes.items.manual-transcript', [$batch, $item]) }}" class="font-medium text-orange-700 hover:text-orange-900">Add manual transcript (OCR failed fallback)</a>
-                                        @endif
-
-                                        @if ($intake && $intake->parse_status === 'pending' && $item->item_status !== \App\Models\BulkIntakeBatchItem::STATUS_PARSE_QUEUED && ! $intake->approved_by_user && ! $intake->intake_locked)
-                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.queue-free-parse', [$batch, $item]) }}">
-                                                @csrf
-                                                <button type="submit" class="text-left text-sm font-medium text-indigo-600 hover:text-indigo-800">Queue free parse item</button>
-                                            </form>
-                                        @endif
-
-                                        @if ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_NEEDS_REVIEW)
-                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.clear-needs-review', [$batch, $item]) }}">
-                                                @csrf
-                                                <button type="submit" class="text-left text-sm font-medium text-green-700 hover:text-green-900">Clear needs review</button>
-                                            </form>
-                                        @else
-                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.mark-needs-review', [$batch, $item]) }}">
-                                                @csrf
-                                                <button type="submit" class="text-left text-sm font-medium text-amber-700 hover:text-amber-900">Mark needs review</button>
-                                            </form>
-                                        @endif
-
-                                        @if (($duplicateVerification['has_hints'] ?? false) && $duplicateHints !== [])
-                                            @include('admin.bulk-intakes.partials.item-duplicate-verify-panel')
-                                        @endif
-
-                                        @if ($manualDuplicateActive)
-                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.clear-duplicate', [$batch, $item]) }}">
-                                                @csrf
-                                                <button type="submit" class="text-left text-sm font-medium text-rose-700 hover:text-rose-900">Clear duplicate</button>
-                                            </form>
-                                        @elseif ($duplicateHints !== [])
-                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.mark-duplicate', [$batch, $item]) }}">
-                                                @csrf
-                                                @if (! empty($primaryDuplicateHint['matched_intake_id']))
-                                                    <input type="hidden" name="matched_biodata_intake_id" value="{{ (int) $primaryDuplicateHint['matched_intake_id'] }}">
+                                <td class="px-2 py-2 text-right text-sm">
+                                    <div class="flex flex-col items-end gap-1">
+                                        @include('admin.bulk-intakes.partials.item-actions-panel')
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="{{ $detailsRowId }}" class="hidden bg-gray-50" data-testid="bulk-item-details-row">
+                                <td colspan="5" class="px-3 py-3 text-sm text-gray-700">
+                                    <div class="grid gap-4 lg:grid-cols-2">
+                                        <div class="space-y-2">
+                                            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">File / source</p>
+                                            <p><span class="font-medium">{{ $itemDisplayLabel }}</span> <span class="text-gray-500">· {{ $item->input_type }} · {{ $itemDisplayStatus }}</span></p>
+                                            @if ($textPreview)
+                                                <p class="text-xs text-gray-500">{{ $textPreview }}</p>
+                                            @endif
+                                            @if ($item->failure_code)
+                                                <p class="text-xs text-red-700">{{ $item->failure_code }}: {{ $item->failure_message }}</p>
+                                            @endif
+                                            <p class="text-xs text-gray-500">Source contexts: {{ (int) ($sourceContextCountsByItem[$item->id] ?? 0) }}</p>
+                                        </div>
+                                        <div class="space-y-2">
+                                            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Candidate</p>
+                                            <p>
+                                                <span class="font-medium">{{ $candidate['full_name'] ?? $missingDisplay }}</span>
+                                                @if ($usesReviewedSnapshot)
+                                                    <span data-testid="bulk-candidate-reviewed-badge" class="ml-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">Reviewed</span>
                                                 @endif
-                                                @if (! empty($primaryDuplicateHint['matched_profile_id']))
-                                                    <input type="hidden" name="matched_profile_id" value="{{ (int) $primaryDuplicateHint['matched_profile_id'] }}">
+                                                @if (($candidate['name_needs_review'] ?? false))
+                                                    <span class="ml-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">review</span>
                                                 @endif
-                                                <input type="hidden" name="reason" value="{{ trim('Duplicate/history hint: '.(string) ($primaryDuplicateHint['label'] ?? 'Possible duplicate')) }}">
-                                                <button type="submit" class="text-left text-sm font-medium text-rose-700 hover:text-rose-900">Mark duplicate</button>
-                                            </form>
-                                        @endif
-
-                                        @if ($duplicateAutoBlocked && ! $duplicateOverrideActive && ! $manualDuplicateActive)
-                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.override-duplicate-block', [$batch, $item]) }}">
-                                                @csrf
-                                                <input type="hidden" name="reason" value="Admin override — proceed despite auto block">
-                                                <button type="submit" data-testid="bulk-override-duplicate-block" class="text-left text-sm font-medium text-sky-700 hover:text-sky-900">Override — proceed</button>
-                                            </form>
-                                        @elseif ($duplicateOverrideActive)
-                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.clear-duplicate-block-override', [$batch, $item]) }}">
-                                                @csrf
-                                                <button type="submit" data-testid="bulk-clear-duplicate-override" class="text-left text-sm font-medium text-sky-700 hover:text-sky-900">Clear override</button>
-                                            </form>
-                                        @endif
-
-                                        @if ($manualScreeningActive)
-                                            <form method="POST" action="{{ route('admin.bulk-intakes.items.clear-screening-review', [$batch, $item]) }}">
-                                                @csrf
-                                                <button type="submit" class="text-left text-sm font-medium text-indigo-700 hover:text-indigo-900">Clear override</button>
-                                            </form>
-                                        @endif
-
-                                        @if ($canSendWhatsAppPermission || $whatsappConsentStatus !== '' || $consentReceived)
-                                            @include('admin.bulk-intakes.partials.item-whatsapp-registration-panel')
-                                        @endif
-
-                                        @if ($intake)
-                                            <div class="mt-1 border-t border-gray-100 pt-2">
-                                                <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-gray-400">Record history</span>
-                                                @foreach ([
-                                                    'already_married' => ['label' => 'Already married', 'testid' => 'bulk-mark-already-married'],
-                                                    'not_interested' => ['label' => 'Not interested', 'testid' => 'bulk-mark-not-interested'],
-                                                    'wrong_number' => ['label' => 'Wrong number', 'testid' => 'bulk-mark-wrong-number'],
-                                                ] as $historyReasonKey => $historyAction)
-                                                    <form method="POST" action="{{ route('admin.bulk-intakes.items.save-screening-review', [$batch, $item]) }}" class="mt-1">
-                                                        @csrf
-                                                        <input type="hidden" name="status" value="stopped">
-                                                        <input type="hidden" name="reason_key" value="{{ $historyReasonKey }}">
-                                                        <button
-                                                            type="submit"
-                                                            data-testid="{{ $historyAction['testid'] }}"
-                                                            class="text-left text-sm font-medium text-red-700 hover:text-red-900"
-                                                        >{{ $historyAction['label'] }}</button>
-                                                    </form>
+                                            </p>
+                                            <p class="text-xs text-gray-500">Mobile: {{ $candidate['mobile'] ?? $missingDisplay }}</p>
+                                            @if (!empty($contactPlan['active_mobile']))
+                                                <p data-testid="bulk-contact-plan-active" class="text-[11px] text-sky-800">
+                                                    WhatsApp queue: {{ $contactPlan['active_mobile'] }}
+                                                    @if (!empty($contactPlan['active_role_label']))
+                                                        ({{ $contactPlan['active_role_label'] }})
+                                                    @endif
+                                                    @if (($contactPlan['queue_total'] ?? 0) > 1)
+                                                        — {{ $contactPlan['active_position'] ?? 0 }}/{{ $contactPlan['queue_total'] }}
+                                                    @endif
+                                                </p>
+                                            @endif
+                                            @if (($contactPlan['suchak_count'] ?? 0) > 0)
+                                                <p data-testid="bulk-suchak-directory-count" class="text-[11px] text-violet-800">
+                                                    Suchak reference: {{ $contactPlan['suchak_count'] }} (not messaged)
+                                                </p>
+                                            @endif
+                                            <p class="text-xs text-gray-500">DOB: {{ $candidate['date_of_birth'] ?? $missingDisplay }} · Age: {{ $candidate['age'] ?? $missingDisplay }}</p>
+                                            <p class="text-xs text-gray-500">Height: {{ $candidate['height'] ?? $missingDisplay }} · Gender: {{ $candidate['gender'] ?? $missingDisplay }}</p>
+                                            <p class="text-xs text-gray-500">City: {{ $candidate['city'] ?? $missingDisplay }}</p>
+                                            <p class="text-xs text-gray-500">Education: {{ $candidate['education'] ?? $missingDisplay }} · Occupation: {{ $candidate['occupation'] ?? $missingDisplay }}</p>
+                                            @if (($candidate['religion'] ?? null) || ($candidate['caste'] ?? null) || ($candidate['sub_caste'] ?? null))
+                                                <p class="text-xs text-gray-500">
+                                                    @if ($candidate['religion'] ?? null)
+                                                        Religion: {{ $candidate['religion'] }}
+                                                    @endif
+                                                    @if ($candidate['caste'] ?? null)
+                                                        @if ($candidate['religion'] ?? null) · @endif
+                                                        Caste: {{ $candidate['caste'] }}
+                                                    @endif
+                                                    @if ($candidate['sub_caste'] ?? null)
+                                                        · Sub: {{ $candidate['sub_caste'] }}
+                                                    @endif
+                                                </p>
+                                            @endif
+                                        </div>
+                                        <div class="space-y-2 lg:col-span-2">
+                                            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Parse</p>
+                                            @if ($intake)
+                                                <p>
+                                                    <a href="{{ route('admin.biodata-intakes.show', $intake) }}" class="font-medium text-indigo-600 hover:text-indigo-800">Intake #{{ $intake->id }}</a>
+                                                    · Parsed JSON: {{ $hasParsedJson ? 'Yes' : 'No' }}
+                                                </p>
+                                                @if ($parseStatus === 'parsed' && $hasParsedJson)
+                                                    <p class="text-xs font-medium text-green-700">Parse: OK</p>
+                                                @elseif ($hasEmptyOcrFailure)
+                                                    <p class="text-xs font-medium text-red-700">OCR failed: no text extracted</p>
+                                                @elseif ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_PARSE_QUEUED)
+                                                    <p class="text-xs font-medium text-amber-700">Free parse queued</p>
+                                                @elseif ($parseStatus === 'pending')
+                                                    <p class="text-xs text-gray-500">Waiting for free parse</p>
+                                                @elseif ($parseStatus !== '')
+                                                    <p class="text-xs text-gray-500">Parse: {{ $parseStatus }}</p>
+                                                @endif
+                                                @if ($intake->last_error)
+                                                    <p class="text-xs text-red-700">{{ $intake->last_error }}</p>
+                                                @endif
+                                            @else
+                                                @if ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_PENDING)
+                                                    <p class="text-xs text-gray-500">Waiting for background processing</p>
+                                                @elseif ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_PROCESSING)
+                                                    <p class="text-xs text-amber-700">OCR/parse preparation running</p>
+                                                @else
+                                                    <p class="text-xs text-red-700">Missing linked intake</p>
+                                                @endif
+                                                <p class="text-xs text-gray-500">Parsed JSON: No</p>
+                                            @endif
+                                        </div>
+                                        <div class="space-y-2 lg:col-span-2">
+                                            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Status & flags</p>
+                                            <div class="flex flex-wrap gap-1">
+                                                @foreach ($visiblePipelineReasons as $pipelineReason)
+                                                    <span data-testid="bulk-pipeline-reason" class="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-600">{{ $pipelineReason['label'] ?? str_replace('_', ' ', (string) ($pipelineReason['code'] ?? '')) }}</span>
                                                 @endforeach
+                                                @if ($whatsappConsentStatus !== '')
+                                                    <span data-testid="bulk-whatsapp-consent-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $whatsappConsentBadgeClass }}">{{ $whatsappConsentLabel }}</span>
+                                                @endif
+                                                @if ($consentReceived && $registrationPath !== '')
+                                                    <span data-testid="bulk-registration-path-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $registrationPathBadgeClass }}">{{ $registrationPathLabel }}</span>
+                                                @endif
+                                                @if ($registrationStatus !== '')
+                                                    <span data-testid="bulk-registration-status-badge" class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $registrationBadgeClass }}">{{ $registrationStatusLabel }}</span>
+                                                @endif
+                                                @if ($exceptionBadges !== [])
+                                                    @foreach ($exceptionBadges as $badge)
+                                                        <span @if (! empty($badge['testid'])) data-testid="{{ $badge['testid'] }}" @endif @if (! empty($badge['title'])) title="{{ $badge['title'] }}" @endif class="rounded-full border px-2 py-0.5 text-xs font-semibold {{ $badge['class'] }}">{{ $badge['label'] }}</span>
+                                                    @endforeach
+                                                @endif
                                             </div>
-                                        @endif
+                                        </div>
                                     </div>
                                 </td>
                             </tr>
@@ -738,6 +672,57 @@
             }
         });
     });
+
+    document.querySelectorAll('[data-bulk-actions-open]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var dialogId = button.getAttribute('data-bulk-actions-open');
+            var dialog = dialogId ? document.getElementById(dialogId) : null;
+            if (dialog && typeof dialog.showModal === 'function') {
+                dialog.showModal();
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-bulk-actions-close]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var dialog = button.closest('dialog');
+            if (dialog && typeof dialog.close === 'function') {
+                dialog.close();
+            }
+        });
+    });
+
+    document.querySelectorAll('dialog[id^="bulk-actions-panel-"]').forEach(function (dialog) {
+        dialog.addEventListener('click', function (event) {
+            if (event.target === dialog && typeof dialog.close === 'function') {
+                dialog.close();
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-bulk-details-toggle]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var rowId = button.getAttribute('data-bulk-details-toggle');
+            var row = rowId ? document.getElementById(rowId) : null;
+            if (! row) {
+                return;
+            }
+            var isHidden = row.classList.contains('hidden');
+            row.classList.toggle('hidden', ! isHidden);
+            if (button.textContent && button.textContent.indexOf('Details') === 0) {
+                button.textContent = isHidden ? 'Details ▴' : 'Details ▾';
+            }
+        });
+    });
+
+    @if ($highlightItemId > 0)
+        (function () {
+            var detailsRow = document.getElementById('bulk-item-details-{{ $highlightItemId }}');
+            if (detailsRow) {
+                detailsRow.classList.remove('hidden');
+            }
+        })();
+    @endif
 })();
 </script>
 @endsection
