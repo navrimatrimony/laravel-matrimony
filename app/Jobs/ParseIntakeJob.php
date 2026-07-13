@@ -461,7 +461,7 @@ class ParseIntakeJob implements ShouldQueue
                 );
             }
         } else {
-            $resolved = $ocr->resolveParseInputText($intake);
+            $resolved = $this->resolveNativeOcrParseInput($ocr, $intake, $manualPreparedExists);
             $raw = $resolved['text'];
         }
 
@@ -807,6 +807,41 @@ class ParseIntakeJob implements ShouldQueue
         }
 
         return BiodataIntakeOcrAttempt::FAILURE_PROVIDER_ERROR;
+    }
+
+    /**
+     * Native OCR parse-input resolution (non-AI-vision path).
+     *
+     * Prefers Phase 3 assembled {@see BiodataIntake::$last_parse_input_text}, then falls back to
+     * {@see OcrService::buildParseInputFromDbRawOcr()} when upload OCR text exists. Preserves legacy
+     * manual-crop and parse-time re-OCR behavior via {@see OcrService::resolveParseInputText()}.
+     *
+     * @return array{text: string, ocr_debug: array<string, mixed>}
+     */
+    private function resolveNativeOcrParseInput(
+        OcrService $ocr,
+        BiodataIntake $intake,
+        bool $manualPreparedExists,
+    ): array {
+        $assembled = trim((string) ($intake->last_parse_input_text ?? ''));
+        if ($assembled !== '') {
+            return [
+                'text' => $assembled,
+                'ocr_debug' => [
+                    'kind' => 'stored_text',
+                    'ocr_source_type' => 'ensemble_assembled_phase3',
+                    'ocr_pipeline' => 'phase3_last_parse_input_text',
+                    'parse_input_source' => 'ensemble_assembled_phase3',
+                    'intake_id' => $intake->id,
+                ],
+            ];
+        }
+
+        if ($manualPreparedExists || trim((string) ($intake->raw_ocr_text ?? '')) === '') {
+            return $ocr->resolveParseInputText($intake);
+        }
+
+        return $ocr->buildParseInputFromDbRawOcr($intake);
     }
 
     public function failed(\Throwable $e): void
