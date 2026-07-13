@@ -4,9 +4,13 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from functools import lru_cache
 from typing import Any
+
+# PaddlePaddle 3.3.x + oneDNN can crash with ConvertPirAttribute2RuntimeAttribute on CPU.
+os.environ.setdefault("FLAGS_use_mkldnn", "0")
 
 from paddleocr import PaddleOCR
 
@@ -21,6 +25,7 @@ def get_ocr() -> PaddleOCR:
     use_doc_orientation_classify=False,
     use_doc_unwarping=False,
     use_textline_orientation=True,
+    enable_mkldnn=False,
   )
 
 
@@ -98,5 +103,7 @@ def extract_text_from_image(image_path: str) -> dict[str, Any]:
       "lang": "hi",
       "line_count": len(lines),
       "paddleocr_api": "predict",
+      "paddlepaddle": __import__("paddle").__version__,
+      "enable_mkldnn": False,
     },
   }

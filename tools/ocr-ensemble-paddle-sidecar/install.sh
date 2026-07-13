@@ -4,15 +4,35 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
-PYTHON_BIN="${PYTHON_BIN:-python3.11}"
+PYTHON_BIN="${PYTHON_BIN:-python3.12}"
 if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
   PYTHON_BIN="${PYTHON_BIN_FALLBACK:-python3}"
 fi
 
-"$PYTHON_BIN" -m venv .venv
+if [ ! -d .venv ]; then
+  "$PYTHON_BIN" -m venv .venv
+fi
+
 source .venv/bin/activate
 python -m pip install --upgrade pip
-pip install -r requirements.txt
+
+# Install PaddlePaddle CPU wheel from the official index first (avoids 3.3.x oneDNN/PIR crash).
+python -m pip install "paddlepaddle==3.2.2" \
+  -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+
+python -m pip install -r requirements.txt
+
+python - <<'PY'
+import sys
+
+import paddle
+import paddleocr
+
+print(f"python={sys.version.split()[0]}")
+print(f"paddlepaddle={paddle.__version__}")
+print(f"paddleocr={paddleocr.__version__}")
+PY
 
 echo "PaddleOCR sidecar installed."
-echo "Start with: source .venv/bin/activate && uvicorn server:app --host 127.0.0.1 --port 18080"
+echo "Verify OCR: python run_ocr.py --image /absolute/path/to/image.png"
+echo "Start sidecar: source .venv/bin/activate && uvicorn server:app --host 127.0.0.1 --port 18080"

@@ -1,6 +1,7 @@
-fastapi>=0.115.0
-uvicorn[standard]>=0.32.0
-paddleocr>=2.9.1
-paddlepaddle>=2.6.2
-pillow>=10.4.0
-numpy>=1.26.0
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.32.0,<1.0.0
+paddleocr==3.7.0
+# PaddlePaddle 3.3.x has a CPU oneDNN/PIR regression; stay on 3.2.2 for OCR sidecar.
+paddlepaddle==3.2.2
+pillow>=10.4.0,<13.0.0
+numpy>=1.26.0,<2.4.0

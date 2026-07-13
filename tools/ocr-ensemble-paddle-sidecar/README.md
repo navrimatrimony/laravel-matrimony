@@ -9,15 +9,44 @@ Benchmark-only service. **Not** wired into production bulk intake until go/no-go
 
 ## Install (Linux server)
 
+Pinned versions (see `requirements.txt`):
+
+| Package | Version | Notes |
+|---------|---------|-------|
+| Python | 3.10–3.12 | Server currently uses 3.12 |
+| paddleocr | 3.7.0 | Requires PaddlePaddle >= 3.0 |
+| paddlepaddle | **3.2.2** | Avoid 3.3.x CPU oneDNN/PIR crash |
+
 ```bash
 cd tools/ocr-ensemble-paddle-sidecar
-python3.11 -m venv .venv
+PYTHON_BIN=python3.12 bash install.sh
 source .venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
 ```
 
 First run downloads Hindi/Devanagari OCR models (~100MB).
+
+### Reinstall after compatibility fix
+
+If OCR fails with `ConvertPirAttribute2RuntimeAttribute` / `onednn_instruction.cc`:
+
+```bash
+cd tools/ocr-ensemble-paddle-sidecar
+source .venv/bin/activate
+python -m pip install "paddlepaddle==3.2.2" \
+  -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+python -m pip install -r requirements.txt --upgrade
+python -c "import paddle, paddleocr; print(paddle.__version__, paddleocr.__version__)"
+```
+
+## Verify standalone OCR (before Laravel)
+
+```bash
+source .venv/bin/activate
+python -c "import paddle, paddleocr; print('python ok', paddle.__version__, paddleocr.__version__)"
+python run_ocr.py --image /absolute/path/to/one/biodata/image.jpg
+```
+
+Expected: JSON with `"text": "..."` and `"line_count" > 0` for a readable biodata image.
 
 ## Run HTTP sidecar
 
