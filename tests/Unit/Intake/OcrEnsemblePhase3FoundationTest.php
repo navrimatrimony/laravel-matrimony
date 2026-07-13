@@ -3,6 +3,7 @@
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Models\BulkIntakeBatchItem;
+use App\Models\User;
 use App\Services\Intake\IntakeOcrEnsembleGate;
 use App\Services\Intake\IntakeOcrEnsemblePhase3Service;
 use App\Services\Intake\OcrEnsemble\Data\FieldResolutionEnvelope;
@@ -79,14 +80,31 @@ test('phase3 service skips text bulk items', function () {
         ->and($result->reason)->toBe('bulk_item_ineligible');
 });
 
-test('phase3 resolve returns not implemented skeleton outcome', function () {
-    $intake = new BiodataIntake(['id' => 737]);
+test('phase3 resolve skips when intake has no usable ocr attempts', function () {
+    $user = User::factory()->create();
+    $intake = BiodataIntake::create([
+        'uploaded_by' => $user->id,
+        'raw_ocr_text' => 'short',
+        'parsed_json' => [],
+        'intake_status' => 'uploaded',
+        'parse_status' => 'pending',
+        'parser_version' => 'rules_only',
+        'snapshot_schema_version' => 1,
+        'approved_by_user' => false,
+        'intake_locked' => false,
+    ]);
 
     $result = app(IntakeOcrEnsemblePhase3Service::class)->resolve($intake);
 
-    expect($result->wasNotImplemented())->toBeTrue()
-        ->and($result->reason)->toBe('phase3_v1_skeleton')
-        ->and($result->envelope)->toBeNull();
+    expect($result->wasSkipped())->toBeTrue()
+        ->and($result->reason)->toBe('no_usable_ocr_attempts')
+        ->and($intake->fresh()->field_resolution_json)->toBeNull();
+});
+
+test('phase3 resolution result helpers', function () {
+    expect(Phase3ResolutionResult::skipped('x')->wasSkipped())->toBeTrue()
+        ->and(Phase3ResolutionResult::notImplemented('y')->wasNotImplemented())->toBeTrue()
+        ->and(Phase3ResolutionResult::resolved(FieldResolutionEnvelope::skeleton(1))->wasResolved())->toBeTrue();
 });
 
 test('phase3 production files do not import benchmark classes', function () {
@@ -111,9 +129,4 @@ test('biodata intake casts field_resolution_json to array', function () {
 
     expect($intake->field_resolution_json)->toBeArray()
         ->and($intake->field_resolution_json['_meta']['intake_id'])->toBe(735);
-});
-
-test('phase3 resolution result helpers', function () {
-    expect(Phase3ResolutionResult::skipped('x')->wasSkipped())->toBeTrue()
-        ->and(Phase3ResolutionResult::notImplemented('y')->wasNotImplemented())->toBeTrue();
 });

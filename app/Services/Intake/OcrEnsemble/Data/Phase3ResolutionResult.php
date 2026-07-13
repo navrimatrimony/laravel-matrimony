@@ -48,4 +48,9 @@ final class Phase3ResolutionResult
     {
         return $this->outcome === self::OUTCOME_NOT_IMPLEMENTED;
     }
+
+    public function wasResolved(): bool
+    {
+        return $this->outcome === self::OUTCOME_RESOLVED;
+    }
 }
