@@ -42,6 +42,10 @@ class OcrEnsembleBenchmarkFieldMatcher
             return preg_replace('/\D/u', '', $value) ?? '';
         }
 
+        if (in_array($field, ['religion', 'caste', 'sub_caste'], true)) {
+            return self::normalizeCommunityToken($field, $value);
+        }
+
         if ($field === 'date_of_birth') {
             return $value;
         }
@@ -51,5 +55,23 @@ class OcrEnsembleBenchmarkFieldMatcher
         $value = preg_replace('/\s+/u', ' ', trim($value)) ?? $value;
 
         return trim($value);
+    }
+
+    private static function normalizeCommunityToken(string $field, string $value): string
+    {
+        $extractor = app(OcrEnsembleBenchmarkCommunityExtractor::class);
+        if ($field === 'religion') {
+            return strtolower((string) ($extractor->normalizeReligion($value) ?? $value));
+        }
+        if ($field === 'caste') {
+            return strtolower((string) ($extractor->normalizeCaste($value) ?? $value));
+        }
+
+        $value = OcrNormalize::normalizeDigits($value);
+        if (preg_match('/(\d{1,3})\s*(?:कुळी|क्‌ळी|कळी)/u', $value, $m)) {
+            return ((int) $m[1]).' kuli';
+        }
+
+        return mb_strtolower(trim($value), 'UTF-8');
     }
 }
