@@ -16,4 +16,16 @@ class IntakeOcrEnsembleGate
     {
         return AdminSetting::getBool(self::SETTING_KEY, false);
     }
+
+    /**
+     * Phase 3 field resolution runs only when the ensemble flag is on and phase3 is enabled in config.
+     */
+    public function isPhase3Enabled(): bool
+    {
+        if (! $this->isEnabled()) {
+            return false;
+        }
+
+        return (bool) config('ocr.ensemble.phase3.enabled', true);
+    }
 }

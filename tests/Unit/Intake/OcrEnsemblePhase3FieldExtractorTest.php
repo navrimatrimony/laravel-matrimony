@@ -1,0 +1,122 @@
+<?php
+
+use App\Models\BiodataIntakeOcrAttempt;
+use App\Services\Intake\OcrEnsemble\Data\OcrEngineFieldCandidatesDto;
+use App\Services\Intake\OcrEnsemble\OcrEnsembleFieldExtractor;
+use App\Services\Intake\OcrEnsemble\OcrEnsemblePhase3Constants;
+use App\Services\Intake\OcrEnsemble\Support\OcrEnsembleCommunityExtractor;
+use App\Services\Intake\OcrEnsemble\Support\OcrEnsembleDobNormalizer;
+use App\Services\Intake\OcrEnsemble\Support\OcrEnsembleMobileSelector;
+use App\Services\Intake\OcrEnsemble\Support\OcrEnsembleNameExtractor;
+use Tests\TestCase;
+
+uses(TestCase::class);
+
+test('production field extractor returns dto with sixteen fields', function () {
+    $text = <<<'TXT'
+मुलाचे नाव : अविनाश अर्जुन खोडवे
+जन्म तारीख : 04/01/1992
+मोबाईल : 8149379216
+धर्म : Hindu
+जात : Maratha
+TXT;
+
+    $dto = app(OcrEnsembleFieldExtractor::class)->extractFromText(
+        $text,
+        OcrEnsemblePhase3Constants::ENGINE_LARAVEL_NATIVE_OCR,
+    );
+
+    expect($dto)->toBeInstanceOf(OcrEngineFieldCandidatesDto::class)
+        ->and(array_keys($dto->toFieldMap()))->toBe(OcrEnsemblePhase3Constants::STRUCTURED_FIELDS)
+        ->and($dto->field('full_name'))->toContain('अविनाश')
+        ->and($dto->field('date_of_birth'))->toBe('1992-01-04')
+        ->and($dto->field('primary_contact_number'))->toBe('8149379216')
+        ->and($dto->field('religion'))->toBe('Hindu')
+        ->and($dto->field('caste'))->toBe('Maratha');
+});
+
+test('production field extractor strips ku honorific from name', function () {
+    $text = "* कु. अभिजीत अशोक पाटील\nजात : हिंदू - मराठा\nशिक्षण : B.E. Computer\nनोकरी : Software Engineer";
+
+    $dto = app(OcrEnsembleFieldExtractor::class)->extractFromText(
+        $text,
+        OcrEnsemblePhase3Constants::ENGINE_LARAVEL_NATIVE_OCR,
+    );
+
+    expect($dto->field('full_name'))->toBe('अभिजीत अशोक पाटील')
+        ->and($dto->field('religion'))->toBe('Hindu')
+        ->and($dto->field('caste'))->toBe('Maratha')
+        ->and($dto->field('education'))->toContain('B.E.')
+        ->and($dto->field('occupation'))->toBe('Software Engineer');
+});
+
+test('production mobile selector prefers candidate mobile over relative numbers', function () {
+    $lines = [
+        'मुलाचे नाव : राहुल शिंदे',
+        'वडील मोबाईल : 9123456789',
+        'मोबाईल : 9876543210',
+        'कौटुंबिक माहिती',
+        'आई मोबाईल : 9988776655',
+    ];
+
+    $phone = app(OcrEnsembleMobileSelector::class)->selectPrimary($lines);
+
+    expect($phone)->toBe('9876543210');
+});
+
+test('production dob normalizer parses dd/mm/yyyy and recovers ocr digit substitutions', function () {
+    $normalizer = app(OcrEnsembleDobNormalizer::class);
+
+    expect($normalizer->normalize('04/01/1992'))->toBe('1992-01-04')
+        ->and($normalizer->normalize('O4/O1/1992'))->toBe('1992-01-04')
+        ->and($normalizer->normalize('15-08-1998'))->toBe('1998-08-15');
+});
+
+test('production name extractor tolerates ocr text with no candidate name', function () {
+    $extractor = app(OcrEnsembleNameExtractor::class);
+    $lines = [
+        '* कु.',
+        'जन्म तारीख : 04/01/1992',
+        'मोबाईल : 9876543210',
+    ];
+
+    expect($extractor->extract($lines))->toBeNull();
+});
+
+test('production field extractor extracts candidates from ocr attempts', function () {
+    $attempt = new BiodataIntakeOcrAttempt([
+        'engine' => BiodataIntakeOcrAttempt::ENGINE_LARAVEL_NATIVE_OCR,
+        'raw_text' => "मुलाचे नाव : Test Candidate\nमोबाईल : 9876543210",
+    ]);
+    $attempt->id = 101;
+
+    $result = app(OcrEnsembleFieldExtractor::class)->extractCandidates([$attempt]);
+
+    expect($result->isEmpty())->toBeFalse()
+        ->and($result->primary()?->engineKey)->toBe(BiodataIntakeOcrAttempt::ENGINE_LARAVEL_NATIVE_OCR)
+        ->and($result->primary()?->ocrAttemptId)->toBe(101)
+        ->and($result->primary()?->field('primary_contact_number'))->toBe('9876543210');
+});
+
+test('production field extractor does not import benchmark classes', function () {
+    $paths = [
+        app_path('Services/Intake/OcrEnsemble/OcrEnsembleFieldExtractor.php'),
+        app_path('Services/Intake/OcrEnsemble/Support'),
+    ];
+
+    foreach ($paths as $path) {
+        $files = is_dir($path) ? glob($path.'/*.php') ?: [] : [$path];
+        foreach ($files as $file) {
+            expect((string) file_get_contents($file))->not->toContain('OcrEnsembleBenchmark');
+        }
+    }
+});
+
+test('production community extractor splits hindu maratha jati line', function () {
+    $lines = ['जात : हिंदू - मराठा (९६ कुळी)'];
+    $result = app(OcrEnsembleCommunityExtractor::class)->extract($lines);
+
+    expect($result['religion'])->toBe('Hindu')
+        ->and($result['caste'])->toBe('Maratha')
+        ->and($result['sub_caste'])->toBe('96 कुळी');
+});
