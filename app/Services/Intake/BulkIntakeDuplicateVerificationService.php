@@ -66,6 +66,23 @@ class BulkIntakeDuplicateVerificationService
     }
 
     /**
+     * @param  array<string, mixed>  $verification
+     */
+    public function canConfirmStaleIntakeProceed(array $verification): bool
+    {
+        if (! (bool) ($verification['has_hints'] ?? false)) {
+            return false;
+        }
+
+        $primary = $verification['primary'] ?? null;
+        if (! is_array($primary)) {
+            return false;
+        }
+
+        return ($primary['recommended_action'] ?? '') === self::ACTION_PROCEED_OK;
+    }
+
+    /**
      * @param  array<string, mixed>  $hint
      * @return array<string, mixed>
      */

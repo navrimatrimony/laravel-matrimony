@@ -242,3 +242,77 @@ test('bulk list shows duplicate verify panel with journey and links', function (
         ->and($dupPanelPos)->not->toBeFalse()
         ->and($dupPanelPos)->toBeGreaterThan($actionsEnd);
 });
+
+test('stale intake only duplicate shows confirm proceed button in verify panel', function () {
+    $admin = duplicateVerifyAdmin();
+    $hash = hash('sha256', 'same-biodata-content-proceed-ui');
+    $oldBatch = duplicateVerifyBatch($admin);
+    $oldIntake = duplicateVerifyIntake([
+        'content_hash' => $hash,
+        'parsed_json' => ['core' => ['full_name' => 'Stale Upload']],
+    ]);
+    duplicateVerifyItem($oldBatch, $oldIntake, ['file_hash' => $hash]);
+
+    $batch = duplicateVerifyBatch($admin);
+    $newIntake = duplicateVerifyIntake([
+        'content_hash' => $hash,
+        'approval_snapshot_json' => [
+            'core' => [
+                'full_name' => 'Stale Upload Again',
+                'primary_contact_number' => '9876501234',
+                'date_of_birth' => '1996-05-27',
+                'gender' => 'male',
+            ],
+        ],
+        'parse_status' => 'parsed',
+    ]);
+    duplicateVerifyItem($batch, $newIntake, ['file_hash' => $hash]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-confirm-duplicate-proceed"', false)
+        ->assertSee('जुना फक्त intake होता — consent साठी पुढे जा', false);
+});
+
+test('admin can confirm stale intake duplicate proceed and pipeline becomes eligible', function () {
+    $admin = duplicateVerifyAdmin();
+    $hash = hash('sha256', 'same-biodata-content-proceed-action');
+    $oldBatch = duplicateVerifyBatch($admin);
+    $oldIntake = duplicateVerifyIntake([
+        'content_hash' => $hash,
+        'parsed_json' => ['core' => ['full_name' => 'Stale Upload']],
+    ]);
+    duplicateVerifyItem($oldBatch, $oldIntake, ['file_hash' => $hash]);
+
+    $batch = duplicateVerifyBatch($admin);
+    $newIntake = duplicateVerifyIntake([
+        'content_hash' => $hash,
+        'approval_snapshot_json' => [
+            'core' => [
+                'full_name' => 'Stale Upload Again',
+                'primary_contact_number' => '9876501235',
+                'date_of_birth' => '1996-05-27',
+                'gender' => 'male',
+            ],
+        ],
+        'parse_status' => 'parsed',
+    ]);
+    $newItem = duplicateVerifyItem($batch, $newIntake, ['file_hash' => $hash]);
+
+    $pipelineBefore = app(\App\Services\Intake\BulkIntakeEligibilityService::class)->eligibleForPipeline($newItem->fresh(['biodataIntake']));
+    expect($pipelineBefore['bucket'])->toBe(\App\Services\Intake\BulkIntakeEligibilityService::FILTER_NEEDS_CHECK)
+        ->and($pipelineBefore['reason_codes'])->toContain('possible_duplicate');
+
+    $this->actingAs($admin)
+        ->post(route('admin.bulk-intakes.items.override-duplicate-block', [$batch, $newItem]), [
+            'reason' => 'जुना upload फक्त intake',
+        ])
+        ->assertRedirect();
+
+    $newItem->refresh();
+    $pipelineAfter = app(\App\Services\Intake\BulkIntakeEligibilityService::class)->eligibleForPipeline($newItem->fresh(['biodataIntake']));
+
+    expect($pipelineAfter['bucket'])->toBe(\App\Services\Intake\BulkIntakeEligibilityService::FILTER_ELIGIBLE)
+        ->and($pipelineAfter['eligible'])->toBeTrue();
+});

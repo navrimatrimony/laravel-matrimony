@@ -4,6 +4,8 @@
     $dupHints = is_array($duplicateVerification['hints'] ?? null) ? $duplicateVerification['hints'] : [];
     $dupHistoryBlocks = is_array($duplicateVerification['history_blocks'] ?? null) ? $duplicateVerification['history_blocks'] : [];
     $dupHintCount = (int) ($duplicateVerification['hint_count'] ?? count($dupHints));
+    $canConfirmStaleDuplicateProceed = app(\App\Services\Intake\BulkIntakeDuplicateVerificationService::class)
+        ->canConfirmStaleIntakeProceed(is_array($duplicateVerification ?? null) ? $duplicateVerification : []);
 @endphp
 
 <dialog id="{{ $dupPanelDialogId }}" class="w-[min(620px,95vw)] max-h-[90vh] rounded-xl border border-gray-200 bg-white p-0 shadow-xl backdrop:bg-black/40">
@@ -152,11 +154,21 @@
                     </form>
                 @endif
 
-                @if ($duplicateAutoBlocked && ! $duplicateOverrideActive && ! $manualDuplicateActive)
+                @if ($canConfirmStaleDuplicateProceed && ! $duplicateOverrideActive && ! $manualDuplicateActive)
+                    <form method="POST" action="{{ route('admin.bulk-intakes.items.override-duplicate-block', [$batch, $item]) }}">
+                        @csrf
+                        <input type="hidden" name="reason" value="Admin verified — जुना upload फक्त intake, नवीन consent process">
+                        <button
+                            type="submit"
+                            data-testid="bulk-confirm-duplicate-proceed"
+                            class="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1.5 text-left text-sm font-semibold text-emerald-900 hover:bg-emerald-100"
+                        >जुना फक्त intake होता — consent साठी पुढे जा</button>
+                    </form>
+                @elseif ($duplicateAutoBlocked && ! $duplicateOverrideActive && ! $manualDuplicateActive)
                     <form method="POST" action="{{ route('admin.bulk-intakes.items.override-duplicate-block', [$batch, $item]) }}">
                         @csrf
                         <input type="hidden" name="reason" value="Admin override after duplicate verify">
-                        <button type="submit" class="text-left font-medium text-sky-700 hover:text-sky-900">Old upload was dead — proceed</button>
+                        <button type="submit" data-testid="bulk-override-duplicate-block" class="text-left font-medium text-sky-700 hover:text-sky-900">Old upload was dead — proceed</button>
                     </form>
                 @endif
             </div>

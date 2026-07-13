@@ -60,10 +60,12 @@ class BulkIntakeCandidateScreeningAdvisorService
         $duplicateStopCodes = ['duplicate_existing_profile', 'auto_duplicate_intake', 'manual_duplicate'];
         $hasDuplicateStop = array_intersect($stopCodes, $duplicateStopCodes) !== [];
         if (! $hasDuplicateStop) {
-            if ($duplicateHints !== []) {
+            if ($duplicateHints !== [] && ! (bool) ($gate['override_active'] ?? false)) {
                 $reviewCodes[] = 'possible_duplicate';
-            } else {
+            } elseif ($duplicateHints === []) {
                 $eligibleCodes[] = 'no_duplicate_hint';
+            } else {
+                $eligibleCodes[] = 'duplicate_verified_proceed';
             }
         }
 

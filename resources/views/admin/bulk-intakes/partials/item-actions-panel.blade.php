@@ -3,6 +3,8 @@
     $dupPanelDialogId = 'bulk-dup-panel-'.(int) $item->id;
     $waPanelDialogId = 'bulk-wa-panel-'.(int) $item->id;
     $actionsCandidateName = trim((string) ($candidate['full_name'] ?? $item->original_filename ?? 'Candidate'));
+    $canConfirmStaleDuplicateProceed = app(\App\Services\Intake\BulkIntakeDuplicateVerificationService::class)
+        ->canConfirmStaleIntakeProceed(is_array($duplicateVerification ?? null) ? $duplicateVerification : []);
     $primaryAction = match (true) {
         $canSendWhatsAppPermission => [
             'kind' => 'wa',
@@ -139,7 +141,13 @@
             </form>
         @endif
 
-        @if ($duplicateAutoBlocked && ! $duplicateOverrideActive && ! $manualDuplicateActive)
+        @if ($canConfirmStaleDuplicateProceed && ! $duplicateOverrideActive && ! $manualDuplicateActive)
+            <form method="POST" action="{{ route('admin.bulk-intakes.items.override-duplicate-block', [$batch, $item]) }}">
+                @csrf
+                <input type="hidden" name="reason" value="Admin verified — जुना upload फक्त intake, नवीन consent process">
+                <button type="submit" data-testid="bulk-confirm-duplicate-proceed" class="text-left font-medium text-emerald-700 hover:text-emerald-900">जुना फक्त intake — consent साठी पुढे जा</button>
+            </form>
+        @elseif ($duplicateAutoBlocked && ! $duplicateOverrideActive && ! $manualDuplicateActive)
             <form method="POST" action="{{ route('admin.bulk-intakes.items.override-duplicate-block', [$batch, $item]) }}">
                 @csrf
                 <input type="hidden" name="reason" value="Admin override — proceed despite auto block">
