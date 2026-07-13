@@ -203,14 +203,22 @@ class BulkIntakeBatchService
             }
 
             $meta = is_array($lockedItem->item_meta_json) ? $lockedItem->item_meta_json : [];
+            $processingMeta = [
+                'background_status' => 'processing',
+                'processing_started_at' => now()->toIso8601String(),
+            ];
+            if (
+                app(IntakeOcrEnsembleGate::class)->isEnabled()
+                && (string) $lockedItem->input_type === BulkIntakeBatchItem::INPUT_FILE
+            ) {
+                $processingMeta['ocr_ensemble_status'] = 'ocr_ensemble_processing';
+                $processingMeta['ocr_ensemble_pipeline'] = IntakeOcrEnsemblePhase1Service::PIPELINE_VERSION;
+            }
             $lockedItem->forceFill([
                 'item_status' => BulkIntakeBatchItem::STATUS_PROCESSING,
                 'failure_code' => null,
                 'failure_message' => null,
-                'item_meta_json' => array_merge($meta, [
-                    'background_status' => 'processing',
-                    'processing_started_at' => now()->toIso8601String(),
-                ]),
+                'item_meta_json' => array_merge($meta, $processingMeta),
             ])->save();
 
             $batch = $lockedItem->batch;
@@ -519,7 +527,9 @@ class BulkIntakeBatchService
             'failure_message' => null,
         ])->save();
 
-        $prepared = $intakeCreation->prepare(null, $file, $rawText);
+        $prepared = $file instanceof UploadedFile
+            ? $intakeCreation->prepareForBulkFile(null, $file)
+            : $intakeCreation->prepare(null, null, $rawText);
 
         return DB::transaction(function () use ($item, $actor, $intakeCreation, $sourceContextRecorder, $prepared): BulkIntakeBatchItem {
             $lockedItem = BulkIntakeBatchItem::query()->lockForUpdate()->findOrFail($item->id);
@@ -530,6 +540,7 @@ class BulkIntakeBatchService
             $intake = $intakeCreation->persistPreparedForUnclaimedBulk($prepared);
 
             $meta = is_array($lockedItem->item_meta_json) ? $lockedItem->item_meta_json : [];
+            $ocrEnsembleMeta = $this->ocrEnsembleItemMetaFromPrepared($prepared);
             $lockedItem->forceFill([
                 'biodata_intake_id' => $intake->id,
                 'source_file_path' => $intake->file_path,
@@ -539,7 +550,7 @@ class BulkIntakeBatchService
                 'item_meta_json' => array_merge($meta, [
                     'background_status' => 'intake_created',
                     'intake_created_at' => now()->toIso8601String(),
-                ]),
+                ], $ocrEnsembleMeta),
             ])->save();
 
             $sourceContextRecorder->recordForIntake($intake, [
@@ -1076,5 +1087,29 @@ class BulkIntakeBatchService
         }
 
         return is_numeric($value) ? (int) $value : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $prepared
+     * @return array<string, mixed>
+     */
+    private function ocrEnsembleItemMetaFromPrepared(array $prepared): array
+    {
+        if (! empty($prepared['ensemble_phase1'])) {
+            return [
+                'ocr_ensemble_status' => 'ocr_ready',
+                'ocr_ensemble_pipeline' => IntakeOcrEnsemblePhase1Service::PIPELINE_VERSION,
+            ];
+        }
+
+        if (! empty($prepared['ensemble_phase1_skipped'])) {
+            return [
+                'ocr_ensemble_status' => 'ocr_ready',
+                'ocr_ensemble_pipeline' => IntakeOcrEnsemblePhase1Service::PIPELINE_VERSION,
+                'ocr_ensemble_skip_reason' => (string) ($prepared['ensemble_skip_reason'] ?? 'reused_transcript'),
+            ];
+        }
+
+        return [];
     }
 }

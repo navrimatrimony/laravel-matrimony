@@ -154,7 +154,7 @@ test('admin bulk upload file defers OCR to background job', function () {
     $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
-        ->assertSee('Waiting for background processing', false);
+        ->assertSee('Background processing', false);
 
     Queue::assertPushed(ProcessBulkIntakeBatchItemJob::class, 1);
     Queue::assertNotPushed(ParseIntakeJob::class);

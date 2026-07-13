@@ -32,6 +32,63 @@ class IntakeCreationService
     }
 
     /**
+     * Bulk file upload only — uses ensemble Phase 1 when flag is on; legacy prepare() when off.
+     *
+     * @return array{file_path: string|null, original_filename: string|null, raw_ocr_text: string, upload_ocr_debug?: array<string, mixed>|null, reused_paid_extraction_text?: bool, reused_from_intake_id?: int, ensemble_phase1?: bool, ensemble_phase1_skipped?: bool, ensemble_skip_reason?: string, preprocessing_version?: string}
+     */
+    public function prepareForBulkFile(?int $userId, UploadedFile $file): array
+    {
+        if (! app(IntakeOcrEnsembleGate::class)->isEnabled()) {
+            return $this->prepare($userId, $file, null);
+        }
+
+        return $this->prepareUploadedFileForBulkEnsemble($userId, $file);
+    }
+
+    /**
+     * @return array{file_path: string|null, original_filename: string|null, raw_ocr_text: string, upload_ocr_debug?: array<string, mixed>|null, reused_paid_extraction_text?: bool, reused_from_intake_id?: int, ensemble_phase1?: bool, ensemble_phase1_skipped?: bool, ensemble_skip_reason?: string, preprocessing_version?: string}
+     */
+    private function prepareUploadedFileForBulkEnsemble(?int $userId, UploadedFile $file): array
+    {
+        $this->enforceRateLimits($userId);
+
+        $originalName = $file->getClientOriginalName();
+        $extension = strtolower($file->getClientOriginalExtension());
+        $this->validateFileLimits($file, $extension, $userId);
+
+        $path = $file->store('intakes');
+        $reused = $this->reusableTextFromExactPreviousUpload($userId, $path);
+        if ($reused !== null) {
+            return [
+                'file_path' => $path,
+                'original_filename' => $originalName,
+                'raw_ocr_text' => $reused['text'],
+                'reused_paid_extraction_text' => $reused['paid_text'],
+                'reused_from_intake_id' => $reused['intake_id'],
+                'ensemble_phase1_skipped' => true,
+                'ensemble_skip_reason' => 'reused_transcript',
+            ];
+        }
+
+        try {
+            $extracted = app(IntakeOcrEnsemblePhase1Service::class)->extractFromStoredFile($path, $originalName);
+        } catch (\Throwable $e) {
+            throw ValidationException::withMessages([
+                'file' => __('intake.ocr_extraction_failed').' '.$e->getMessage(),
+            ]);
+        }
+
+        return [
+            'file_path' => $path,
+            'original_filename' => $originalName,
+            'raw_ocr_text' => (string) ($extracted['text'] ?? ''),
+            'upload_ocr_debug' => is_array($extracted['debug'] ?? null) ? $extracted['debug'] : [],
+            'ensemble_phase1' => true,
+            'preprocessing_version' => (string) ($extracted['preprocessing_version'] ?? IntakeOcrEnsemblePhase1Service::PREPROCESSING_VERSION),
+        ];
+    }
+
+    /**
      * @return array{file_path: string|null, original_filename: string|null, raw_ocr_text: string, upload_ocr_debug?: array<string, mixed>|null, reused_paid_extraction_text?: bool, reused_from_intake_id?: int}
      */
     public function prepare(?int $userId, ?UploadedFile $file, ?string $rawText): array
@@ -241,11 +298,28 @@ class IntakeCreationService
 
         $debug = is_array($prepared['upload_ocr_debug'] ?? null) ? $prepared['upload_ocr_debug'] : [];
         $ensembleMeta = [];
-        if (app(IntakeOcrEnsembleGate::class)->isEnabled()) {
+        if (! empty($prepared['ensemble_phase1'])) {
             $ensembleMeta = [
-                'ensemble_pipeline' => 'phase1_v1',
+                'ensemble_pipeline' => IntakeOcrEnsemblePhase1Service::PIPELINE_VERSION,
                 'ensemble_enabled' => true,
+                'ensemble_phase1' => true,
             ];
+            if ($selectedReason === 'upload_time_native_ocr') {
+                $selectedReason = 'ensemble_phase1_bulk_upload';
+            }
+        } elseif (app(IntakeOcrEnsembleGate::class)->isEnabled()) {
+            $ensembleMeta = [
+                'ensemble_pipeline' => IntakeOcrEnsemblePhase1Service::PIPELINE_VERSION,
+                'ensemble_enabled' => true,
+                'ensemble_phase1_skipped' => true,
+                'ensemble_skip_reason' => (string) ($prepared['ensemble_skip_reason'] ?? 'reused_transcript'),
+            ];
+        }
+        $preprocessingVersion = ! empty($prepared['preprocessing_version'])
+            ? (string) $prepared['preprocessing_version']
+            : (is_string($debug['preset_resolved'] ?? null) ? $debug['preset_resolved'] : null);
+        if (! empty($prepared['ensemble_phase1']) && $preprocessingVersion === null) {
+            $preprocessingVersion = IntakeOcrEnsemblePhase1Service::PREPROCESSING_VERSION;
         }
         $this->ocrAttemptRecorder->record($intake, [
             'engine' => $engine,
@@ -266,7 +340,7 @@ class IntakeCreationService
                 'reused_paid_extraction_text' => $prepared['reused_paid_extraction_text'] ?? null,
             ]), static fn (mixed $value): bool => $value !== null),
             'parser_version' => $intake->parser_version,
-            'preprocessing_version' => is_string($debug['preset_resolved'] ?? null) ? $debug['preset_resolved'] : null,
+            'preprocessing_version' => $preprocessingVersion,
             'is_primary' => true,
             'selected_policy' => IntakeOcrAttemptRecorder::SELECTION_POLICY_VERSION,
             'selected_reason' => $selectedReason,

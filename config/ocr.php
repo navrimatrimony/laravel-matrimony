@@ -206,4 +206,17 @@ return [
         // Imagick perspective warp: max long side before distort (speed / memory).
         'distort_max_side' => (int) env('OCR_INTAKE_MANUAL_DISTORT_MAX_SIDE', 2400),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | OCR Ensemble pipeline (Phase 1+) — bulk intake file path when flag on
+    |--------------------------------------------------------------------------
+    */
+    'ensemble' => [
+        'phase1' => [
+            'pipeline_version' => 'phase1_v1',
+            'preprocessing_version' => 'opencv_minimal_v1',
+            'preprocessing_preset' => env('OCR_ENSEMBLE_PHASE1_PRESET', 'photo_capture'),
+        ],
+    ],
 ];
