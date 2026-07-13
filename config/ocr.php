@@ -236,5 +236,11 @@ return [
                 ],
             ],
         ],
+        'phase3' => [
+            'enabled' => filter_var(env('OCR_ENSEMBLE_PHASE3_ENABLED', true), FILTER_VALIDATE_BOOL),
+            'pipeline_version' => 'phase3_v1',
+            'schema_version' => 'phase3_v1',
+            'assembly_version' => 'parse_input_v1',
+        ],
     ],
 ];

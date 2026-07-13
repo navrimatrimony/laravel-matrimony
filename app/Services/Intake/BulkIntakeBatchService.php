@@ -182,6 +182,8 @@ class BulkIntakeBatchService
             $rawText
         );
 
+        $this->runPhase3FieldResolutionIfApplicable($processedItem);
+
         if ($queueFreeParseAfterUpload) {
             $this->queueAutoFreeParseAfterUploadForItem($processedItem, $actor);
         } else {
@@ -1111,5 +1113,10 @@ class BulkIntakeBatchService
         }
 
         return [];
+    }
+
+    private function runPhase3FieldResolutionIfApplicable(BulkIntakeBatchItem $item): void
+    {
+        app(IntakeOcrEnsemblePhase3Service::class)->runForBulkItemIfApplicable($item);
     }
 }

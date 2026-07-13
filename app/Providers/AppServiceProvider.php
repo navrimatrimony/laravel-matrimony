@@ -58,6 +58,11 @@ class AppServiceProvider extends ServiceProvider
 
             return $app->make(LogBulkIntakeWhatsAppConsentSender::class);
         });
+        $this->app->bind(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleFieldExtractorInterface::class, \App\Services\Intake\OcrEnsemble\OcrEnsembleFieldExtractor::class);
+        $this->app->bind(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleFieldNormalizerInterface::class, \App\Services\Intake\OcrEnsemble\OcrEnsembleFieldNormalizer::class);
+        $this->app->bind(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleFieldVoterInterface::class, \App\Services\Intake\OcrEnsemble\OcrEnsembleFieldVoter::class);
+        $this->app->bind(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleFieldValidatorInterface::class, \App\Services\Intake\OcrEnsemble\OcrEnsembleFieldValidator::class);
+        $this->app->bind(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleParseInputAssemblerInterface::class, \App\Services\Intake\OcrEnsemble\OcrEnsembleParseInputAssembler::class);
     }
 
     /**
