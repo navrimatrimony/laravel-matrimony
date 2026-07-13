@@ -28,4 +28,16 @@ class IntakeOcrEnsembleGate
 
         return (bool) config('ocr.ensemble.phase3.enabled', true);
     }
+
+    /**
+     * Phase 4 Sarvam judge runs only when ensemble + Phase 3 + phase4 config are enabled.
+     */
+    public function isPhase4Enabled(): bool
+    {
+        if (! $this->isPhase3Enabled()) {
+            return false;
+        }
+
+        return (bool) config('ocr.ensemble.phase4.enabled', true);
+    }
 }

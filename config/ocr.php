@@ -242,5 +242,10 @@ return [
             'schema_version' => 'phase3_v1',
             'assembly_version' => 'parse_input_v1',
         ],
+        'phase4' => [
+            'enabled' => filter_var(env('OCR_ENSEMBLE_PHASE4_ENABLED', true), FILTER_VALIDATE_BOOL),
+            'pipeline_version' => 'phase4_v1',
+            'schema_version' => 'phase4_judge_v1',
+        ],
     ],
 ];

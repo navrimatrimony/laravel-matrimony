@@ -63,6 +63,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleFieldVoterInterface::class, \App\Services\Intake\OcrEnsemble\OcrEnsembleFieldVoter::class);
         $this->app->bind(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleFieldValidatorInterface::class, \App\Services\Intake\OcrEnsemble\OcrEnsembleFieldValidator::class);
         $this->app->bind(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleParseInputAssemblerInterface::class, \App\Services\Intake\OcrEnsemble\OcrEnsembleParseInputAssembler::class);
+        $this->app->bind(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleSarvamJudgeTriggerEvaluatorInterface::class, \App\Services\Intake\OcrEnsemble\OcrEnsembleSarvamJudgeTriggerEvaluator::class);
+        $this->app->bind(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleSarvamJudgeClientInterface::class, \App\Services\Intake\OcrEnsemble\OcrEnsembleSarvamJudgeClient::class);
+        $this->app->bind(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleSarvamJudgeMergerInterface::class, \App\Services\Intake\OcrEnsemble\OcrEnsembleSarvamJudgeMerger::class);
     }
 
     /**
