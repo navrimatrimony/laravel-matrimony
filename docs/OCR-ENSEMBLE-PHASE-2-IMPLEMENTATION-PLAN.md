@@ -45,19 +45,19 @@ Decide whether a **second OCR engine** (technology-neutral, benchmark-selected) 
 ## 4. Delivery gate (mandatory order)
 
 ```
-Phase 2
+Phase 1 FROZEN → tag → deploy → stability pause
     ↓
-A. Benchmark only (offline / scripts — NO production integration)
+Phase 2 Benchmark (Workstream A only — no integration code)
     ↓
-B. Go/no-go decision recorded in docs/ocr-ensemble-benchmark-v1.md
+Stage A: 10 images (Batch #43 pilot)
     ↓
-C. IF go → sidecar integration PR (focused, flag-gated)
+Stage B: 40 new held-out images (admin verified)
     ↓
-D. Phase 2 tests + staging simulation
+50-image report + GO/NO-GO (decision on Stage B)
     ↓
-E. Phase 2 freeze
+(Only if GO) Sidecar integration
     ↓
-Phase 3 only
+Phase 3
 ```
 
 **Never:** benchmark and sidecar integration in the same PR.  
@@ -67,34 +67,31 @@ Phase 3 only
 
 ## 5. Workstream A — Benchmark (before any integration code)
 
-### 5.1 Stage 1: 10-image technology check (checklist 2.01)
+### 5.1 Stage A — Pilot: 10 images (checklist 2.01)
 
 | Step | Action |
 |------|--------|
-| 1 | Select **10 cases** from Batch #43 ground truth (layout mix: table + photo-right) |
-| 2 | For each image: run **Phase 1 pipeline** (preprocess + Tesseract) — baseline scores |
-| 3 | For each **candidate second engine** (offline): run on same preprocessed image |
-| 4 | Score critical 5 fields per case vs `approval_snapshot_json` |
-| 5 | Record in `docs/ocr-ensemble-benchmark-v1.md` § Tech check |
-| 6 | Pick ≤1 candidate for 50-image stage OR reject all |
+| 1 | Use **all 10** Batch #43 ground-truth images (`approval_snapshot_json`) |
+| 2 | Run **Phase 1 pipeline** (preprocess + Tesseract) — baseline scores + §3.4 metrics |
+| 3 | Run each **candidate second engine** (offline) on same preprocessed images |
+| 4 | Score critical 5 fields + capture OCR time, failure, empty OCR, correction count |
+| 5 | Record in `docs/ocr-ensemble-benchmark-v1.md` § Stage A |
+| 6 | Pick ≤1 candidate to carry into Stage B OR reject all |
 
-**Candidate engines (evaluate only — do not hardcode):**
+**Pass to Stage B if:** best candidate shows promising uplift on Stage A (informational); **GO still requires Stage B (§5.2).**
 
-- PaddleOCR (HTTP sidecar)
-- EasyOCR (HTTP sidecar)
-- Others only if benchmark setup is trivial
-
-**Pass to Stage 2 if:** best candidate shows **≥5% absolute uplift** on critical-field accuracy vs Tesseract baseline on the 10-image set.
-
-### 5.2 Stage 2: 50-image decision benchmark (checklist 2.02)
+### 5.2 Stage B — Validation: 40 new images (checklist 2.02)
 
 | Step | Action |
 |------|--------|
-| 1 | Expand ground truth to **50 verified rows** (`approval_snapshot_json` or curated private dataset per golden runbook) |
-| 2 | Re-run baseline + winning candidate from Stage 1 |
-| 3 | Score critical 5 + all 16 fields; record timing p50/p95 |
-| 4 | Apply go/no-go rule (§6) |
-| 5 | Product sign-off on benchmark doc (checklist 2.04) |
+| 1 | Curate **40 new** biodata images — **not** from Batch #43, #44, or prior benchmarks |
+| 2 | Upload → admin verify on `correct-candidate` → `approval_snapshot_json` |
+| 3 | Re-run Phase 1 baseline + winning candidate from Stage A |
+| 4 | Score critical 5 + all 16 fields; full §3.4 metrics on held-out set |
+| 5 | Apply go/no-go on **Stage B only** (`BENCHMARK-SUCCESS-CRITERIA.md` §3.5) |
+| 6 | Product sign-off (checklist 2.04) |
+
+**Total report:** 50 images (10 pilot + 40 validation) in `ocr-ensemble-benchmark-v1.md`.
 
 ### 5.3 Benchmark artifacts (checklist 2.03)
 
@@ -247,6 +244,7 @@ Product says: **"Phase 2 integrate"** → only after go decision in benchmark do
 | Date | Change |
 |------|--------|
 | 2026-07-13 | Initial plan — Phase 1 frozen; Batch #43 = ground truth SSOT |
+| 2026-07-13 | Stage A/B dataset split; stability pause before benchmark kickoff |
 
 **Related:**
 

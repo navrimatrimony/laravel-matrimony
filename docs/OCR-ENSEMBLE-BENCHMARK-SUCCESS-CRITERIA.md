@@ -44,27 +44,58 @@ Per `OCR-ENSEMBLE-TEST-PLAN.md` §2.5 — DOB `YYYY-MM-DD`, mobile last 10 digit
 
 ## 3. Phase 2 integration gate (GO / NO-GO)
 
-### 3.1 Primary rule (frozen — blueprint)
+### 3.2 Benchmark dataset (frozen — anti-overfitting)
 
-```
-GO  IF  critical_accuracy(second_engine)
-         >= critical_accuracy(phase1_tesseract_baseline) + 5 percentage points
-     AND  no unacceptable regression on any critical field (§3.3)
-     AND  sidecar ops acceptable (§3.4)
+| Stage | Images | Source | Role |
+|-------|--------|--------|------|
+| **Stage A — Pilot** | **10** | Batch #43 only (`approval_snapshot_json`) | Engine comparison; pick candidate for Stage B |
+| **Stage B — Validation** | **40** | **New images** — never used in Stage A or prior benchmarks | Confirm uplift generalizes |
+| **Total decision set** | **50** | 10 + 40 | GO/NO-GO scored primarily on **Stage B**; Stage A is pilot only |
 
-NO-GO  OTHERWISE  →  Tesseract-only through Phase 5; document in benchmark report
-```
+**Rules:**
 
-This is a **relative uplift** rule, not “second engine must hit 98% in isolation.”
+- Stage B images must be **admin-verified** (`approval_snapshot_json`) before scoring.
+- Stage B must **not** include Batch #43 or Batch #44 items.
+- GO/NO-GO (§3.1) requires **+5% uplift on Stage B critical accuracy** vs Phase 1 baseline on the **same 40 images**.
+- Stage A pass alone is **not** sufficient for integration.
 
-### 3.2 Benchmark stages
+### 3.3 Benchmark stages (workflow)
 
 | Stage | Dataset | Purpose | Advance if |
 |-------|---------|---------|------------|
-| **Tech check** | 10 images (from Batch #43 truth set + layout mix) | Compare candidate engines | Best candidate meets §3.1 on 10-image set |
-| **Decision** | 50 verified images | Confirm uplift + ops | §3.1 confirmed; product sign-off |
+| **Stage A (pilot)** | 10 from Batch #43 | Compare candidate engines offline | Best candidate qualifies for Stage B trial |
+| **Stage B (validation)** | 40 new verified images | Unbiased decision | §3.1 met on Stage B + §3.4–3.6 |
+| **Report** | 50 total | Signed benchmark doc | Product sign-off |
 
-### 3.3 Unacceptable regression (NO-GO triggers)
+### 3.4 Required metrics (every benchmark run)
+
+Capture **per engine** (Phase 1 baseline + each candidate) on each stage:
+
+| Metric | Required | Notes |
+|--------|----------|-------|
+| Field accuracy | ✅ | Critical 5 + full 16 in report tables |
+| OCR time | ✅ | p50 / p95 / max per image (ms) |
+| Failure rate | ✅ | % jobs failed (exclude known bad scans) |
+| Empty OCR rate | ✅ | % images with `raw_ocr_text` < 20 chars |
+| Manual correction count | ✅ | Avg fields wrong vs `approval_snapshot_json` per image (proxy for admin burden) |
+
+Record in `docs/ocr-ensemble-benchmark-v1.md` so accuracy vs performance trade-offs are visible.
+
+### 3.5 Primary rule (frozen — blueprint)
+
+```
+GO  IF  critical_accuracy(second_engine, Stage B)
+         >= critical_accuracy(phase1_baseline, Stage B) + 5 percentage points
+     AND  no unacceptable regression (§3.6)
+     AND  sidecar ops acceptable (§3.7)
+     AND  metrics in §3.4 within thresholds
+
+NO-GO  OTHERWISE  →  Tesseract-only through Phase 5
+```
+
+This is a **relative uplift** rule on **held-out validation images**, not “second engine must hit 98% in isolation.”
+
+### 3.6 Unacceptable regression (NO-GO triggers)
 
 Even if average critical accuracy improves ≥5%, **NO-GO** if any of:
 
@@ -73,9 +104,11 @@ Even if average critical accuracy improves ≥5%, **NO-GO** if any of:
 | Critical-field accuracy **drops** vs Phase 1 baseline on same image set | > **2 pp** on aggregate critical accuracy |
 | Mobile field accuracy (second engine) | **Below Phase 1 baseline** on 50-image set |
 | Job failure rate (benchmark runs) | **≥ 1%** excluding known bad scans |
-| Any single critical field | Second engine **worse than baseline** on **> 20%** of cases in 50-image set |
+| Empty OCR rate (Stage B) | **Higher than Phase 1 baseline** on same 40 images |
+| Manual correction count (Stage B avg) | **Higher than Phase 1 baseline** on same 40 images |
+| Any single critical field | Second engine **worse than baseline** on **> 20%** of cases in Stage B |
 
-### 3.4 Sidecar ops (GO requires all)
+### 3.7 Sidecar ops (GO requires all)
 
 | Check | Requirement |
 |-------|-------------|
@@ -84,7 +117,7 @@ Even if average critical accuracy improves ≥5%, **NO-GO** if any of:
 | RAM | Fits server budget (document actual MB) |
 | Timeout | Within configured budget; failed calls **do not** fail intake job (Phase 2 contract) |
 
-### 3.5 Timing (benchmark + staging)
+### 3.8 Timing (benchmark + staging)
 
 | Metric | Threshold | Baseline |
 |--------|-----------|----------|
@@ -114,11 +147,12 @@ Per-field aspirational reporting (e.g. mobile exact-match rate) belongs in `ocr-
 ## 5. Ground truth workflow (frozen)
 
 ```
-Batch #43  →  approval_snapshot_json  →  benchmark scoring SSOT
-Batch #44  →  Phase 1 pipeline validation only (not re-scored for Phase 2 gate)
+Batch #43  →  approval_snapshot_json  →  Stage A pilot (10 images)
+Batch #44  →  Phase 1 pipeline validation only (not in benchmark scoring)
+New batch  →  40 admin-verified images  →  Stage B validation (held-out)
 ```
 
-Expand 50-image set: additional batches with admin-verified snapshots per golden dataset runbook.
+Stage B images: upload → admin correct-candidate → save → then score. No reuse of Batch #43/#44 files.
 
 ---
 
@@ -138,5 +172,6 @@ Expand 50-image set: additional batches with admin-verified snapshots per golden
 | Date | Change |
 |------|--------|
 | 2026-07-13 | Initial frozen criteria — aligned to Test Plan §2.3–2.4 |
+| 2026-07-13 | Stage A/B split (10 pilot + 40 held-out); required metrics §3.4 |
 
 **Related:** `OCR-ENSEMBLE-PHASE-2-IMPLEMENTATION-PLAN.md`, `OCR-ENSEMBLE-IMPLEMENTATION-CHECKLIST.md` §2.01–2.04
