@@ -19,6 +19,7 @@ class BulkIntakeCandidateCorrectionService
         private readonly BulkIntakeCandidateMobileCollector $mobileCollector,
         private readonly IntakeHumanReviewSnapshotService $reviewSnapshotService,
         private readonly IntakePipelineService $intakePipeline,
+        private readonly BulkIntakeBatchService $batchService,
     ) {}
 
     /**
@@ -121,13 +122,34 @@ class BulkIntakeCandidateCorrectionService
         $snapshot = $this->applyCorrection($source['snapshot'], $input);
         $snapshot = $this->intakePipeline->normalizeBulkCandidateCorrectionSnapshot($snapshot, (int) $actor->id);
 
-        return $this->reviewSnapshotService->saveReviewedSnapshot($intake, $snapshot, [
+        $intake = $this->reviewSnapshotService->saveReviewedSnapshot($intake, $snapshot, [
             'reviewed_by_user_id' => (int) $actor->id,
             'review_actor_type' => IntakeHumanReviewSnapshotService::ACTOR_ADMIN,
             'review_surface' => IntakeHumanReviewSnapshotService::SURFACE_ADMIN_PANEL,
             'approval_policy' => IntakeHumanReviewSnapshotService::POLICY_PHASE2A_HUMAN_REVIEW_V1,
             'approval_status' => IntakeHumanReviewSnapshotService::STATUS_REVIEWED,
         ]);
+
+        $this->clearOperationalReviewFlagsAfterAdminCorrection($item, $actor);
+
+        return $intake;
+    }
+
+    private function clearOperationalReviewFlagsAfterAdminCorrection(BulkIntakeBatchItem $item, User $actor): void
+    {
+        $item->refresh();
+
+        if ((string) $item->item_status === BulkIntakeBatchItem::STATUS_NEEDS_REVIEW) {
+            $this->batchService->clearItemNeedsReview($item, $actor);
+            $item->refresh();
+        }
+
+        if (filled($item->failure_code) || filled($item->failure_message)) {
+            $item->forceFill([
+                'failure_code' => null,
+                'failure_message' => null,
+            ])->save();
+        }
     }
 
     private function intakeForItem(BulkIntakeBatchItem $item): ?BiodataIntake

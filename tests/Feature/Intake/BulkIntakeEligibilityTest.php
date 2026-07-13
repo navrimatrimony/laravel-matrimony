@@ -228,6 +228,58 @@ test('admin override eligible makes pipeline eligible when identity complete', f
         ->and($pipeline['source'])->toBe('override');
 });
 
+test('eligibleForPipeline allows reviewed snapshot despite parse error', function () {
+    $item = eligibilityPipelineFixtureItem([
+        'parse_status' => 'error',
+        'last_error' => 'sarvam_job_timeout',
+        'parsed_json' => [],
+        'approval_snapshot_json' => [
+            'core' => [
+                'full_name' => 'Rohan Reviewed',
+                'primary_contact_number' => '9765771101',
+                'date_of_birth' => '1994-03-11',
+                'gender' => 'male',
+            ],
+        ],
+    ], [
+        'item_status' => BulkIntakeBatchItem::STATUS_NEEDS_REVIEW,
+        'failure_code' => 'parse_error',
+        'failure_message' => 'Parser failed',
+    ]);
+
+    $pipeline = app(BulkIntakeEligibilityService::class)->eligibleForPipeline($item->fresh(['biodataIntake']));
+
+    expect($pipeline['eligible'])->toBeTrue()
+        ->and($pipeline['bucket'])->toBe(BulkIntakeEligibilityService::FILTER_ELIGIBLE);
+});
+
+test('batch show shows whatsapp send when reviewed candidate is pipeline eligible', function () {
+    $admin = eligibilityPipelineAdmin();
+    $batch = eligibilityPipelineBatch($admin);
+    $intake = eligibilityPipelineIntake([
+        'parse_status' => 'error',
+        'last_error' => 'sarvam_job_timeout',
+        'parsed_json' => [],
+        'approval_snapshot_json' => [
+            'core' => [
+                'full_name' => 'WhatsApp Ready Candidate',
+                'primary_contact_number' => '9765771199',
+                'date_of_birth' => '1994-03-11',
+                'gender' => 'male',
+            ],
+        ],
+    ]);
+    eligibilityPipelineItem($batch, $intake, [
+        'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.show', $batch))
+        ->assertOk()
+        ->assertSee('data-testid="bulk-primary-send-whatsapp"', false)
+        ->assertSee('WhatsApp पाठवा', false);
+});
+
 function eligibilityPipelineAdmin(): User
 {
     return User::factory()->create([

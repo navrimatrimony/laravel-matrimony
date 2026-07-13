@@ -108,7 +108,7 @@ class BulkIntakeCandidateScreeningAdvisorService
             $eligibleCodes[] = 'age_in_range_or_dob_missing_but_not_blocked';
         }
 
-        if ((string) ($intake?->parse_status ?? '') === 'error') {
+        if ((string) ($intake?->parse_status ?? '') === 'error' && ! $this->hasAdminReviewedSnapshot($intake)) {
             $reviewCodes[] = 'parse_error';
         }
 
@@ -116,7 +116,14 @@ class BulkIntakeCandidateScreeningAdvisorService
             $reviewCodes[] = 'parsed_json_missing';
         }
 
-        if ($item->item_status === BulkIntakeBatchItem::STATUS_NEEDS_REVIEW || $item->failure_code || $item->failure_message) {
+        if (
+            ! $this->hasAdminReviewedSnapshot($intake)
+            && (
+                $item->item_status === BulkIntakeBatchItem::STATUS_NEEDS_REVIEW
+                || $item->failure_code
+                || $item->failure_message
+            )
+        ) {
             $reviewCodes[] = 'needs_review_item_status';
         }
 
@@ -183,6 +190,11 @@ class BulkIntakeCandidateScreeningAdvisorService
     {
         return (is_array($intake?->approval_snapshot_json) && $intake->approval_snapshot_json !== [])
             || (is_array($intake?->parsed_json) && $intake->parsed_json !== []);
+    }
+
+    private function hasAdminReviewedSnapshot(?BiodataIntake $intake): bool
+    {
+        return is_array($intake?->approval_snapshot_json) && $intake->approval_snapshot_json !== [];
     }
 
     /**
