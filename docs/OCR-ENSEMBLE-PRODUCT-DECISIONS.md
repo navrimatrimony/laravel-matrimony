@@ -94,13 +94,14 @@
 
 ---
 
-## 7. Implementation — NOT started ✅ CONFIRMED
+## 7. Implementation status
 
 | Item | Status |
 |------|--------|
 | Blueprint + contracts + review + checklist + test plan | ✅ Done |
 | Product decisions (this doc) | ✅ Done |
-| Phase 1 code | ❌ **Waiting for explicit “Phase 1 सुरू कर”** |
+| Phase 1 code | ✅ **FROZEN** (2026-07-13) — see `docs/OCR-ENSEMBLE-PHASE-1-RELEASE-NOTES.md` |
+| Phase 2 | 📋 Plan only — `docs/OCR-ENSEMBLE-PHASE-2-IMPLEMENTATION-PLAN.md` |
 
 ---
 
@@ -128,3 +129,4 @@ Sarvam = helper + judge, **never** replaces admin review.
 |------|--------|
 | 2026-07-12 | Product owner decisions: bulk-only P1, admin>saravam truth, 10 images, zoom UI, server test |
 | 2026-07-13 | Fix: #735–737 = one biodata 3 OCR paths; 10 NEW biodata; no manual CSV — admin correction builds truth; zoom already exists |
+| 2026-07-13 | Phase 1 frozen; Batch #43 = ground truth SSOT; Batch #44 = pipeline validation |

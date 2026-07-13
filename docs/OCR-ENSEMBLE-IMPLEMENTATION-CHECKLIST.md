@@ -48,55 +48,58 @@ Next Phase only
 
 | # | Item | Done |
 |---|------|------|
-| 1.01 | Admin setting `intake_ocr_ensemble_enabled` (default `false`) | ☐ |
-| 1.02 | Flag read in bulk processing path only (scope per v1.1) | ☐ |
-| 1.03 | When flag `false`: byte-identical behavior to current production | ☐ |
-| 1.04 | OpenCV minimal v1: EXIF rotate | ☐ |
-| 1.05 | OpenCV minimal v1: grayscale + contrast | ☐ |
-| 1.06 | OpenCV minimal v1: best-effort text-region crop | ☐ |
-| 1.07 | OpenCV failure → degrade (log, use original image) | ☐ |
-| 1.08 | PDF path: skip or rasterize page 1 (document behavior) | ☐ |
-| 1.09 | Tesseract via existing multipass (enriched, not replaced) | ☐ |
-| 1.10 | `preprocessing_version` string defined and stored | ☐ |
-| 1.11 | `IntakeOcrAttemptRecorder` saves attempt per intake | ☐ |
-| 1.12 | `raw_ocr_text` set once at intake insert (worker) | ☐ |
-| 1.13 | Skip ensemble for bulk `input_type=text` | ☐ |
-| 1.14 | Skip re-ensemble on duplicate file reuse (`REUSED_TRANSCRIPT`) | ☐ |
-| 1.15 | Ensemble completes **before** `ParseIntakeJob` dispatch | ☐ |
-| 1.16 | No changes to `BiodataParserService` / `ParseIntakeJob` logic | ☐ |
+| 1.01 | Admin setting `intake_ocr_ensemble_enabled` (default `false`) | ☑ |
+| 1.02 | Flag read in bulk processing path only (scope per v1.1) | ☑ |
+| 1.03 | When flag `false`: byte-identical behavior to current production | ☑ |
+| 1.04 | OpenCV minimal v1: EXIF rotate | ☑ |
+| 1.05 | OpenCV minimal v1: grayscale + contrast | ☑ |
+| 1.06 | OpenCV minimal v1: best-effort text-region crop | ☑ |
+| 1.07 | OpenCV failure → degrade (log, use original image) | ☑ |
+| 1.08 | PDF path: skip or rasterize page 1 (document behavior) | ☑ |
+| 1.09 | Tesseract via existing multipass (enriched, not replaced) | ☑ |
+| 1.10 | `preprocessing_version` string defined and stored | ☑ |
+| 1.11 | `IntakeOcrAttemptRecorder` saves attempt per intake | ☑ |
+| 1.12 | `raw_ocr_text` set once at intake insert (worker) | ☑ |
+| 1.13 | Skip ensemble for bulk `input_type=text` | ☑ |
+| 1.14 | Skip re-ensemble on duplicate file reuse (`REUSED_TRANSCRIPT`) | ☑ |
+| 1.15 | Ensemble completes **before** `ParseIntakeJob` dispatch | ☑ |
+| 1.16 | No changes to `BiodataParserService` / `ParseIntakeJob` logic | ☑ |
 
 ### Tests
 
 | # | Item | Done |
 |---|------|------|
-| 1.T01 | Unit: flag off → legacy code path | ☐ |
-| 1.T02 | Unit: OpenCV degrade when extension unavailable (mock) | ☐ |
-| 1.T03 | Feature: bulk upload with flag on → `ocr_attempt` row exists | ☐ |
-| 1.T04 | Feature: bulk upload with flag off → no regression | ☐ |
-| 1.T05 | Feature: text-only bulk item skips ensemble | ☐ |
-| 1.T06 | Feature: empty OCR still marks `empty_ocr_text` when text < 20 chars | ☐ |
+| 1.T01 | Unit: flag off → legacy code path | ☑ |
+| 1.T02 | Unit: OpenCV degrade when extension unavailable (mock) | ☑ |
+| 1.T03 | Feature: bulk upload with flag on → `ocr_attempt` row exists | ☑ |
+| 1.T04 | Feature: bulk upload with flag off → no regression | ☑ |
+| 1.T05 | Feature: text-only bulk item skips ensemble | ☑ |
+| 1.T06 | Feature: empty OCR still marks `empty_ocr_text` when text < 20 chars | ☑ |
+| 1.T07 | Feature: duplicate file reuse skips re-ensemble OCR | ☑ |
 
 ### Rollback
 
 | # | Item | Done |
 |---|------|------|
-| 1.R01 | Toggle flag `false` on staging → legacy behavior verified | ☐ |
-| 1.R02 | Deploy revert removes flag code without DB migration rollback | ☐ |
+| 1.R01 | Toggle flag `false` on staging → legacy behavior verified | ☑ |
+| 1.R02 | Deploy revert removes flag code without DB migration rollback | ☑ |
 
 ### Production simulation
 
 | # | Item | Done |
 |---|------|------|
-| 1.S01 | Upload 5 real biodata on staging (flag on) | ☐ |
-| 1.S02 | Worker completes within 40s average (Tesseract-only) | ☐ |
-| 1.S03 | `ocr_attempts` inspectable in DB | ☐ |
+| 1.S01 | Upload 5 real biodata on staging (flag on) | ☑ |
+| 1.S02 | Worker completes within 40s average (Tesseract-only) | ☑ |
+| 1.S03 | `ocr_attempts` inspectable in DB | ☑ |
 
 ### Phase 1 freeze
 
 | # | Item | Done |
 |---|------|------|
-| 1.F01 | All Phase 1 items checked | ☐ |
-| 1.F02 | PR merged; tag/note in changelog | ☐ |
+| 1.F01 | All Phase 1 items checked | ☑ |
+| 1.F02 | PR merged; tag/note in changelog | ☑ |
+
+**Phase 1 status: FROZEN (2026-07-13)** — staging Batch #44 validated; ground truth Batch #43 (`approval_snapshot_json`). See `docs/OCR-ENSEMBLE-PHASE-1-RELEASE-NOTES.md`.
 
 **PASS → Phase 2 only**
 
@@ -268,3 +271,4 @@ Next Phase only
 | Version | Date | Change |
 |---------|------|--------|
 | 1.0 | 2026-07-12 | Initial checklist |
+| 1.1 | 2026-07-13 | Phase 1 frozen — Batch #44 staging PASS |
