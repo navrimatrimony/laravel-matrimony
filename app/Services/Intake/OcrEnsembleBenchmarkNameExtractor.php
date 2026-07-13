@@ -244,9 +244,9 @@ class OcrEnsembleBenchmarkNameExtractor
         return preg_match('/\p{L}/u', $name) === 1;
     }
 
-    private function validRescuedName(string $name): bool
+    private function validRescuedName(?string $name): bool
     {
-        if ($name === '' || mb_strlen($name, 'UTF-8') > 80 || $this->hasRelationContext($name) || $this->hasAnyFieldLabel($name)) {
+        if ($name === null || $name === '' || mb_strlen($name, 'UTF-8') > 80 || $this->hasRelationContext($name) || $this->hasAnyFieldLabel($name)) {
             return false;
         }
 

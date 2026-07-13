@@ -82,6 +82,36 @@ test('mobile selector prefers candidate mobile over relative numbers', function 
     expect($phone)->toBe('9876543210');
 });
 
+test('name extractor tolerates ocr text with no candidate name', function () {
+    $extractor = app(OcrEnsembleBenchmarkNameExtractor::class);
+    $lines = [
+        '* कु.',
+        'जन्म तारीख : 04/01/1992',
+        'मोबाईल : 9876543210',
+        'धर्म : Hindu',
+        'जात : Maratha',
+    ];
+
+    expect($extractor->extract($lines))->toBeNull();
+});
+
+test('ocr text field extractor tolerates ocr text without candidate name', function () {
+    $text = <<<'TXT'
+* कु.
+जन्म तारीख : 04/01/1992
+मोबाईल : 9876543210
+धर्म : Hindu
+जात : Maratha
+शिक्षण : B.E. Computer
+TXT;
+
+    $fields = app(OcrEnsembleBenchmarkOcrTextFieldExtractor::class)->extractFromText($text);
+
+    expect($fields['full_name'])->toBeNull()
+        ->and($fields['date_of_birth'])->toBe('1992-01-04')
+        ->and($fields['primary_contact_number'])->toBe('9876543210');
+});
+
 test('name extractor strips html fragments and prefers labeled candidate name', function () {
     $extractor = app(OcrEnsembleBenchmarkNameExtractor::class);
     $lines = [
