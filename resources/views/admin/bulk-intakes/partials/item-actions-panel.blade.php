@@ -112,7 +112,12 @@
         @endif
 
         @if (($duplicateVerification['has_hints'] ?? false) && $duplicateHints !== [])
-            @include('admin.bulk-intakes.partials.item-duplicate-verify-panel')
+            <button
+                type="button"
+                data-bulk-dup-open="{{ $dupPanelDialogId }}"
+                data-testid="bulk-open-duplicate-verify-panel"
+                class="text-left text-sm font-medium text-purple-700 hover:text-purple-900"
+            >🔍 Verify duplicate{{ count($duplicateHints) > 1 ? ' ('.count($duplicateHints).')' : '' }}</button>
         @endif
 
         @if ($manualDuplicateActive)
@@ -181,3 +186,7 @@
         @endif
     </div>
 </dialog>
+
+@if (($duplicateVerification['has_hints'] ?? false) && $duplicateHints !== [])
+    @include('admin.bulk-intakes.partials.item-duplicate-verify-panel')
+@endif

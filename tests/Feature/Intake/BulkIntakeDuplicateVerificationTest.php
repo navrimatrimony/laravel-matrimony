@@ -209,7 +209,7 @@ test('bulk list shows duplicate verify panel with journey and links', function (
             ],
         ],
     ]);
-    duplicateVerifyItem($oldBatch, $oldIntake);
+    $oldItem = duplicateVerifyItem($oldBatch, $oldIntake);
 
     $batch = duplicateVerifyBatch($admin);
     $intake = duplicateVerifyIntake([
@@ -220,14 +220,25 @@ test('bulk list shows duplicate verify panel with journey and links', function (
             ],
         ],
     ]);
-    duplicateVerifyItem($batch, $intake);
+    $newItem = duplicateVerifyItem($batch, $intake);
 
-    $this->actingAs($admin)
+    $response = $this->actingAs($admin)
         ->get(route('admin.bulk-intakes.show', $batch))
         ->assertOk()
         ->assertSee('data-testid="bulk-open-duplicate-verify-panel"', false)
+        ->assertSee('data-testid="bulk-primary-verify-duplicate"', false)
         ->assertSee('Verify duplicate', false)
         ->assertSee('data-testid="bulk-duplicate-link-intake"', false)
         ->assertSee('फक्त intake — process सुरू झाला नाही', false)
         ->assertSee('हाच मोबाईल नंबर आधी आला', false);
+
+    $html = (string) $response->getContent();
+    $actionsStart = strpos($html, 'id="bulk-actions-panel-'.$newItem->id.'"');
+    $actionsEnd = strpos($html, '</dialog>', $actionsStart !== false ? $actionsStart : 0);
+    $dupPanelPos = strpos($html, 'id="bulk-dup-panel-'.$newItem->id.'"');
+
+    expect($actionsStart)->not->toBeFalse()
+        ->and($actionsEnd)->not->toBeFalse()
+        ->and($dupPanelPos)->not->toBeFalse()
+        ->and($dupPanelPos)->toBeGreaterThan($actionsEnd);
 });

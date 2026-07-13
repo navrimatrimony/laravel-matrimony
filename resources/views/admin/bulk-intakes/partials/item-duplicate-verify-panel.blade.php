@@ -6,13 +6,6 @@
     $dupHintCount = (int) ($duplicateVerification['hint_count'] ?? count($dupHints));
 @endphp
 
-<button
-    type="button"
-    data-bulk-dup-open="{{ $dupPanelDialogId }}"
-    data-testid="bulk-open-duplicate-verify-panel"
-    class="text-left text-sm font-medium text-purple-700 hover:text-purple-900"
->🔍 Verify duplicate{{ $dupHintCount > 1 ? ' ('.$dupHintCount.')' : '' }}</button>
-
 <dialog id="{{ $dupPanelDialogId }}" class="w-[min(620px,95vw)] max-h-[90vh] rounded-xl border border-gray-200 bg-white p-0 shadow-xl backdrop:bg-black/40">
     <div class="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3">
         <div>
