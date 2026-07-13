@@ -58,7 +58,7 @@ class OcrEnsembleBenchmarkPaddleOcrClient
      */
     private function extractViaHttp(string $baseUrl, string $absoluteImagePath): array
     {
-        $timeout = max(5, (int) config('ocr.ensemble.phase2.benchmark.timeout_seconds', 120));
+        $timeout = max(5, (int) config('ocr.ensemble.phase2.benchmark.timeout_seconds', 180));
 
         try {
             $response = Http::timeout($timeout)
@@ -95,7 +95,7 @@ class OcrEnsembleBenchmarkPaddleOcrClient
         }
 
         $python = trim((string) config('ocr.ensemble.phase2.benchmark.python_binary', 'python3'));
-        $timeout = max(5, (int) config('ocr.ensemble.phase2.benchmark.timeout_seconds', 120));
+        $timeout = max(5, (int) config('ocr.ensemble.phase2.benchmark.timeout_seconds', 180));
         $command = sprintf(
             '%s %s --image %s',
             escapeshellarg($python),

@@ -111,20 +111,20 @@ Next Phase only
 
 | # | Item | Done |
 |---|------|------|
-| 2.01 | 10-image technology check completed | ☐ |
-| 2.02 | 50-image decision benchmark completed | ☐ |
-| 2.03 | Results in `docs/ocr-ensemble-benchmark-v1.md` | ☐ |
-| 2.04 | Go/no-go decision recorded | ☐ |
+| 2.01 | 10-image technology check completed | ☑ |
+| 2.02 | 50-image decision benchmark completed | N/A — no Stage A candidate qualified (+5pp); Stage B skipped per plan |
+| 2.03 | Results in `docs/ocr-ensemble-benchmark-v1.md` | ☑ |
+| 2.04 | Go/no-go decision recorded | ☑ NO-GO — Tesseract winner |
 
 ### Implementation (only if go)
 
 | # | Item | Done |
 |---|------|------|
-| 2.05 | Python OCR sidecar deployed (staging) | ☐ |
-| 2.06 | HTTP client with timeout + health check | ☐ |
-| 2.07 | Second `ocr_attempt` row per intake | ☐ |
-| 2.08 | Sidecar down → Tesseract-only, job succeeds | ☐ |
-| 2.09 | Engine constant + display name configurable | ☐ |
+| 2.05 | Python OCR sidecar deployed (staging) | N/A — NO-GO |
+| 2.06 | HTTP client with timeout + health check | ☑ benchmark-only clients exist; production integration N/A |
+| 2.07 | Second `ocr_attempt` row per intake | N/A — NO-GO |
+| 2.08 | Sidecar down → Tesseract-only, job succeeds | N/A — NO-GO |
+| 2.09 | Engine constant + display name configurable | N/A — NO-GO |
 
 ### Tests
 
@@ -132,20 +132,22 @@ Next Phase only
 |---|------|------|
 | 2.T01 | Sidecar mock success → two attempts | ☐ |
 | 2.T02 | Sidecar timeout → one attempt, warning log | ☐ |
-| 2.T03 | Benchmark script reproducible | ☐ |
+| 2.T03 | Benchmark script reproducible | ☑ |
 
 ### Rollback
 
 | # | Item | Done |
 |---|------|------|
-| 2.R01 | Disable sidecar URL → Tesseract-only | ☐ |
+| 2.R01 | Disable sidecar URL → Tesseract-only | N/A — NO-GO |
 
 ### Phase 2 freeze
 
 | # | Item | Done |
 |---|------|------|
-| 2.F01 | Benchmark doc complete | ☐ |
-| 2.F02 | Integration items checked OR no-go documented | ☐ |
+| 2.F01 | Benchmark doc complete | ☑ |
+| 2.F02 | Integration items checked OR no-go documented | ☑ NO-GO documented |
+
+**Phase 2 status: FROZEN (2026-07-13)** — Tesseract baseline winner; Paddle benchmark incomplete (excluded); EasyOCR NO-GO (−18.75pp). See `docs/ocr-ensemble-benchmark-v1.md`.
 
 **PASS → Phase 3 only**
 
