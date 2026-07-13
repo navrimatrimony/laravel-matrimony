@@ -1090,6 +1090,45 @@ test('admin can save religion caste and occupation correction into reviewed snap
         ->assertDontSee('Old OCR Occupation', false);
 });
 
+test('admin can save sub caste ids when snapshot has no caste text keys', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $masters = registrationMasterIds();
+    $subCaste = \App\Models\SubCaste::query()->firstOrCreate(
+        ['key' => '96_kuli_test'],
+        [
+            'label_en' => '96 Kuli',
+            'label' => '96 Kuli',
+            'label_mr' => '९६ कुळी',
+            'caste_id' => $masters['caste_id'],
+            'is_active' => true,
+        ]
+    );
+    $intake = candidateCorrectionIntake([
+        'parse_status' => 'error',
+        'parsed_json' => null,
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->patch(route('admin.bulk-intakes.items.correct-candidate.update', [$batch, $item]), [
+            'name' => 'Subcaste Candidate',
+            'mobile' => '9876543210',
+            'religion_id' => $masters['religion_id'],
+            'caste_id' => $masters['caste_id'],
+            'sub_caste_id' => $subCaste->id,
+            'after_save' => 'stay',
+        ])
+        ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertSessionHas('success');
+
+    $intake->refresh();
+
+    expect(data_get($intake->approval_snapshot_json, 'core.sub_caste_id'))->toBe($subCaste->id)
+        ->and(data_get($intake->approval_snapshot_json, 'core.caste_id'))->toBe($masters['caste_id'])
+        ->and(data_get($intake->approval_snapshot_json, 'core.religion_id'))->toBe($masters['religion_id']);
+});
+
 test('bulk candidate correction save is blocked after intake approval or lock', function () {
     $admin = candidateCorrectionAdminUser();
     $batch = candidateCorrectionBatch($admin);
@@ -1115,6 +1154,38 @@ test('bulk candidate correction save is blocked after intake approval or lock', 
 
     expect(data_get($intake->approval_snapshot_json, 'core.full_name'))->toBe('Approved Candidate')
         ->and($intake->raw_ocr_text)->toBe('Original OCR text');
+});
+
+test('admin can save correction when parse failed and parsed json is empty', function () {
+    $admin = candidateCorrectionAdminUser();
+    $batch = candidateCorrectionBatch($admin);
+    $intake = candidateCorrectionIntake([
+        'parse_status' => 'error',
+        'last_error' => 'parse_only_no_extraction_text',
+        'parsed_json' => null,
+        'raw_ocr_text' => 'नाव : चि. रोहन सुभाष दळवी',
+    ]);
+    $item = candidateCorrectionItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->patch(route('admin.bulk-intakes.items.correct-candidate.update', [$batch, $item]), [
+            'name' => 'चि. रोहन सुभाष दळवी',
+            'mobile' => '9765771101',
+            'date_of_birth' => '1994-03-11',
+            'height' => "5'5\"",
+            'gender' => 'male',
+            'education' => 'B.A.',
+            'location' => 'Gadhinglaj',
+            'after_save' => 'stay',
+        ])
+        ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertSessionHas('success');
+
+    $intake->refresh();
+
+    expect(data_get($intake->approval_snapshot_json, 'core.full_name'))->toBe('चि. रोहन सुभाष दळवी')
+        ->and(data_get($intake->approval_snapshot_json, 'core.primary_contact_number'))->toBe('9765771101')
+        ->and($intake->approval_status)->toBe(IntakeHumanReviewSnapshotService::STATUS_REVIEWED);
 });
 
 function candidateCorrectionAdminUser(): User

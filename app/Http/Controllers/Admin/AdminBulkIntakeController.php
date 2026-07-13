@@ -600,10 +600,15 @@ class AdminBulkIntakeController extends Controller
                 'message' => $e->getMessage(),
             ]);
 
+            $detail = trim($e->getMessage());
+            $error = $detail !== ''
+                ? 'Correction save failed: '.$detail
+                : 'Correction save failed unexpectedly. Check storage/logs/laravel.log for details.';
+
             return redirect()
                 ->route('admin.bulk-intakes.items.correct-candidate', [$bulkIntakeBatch, $bulkIntakeBatchItem])
                 ->withInput()
-                ->with('error', 'Correction save failed unexpectedly. Check storage/logs/laravel.log for details.');
+                ->with('error', $error);
         }
 
         if (($validated['after_save'] ?? null) === 'stay') {

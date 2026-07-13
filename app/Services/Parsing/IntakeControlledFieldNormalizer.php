@@ -268,7 +268,7 @@ class IntakeControlledFieldNormalizer
                 if (empty($core['caste_id']) && ! empty($subCaste->caste_id)) {
                     $core['caste_id'] = (int) $subCaste->caste_id;
                 }
-                if ($core['caste'] === null || $core['caste'] === '') {
+                if (($core['caste'] ?? null) === null || ($core['caste'] ?? '') === '') {
                     $core['caste'] = $subCaste->caste?->display_label ?? $core['caste'] ?? null;
                 }
             }
