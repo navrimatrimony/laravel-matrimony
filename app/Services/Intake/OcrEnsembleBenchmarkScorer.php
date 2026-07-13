@@ -66,6 +66,7 @@ class OcrEnsembleBenchmarkScorer
 
             $truth = $this->snapshotFieldReader->extract($snapshot);
             $prediction = $this->resolvePrediction($intake, $externalPredictions);
+            $externalRow = is_array($externalPredictions) ? ($externalPredictions[(int) $intake->id] ?? null) : null;
             $fieldRows = [];
             $itemCorrections = 0;
 
@@ -100,7 +101,7 @@ class OcrEnsembleBenchmarkScorer
             }
 
             $correctionCounts[] = $itemCorrections;
-            $rawLen = mb_strlen(trim((string) ($intake->raw_ocr_text ?? '')), 'UTF-8');
+            $rawLen = $this->predictionRawOcrLength($intake, $externalRow);
             if ($rawLen < 20) {
                 $emptyOcr++;
             }
@@ -108,10 +109,7 @@ class OcrEnsembleBenchmarkScorer
                 $failures++;
             }
 
-            $attempt = $intake->ocrAttempts
-                ?->first(static fn (BiodataIntakeOcrAttempt $row): bool => (bool) $row->is_primary)
-                ?? $intake->ocrAttempts?->sortBy('id')->first();
-            $ocrMs = is_numeric($attempt?->duration_ms) ? (int) $attempt->duration_ms : null;
+            $ocrMs = $this->predictionOcrTimeMs($intake, $externalRow);
             if ($ocrMs !== null) {
                 $ocrTimes[] = $ocrMs;
             }
@@ -236,5 +234,33 @@ class OcrEnsembleBenchmarkScorer
         }
 
         return $indexed;
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $externalRow
+     */
+    private function predictionRawOcrLength(BiodataIntake $intake, ?array $externalRow): int
+    {
+        if (is_array($externalRow) && isset($externalRow['raw_ocr_text']) && is_string($externalRow['raw_ocr_text'])) {
+            return mb_strlen(trim($externalRow['raw_ocr_text']), 'UTF-8');
+        }
+
+        return mb_strlen(trim((string) ($intake->raw_ocr_text ?? '')), 'UTF-8');
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $externalRow
+     */
+    private function predictionOcrTimeMs(BiodataIntake $intake, ?array $externalRow): ?int
+    {
+        if (is_array($externalRow) && is_numeric($externalRow['ocr_time_ms'] ?? null)) {
+            return (int) $externalRow['ocr_time_ms'];
+        }
+
+        $attempt = $intake->ocrAttempts
+            ?->first(static fn (BiodataIntakeOcrAttempt $row): bool => (bool) $row->is_primary)
+            ?? $intake->ocrAttempts?->sortBy('id')->first();
+
+        return is_numeric($attempt?->duration_ms) ? (int) $attempt->duration_ms : null;
     }
 }

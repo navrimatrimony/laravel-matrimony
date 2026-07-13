@@ -218,5 +218,13 @@ return [
             'preprocessing_version' => 'opencv_minimal_v1',
             'preprocessing_preset' => env('OCR_ENSEMBLE_PHASE1_PRESET', 'photo_capture'),
         ],
+        'phase2' => [
+            'benchmark' => [
+                'sidecar_url' => env('OCR_ENSEMBLE_PADDLE_SIDECAR_URL', ''),
+                'cli_runner' => env('OCR_ENSEMBLE_PADDLE_CLI_RUNNER', ''),
+                'python_binary' => env('OCR_ENSEMBLE_PADDLE_PYTHON', 'python3'),
+                'timeout_seconds' => (int) env('OCR_ENSEMBLE_PADDLE_TIMEOUT_SECONDS', 120),
+            ],
+        ],
     ],
 ];
