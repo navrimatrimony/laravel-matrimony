@@ -16,6 +16,7 @@ class OcrEnsembleBenchmarkCommunityExtractor
     public function extract(array $lines): array
     {
         $religion = $this->normalizeReligion($this->labelValue($lines, ['धर्म', 'धम', 'Religion']));
+        $caste = null;
         $jatiRaw = $this->labelValue($lines, ['जात', 'Caste', 'Community']);
         $subCaste = $this->normalizeSubCaste($this->labelValue($lines, ['पोटजात', 'उपजात', 'Sub caste', 'Sub-caste', 'Subcaste']));
 
@@ -92,7 +93,7 @@ class OcrEnsembleBenchmarkCommunityExtractor
         return null;
     }
 
-  public function normalizeReligion(?string $value): ?string
+    public function normalizeReligion(?string $value): ?string
     {
         if ($value === null || trim($value) === '') {
             return null;

@@ -4,6 +4,15 @@ use App\Services\Intake\OcrEnsembleBenchmarkCommunityExtractor;
 use App\Services\Intake\OcrEnsembleBenchmarkFieldMatcher;
 use App\Services\Intake\OcrEnsembleBenchmarkOcrTextFieldExtractor;
 
+test('community extractor handles absent caste without runtime error', function () {
+    $lines = ['धर्म : Hindu', 'मुलाचे नाव : Test Candidate'];
+    $result = app(OcrEnsembleBenchmarkCommunityExtractor::class)->extract($lines);
+
+    expect($result['religion'])->toBe('Hindu')
+        ->and($result['caste'])->toBeNull()
+        ->and($result['sub_caste'])->toBeNull();
+});
+
 test('community extractor splits hindu maratha jati line', function () {
     $lines = ['जात : हिंदू - मराठा (९६ कुळी)'];
     $result = app(OcrEnsembleBenchmarkCommunityExtractor::class)->extract($lines);
