@@ -23,6 +23,8 @@ use App\Services\Intake\BulkIntakeDuplicateVerificationService;
 use App\Services\Intake\BulkIntakeIdentityHistoryService;
 use App\Services\Intake\BulkIntakeManualTranscriptService;
 use App\Services\Intake\BulkIntakeProgressPresenter;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Log;
 use App\Services\Intake\BulkIntakeReadinessService;
 use App\Services\Intake\BulkIntakeRegistrationService;
 use App\Services\Intake\BulkIntakeWhatsAppConsentService;
@@ -553,21 +555,56 @@ class AdminBulkIntakeController extends Controller
             $occupationService->mergeOccupationIntoRequest($request);
         }
 
-        $correctionService->saveCorrection($bulkIntakeBatchItem, $request->user(), array_merge(
-            $validated,
-            $request->only([
-                'religion_id',
-                'caste_id',
-                'sub_caste_id',
-                'occupation_master_id',
-                'occupation_custom_id',
-                'working_with_type_id',
-                'profession_id',
-                'occupation_title',
-                'company_name',
-                'location_id',
-            ]),
-        ));
+        try {
+            $correctionService->saveCorrection($bulkIntakeBatchItem, $request->user(), array_merge(
+                $validated,
+                $request->only([
+                    'religion_id',
+                    'caste_id',
+                    'sub_caste_id',
+                    'occupation_master_id',
+                    'occupation_custom_id',
+                    'working_with_type_id',
+                    'profession_id',
+                    'occupation_title',
+                    'company_name',
+                    'location_id',
+                ]),
+            ));
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (QueryException $e) {
+            Log::error('bulk_candidate_correction_save_db_failed', [
+                'batch_id' => $bulkIntakeBatch->id,
+                'item_id' => $bulkIntakeBatchItem->id,
+                'intake_id' => $bulkIntakeBatchItem->biodata_intake_id,
+                'sql_state' => $e->getCode(),
+                'message' => $e->getMessage(),
+            ]);
+
+            return redirect()
+                ->route('admin.bulk-intakes.items.correct-candidate', [$bulkIntakeBatch, $bulkIntakeBatchItem])
+                ->withInput()
+                ->with('error', 'Correction save failed (database). Pending migrations are the most common cause — run `php artisan migrate` on the server, then retry.');
+        } catch (\RuntimeException $e) {
+            return redirect()
+                ->route('admin.bulk-intakes.items.correct-candidate', [$bulkIntakeBatch, $bulkIntakeBatchItem])
+                ->withInput()
+                ->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            Log::error('bulk_candidate_correction_save_failed', [
+                'batch_id' => $bulkIntakeBatch->id,
+                'item_id' => $bulkIntakeBatchItem->id,
+                'intake_id' => $bulkIntakeBatchItem->biodata_intake_id,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
+
+            return redirect()
+                ->route('admin.bulk-intakes.items.correct-candidate', [$bulkIntakeBatch, $bulkIntakeBatchItem])
+                ->withInput()
+                ->with('error', 'Correction save failed unexpectedly. Check storage/logs/laravel.log for details.');
+        }
 
         if (($validated['after_save'] ?? null) === 'stay') {
             return redirect()

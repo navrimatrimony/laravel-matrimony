@@ -283,6 +283,10 @@ class AdminSettingsController extends Controller
             'intake_use_normalized_draft_parser',
             (bool) config('intake.use_normalized_draft_parser', false)
         );
+        $ocrEnsembleEnabled = AdminSetting::getBool(
+            \App\Services\Intake\IntakeOcrEnsembleGate::SETTING_KEY,
+            false
+        );
         if (! in_array($photoLaterUploadPrimaryPolicy, ['new_upload_primary', 'keep_intake_primary'], true)) {
             $photoLaterUploadPrimaryPolicy = 'new_upload_primary';
         }
@@ -317,6 +321,7 @@ class AdminSettingsController extends Controller
             'intakePhotoLaterUploadPrimaryPolicy' => $photoLaterUploadPrimaryPolicy,
             'mobileBiodataSourceMode' => $mobileBiodataSourceMode,
             'intakeUseNormalizedDraftParser' => $useNormalizedDraftParser,
+            'ocrEnsembleEnabled' => $ocrEnsembleEnabled,
         ]);
     }
 
@@ -372,6 +377,7 @@ class AdminSettingsController extends Controller
             'intake_photo_later_upload_primary_policy' => 'required|string|in:new_upload_primary,keep_intake_primary',
             'intake_mobile_biodata_source_mode' => 'required|string|in:ml_kit,laravel_pipeline',
             'intake_use_normalized_draft_parser' => 'nullable|in:0,1',
+            'intake_ocr_ensemble_enabled' => 'nullable|in:0,1',
             'return_tab' => 'nullable|string|in:general,ai_ocr,mobile',
         ]);
 
@@ -443,6 +449,7 @@ class AdminSettingsController extends Controller
         $photoLaterUploadPrimaryPolicy = (string) $request->input('intake_photo_later_upload_primary_policy', 'new_upload_primary');
         $mobileBiodataSourceMode = (string) $request->input('intake_mobile_biodata_source_mode', 'ml_kit');
         $useNormalizedDraftParser = $request->has('intake_use_normalized_draft_parser') ? '1' : '0';
+        $ocrEnsembleEnabled = $request->has('intake_ocr_ensemble_enabled') ? '1' : '0';
         $returnTab = $request->filled('return_tab') ? (string) $request->input('return_tab') : '';
 
         AdminSetting::setValue('intake_max_daily_per_user', $daily);
@@ -477,6 +484,7 @@ class AdminSettingsController extends Controller
         AdminSetting::setValue('intake_photo_later_upload_primary_policy', $photoLaterUploadPrimaryPolicy);
         AdminSetting::setValue('intake_mobile_biodata_source_mode', $mobileBiodataSourceMode);
         AdminSetting::setValue('intake_use_normalized_draft_parser', $useNormalizedDraftParser);
+        AdminSetting::setValue(\App\Services\Intake\IntakeOcrEnsembleGate::SETTING_KEY, $ocrEnsembleEnabled);
 
         AuditLogService::log(
             $request->user(),

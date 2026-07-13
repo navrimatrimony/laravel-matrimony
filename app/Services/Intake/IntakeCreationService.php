@@ -240,6 +240,13 @@ class IntakeCreationService
         }
 
         $debug = is_array($prepared['upload_ocr_debug'] ?? null) ? $prepared['upload_ocr_debug'] : [];
+        $ensembleMeta = [];
+        if (app(IntakeOcrEnsembleGate::class)->isEnabled()) {
+            $ensembleMeta = [
+                'ensemble_pipeline' => 'phase1_v1',
+                'ensemble_enabled' => true,
+            ];
+        }
         $this->ocrAttemptRecorder->record($intake, [
             'engine' => $engine,
             'source' => $source,
@@ -254,7 +261,7 @@ class IntakeCreationService
                 'derived_width' => $debug['derived_width'] ?? null,
                 'derived_height' => $debug['derived_height'] ?? null,
             ], static fn (mixed $value): bool => $value !== null),
-            'engine_meta_json' => array_filter(array_merge($debug, [
+            'engine_meta_json' => array_filter(array_merge($debug, $ensembleMeta, [
                 'reused_from_intake_id' => $prepared['reused_from_intake_id'] ?? null,
                 'reused_paid_extraction_text' => $prepared['reused_paid_extraction_text'] ?? null,
             ]), static fn (mixed $value): bool => $value !== null),

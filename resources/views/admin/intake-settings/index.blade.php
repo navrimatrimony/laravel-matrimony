@@ -253,6 +253,15 @@
                         Experimental. Changes rules-only parser path only. AI-first merge may ignore this setting.
                     </p>
                 </div>
+                <div class="rounded border border-blue-200 bg-blue-50 p-3 dark:border-blue-700/60 dark:bg-blue-900/20">
+                    <label class="inline-flex items-center gap-2 text-sm">
+                        <input type="checkbox" name="intake_ocr_ensemble_enabled" value="1" {{ ($ocrEnsembleEnabled ?? false) ? 'checked' : '' }} class="rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700">
+                        <span class="font-medium text-gray-800 dark:text-gray-100">Enable OCR ensemble pipeline (Phase 1+)</span>
+                    </label>
+                    <p class="mt-2 text-xs text-blue-800 dark:text-blue-200">
+                        Off by default. When enabled, bulk intake uses the new preprocess + OCR evidence path. Safe to test on staging; production default stays off until benchmark passes.
+                    </p>
+                </div>
             </div>
             <script>
                 (function () {
