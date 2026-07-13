@@ -220,10 +220,20 @@ return [
         ],
         'phase2' => [
             'benchmark' => [
+                'timeout_seconds' => (int) env('OCR_ENSEMBLE_BENCHMARK_TIMEOUT_SECONDS', 180),
                 'sidecar_url' => env('OCR_ENSEMBLE_PADDLE_SIDECAR_URL', ''),
                 'cli_runner' => env('OCR_ENSEMBLE_PADDLE_CLI_RUNNER', ''),
                 'python_binary' => env('OCR_ENSEMBLE_PADDLE_PYTHON', 'python3'),
-                'timeout_seconds' => (int) env('OCR_ENSEMBLE_PADDLE_TIMEOUT_SECONDS', 120),
+                'paddle' => [
+                    'sidecar_url' => env('OCR_ENSEMBLE_PADDLE_SIDECAR_URL', ''),
+                    'cli_runner' => env('OCR_ENSEMBLE_PADDLE_CLI_RUNNER', ''),
+                    'python_binary' => env('OCR_ENSEMBLE_PADDLE_PYTHON', 'python3'),
+                ],
+                'easyocr' => [
+                    'sidecar_url' => env('OCR_ENSEMBLE_EASYOCR_SIDECAR_URL', ''),
+                    'cli_runner' => env('OCR_ENSEMBLE_EASYOCR_CLI_RUNNER', ''),
+                    'python_binary' => env('OCR_ENSEMBLE_EASYOCR_PYTHON', 'python3'),
+                ],
             ],
         ],
     ],

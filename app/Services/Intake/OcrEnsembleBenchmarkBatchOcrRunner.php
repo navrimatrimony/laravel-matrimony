@@ -16,26 +16,17 @@ class OcrEnsembleBenchmarkBatchOcrRunner
 {
     public function __construct(
         private readonly OcrEnsembleBenchmarkPaddleOcrClient $paddleClient,
+        private readonly OcrEnsembleBenchmarkEasyOcrClient $easyOcrClient,
         private readonly ImagePreprocessingService $imagePreprocessing,
     ) {}
 
     public function assertEngineReady(string $engine): void
     {
-        if ($engine !== OcrEnsembleBenchmarkPaddleOcrClient::ENGINE) {
-            throw new RuntimeException("Unsupported benchmark engine: {$engine}");
-        }
-
-        if (! $this->paddleClient->isConfigured()) {
-            throw new RuntimeException(
-                'PaddleOCR benchmark engine is not configured. Set OCR_ENSEMBLE_PADDLE_SIDECAR_URL or install tools/ocr-ensemble-paddle-sidecar.'
-            );
-        }
-
-        if (! $this->paddleClient->healthCheck()) {
-            throw new RuntimeException(
-                'PaddleOCR benchmark engine is not reachable. Start the sidecar or install the CLI runner venv.'
-            );
-        }
+        match ($engine) {
+            OcrEnsembleBenchmarkPaddleOcrClient::ENGINE => $this->assertPaddleReady(),
+            OcrEnsembleBenchmarkEasyOcrClient::ENGINE => $this->assertEasyOcrReady(),
+            default => throw new RuntimeException("Unsupported benchmark engine: {$engine}"),
+        };
     }
 
     /**
@@ -78,7 +69,7 @@ class OcrEnsembleBenchmarkBatchOcrRunner
 
             [$absolutePath, $relativePath, $originalFilename] = $this->resolveImagePaths($item, $intake);
             $ocrInputPath = $this->preprocessedImagePath($absolutePath, $relativePath, $originalFilename, $preset);
-            $ocrResult = $this->paddleClient->extractFromImagePath($ocrInputPath);
+            $ocrResult = $this->extractFromImage($engine, $ocrInputPath);
 
             $predictions[] = [
                 'batch_item_id' => (int) $item->id,
@@ -116,6 +107,48 @@ class OcrEnsembleBenchmarkBatchOcrRunner
         );
 
         return $path;
+    }
+
+    /**
+     * @return array{text: string, duration_ms: int|null, engine: string, engine_meta: array<string, mixed>|null}
+     */
+    private function extractFromImage(string $engine, string $absoluteImagePath): array
+    {
+        return match ($engine) {
+            OcrEnsembleBenchmarkPaddleOcrClient::ENGINE => $this->paddleClient->extractFromImagePath($absoluteImagePath),
+            OcrEnsembleBenchmarkEasyOcrClient::ENGINE => $this->easyOcrClient->extractFromImagePath($absoluteImagePath),
+            default => throw new RuntimeException("Unsupported benchmark engine: {$engine}"),
+        };
+    }
+
+    private function assertPaddleReady(): void
+    {
+        if (! $this->paddleClient->isConfigured()) {
+            throw new RuntimeException(
+                'PaddleOCR benchmark engine is not configured. Set OCR_ENSEMBLE_PADDLE_SIDECAR_URL or install tools/ocr-ensemble-paddle-sidecar.'
+            );
+        }
+
+        if (! $this->paddleClient->healthCheck()) {
+            throw new RuntimeException(
+                'PaddleOCR benchmark engine is not reachable. Start the sidecar or install the CLI runner venv.'
+            );
+        }
+    }
+
+    private function assertEasyOcrReady(): void
+    {
+        if (! $this->easyOcrClient->isConfigured()) {
+            throw new RuntimeException(
+                'EasyOCR benchmark engine is not configured. Set OCR_ENSEMBLE_EASYOCR_SIDECAR_URL or install tools/ocr-ensemble-easyocr-sidecar.'
+            );
+        }
+
+        if (! $this->easyOcrClient->healthCheck()) {
+            throw new RuntimeException(
+                'EasyOCR benchmark engine is not reachable. Start the sidecar or install the CLI runner venv.'
+            );
+        }
     }
 
     /**

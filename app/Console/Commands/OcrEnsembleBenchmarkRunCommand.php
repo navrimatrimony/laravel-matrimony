@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\Intake\OcrEnsembleBenchmarkBatchOcrRunner;
+use App\Services\Intake\OcrEnsembleBenchmarkEasyOcrClient;
 use App\Services\Intake\OcrEnsembleBenchmarkFieldExtractor;
 use App\Services\Intake\OcrEnsembleBenchmarkPaddleOcrClient;
 use App\Services\Intake\OcrEnsembleBenchmarkScorer;
@@ -13,7 +14,7 @@ class OcrEnsembleBenchmarkRunCommand extends Command
 {
     protected $signature = 'ocr-ensemble:benchmark-run
         {batchId : Bulk intake batch id (e.g. 43)}
-        {--engine=paddleocr_v1 : Candidate OCR engine label}
+        {--engine=easyocr_v1 : Candidate OCR engine label (easyocr_v1 or paddleocr_v1)}
         {--stage=B : Benchmark stage label}
         {--baseline=68.75 : Phase 1 baseline critical accuracy percent for comparison}
         {--predictions= : Reuse an existing predictions JSON instead of running OCR}
@@ -37,15 +38,20 @@ class OcrEnsembleBenchmarkRunCommand extends Command
             return self::FAILURE;
         }
 
-        if ($engine !== OcrEnsembleBenchmarkPaddleOcrClient::ENGINE) {
-            $this->error('Only paddleocr_v1 is supported in Phase 2 Stage B.');
+        $supportedEngines = [
+            OcrEnsembleBenchmarkEasyOcrClient::ENGINE,
+            OcrEnsembleBenchmarkPaddleOcrClient::ENGINE,
+        ];
+
+        if (! in_array($engine, $supportedEngines, true)) {
+            $this->error('Supported engines: '.implode(', ', $supportedEngines));
 
             return self::FAILURE;
         }
 
         try {
             if ($predictionsPath === '') {
-                $this->info('Running PaddleOCR on batch #'.$batchId.' images...');
+                $this->info('Running '.$engine.' on batch #'.$batchId.' images...');
                 $payload = $batchRunner->runBatch($batchId, $engine);
                 $predictionsPath = $batchRunner->savePredictions($payload, $batchId, $engine);
                 $this->line('predictions='.$predictionsPath);
