@@ -3,6 +3,8 @@
 namespace App\Services\Intake\OcrEnsemble\Contracts;
 
 use App\Models\BiodataIntakeOcrAttempt;
+use App\Services\Intake\OcrEnsemble\Data\OcrEnsembleExtractionResultDto;
+use App\Services\Intake\OcrEnsemble\Data\OcrEngineFieldCandidatesDto;
 
 interface OcrEnsembleFieldExtractorInterface
 {
@@ -10,7 +12,17 @@ interface OcrEnsembleFieldExtractorInterface
      * Extract per-engine field candidates from OCR attempts.
      *
      * @param  list<BiodataIntakeOcrAttempt>  $attempts
-     * @return array<string, array<string, string|null>> engine => field => candidate
      */
-    public function extractCandidates(array $attempts): array;
+    public function extractCandidates(array $attempts): OcrEnsembleExtractionResultDto;
+
+    public function extractFromText(
+        string $text,
+        string $engineKey,
+        ?int $ocrAttemptId = null,
+    ): OcrEngineFieldCandidatesDto;
+
+    /**
+     * @return list<BiodataIntakeOcrAttempt>
+     */
+    public function filterUsableAttempts(array $attempts): array;
 }
