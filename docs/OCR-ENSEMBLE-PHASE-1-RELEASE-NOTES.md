@@ -49,7 +49,9 @@ Production behavior is **unchanged** while `intake_ocr_ensemble_enabled` remains
 
 ## Staging validation (PASS)
 
-**Batch #44** — 5 real biodata images, flag **ON**:
+**Evidence:** Batch #44 technical validation logs and verification (staging server, flag ON).
+
+**Batch #44** — 5 real biodata images:
 
 | Check | Result |
 |-------|--------|
@@ -106,4 +108,4 @@ All passing locally:
 
 | Date | Change |
 |------|--------|
-| 2026-07-13 | Phase 1 frozen after Batch #44 staging PASS |
+| 2026-07-13 | Phase 1 frozen — Batch #44 staging PASS (technical validation logs) |

@@ -114,9 +114,14 @@ Phase 3 only
 
 ## 6. Go / no-go rule (frozen)
 
+See **`docs/OCR-ENSEMBLE-BENCHMARK-SUCCESS-CRITERIA.md`** (authoritative).
+
+Summary:
+
 ```
 IF second_engine_critical_field_accuracy >= tesseract_accuracy + 5%
-   AND sidecar ops acceptable (uptime, deploy, RAM, timeout budget)
+   AND no unacceptable regression (§3.3)
+   AND sidecar ops acceptable
 THEN integrate second engine in production pipeline
 ELSE stay Tesseract-only through Phase 5; document no-go in benchmark doc
 ```
