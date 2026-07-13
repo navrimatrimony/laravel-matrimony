@@ -1,7 +1,10 @@
 <?php
 
 use App\Services\Intake\OcrEnsembleBenchmarkCommunityExtractor;
+use App\Services\Intake\OcrEnsembleBenchmarkDobNormalizer;
 use App\Services\Intake\OcrEnsembleBenchmarkFieldMatcher;
+use App\Services\Intake\OcrEnsembleBenchmarkMobileSelector;
+use App\Services\Intake\OcrEnsembleBenchmarkNameExtractor;
 use App\Services\Intake\OcrEnsembleBenchmarkOcrTextFieldExtractor;
 
 test('community extractor handles absent caste without runtime error', function () {
@@ -51,7 +54,56 @@ TXT;
     $fields = app(OcrEnsembleBenchmarkOcrTextFieldExtractor::class)->extractFromText($text);
 
     expect($fields['full_name'])->toContain('अविनाश')
+        ->and($fields['date_of_birth'])->toBe('1992-01-04')
         ->and($fields['primary_contact_number'])->toBe('8149379216')
         ->and($fields['religion'])->toBe('Hindu')
         ->and($fields['caste'])->toBe('Maratha');
+});
+
+test('dob normalizer parses dd/mm/yyyy and recovers common ocr digit substitutions', function () {
+    $normalizer = app(OcrEnsembleBenchmarkDobNormalizer::class);
+
+    expect($normalizer->normalize('04/01/1992'))->toBe('1992-01-04')
+        ->and($normalizer->normalize('O4/O1/1992'))->toBe('1992-01-04')
+        ->and($normalizer->normalize('15-08-1998'))->toBe('1998-08-15');
+});
+
+test('mobile selector prefers candidate mobile over relative numbers', function () {
+    $lines = [
+        'मुलाचे नाव : राहुल शिंदे',
+        'वडील मोबाईल : 9123456789',
+        'मोबाईल : 9876543210',
+        'कौटुंबिक माहिती',
+        'आई मोबाईल : 9988776655',
+    ];
+
+    $phone = app(OcrEnsembleBenchmarkMobileSelector::class)->selectPrimary($lines);
+
+    expect($phone)->toBe('9876543210');
+});
+
+test('name extractor strips html fragments and prefers labeled candidate name', function () {
+    $extractor = app(OcrEnsembleBenchmarkNameExtractor::class);
+    $lines = [
+        '<td>बायो डाटा</td>',
+        'मुलाचे नाव : <span>सुनील राजेश पवार</span>',
+        'à¤ à¤¨à¤¾à¤µ',
+    ];
+
+    expect($extractor->extract($lines))->toBe('सुनील राजेश पवार')
+        ->and($extractor->cleanBenchmarkName('* कु. अभिजीत अशोक पाटील'))->toBe('अभिजीत अशोक पाटील');
+});
+
+test('ocr text field extractor chooses owner mobile when multiple numbers exist', function () {
+    $text = <<<'TXT'
+मुलाचे नाव : राहुल शिंदे
+जन्म तारीख : 04/01/1992
+वडील : राम शिंदे मोबाईल 9123456789
+मोबाईल : 9876543210
+TXT;
+
+    $fields = app(OcrEnsembleBenchmarkOcrTextFieldExtractor::class)->extractFromText($text);
+
+    expect($fields['primary_contact_number'])->toBe('9876543210')
+        ->and($fields['date_of_birth'])->toBe('1992-01-04');
 });

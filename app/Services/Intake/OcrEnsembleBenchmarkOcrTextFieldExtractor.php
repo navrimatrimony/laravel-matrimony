@@ -8,7 +8,6 @@ use App\Services\Ocr\OcrNormalize;
 use App\Services\Parsing\MarathiOcrFieldRescueService;
 use App\Services\Parsing\MarathiSeparatedLabelValueExtractor;
 use App\Support\HeightDisplay;
-use Illuminate\Support\Carbon;
 
 /**
  * Benchmark-only field extraction from raw OCR text (not parsed_json / not full parser).
@@ -18,6 +17,9 @@ class OcrEnsembleBenchmarkOcrTextFieldExtractor
     public function __construct(
         private readonly MarathiOcrFieldRescueService $rescueService,
         private readonly OcrEnsembleBenchmarkCommunityExtractor $communityExtractor,
+        private readonly OcrEnsembleBenchmarkDobNormalizer $dobNormalizer,
+        private readonly OcrEnsembleBenchmarkMobileSelector $mobileSelector,
+        private readonly OcrEnsembleBenchmarkNameExtractor $nameExtractor,
     ) {}
 
     public function extractFromIntake(BiodataIntake $intake): array
@@ -51,15 +53,17 @@ class OcrEnsembleBenchmarkOcrTextFieldExtractor
         $core = $this->rescueService->rescueCoreFields($lines, []);
 
         $hints = MarathiSeparatedLabelValueExtractor::extract($lines);
+        $hintName = null;
+        $hintDob = null;
+        $hintMobile = null;
+
         if (is_array($hints)) {
-            if (! empty($hints['full_name']) && empty($core['full_name'])) {
-                $core['full_name'] = (string) $hints['full_name'];
-            }
+            $hintName = $this->stringOrNull($hints['full_name'] ?? null);
             if (! empty($hints['date_of_birth']) && empty($core['date_of_birth'])) {
-                $core['date_of_birth'] = $this->normalizeDob((string) $hints['date_of_birth']);
+                $hintDob = $this->dobNormalizer->normalize((string) $hints['date_of_birth']);
             }
             if (! empty($hints['primary_contact']) && empty($core['primary_contact_number'])) {
-                $core['primary_contact_number'] = (string) $hints['primary_contact'];
+                $hintMobile = (string) $hints['primary_contact'];
             }
             if (! empty($hints['highest_education']) && empty($core['highest_education'])) {
                 $core['highest_education'] = (string) $hints['highest_education'];
@@ -72,7 +76,9 @@ class OcrEnsembleBenchmarkOcrTextFieldExtractor
         $community = $this->communityExtractor->extract($lines);
         $education = $this->stringOrNull($core['highest_education'] ?? null) ?? $this->extractEducation($lines);
         $occupation = $this->stringOrNull($core['occupation_title'] ?? null) ?? $this->extractOccupation($lines);
-        $dob = $this->normalizeDob($this->stringOrNull($core['date_of_birth'] ?? null)) ?? $this->extractDob($lines);
+        $dob = $this->dobNormalizer->normalize($this->stringOrNull($core['date_of_birth'] ?? null))
+            ?? $hintDob
+            ?? $this->dobNormalizer->normalizeFromLines($lines);
         $income = $this->labelValue($lines, ['उत्पन्न', 'वार्षिक उत्पन्न', 'Income', 'Annual income', 'पगार', 'वेतन']);
         $marital = $this->labelValue($lines, ['वैवाहिक स्थिती', 'वैवाहिक', 'Marital status', 'विवाह']);
         $village = $this->labelValue($lines, ['गाव', 'Village', 'जन्म स्थळ', 'जन्म ठिकाण']) ?? ($core['birth_place_text'] ?? null);
@@ -83,10 +89,17 @@ class OcrEnsembleBenchmarkOcrTextFieldExtractor
         }
 
         return [
-            'full_name' => $this->cleanBenchmarkName($this->stringOrNull($core['full_name'] ?? null)),
+            'full_name' => $this->nameExtractor->extract(
+                $lines,
+                $this->stringOrNull($core['full_name'] ?? null),
+                $hintName,
+            ),
             'date_of_birth' => $dob,
             'gender' => $this->normalizeGender($this->stringOrNull($core['gender'] ?? null)),
-            'primary_contact_number' => $this->stringOrNull($core['primary_contact_number'] ?? null),
+            'primary_contact_number' => $this->mobileSelector->selectPrimary(
+                $lines,
+                $this->stringOrNull($core['primary_contact_number'] ?? null) ?? $hintMobile,
+            ),
             'height' => $height,
             'education' => $education,
             'occupation' => $occupation,
@@ -192,34 +205,6 @@ class OcrEnsembleBenchmarkOcrTextFieldExtractor
         return null;
     }
 
-    /**
-     * @param  list<string>  $lines
-     */
-    private function extractDob(array $lines): ?string
-    {
-        foreach ($lines as $line) {
-            if (preg_match('/जन्म\s*तारीख|जन्मतारीख|जन्म\s*दिनांक|DOB|date\s*of\s*birth/ui', $line) !== 1) {
-                continue;
-            }
-            if (preg_match('/(\d{1,2}\s*[\/.-]\s*\d{1,2}\s*[\/.-]\s*\d{2,4})/u', $line, $m) === 1) {
-                return $this->normalizeDob($m[1]);
-            }
-        }
-
-        return null;
-    }
-
-    private function cleanBenchmarkName(?string $name): ?string
-    {
-        if ($name === null || trim($name) === '') {
-            return null;
-        }
-        $name = trim($name);
-        $name = preg_replace('/^(?:\*[\s]*)?(?:कु\.|कुं\.|कुमारी\s+|चि\.|चिरंजीव\s+|श्री\.|श्रीमती\s+|सौ\.)/u', '', $name) ?? $name;
-
-        return trim($name) === '' ? null : trim($name);
-    }
-
     private function stringOrNull(mixed $value): ?string
     {
         if ($value === null || is_array($value) || is_bool($value)) {
@@ -228,18 +213,6 @@ class OcrEnsembleBenchmarkOcrTextFieldExtractor
         $string = trim((string) $value);
 
         return $string === '' ? null : $string;
-    }
-
-    private function normalizeDob(?string $value): ?string
-    {
-        if ($value === null || trim($value) === '') {
-            return null;
-        }
-        try {
-            return Carbon::parse($value)->format('Y-m-d');
-        } catch (\Throwable) {
-            return trim($value);
-        }
     }
 
     private function normalizeGender(?string $value): ?string
