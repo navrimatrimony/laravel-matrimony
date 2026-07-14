@@ -202,7 +202,7 @@ Next Phase only
 | 4.03 | Trigger: mobile missing | ✅ |
 | 4.04 | Trigger: religion missing | ✅ |
 | 4.05 | Gender missing does NOT trigger | ✅ |
-| 4.06 | Sarvam attempt saved | ☐ (deferred — see Phase 4 validation B1) |
+| 4.06 | Sarvam attempt saved | ✅ (Phase 4.5 — append-only `sarvam_ai_vision`, never primary) |
 | 4.07 | Sarvam failure non-fatal (soft-fail) | ✅ |
 | 4.08 | Re-merge affected fields into `field_resolution_json` | ✅ |
 | 4.09 | Rebuild `last_parse_input_text` when merge changes (existing assembler; ParseIntakeJob unchanged) | ✅ |
@@ -210,6 +210,7 @@ Next Phase only
 | 4.11 | Request builder (deterministic) | ✅ |
 | 4.12 | HTTP client + retry + response DTOs | ✅ |
 | 4.13 | Orchestration + quality gate + persist (4f) | ✅ |
+| 4.14 | Phase 4.5: retry resume when FR missing (B2) | ✅ |
 
 ### Tests
 
@@ -220,6 +221,7 @@ Next Phase only
 | 4.T03 | Synthetic: gender only missing → Sarvam not called | ✅ |
 | 4.T04 | Synthetic: Sarvam API error → intake not failed | ✅ |
 | 4.T05 | Merge no-op / quality gate / raw_ocr immutability / bulk hook | ✅ |
+| 4.T06 | Phase 4.5 hardening (attempt append + retry resume) | ✅ |
 
 ### Phase 4 freeze
 
@@ -228,11 +230,13 @@ Next Phase only
 | 4.F00 | Implementation freeze 4a–4f + validation doc | ✅ (2026-07-14) — see `OCR-ENSEMBLE-PHASE-4-VALIDATION-AND-ROLLOUT.md` |
 | 4.F01 | Sarvam trigger rate on 50-image set ≤ 20% | ☐ |
 | 4.F02 | Staging live Sarvam drill signed off | ☐ |
-| 4.F03 | Decide/implement `ocr_attempt` save (B1) before Phase 5 UI | ☐ |
+| 4.F03 | Decide/implement `ocr_attempt` save (B1) before Phase 5 UI | ✅ (Phase 4.5) |
 
-**Automated suite at freeze:** 113 passed / 486 assertions (Phase 4 + Phase 3 ensemble regression).
+**Automated suite at Phase 4 freeze (historical):** 113 passed / 486 assertions.
 
-**PASS → Phase 5 only** after 4.F00 accepted **and** product clears B1/B5; keep production flags off until 4.F01–4.F02.
+**Phase 4.5 + Phase 5 regression baseline (2026-07-14):** 180 passed / 980 assertions (`--filter=OcrEnsemblePhase`).
+
+**PASS → Phase 5:** accepted for implementation; production flags remain off until 4.F01–4.F02 + Phase 5 staging acceptance.
 
 ---
 
@@ -242,27 +246,34 @@ Next Phase only
 
 | # | Item | Done |
 |---|------|------|
-| 5.01 | Table on `correct-candidate` only | ☐ |
-| 5.02 | Columns: Field, Final, Tesseract, Second OCR, Sarvam, Reason | ☐ |
-| 5.03 | NOT on bulk list / intake list | ☐ |
-| 5.04 | Bulk list: status badge only (`ocr_ensemble_processing` / `ocr_ready`) | ☐ |
-| 5.05 | Legacy intake empty state | ☐ |
-| 5.06 | No regression on correction save | ☐ |
+| 5.A–5.G | Steps 5a–5g (foundation → UI → validation docs) | ✅ |
+| 5.01 | Table on `correct-candidate` only (blueprint §7.1) | ☐ — **surface drift:** live on `admin.biodata-intakes.ocr-comparison` (see Phase 5 validation P5-B1) |
+| 5.02 | Columns: Field, Final, Tesseract, Second OCR, Sarvam, Reason | ✅ (+ Status/Source badge columns) |
+| 5.03 | NOT on bulk list / intake list | ✅ |
+| 5.04 | Bulk list: status badge only (`ocr_ensemble_processing` / `ocr_ready`) | ☐ — meta written; Blade display open (P5-B2) |
+| 5.05 | Legacy intake empty state | ✅ |
+| 5.06 | No regression on correction save | ☐ — smoke on staging (correction form untouched by Phase 5 code) |
 
 ### Tests
 
 | # | Item | Done |
 |---|------|------|
-| 5.T01 | Feature test: table renders for ensemble intake | ☐ |
-| 5.T02 | Feature test: table absent on bulk index | ☐ |
-| 5.T03 | Manual: admin can read Reason column | ☐ |
+| 5.T01 | Feature: table / review page for ensemble intake | ✅ (`OcrEnsemblePhase5ComparisonUiTest` / admin integration) |
+| 5.T02 | Feature: table absent on bulk index | ✅ (no bulk index wiring; separate route only) |
+| 5.T03 | Manual: admin can read Reason column | ☐ staging |
+| 5.T04 | Unit: evidence / builder / orchestration | ✅ |
+| 5.T05 | Feature: auth, gate skip, empty, resolved | ✅ |
 
 ### Phase 5 freeze
 
 | # | Item | Done |
 |---|------|------|
-| 5.F01 | All items checked | ☐ |
+| 5.F00 | Validation & rollout doc | ✅ — `OCR-ENSEMBLE-PHASE-5-VALIDATION-AND-ROLLOUT.md` |
+| 5.F01 | All blueprint 5.01–5.06 checked | ☐ (P5-B1 / P5-B2 open) |
 | 5.F02 | **Program v1.0 complete** — production flag rollout plan approved | ☐ |
+| 5.F03 | Staging acceptance (READY FOR STAGING) | ☐ ops — doc verdict **READY FOR STAGING** |
+
+**Verdict (5g):** **READY FOR STAGING** — not production. See Phase 5 validation doc §10.
 
 ---
 
@@ -273,6 +284,7 @@ Next Phase only
 - Marathi label normalizer  
 - LLM text cleanup  
 - EasyOCR without new benchmark  
+- Relocate comparison table onto `correct-candidate` (if product requires strict §7.1)
 
 ---
 
@@ -282,3 +294,5 @@ Next Phase only
 |---------|------|--------|
 | 1.0 | 2026-07-12 | Initial checklist |
 | 1.1 | 2026-07-13 | Phase 1 frozen — Batch #44 staging PASS |
+| 1.2 | 2026-07-14 | Phase 4 freeze notes |
+| 1.3 | 2026-07-14 | Phase 4.5 + Phase 5a–5g — READY FOR STAGING; checklist updates |
