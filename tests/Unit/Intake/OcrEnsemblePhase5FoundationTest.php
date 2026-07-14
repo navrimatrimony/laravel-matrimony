@@ -146,8 +146,9 @@ test('phase5 evidence loader and table builder skeletons are bound', function ()
         ->and($bundle->secondOcr->present)->toBeFalse()
         ->and($bundle->sarvam->present)->toBeFalse()
         ->and($table->columns)->toBe(OcrEnsemblePhase5Constants::TABLE_COLUMNS)
-        ->and($table->isEmpty())->toBeTrue()
-        ->and($table->audit->emptyState)->toBe(OcrEnsemblePhase5Constants::EMPTY_STATE_ENSEMBLE_NOT_RUN);
+        ->and($table->fieldKeys())->toBe(\App\Services\Intake\OcrEnsemble\OcrEnsemblePhase3Constants::STRUCTURED_FIELDS)
+        ->and(count($table->rows))->toBe(16)
+        ->and($table->audit->emptyState)->toBe(OcrEnsemblePhase5Constants::EMPTY_STATE_LEGACY_INTAKE);
 });
 
 test('phase5 production files do not import benchmark classes or write paths', function () {

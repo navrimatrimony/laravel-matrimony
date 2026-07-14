@@ -6,7 +6,9 @@ use App\Services\Intake\OcrEnsemble\Data\OcrComparisonEvidenceBundle;
 use App\Services\Intake\OcrEnsemble\Data\OcrComparisonTable;
 
 /**
- * Builds an immutable comparison table from Phase 3/4 evidence (no writes).
+ * Builds an immutable comparison table from an EvidenceBundle (no writes).
+ *
+ * One row per Phase 3 canonical field. Engine columns gated by evidence presence.
  */
 interface OcrEnsembleComparisonTableBuilderInterface
 {
