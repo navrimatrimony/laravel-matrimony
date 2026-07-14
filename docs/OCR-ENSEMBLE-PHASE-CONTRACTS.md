@@ -246,12 +246,12 @@ ELSE stay Tesseract-only; re-evaluate in v1.1
 
 ### Success criteria
 
-- [ ] Table visible on `correct-candidate` for ensemble intakes
-- [ ] Table **not** on bulk list or intake list
-- [ ] All 16 fields listed (or subset with data + missing rows)
-- [ ] Reason column explains vote / validator / sarvam_judge
-- [ ] No regression to correction save flow
-- [ ] Feature flag off: table hidden or shows legacy message
+- [x] Table visible on `correct-candidate` for ensemble intakes
+- [x] Table **not** on bulk list or intake list
+- [x] All 16 fields listed (or subset with data + missing rows)
+- [x] Reason column explains vote / validator / sarvam_judge
+- [ ] No regression to correction save flow *(staging smoke — ops)*
+- [x] Feature flag off: table hidden or shows legacy message
 
 ### Out of scope (Phase 5)
 
@@ -291,3 +291,4 @@ Phase 1 ──► Phase 2 (benchmark) ──► Phase 3 ──► Phase 4 ──
 | Version | Date | Change |
 |---------|------|--------|
 | 1.0 | 2026-07-12 | Initial phase contracts aligned with blueprint v1.0 freeze |
+| 1.0a | 2026-07-14 | Phase 5 success-criteria checkmarks (v1.0 freeze review; contracts unchanged) |

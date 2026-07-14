@@ -523,38 +523,38 @@ Detailed per-phase contracts: **`docs/OCR-ENSEMBLE-PHASE-CONTRACTS.md`**
 
 ### 13.1 Phase 1 complete when
 
-- [ ] `intake_ocr_ensemble_enabled` exists; default `false`
-- [ ] Upload returns immediately; work runs on `bulk-intake` (or dedicated) queue
-- [ ] OpenCV minimal preprocessing runs before Tesseract
-- [ ] At least one `biodata_intake_ocr_attempts` row per intake with timing + version
-- [ ] Failure in optional path does not fail entire job (Tesseract fallback)
-- [ ] Existing bulk flow works unchanged when flag `false`
+- [x] `intake_ocr_ensemble_enabled` exists; default `false`
+- [x] Upload returns immediately; work runs on `bulk-intake` (or dedicated) queue
+- [x] OpenCV minimal preprocessing runs before Tesseract
+- [x] At least one `biodata_intake_ocr_attempts` row per intake with timing + version
+- [x] Failure in optional path does not fail entire job (Tesseract fallback)
+- [x] Existing bulk flow works unchanged when flag `false`
 
 ### 13.2 Phase 2 complete when
 
-- [ ] 10-image technology check completed and recorded
-- [ ] 50-image decision benchmark completed (or second engine rejected with documented reason)
-- [ ] If go: second engine sidecar integrated with Tesseract fallback; if no-go: documented stay on Tesseract-only
+- [x] 10-image technology check completed and recorded
+- [x] 50-image decision benchmark completed (or second engine rejected with documented reason)
+- [x] If go: second engine sidecar integrated with Tesseract fallback; if no-go: documented stay on Tesseract-only
 
 ### 13.3 Phase 3 complete when
 
-- [ ] 16 structured fields extracted to candidates without running full parser per engine
-- [ ] Field-wise vote + validator produces `field_resolution_json`
-- [ ] Assembled parse input reaches `ParseIntakeJob` and produces `parsed_json`
-- [ ] Gender missing does not block pipeline; no Sarvam for gender alone
+- [x] 16 structured fields extracted to candidates without running full parser per engine
+- [x] Field-wise vote + validator produces `field_resolution_json`
+- [x] Assembled parse input reaches `ParseIntakeJob` and produces `parsed_json`
+- [x] Gender missing does not block pipeline; no Sarvam for gender alone
 
 ### 13.4 Phase 4 complete when
 
-- [ ] Sarvam runs **only** on: name conflict OR DOB missing OR mobile missing OR religion missing
-- [ ] Gender missing does **not** trigger Sarvam
-- [ ] Sarvam skip verified when engines agree on all triggered-critical fields
-- [ ] Sarvam attempt saved in `ocr_attempts`
+- [x] Sarvam runs **only** on: name conflict OR DOB missing OR mobile missing OR religion missing
+- [x] Gender missing does **not** trigger Sarvam
+- [x] Sarvam skip verified when engines agree on all triggered-critical fields
+- [x] Sarvam attempt saved in `ocr_attempts`
 
 ### 13.5 Phase 5 complete when
 
-- [ ] Admin comparison table visible **only** on `correct-candidate`
-- [ ] Columns: Field, Final, Tesseract, Second OCR, Sarvam, Reason
-- [ ] `ocr_ensemble_processing` status visible in bulk UI (list row — status only, not full table)
+- [x] Admin comparison table visible **only** on `correct-candidate`
+- [x] Columns: Field, Final, Tesseract, Second OCR, Sarvam, Reason
+- [x] `ocr_ensemble_processing` status visible in bulk UI (list row — status only, not full table)
 
 ### 13.6 Program success (post 50-image benchmark)
 
@@ -638,6 +638,7 @@ IntakeApprovalService → MutationService (unchanged)
 |---------|------|--------|
 | 0.1 | 2026-07-12 | Initial blueprint draft |
 | **1.0** | **2026-07-12** | **DESIGN FROZEN** — gender not Sarvam trigger; comparison table only correct-candidate; income+marital_status confirmed; guiding principle; phase order aligned with phase contracts |
+| 1.0a | 2026-07-14 | §13 acceptance checkmarks only (implementation freeze review; design unchanged) |
 
 **Related:** `docs/OCR-ENSEMBLE-PHASE-CONTRACTS.md`  
 **Readiness package:** `OCR-ENSEMBLE-PRODUCTION-READINESS-REVIEW.md`, `OCR-ENSEMBLE-IMPLEMENTATION-CHECKLIST.md`, `OCR-ENSEMBLE-TEST-PLAN.md`, `OCR-ENSEMBLE-BLUEPRINT-v1.1-ADDENDUM.md`

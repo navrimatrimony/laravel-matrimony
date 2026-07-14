@@ -159,35 +159,38 @@ Next Phase only
 
 | # | Item | Done |
 |---|------|------|
-| 3.01 | `field_resolution_json` storage (per v1.1 decision) | ☐ |
-| 3.02 | Field extractor: 16 fields (blueprint list) | ☐ |
-| 3.03 | Shared regex/helpers from parser (no duplicate fork) | ☐ |
-| 3.04 | Per-field normalize → vote → validator | ☐ |
-| 3.05 | Single-engine mode works (pass-through) | ☐ |
-| 3.06 | Assemble `last_parse_input_text` | ☐ |
-| 3.07 | `ParseIntakeJob` uses assembled input | ☐ |
-| 3.08 | Gender missing → empty, no error | ☐ |
-| 3.09 | Income soft validator (no hard fail) | ☐ |
-| 3.10 | Paragraph fields not voted | ☐ |
+| 3.01 | `field_resolution_json` storage (per v1.1 decision) | ✅ |
+| 3.02 | Field extractor: 16 fields (blueprint list) | ✅ |
+| 3.03 | Shared regex/helpers from parser (no duplicate fork) | ✅ |
+| 3.04 | Per-field normalize → vote → validator | ✅ |
+| 3.05 | Single-engine mode works (pass-through) | ✅ |
+| 3.06 | Assemble `last_parse_input_text` | ✅ |
+| 3.07 | `ParseIntakeJob` uses assembled input | ✅ |
+| 3.08 | Gender missing → empty, no error | ✅ |
+| 3.09 | Income soft validator (no hard fail) | ✅ |
+| 3.10 | Paragraph fields not voted | ✅ |
 
 ### Tests
 
 | # | Item | Done |
 |---|------|------|
-| 3.T01 | Unit: each field validator (mobile, DOB, religion) | ☐ |
-| 3.T02 | Unit: vote tie-break rules | ☐ |
-| 3.T03 | Feature: #735 ground truth fields ≥ target accuracy on extract | ☐ |
-| 3.T04 | Feature: `parsed_json` populated after parse | ☐ |
-| 3.T05 | Regression: flag off unchanged | ☐ |
+| 3.T01 | Unit: each field validator (mobile, DOB, religion) | ✅ |
+| 3.T02 | Unit: vote tie-break rules | ✅ |
+| 3.T03 | Feature: #735 ground truth fields ≥ target accuracy on extract | ☐ **ops** — see 3.F01 |
+| 3.T04 | Feature: `parsed_json` populated after parse | ✅ (assemble → ParseIntakeJob preference covered) |
+| 3.T05 | Regression: flag off unchanged | ✅ |
 
 ### Phase 3 freeze
 
 | # | Item | Done |
 |---|------|------|
-| 3.F01 | Ground truth 10-image extract score recorded | ☐ |
-| 3.F02 | All items checked | ☐ |
+| 3.F00 | Implementation freeze 3a–3g (code + automated tests) | ✅ — see `OCR-ENSEMBLE-PHASE-3-VALIDATION-AND-ROLLOUT.md` |
+| 3.F01 | Ground truth 10-image extract score recorded | ☐ **ops** — staging/QA |
+| 3.F02 | All implementation + automated test items checked | ✅ (3.T03/3.F01 remain ops) |
 
-**PASS → Phase 4 only**
+**Phase 3 status: IMPLEMENTATION FROZEN** — production flag-on still waits for 3.F01 + staging drills.
+
+**PASS → Phase 4** (implementation path completed; ops gates tracked separately)
 
 ---
 
@@ -234,9 +237,9 @@ Next Phase only
 
 **Automated suite at Phase 4 freeze (historical):** 113 passed / 486 assertions.
 
-**Phase 4.5 + Phase 5 regression baseline (2026-07-14):** 180 passed / 980 assertions (`--filter=OcrEnsemblePhase`).
+**v1.0 freeze suite baseline (2026-07-14):** 196 passed / 1032 assertions (`--filter=OcrEnsemblePhase`).
 
-**PASS → Phase 5:** accepted for implementation; production flags remain off until 4.F01–4.F02 + Phase 5 staging acceptance.
+**PASS → Phase 5:** accepted; production flags remain off until 4.F01–4.F02 + Phase 5 staging acceptance (P5-B3 / P5-B4).
 
 ---
 
@@ -247,44 +250,46 @@ Next Phase only
 | # | Item | Done |
 |---|------|------|
 | 5.A–5.G | Steps 5a–5g (foundation → UI → validation docs) | ✅ |
-| 5.01 | Table on `correct-candidate` only (blueprint §7.1) | ☐ — **surface drift:** live on `admin.biodata-intakes.ocr-comparison` (see Phase 5 validation P5-B1) |
+| 5.01 | Table on `correct-candidate` only (blueprint §7.1) | ✅ **P5-B1 closed** — standalone URL redirects |
 | 5.02 | Columns: Field, Final, Tesseract, Second OCR, Sarvam, Reason | ✅ (+ Status/Source badge columns) |
-| 5.03 | NOT on bulk list / intake list | ✅ |
-| 5.04 | Bulk list: status badge only (`ocr_ensemble_processing` / `ocr_ready`) | ☐ — meta written; Blade display open (P5-B2) |
+| 5.03 | NOT full comparison table on bulk list / intake list | ✅ |
+| 5.04 | Bulk list: status badge only (`ocr_ensemble_processing` / `ocr_ready` + related) | ✅ **P5-B2 closed** |
 | 5.05 | Legacy intake empty state | ✅ |
-| 5.06 | No regression on correction save | ☐ — smoke on staging (correction form untouched by Phase 5 code) |
+| 5.06 | No regression on correction save | ☐ **ops** — smoke on staging (form untouched by Phase 5 write paths) |
 
 ### Tests
 
 | # | Item | Done |
 |---|------|------|
-| 5.T01 | Feature: table / review page for ensemble intake | ✅ (`OcrEnsemblePhase5ComparisonUiTest` / admin integration) |
-| 5.T02 | Feature: table absent on bulk index | ✅ (no bulk index wiring; separate route only) |
+| 5.T01 | Feature: Correct Candidate comparison / review panel | ✅ |
+| 5.T02 | Feature: full table absent from bulk dense list (badges only) | ✅ |
 | 5.T03 | Manual: admin can read Reason column | ☐ staging |
 | 5.T04 | Unit: evidence / builder / orchestration | ✅ |
 | 5.T05 | Feature: auth, gate skip, empty, resolved | ✅ |
+| 5.T06 | Feature: bulk list badges (legacy / Phase 3 / Phase 4 / order) | ✅ |
 
 ### Phase 5 freeze
 
 | # | Item | Done |
 |---|------|------|
 | 5.F00 | Validation & rollout doc | ✅ — `OCR-ENSEMBLE-PHASE-5-VALIDATION-AND-ROLLOUT.md` |
-| 5.F01 | All blueprint 5.01–5.06 checked | ☐ (P5-B1 / P5-B2 open) |
-| 5.F02 | **Program v1.0 complete** — production flag rollout plan approved | ☐ |
-| 5.F03 | Staging acceptance (READY FOR STAGING) | ☐ ops — doc verdict **READY FOR STAGING** |
+| 5.F01 | Blueprint UI items 5.01–5.05 checked (5.06 ops smoke) | ✅ |
+| 5.F02 | **Program v1.0 application complete** — production flag rollout approved | ☐ **ops/product** (P5-B4) |
+| 5.F03 | Staging acceptance (READY FOR STAGING) | ✅ doc/code — ops drills still open (RO3–RO7 / P5-B3) |
 
-**Verdict (5g):** **READY FOR STAGING** — not production. See Phase 5 validation doc §10.
+**v1.0 application freeze:** **READY FOR STAGING** — **NOT READY FOR PRODUCTION**. See Phase 5 validation doc §10.
 
 ---
 
-## Post-v1.0 (not in scope until Phase 5 frozen)
+## Post-v1.0 (not in scope — Phase 6+)
 
 - Weight learning  
 - Layout detection  
 - Marathi label normalizer  
 - LLM text cleanup  
-- EasyOCR without new benchmark  
-- Relocate comparison table onto `correct-candidate` (if product requires strict §7.1)
+- EasyOCR / second engine without new benchmark + GO decision  
+
+**v1.0 closed blueprint blockers:** Correct Candidate placement (P5-B1) and bulk list badges (P5-B2).
 
 ---
 
@@ -296,3 +301,4 @@ Next Phase only
 | 1.1 | 2026-07-13 | Phase 1 frozen — Batch #44 staging PASS |
 | 1.2 | 2026-07-14 | Phase 4 freeze notes |
 | 1.3 | 2026-07-14 | Phase 4.5 + Phase 5a–5g — READY FOR STAGING; checklist updates |
+| 1.4 | 2026-07-14 | v1.0 freeze review — Phase 3/5 checklist alignment; P5-B1/B2 closed; suite 196/1032 |
