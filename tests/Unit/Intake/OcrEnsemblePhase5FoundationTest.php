@@ -142,6 +142,9 @@ test('phase5 evidence loader and table builder skeletons are bound', function ()
 
     expect($bundle->intakeId)->toBe(44)
         ->and($bundle->hasFieldResolution())->toBeFalse()
+        ->and($bundle->tesseract->present)->toBeFalse()
+        ->and($bundle->secondOcr->present)->toBeFalse()
+        ->and($bundle->sarvam->present)->toBeFalse()
         ->and($table->columns)->toBe(OcrEnsemblePhase5Constants::TABLE_COLUMNS)
         ->and($table->isEmpty())->toBeTrue()
         ->and($table->audit->emptyState)->toBe(OcrEnsemblePhase5Constants::EMPTY_STATE_ENSEMBLE_NOT_RUN);
@@ -157,6 +160,8 @@ test('phase5 production files do not import benchmark classes or write paths', f
         app_path('Services/Intake/OcrEnsemble/Data/OcrComparisonFieldRow.php'),
         app_path('Services/Intake/OcrEnsemble/Data/OcrComparisonAuditMeta.php'),
         app_path('Services/Intake/OcrEnsemble/Data/OcrComparisonEvidenceBundle.php'),
+        app_path('Services/Intake/OcrEnsemble/Data/OcrComparisonAttemptSummary.php'),
+        app_path('Services/Intake/OcrEnsemble/Data/OcrComparisonEngineEvidence.php'),
         app_path('Services/Intake/OcrEnsemble/Data/Phase5ComparisonResult.php'),
     ];
 
