@@ -149,6 +149,9 @@ class BulkIntakeBatchService
         $claimedItem = $this->claimItemForProcessing($item);
 
         if ($claimedItem->biodata_intake_id !== null) {
+            // B2: resume Phase 3/4 when intake exists but field_resolution_json is still missing.
+            $this->resumeEnsembleFieldResolutionIfNeeded($claimedItem);
+
             if ($queueFreeParseAfterUpload) {
                 $this->queueAutoFreeParseAfterUploadForItem($claimedItem, $actor);
             }
@@ -1125,5 +1128,46 @@ class BulkIntakeBatchService
     private function runPhase4SarvamJudgeIfApplicable(BulkIntakeBatchItem $item): void
     {
         app(IntakeOcrEnsemblePhase4Service::class)->runForBulkItemIfApplicable($item);
+    }
+
+    /**
+     * Retry resume (Phase 4.5 B2): when gates allow and envelope is missing, run Phase 3 then Phase 4.
+     * Skips when Phase 3 already persisted field_resolution_json (no duplicate work).
+     */
+    private function resumeEnsembleFieldResolutionIfNeeded(BulkIntakeBatchItem $item): void
+    {
+        if (! $this->shouldResumeEnsembleFieldResolution($item)) {
+            return;
+        }
+
+        $this->runPhase3FieldResolutionIfApplicable($item);
+        $this->runPhase4SarvamJudgeIfApplicable($item);
+    }
+
+    private function shouldResumeEnsembleFieldResolution(BulkIntakeBatchItem $item): bool
+    {
+        $gate = app(IntakeOcrEnsembleGate::class);
+        if (! $gate->isPhase3Enabled()) {
+            return false;
+        }
+
+        if ((string) $item->input_type !== BulkIntakeBatchItem::INPUT_FILE) {
+            return false;
+        }
+
+        $meta = is_array($item->item_meta_json) ? $item->item_meta_json : [];
+        if (($meta['ocr_ensemble_skip_reason'] ?? null) === 'reused_transcript') {
+            return false;
+        }
+
+        $item->loadMissing('biodataIntake');
+        $intake = $item->biodataIntake;
+        if (! $intake instanceof BiodataIntake) {
+            return false;
+        }
+
+        $json = $intake->field_resolution_json;
+
+        return ! is_array($json) || $json === [];
     }
 }

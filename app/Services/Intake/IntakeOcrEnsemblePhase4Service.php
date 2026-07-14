@@ -12,7 +12,9 @@ use App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleSarvamJudgeRequestBuild
 use App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleSarvamJudgeTriggerEvaluatorInterface;
 use App\Services\Intake\OcrEnsemble\Data\FieldResolutionEnvelope;
 use App\Services\Intake\OcrEnsemble\Data\Phase4JudgeResult;
+use App\Services\Intake\OcrEnsemble\Data\SarvamJudgeRequest;
 use App\Services\Intake\OcrEnsemble\Data\SarvamJudgeResponse;
+use App\Services\Intake\OcrEnsemble\OcrEnsemblePhase4Constants;
 use App\Services\Intake\OcrEnsemble\Support\OcrEnsembleParseInputAssemblySupport;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -32,6 +34,7 @@ class IntakeOcrEnsemblePhase4Service
         private readonly OcrEnsembleSarvamJudgeClientInterface $sarvamJudgeClient,
         private readonly OcrEnsembleSarvamJudgeMergerInterface $sarvamJudgeMerger,
         private readonly OcrEnsembleParseInputAssemblerInterface $parseInputAssembler,
+        private readonly IntakeOcrAttemptRecorder $ocrAttemptRecorder,
     ) {}
 
     public function runForBulkItemIfApplicable(BulkIntakeBatchItem $item): Phase4JudgeResult
@@ -118,6 +121,9 @@ class IntakeOcrEnsemblePhase4Service
             );
         }
 
+        // B1: append-only evidence row for successful judge output (never primary; never touches raw_ocr_text).
+        $this->persistSarvamJudgeOcrAttempt($intake, $request, $sarvamResponse);
+
         $mergeResult = $this->sarvamJudgeMerger->merge($envelope, $sarvamResponse);
         if (! $mergeResult->changed) {
             Log::info('phase4_sarvam_merge_noop', [
@@ -170,6 +176,62 @@ class IntakeOcrEnsemblePhase4Service
             SarvamJudgeResponse::OUTCOME_CONFIG_ERROR => 'sarvam_config_error',
             default => 'sarvam_soft_failed',
         };
+    }
+
+    /**
+     * Append-only Sarvam judge evidence. Does not become primary and does not mutate prior attempts.
+     */
+    private function persistSarvamJudgeOcrAttempt(
+        BiodataIntake $intake,
+        SarvamJudgeRequest $request,
+        SarvamJudgeResponse $response,
+    ): void {
+        try {
+            $rawText = $this->buildSarvamJudgeEvidenceText($response);
+            $this->ocrAttemptRecorder->record($intake, [
+                'engine' => BiodataIntakeOcrAttempt::ENGINE_SARVAM_AI_VISION,
+                'source' => 'phase4_sarvam_judge',
+                'created_by_actor_type' => BiodataIntakeOcrAttempt::ACTOR_SYSTEM,
+                'source_surface' => BiodataIntakeOcrAttempt::SURFACE_SERVER,
+                'status' => BiodataIntakeOcrAttempt::STATUS_SUCCESS,
+                'raw_text' => $rawText,
+                'is_primary' => false,
+                'parser_version' => OcrEnsemblePhase4Constants::PIPELINE_VERSION,
+                'prompt_version' => OcrEnsemblePhase4Constants::SCHEMA_VERSION,
+                'engine_meta_json' => [
+                    'phase' => 'phase4_sarvam_judge',
+                    'pipeline_version' => OcrEnsemblePhase4Constants::PIPELINE_VERSION,
+                    'schema_version' => OcrEnsemblePhase4Constants::SCHEMA_VERSION,
+                    'request_payload_hash' => $response->requestPayloadHash,
+                    'response' => $response->toArray(),
+                    'trigger_field_names' => $request->fieldNames(),
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            // Soft-fail evidence write: merge/persist may still proceed.
+            Log::warning('phase4_sarvam_judge_attempt_persist_failed', [
+                'intake_id' => $intake->id,
+                'message' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    private function buildSarvamJudgeEvidenceText(SarvamJudgeResponse $response): string
+    {
+        $lines = [];
+        foreach ($response->fields as $field) {
+            $value = is_string($field->value) ? trim($field->value) : '';
+            if ($value === '') {
+                continue;
+            }
+            $lines[] = $field->fieldName.' : '.$value;
+        }
+
+        if ($lines === []) {
+            return json_encode($response->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
+        }
+
+        return implode("\n", $lines);
     }
 
     private function primaryOcrText(BiodataIntake $intake): string
