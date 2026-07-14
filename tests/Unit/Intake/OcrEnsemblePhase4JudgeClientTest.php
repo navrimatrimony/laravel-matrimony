@@ -9,6 +9,7 @@ use App\Services\Intake\OcrEnsemble\OcrEnsembleSarvamJudgeClient;
 use App\Services\Intake\OcrEnsemble\OcrEnsembleSarvamJudgeResponseParser;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Sleep;
 use Tests\TestCase;
 
@@ -150,6 +151,36 @@ test('judge succeeds after retryable http failure', function () {
         ->and($response->fields[0]->value)->toBe('1990-05-15');
 
     Http::assertSentCount(2);
+});
+
+test('non-2xx mapHttpResponse logs status model and body prefix only', function () {
+    Log::spy();
+
+    $body = '{"error":{"message":"invalid_request_error diagnostic body"}}'.str_repeat('x', 600);
+
+    Http::fake([
+        'https://example.test/v1/chat/completions' => Http::response($body, 400),
+    ]);
+
+    $response = app(OcrEnsembleSarvamJudgeClientInterface::class)->judge(phase4dSampleRequest());
+
+    expect($response->ok)->toBeFalse()
+        ->and($response->errorCode)->toBe('http_400')
+        ->and($response->statusCode)->toBe(400);
+
+    Log::shouldHaveReceived('warning')
+        ->once()
+        ->withArgs(function (string $message, array $context): bool {
+            return $message === 'phase4_sarvam_http_response'
+                && ($context['http_status'] ?? null) === 400
+                && ($context['model'] ?? null) === 'sarvam-m'
+                && is_string($context['response_body_prefix'] ?? null)
+                && strlen((string) $context['response_body_prefix']) === 500
+                && str_contains((string) $context['response_body_prefix'], 'invalid_request_error')
+                && ! array_key_exists('api_key', $context)
+                && ! array_key_exists('request_payload', $context)
+                && ! array_key_exists('ocr_text', $context);
+        });
 });
 
 test('judge handles malformed json gracefully', function () {
