@@ -98,7 +98,7 @@ test('phase5 service skips when gate is disabled', function () {
         ->and($result->reason)->toBe('phase5_gate_disabled');
 });
 
-test('phase5 service returns not implemented skeleton when gated on', function () {
+test('phase5 service returns empty comparison when gated on without ensemble evidence', function () {
     AdminSetting::setValue(IntakeOcrEnsembleGate::SETTING_KEY, true);
     config()->set('ocr.ensemble.phase5.enabled', true);
 
@@ -117,8 +117,10 @@ test('phase5 service returns not implemented skeleton when gated on', function (
 
     $result = app(IntakeOcrEnsemblePhase5Service::class)->buildComparisonForIntake($intake);
 
-    expect($result->wasNotImplemented())->toBeTrue()
-        ->and($result->reason)->toBe('phase5_v1_skeleton');
+    expect($result->wasEmpty())->toBeTrue()
+        ->and($result->reason)->toBe(OcrEnsemblePhase5Constants::EMPTY_STATE_LEGACY_INTAKE)
+        ->and($result->table)->not->toBeNull()
+        ->and(count($result->table->rows))->toBe(16);
 });
 
 test('phase5 result helpers', function () {
