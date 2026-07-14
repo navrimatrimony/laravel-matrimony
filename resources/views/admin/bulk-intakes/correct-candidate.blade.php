@@ -91,6 +91,14 @@
         Saves only the reviewed intake snapshot. No user/profile creation, WhatsApp queue, apply flow, or paid provider extraction runs here.
     </div>
 
+    <section class="rounded-lg bg-white p-6 shadow" data-testid="bulk-correction-ocr-comparison">
+        @include('admin.intake.partials.ocr-comparison-review-panel', [
+            'intake' => $intake,
+            'comparisonResult' => $comparisonResult,
+            'embedded' => true,
+        ])
+    </section>
+
     <div data-testid="bulk-correction-two-column-layout" class="bulk-correction-layout grid gap-6">
         <section data-testid="bulk-correction-left-evidence" class="space-y-6">
             <div class="rounded-lg bg-white p-6 shadow">

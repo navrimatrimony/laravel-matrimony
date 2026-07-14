@@ -3,6 +3,8 @@
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Models\BiodataIntakeOcrAttempt;
+use App\Models\BulkIntakeBatch;
+use App\Models\BulkIntakeBatchItem;
 use App\Models\User;
 use App\Services\Intake\IntakeOcrEnsembleGate;
 use App\Services\Intake\OcrEnsemble\Data\FieldResolutionEnvelope;
@@ -10,6 +12,10 @@ use App\Services\Intake\OcrEnsemble\Data\FieldResolutionFieldRecord;
 use App\Services\Intake\OcrEnsemble\Data\FieldResolutionMeta;
 use App\Services\Intake\OcrEnsemble\OcrEnsemblePhase3Constants;
 use App\Services\Intake\OcrEnsemble\OcrEnsemblePhase5Constants;
+
+/**
+ * Phase 5e legacy route coverage after P5-B1: standalone entry redirects to Correct Candidate.
+ */
 
 function phase5eAdmin(): User
 {
@@ -56,6 +62,28 @@ function phase5eIntake(array $overrides = []): BiodataIntake
     ], $overrides));
 }
 
+function phase5eLinkBulk(User $admin, BiodataIntake $intake): array
+{
+    $batch = BulkIntakeBatch::create([
+        'uploaded_by_user_id' => $admin->id,
+        'uploaded_by_actor_type' => BulkIntakeBatch::ACTOR_ADMIN,
+        'source_surface' => BulkIntakeBatch::SURFACE_ADMIN_PANEL,
+        'batch_name' => 'Phase 5e redirect batch',
+        'batch_status' => BulkIntakeBatch::STATUS_COMPLETED,
+    ]);
+    $item = BulkIntakeBatchItem::create([
+        'bulk_intake_batch_id' => $batch->id,
+        'biodata_intake_id' => $intake->id,
+        'item_sequence' => 1,
+        'input_type' => BulkIntakeBatchItem::INPUT_FILE,
+        'original_filename' => 'phase5e.pdf',
+        'source_file_path' => 'bulk-intakes/phase5e.pdf',
+        'item_status' => BulkIntakeBatchItem::STATUS_INTAKE_CREATED,
+    ]);
+
+    return [$batch, $item];
+}
+
 function phase5eResolvedEnvelope(int $intakeId): array
 {
     $fields = [];
@@ -85,23 +113,23 @@ function phase5eResolvedEnvelope(int $intakeId): array
     ))->toArray();
 }
 
-test('authorized admin can open ocr comparison placeholder', function () {
+test('authorized admin is redirected from standalone ocr comparison to correct candidate', function () {
     phase5eEnableGate();
     $admin = phase5eAdmin();
     $intake = phase5eIntake();
+    [$batch, $item] = phase5eLinkBulk($admin, $intake);
 
     $this->actingAs($admin)
         ->get(route('admin.biodata-intakes.ocr-comparison', $intake))
-        ->assertOk()
-        ->assertSee('data-testid="ocr-comparison-review"', false)
-        ->assertSee('data-testid="ocr-comparison-outcome"', false)
-        ->assertSee('data-testid="ocr-comparison-table"', false);
+        ->assertRedirect(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]));
 });
 
-test('unauthorized user cannot open ocr comparison', function () {
+test('unauthorized user cannot open standalone ocr comparison redirect', function () {
     phase5eEnableGate();
+    $admin = phase5eAdmin();
     $member = phase5eMember();
     $intake = phase5eIntake();
+    phase5eLinkBulk($admin, $intake);
 
     $this->actingAs($member)
         ->get(route('admin.biodata-intakes.ocr-comparison', $intake))
@@ -117,21 +145,30 @@ test('ocr comparison returns not found for missing intake', function () {
         ->assertNotFound();
 });
 
-test('ocr comparison shows skipped outcome when gate disabled', function () {
-    phase5eDisableGate();
+test('standalone ocr comparison 404s when intake has no bulk item', function () {
+    phase5eEnableGate();
     $admin = phase5eAdmin();
     $intake = phase5eIntake();
 
     $this->actingAs($admin)
         ->get(route('admin.biodata-intakes.ocr-comparison', $intake))
-        ->assertOk()
-        ->assertSee('data-outcome="skipped"', false)
-        ->assertSee('data-reason="phase5_gate_disabled"', false)
-        ->assertSee('>skipped<', false)
-        ->assertSee('phase5_gate_disabled', false);
+        ->assertNotFound();
 });
 
-test('ocr comparison shows resolved outcome when field resolution exists', function () {
+test('correct candidate shows skipped outcome when gate disabled', function () {
+    phase5eDisableGate();
+    $admin = phase5eAdmin();
+    $intake = phase5eIntake();
+    [$batch, $item] = phase5eLinkBulk($admin, $intake);
+
+    $this->actingAs($admin)
+        ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
+        ->assertOk()
+        ->assertSee('data-outcome="skipped"', false)
+        ->assertSee('data-reason="phase5_gate_disabled"', false);
+});
+
+test('correct candidate shows resolved outcome when field resolution exists', function () {
     phase5eEnableGate();
     $admin = phase5eAdmin();
     $intake = phase5eIntake();
@@ -148,26 +185,26 @@ test('ocr comparison shows resolved outcome when field resolution exists', funct
 
     $intake->field_resolution_json = phase5eResolvedEnvelope((int) $intake->id);
     $intake->save();
+    [$batch, $item] = phase5eLinkBulk($admin, $intake->fresh());
 
     $this->actingAs($admin)
-        ->get(route('admin.biodata-intakes.ocr-comparison', $intake->fresh()))
+        ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
         ->assertOk()
         ->assertSee('data-outcome="resolved"', false)
-        ->assertSee('data-reason="resolved"', false)
         ->assertSee('data-testid="ocr-comparison-row-religion"', false)
         ->assertSee('data-testid="ocr-comparison-final-highlight"', false)
         ->assertSee('Hindu', false);
 });
 
-test('ocr comparison shows empty outcome when no field resolution', function () {
+test('correct candidate shows empty outcome when no field resolution', function () {
     phase5eEnableGate();
     $admin = phase5eAdmin();
     $intake = phase5eIntake(['field_resolution_json' => null]);
+    [$batch, $item] = phase5eLinkBulk($admin, $intake);
 
     $this->actingAs($admin)
-        ->get(route('admin.biodata-intakes.ocr-comparison', $intake))
+        ->get(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]))
         ->assertOk()
         ->assertSee('data-outcome="empty"', false)
-        ->assertSee('data-reason="'.OcrEnsemblePhase5Constants::EMPTY_STATE_LEGACY_INTAKE.'"', false)
-        ->assertSee(OcrEnsemblePhase5Constants::EMPTY_STATE_LEGACY_INTAKE, false);
+        ->assertSee('data-reason="'.OcrEnsemblePhase5Constants::EMPTY_STATE_LEGACY_INTAKE.'"', false);
 });

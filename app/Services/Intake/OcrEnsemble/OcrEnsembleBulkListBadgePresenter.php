@@ -196,13 +196,13 @@ final class OcrEnsembleBulkListBadgePresenter
     private function label(string $key): string
     {
         return match ($key) {
-            self::BADGE_OCR_COMPLETE => 'OCR Complete',
-            self::BADGE_PHASE3_COMPLETE => 'Phase 3 Complete',
-            self::BADGE_SARVAM_REVIEWED => 'Sarvam Reviewed',
-            self::BADGE_COMPARISON_READY => 'Comparison Ready',
-            self::BADGE_AWAITING_REVIEW => 'Awaiting Review',
-            self::BADGE_LEGACY_PATH => 'Legacy Path',
-            self::BADGE_NO_OCR => 'No OCR',
+            self::BADGE_OCR_COMPLETE => 'स्कॅन पूर्ण',
+            self::BADGE_PHASE3_COMPLETE => 'फील्ड तयार',
+            self::BADGE_SARVAM_REVIEWED => 'AI तपास पूर्ण',
+            self::BADGE_COMPARISON_READY => 'तुलना तयार',
+            self::BADGE_AWAITING_REVIEW => 'तपासा बाकी',
+            self::BADGE_LEGACY_PATH => 'जुनी पद्धत',
+            self::BADGE_NO_OCR => 'स्कॅन नाही',
             default => $key,
         };
     }

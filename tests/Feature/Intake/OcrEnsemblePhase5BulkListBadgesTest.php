@@ -258,10 +258,10 @@ test('presenter badge order is deterministic across DISPLAY_ORDER', function () 
     $badges = app(OcrEnsembleBulkListBadgePresenter::class)->badgesForItem($item->fresh());
     expect(array_column($badges, 'key'))->toBe($expected)
         ->and(array_column($badges, 'label'))->toBe([
-            'Phase 3 Complete',
-            'Sarvam Reviewed',
-            'Comparison Ready',
-            'Awaiting Review',
+            'फील्ड तयार',
+            'AI तपास पूर्ण',
+            'तुलना तयार',
+            'तपासा बाकी',
         ]);
 });
 
@@ -293,11 +293,11 @@ test('bulk intake list renders ocr ensemble badges for legacy and phase3 items',
         ->assertOk()
         ->assertSee('data-testid="bulk-ocr-ensemble-badges"', false)
         ->assertSee('data-ocr-badge="legacy_path"', false)
-        ->assertSee('Legacy Path', false)
+        ->assertSee('जुनी पद्धत', false)
         ->assertSee('data-ocr-badge="phase3_complete"', false)
-        ->assertSee('Phase 3 Complete', false)
+        ->assertSee('फील्ड तयार', false)
         ->assertSee('data-ocr-badge="comparison_ready"', false)
-        ->assertSee('Comparison Ready', false)
+        ->assertSee('तुलना तयार', false)
         ->assertSee('data-ocr-badge="ocr_complete"', false)
-        ->assertSee('OCR Complete', false);
+        ->assertSee('स्कॅन पूर्ण', false);
 });

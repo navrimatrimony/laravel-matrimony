@@ -171,6 +171,7 @@ class BulkIntakeCandidateCorrectionService
                 'approval_snapshot_json',
                 'raw_ocr_text',
                 'last_parse_input_text',
+                'field_resolution_json',
                 'field_confidence_json',
                 'reviewed_by_user_id',
                 'review_actor_type',

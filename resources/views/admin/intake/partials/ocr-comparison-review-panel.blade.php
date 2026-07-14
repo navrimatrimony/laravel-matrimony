@@ -1,30 +1,31 @@
-@extends('layouts.admin')
-
-@section('content')
 @php
     /** @var \App\Models\BiodataIntake $intake */
     /** @var \App\Services\Intake\OcrEnsemble\Data\Phase5ComparisonResult $comparisonResult */
-    /** @var array{outcome: string, reason: string, table: array<string, mixed>|null} $comparisonPayload */
+    /** @var bool $embedded */
 
+    $embedded = (bool) ($embedded ?? false);
     $table = $comparisonResult->table;
-    $rows = $table?->rows ?? [];
     $audit = $table?->audit ?? null;
     $emptyDisplay = '—';
 @endphp
 
-<div class="max-w-7xl mx-auto space-y-4" data-testid="ocr-comparison-review">
+<div class="space-y-4" data-testid="ocr-comparison-review" data-ocr-comparison-surface="{{ $embedded ? 'correct_candidate' : 'standalone' }}">
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-            <h1 class="text-lg font-semibold text-gray-900">OCR comparison review</h1>
+            <h2 class="{{ $embedded ? 'text-lg font-semibold text-gray-900' : 'text-lg font-semibold text-gray-900' }}">
+                OCR comparison review
+            </h2>
             <p class="text-sm text-gray-600">
                 Intake #{{ $intake->id }} — read-only ensemble comparison (Field / Final / Tesseract / Second OCR / Sarvam / Reason).
             </p>
         </div>
-        <a href="{{ route('admin.biodata-intakes.show', $intake) }}"
-           class="text-sm font-medium text-indigo-700 hover:underline"
-           data-testid="ocr-comparison-back-link">
-            Back to intake
-        </a>
+        @unless ($embedded)
+            <a href="{{ route('admin.biodata-intakes.show', $intake) }}"
+               class="text-sm font-medium text-indigo-700 hover:underline"
+               data-testid="ocr-comparison-back-link">
+                Back to intake
+            </a>
+        @endunless
     </div>
 
     <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4"
@@ -73,4 +74,3 @@
         ])
     @endif
 </div>
-@endsection

@@ -4,40 +4,33 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\BiodataIntake;
-use App\Services\Intake\IntakeOcrEnsemblePhase5Service;
-use App\Services\Intake\OcrEnsemble\Data\Phase5ComparisonResult;
+use App\Models\BulkIntakeBatchItem;
+use Illuminate\Http\RedirectResponse;
 
 /**
- * Phase 5 — admin OCR comparison review (read-only).
+ * Legacy standalone OCR comparison entry (Phase 5e).
  *
- * Delegates entirely to IntakeOcrEnsemblePhase5Service. No persistence.
+ * Blueprint §7.1 / §13.5: comparison lives only on Correct Candidate.
+ * This action redirects to that surface when a bulk item is linked.
  */
 class AdminIntakeOcrComparisonController extends Controller
 {
-    public function __construct(
-        private readonly IntakeOcrEnsemblePhase5Service $phase5Service,
-    ) {}
-
-    public function show(BiodataIntake $intake)
+    public function show(BiodataIntake $intake): RedirectResponse
     {
-        $comparisonResult = $this->phase5Service->buildComparisonForIntake($intake);
+        $item = BulkIntakeBatchItem::query()
+            ->where('biodata_intake_id', $intake->id)
+            ->orderByDesc('id')
+            ->first();
 
-        return view('admin.intake.ocr-comparison', [
-            'intake' => $intake,
-            'comparisonResult' => $comparisonResult,
-            'comparisonPayload' => $this->payload($comparisonResult),
-        ]);
-    }
+        if ($item instanceof BulkIntakeBatchItem) {
+            return redirect()
+                ->route('admin.bulk-intakes.items.correct-candidate', [
+                    $item->bulk_intake_batch_id,
+                    $item->id,
+                ])
+                ->with('info', 'OCR comparison is shown on Correct Candidate (canonical Blueprint surface).');
+        }
 
-    /**
-     * @return array{outcome: string, reason: string, table: array<string, mixed>|null}
-     */
-    private function payload(Phase5ComparisonResult $result): array
-    {
-        return [
-            'outcome' => $result->outcome,
-            'reason' => $result->reason,
-            'table' => $result->table?->toArray(),
-        ];
+        abort(404, 'OCR comparison is available only on Correct Candidate for bulk-linked intakes.');
     }
 }

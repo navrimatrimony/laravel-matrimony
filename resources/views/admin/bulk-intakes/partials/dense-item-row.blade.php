@@ -140,18 +140,18 @@
         $intake !== null => 'माहिती तपासा / दुरुस्त करा',
         default => \Illuminate\Support\Str::limit($suggestedNextAction !== '' ? $suggestedNextAction : 'प्रतीक्षा', 48),
     };
-    $candidateSummaryParts = array_filter([
-        filled($candidate['age'] ?? null) ? (string) $candidate['age'].'वर्ष' : null,
-        filled($candidate['city'] ?? null) ? (string) $candidate['city'] : null,
-        filled($candidate['education'] ?? null) ? (string) $candidate['education'] : null,
-    ]);
-    $candidateSummary = $candidateSummaryParts !== [] ? implode(' · ', $candidateSummaryParts) : null;
     $mobileMissing = in_array('missing_mobile', $pipelineReasonCodes, true) || blank($candidate['mobile'] ?? null);
+    $activeWhatsAppMobile = trim((string) ($contactPlan['active_mobile'] ?? ''));
+    $candidateMobileNormalized = preg_replace('/\D+/', '', (string) ($candidate['mobile'] ?? '')) ?? '';
+    $whatsAppMobileNormalized = preg_replace('/\D+/', '', $activeWhatsAppMobile) ?? '';
+    $showWhatsAppMobile = $activeWhatsAppMobile !== ''
+        && $whatsAppMobileNormalized !== ''
+        && $whatsAppMobileNormalized !== $candidateMobileNormalized;
     $mobileInvalid = in_array('invalid_mobile', $pipelineReasonCodes, true);
     $problemLines = [];
     if ($hasEmptyOcrFailure) {
         $problemLines[] = [
-            'text' => 'OCR failed / no text extracted',
+            'text' => 'स्कॅन अयशस्वी / मजकूर मिळाला नाही',
             'class' => 'text-red-800',
             'testid' => '',
             'title' => '',
@@ -262,16 +262,13 @@
         </span>
         <span @class(['block truncate', 'font-medium text-red-700' => $mobileMissing || $mobileInvalid, 'text-gray-600' => ! $mobileMissing && ! $mobileInvalid])" title="{{ $candidate['mobile'] ?? '' }}">
             @if ($mobileMissing)
-                Mobile: {{ $missingDisplay }}
+                मोबाईल: {{ $missingDisplay }}
             @elseif ($mobileInvalid)
-                Mobile: <span class="text-red-700">⚠ invalid</span>
+                मोबाईल: <span class="text-red-700">⚠ चुकीचा</span>
             @else
-                Mobile: {{ $candidate['mobile'] ?? $missingDisplay }}
+                मोबाईल: {{ $candidate['mobile'] ?? $missingDisplay }}
             @endif
         </span>
-        @if ($candidateSummary)
-            <span class="block truncate text-[11px] text-gray-600" title="{{ $candidateSummary }}">{{ $candidateSummary }}</span>
-        @endif
         <span class="block truncate text-[10px] text-gray-500" title="{{ $itemDisplayLabel }}">{{ $itemDisplayLabel }}</span>
         <span class="block text-[10px] text-gray-500">{{ $itemTypeStatusLine }}</span>
         @if ($isUnclaimedIntake)
@@ -280,9 +277,9 @@
         @if ($usesReviewedSnapshot)
             <span data-testid="bulk-candidate-reviewed-badge" class="text-[10px] font-semibold text-emerald-700">Reviewed</span>
         @endif
-        @if (!empty($contactPlan['active_mobile']))
-            <span data-testid="bulk-contact-plan-active" class="block truncate text-[10px] text-sky-800" title="WhatsApp queue">
-                WA: {{ $contactPlan['active_mobile'] }}
+        @if ($showWhatsAppMobile)
+            <span data-testid="bulk-contact-plan-active" class="block truncate text-[10px] text-sky-800" title="WhatsApp रांग">
+                WA: {{ $activeWhatsAppMobile }}
             </span>
         @endif
         @if (($contactPlan['suchak_count'] ?? 0) > 0)
@@ -296,12 +293,12 @@
             @endif
             {{ $candidate['date_of_birth'] ?? $missingDisplay }}
         </span>
-        <span class="block">Age: {{ $candidate['age'] ?? $missingDisplay }}</span>
+        <span class="block">वय: {{ $candidate['age'] ?? $missingDisplay }}</span>
         <span @class(['block', 'text-amber-800' => ($candidate['height_needs_review'] ?? false)])>
             @if ($candidate['height_needs_review'] ?? false)⚠ @endif
             {{ $candidate['height'] ?? $missingDisplay }}
         </span>
-        <span class="block">Gender: {{ filled($candidate['gender'] ?? null) ? ucfirst((string) $candidate['gender']) : $missingDisplay }}</span>
+        <span class="block">लिंग: {{ filled($candidate['gender'] ?? null) ? ucfirst((string) $candidate['gender']) : $missingDisplay }}</span>
         <span class="block truncate" title="{{ $candidate['city'] ?? '' }}">{{ $candidate['city'] ?? $missingDisplay }}</span>
         <span @class(['block truncate', 'text-amber-800' => ($candidate['education_needs_review'] ?? false)])" title="{{ $candidate['education'] ?? '' }}">
             @if ($candidate['education_needs_review'] ?? false)⚠ @endif
@@ -330,25 +327,25 @@
         @if ($intake)
             <a href="{{ route('admin.biodata-intakes.show', $intake) }}" class="font-medium text-indigo-600 hover:text-indigo-800">#{{ $intake->id }}</a>
             @if ($parseDone)
-                <span class="block font-medium text-green-700">Parse: OK</span>
+                <span class="block font-medium text-green-700">पार्स: पूर्ण</span>
             @elseif ((string) ($intake?->parse_status ?? '') === 'error')
-                <span class="block font-medium text-red-700">Parse error</span>
+                <span class="block font-medium text-red-700">पार्स: त्रुटी</span>
             @elseif ($hasEmptyOcrFailure)
-                <span class="block font-medium text-red-700">OCR failed: no text extracted</span>
+                <span class="block font-medium text-red-700">स्कॅन अयशस्वी</span>
             @elseif ($item->item_status === \App\Models\BulkIntakeBatchItem::STATUS_PARSE_QUEUED)
-                <span class="block font-medium text-amber-700">Free parse queued</span>
+                <span class="block font-medium text-amber-700">पार्स रांगेत</span>
             @elseif ($parseStatus === 'pending')
-                <span class="block text-gray-500">Waiting for free parse</span>
+                <span class="block text-gray-500">पार्स प्रतीक्षा</span>
             @else
                 <span class="block text-gray-600">{{ $parseStatus !== '' ? $parseStatus : $itemDisplayStatus }}</span>
             @endif
-            <span class="block text-gray-600">Parsed JSON: {{ $hasParsedJson ? 'Yes' : 'No' }}</span>
+            <span class="block text-gray-600">माहिती: {{ $hasParsedJson ? 'तयार' : 'अपूर्ण' }}</span>
             @if ($intake->last_error)
                 <span class="block text-red-700" title="{{ $intake->last_error }}">{{ \Illuminate\Support\Str::limit($intake->last_error, 40) }}</span>
             @endif
         @else
             <span class="text-gray-600">{{ $itemDisplayStatus }}</span>
-            <span class="block text-gray-600">Parsed JSON: No</span>
+            <span class="block text-gray-600">माहिती: अपूर्ण</span>
         @endif
         @if ($textPreview)
             <span class="block truncate text-[10px] text-gray-500" title="{{ $textPreview }}">{{ $textPreview }}</span>
