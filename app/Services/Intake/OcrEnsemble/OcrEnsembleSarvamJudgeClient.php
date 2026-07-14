@@ -8,7 +8,6 @@ use App\Services\Intake\OcrEnsemble\Data\SarvamJudgeResponse;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Sleep;
 
 /**
@@ -172,13 +171,7 @@ final class OcrEnsembleSarvamJudgeClient implements OcrEnsembleSarvamJudgeClient
     private function mapHttpResponse(Response $response, int $attemptCount, string $payloadHash): SarvamJudgeResponse
     {
         if (! $response->successful()) {
-            Log::warning('phase4_sarvam_http_response', [
-                'http_status' => $response->status(),
-                'resolved_model' => $this->resolveChatModel(),
-                'response_body_prefix' => mb_substr((string) $response->body(), 0, 500),
-                'payload_hash' => $payloadHash,
-                'attempt_count' => $attemptCount,
-            ]);
+            $bodyPrefix = mb_substr((string) $response->body(), 0, 500);
 
             return SarvamJudgeResponse::failure(
                 outcome: SarvamJudgeResponse::OUTCOME_HTTP_ERROR,
@@ -187,6 +180,9 @@ final class OcrEnsembleSarvamJudgeClient implements OcrEnsembleSarvamJudgeClient
                 attemptCount: $attemptCount,
                 statusCode: $response->status(),
                 requestPayloadHash: $payloadHash,
+                httpStatus: $response->status(),
+                resolvedModel: $this->resolveChatModel(),
+                responseBodyPrefix: $bodyPrefix,
             );
         }
 

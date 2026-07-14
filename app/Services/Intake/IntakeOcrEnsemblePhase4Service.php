@@ -108,12 +108,23 @@ class IntakeOcrEnsemblePhase4Service
 
         $sarvamResponse = $this->sarvamJudgeClient->judge($request);
         if (! $sarvamResponse->ok) {
-            Log::warning('phase4_sarvam_http_soft_failed', [
+            $softFailContext = [
                 'intake_id' => $intake->id,
                 'outcome' => $sarvamResponse->outcome,
                 'error_code' => $sarvamResponse->errorCode,
                 'attempt_count' => $sarvamResponse->attemptCount,
-            ]);
+            ];
+            if ($sarvamResponse->httpStatus !== null) {
+                $softFailContext['http_status'] = $sarvamResponse->httpStatus;
+            }
+            if ($sarvamResponse->resolvedModel !== null) {
+                $softFailContext['resolved_model'] = $sarvamResponse->resolvedModel;
+            }
+            if ($sarvamResponse->responseBodyPrefix !== null) {
+                $softFailContext['response_body_prefix'] = $sarvamResponse->responseBodyPrefix;
+            }
+
+            Log::warning('phase4_sarvam_http_soft_failed', $softFailContext);
 
             return Phase4JudgeResult::softFailed(
                 $this->softFailReason($sarvamResponse),

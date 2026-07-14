@@ -9,7 +9,6 @@ use App\Services\Intake\OcrEnsemble\OcrEnsembleSarvamJudgeClient;
 use App\Services\Intake\OcrEnsemble\OcrEnsembleSarvamJudgeResponseParser;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Sleep;
 use Tests\TestCase;
 
@@ -154,8 +153,6 @@ test('judge succeeds after retryable http failure', function () {
 });
 
 test('non-2xx mapHttpResponse logs status model and body prefix only', function () {
-    Log::spy();
-
     $body = '{"error":{"message":"invalid_request_error diagnostic body"}}'.str_repeat('x', 600);
 
     Http::fake([
@@ -166,23 +163,12 @@ test('non-2xx mapHttpResponse logs status model and body prefix only', function 
 
     expect($response->ok)->toBeFalse()
         ->and($response->errorCode)->toBe('http_400')
-        ->and($response->statusCode)->toBe(400);
-
-    Log::shouldHaveReceived('warning')
-        ->once()
-        ->withArgs(function (string $message, array $context) use ($response): bool {
-            return $message === 'phase4_sarvam_http_response'
-                && ($context['http_status'] ?? null) === 400
-                && ($context['resolved_model'] ?? null) === 'sarvam-m'
-                && is_string($context['response_body_prefix'] ?? null)
-                && strlen((string) $context['response_body_prefix']) === 500
-                && str_contains((string) $context['response_body_prefix'], 'invalid_request_error')
-                && ($context['payload_hash'] ?? null) === $response->requestPayloadHash
-                && ($context['attempt_count'] ?? null) === 1
-                && ! array_key_exists('api_key', $context)
-                && ! array_key_exists('request_payload', $context)
-                && ! array_key_exists('ocr_text', $context);
-        });
+        ->and($response->statusCode)->toBe(400)
+        ->and($response->httpStatus)->toBe(400)
+        ->and($response->resolvedModel)->toBe('sarvam-m')
+        ->and($response->responseBodyPrefix)->toBeString()
+        ->and(strlen((string) $response->responseBodyPrefix))->toBe(500)
+        ->and((string) $response->responseBodyPrefix)->toContain('invalid_request_error');
 });
 
 test('judge handles malformed json gracefully', function () {

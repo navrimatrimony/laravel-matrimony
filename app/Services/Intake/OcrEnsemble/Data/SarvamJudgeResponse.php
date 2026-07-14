@@ -15,7 +15,10 @@ use App\Services\Intake\OcrEnsemble\OcrEnsemblePhase4Constants;
  *     error_code: string|null,
  *     error_message: string|null,
  *     fields: list<array<string, mixed>>,
- *     request_payload_hash: string|null
+ *     request_payload_hash: string|null,
+ *     http_status: int|null,
+ *     resolved_model: string|null,
+ *     response_body_prefix: string|null
  * }
  */
 final class SarvamJudgeResponse
@@ -46,6 +49,9 @@ final class SarvamJudgeResponse
         public readonly ?string $errorMessage,
         public readonly array $fields,
         public readonly ?string $requestPayloadHash = null,
+        public readonly ?int $httpStatus = null,
+        public readonly ?string $resolvedModel = null,
+        public readonly ?string $responseBodyPrefix = null,
     ) {}
 
     /**
@@ -90,6 +96,9 @@ final class SarvamJudgeResponse
         int $attemptCount = 0,
         ?int $statusCode = null,
         ?string $requestPayloadHash = null,
+        ?int $httpStatus = null,
+        ?string $resolvedModel = null,
+        ?string $responseBodyPrefix = null,
     ): self {
         return new self(
             ok: false,
@@ -100,6 +109,9 @@ final class SarvamJudgeResponse
             errorMessage: $errorMessage,
             fields: [],
             requestPayloadHash: $requestPayloadHash,
+            httpStatus: $httpStatus,
+            resolvedModel: $resolvedModel,
+            responseBodyPrefix: $responseBodyPrefix,
         );
     }
 
@@ -126,6 +138,9 @@ final class SarvamJudgeResponse
             errorMessage: isset($data['error_message']) ? (string) $data['error_message'] : null,
             fields: $fields,
             requestPayloadHash: isset($data['request_payload_hash']) ? (string) $data['request_payload_hash'] : null,
+            httpStatus: is_numeric($data['http_status'] ?? null) ? (int) $data['http_status'] : null,
+            resolvedModel: isset($data['resolved_model']) ? (string) $data['resolved_model'] : null,
+            responseBodyPrefix: isset($data['response_body_prefix']) ? (string) $data['response_body_prefix'] : null,
         );
     }
 
@@ -148,6 +163,9 @@ final class SarvamJudgeResponse
             'error_message' => $this->errorMessage,
             'fields' => $fields,
             'request_payload_hash' => $this->requestPayloadHash,
+            'http_status' => $this->httpStatus,
+            'resolved_model' => $this->resolvedModel,
+            'response_body_prefix' => $this->responseBodyPrefix,
         ];
     }
 
