@@ -197,34 +197,42 @@ Next Phase only
 
 | # | Item | Done |
 |---|------|------|
-| 4.01 | Trigger: name conflict only | ☐ |
-| 4.02 | Trigger: DOB missing | ☐ |
-| 4.03 | Trigger: mobile missing | ☐ |
-| 4.04 | Trigger: religion missing | ☐ |
-| 4.05 | Gender missing does NOT trigger | ☐ |
-| 4.06 | Sarvam attempt saved | ☐ |
-| 4.07 | Sarvam failure non-fatal (admin review) | ☐ |
-| 4.08 | Re-merge affected fields into `field_resolution_json` | ☐ |
-| 4.09 | Re-parse if parse input materially changed | ☐ |
-| 4.10 | Trigger rate telemetry | ☐ |
+| 4.01 | Trigger: name conflict | ✅ |
+| 4.02 | Trigger: DOB missing | ✅ |
+| 4.03 | Trigger: mobile missing | ✅ |
+| 4.04 | Trigger: religion missing | ✅ |
+| 4.05 | Gender missing does NOT trigger | ✅ |
+| 4.06 | Sarvam attempt saved | ☐ (deferred — see Phase 4 validation B1) |
+| 4.07 | Sarvam failure non-fatal (soft-fail) | ✅ |
+| 4.08 | Re-merge affected fields into `field_resolution_json` | ✅ |
+| 4.09 | Rebuild `last_parse_input_text` when merge changes (existing assembler; ParseIntakeJob unchanged) | ✅ |
+| 4.10 | Trigger rate telemetry | ☐ (logs only; 4.F01 pending) |
+| 4.11 | Request builder (deterministic) | ✅ |
+| 4.12 | HTTP client + retry + response DTOs | ✅ |
+| 4.13 | Orchestration + quality gate + persist (4f) | ✅ |
 
 ### Tests
 
 | # | Item | Done |
 |---|------|------|
-| 4.T01 | Synthetic: DOB missing → Sarvam called (mock) | ☐ |
-| 4.T02 | Synthetic: all fields OK → Sarvam not called | ☐ |
-| 4.T03 | Synthetic: gender only missing → Sarvam not called | ☐ |
-| 4.T04 | Synthetic: Sarvam API error → intake not failed | ☐ |
+| 4.T01 | Synthetic: DOB missing → Sarvam called (mock) | ✅ |
+| 4.T02 | Synthetic: all fields OK → Sarvam not called | ✅ |
+| 4.T03 | Synthetic: gender only missing → Sarvam not called | ✅ |
+| 4.T04 | Synthetic: Sarvam API error → intake not failed | ✅ |
+| 4.T05 | Merge no-op / quality gate / raw_ocr immutability / bulk hook | ✅ |
 
 ### Phase 4 freeze
 
 | # | Item | Done |
 |---|------|------|
+| 4.F00 | Implementation freeze 4a–4f + validation doc | ✅ (2026-07-14) — see `OCR-ENSEMBLE-PHASE-4-VALIDATION-AND-ROLLOUT.md` |
 | 4.F01 | Sarvam trigger rate on 50-image set ≤ 20% | ☐ |
-| 4.F02 | All items checked | ☐ |
+| 4.F02 | Staging live Sarvam drill signed off | ☐ |
+| 4.F03 | Decide/implement `ocr_attempt` save (B1) before Phase 5 UI | ☐ |
 
-**PASS → Phase 5 only**
+**Automated suite at freeze:** 113 passed / 486 assertions (Phase 4 + Phase 3 ensemble regression).
+
+**PASS → Phase 5 only** after 4.F00 accepted **and** product clears B1/B5; keep production flags off until 4.F01–4.F02.
 
 ---
 
