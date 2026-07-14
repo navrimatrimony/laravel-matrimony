@@ -170,13 +170,15 @@ test('non-2xx mapHttpResponse logs status model and body prefix only', function 
 
     Log::shouldHaveReceived('warning')
         ->once()
-        ->withArgs(function (string $message, array $context): bool {
+        ->withArgs(function (string $message, array $context) use ($response): bool {
             return $message === 'phase4_sarvam_http_response'
                 && ($context['http_status'] ?? null) === 400
-                && ($context['model'] ?? null) === 'sarvam-m'
+                && ($context['resolved_model'] ?? null) === 'sarvam-m'
                 && is_string($context['response_body_prefix'] ?? null)
                 && strlen((string) $context['response_body_prefix']) === 500
                 && str_contains((string) $context['response_body_prefix'], 'invalid_request_error')
+                && ($context['payload_hash'] ?? null) === $response->requestPayloadHash
+                && ($context['attempt_count'] ?? null) === 1
                 && ! array_key_exists('api_key', $context)
                 && ! array_key_exists('request_payload', $context)
                 && ! array_key_exists('ocr_text', $context);

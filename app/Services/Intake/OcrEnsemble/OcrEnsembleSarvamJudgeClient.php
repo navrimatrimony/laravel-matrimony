@@ -174,8 +174,10 @@ final class OcrEnsembleSarvamJudgeClient implements OcrEnsembleSarvamJudgeClient
         if (! $response->successful()) {
             Log::warning('phase4_sarvam_http_response', [
                 'http_status' => $response->status(),
-                'model' => $this->resolveChatModel(),
+                'resolved_model' => $this->resolveChatModel(),
                 'response_body_prefix' => mb_substr((string) $response->body(), 0, 500),
+                'payload_hash' => $payloadHash,
+                'attempt_count' => $attemptCount,
             ]);
 
             return SarvamJudgeResponse::failure(
