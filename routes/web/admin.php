@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminEducationOccupationController;
 use App\Http\Controllers\Admin\AdminFieldRegistryController;
 use App\Http\Controllers\Admin\AdminIntakeController;
+use App\Http\Controllers\Admin\AdminIntakeOcrComparisonController;
 use App\Http\Controllers\Admin\AdminKycController;
 use App\Http\Controllers\Admin\AdminOcrSimulationController;
 use App\Http\Controllers\Admin\AdminPaymentController;
@@ -676,6 +677,7 @@ Route::middleware(['auth', 'admin', 'admin.section'])->prefix('admin')->name('ad
     Route::get('/biodata-intakes/create-profile', [AdminIntakeController::class, 'createProfileEntry'])->name('biodata-intakes.create-profile');
     Route::post('/biodata-intakes/create-profile', [AdminIntakeController::class, 'storeProfileEntry'])->name('biodata-intakes.store-profile');
     Route::get('/biodata-intakes/{intake}', [AdminIntakeController::class, 'showBiodataIntake'])->name('biodata-intakes.show');
+    Route::get('/biodata-intakes/{intake}/ocr-comparison', [AdminIntakeOcrComparisonController::class, 'show'])->name('biodata-intakes.ocr-comparison');
     Route::get('/biodata-intakes/{intake}/parse-status', [AdminIntakeController::class, 'parseStatus'])->name('biodata-intakes.parse-status');
     Route::patch('/biodata-intakes/{intake}/attach', [AdminIntakeController::class, 'attachBiodataIntake'])->name('biodata-intakes.attach');
     Route::post('/biodata-intakes/{intake}/reparse', [AdminIntakeController::class, 'reparse'])->name('biodata-intakes.reparse');
