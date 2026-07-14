@@ -125,11 +125,17 @@ test('phase4 service skips when field_resolution_json is missing', function () {
         ->and($result->reason)->toBe('missing_field_resolution_json');
 });
 
-test('phase4 judge returns not implemented skeleton outcome', function () {
+test('phase4 judge soft-fails when triggers fire but sarvam is not configured', function () {
+    AdminSetting::setValue(IntakeOcrEnsembleGate::SETTING_KEY, true);
+    config()->set('ocr.ensemble.phase3.enabled', true);
+    config()->set('ocr.ensemble.phase4.enabled', true);
+    config()->set('ocr.ensemble.phase4.client.api_key', '');
+    config()->set('services.sarvam.subscription_key', '');
+
     $user = User::factory()->create();
     $intake = BiodataIntake::create([
         'uploaded_by' => $user->id,
-        'raw_ocr_text' => 'sample ocr text for phase four skeleton judge',
+        'raw_ocr_text' => 'sample ocr text for phase four soft fail path with enough characters',
         'field_resolution_json' => FieldResolutionEnvelope::skeleton(737)->toArray(),
         'parsed_json' => [],
         'intake_status' => 'uploaded',
@@ -139,17 +145,22 @@ test('phase4 judge returns not implemented skeleton outcome', function () {
         'approved_by_user' => false,
         'intake_locked' => false,
     ]);
+    $beforeResolution = $intake->field_resolution_json;
+    $beforeRaw = $intake->raw_ocr_text;
 
     $result = app(IntakeOcrEnsemblePhase4Service::class)->judge($intake);
 
-    expect($result->wasNotImplemented())->toBeTrue()
-        ->and($result->reason)->toBe('phase4_v1_skeleton');
+    expect($result->wasSoftFailed())->toBeTrue()
+        ->and($result->reason)->toBe('sarvam_config_error')
+        ->and($intake->fresh()->field_resolution_json)->toBe($beforeResolution)
+        ->and($intake->fresh()->raw_ocr_text)->toBe($beforeRaw);
 });
 
 test('phase4 resolution result helpers', function () {
     expect(Phase4JudgeResult::skipped('x')->wasSkipped())->toBeTrue()
         ->and(Phase4JudgeResult::notImplemented('y')->wasNotImplemented())->toBeTrue()
         ->and(Phase4JudgeResult::noop('z')->wasNoop())->toBeTrue()
+        ->and(Phase4JudgeResult::softFailed('s')->wasSoftFailed())->toBeTrue()
         ->and(Phase4JudgeResult::resolved(FieldResolutionEnvelope::skeleton(1))->wasResolved())->toBeTrue();
 });
 

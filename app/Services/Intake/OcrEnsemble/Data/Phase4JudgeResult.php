@@ -10,6 +10,8 @@ final class Phase4JudgeResult
 
     public const OUTCOME_NOOP = 'noop';
 
+    public const OUTCOME_SOFT_FAILED = 'soft_failed';
+
     public const OUTCOME_RESOLVED = 'resolved';
 
     private function __construct(
@@ -20,9 +22,9 @@ final class Phase4JudgeResult
         public readonly ?string $assembledParseInputText = null,
     ) {}
 
-    public static function skipped(string $reason): self
+    public static function skipped(string $reason, ?SarvamJudgeTriggerReport $triggerReport = null): self
     {
-        return new self(self::OUTCOME_SKIPPED, $reason);
+        return new self(self::OUTCOME_SKIPPED, $reason, $triggerReport);
     }
 
     public static function notImplemented(string $reason): self
@@ -33,6 +35,11 @@ final class Phase4JudgeResult
     public static function noop(string $reason, ?SarvamJudgeTriggerReport $triggerReport = null): self
     {
         return new self(self::OUTCOME_NOOP, $reason, $triggerReport);
+    }
+
+    public static function softFailed(string $reason, ?SarvamJudgeTriggerReport $triggerReport = null): self
+    {
+        return new self(self::OUTCOME_SOFT_FAILED, $reason, $triggerReport);
     }
 
     public static function resolved(
@@ -62,6 +69,11 @@ final class Phase4JudgeResult
     public function wasNoop(): bool
     {
         return $this->outcome === self::OUTCOME_NOOP;
+    }
+
+    public function wasSoftFailed(): bool
+    {
+        return $this->outcome === self::OUTCOME_SOFT_FAILED;
     }
 
     public function wasResolved(): bool
