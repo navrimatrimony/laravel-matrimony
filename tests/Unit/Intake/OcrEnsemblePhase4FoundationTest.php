@@ -168,6 +168,7 @@ test('phase4 production files do not import benchmark classes', function () {
         app_path('Services/Intake/OcrEnsemble/Data/SarvamJudgeRequestField.php'),
         app_path('Services/Intake/OcrEnsemble/Data/SarvamJudgeResponse.php'),
         app_path('Services/Intake/OcrEnsemble/Data/SarvamJudgeResponseField.php'),
+        app_path('Services/Intake/OcrEnsemble/Data/SarvamJudgeMergeResult.php'),
         app_path('Services/Intake/OcrEnsemble/Support/OcrEnsembleSarvamJudgeRequestSupport.php'),
     ];
 

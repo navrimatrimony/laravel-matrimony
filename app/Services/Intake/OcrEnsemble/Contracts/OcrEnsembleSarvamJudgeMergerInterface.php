@@ -3,19 +3,16 @@
 namespace App\Services\Intake\OcrEnsemble\Contracts;
 
 use App\Services\Intake\OcrEnsemble\Data\FieldResolutionEnvelope;
-use App\Services\Intake\OcrEnsemble\Data\OcrEngineFieldCandidatesDto;
+use App\Services\Intake\OcrEnsemble\Data\SarvamJudgeMergeResult;
+use App\Services\Intake\OcrEnsemble\Data\SarvamJudgeResponse;
 
 /**
- * Re-merge Sarvam judge candidates into affected fields only (Phase 4 — later steps).
+ * Merges Sarvam judge field values into a new FieldResolutionEnvelope (read-only toward DB).
  */
 interface OcrEnsembleSarvamJudgeMergerInterface
 {
-    /**
-     * @param  list<string>  $affectedFieldKeys
-     */
-    public function mergeAffectedFields(
+    public function merge(
         FieldResolutionEnvelope $envelope,
-        OcrEngineFieldCandidatesDto $sarvamCandidates,
-        array $affectedFieldKeys,
-    ): FieldResolutionEnvelope;
+        SarvamJudgeResponse $response,
+    ): SarvamJudgeMergeResult;
 }

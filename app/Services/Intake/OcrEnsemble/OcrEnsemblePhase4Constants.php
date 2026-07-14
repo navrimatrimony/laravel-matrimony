@@ -13,6 +13,12 @@ final class OcrEnsemblePhase4Constants
 
     public const ENGINE_SARVAM_JUDGE = 'sarvam_ai_vision';
 
+    public const FIELD_SOURCE_SARVAM_JUDGE = 'sarvam_judge';
+
+    public const MERGE_REASON = 'sarvam_judge_merge';
+
+    public const VALIDATOR_CODE_SARVAM_JUDGE = 'sarvam_judge_accepted';
+
     /** Fields that may trigger Sarvam when unresolved after Phase 3. */
     public const TRIGGER_FIELD_FULL_NAME = 'full_name';
 
