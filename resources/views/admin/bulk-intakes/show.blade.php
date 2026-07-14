@@ -31,6 +31,7 @@
     $duplicateGateByItemId = $duplicateGateByItemId ?? [];
     $duplicateVerificationByItemId = $duplicateVerificationByItemId ?? [];
     $pipelineByItemId = $pipelineByItemId ?? [];
+    $ocrEnsembleBadgesByItemId = $ocrEnsembleBadgesByItemId ?? [];
     $screeningReviewByItemId = $screeningReviewByItemId ?? [];
     $eligiblePipelineCount = (int) ($eligiblePipelineCount ?? 0);
     $whatsappConsentByItemId = is_array($whatsappConsentByItemId ?? null) ? $whatsappConsentByItemId : [];

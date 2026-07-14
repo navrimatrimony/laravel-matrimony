@@ -27,6 +27,9 @@
         'occupation_needs_review' => false,
         'display_warnings' => [],
     ];
+    $ocrEnsembleBadges = is_array(($ocrEnsembleBadgesByItemId ?? [])[$item->id] ?? null)
+        ? $ocrEnsembleBadgesByItemId[$item->id]
+        : [];
     $manualScreeningReview = is_array($screeningReviewByItemId[$item->id] ?? null) ? $screeningReviewByItemId[$item->id] : null;
     $manualScreeningActive = $manualScreeningReview !== null;
     $duplicateHints = is_array($duplicateHintsByItemId[$item->id] ?? null) ? $duplicateHintsByItemId[$item->id] : [];
@@ -358,6 +361,17 @@
                 <span class="font-normal">· override</span>
             @endif
         </span>
+        @if ($ocrEnsembleBadges !== [])
+            <div class="mt-1 flex flex-wrap gap-1" data-testid="bulk-ocr-ensemble-badges">
+                @foreach ($ocrEnsembleBadges as $ocrBadge)
+                    <span
+                        data-testid="bulk-ocr-ensemble-badge"
+                        data-ocr-badge="{{ $ocrBadge['key'] }}"
+                        class="inline-block rounded-full border px-1.5 py-0.5 text-[10px] font-semibold {{ $ocrBadge['class'] }}"
+                    >{{ $ocrBadge['label'] }}</span>
+                @endforeach
+            </div>
+        @endif
         @if ($mainPipelineReason !== '' && $pipelineBucket !== 'eligible')
             <span class="mt-0.5 block text-gray-700">{{ $mainPipelineReason }}</span>
         @endif

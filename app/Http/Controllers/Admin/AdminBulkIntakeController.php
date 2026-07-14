@@ -29,7 +29,9 @@ use App\Services\Intake\BulkIntakeReadinessService;
 use App\Services\Intake\BulkIntakeRegistrationService;
 use App\Services\Intake\BulkIntakeWhatsAppConsentService;
 use App\Services\Intake\BulkIntakeWhatsAppRegistrationConversationService;
+use App\Services\Intake\IntakeOcrEnsemblePhase5Service;
 use App\Services\Intake\IntakeOwnerAssignmentService;
+use App\Services\Intake\OcrEnsemble\OcrEnsembleBulkListBadgePresenter;
 use App\Support\MobileNumber;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -146,6 +148,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeCandidateContactPlanService $contactPlanService,
         BulkIntakeRegistrationService $registrationService,
         BulkIntakeWhatsAppRegistrationConversationService $registrationConversationService,
+        OcrEnsembleBulkListBadgePresenter $ocrEnsembleBadgePresenter,
     )
     {
         $statusFilters = $this->bulkItemStatusFilters();
@@ -162,9 +165,10 @@ class AdminBulkIntakeController extends Controller
 
         $itemsQuery = $bulkIntakeBatch->items()
             ->with([
-                'biodataIntake:id,uploaded_by,matrimony_profile_id,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,parsed_json,approval_snapshot_json,reviewed_by_user_id,review_actor_type,review_surface,reviewed_at,approval_policy,approval_status,approved_at,content_hash,parsed_at,created_at,updated_at',
+                'biodataIntake:id,uploaded_by,matrimony_profile_id,original_filename,file_path,intake_status,parse_status,last_error,approved_by_user,intake_locked,parsed_json,approval_snapshot_json,raw_ocr_text,last_parse_input_text,field_resolution_json,reviewed_by_user_id,review_actor_type,review_surface,reviewed_at,approval_policy,approval_status,approved_at,content_hash,parsed_at,created_at,updated_at',
                 'biodataIntake.uploadedByUser:id,name,email,mobile,is_admin,admin_role',
                 'biodataIntake.uploadedByUser.matrimonyProfile:id,user_id',
+                'biodataIntake.ocrAttempts:id,intake_id,engine,status',
             ])
             ->orderBy('item_sequence');
 
@@ -314,6 +318,12 @@ class AdminBulkIntakeController extends Controller
             ->values();
         $bulkIntakeBatch->setRelation('items', $displayItems);
 
+        $ocrEnsembleBadgesByItemId = $displayItems
+            ->mapWithKeys(fn (BulkIntakeBatchItem $item): array => [
+                (int) $item->id => $ocrEnsembleBadgePresenter->badgesForItem($item),
+            ])
+            ->all();
+
         $sourceContextCountsByItem = IntakeSourceContext::query()
             ->where('bulk_intake_batch_id', $bulkIntakeBatch->id)
             ->whereNotNull('bulk_intake_batch_item_id')
@@ -330,6 +340,7 @@ class AdminBulkIntakeController extends Controller
             'duplicateGateByItemId' => $duplicateGateByItemId,
             'duplicateVerificationByItemId' => $duplicateVerificationByItemId,
             'pipelineByItemId' => $pipelineByItemId,
+            'ocrEnsembleBadgesByItemId' => $ocrEnsembleBadgesByItemId,
             'autoSuggestionByItemId' => $autoSuggestionByItemId,
             'batchCoachSummary' => $batchCoachSummary,
             'screeningReviewByItemId' => $screeningReviewByItemId,
@@ -474,6 +485,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeBatch $bulkIntakeBatch,
         BulkIntakeBatchItem $bulkIntakeBatchItem,
         BulkIntakeCandidateCorrectionService $correctionService,
+        IntakeOcrEnsemblePhase5Service $phase5Service,
     ) {
         abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
 
@@ -481,10 +493,14 @@ class AdminBulkIntakeController extends Controller
         $correction = $correctionService->correctionDataForItem($bulkIntakeBatchItem);
         abort_unless($correction['intake'] !== null, 404);
 
+        /** @var \App\Models\BiodataIntake $intake */
+        $intake = $correction['intake'];
+        $comparisonResult = $phase5Service->buildComparisonForIntake($intake);
+
         return view('admin.bulk-intakes.correct-candidate', [
             'batch' => $bulkIntakeBatch,
             'item' => $bulkIntakeBatchItem,
-            'intake' => $correction['intake'],
+            'intake' => $intake,
             'fields' => $correction['fields'],
             'sourceSnapshotSource' => $correction['source_snapshot_source'],
             'sourceText' => $correction['source_text'],
@@ -492,6 +508,7 @@ class AdminBulkIntakeController extends Controller
             'imagePreview' => $correction['image_preview'],
             'canSave' => $correction['can_save'],
             'correctionProfile' => $correction['correction_profile'] ?? null,
+            'comparisonResult' => $comparisonResult,
         ]);
     }
 
