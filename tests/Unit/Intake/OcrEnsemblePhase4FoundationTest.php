@@ -158,10 +158,14 @@ test('phase4 production files do not import benchmark classes', function () {
         app_path('Services/Intake/IntakeOcrEnsemblePhase4Service.php'),
         app_path('Services/Intake/OcrEnsemble/OcrEnsemblePhase4Constants.php'),
         app_path('Services/Intake/OcrEnsemble/OcrEnsembleSarvamJudgeTriggerEvaluator.php'),
+        app_path('Services/Intake/OcrEnsemble/OcrEnsembleSarvamJudgeRequestBuilder.php'),
         app_path('Services/Intake/OcrEnsemble/OcrEnsembleSarvamJudgeClient.php'),
         app_path('Services/Intake/OcrEnsemble/OcrEnsembleSarvamJudgeMerger.php'),
         app_path('Services/Intake/OcrEnsemble/Data/Phase4JudgeResult.php'),
         app_path('Services/Intake/OcrEnsemble/Data/SarvamJudgeTriggerReport.php'),
+        app_path('Services/Intake/OcrEnsemble/Data/SarvamJudgeRequest.php'),
+        app_path('Services/Intake/OcrEnsemble/Data/SarvamJudgeRequestField.php'),
+        app_path('Services/Intake/OcrEnsemble/Support/OcrEnsembleSarvamJudgeRequestSupport.php'),
     ];
 
     foreach ($paths as $file) {
