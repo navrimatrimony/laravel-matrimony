@@ -2,15 +2,13 @@
 
 namespace App\Services\Intake\OcrEnsemble\Contracts;
 
-use App\Models\BiodataIntake;
+use App\Services\Intake\OcrEnsemble\Data\SarvamJudgeRequest;
+use App\Services\Intake\OcrEnsemble\Data\SarvamJudgeResponse;
 
 /**
- * Sarvam Document Digitization judge client (wraps existing vision path in later steps).
+ * Sarvam judge HTTP client — sole network entry point for Phase 4 judge calls.
  */
 interface OcrEnsembleSarvamJudgeClientInterface
 {
-    /**
-     * @return array{text: string, meta: array<string, mixed>}
-     */
-    public function extractForIntake(BiodataIntake $intake): array;
+    public function judge(SarvamJudgeRequest $request): SarvamJudgeResponse;
 }

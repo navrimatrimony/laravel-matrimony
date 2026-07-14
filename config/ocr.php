@@ -246,6 +246,19 @@ return [
             'enabled' => filter_var(env('OCR_ENSEMBLE_PHASE4_ENABLED', true), FILTER_VALIDATE_BOOL),
             'pipeline_version' => 'phase4_v1',
             'schema_version' => 'phase4_judge_v1',
+            'client' => [
+                'endpoint' => env(
+                    'OCR_ENSEMBLE_PHASE4_SARVAM_ENDPOINT',
+                    env('SARVAM_CHAT_COMPLETIONS_URL', 'https://api.sarvam.ai/v1/chat/completions')
+                ),
+                'api_key' => env('OCR_ENSEMBLE_PHASE4_SARVAM_API_KEY', env('SARVAM_API_SUBSCRIPTION_KEY')),
+                'model' => env('OCR_ENSEMBLE_PHASE4_SARVAM_MODEL', 'sarvam-m'),
+                'timeout_seconds' => (int) env('OCR_ENSEMBLE_PHASE4_TIMEOUT_SECONDS', 30),
+                'connect_timeout_seconds' => (int) env('OCR_ENSEMBLE_PHASE4_CONNECT_TIMEOUT_SECONDS', 10),
+                'max_attempts' => (int) env('OCR_ENSEMBLE_PHASE4_MAX_ATTEMPTS', 3),
+                'retry_base_ms' => (int) env('OCR_ENSEMBLE_PHASE4_RETRY_BASE_MS', 200),
+                'retry_max_ms' => (int) env('OCR_ENSEMBLE_PHASE4_RETRY_MAX_MS', 2000),
+            ],
         ],
     ],
 ];
