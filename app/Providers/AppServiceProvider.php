@@ -67,6 +67,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleSarvamJudgeRequestBuilderInterface::class, \App\Services\Intake\OcrEnsemble\OcrEnsembleSarvamJudgeRequestBuilder::class);
         $this->app->bind(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleSarvamJudgeClientInterface::class, \App\Services\Intake\OcrEnsemble\OcrEnsembleSarvamJudgeClient::class);
         $this->app->bind(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleSarvamJudgeMergerInterface::class, \App\Services\Intake\OcrEnsemble\OcrEnsembleSarvamJudgeMerger::class);
+        $this->app->bind(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleComparisonEvidenceLoaderInterface::class, \App\Services\Intake\OcrEnsemble\OcrEnsembleComparisonEvidenceLoader::class);
+        $this->app->bind(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleComparisonTableBuilderInterface::class, \App\Services\Intake\OcrEnsemble\OcrEnsembleComparisonTableBuilder::class);
     }
 
     /**

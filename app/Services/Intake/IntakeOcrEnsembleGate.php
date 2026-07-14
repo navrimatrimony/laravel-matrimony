@@ -40,4 +40,17 @@ class IntakeOcrEnsembleGate
 
         return (bool) config('ocr.ensemble.phase4.enabled', true);
     }
+
+    /**
+     * Phase 5 comparison read-path runs when ensemble + phase5 config are enabled.
+     * Does not require Phase 4 live calls (legacy/ensemble-not-run empty states still allowed later).
+     */
+    public function isPhase5Enabled(): bool
+    {
+        if (! $this->isEnabled()) {
+            return false;
+        }
+
+        return (bool) config('ocr.ensemble.phase5.enabled', true);
+    }
 }

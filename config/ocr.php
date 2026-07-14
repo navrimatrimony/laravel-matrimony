@@ -260,5 +260,11 @@ return [
                 'retry_max_ms' => (int) env('OCR_ENSEMBLE_PHASE4_RETRY_MAX_MS', 2000),
             ],
         ],
+        'phase5' => [
+            'enabled' => filter_var(env('OCR_ENSEMBLE_PHASE5_ENABLED', true), FILTER_VALIDATE_BOOL),
+            'pipeline_version' => 'phase5_v1',
+            'schema_version' => 'phase5_comparison_v1',
+            'surface' => 'correct_candidate',
+        ],
     ],
 ];
