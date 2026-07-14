@@ -170,11 +170,13 @@ test('phase4 production files do not import benchmark classes', function () {
     }
 });
 
-test('phase4 trigger evaluator skeleton returns empty report', function () {
+test('phase4 trigger evaluator evaluates skeleton envelope as all trigger fields missing', function () {
     $report = app(\App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleSarvamJudgeTriggerEvaluatorInterface::class)
         ->evaluate(FieldResolutionEnvelope::skeleton(735));
 
-    expect($report->shouldInvokeSarvam)->toBeFalse()
-        ->and($report->triggeredFields)->toBe([])
-        ->and($report->skipReason)->toBe('phase4_v1_skeleton');
+    expect($report->shouldInvokeSarvam)->toBeTrue()
+        ->and($report->shouldJudge())->toBeTrue()
+        ->and($report->triggerFields())->toBe(OcrEnsemblePhase4Constants::TRIGGER_FIELDS)
+        ->and($report->unresolvedCount)->toBe(4)
+        ->and($report->skipReason)->toBeNull();
 });
