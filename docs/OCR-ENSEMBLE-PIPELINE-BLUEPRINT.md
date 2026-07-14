@@ -639,10 +639,100 @@ IntakeApprovalService → MutationService (unchanged)
 | 0.1 | 2026-07-12 | Initial blueprint draft |
 | **1.0** | **2026-07-12** | **DESIGN FROZEN** — gender not Sarvam trigger; comparison table only correct-candidate; income+marital_status confirmed; guiding principle; phase order aligned with phase contracts |
 | 1.0a | 2026-07-14 | §13 acceptance checkmarks only (implementation freeze review; design unchanged) |
+| 1.0b | 2026-07-14 | **§19 Post-v1.0 architecture roadmap LOCKED** — Phase 4 transport closed; Sprint 1→4 order (Phase3 forensics → engine eval → optional multi-OCR → knowledge) |
 
 **Related:** `docs/OCR-ENSEMBLE-PHASE-CONTRACTS.md`  
 **Readiness package:** `OCR-ENSEMBLE-PRODUCTION-READINESS-REVIEW.md`, `OCR-ENSEMBLE-IMPLEMENTATION-CHECKLIST.md`, `OCR-ENSEMBLE-TEST-PLAN.md`, `OCR-ENSEMBLE-BLUEPRINT-v1.1-ADDENDUM.md`
 
 ---
 
-*End of blueprint v1.0 — implementation per phase contracts + v1.1 addendum only.*
+## 19. Post-v1.0 architecture roadmap (LOCKED — 2026-07-14)
+
+> **Purpose:** Debugging mode बंद; architecture mode. Goal drift टाळण्यासाठी खालील क्रम **locked** आहे.  
+> **Does not change** v1.0 design freeze (§1–§16). Production engine additions अजूनही **benchmark GO** नंतरच (§ guiding principle).
+
+### 19.1 Product identity (non-negotiable)
+
+हा **generic OCR project नाही**.
+
+हा **Marathi Matrimony OCR Platform** आहे:
+
+- Finite domain fields (धर्म, जात, शिक्षण, गाव/तालुका/जिल्हा, उंची, रक्तगट, मंगळ/राशी, …)
+- स्वस्त offline primary path
+- Sarvam = **Judge only** (OCR engine नाही)
+- Human approval → knowledge improve (nurture later; governed SSOT)
+
+**Primary goal (restated):** कमी खर्च + जास्त अचूकता + हळूहळू स्वतः सुधारणारी biodata OCR प्रणाली.
+
+### 19.2 Phase 4 — CLOSED (transport / Judge)
+
+Proven (validation intake **#771** and prior forensics):
+
+| Fact | Status |
+|------|--------|
+| HTTP transport / model path | Closed — Judge returns **HTTP 200** |
+| Soft-fail `http_400` investigation | Closed |
+| Judge execute + attempt persist | Proven |
+| `merge_noop` + `empty_sarvam_value` | Understood (empty Judge value when Phase 3 had no valid DOB) |
+| Phase 4 as root cause of empty Final DOB | **Not at fault** |
+
+**Do not reopen** HTTP / logging / Judge client forensics unless a **new** transport regression appears.
+
+Sarvam remains: **Judge, not OCR.**
+
+### 19.3 Locked sprint order (do not rearrange casually)
+
+```
+Sprint 1 — Phase 3 Validator / Extract Forensics
+        ↓
+Sprint 2 — OCR Engine Evaluation (benchmark only; no production integration)
+        ↓
+Sprint 3 — Second (and later) OCR into production ensemble IFF Sprint 2 GO
+        ↓
+Sprint 4 — Knowledge / Learning layer (design + SSOT-governed)
+```
+
+#### Sprint 1 — Phase 3 DOB / candidate forensics
+
+- Focus: why `#771`-class intakes have `candidates.laravel_native_ocr = null` → `no_eligible_candidate` / `dob_invalid_format`.
+- Path: OCR text → Extractor → Normalizer → Voter → Validator → FR.
+- Out of scope: Phase 4, HTTP, merge, logging sinks.
+
+#### Sprint 2 — OCR Engine Evaluation (**benchmark only**)
+
+- **No production code path for new engines** until written GO in a new benchmark report.
+- Candidates to evaluate (examples; not pre-crowned winners): Tesseract (baseline), PaddleOCR v5, EasyOCR, DocTR.
+- Dataset: real Marathi biodata (suggest 100 → 200 → 500 as budget allows).
+- Metrics example: Marathi text, English, digits/DOB/mobile, tables/layout, latency/cost.
+- Phase 2 (2026-07-13) **NO-GO** remains valid for **that** EasyOCR/Paddle snapshot; it is **not** a permanent ban on any future engine generation. Re-benchmark required.
+
+#### Sprint 3 — Multi-OCR vote in production
+
+- Only engines with Sprint 2 **GO**.
+- Add `ocr_attempt` rows + Phase 3 multi-engine vote; Phase 5 Second OCR column fills when present.
+- Still behind feature flag; Tesseract fallback mandatory.
+
+#### Sprint 4 — Knowledge / Learning
+
+- Master dictionary + approval feedback (e.g. `96 Kuli` variants, city OCR noise → approved value).
+- Must respect PHASE-5 SSOT / MutationService / approval_snapshot — no silent overwrite.
+- Was listed as Phase 6+/7 non-goal in v1.0; this sprint **designs** it — implementation only after explicit phase contract.
+
+### 19.4 What “done” looks like for the near term
+
+| Milestone | Done when |
+|-----------|-----------|
+| Sprint 1 | Written forensic for DOB null-candidate cases + fix list (implement separately) |
+| Sprint 2 | New benchmark doc + GO/NO-GO per engine |
+| Sprint 3 | Second engine integrated only if GO |
+| Sprint 4 | Learning design signed; then implement |
+
+### 19.5 Explicitly deferred / rejected for cost
+
+- Google Vision / Azure / AWS Textract as **ensemble voters** — out (cost).
+- Integrating a new OCR into production **without** Sprint 2 GO — forbidden.
+- Replacing Judge with full-page paid vision as default OCR — forbidden.
+
+---
+
+*End of blueprint v1.0 + §19 post-v1.0 locked roadmap — implementation per phase contracts + this §19 order.*

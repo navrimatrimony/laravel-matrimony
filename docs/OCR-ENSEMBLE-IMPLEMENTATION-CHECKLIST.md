@@ -281,13 +281,22 @@ Next Phase only
 
 ---
 
-## Post-v1.0 (not in scope — Phase 6+)
+## Post-v1.0 (next work — locked order)
 
-- Weight learning  
-- Layout detection  
-- Marathi label normalizer  
-- LLM text cleanup  
-- EasyOCR / second engine without new benchmark + GO decision  
+Authority: **`OCR-ENSEMBLE-PIPELINE-BLUEPRINT.md` §19** (2026-07-14).
+
+| Sprint | Name | Production code? | Status |
+|--------|------|------------------|--------|
+| — | Phase 4 Judge HTTP / soft-fail / merge_noop forensics | Done | **CLOSED** (#771 Judge 200) |
+| 1 | Phase 3 validator / DOB candidate forensics | Forensic first; fixes separate | **NEXT** |
+| 2 | OCR Engine Evaluation (Tesseract / PaddleOCR v5 / EasyOCR / DocTR) | **Benchmark only** | After Sprint 1 |
+| 3 | Multi-OCR vote in production | Only if Sprint 2 GO | After Sprint 2 |
+| 4 | Knowledge / Learning layer (SSOT-governed) | Design then implement | After Sprint 3 |
+
+Still out of casual scope:
+
+- Weight learning / layout AI / LLM cleanup without §19 Sprint 4 design  
+- Second engine without **new** benchmark GO (2026-07-13 NO-GO still binds that vintage)
 
 **v1.0 closed blueprint blockers:** Correct Candidate placement (P5-B1) and bulk list badges (P5-B2).
 
@@ -302,3 +311,4 @@ Next Phase only
 | 1.2 | 2026-07-14 | Phase 4 freeze notes |
 | 1.3 | 2026-07-14 | Phase 4.5 + Phase 5a–5g — READY FOR STAGING; checklist updates |
 | 1.4 | 2026-07-14 | v1.0 freeze review — Phase 3/5 checklist alignment; P5-B1/B2 closed; suite 196/1032 |
+| 1.5 | 2026-07-14 | Post-v1.0 locked sprint order (§19 blueprint) — Phase 4 closed; Sprint 1 next |

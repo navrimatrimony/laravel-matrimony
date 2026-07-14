@@ -65,13 +65,17 @@ See `OCR-ENSEMBLE-PRODUCT-DECISIONS.md`:
 - Correction UI: **left zoomable image, right form** — high priority
 - Testing on production server (no customers yet) — OK with feature flag
 
-## A10. Related documents (readiness package)
+## A12. Post-v1.0 locked roadmap (2026-07-14)
 
-| Document | Purpose |
-|----------|---------|
-| `OCR-ENSEMBLE-PRODUCTION-READINESS-REVIEW.md` | Architecture gate |
-| `OCR-ENSEMBLE-IMPLEMENTATION-CHECKLIST.md` | Per-phase checklist |
-| `OCR-ENSEMBLE-TEST-PLAN.md` | Benchmark + test cases |
+See parent blueprint **§19**:
+
+1. Phase 4 transport / Judge path → **CLOSED**
+2. Sprint 1 → Phase 3 DOB/candidate forensics  
+3. Sprint 2 → OCR engine **evaluation** (benchmark only)  
+4. Sprint 3 → multi-OCR production only after GO  
+5. Sprint 4 → knowledge/learning (SSOT-governed)
+
+Do not reopen Phase 4 HTTP debugging for empty DOB / `merge_noop` class issues.
 
 ---
 
@@ -80,3 +84,4 @@ See `OCR-ENSEMBLE-PRODUCT-DECISIONS.md`:
 | Version | Date | Change |
 |---------|------|--------|
 | 1.1 | 2026-07-12 | Clarifications from readiness review |
+| 1.1a | 2026-07-14 | A12 — pointer to blueprint §19 locked post-v1.0 roadmap |
