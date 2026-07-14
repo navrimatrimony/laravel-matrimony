@@ -8,9 +8,9 @@ use App\Services\Intake\IntakeOcrEnsemblePhase5Service;
 use App\Services\Intake\OcrEnsemble\Data\Phase5ComparisonResult;
 
 /**
- * Phase 5e — admin OCR comparison request (placeholder view; full UI in a later step).
+ * Phase 5 — admin OCR comparison review (read-only).
  *
- * Read-only. Delegates entirely to IntakeOcrEnsemblePhase5Service.
+ * Delegates entirely to IntakeOcrEnsemblePhase5Service. No persistence.
  */
 class AdminIntakeOcrComparisonController extends Controller
 {

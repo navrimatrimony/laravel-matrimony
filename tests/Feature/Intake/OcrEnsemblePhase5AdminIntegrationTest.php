@@ -93,8 +93,9 @@ test('authorized admin can open ocr comparison placeholder', function () {
     $this->actingAs($admin)
         ->get(route('admin.biodata-intakes.ocr-comparison', $intake))
         ->assertOk()
-        ->assertSee('data-testid="ocr-comparison-placeholder"', false)
-        ->assertSee('data-testid="ocr-comparison-outcome"', false);
+        ->assertSee('data-testid="ocr-comparison-review"', false)
+        ->assertSee('data-testid="ocr-comparison-outcome"', false)
+        ->assertSee('data-testid="ocr-comparison-table"', false);
 });
 
 test('unauthorized user cannot open ocr comparison', function () {
@@ -153,8 +154,9 @@ test('ocr comparison shows resolved outcome when field resolution exists', funct
         ->assertOk()
         ->assertSee('data-outcome="resolved"', false)
         ->assertSee('data-reason="resolved"', false)
-        ->assertSee('&quot;final_value&quot;: &quot;Hindu&quot;', false)
-        ->assertSee('&quot;field_key&quot;: &quot;religion&quot;', false);
+        ->assertSee('data-testid="ocr-comparison-row-religion"', false)
+        ->assertSee('data-testid="ocr-comparison-final-highlight"', false)
+        ->assertSee('Hindu', false);
 });
 
 test('ocr comparison shows empty outcome when no field resolution', function () {
