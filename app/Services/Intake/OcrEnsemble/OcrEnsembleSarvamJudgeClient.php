@@ -139,10 +139,7 @@ final class OcrEnsembleSarvamJudgeClient implements OcrEnsembleSarvamJudgeClient
      */
     public function buildHttpPayload(SarvamJudgeRequest $request): array
     {
-        $model = trim((string) config('ocr.ensemble.phase4.client.model', 'sarvam-m'));
-        if ($model === '') {
-            $model = 'sarvam-m';
-        }
+        $model = $this->resolveChatModel();
 
         return [
             'model' => $model,
@@ -214,6 +211,26 @@ final class OcrEnsembleSarvamJudgeClient implements OcrEnsembleSarvamJudgeClient
             statusCode: $response->status(),
             requestPayloadHash: $payloadHash,
         );
+    }
+
+    /**
+     * Prefer OCR_ENSEMBLE_PHASE4_SARVAM_MODEL when set; otherwise reuse shared Sarvam chat model
+     * (services.sarvam.chat_model / SARVAM_CHAT_MODEL) — same SSOT as AiBoostService.
+     */
+    private function resolveChatModel(): string
+    {
+        $override = trim((string) (config('ocr.ensemble.phase4.client.model') ?? ''));
+        if ($override !== '') {
+            return $override;
+        }
+
+        $shared = trim((string) config('services.sarvam.chat_model', ''));
+        if ($shared !== '') {
+            return $shared;
+        }
+
+        // Last resort matches config/services.php factory default when env is empty.
+        return 'sarvam-105b';
     }
 
     private function shouldRetryStatus(int $status): bool

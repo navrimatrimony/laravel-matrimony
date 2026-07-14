@@ -252,7 +252,8 @@ return [
                     env('SARVAM_CHAT_COMPLETIONS_URL', 'https://api.sarvam.ai/v1/chat/completions')
                 ),
                 'api_key' => env('OCR_ENSEMBLE_PHASE4_SARVAM_API_KEY', env('SARVAM_API_SUBSCRIPTION_KEY')),
-                'model' => env('OCR_ENSEMBLE_PHASE4_SARVAM_MODEL', 'sarvam-m'),
+                // Optional Phase-4-only override. When empty, Judge resolves via services.sarvam.chat_model (SARVAM_CHAT_MODEL).
+                'model' => env('OCR_ENSEMBLE_PHASE4_SARVAM_MODEL'),
                 'timeout_seconds' => (int) env('OCR_ENSEMBLE_PHASE4_TIMEOUT_SECONDS', 30),
                 'connect_timeout_seconds' => (int) env('OCR_ENSEMBLE_PHASE4_CONNECT_TIMEOUT_SECONDS', 10),
                 'max_attempts' => (int) env('OCR_ENSEMBLE_PHASE4_MAX_ATTEMPTS', 3),

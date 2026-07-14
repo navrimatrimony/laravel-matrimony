@@ -89,7 +89,7 @@ Set any of these to `false` **only** when deliberately testing disable/rollback 
 |----------|-------------------|-------|
 | `OCR_ENSEMBLE_PHASE4_SARVAM_ENDPOINT` | `SARVAM_CHAT_COMPLETIONS_URL` or `https://api.sarvam.ai/v1/chat/completions` | Live HTTP endpoint |
 | `OCR_ENSEMBLE_PHASE4_SARVAM_API_KEY` | `SARVAM_API_SUBSCRIPTION_KEY` | **Must be valid on staging** for live drill |
-| `OCR_ENSEMBLE_PHASE4_SARVAM_MODEL` | `sarvam-m` | Judge model |
+| `OCR_ENSEMBLE_PHASE4_SARVAM_MODEL` | _(empty)_ → `SARVAM_CHAT_MODEL` / `services.sarvam.chat_model` (default `sarvam-105b`) | Phase-4-only override. Do **not** use deprecated `sarvam-m` on Chat Completions (Batch #46 HTTP 400). |
 | `OCR_ENSEMBLE_PHASE4_TIMEOUT_SECONDS` | `30` | Per request |
 | `OCR_ENSEMBLE_PHASE4_CONNECT_TIMEOUT_SECONDS` | `10` | Connect timeout |
 | `OCR_ENSEMBLE_PHASE4_MAX_ATTEMPTS` | `3` | Retries |

@@ -236,6 +236,26 @@ test('http request body uses deterministic serialization', function () {
     });
 });
 
+test('judge model prefers phase4 override then shared SARVAM_CHAT_MODEL', function () {
+    $client = app(OcrEnsembleSarvamJudgeClient::class);
+    $request = phase4dSampleRequest();
+
+    config()->set('ocr.ensemble.phase4.client.model', 'phase4-override-model');
+    config()->set('services.sarvam.chat_model', 'sarvam-105b');
+    $overridePayload = $client->buildHttpPayload($request);
+    expect($overridePayload['model'])->toBe('phase4-override-model');
+
+    config()->set('ocr.ensemble.phase4.client.model', null);
+    config()->set('services.sarvam.chat_model', 'sarvam-105b');
+    $sharedPayload = $client->buildHttpPayload($request);
+    expect($sharedPayload['model'])->toBe('sarvam-105b');
+
+    config()->set('ocr.ensemble.phase4.client.model', '');
+    config()->set('services.sarvam.chat_model', '');
+    $fallbackPayload = $client->buildHttpPayload($request);
+    expect($fallbackPayload['model'])->toBe('sarvam-105b');
+});
+
 test('response parser accepts direct fields payload and ignores unknown fields', function () {
     $parsed = app(OcrEnsembleSarvamJudgeResponseParser::class)->parse(json_encode([
         'fields' => [
