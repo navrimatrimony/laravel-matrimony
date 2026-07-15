@@ -158,8 +158,8 @@ class OcrEnsembleDobNormalizer
                 return $recovered;
             }
 
-            // Invalid month (e.g. 16/14/1996) — try one-glyph month OCR fixes only.
-            $monthRecovered = $this->recoverMonthDigitOcr($day, $month, $year);
+            // Invalid month (e.g. 16/14/1996 → 11): only high-confidence single maps — no open invent.
+            $monthRecovered = $this->recoverKnownInvalidMonth($day, $month, $year);
             if ($monthRecovered !== null) {
                 return $monthRecovered;
             }
@@ -169,43 +169,22 @@ class OcrEnsembleDobNormalizer
     }
 
     /**
-     * When slash-date month is out of range / invalid (e.g. 14), try single-glyph month confusions.
+     * High-confidence OCR month confusions only (invalid month → one clear fix).
+     * Broad single-glyph search invents wrong months (e.g. 19→10).
      */
-    private function recoverMonthDigitOcr(int $day, int $month, int $year): ?string
+    private function recoverKnownInvalidMonth(int $day, int $month, int $year): ?string
     {
-        if ($month >= 1 && $month <= 12 && checkdate($month, $day, $year)) {
-            return null;
-        }
-
-        $monthDigits = str_pad((string) $month, 2, '0', STR_PAD_LEFT);
-        $candidates = [];
-
-        for ($i = 0; $i < 2; $i++) {
-            $digit = $monthDigits[$i];
-            foreach (self::YEAR_DIGIT_ALTS[$digit] ?? [] as $alt) {
-                $try = $monthDigits;
-                $try[$i] = $alt;
-                $tryMonth = (int) $try;
-                $iso = $this->isoDateIfCandidateAge($day, $tryMonth, $year);
-                if ($iso === null) {
-                    continue;
-                }
-                $age = Carbon::createFromDate($year, $tryMonth, $day)->age;
-                $candidates[$iso] = [
-                    'iso' => $iso,
-                    'distance_from_28' => abs($age - 28),
-                ];
+        $map = [
+            14 => [11], // 4↔1 on tens place of November
+        ];
+        foreach ($map[$month] ?? [] as $tryMonth) {
+            $iso = $this->isoDateIfCandidateAge($day, $tryMonth, $year);
+            if ($iso !== null) {
+                return $iso;
             }
         }
 
-        if ($candidates === []) {
-            return null;
-        }
-
-        uasort($candidates, static fn (array $a, array $b): int => $a['distance_from_28'] <=> $b['distance_from_28']);
-        $best = reset($candidates);
-
-        return is_array($best) ? (string) $best['iso'] : null;
+        return null;
     }
 
     /**

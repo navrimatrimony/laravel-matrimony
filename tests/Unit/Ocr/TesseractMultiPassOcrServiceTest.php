@@ -85,6 +85,16 @@ test('scoring prefers Marathi biodata labels over Latin garbage', function () {
         ->and($marathi['label_hits'])->toBeGreaterThan($garbage['label_hits']);
 });
 
+test('scoring prefers valid calendar slash dates over garbled days', function () {
+    $service = app(TesseractMultiPassOcrService::class);
+
+    $valid = $service->scoreText("नाव : सीमा\nजन्म तारीख\n०२/११/१९९५\nजन्मवार आणि वेळ");
+    $garbled = $service->scoreText("नाव : सीमा\nजन्म तारीख : ७२/११/१९९७ न र");
+
+    expect($valid['score'])->toBeGreaterThan($garbled['score'])
+        ->and($garbled['penalties'])->toContain('invalid_slash_dates_only');
+});
+
 test('scoring prefers text with name dob mobile and height labels', function () {
     $service = app(TesseractMultiPassOcrService::class);
 

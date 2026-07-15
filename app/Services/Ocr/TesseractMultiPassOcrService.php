@@ -168,6 +168,28 @@ class TesseractMultiPassOcrService
         $score += min(12.0, $charCount / 35.0);
 
         $penalties = [];
+
+        $validSlashDates = 0;
+        $invalidSlashDates = 0;
+        if (preg_match_all('/(?<!\d)(\d{1,2})\s*[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*(\d{4})(?!\d)/u', $text, $dateMatches, PREG_SET_ORDER) !== false) {
+            foreach ($dateMatches as $dm) {
+                $day = (int) $dm[1];
+                $month = (int) $dm[2];
+                $year = (int) $dm[3];
+                if (checkdate($month, $day, $year) && $year >= 1940 && $year <= (int) date('Y')) {
+                    $validSlashDates++;
+                } else {
+                    $invalidSlashDates++;
+                }
+            }
+        }
+        // Prefer variants that keep calendar-looking biodata dates intact (raw fidelity).
+        $score += min(24.0, $validSlashDates * 14.0);
+        if ($invalidSlashDates > 0 && $validSlashDates === 0) {
+            $penalties[] = 'invalid_slash_dates_only';
+            $score -= min(18.0, $invalidSlashDates * 8.0);
+        }
+
         if ($charCount < 25) {
             $penalties[] = 'very_short_output';
             $score -= 30.0;
