@@ -572,7 +572,7 @@ class OcrService
 
         try {
             $image = new \Imagick;
-            $image->setResolution(200, 200);
+            $image->setResolution(300, 300);
             $image->readImage($fullPath);
             $pageCount = $image->getNumberImages();
             $limit = min($pageCount, $maxPages);
@@ -598,7 +598,7 @@ class OcrService
                     $pagePath,
                     $rel,
                     'pdf-page-'.($i + 1).'.png',
-                    $presetOverride ?? 'off'
+                    $presetOverride ?? null
                 );
                 $pageText = trim((string) ($result['text'] ?? ''));
                 if ($pageText !== '') {

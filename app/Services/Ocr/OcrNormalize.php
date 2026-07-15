@@ -344,6 +344,19 @@ class OcrNormalize
             }
         }
 
+        // English "24th March 1991" / "24 March 1991" (ordinal suffix common on resumes)
+        if (preg_match('/(\d{1,2})(?:st|nd|rd|th)?\s*('.$fullMonth.')\s*(\d{4})/iu', $value, $m)) {
+            $monthMap = [
+                'january' => '01', 'february' => '02', 'march' => '03', 'april' => '04',
+                'may' => '05', 'june' => '06', 'july' => '07', 'august' => '08',
+                'september' => '09', 'october' => '10', 'november' => '11', 'december' => '12',
+            ];
+            $month = $monthMap[strtolower($m[2])] ?? null;
+            if ($month !== null) {
+                return $m[3].'-'.$month.'-'.str_pad($m[1], 2, '0', STR_PAD_LEFT);
+            }
+        }
+
         // After Marathi→English month replace: "8 August 1997"
         if (preg_match('/(\d{1,2})\s*('.$fullMonth.')\s*(\d{4})/iu', $value, $m)) {
             $monthMap = [

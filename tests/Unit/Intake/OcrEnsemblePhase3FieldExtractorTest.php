@@ -98,6 +98,7 @@ test('production dob normalizer reads Marathi month forms present in raw OCR', f
         ]))->toBe('1997-08-08')
         ->and($normalizer->normalize('9सप्टेंबट 2000'))->toBe('2000-09-09')
         ->and($normalizer->normalize('December 10, 1995'))->toBe('1995-12-10')
+        ->and($normalizer->normalize('24th March 1991'))->toBe('1991-03-24')
         ->and($normalizer->normalize('18 ऑगस्ट1998'))->toBe('1998-08-18')
         ->and($normalizer->normalizeFromLines([
             'जन्मतारीख :_ 18 ऑगस्ट1998 भे > अ',

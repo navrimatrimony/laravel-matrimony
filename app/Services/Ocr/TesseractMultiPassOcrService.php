@@ -190,6 +190,29 @@ class TesseractMultiPassOcrService
             $score -= min(18.0, $invalidSlashDates * 8.0);
         }
 
+        $englishBiodataHits = 0;
+        foreach ([
+            'date of birth', 'father', 'mother', 'resume', 'place of birth',
+            'birth time', 'height', 'education', 'caste', 'religion',
+        ] as $kw) {
+            if (stripos($text, $kw) !== false) {
+                $englishBiodataHits++;
+            }
+        }
+        $score += min(28.0, $englishBiodataHits * 7.0);
+
+        $englishMonthDate = preg_match(
+            '/\b(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}\b/iu',
+            $text
+        ) === 1
+            || preg_match(
+                '/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},?\s+\d{4}\b/iu',
+                $text
+            ) === 1;
+        if ($englishMonthDate) {
+            $score += 16.0;
+        }
+
         if ($charCount < 25) {
             $penalties[] = 'very_short_output';
             $score -= 30.0;
@@ -200,7 +223,7 @@ class TesseractMultiPassOcrService
 
         $letters = max(1, $devanagariChars + $latinChars);
         $latinRatio = $latinChars / $letters;
-        if ($latinRatio > 0.75 && $labelHits < 2) {
+        if ($latinRatio > 0.75 && $labelHits < 2 && $englishBiodataHits < 2 && ! $englishMonthDate) {
             $penalties[] = 'latin_garbage_ratio';
             $score -= 22.0;
         }
@@ -212,7 +235,8 @@ class TesseractMultiPassOcrService
             $score -= 12.0;
         }
 
-        if ($labelHits === 0 && $mobileLikeCount === 0 && $devanagariChars < 20) {
+        if ($labelHits === 0 && $mobileLikeCount === 0 && $devanagariChars < 20
+            && $englishBiodataHits === 0 && ! $englishMonthDate) {
             $penalties[] = 'no_biodata_signals';
             $score -= 18.0;
         }
@@ -564,7 +588,7 @@ class TesseractMultiPassOcrService
         return match ($hint) {
             'mr' => ['mar'],
             'en' => ['eng'],
-            default => ['mar+eng', 'mar'],
+            default => ['mar+eng', 'mar', 'eng'],
         };
     }
 

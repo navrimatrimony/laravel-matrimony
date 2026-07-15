@@ -30,6 +30,13 @@
 | Invent day 21 from `२४०३/१९९९` on `D (8)` | **Rejected** | Guesses wrong day; Mode A |
 | EasyOCR / Paddle / DocTR as production replace | **Rejected** (Sprint 2) | NO-GO vs Tesseract GT-20 critical |
 | Date-band crop (Loop 02) | **Pending** | Next approach for Mode A residuals |
+| Horizontal date-band on `D (8)` | **Rejected (GT)** | Improves glued→`२४/०३/१९९९` but day stays **24≠21**; no GT match |
+| Color/red-channel suppress on `D (8)` | **Rejected** | Still reads day 24 / wrong months; no uplift to truth |
+| Opaque blue-fill watermark wipe (`D (8)`) | **Rejected** | No DOB recover |
+| PDF DPI/crop/channel only (`28.pdf`) | **Rejected** | Marathi multipass still preferred garbage |
+| English ordinal date parse (`24th March 1991`) | **Accepted** | Resume-style DOB in raw |
+| Multipass: include `eng`; don’t penalize Latin resumes | **Accepted** | Stops Marathi hallucination winning over English resumes |
+| PDF raster 300 DPI + multipass (not forced `off`) | **Accepted** | `28.pdf` → DOB **1991-03-24** |
 
 ---
 

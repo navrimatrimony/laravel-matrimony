@@ -95,6 +95,19 @@ test('scoring prefers valid calendar slash dates over garbled days', function ()
         ->and($garbled['penalties'])->toContain('invalid_slash_dates_only');
 });
 
+test('scoring prefers English resume biodata over Devanagari OCR hallucination', function () {
+    $service = app(TesseractMultiPassOcrService::class);
+
+    $english = $service->scoreText(
+        "RESUME Name: - Ms. Sonam\nFather's Name: - Mr. Sanjeev\nDate of Birth:- = 24th March 1991\nBirth Time: - 5:45 a.m."
+    );
+    $hallucinated = $service->scoreText(
+        "२ि६छाजशर् पिंबा 24 फिट 1991 आप गाा 5:45 सिलि पएभा मोबाइल शिक्षण"
+    );
+
+    expect($english['score'])->toBeGreaterThan($hallucinated['score']);
+});
+
 test('scoring prefers text with name dob mobile and height labels', function () {
     $service = app(TesseractMultiPassOcrService::class);
 
