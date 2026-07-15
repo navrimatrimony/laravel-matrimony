@@ -97,6 +97,7 @@
             'comparisonResult' => $comparisonResult,
             'embedded' => true,
             'ocrAttemptSummaries' => $ocrAttemptSummaries ?? [],
+            'ocrEngineDebugMetrics' => $ocrEngineDebugMetrics ?? [],
         ])
     </section>
 

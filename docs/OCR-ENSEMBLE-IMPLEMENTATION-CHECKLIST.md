@@ -301,7 +301,7 @@ Still out of casual scope:
 - Second engine without **new** benchmark GO (2026-07-13 / Sprint 2 NO-GO still bind those vintages)
 - Declaring **Product OCR Vision** complete when only §19 milestones are done — Vision continues under **Blueprint §20**
 
-**Active product goal:** `OCR-ENSEMBLE-PIPELINE-BLUEPRINT.md` **§20** + `OCR-RESEARCH-PHASE-LEDGER.md` (STATUS: In Progress).
+**Active product goal:** `OCR-ENSEMBLE-PIPELINE-BLUEPRINT.md` **§20** (problem-driven) + `OCR-RESEARCH-PHASE-LEDGER.md` + Loop 01 DOB.
 
 **v1.0 closed blueprint blockers:** Correct Candidate placement (P5-B1) and bulk list badges (P5-B2).
 
@@ -326,3 +326,4 @@ Still out of casual scope:
 | 2.1 | 2026-07-15 | Sprint 4 design signed (4a); implement gated on Phase Contract 4b |
 | 2.2 | 2026-07-15 | Sprint 4 4b SSOT guards; 4c deferred |
 | 2.3 | 2026-07-15 | §20 OCR Research Vision accepted; Admin per-engine Raw OCR UI; Vision In Progress |
+| 2.4 | 2026-07-15 | §20 problem-driven research; Admin engine metrics; Loop 01 DOB; Knowledge Base design |

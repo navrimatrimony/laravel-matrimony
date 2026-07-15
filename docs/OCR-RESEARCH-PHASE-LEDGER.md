@@ -1,52 +1,87 @@
-# OCR Research Phase — Ledger & Kickoff (§20)
+# OCR Research Phase — Problem-driven Ledger (§20)
 
-> **Approved Goal:** Blueprint §20 — best practical OCR for Marathi biodata (Find **or** Build).  
-> **Status:** **In Progress** (2026-07-15)  
-> **Not:** §19 Sprint-complete = Vision-complete.
-
----
-
-## 1. Baseline locked from Sprint 2 (GT-20)
-
-| Engine | Critical % | Decision |
-|--------|-----------:|----------|
-| Tesseract | 42.11% | Production primary (until new GO) |
-| EasyOCR | 27.37% | NO-GO (this vintage) |
-| PaddleOCR 3.7 | 14.74% | NO-GO (this vintage) |
-| DocTR 0.12 | 4.21% | NO-GO (this vintage) |
-
-Re-benchmark required before any production GO for a new or upgraded engine.
+> **Approved Goal:** Maximize Marathi + Devanagari + English OCR quality for production biodata.  
+> **Method:** **Problem-driven** research — not an engine shopping queue.  
+> **Status:** **In Progress** (2026-07-15)
 
 ---
 
-## 2. Research queue (ordered)
+## 0. Authority
 
-Execute locally; score vs Batch-001 / GT-20 (expand GT when labels available). Reject quickly.
+```text
+The objective is NOT to benchmark OCR engines.
 
-| Priority | Candidate / track | Next action |
-|----------|-------------------|-------------|
-| P0 | **Preprocessing** (deskew / contrast / denoise / crop for phone biodata) | Measure Tesseract Δ on GT-20 with/without preprocess sidecar |
-| P0 | **Lexicon / post-correct** (digits, DOB, mobile, 96 Kuli aliases) | Bound experiments; SSOT aliases — no silent profile writes |
-| P1 | **Surya OCR** | Install short-path venv; smoke 1 image; GT-20 if smoke OK |
-| P1 | **PaddleOCR refresh / PP-OCRv5 configs** | Re-run only if newer stack ≠ Sprint 2 snap |
-| P2 | Indic / Devanagari-specialized models (IndicOCR, Kraken fine-tune) | Feasibility + data estimate |
-| P2 | TrOCR / transformer OCR | GPU/time cost; prototype if CPU viable |
-| P3 | Heavy doc parsers (GOT / MinerU / Nougat / Florence / Qwen-OCR class) | Ops+license+cost gate before deep bench |
-| Ongoing | Ensemble voting research | Offline only until second engine GO |
+The objective IS to maximize
+Marathi + Devanagari + English
+OCR accuracy for production biodata.
+```
 
----
+Loop (mandatory):
 
-## 3. Success yardstick
+```text
+Current accuracy → Biggest weakness → Candidate solutions for THAT weakness
+  → Benchmark → Keep only measurable gains → Repeat → 90%+ → Stop
+```
 
-- Direction: **90%+ usable OCR text** on representative Marathi biodata (expand labeled set; report both **text CER/WER-style** proxy and **critical field** accuracy).
-- Sprint 2 GT-20 critical field % stays the formal gate for production second OCR.
-- Stop condition: consecutive candidates with no meaningful uplift under practical compute/time.
+Engines (Surya, Paddle, …) may appear **only** as candidates for a named weakness — never as the roadmap itself.
 
 ---
 
-## 4. Ops / Admin
+## 1. Current accuracy (baseline)
 
-See Blueprint §20.5. Per-engine Raw OCR is on Correct candidate (2026-07-15).
+| Metric | Value | Source |
+|--------|------:|--------|
+| Tesseract critical (5 fields) | **42.11%** | Sprint 2 GT-20 |
+| EasyOCR / Paddle / DocTR | below baseline | Sprint 2 NO-GO vintages |
+
+### Per-field (Tesseract GT-20) — weakness rank
+
+| Field | Accuracy | Rank |
+|-------|---------:|------|
+| date_of_birth | **25.0%** | **#1 weakest critical** |
+| full_name | 30.0% | #2 |
+| religion | 47.1% | |
+| gender | 55.0% | |
+| primary_contact_number | 55.6% | strongest critical |
+
+---
+
+## 2. Active loop
+
+### Loop 01 — DOB critical accuracy (OPEN)
+
+| Step | Content |
+|------|---------|
+| Weakness | DOB extract/OCR at **25%** on hard-heavy GT-20 |
+| Hypothesis set (problem-first) | (A) transcript never contains date → OCR/preprocess; (B) date present but label/format miss → Sprint 1 extract/normalize expand; (C) digit glyph confusion → lexicon/post-correct |
+| Next action | Forensic sample of GT-20 DOB misses: OCR text contains `DD/MM`? → choose A vs B vs C |
+| Engine experiments | Only if forensic says **A** dominates (e.g. try preprocess + optional second engine for date lines) |
+| Success | +measurable DOB pp on same GT-20; no SSOT break |
+| Forensic (prefix) | 13/15 misses lack date pattern in OCR prefix → Mode A/D lead |
+
+See: `docs/OCR-RESEARCH-LOOP-01-DOB-WEAKNESS.md`
+
+---
+
+## 3. Rejected / parked (not a queue)
+
+| Item | Status | Why parked |
+|------|--------|------------|
+| EasyOCR / Paddle 3.7 / DocTR 0.12 | NO-GO vintage | Failed critical gate; re-open only for a named weakness with new evidence |
+| Engine-first “try Surya next” | Forbidden as roadmap | May be a Loop 01/02 **candidate** if forensic warrants |
+
+---
+
+## 4. Stop conditions
+
+- Critical + text usability toward **90%+** on representative Marathi biodata, **or**
+- Consecutive loops with no meaningful measurable uplift under practical effort
+
+---
+
+## 5. Admin comparison surface
+
+Correct candidate shows: field table + **engine metrics** (confidence, time, fields found/missing, critical errors, Judge used?) + per-engine Raw OCR.
 
 ---
 
@@ -54,4 +89,5 @@ See Blueprint §20.5. Per-engine Raw OCR is on Correct candidate (2026-07-15).
 
 | Date | Note |
 |------|------|
-| 2026-07-15 | Ledger opened; §20 accepted; Admin Raw OCR UI shipped |
+| 2026-07-15 | Ledger opened (engine queue — superseded) |
+| 2026-07-15 | Reframed to **problem-driven**; Loop 01 = DOB; Admin metrics |

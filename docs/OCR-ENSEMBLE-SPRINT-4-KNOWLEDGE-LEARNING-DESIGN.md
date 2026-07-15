@@ -257,9 +257,50 @@ Escalate to product only if 4b would change business truth rules (actor weight, 
 
 ---
 
+## 15. OCR Knowledge Base (Blueprint §20.7 — design expansion)
+
+> Learning USP is **not** aliases-only. Human corrections must teach the OCR pipeline over time without silent profile writes.
+
+### 15.1 Desired flow
+
+```text
+Human Approval (review snapshot)
+  → OCR Knowledge Candidate (observation + optional draft pattern)
+  → Confidence / sample count
+  → Human or policy Review (promotion_status)
+  → Reusable Pattern / curated alias
+  → Next OCR / normalize / extract assist (feature-flagged)
+```
+
+**Not:** approval → immediate silent rewrite of other profiles.
+
+### 15.2 Memory categories (target coverage)
+
+| Category | Examples | Today |
+|----------|----------|-------|
+| Correction memory | wrong → corrected field pairs | `ocr_correction_logs` / patterns |
+| Surnames / names | OCR noise → canonical name tokens | Partial via logs |
+| Villages / places | place OCR → location alias | `location_aliases` + suggestion patterns |
+| Castes / sub-castes | `96 Kuli`, कुली/कुळी | aliases + hardcodes |
+| Degrees / occupations | education OCR | domain normalizers |
+| OCR confusion pairs | मटाठा→मराठा | community extractor / patterns |
+| Digits | ८/३, O/0 | sparse baselines |
+| Dates | label+format rescue | Sprint 1 normalizer |
+| Mixed Marathi–English | Adv./डॉ. titles, codes | name normalizers |
+
+### 15.3 Phase Contract 4d (design only until started)
+
+- Extend promotion UX: Knowledge Candidate queue (reuse `promotion_status` / conflicts)  
+- Category tags on patterns (additive column OK; no destructive type change)  
+- Read-path still post-parse-first (4c before ensemble injection)  
+- No auto-enable of `ai_generalize_*`
+
+---
+
 ## Changelog
 
 | Date | Change |
 |------|--------|
 | 2026-07-15 | Initial design signed (4a); Sprint 2 close / Sprint 3 skip recorded |
 | 2026-07-15 | 4b SSOT guard tests landed (`OcrKnowledgeLearningSsotGuardTest`) |
+| 2026-07-15 | §15 OCR Knowledge Base expansion (aliases-only rejected; candidate→review→pattern) |

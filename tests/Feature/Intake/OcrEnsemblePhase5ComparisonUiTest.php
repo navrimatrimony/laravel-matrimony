@@ -180,7 +180,9 @@ test('resolved comparison page renders table with highlighted final', function (
         ->assertSee('Hindu', false)
         ->assertSee('data-testid="ocr-attempt-raw-transcripts"', false)
         ->assertSee('data-testid="ocr-attempt-raw-0"', false)
-        ->assertSee('tesseract ui evidence', false);
+        ->assertSee('tesseract ui evidence', false)
+        ->assertSee('data-testid="ocr-engine-debug-metrics"', false)
+        ->assertSee('data-testid="ocr-engine-debug-metrics-table"', false);
 });
 
 test('empty comparison page shows empty notice and canonical rows', function () {
