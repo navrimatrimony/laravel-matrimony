@@ -616,9 +616,35 @@ Do not optimize rare GT overfitting
 at the expense of production impact.
 ```
 
+### 19.1 Dashboard = compass, not success (LOCKED)
+
+```text
+The Product Goal
+shall always take precedence
+over any dashboard metric.
+
+Dashboard metrics
+exist only
+to measure progress
+and guide priority,
+not
+to redefine
+the Product Vision
+or declare success by themselves.
+
+Dashboard shall guide priority,
+not success.
+
+GT-20 green ≠ Product Goal complete.
+All critical fields 100% on GT ≠
+Raw OCR fidelity complete on real biodata.
+```
+
+Product Vision remains: maximize practical **RAW OCR text fidelity** for Marathi + Devanagari + English biodata in production; structured accuracy, Judge %, and human correction rates measure downstream use of that fidelity.
+
 After every accepted or rejected loop, the agent SHALL update:
 
-1. **`docs/OCR-PRODUCT-METRICS-DASHBOARD.md`** (product-level metrics)  
+1. **`docs/OCR-PRODUCT-METRICS-DASHBOARD.md`** (GT + production sections when data exists)  
 2. **`docs/OCR-RESEARCH-PHASE-LEDGER.md`** (technique register + Knowledge findings)  
 3. Commit + push, then continue automatically until §17–18.
 
@@ -635,3 +661,4 @@ After every accepted or rejected loop, the agent SHALL update:
 | 1.4 | 2026-07-15 | §12.1 Local Development Ownership — agent installs deps (Ghostscript, Python, OCR models, …); user only for UAC/license/paid login |
 | 1.5 | 2026-07-15 | §17 Plateau Rule; §18 Research Phase Completion — loop ≠ goal; multi-approach evidence required |
 | 1.6 | 2026-07-15 | §19 Product Impact First + mandatory Product Metrics Dashboard / Ledger updates each loop |
+| 1.7 | 2026-07-15 | §19.1 Dashboard = compass not success; Product Goal precedence over metrics |

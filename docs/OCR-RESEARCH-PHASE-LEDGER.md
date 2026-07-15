@@ -21,6 +21,7 @@
 | ITRANS / wrong PDF text layer looks “long” but is unusable | Yes | Force raster when no Devanagari/English biodata keywords |
 | English resumes OCR’d as Marathi produce Devanagari garbage that scores high | Yes | Include `eng`; don’t apply latin_garbage when English biodata keywords present |
 | Most GT-20 **name** misses are Mode B (tokens in raw) | Yes | Extractor gaps (English Name, biodata-title names, OCR honorific noise) over new OCR engine |
+| Dashboard is a **compass**, not success | Yes | DOC §19.1 — Goal = RAW OCR fidelity on real biodata; GT-20 ≠ plateau |
 | Ordinal English DOB (`24th March 1991`) | Yes | Common resume form; must parse |
 | Horizontal date-band crop | Partial | Fixes glued slash form; does not fix wrong day under overlay |
 | Blue watermark opaque wipe / red-channel | No (so far) | Overlay destroys or confuses day digits (`D (8)` still 24≠21) |
@@ -84,13 +85,13 @@ Residual Mode A (ranked for Loop 02+):
 
 ---
 
-## Active improvement cycle (Loop 02+)
+## Active improvement cycle (Loop 03 Name)
 
-1. **Done (accept):** English resume path — `28.pdf` recovered (`24th March 1991`).  
-2. **Reject so far on `D (8)`:** bands, color channel, de-blue — OCR still prefers day **24** vs GT **21** (watermark overlap).  
-3. **Dashboard + DOC §19** — Product Metrics + Impact First.  
-4. **Next:** Loop 03 Name — forensic **Mode B 12 / Mode A 1**; English Name + biodata-title extract implemented. Remasure after accept.  
-5. Plateau only per DOC §17 after multiple approaches exhausted.
+1. **Forensic:** Name Mode B **12** / Mode A **1**.  
+2. **Accepted:** English `Name:`, biodata-title names, honorific/prefix cleanup.  
+3. **Remasure:** Name **30% → 50%**, Critical **42.1% → 63.2%**.  
+4. **Next:** Remaining name misses (OCR garbled surnames / multipass choosing weak text) — production-general only.  
+5. DOC §19.1: Dashboard compass; Goal still Raw OCR fidelity.
 
 ---
 
@@ -104,3 +105,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-15 | Loop 01 Complete; Product Goal In Progress; technique register; Loop 02 date-band pending |
 | 2026-07-15 | Loop 02: reject D8 overlays/bands; accept English resume scoring + ordinal DOB; **28.pdf recovered** |
 | 2026-07-15 | DOC §19 Product Impact First; Product Metrics Dashboard; remasure critical **60%**, DOB **95%**; **Name** ranked next |
+| 2026-07-15 | DOC §19.1 Dashboard = compass not success; Production scoreboard scaffold (anti GT-overfit) |
