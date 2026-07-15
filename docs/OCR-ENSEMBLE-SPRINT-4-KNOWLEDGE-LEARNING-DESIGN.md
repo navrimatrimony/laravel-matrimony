@@ -1,9 +1,9 @@
 # OCR Ensemble — Sprint 4 Knowledge / Learning Design
 
-> **Status:** **DESIGN SIGNED** (2026-07-15) — design-only; **no production learning enablement** in this document  
+> **Status:** **4a+4b COMPLETE** (2026-07-15) — design signed + SSOT guard tests; **4c deferred**; no AI learning enablement  
 > **Authority:** Blueprint §19.3 Sprint 4 + §19.4 + PHASE-5 SSOT + `INTAKE-NORMALIZATION-SSOT.md` + Day-31 safety audit  
 > **Prerequisite:** Sprint 2 **CLOSED** (all engines GO/NO-GO); Sprint 3 **SKIPPED** (no second-engine GO)  
-> **Implementation:** only under **Phase Contract 4a/4b** below — not in this design commit beyond docs
+> **Implementation:** 4b landed; further ensemble injection only under Phase Contract **4c**
 
 ---
 
