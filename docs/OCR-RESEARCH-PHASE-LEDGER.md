@@ -6,9 +6,25 @@
 > **Loop 01 status:** **Complete**  
 > **Research Phase status:** **Open** (plateau §17 / completion §18 not met)
 
-**Authority:** Blueprint §20 + DOC (esp. §17 Plateau, §18 Research Completion).  
-**Triage:** raw has info? → parser/normalizer. Else → OCR/preprocess. Never re-optimize solved layers; attack largest remaining information loss.  
-**Do not stop after each loop** — measure → rank → fix → bench → keep/reject → commit → push → repeat.
+**Authority:** Blueprint §20 + DOC (§17–19).  
+**Product dashboard:** [`docs/OCR-PRODUCT-METRICS-DASHBOARD.md`](OCR-PRODUCT-METRICS-DASHBOARD.md)  
+**Triage:** raw has info? → parser/normalizer. Else → OCR/preprocess. **Product Impact First** (loss × frequency).  
+**Do not stop after each loop** — measure → rank → fix → bench → dashboard + ledger → commit → push → repeat.
+
+---
+
+## Knowledge findings (durable)
+
+| Finding | Useful? | Reason |
+|---------|---------|--------|
+| Dates often already in raw OCR; Label/month bugs hide them | Yes | Prefer parser recovery before new engines |
+| ITRANS / wrong PDF text layer looks “long” but is unusable | Yes | Force raster when no Devanagari/English biodata keywords |
+| English resumes OCR’d as Marathi produce Devanagari garbage that scores high | Yes | Include `eng`; don’t apply latin_garbage when English biodata keywords present |
+| Ordinal English DOB (`24th March 1991`) | Yes | Common resume form; must parse |
+| Horizontal date-band crop | Partial | Fixes glued slash form; does not fix wrong day under overlay |
+| Blue watermark opaque wipe / red-channel | No (so far) | Overlay destroys or confuses day digits (`D (8)` still 24≠21) |
+| Wide month-digit invent / truncated-year invent | No | False ISOs / age-bias guessing |
+| Replace Tesseract with EasyOCR/Paddle/DocTR | No | Sprint 2 NO-GO on GT-20 critical |
 
 ---
 
@@ -29,7 +45,7 @@
 | Full-page preset / DPI sweep on `28.pdf` | **Rejected** | No calendar date signal in raw (`24 फिट 1991`) |
 | Invent day 21 from `२४०३/१९९९` on `D (8)` | **Rejected** | Guesses wrong day; Mode A |
 | EasyOCR / Paddle / DocTR as production replace | **Rejected** (Sprint 2) | NO-GO vs Tesseract GT-20 critical |
-| Date-band crop (Loop 02) | **Pending** | Next approach for Mode A residuals |
+| Date-band crop (Loop 02) | **Rejected for GT match on D8** | Partial structure help only; see Knowledge |
 | Horizontal date-band on `D (8)` | **Rejected (GT)** | Improves glued→`२४/०३/१९९९` but day stays **24≠21**; no GT match |
 | Color/red-channel suppress on `D (8)` | **Rejected** | Still reads day 24 / wrong months; no uplift to truth |
 | Opaque blue-fill watermark wipe (`D (8)`) | **Rejected** | No DOB recover |
@@ -62,8 +78,8 @@
 
 Residual Mode A (ranked for Loop 02+):
 
-1. **`D (8).jpeg`** — preprocess yields `२४०३/१९९९` (year OK-ish; day wrong); invent rejected.  
-2. **`28.pdf`** — raster/presets/DPI: no parseable DOB in raw.
+1. **`D (8).jpeg`** — watermark/overlay; OCR day 24 vs GT 21; invent rejected.  
+2. ~~`28.pdf`~~ — **recovered** (English resume multipass).
 
 ---
 
@@ -71,8 +87,9 @@ Residual Mode A (ranked for Loop 02+):
 
 1. **Done (accept):** English resume path — `28.pdf` recovered (`24th March 1991`).  
 2. **Reject so far on `D (8)`:** bands, color channel, de-blue — OCR still prefers day **24** vs GT **21** (watermark overlap).  
-3. **Next ranked:** watermark/color-layer separation or date-band with stronger filter for overlay biodata; then remasure GT-20 DOB.  
-4. Plateau only per DOC §17 after multiple approaches exhausted.
+3. **Dashboard + DOC §19** — Product Metrics + Impact First.  
+4. **Next:** After GT-20 remasure, pick highest residual (name vs `D (8)` watermark) by production impact; continue.  
+5. Plateau only per DOC §17 after multiple approaches exhausted.
 
 ---
 
@@ -85,3 +102,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-15 | GS user-local; ITRANS reject; bare-तारीख; multipass date scoring |
 | 2026-07-15 | Loop 01 Complete; Product Goal In Progress; technique register; Loop 02 date-band pending |
 | 2026-07-15 | Loop 02: reject D8 overlays/bands; accept English resume scoring + ordinal DOB; **28.pdf recovered** |
+| 2026-07-15 | DOC §19 Product Impact First; Product Metrics Dashboard; remasure critical **60%**, DOB **95%**; **Name** ranked next |

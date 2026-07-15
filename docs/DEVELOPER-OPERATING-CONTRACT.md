@@ -589,6 +589,41 @@ Loop Complete ≠ Product Goal Complete ≠ Research Phase Complete.
 
 ---
 
+## 19. Product Impact First (LOCKED)
+
+```text
+Priority =
+  information loss on GT / production proxies
+  ×
+  production frequency / coverage
+  (PDF vs image; Marathi vs English; field criticality)
+
+Before starting a loop, the agent SHALL ask:
+
+  “Will this improvement affect
+   thousands of real biodata intakes
+   in production — not only one GT row?”
+
+If the honest answer is No,
+reject the loop (document in Ledger)
+and pick the next ranked weakness.
+
+Prefer +12% PDF fidelity over +2% DOB
+on a single hard watermark when
+PDF volume / coverage is higher.
+
+Do not optimize rare GT overfitting
+at the expense of production impact.
+```
+
+After every accepted or rejected loop, the agent SHALL update:
+
+1. **`docs/OCR-PRODUCT-METRICS-DASHBOARD.md`** (product-level metrics)  
+2. **`docs/OCR-RESEARCH-PHASE-LEDGER.md`** (technique register + Knowledge findings)  
+3. Commit + push, then continue automatically until §17–18.
+
+---
+
 ## Document history
 
 | Version | Date | Change |
@@ -599,3 +634,4 @@ Loop Complete ≠ Product Goal Complete ≠ Research Phase Complete.
 | 1.3 | 2026-07-15 | §5.4 mid-goal commits without ask; §13.5–13.7 batch/folder/dataset ownership + Sprint 2 Batch-001 contract |
 | 1.4 | 2026-07-15 | §12.1 Local Development Ownership — agent installs deps (Ghostscript, Python, OCR models, …); user only for UAC/license/paid login |
 | 1.5 | 2026-07-15 | §17 Plateau Rule; §18 Research Phase Completion — loop ≠ goal; multi-approach evidence required |
+| 1.6 | 2026-07-15 | §19 Product Impact First + mandatory Product Metrics Dashboard / Ledger updates each loop |
