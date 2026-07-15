@@ -1,22 +1,26 @@
 ---
-description: Agent execution follows Developer Operating Contract (DOC) — goal ownership, DoD, escalation
+description: Agent execution follows Developer Operating Contract (DOC) — goal ownership, local-first, Marathi user steps
 alwaysApply: true
 ---
 
 # Developer Operating Contract
 
-Execution policy for all agent work in this repository lives in:
+Full policy: **`docs/DEVELOPER-OPERATING-CONTRACT.md`**
 
-**`docs/DEVELOPER-OPERATING-CONTRACT.md`**
+| Layer | Role |
+|-------|------|
+| SSOT / PHASE-5 | What is correct |
+| Blueprint | What / order |
+| DOC | How the agent executes |
+| Local project | DB, logs, queue, tests |
+| User | Biodata/GT, escalations, production approval |
 
-Read and follow it. Summary (authority remains the DOC):
+**Owns the goal, not the task.** Complete only when DOC Definition of Done is fully met.
 
-- **SSOT / PHASE-5** = business + data governance (do not bypass).
-- **Product Blueprints** = roadmap / sprints / milestones.
-- **DOC** = how the agent executes: Approved Goal, autonomy between sprints, Definition of Done, Escalation Matrix, testing, evidence, completion reporting.
+**Local-first.** Do not use live server for routine debug.
 
-**The agent owns the goal, not the task** — determine and execute all required steps within approved scope; plan, implement, debug, validate, regression-test, and collect evidence until DOC Definition of Done is fully satisfied (or escalate per DOC). Never declare Complete on a partial subtask alone.
+**Never ask** what local project/DB/logs/queue/git can answer.
 
-Do not invent a “Complete” status when any DoD item is open → report **In Progress** or **Escalation**.
+**User instructions** (when action required): simple **Marathi (Devanagari)**, steps १–५ (कुठे, काय, किती, कधी थांबा, पुढे काय). No jargon commands for the product owner.
 
-Prefer local DB/logs for development; live server for smoke / production validation only.
+Report: `Complete` | `In Progress` | `Escalation` per DOC §10.

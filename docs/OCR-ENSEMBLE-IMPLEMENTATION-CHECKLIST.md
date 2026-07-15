@@ -285,7 +285,7 @@ Next Phase only
 
 Authority: **`OCR-ENSEMBLE-PIPELINE-BLUEPRINT.md` §19** (2026-07-14) + **§19.6** goal-centric execution (2026-07-15).
 
-**Execution mode:** `docs/DEVELOPER-OPERATING-CONTRACT.md` (DOC). Prefer **one Approved Goal**. Chain Sprint 1→4 under DOC autonomy. Report **Complete** only when DOC Definition of Done is fully satisfied (else **In Progress** / **Escalation**).
+**Execution mode:** `docs/DEVELOPER-OPERATING-CONTRACT.md` (DOC v1.2+). One Approved Goal; local-first; Marathi user steps when needed; Complete only after DOC DoD.
 
 | Sprint | Name | Production code? | Status |
 |--------|------|------------------|--------|
@@ -317,3 +317,4 @@ Still out of casual scope:
 | 1.6 | 2026-07-15 | §19.6 goal-centric autonomous delivery — chain sprints under one Approved Goal |
 | 1.7 | 2026-07-15 | §19.6 DoD + Escalation Matrix refinement |
 | 1.8 | 2026-07-15 | Point execution to DEVELOPER-OPERATING-CONTRACT.md |
+| 1.9 | 2026-07-15 | DOC v1.2 local-first + Marathi user interaction |

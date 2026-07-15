@@ -644,6 +644,7 @@ IntakeApprovalService → MutationService (unchanged)
 | 1.0d | 2026-07-15 | §19.6 DoD LOCKED + Escalation Matrix (automatic vs human) + canonical mandate + Sprint 2 dataset blocker |
 | 1.0e | 2026-07-15 | §19.6 points to `DEVELOPER-OPERATING-CONTRACT.md` for execution; OCR product gates remain here |
 | 1.0f | 2026-07-15 | §19.6 / DOC mandate: implementation steps within scope; Complete only after DOC DoD |
+| 1.0g | 2026-07-15 | DOC v1.2 — local-first, user interaction, Marathi instructions |
 
 **Related:** `docs/OCR-ENSEMBLE-PHASE-CONTRACTS.md`  
 **Readiness package:** `OCR-ENSEMBLE-PRODUCTION-READINESS-REVIEW.md`, `OCR-ENSEMBLE-IMPLEMENTATION-CHECKLIST.md`, `OCR-ENSEMBLE-TEST-PLAN.md`, `OCR-ENSEMBLE-BLUEPRINT-v1.1-ADDENDUM.md`
@@ -755,6 +756,7 @@ Sprint 4 — Knowledge / Learning layer (design + SSOT-governed)
 - Approved Goal ownership (“owns the goal, not the task”)  
 - Definition of Done / In Progress  
 - Escalation Matrix (automatic vs human)  
+- Local-first; minimal user asks; Marathi step instructions when user action needed  
 - Autonomous debugging, testing, regression, evidence, reporting format  
 
 Canonical OCR mandate: use DOC §3.2 with goal text:

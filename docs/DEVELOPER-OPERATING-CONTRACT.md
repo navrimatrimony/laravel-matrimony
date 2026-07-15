@@ -233,18 +233,157 @@ OPTIONS: <A / B if clear>
 
 ---
 
-## 11. Dual-repo and local preference
+## 11. Dual-repo scope
 
-- Obey workspace dual-repo rules: Laravel vs Flutter scopes; no silent cross-repo edits.  
-- Prefer **local** app + DB + logs for development/forensics; use live only for smoke / production validation / external API (WhatsApp, Meta, payments).
+Obey workspace dual-repo rules: Laravel vs Flutter scopes; no silent cross-repo edits. Prefer Laravel-only changes for OCR Ensemble goals unless the Approved Goal explicitly authorizes Flutter.
 
 ---
 
-## 12. Relationship to OCR Ensemble Blueprint §19
+## 12. Local-first Contract (LOCKED)
+
+```text
+Development SHALL be Local-first.
+
+The agent SHALL use the local
+Laravel environment,
+local database,
+local logs,
+local queue
+as the primary source of truth for development,
+debugging, forensics, and benchmarks.
+
+Remote / production server SHALL NOT be used
+for routine debugging or development.
+
+Remote server MAY be used only for:
+• production smoke / verification after pull
+• real WhatsApp / Meta / payment / cron paths
+• explicitly requested live validation
+```
+
+If local env is incomplete (no DB, no Tesseract, queue not runnable), report **Escalation: ops-blocker** with Marathi steps to enable local — do not default to SSH-on-live.
+
+---
+
+## 13. User Interaction Contract (LOCKED)
+
+### 13.1 User responsibilities
+
+The product owner (user) **only** supplies:
+
+1. Biodata files / batches (and ground truth when the agent requests)  
+2. Business decisions when the agent escalates (§5.2)  
+3. Production release approval at the end  
+
+The user is **not** required to dictate OCR strategy, parsing strategy, benchmark strategy, sprint order, or how many intakes to run — the agent decides those from Blueprint + DOC and **asks** for the matching inputs when needed.
+
+### 13.2 Agent responsibilities
+
+The agent **shall** itself:
+
+- Read project, Blueprint, SSOT, and this DOC  
+- Inspect local Laravel, database, logs, queue  
+- Run tests and benchmarks as required by the goal  
+- Deliver toward Definition of Done  
+- Tell the user clearly what to do next when human action is required  
+
+### 13.3 Minimal User Interaction Rule
+
+```text
+The agent SHALL minimize user interaction.
+
+The agent SHALL ask the user
+only for information or resources
+that cannot be obtained locally.
+
+Everything else shall be determined
+from the local project.
+```
+
+```text
+Never ask the user
+what you can determine
+from the local project.
+```
+
+**Forbidden questions** (examples — agent must self-serve):
+
+- How many records are in the local DB?  
+- Did migrations run?  
+- Show me the logs / paste Laravel log  
+- Is the queue running?  
+- What is the current git branch / commit?  
+
+**Allowed asks:** biodata folders, ground-truth labels, secrets the agent must not invent, business GO/NO-GO, production enable.
+
+### 13.4 Biodata / input Contract (OCR and similar)
+
+```text
+The user provides biodata (and GT when asked).
+
+The user does NOT specify OCR / parse / benchmark strategy.
+
+The user does NOT decide intake counts casually.
+
+The agent decides timing and volume from the Blueprint
+and instructs the user in plain Marathi when files are needed.
+
+Examples of agent requests:
+• "आता Batch-01 मध्ये ५० biodata ठेवा."
+• "आता Ground Truth शीट भरा."
+```
+
+Agent **must not invent** fake production biodata as ground truth. Synthetic fixtures are allowed only for automated unit/feature tests inside the repo.
+
+### 13.5 Human Instruction Contract (LOCKED)
+
+Whenever user action is required, instructions **MUST** be written in **simple Marathi (Devanagari)**, assuming a **non-programmer**.
+
+Each user-facing instruction block **MUST** include:
+
+१. कुठे जायचे / कोणती फोल्डर किंवा स्क्रीन  
+२. काय करायचे  
+३. किती करायचे (संख्या / बॅच)  
+४. कधी थांबायचे  
+५. पुढे काय होईल (agent काय करेल)
+
+Avoid technical jargon (queue, tinker, grep, artisan) unless unavoidable — then explain in one plain sentence.
+
+**Good pattern:**
+
+```text
+आता तुम्ही फक्त हे करा.
+
+पायरी १
+"D:\OCR\Batch-01" फोल्डरमध्ये ५० biodata PDF/JPG ठेवा.
+
+पायरी २
+मला फक्त लिहा: "Batch-01 तयार आहे."
+
+पुढे मी स्वतः Local वर OCR, DB, tests, आणि दुरुस्ती करेन.
+तुम्हाला command चालवायचा नाही.
+पुढची सूचना येईपर्यंत थांबा.
+```
+
+**Bad pattern:** “Run `php artisan …` with folder X and paste logs.”
+
+Commit messages and code comments may stay in English; **user-facing** progress/asks stay Marathi when action is required.
+
+---
+
+## 14. Single Active Goal (LOCKED)
+
+- Only **one** Approved Goal active at a time unless the user explicitly stacks goals.  
+- New chat / resume: continue the Active Goal until Complete, Escalation, or user cancels.  
+- Do not reopen closed Phase 4 HTTP forensics for DOB-empty / merge_noop class issues (§19.2 OCR Blueprint) unless a **new** transport regression is proven.
+
+---
+
+## 15. Relationship to OCR Ensemble Blueprint §19
 
 OCR product roadmap and sprint **order** live in `docs/OCR-ENSEMBLE-PIPELINE-BLUEPRINT.md` §19.
 
-**How** those sprints are executed (autonomy, DoD, escalation, evidence) follows **this DOC**.
+**How** those sprints are executed (autonomy, DoD, escalation, evidence, user interaction) follows **this DOC**.
 
 OCR-specific quality gates that remain in the Blueprint (unchanged by DOC):
 
@@ -254,9 +393,24 @@ OCR-specific quality gates that remain in the Blueprint (unchanged by DOC):
 
 ---
 
+## 16. Operating model (summary)
+
+| Authority | Role |
+|-----------|------|
+| **SSOT** | What is correct (business + data) |
+| **Blueprint** | What to build and in what order |
+| **DOC (this file)** | How the agent executes |
+| **Local project** | Operational truth (DB, logs, tests, queue) |
+| **User** | Biodata / GT inputs, escalated decisions, production approval |
+
+No fourth foundational “process” document is required for maturity. Prefer implementation under an Approved Goal.
+
+---
+
 ## Document history
 
 | Version | Date | Change |
 |---------|------|--------|
 | 1.0 | 2026-07-15 | Initial DOC — separated agent execution from SSOT/Blueprint; goal ownership; DoD; escalation; evidence; reporting |
 | 1.1 | 2026-07-15 | Mandate: own all implementation steps within scope; no Complete until DOC DoD fully satisfied |
+| 1.2 | 2026-07-15 | User Interaction / Local-first / Marathi instructions / Minimal ask / Single Active Goal |
