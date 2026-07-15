@@ -170,7 +170,16 @@ test('production name extractor reads English resume Name and biodata-title name
         ]))->toBe('रेखा शिवदास पाटील')
         ->and($extractor->extract([
             'र : कु. प्रतीक्षा दशरथ कचरे. जन्म : २४/०३/१९९९',
-        ]))->toBe('प्रतीक्षा दशरथ कचरे');
+        ]))->toBe('प्रतीक्षा दशरथ कचरे')
+        ->and($extractor->extract([
+            'मुलीचे बां : कु. स्नेहा प्रताप पाटील जन्म तारीख : १९',
+        ]))->toBe('स्नेहा प्रताप पाटील')
+        ->and($extractor->extract([
+            'नाव : सुप्रिया गणेशराव बोबडे फार 9 झज',
+        ]))->toBe('सुप्रिया गणेशराव बोबडे')
+        ->and($extractor->extract([
+            'नाव : मोहित पंढरीनाथ पवाट त्स दुस',
+        ]))->toBe('मोहित पंढरीनाथ पवाट');
 });
 
 test('production field extractor extracts candidates from ocr attempts', function () {

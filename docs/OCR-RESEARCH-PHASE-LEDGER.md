@@ -54,7 +54,7 @@
 | PDF DPI/crop/channel only (`28.pdf`) | **Rejected** | Marathi multipass still preferred garbage |
 | English ordinal date parse (`24th March 1991`) | **Accepted** | Resume-style DOB in raw |
 | Multipass: include `eng`; don’t penalize Latin resumes | **Accepted** | Stops Marathi hallucination winning over English resumes |
-| English resume `Name:` + strip Ms/Mr; biodata-title name lines; `चच.` honorific; garble prefix before `कु.` | **Accepted** | Loop 03 Mode B name recovery (production-general) |
+| Trailing OCR junk after 3-token Marathi names; `मुलीचे बां` OCR for नाव | **Accepted** | Loop 03 residual; production-general |
 
 ---
 

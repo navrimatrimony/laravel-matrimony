@@ -650,6 +650,46 @@ After every accepted or rejected loop, the agent SHALL update:
 
 ---
 
+## 20. Production OCR Release Gate (RECORD — enforce at production enable)
+
+```text
+The OCR system SHALL NOT
+be declared production-ready
+unless:
+
+✓ Product Dashboard shows
+stable improvement
+(compass, not sole proof).
+
+✓ Production cohorts
+(Batch / last-N intakes)
+confirm the improvement
+(anti GT-20 overfitting).
+
+✓ No major regression exists
+on critical fields.
+
+✓ Human approval workload
+is measurably reduced
+(when telemetry exists).
+
+✓ Judge dependency
+is decreasing or justified
+(when Judge is enabled).
+
+✓ Cost remains within
+target limits.
+
+This gate does NOT redefine
+the Product Vision.
+It is the production-enable check
+after Vision work matures (§17–18).
+```
+
+Do **not** stop research loops solely to implement this checklist early. Enforce when seeking production release approval (§5.2).
+
+---
+
 ## Document history
 
 | Version | Date | Change |
@@ -662,3 +702,5 @@ After every accepted or rejected loop, the agent SHALL update:
 | 1.5 | 2026-07-15 | §17 Plateau Rule; §18 Research Phase Completion — loop ≠ goal; multi-approach evidence required |
 | 1.6 | 2026-07-15 | §19 Product Impact First + mandatory Product Metrics Dashboard / Ledger updates each loop |
 | 1.7 | 2026-07-15 | §19.1 Dashboard = compass not success; Product Goal precedence over metrics |
+| 1.8 | 2026-07-15 | §20 Production OCR Release Gate recorded for future production enable |
+| 1.8 | 2026-07-15 | §20 Production OCR Release Gate (record only — enforce at production enable) |

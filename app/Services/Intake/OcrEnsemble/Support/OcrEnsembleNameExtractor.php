@@ -97,8 +97,66 @@ class OcrEnsembleNameExtractor
         } while ($name !== $before);
 
         $name = trim(preg_replace('/\s+/u', ' ', $name) ?? '');
+        $name = $this->trimToLikelyPersonName($name);
 
         return $name === '' ? null : $name;
+    }
+
+    /**
+     * Keep leading person-name tokens; drop trailing OCR junk ("फार 9 झज", "त्स दुस").
+     */
+    private function trimToLikelyPersonName(string $name): string
+    {
+        $tokens = preg_split('/\s+/u', trim($name)) ?: [];
+        if ($tokens === []) {
+            return '';
+        }
+
+        $kept = [];
+        foreach ($tokens as $tok) {
+            $tok = trim($tok, " \t.,;:|");
+            if ($tok === '') {
+                continue;
+            }
+
+            $isDevName = preg_match('/^[\x{0900}-\x{097F}.]+$/u', $tok) === 1;
+            $isLatinName = preg_match('/^[A-Za-z.]{2,}$/', $tok) === 1;
+            $hasDigit = preg_match('/\d/u', $tok) === 1;
+
+            if ($hasDigit) {
+                break;
+            }
+
+            if (! $isDevName && ! $isLatinName) {
+                if (count($kept) >= 2) {
+                    break;
+                }
+
+                continue;
+            }
+
+            // Typical Marathi biodata is 2–3 name tokens; further Devanagari is often OCR tail junk.
+            if (count($kept) >= 3 && $isDevName) {
+                break;
+            }
+
+            // After 3 solid tokens, stop on short trailing OCR syllables.
+            if (count($kept) >= 3 && mb_strlen($tok, 'UTF-8') <= 2) {
+                break;
+            }
+
+            // Mixed script junk after a Devanagari full name
+            if (count($kept) >= 3 && $isLatinName && preg_match('/[\x{0900}-\x{097F}]/u', implode(' ', $kept)) === 1) {
+                break;
+            }
+
+            $kept[] = $tok;
+            if (count($kept) >= 4) {
+                break;
+            }
+        }
+
+        return trim(implode(' ', $kept));
     }
 
     private function stripHtmlAndOcrArtifacts(string $value): string
@@ -131,7 +189,7 @@ class OcrEnsembleNameExtractor
 
     private function valueAfterNameLabel(string $line): ?string
     {
-        if (preg_match('/(?:मुलाचे\s+नां?व|मुलीचे\s+नां?व|वधूचे\s+नां?व|वराचे\s+नां?व|नां?व)\s*(?::\s*-\s*|[:\-：]\s*|[८8]\s*|\s+)\s*(.+)$/ui', $line, $matches) === 1) {
+        if (preg_match('/(?:मुलाचे\s+नां?व|मुलीचे\s+नां?व|वधूचे\s+नां?व|वराचे\s+नां?व|नां?व|मुलाचे\s+बां|मुलीचे\s+बां)\s*(?::\s*-\s*|[:\-：]\s*|[८8]\s*|\s+)\s*(.+)$/ui', $line, $matches) === 1) {
             return $this->stopAtNextCandidateField(trim((string) $matches[1]));
         }
 
@@ -159,8 +217,10 @@ class OcrEnsembleNameExtractor
         foreach ([
             'मुलाचे नांव',
             'मुलाचे नाव',
+            'मुलाचे बां',
             'मुलीचे नांव',
             'मुलीचे नाव',
+            'मुलीचे बां',
             'वधूचे नांव',
             'वधूचे नाव',
             'वराचे नांव',
@@ -318,7 +378,7 @@ class OcrEnsembleNameExtractor
 
     private function hasCandidateNameLabel(string $line): bool
     {
-        if (preg_match('/(?:मुलाचे\s+नां?व|मुलीचे\s+नां?व|वधूचे\s+नां?व|वराचे\s+नां?व)/u', $line) === 1) {
+        if (preg_match('/(?:मुलाचे\s+नां?व|मुलीचे\s+नां?व|वधूचे\s+नां?व|वराचे\s+नां?व|मुलाचे\s+बां|मुलीचे\s+बां)/u', $line) === 1) {
             return true;
         }
 
