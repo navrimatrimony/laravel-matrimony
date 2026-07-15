@@ -69,11 +69,10 @@ Residual Mode A (ranked for Loop 02+):
 
 ## Active improvement cycle (Loop 02+)
 
-1. Measure residual production DOB / critical loss on GT-20 (production multipass).  
-2. Highest impact: **date-band / region OCR** for `D (8)` then harder `28.pdf` raster fidelity.  
-3. Benchmark; keep only measurable uplift; ledger accept/reject.  
-4. Commit + push; continue to next ranked loss.  
-5. Plateau only per DOC §17 after multiple approaches exhausted.
+1. **Done (accept):** English resume path — `28.pdf` recovered (`24th March 1991`).  
+2. **Reject so far on `D (8)`:** bands, color channel, de-blue — OCR still prefers day **24** vs GT **21** (watermark overlap).  
+3. **Next ranked:** watermark/color-layer separation or date-band with stronger filter for overlay biodata; then remasure GT-20 DOB.  
+4. Plateau only per DOC §17 after multiple approaches exhausted.
 
 ---
 
@@ -85,3 +84,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-15 | Glued month-year; PDF raster-OCR fallback (Ghostscript) |
 | 2026-07-15 | GS user-local; ITRANS reject; bare-तारीख; multipass date scoring |
 | 2026-07-15 | Loop 01 Complete; Product Goal In Progress; technique register; Loop 02 date-band pending |
+| 2026-07-15 | Loop 02: reject D8 overlays/bands; accept English resume scoring + ordinal DOB; **28.pdf recovered** |
