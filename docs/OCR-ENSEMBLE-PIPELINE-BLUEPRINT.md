@@ -640,6 +640,8 @@ IntakeApprovalService → MutationService (unchanged)
 | **1.0** | **2026-07-12** | **DESIGN FROZEN** — gender not Sarvam trigger; comparison table only correct-candidate; income+marital_status confirmed; guiding principle; phase order aligned with phase contracts |
 | 1.0a | 2026-07-14 | §13 acceptance checkmarks only (implementation freeze review; design unchanged) |
 | 1.0b | 2026-07-14 | **§19 Post-v1.0 architecture roadmap LOCKED** — Phase 4 transport closed; Sprint 1→4 order (Phase3 forensics → engine eval → optional multi-OCR → knowledge) |
+| 1.0c | 2026-07-15 | **§19.6 Goal-centric autonomous delivery** — one Approved Goal may chain sprints; STOP only SSOT/business/destructive/prod release |
+| 1.0d | 2026-07-15 | §19.6 DoD LOCKED + Escalation Matrix (automatic vs human) + canonical mandate + Sprint 2 dataset blocker |
 
 **Related:** `docs/OCR-ENSEMBLE-PHASE-CONTRACTS.md`  
 **Readiness package:** `OCR-ENSEMBLE-PRODUCTION-READINESS-REVIEW.md`, `OCR-ENSEMBLE-IMPLEMENTATION-CHECKLIST.md`, `OCR-ENSEMBLE-TEST-PLAN.md`, `OCR-ENSEMBLE-BLUEPRINT-v1.1-ADDENDUM.md`
@@ -732,6 +734,149 @@ Sprint 4 — Knowledge / Learning layer (design + SSOT-governed)
 - Google Vision / Azure / AWS Textract as **ensemble voters** — out (cost).
 - Integrating a new OCR into production **without** Sprint 2 GO — forbidden.
 - Replacing Judge with full-page paid vision as default OCR — forbidden.
+
+### 19.6 Goal-centric autonomous delivery (LOCKED — 2026-07-15)
+
+> **Purpose:** ChatGPT↔Cursor ping-pong आणि Sprint-दरम्यान जास्त STOP/approval बंद करणे.  
+> **Does not weaken:** Sprint 2 benchmark-before-production-OCR, Learning-after-stable-OCR, PHASE-5 SSOT, no destructive DB.
+
+#### Architecture vs execution
+
+| Layer | Rule |
+|-------|------|
+| **Blueprint** | Still has Sprints 1→4 (§19.3) — order fixed |
+| **Agent / Cursor mandate** | Receives **one Approved Goal**, not four separate “start Sprint N” prompts |
+| **v1.0 one-phase rule** | Remains for **named Phase 1–5 product phases**. Under an **Approved Goal**, dependent **post-v1.0 sprints** may chain automatically |
+
+#### Goal-Based Execution Law
+
+```
+One Approved Goal
+  may internally execute
+  multiple dependent sprints (Sprint 1 → 2 → 3 → 4)
+  without intermediate human approval,
+  when each sprint’s Definition of Done is met.
+```
+
+#### Canonical Approved Goal mandate (copy/paste)
+
+```text
+Approved Goal:
+
+Achieve Blueprint §19 Program Completion
+according to Blueprint §19.6.
+
+The agent shall autonomously execute all dependent
+Sprints (1→4) in sequence.
+
+Do not stop between sprints.
+
+Escalate ONLY for:
+
+• SSOT conflict
+• Approved business-rule decision
+• Destructive migration
+• Production release authorization
+• External operational blocker
+  (e.g. required benchmark dataset unavailable)
+
+Goal is complete only after the
+Definition of Done is fully satisfied.
+```
+
+#### Autonomous Sprint Progression
+
+Agent **shall** start the next sprint when the previous sprint DoD (§19.4) is satisfied — including required tests / evidence for that sprint.
+
+Do **not** wait for a new chat prompt solely to unlock Sprint N+1.
+
+#### Escalation Matrix (LOCKED)
+
+**Automatic (no human stop):**
+
+- implementation decisions inside Approved Goal scope  
+- refactoring required for the goal  
+- bug fixes / test fixes  
+- benchmark **execution** (running engines, writing raw scores)  
+- documentation updates required by DoD  
+
+**Human approval required (STOP / escalate):**
+
+| Class | Examples |
+|-------|----------|
+| **SSOT / PHASE-5 conflict** | Mutation bypass, `raw_ocr_text` mutate, dual source of truth; **any proposed SSOT rule change** |
+| **Approved business-rule decision** | Pricing / entitlement / product policy; **borderline** benchmark GO/NO-GO; new product scope outside §19 |
+| **Destructive migration** | drop / truncate / wipe — forbidden unless user explicitly orders that action |
+| **Production release** | Enabling production `intake_ocr_ensemble_enabled` / live customer rollout |
+| **External operational blocker** | Required Sprint 2 biodata + ground-truth dataset unavailable (see below) |
+
+**Not** stop reasons: “Sprint 1 done, please approve Sprint 2”; routine refactors; ChatGPT micro-prompts; clear-cut engine GO when metrics meet pre-agreed thresholds in the Sprint 2 report template.
+
+#### Definition of Done — Goal SHALL NOT be Complete unless (LOCKED)
+
+Machine-readable gate. **Missing any item ⇒ status = In Progress** (never “mostly done” / “90%”).
+
+```text
+Goal SHALL NOT be reported as Complete unless:
+
+✓ Scope implemented (Sprint 1→4 DoD per §19.4, subject to Sprint 2 GO for Sprint 3 engines)
+✓ All automated tests for touched areas pass
+✓ No known regression introduced
+✓ Logs reviewed (no new critical errors attributable to this goal)
+✓ Manual UI verification completed where UI changed; otherwise N/A noted
+✓ Blueprint / SSOT compliance verified
+✓ Required documentation updated
+✓ Evidence attached (test results, benchmark report, screenshots where applicable)
+
+Otherwise status = In Progress.
+```
+
+**Sprint complete ≠ Program complete.** Claiming “Complete” without the checklist above is a process violation.
+
+#### Mandatory self-verification (each sprint, before claiming that sprint’s DoD)
+
+Agent must evidence, as applicable to that sprint:
+
+1. Automated tests (focused suite for touched area)  
+2. Logs / DB forensics when debugging claims are made  
+3. Benchmark artifacts when Sprint 2  
+4. No regression on prior ensemble phases (smoke or targeted)  
+5. Manual UI check only when UI changed (e.g. comparison columns)  
+6. Written short evidence (commit body / checklist note — not a new micro-chat loop)
+
+#### Program Complete checklist (rollup)
+
+- [ ] Definition of Done above fully satisfied  
+- [ ] Sprint 1–4 §19.4 items met (Sprint 3 engines only if Sprint 2 GO)  
+- [ ] Sprint 2 GO/NO-GO written  
+- [ ] No open SSOT conflict  
+- [ ] Staging smoke / metrics where required by checklist  
+- [ ] Production flag **ready** (actual enable = Human → production release)
+
+#### Non-change (quality gates keep)
+
+```
+Second OCR (or 3rd/4th)
+  → Benchmark (Sprint 2)
+  → Written GO
+  → Production (Sprint 3)
+```
+
+```
+OCR path stable
+  → Benchmark / multi-OCR as GO
+  → Then Learning design+implement (Sprint 4)
+```
+
+Learning must not precede a stable ensemble; bad aliases poison the pipeline.
+
+#### Sprint 2 dataset (LOCKED — quality gate, not optional)
+
+Sprint 2 **requires** a real Marathi biodata + ground-truth set (or access to an existing golden dataset).
+
+- Dataset missing → **External operational blocker** (escalate).  
+- **Do not** skip, weaken, or omit the benchmark because the dataset is unavailable.  
+- Agent proceeds autonomously once the data path exists.
 
 ---
 

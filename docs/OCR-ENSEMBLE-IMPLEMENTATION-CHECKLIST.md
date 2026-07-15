@@ -283,15 +283,17 @@ Next Phase only
 
 ## Post-v1.0 (next work — locked order)
 
-Authority: **`OCR-ENSEMBLE-PIPELINE-BLUEPRINT.md` §19** (2026-07-14).
+Authority: **`OCR-ENSEMBLE-PIPELINE-BLUEPRINT.md` §19** (2026-07-14) + **§19.6** goal-centric execution (2026-07-15).
+
+**Execution mode:** Prefer **one Approved Goal** (Program Completion §19 / mandate in §19.6). Agent may run Sprint 1→4 continuously. Escalate only per §19.6 Escalation Matrix. Report **Complete** only when §19.6 Definition of Done is fully satisfied (else **In Progress**).
 
 | Sprint | Name | Production code? | Status |
 |--------|------|------------------|--------|
 | — | Phase 4 Judge HTTP / soft-fail / merge_noop forensics | Done | **CLOSED** (#771 Judge 200) |
-| 1 | Phase 3 validator / DOB candidate forensics | Forensic first; fixes separate | **NEXT** |
-| 2 | OCR Engine Evaluation (Tesseract / PaddleOCR v5 / EasyOCR / DocTR) | **Benchmark only** | After Sprint 1 |
-| 3 | Multi-OCR vote in production | Only if Sprint 2 GO | After Sprint 2 |
-| 4 | Knowledge / Learning layer (SSOT-governed) | Design then implement | After Sprint 3 |
+| 1 | Phase 3 validator / DOB candidate forensics | Forensic first; fixes separate | **NEXT** (under Approved Goal) |
+| 2 | OCR Engine Evaluation (Tesseract / PaddleOCR v5 / EasyOCR / DocTR) | **Benchmark only** | Auto after Sprint 1 DoD |
+| 3 | Multi-OCR vote in production | Only if Sprint 2 GO | Auto after GO |
+| 4 | Knowledge / Learning layer (SSOT-governed) | Design then implement | Auto after Sprint 3 DoD |
 
 Still out of casual scope:
 
@@ -312,3 +314,5 @@ Still out of casual scope:
 | 1.3 | 2026-07-14 | Phase 4.5 + Phase 5a–5g — READY FOR STAGING; checklist updates |
 | 1.4 | 2026-07-14 | v1.0 freeze review — Phase 3/5 checklist alignment; P5-B1/B2 closed; suite 196/1032 |
 | 1.5 | 2026-07-14 | Post-v1.0 locked sprint order (§19 blueprint) — Phase 4 closed; Sprint 1 next |
+| 1.6 | 2026-07-15 | §19.6 goal-centric autonomous delivery — chain sprints under one Approved Goal |
+| 1.7 | 2026-07-15 | §19.6 DoD + Escalation Matrix refinement |
