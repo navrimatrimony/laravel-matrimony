@@ -37,6 +37,21 @@ laravel-matrimony-master 31Dec25.md
 /storage/app/intake-golden-datasets/*.jsonl
 /storage/app/intake-golden-datasets/*.json
 
+# OCR ensemble local biodata batches (PII images/PDFs; folder markers may be committed)
+/storage/app/ocr-dev-batches/**/*.pdf
+/storage/app/ocr-dev-batches/**/*.PDF
+/storage/app/ocr-dev-batches/**/*.jpg
+/storage/app/ocr-dev-batches/**/*.jpeg
+/storage/app/ocr-dev-batches/**/*.png
+/storage/app/ocr-dev-batches/**/*.webp
+/storage/app/ocr-dev-batches/**/*.tif
+/storage/app/ocr-dev-batches/**/*.tiff
+/storage/app/ocr-dev-batches/**/*.JPG
+/storage/app/ocr-dev-batches/**/*.JPEG
+/storage/app/ocr-dev-batches/**/*.PNG
+/storage/app/ocr-dev-batches/**/*.WEBP
+/storage/app/ocr-dev-batches/**/ground-truth/**
+
 # Bundled NudeNet FastAPI service (local venv / bytecode)
 /nudnet-api/.venv/
 /nudnet-api/__pycache__/

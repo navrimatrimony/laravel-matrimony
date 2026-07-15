@@ -139,6 +139,8 @@ Otherwise status = In Progress.
 - Bug fixes / test fixes  
 - Running benchmarks and recording scores  
 - Docs required by DoD  
+- **Logical git commits** at stable checkpoints (see §5.4)  
+- **Batch / dataset / ground-truth / benchmark sizes** for the active sprint (see §13.6)
 
 ### 5.2 Human approval required (STOP / escalate)
 
@@ -147,14 +149,36 @@ Otherwise status = In Progress.
 | **SSOT conflict** | Mutation bypass, mutate immutable fields, dual SoT; **any proposed SSOT change** |
 | **Approved business-rule decision** | Pricing, entitlements, product policy; **borderline** GO/NO-GO; scope outside the Approved Goal |
 | **Destructive migration** | `DROP` / `TRUNCATE` / wipe — forbidden unless user explicitly orders that exact action |
-| **Production release** | Enabling production flags / live customer rollout |
+| **Production release** | Enabling production flags / live customer rollout; **git push to production deploy path only when release authorized** |
 | **External operational blocker** | Required dataset, secrets, or infra the agent cannot create (e.g. OCR golden set missing) |
 
 ### 5.3 Not escalations
 
 - “Please approve starting the next sprint”  
+- “Please approve this commit” / “Shall I commit?”  
 - Re-asking ChatGPT for the next micro-prompt  
 - Clear GO when metrics meet pre-agreed thresholds in a benchmark report  
+
+### 5.4 Git commits during an Approved Goal (LOCKED)
+
+```text
+The agent SHALL create logical commits
+during implementation whenever a stable
+checkpoint is reached.
+
+The agent SHALL NOT wait for user approval
+before committing.
+
+Only production release requires approval.
+```
+
+Rules:
+
+- Commit when a sprint milestone, forensic+fix set, or doc contract is stable and tests for that slice pass.  
+- Prefer small logical commits over one mega-commit.  
+- Do **not** ask “commit हवा असेल तर सांगा” mid-goal.  
+- Do **not** `git push` to trigger production deploy without production-release approval (§5.2). Pushing a feature branch for backup/PR is allowed when useful; production flag / live enable is not.  
+- Never commit secrets, `.env`, or raw PII biodata batches (see §13.7).
 
 ---
 
@@ -339,35 +363,65 @@ Agent **must not invent** fake production biodata as ground truth. Synthetic fix
 
 Whenever user action is required, instructions **MUST** be written in **simple Marathi (Devanagari)**, assuming a **non-programmer**.
 
-Each user-facing instruction block **MUST** include:
+User-facing instruction block **MUST** use this locked shape (and nothing more):
 
-१. कुठे जायचे / कोणती फोल्डर किंवा स्क्रीन  
-२. काय करायचे  
-३. किती करायचे (संख्या / बॅच)  
-४. कधी थांबायचे  
-५. पुढे काय होईल (agent काय करेल)
+```text
+तुम्ही आता फक्त हे करा.
+
+१. कुठे जायचे.
+२. काय ठेवायचे.   (किंवा: काय करायचे.)
+३. किती ठेवायचे.
+४. पूर्ण झाल्यावर मला नेमके काय लिहायचे.
+५. पुढे मी काय करणार आहे.
+
+यापेक्षा जास्त माहिती देऊ नका.
+```
 
 Avoid technical jargon (queue, tinker, grep, artisan) unless unavoidable — then explain in one plain sentence.
 
-**Good pattern:**
-
-```text
-आता तुम्ही फक्त हे करा.
-
-पायरी १
-"D:\OCR\Batch-01" फोल्डरमध्ये ५० biodata PDF/JPG ठेवा.
-
-पायरी २
-मला फक्त लिहा: "Batch-01 तयार आहे."
-
-पुढे मी स्वतः Local वर OCR, DB, tests, आणि दुरुस्ती करेन.
-तुम्हाला command चालवायचा नाही.
-पुढची सूचना येईपर्यंत थांबा.
-```
-
-**Bad pattern:** “Run `php artisan …` with folder X and paste logs.”
+**Bad pattern:** “Run `php artisan …` with folder X and paste logs.”  
+**Bad pattern:** Asking the user to invent folder names, batch sizes, or ground-truth counts.
 
 Commit messages and code comments may stay in English; **user-facing** progress/asks stay Marathi when action is required.
+
+### 13.6 Batch size / dataset ownership (LOCKED)
+
+```text
+The agent determines
+batch size, dataset size, ground truth size,
+and benchmark size according to the current sprint.
+
+The user SHALL NOT decide dataset quantities.
+```
+
+The agent tells the user the numbers in the Marathi five-step block.  
+Do not ask “50 किंवा 100?” — decide from Blueprint + sprint stage, then instruct.
+
+### 13.7 Folder ownership + Sprint dataset contract (LOCKED)
+
+**Canonical local inbox (OCR / biodata):**
+
+```text
+storage/app/ocr-dev-batches/Batch-001
+storage/app/ocr-dev-batches/Batch-002
+…
+```
+
+- The agent owns folder names (`Batch-001`, …). The user must not invent alternate folder names.  
+- Raw biodata files are **local-only PII** — gitignore; never commit images/PDFs.  
+- Tracker / README / empty dir markers may be committed.
+
+**Sprint 2 — Batch-001 (agent-owned defaults):**
+
+| Item | Agent decision |
+|------|----------------|
+| Size | **50** Marathi biodata files |
+| Types | Mixed PDF / JPG / PNG |
+| Quality | Real production mix: old scans, mobile photos, poor light, rotated pages, duplicate surnames, different layouts, handwritten corrections if available |
+| Ground truth at drop | **Not required** for all 50 |
+| Ground truth later | Agent will request a **subset** (e.g. 20) only when the sprint needs labels |
+
+When files are missing → Escalation class **ops-blocker**, with the five-step Marathi block only.
 
 ---
 
@@ -414,3 +468,4 @@ No fourth foundational “process” document is required for maturity. Prefer i
 | 1.0 | 2026-07-15 | Initial DOC — separated agent execution from SSOT/Blueprint; goal ownership; DoD; escalation; evidence; reporting |
 | 1.1 | 2026-07-15 | Mandate: own all implementation steps within scope; no Complete until DOC DoD fully satisfied |
 | 1.2 | 2026-07-15 | User Interaction / Local-first / Marathi instructions / Minimal ask / Single Active Goal |
+| 1.3 | 2026-07-15 | §5.4 mid-goal commits without ask; §13.5–13.7 batch/folder/dataset ownership + Sprint 2 Batch-001 contract |
