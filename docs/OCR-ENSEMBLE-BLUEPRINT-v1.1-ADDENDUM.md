@@ -92,3 +92,4 @@ Do not reopen Phase 4 HTTP debugging for empty DOB / `merge_noop` class issues.
 | 1.1 | 2026-07-12 | Clarifications from readiness review |
 | 1.1a | 2026-07-14 | A12 — pointer to blueprint §19 locked post-v1.0 roadmap |
 | 1.1b | 2026-07-15 | A13 — pointer to §19.6 goal-centric autonomous delivery |
+| 1.1c | 2026-07-15 | A13 — DOC is execution authority; Blueprint keeps OCR product gates |
