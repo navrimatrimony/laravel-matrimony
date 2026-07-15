@@ -290,8 +290,8 @@ Authority: **`OCR-ENSEMBLE-PIPELINE-BLUEPRINT.md` §19** (2026-07-14) + **§19.6
 | Sprint | Name | Production code? | Status |
 |--------|------|------------------|--------|
 | — | Phase 4 Judge HTTP / soft-fail / merge_noop forensics | Done | **CLOSED** (#771 Judge 200) |
-| 1 | Phase 3 validator / DOB candidate forensics | Forensic first; fixes separate | **NEXT** (under Approved Goal) |
-| 2 | OCR Engine Evaluation (Tesseract / PaddleOCR v5 / EasyOCR / DocTR) | **Benchmark only** | Auto after Sprint 1 DoD |
+| 1 | Phase 3 validator / DOB candidate forensics | Forensic + extract/normalize fixes | **DONE** (2026-07-15) — see `OCR-ENSEMBLE-SPRINT-1-DOB-FORENSICS.md` |
+| 2 | OCR Engine Evaluation (Tesseract / PaddleOCR v5 / EasyOCR / DocTR) | **Benchmark only** | **NEXT** — inbox `storage/app/ocr-dev-batches/Batch-001` (50 files; GT subset later per DOC §13.6–13.7) |
 | 3 | Multi-OCR vote in production | Only if Sprint 2 GO | Auto after GO |
 | 4 | Knowledge / Learning layer (SSOT-governed) | Design then implement | Auto after Sprint 3 DoD |
 
@@ -317,4 +317,5 @@ Still out of casual scope:
 | 1.6 | 2026-07-15 | §19.6 goal-centric autonomous delivery — chain sprints under one Approved Goal |
 | 1.7 | 2026-07-15 | §19.6 DoD + Escalation Matrix refinement |
 | 1.8 | 2026-07-15 | Point execution to DEVELOPER-OPERATING-CONTRACT.md |
+| 1.9 | 2026-07-15 | Sprint 1 DOB forensics + Phase 3 extract fixes DONE; Sprint 2 NEXT |
 | 1.9 | 2026-07-15 | DOC v1.2 local-first + Marathi user interaction |

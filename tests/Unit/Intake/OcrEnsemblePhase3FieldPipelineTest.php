@@ -169,6 +169,19 @@ test('field validator treats missing gender as soft missing not fatal error shap
         ->and($result['final'])->toBeNull();
 });
 
+test('field validator missing dob uses dob_missing detail not dob_invalid_format', function () {
+    $validator = app(OcrEnsembleFieldValidator::class);
+
+    $result = $validator->validateField('date_of_birth', [
+        OcrEnsemblePhase3Constants::ENGINE_LARAVEL_NATIVE_OCR => null,
+    ]);
+
+    expect($result['passed'])->toBeFalse()
+        ->and($result['code'])->toBe('no_eligible_candidate')
+        ->and($result['detail'])->toBe('dob_missing')
+        ->and($result['final'])->toBeNull();
+});
+
 test('field validator accepts valid gender enum values', function () {
     $validator = app(OcrEnsembleFieldValidator::class);
 

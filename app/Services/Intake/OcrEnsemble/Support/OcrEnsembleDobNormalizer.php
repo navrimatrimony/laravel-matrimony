@@ -10,6 +10,29 @@ use Illuminate\Support\Carbon;
  */
 class OcrEnsembleDobNormalizer
 {
+    /**
+     * Fuzzy Marathi / English DOB labels (Tesseract often corrupts leading ज / birth glyphs).
+     */
+    public const DOB_LABEL_PATTERN = '/(?:[जअलग]|ज्)?\.?\s*न्म\s*तार्[ीईि]?ख|जन्मतारीख|जन्म\s*दिनांक|जन्मदि|DOB|date\s*of\s*birth/ui';
+
+    /**
+     * Common single-glyph OCR digit confusions (year recovery only).
+     *
+     * @var array<string, list<string>>
+     */
+    private const YEAR_DIGIT_ALTS = [
+        '0' => ['8', '9', '6'],
+        '1' => ['7', '4'],
+        '2' => ['7', '3'],
+        '3' => ['9', '8', '5'],
+        '4' => ['1', '9'],
+        '5' => ['6', '3', '8'],
+        '6' => ['5', '8', '0'],
+        '7' => ['1', '2'],
+        '8' => ['3', '0', '9', '6'],
+        '9' => ['3', '8', '4', '0'],
+    ];
+
     public function normalize(?string $value): ?string
     {
         if ($value === null || trim($value) === '') {
@@ -39,7 +62,7 @@ class OcrEnsembleDobNormalizer
     public function normalizeFromLines(array $lines): ?string
     {
         foreach ($lines as $line) {
-            if (preg_match('/जन्म\s*तारीख|जन्मतारीख|जन्म\s*दिनांक|DOB|date\s*of\s*birth/ui', $line) !== 1) {
+            if (preg_match(self::DOB_LABEL_PATTERN, $line) !== 1) {
                 continue;
             }
 
@@ -68,6 +91,11 @@ class OcrEnsembleDobNormalizer
         }
 
         return null;
+    }
+
+    public function lineLooksLikeDobLabel(string $line): bool
+    {
+        return preg_match(self::DOB_LABEL_PATTERN, $line) === 1;
     }
 
     private function prepareDateText(string $value): string
@@ -104,9 +132,63 @@ class OcrEnsembleDobNormalizer
             if ($iso !== null) {
                 return $iso;
             }
+
+            $recovered = $this->recoverYearDigitOcr($day, $month, $year);
+            if ($recovered !== null) {
+                return $recovered;
+            }
         }
 
         return null;
+    }
+
+    /**
+     * When calendar date is valid but age is out of band, try one-glyph year OCR fixes
+     * (e.g. 1938 → 1998, 1396 → 1996). Does not invent a date without a parsed triple.
+     */
+    private function recoverYearDigitOcr(int $day, int $month, int $year): ?string
+    {
+        if ($year < 1000 || $year > 2100) {
+            return null;
+        }
+
+        if (! checkdate($month, $day, $year)) {
+            return null;
+        }
+
+        $yearDigits = str_pad((string) $year, 4, '0', STR_PAD_LEFT);
+        $candidates = [];
+
+        for ($i = 0; $i < 4; $i++) {
+            $digit = $yearDigits[$i];
+            foreach (self::YEAR_DIGIT_ALTS[$digit] ?? [] as $alt) {
+                $try = $yearDigits;
+                $try[$i] = $alt;
+                $tryYear = (int) $try;
+                $iso = $this->isoDateIfCandidateAge($day, $month, $tryYear);
+                if ($iso === null) {
+                    continue;
+                }
+                $age = Carbon::createFromDate($tryYear, $month, $day)->age;
+                $candidates[$iso] = [
+                    'iso' => $iso,
+                    'age' => $age,
+                    'distance_from_28' => abs($age - 28),
+                ];
+            }
+        }
+
+        if ($candidates === []) {
+            return null;
+        }
+
+        uasort($candidates, static function (array $a, array $b): int {
+            return $a['distance_from_28'] <=> $b['distance_from_28'];
+        });
+
+        $best = reset($candidates);
+
+        return is_array($best) ? (string) $best['iso'] : null;
     }
 
     private function isoDateIfCandidateAge(int $day, int $month, int $year): ?string

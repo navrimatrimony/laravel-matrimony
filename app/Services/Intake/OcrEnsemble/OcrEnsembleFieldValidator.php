@@ -268,7 +268,8 @@ final class OcrEnsembleFieldValidator implements OcrEnsembleFieldValidatorInterf
         return match ($fieldKey) {
             'gender' => 'gender_not_found',
             'primary_contact_number' => 'mobile_regex_invalid',
-            'date_of_birth' => 'dob_invalid_format',
+            // Missing candidate ≠ format failure. Keep dob_invalid_format for validateDob() only.
+            'date_of_birth' => 'dob_missing',
             default => 'no_valid_candidate_after_validator',
         };
     }

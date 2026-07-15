@@ -72,6 +72,40 @@ test('production dob normalizer parses dd/mm/yyyy and recovers ocr digit substit
         ->and($normalizer->normalize('15-08-1998'))->toBe('1998-08-15');
 });
 
+test('production dob normalizer recovers fuzzy जन्म label and year glyph ocr errors', function () {
+    $normalizer = app(OcrEnsembleDobNormalizer::class);
+
+    // Intake #460-class: ज → अ corruption + 9→3 in year
+    expect($normalizer->normalizeFromLines([
+        'अन्म तारीख > 24/10/1938 अन्म वेळ + रात्री 09 वा.45 मि',
+    ]))->toBe('1998-10-24');
+
+    // Intake #472-class: heavy label garble but date present; year 1396 → 1996
+    expect($normalizer->normalize('02/10/1396'))->toBe('1996-10-02');
+
+    // Clean label still works
+    expect($normalizer->normalizeFromLines([
+        'जन्म तारीख : 04/01/1992',
+    ]))->toBe('1992-01-04');
+});
+
+test('production field extractor recovers dob from corrupted जन्म label line', function () {
+    $text = <<<'TXT'
+मुलाचे नाव : कु. प्रौती राजेंद्र पाटील
+अन्म तारीख > 24/10/1938 अन्म वेळ + रात्री 09 वा.45 मि
+मोबाईल : 9145206745
+धर्म : Hindu
+जात : Maratha
+TXT;
+
+    $dto = app(OcrEnsembleFieldExtractor::class)->extractFromText(
+        $text,
+        OcrEnsemblePhase3Constants::ENGINE_LARAVEL_NATIVE_OCR,
+    );
+
+    expect($dto->field('date_of_birth'))->toBe('1998-10-24');
+});
+
 test('production name extractor tolerates ocr text with no candidate name', function () {
     $extractor = app(OcrEnsembleNameExtractor::class);
     $lines = [
