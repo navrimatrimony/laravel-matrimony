@@ -31,6 +31,7 @@ use App\Services\Intake\BulkIntakeWhatsAppConsentService;
 use App\Services\Intake\BulkIntakeWhatsAppRegistrationConversationService;
 use App\Services\Intake\IntakeOcrEnsemblePhase5Service;
 use App\Services\Intake\IntakeOwnerAssignmentService;
+use App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleComparisonEvidenceLoaderInterface;
 use App\Services\Intake\OcrEnsemble\OcrEnsembleBulkListBadgePresenter;
 use App\Support\MobileNumber;
 use Illuminate\Http\Request;
@@ -486,6 +487,7 @@ class AdminBulkIntakeController extends Controller
         BulkIntakeBatchItem $bulkIntakeBatchItem,
         BulkIntakeCandidateCorrectionService $correctionService,
         IntakeOcrEnsemblePhase5Service $phase5Service,
+        OcrEnsembleComparisonEvidenceLoaderInterface $evidenceLoader,
     ) {
         abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
 
@@ -496,6 +498,7 @@ class AdminBulkIntakeController extends Controller
         /** @var \App\Models\BiodataIntake $intake */
         $intake = $correction['intake'];
         $comparisonResult = $phase5Service->buildComparisonForIntake($intake);
+        $ocrAttemptSummaries = $evidenceLoader->loadForIntake($intake)->attemptSummaries;
 
         return view('admin.bulk-intakes.correct-candidate', [
             'batch' => $bulkIntakeBatch,
@@ -509,6 +512,7 @@ class AdminBulkIntakeController extends Controller
             'canSave' => $correction['can_save'],
             'correctionProfile' => $correction['correction_profile'] ?? null,
             'comparisonResult' => $comparisonResult,
+            'ocrAttemptSummaries' => $ocrAttemptSummaries,
         ]);
     }
 

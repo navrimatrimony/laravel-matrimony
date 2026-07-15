@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
+use App\Models\BulkIntakeBatchItem;
 use App\Models\ConflictRecord;
 use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
@@ -389,6 +390,23 @@ class AdminIntakeController extends Controller
         $adminQualitySignals = $this->adminQualitySignals($intake);
         $adminRoutingDryRun = $this->adminRoutingDryRun($intake);
 
+        $ocrEnsembleCorrectCandidate = null;
+        $bulkLinkedItem = BulkIntakeBatchItem::query()
+            ->where('biodata_intake_id', $intake->id)
+            ->orderByDesc('id')
+            ->first(['id', 'bulk_intake_batch_id', 'item_sequence']);
+        if ($bulkLinkedItem instanceof BulkIntakeBatchItem) {
+            $ocrEnsembleCorrectCandidate = [
+                'batch_id' => (int) $bulkLinkedItem->bulk_intake_batch_id,
+                'item_id' => (int) $bulkLinkedItem->id,
+                'item_sequence' => (int) $bulkLinkedItem->item_sequence,
+                'url' => route('admin.bulk-intakes.items.correct-candidate', [
+                    'bulkIntakeBatch' => (int) $bulkLinkedItem->bulk_intake_batch_id,
+                    'bulkIntakeBatchItem' => (int) $bulkLinkedItem->id,
+                ]),
+            ];
+        }
+
         return view('admin.intake.show', compact(
             'intake',
             'showAdminReextractAction',
@@ -414,6 +432,7 @@ class AdminIntakeController extends Controller
             'adminReviewSnapshotEditor',
             'adminQualitySignals',
             'adminRoutingDryRun',
+            'ocrEnsembleCorrectCandidate',
         ));
     }
 

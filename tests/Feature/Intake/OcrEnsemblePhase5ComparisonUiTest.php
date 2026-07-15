@@ -134,6 +134,19 @@ function phase5fCorrectCandidateUrl(BulkIntakeBatch $batch, BulkIntakeBatchItem 
     return route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]);
 }
 
+test('biodata intake show links to correct candidate when bulk-linked', function () {
+    $admin = phase5fAdmin();
+    $batch = phase5fBatch($admin);
+    $intake = phase5fIntake();
+    $item = phase5fItem($batch, $intake);
+
+    $this->actingAs($admin)
+        ->get(route('admin.biodata-intakes.show', $intake))
+        ->assertOk()
+        ->assertSee('data-testid="intake-ocr-ensemble-link"', false)
+        ->assertSee(route('admin.bulk-intakes.items.correct-candidate', [$batch, $item]), false);
+});
+
 test('resolved comparison page renders table with highlighted final', function () {
     phase5fEnableGate();
     $admin = phase5fAdmin();
@@ -164,7 +177,10 @@ test('resolved comparison page renders table with highlighted final', function (
         ->assertSee('data-row-count="16"', false)
         ->assertSee('data-testid="ocr-comparison-row-religion"', false)
         ->assertSee('data-testid="ocr-comparison-final-highlight"', false)
-        ->assertSee('Hindu', false);
+        ->assertSee('Hindu', false)
+        ->assertSee('data-testid="ocr-attempt-raw-transcripts"', false)
+        ->assertSee('data-testid="ocr-attempt-raw-0"', false)
+        ->assertSee('tesseract ui evidence', false);
 });
 
 test('empty comparison page shows empty notice and canonical rows', function () {

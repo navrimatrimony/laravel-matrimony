@@ -96,6 +96,7 @@
             'intake' => $intake,
             'comparisonResult' => $comparisonResult,
             'embedded' => true,
+            'ocrAttemptSummaries' => $ocrAttemptSummaries ?? [],
         ])
     </section>
 

@@ -73,4 +73,8 @@
             'isEmptyOutcome' => $comparisonResult->wasEmpty(),
         ])
     @endif
+
+    @include('admin.intake.partials.ocr-attempt-raw-transcripts', [
+        'ocrAttemptSummaries' => $ocrAttemptSummaries ?? [],
+    ])
 </div>

@@ -77,6 +77,14 @@
         <div>
             <h1 class="text-2xl font-bold text-gray-900">Intake #{{ $intake->id }}</h1>
             <p class="text-gray-600 text-sm mt-1">Review parsed biodata — start with the <strong class="font-semibold text-indigo-700">Parse review</strong> tab to spot mistakes.</p>
+            @if (! empty($ocrEnsembleCorrectCandidate['url']))
+                <p class="mt-2 text-sm" data-testid="intake-ocr-ensemble-link">
+                    <a href="{{ $ocrEnsembleCorrectCandidate['url'] }}"
+                       class="font-medium text-indigo-700 hover:underline">
+                        Open OCR comparison + Raw OCR (Correct candidate · item #{{ $ocrEnsembleCorrectCandidate['item_sequence'] ?? '—' }})
+                    </a>
+                </p>
+            @endif
         </div>
         <a href="{{ route('admin.biodata-intakes.index') }}" class="text-sm text-indigo-700 hover:text-indigo-900 underline">← Back to intakes</a>
     </div>

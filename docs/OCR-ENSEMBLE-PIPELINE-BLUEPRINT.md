@@ -645,6 +645,7 @@ IntakeApprovalService → MutationService (unchanged)
 | 1.0e | 2026-07-15 | §19.6 points to `DEVELOPER-OPERATING-CONTRACT.md` for execution; OCR product gates remain here |
 | 1.0f | 2026-07-15 | §19.6 / DOC mandate: implementation steps within scope; Complete only after DOC DoD |
 | 1.0g | 2026-07-15 | DOC v1.2 — local-first, user interaction, Marathi instructions |
+| 1.0h | 2026-07-15 | **§20 OCR Research Vision** — product goal beyond §19 sprints; Sprint ≠ Vision Complete |
 
 **Related:** `docs/OCR-ENSEMBLE-PHASE-CONTRACTS.md`  
 **Readiness package:** `OCR-ENSEMBLE-PRODUCTION-READINESS-REVIEW.md`, `OCR-ENSEMBLE-IMPLEMENTATION-CHECKLIST.md`, `OCR-ENSEMBLE-TEST-PLAN.md`, `OCR-ENSEMBLE-BLUEPRINT-v1.1-ADDENDUM.md`
@@ -780,4 +781,114 @@ Contract is fully satisfied.
 
 ---
 
-*End of blueprint v1.0 + §19 post-v1.0 locked roadmap — implementation per phase contracts + this §19 order.*
+*End of blueprint v1.0 + §19 post-v1.0 locked roadmap — §20 OCR Research Vision extends beyond Sprint 1–4.*
+
+---
+
+## 20. OCR Research Vision (LOCKED — 2026-07-15)
+
+> **Status:** APPROVED product goal — **R&D / expand Blueprint; does not replace §19**.  
+> **Clarification:** §19 Sprint 1–4 **architecture milestones** ≠ **Product OCR Vision complete**.
+
+### 20.1 Product objective (not engine shopping)
+
+```text
+Find or Build the best OCR pipeline
+for Marathi + Devanagari + English biodata.
+
+Objective is NOT only "choose among vendors."
+Objective IS "highest practical text extraction
+accuracy for this product," including research,
+training, preprocessing, post-processing,
+ensemble, and lexicon correction.
+```
+
+Canonical pipeline vision (unchanged intent):
+
+```text
+Image → Best preprocessing → Multiple OCR → Compare → Vote
+  → Judge (minimum) → Structured extraction → Human approval
+  → Learning → Smarter next OCR → Sarvam cost minimum → Production
+```
+
+### 20.2 Relationship to §19
+
+| Layer | Meaning |
+|-------|---------|
+| §19 Sprint 1–4 | Forensic freeze, benchmark gates, optional multi-OCR, knowledge design |
+| Sprint 2 NO-GO | Binds **that** engine vintage — **not** a ban on future research |
+| Sprint 3 skipped | No production second OCR **yet** — research may still prototype offline |
+| §20 Research Phase | **Continues** until meaningful accuracy gains plateau within practical effort |
+
+Do **not** rewrite §19 order. Do **not** reverse Sprint 2 NO-GO into silent production GO without a **new** benchmark GO report.
+
+### 20.3 Research Phase (non-production by default)
+
+Agent may evaluate / prototype / reject (examples; not a crowned shortlist):
+
+- Additional / newer OCR stacks (e.g. Surya, IndicOCR, TrOCR, Kraken, GOT/MinerU/Qwen/Florence class, Paddle refreshes, EasyOCR forks)
+- Preprocessing & layout for mixed Marathi/English scans
+- Post-processing: lexicon, LM correction, voting strategies
+- Fine-tuning / custom recognition for Marathi biodata when data+budget allow
+- Training dataset curation (local GT — PII stays gitignored)
+
+**Hard gates (SSOT / DOC):**
+
+- Local-first; no paid cloud OCR voters without product approval  
+- Production second engine / Judge expansion still needs **benchmark GO + release approval**  
+- No MutationService bypass; additive schema only  
+- Mid-goal logical commits; push when useful; **production enable still human**
+
+### 20.4 Definition of Done for §20 Vision (product)
+
+```text
+Complete only when:
+
+✓ Practical accuracy target trajectory is evidenced
+  (goal direction: 90%+ usable OCR text on representative
+   Marathi biodata — track via GT / Batch-001+ expansions)
+✓ Admin can inspect Raw OCR + Phase 3 comparison + parse
+✓ Learning path remains SSOT-governed (§19 Sprint 4)
+✓ Production path still Tesseract-primary until a new GO
+✓ Research ledger documents evaluated candidates (GO/NO-GO/ops)
+
+Otherwise STATUS = In Progress for the Vision goal.
+```
+
+### 20.5 Admin OCR review surface (ops DoD)
+
+Canonical Admin path:
+
+```text
+Admin → Intake & OCR → Bulk Intakes → Batch → Correct candidate
+  → OCR comparison table (Phase 3 fields)
+  → Per-engine Raw OCR transcripts
+  → Parse / correction form
+```
+
+Discoverability: Biodata Intake show links to Correct candidate when bulk-linked.
+
+### 20.6 Canonical Approved Goal (§20)
+
+```text
+Approved Goal:
+
+Achieve the original OCR Vision (Blueprint §20).
+
+Do not optimize only the frozen Sprint-1–4 slice.
+Research, evaluate, prototype, benchmark and, where
+beneficial, train or improve OCR technologies for the
+highest practical Marathi + Devanagari + English
+biodata extraction accuracy.
+
+The agent owns the complete OCR Vision,
+not only the current sprint checklist.
+
+Continue committing logical checkpoints.
+Push when appropriate.
+Production release still requires approval.
+```
+
+---
+
+*End of blueprint v1.0 + §19 + §20 OCR Research Vision.*

@@ -298,7 +298,10 @@ Authority: **`OCR-ENSEMBLE-PIPELINE-BLUEPRINT.md` §19** (2026-07-14) + **§19.6
 Still out of casual scope:
 
 - Weight learning / layout AI / LLM cleanup without §19 Sprint 4 design  
-- Second engine without **new** benchmark GO (2026-07-13 NO-GO still binds that vintage)
+- Second engine without **new** benchmark GO (2026-07-13 / Sprint 2 NO-GO still bind those vintages)
+- Declaring **Product OCR Vision** complete when only §19 milestones are done — Vision continues under **Blueprint §20**
+
+**Active product goal:** `OCR-ENSEMBLE-PIPELINE-BLUEPRINT.md` **§20** + `OCR-RESEARCH-PHASE-LEDGER.md` (STATUS: In Progress).
 
 **v1.0 closed blueprint blockers:** Correct Candidate placement (P5-B1) and bulk list badges (P5-B2).
 
@@ -322,3 +325,4 @@ Still out of casual scope:
 | 2.0 | 2026-07-15 | Sprint 2 CLOSED (Tesseract/EasyOCR/Paddle/DocTR GT-20); Sprint 3 SKIPPED; Sprint 4 NEXT |
 | 2.1 | 2026-07-15 | Sprint 4 design signed (4a); implement gated on Phase Contract 4b |
 | 2.2 | 2026-07-15 | Sprint 4 4b SSOT guards; 4c deferred |
+| 2.3 | 2026-07-15 | §20 OCR Research Vision accepted; Admin per-engine Raw OCR UI; Vision In Progress |
