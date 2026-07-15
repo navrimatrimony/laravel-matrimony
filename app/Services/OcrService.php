@@ -58,16 +58,7 @@ class OcrService
 
         if ($isImage || $isPdf) {
             if ($isPdf) {
-                $this->lastExtractTextFromPathDebug = [
-                    'kind' => 'pdf',
-                    'original_absolute_path' => $fullPath,
-                    'original_storage_relative' => $storagePath,
-                    'final_ocr_input_path' => null,
-                    'preset_request' => $presetOverride,
-                    'skipped_preprocessing_reason' => 'pdf_text_extract',
-                ];
-
-                return $this->extractTextFromPdf($fullPath);
+                return $this->extractTextFromPdf($fullPath, $storagePath, $presetOverride);
             }
 
             $result = $this->tesseractMultiPassOcr->extractFromImage(
@@ -131,7 +122,7 @@ class OcrService
 
         if ($isImage || $isPdf) {
             if ($isPdf) {
-                return $this->extractTextFromPdf($fullPath);
+                return $this->extractTextFromPdf($fullPath, (string) $intake->file_path, 'off');
             }
 
             return $this->resolveParseInputText($intake)['text'];
@@ -398,9 +389,53 @@ class OcrService
     }
 
     /**
-     * Extract text from a PDF (text-based PDFs). Returns empty string for scanned/image-only PDFs or on failure.
+     * Extract text from a PDF.
+     *
+     * Prefer embedded text when usable (digital biodata PDFs).
+     * For scanned/image-only PDFs (common in production), rasterize pages via Imagick
+     * and run the same Tesseract multipass path used for photos — improves RAW OCR fidelity.
+     * Never overwrites the uploaded PDF; page images are temporary only.
      */
-    private function extractTextFromPdf(string $fullPath): string
+    private function extractTextFromPdf(
+        string $fullPath,
+        ?string $storageRelative = null,
+        ?string $presetOverride = null
+    ): string {
+        $embedded = $this->extractEmbeddedPdfText($fullPath);
+        $embeddedUsable = $this->pdfEmbeddedTextIsUsable($embedded);
+
+        $this->lastExtractTextFromPathDebug = [
+            'kind' => 'pdf',
+            'original_absolute_path' => $fullPath,
+            'original_storage_relative' => $storageRelative,
+            'final_ocr_input_path' => null,
+            'preset_request' => $presetOverride,
+            'pdf_embedded_chars' => mb_strlen($embedded, 'UTF-8'),
+            'pdf_embedded_usable' => $embeddedUsable,
+            'skipped_preprocessing_reason' => $embeddedUsable ? 'pdf_text_extract' : null,
+            'pdf_pipeline' => $embeddedUsable ? 'embedded_text' : 'pending_raster',
+        ];
+
+        if ($embeddedUsable) {
+            return $embedded;
+        }
+
+        $raster = $this->extractTextFromPdfViaRasterOcr($fullPath, $storageRelative, $presetOverride);
+        if (trim($raster) !== '') {
+            $this->lastExtractTextFromPathDebug['pdf_pipeline'] = 'raster_ocr_fallback';
+            $this->lastExtractTextFromPathDebug['skipped_preprocessing_reason'] = 'pdf_raster_ocr';
+
+            return $raster;
+        }
+
+        $this->lastExtractTextFromPathDebug['pdf_pipeline'] = trim($embedded) !== ''
+            ? 'embedded_text_weak_kept'
+            : 'pdf_raster_failed_empty';
+
+        return $embedded;
+    }
+
+    private function extractEmbeddedPdfText(string $fullPath): string
     {
         try {
             $parser = new PdfParser;
@@ -408,9 +443,146 @@ class OcrService
             $text = $pdf->getText();
 
             return is_string($text) ? trim($text) : '';
-        } catch (\Throwable $e) {
+        } catch (\Throwable) {
             return '';
         }
     }
 
+    /**
+     * Digital biodata PDFs usually have substantial selectable text.
+     * Empty / tiny layers are typical of scanned photo PDFs — those need raster OCR.
+     */
+    private function pdfEmbeddedTextIsUsable(string $text): bool
+    {
+        $text = trim($text);
+        if ($text === '') {
+            return false;
+        }
+
+        $len = mb_strlen($text, 'UTF-8');
+        if ($len < 50) {
+            return false;
+        }
+
+        if (preg_match('/\p{Devanagari}/u', $text) === 1) {
+            return true;
+        }
+
+        if (preg_match('/\b(name|dob|date of birth|mobile|education|caste|religion|height)\b/iu', $text) === 1) {
+            return true;
+        }
+
+        // Long Latin-only selectable text (generated PDF biodata)
+        return $len >= 200;
+    }
+
+    /**
+     * Rasterize PDF pages to temporary PNGs and OCR each page (production scanned biodata).
+     */
+    private function extractTextFromPdfViaRasterOcr(
+        string $fullPath,
+        ?string $storageRelative = null,
+        ?string $presetOverride = null
+    ): string {
+        if (! class_exists(\Imagick::class)) {
+            Log::warning('ocr_pdf_raster: Imagick unavailable', ['path' => $fullPath]);
+            if (is_array($this->lastExtractTextFromPathDebug)) {
+                $this->lastExtractTextFromPathDebug['pdf_raster_error'] = 'imagick_unavailable';
+            }
+
+            return '';
+        }
+
+        $maxPages = 8;
+        try {
+            $maxPages = (int) \App\Models\AdminSetting::getValue('intake_max_pdf_pages', 8);
+        } catch (\Throwable) {
+            $maxPages = 8;
+        }
+        if ($maxPages < 1) {
+            $maxPages = 1;
+        }
+        if ($maxPages > 50) {
+            $maxPages = 50;
+        }
+
+        $tmpDir = storage_path('app/private/ocr-temp/pdf-raster/'.hash('sha256', $fullPath.microtime(true)));
+        if (! is_dir($tmpDir) && ! mkdir($tmpDir, 0755, true) && ! is_dir($tmpDir)) {
+            Log::warning('ocr_pdf_raster: cannot create temp dir', ['dir' => $tmpDir]);
+
+            return '';
+        }
+
+        $pagePaths = [];
+        $texts = [];
+        $pageDebug = [];
+
+        try {
+            $image = new \Imagick;
+            $image->setResolution(200, 200);
+            $image->readImage($fullPath);
+            $pageCount = $image->getNumberImages();
+            $limit = min($pageCount, $maxPages);
+
+            for ($i = 0; $i < $limit; $i++) {
+                $image->setIteratorIndex($i);
+                $page = $image->getImage();
+                $page->setImageBackgroundColor('white');
+                try {
+                    $page->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
+                    $page->mergeImageLayers(\Imagick::LAYERMETHOD_FLATTEN);
+                } catch (\Throwable) {
+                    // Some PDF pages lack alpha; continue.
+                }
+                $page->setImageFormat('png');
+                $pagePath = $tmpDir.DIRECTORY_SEPARATOR.'page-'.($i + 1).'.png';
+                $page->writeImage($pagePath);
+                $page->clear();
+                $pagePaths[] = $pagePath;
+
+                $rel = ($storageRelative ?: 'pdf-raster').'/page-'.($i + 1).'.png';
+                $result = $this->tesseractMultiPassOcr->extractFromImage(
+                    $pagePath,
+                    $rel,
+                    'pdf-page-'.($i + 1).'.png',
+                    $presetOverride ?? 'off'
+                );
+                $pageText = trim((string) ($result['text'] ?? ''));
+                if ($pageText !== '') {
+                    $texts[] = $pageText;
+                }
+                $pageDebug[] = [
+                    'page' => $i + 1,
+                    'chars' => mb_strlen($pageText, 'UTF-8'),
+                    'chosen_variant' => $result['debug']['chosen_variant'] ?? null,
+                ];
+            }
+
+            $image->clear();
+        } catch (\Throwable $e) {
+            Log::warning('ocr_pdf_raster: failed', [
+                'path' => $fullPath,
+                'error' => $e->getMessage(),
+            ]);
+            if (is_array($this->lastExtractTextFromPathDebug)) {
+                $this->lastExtractTextFromPathDebug['pdf_raster_error'] = $e->getMessage();
+            }
+        } finally {
+            foreach ($pagePaths as $pagePath) {
+                if (is_file($pagePath)) {
+                    @unlink($pagePath);
+                }
+            }
+            if (is_dir($tmpDir)) {
+                @rmdir($tmpDir);
+            }
+        }
+
+        if (is_array($this->lastExtractTextFromPathDebug)) {
+            $this->lastExtractTextFromPathDebug['pdf_raster_pages'] = $pageDebug;
+            $this->lastExtractTextFromPathDebug['final_ocr_input_path'] = $pagePaths[0] ?? null;
+        }
+
+        return trim(implode("\n\n", $texts));
+    }
 }

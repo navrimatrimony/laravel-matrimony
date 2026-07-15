@@ -133,3 +133,68 @@ test('debug keep derived skips unlink when app.debug and config enabled', functi
     @unlink($abs);
     @unlink($derived);
 });
+
+test('scanned pdf with empty embedded text falls back to raster page OCR when Imagick can read PDF', function () {
+    if (! class_exists(\Imagick::class)) {
+        $this->markTestSkipped('Imagick required for PDF raster OCR fallback');
+    }
+
+    $pdf = new \Imagick;
+    $pdf->newImage(200, 200, new \ImagickPixel('white'));
+    $pdf->setImageFormat('pdf');
+    $blob = $pdf->getImagesBlob();
+    $pdf->clear();
+
+    $rel = 'intakes/ocr_pdf_raster_'.uniqid('', true).'.pdf';
+    $abs = storage_path('app/private/'.$rel);
+    if (! is_dir(dirname($abs))) {
+        mkdir(dirname($abs), 0755, true);
+    }
+    file_put_contents($abs, $blob);
+
+    $mock = Mockery::mock(TesseractMultiPassOcrService::class);
+    $mock->shouldReceive('extractFromImage')
+        ->zeroOrMoreTimes()
+        ->andReturn([
+            'text' => "नाव : परीक्षण\nजन्म तारीख : 08 ऑगस्ट 1997",
+            'debug' => [
+                'kind' => 'image',
+                'chosen_variant' => 'original',
+                'preprocess_used' => false,
+            ],
+        ]);
+    $this->app->instance(TesseractMultiPassOcrService::class, $mock);
+
+    $ocr = $this->app->make(OcrService::class);
+    $text = $ocr->extractTextFromPath($rel, 'scan.pdf', 'off');
+    $dbg = $ocr->getLastExtractTextFromPathDebug();
+
+    expect($dbg['kind'])->toBe('pdf')
+        ->and($dbg['pdf_embedded_usable'])->toBeFalse();
+
+    // Windows Imagick needs Ghostscript to rasterize PDFs. When GS is present we get OCR text;
+    // when absent we record a clear raster error (production-safe degrade).
+    if (($dbg['pdf_pipeline'] ?? null) === 'raster_ocr_fallback') {
+        expect($text)->toContain('जन्म तारीख');
+    } else {
+        expect($dbg['pdf_pipeline'])->toBe('pdf_raster_failed_empty')
+            ->and($dbg['pdf_raster_error'] ?? null)->not->toBeNull();
+    }
+
+    @unlink($abs);
+});
+test('usable embedded pdf text heuristics prefer real biodata layers', function () {
+    $ref = new ReflectionClass(OcrService::class);
+    $method = $ref->getMethod('pdfEmbeddedTextIsUsable');
+    $method->setAccessible(true);
+    $ocr = $this->app->make(OcrService::class);
+    $long = str_repeat('नाव जन्म तारीख शिक्षण व्यवसाय मोबाइल ', 20);
+
+    expect($method->invoke($ocr, ''))->toBeFalse()
+        ->and($method->invoke($ocr, 'short'))->toBeFalse()
+        ->and($method->invoke($ocr, $long))->toBeTrue()
+        ->and($method->invoke(
+            $ocr,
+            'Hello biodata DOB name mobile education caste religion height text here with enough latin keywords'
+        ))->toBeTrue();
+});

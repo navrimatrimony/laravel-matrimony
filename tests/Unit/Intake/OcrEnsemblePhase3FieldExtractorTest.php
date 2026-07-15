@@ -97,7 +97,11 @@ test('production dob normalizer reads Marathi month forms present in raw OCR', f
             'जन्म तारीख :-_ ०८ ऑगस्ट १९९७ जन्म वार व वेळ :-_ शुक्रवार',
         ]))->toBe('1997-08-08')
         ->and($normalizer->normalize('9सप्टेंबट 2000'))->toBe('2000-09-09')
-        ->and($normalizer->normalize('December 10, 1995'))->toBe('1995-12-10');
+        ->and($normalizer->normalize('December 10, 1995'))->toBe('1995-12-10')
+        ->and($normalizer->normalize('18 ऑगस्ट1998'))->toBe('1998-08-18')
+        ->and($normalizer->normalizeFromLines([
+            'जन्मतारीख :_ 18 ऑगस्ट1998 भे > अ',
+        ]))->toBe('1998-08-18');
 });
 
 test('production field extractor recovers Marathi month DOB from raw-like page text', function () {
