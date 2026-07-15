@@ -104,7 +104,11 @@ test('production dob normalizer reads Marathi month forms present in raw OCR', f
         ]))->toBe('1998-08-18')
         ->and($normalizer->normalizeFromLines([
             'नाव नवनाथ पाटीलणे तारीखDecember 10, 1995णे वेळ06:50 AM',
-        ]))->toBe('1995-12-10');
+        ]))->toBe('1995-12-10')
+        // Invalid OCR month 14 → 11 via digit confusion (1↔4)
+        ->and($normalizer->normalizeFromLines([
+            'जन्म दि :- १६/१४/१९९६',
+        ]))->toBe('1996-11-16');
 });
 
 test('production field extractor recovers Marathi month DOB from raw-like page text', function () {

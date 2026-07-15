@@ -62,4 +62,4 @@ Full-page re-OCR of GT-20 DOB misses (see ledger):
 | Fresh OCR already extractable | 1 |
 | No date signal in image raw | 0 |
 
-Prefix-only earlier “no date” counts were **incomplete**. Product goal remains **Raw OCR quality**; this cycle first recovered dates **already present** in raw (broken `तारीख` label + month forms). Next: PDF raster + garbled digit OCR.
+Prefix-only earlier “no date” counts were **incomplete**. Product goal remains **Raw OCR quality**; this cycle first recovered dates **already present** in raw (broken `जन्म तारीख` label + month forms). PDF raster + Ghostscript + invalid-month digit recovery followed. Remaining: hard raw garbles / truncated year / bad PDF raster.

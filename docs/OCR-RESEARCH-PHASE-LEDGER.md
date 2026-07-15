@@ -33,9 +33,12 @@
 4. **Done (accept):** Reject ITRANS/Latin encoding-garbage as “usable” PDF text → raster OCR (`27.pdf` DOB recovered).  
 5. **Done (accept):** Bare `तारीख` / English–Marathi month-name line pass in DOB normalizer (`testing …pdf` → `1995-12-10`).  
 6. **Reject / defer:** `28.pdf` raster still has no parseable date (`24 फिट 1991` only) — true raw OCR fidelity / preprocess, not parser.  
-7. **Next:** Remaining image DOB raw-garble cases (digit confusions) + optional better raster/preprocess for hard PDFs like `28.pdf`.
+7. **Done (accept):** Invalid OCR month digit recovery (`१६/१४/१९९६` → `1996-11-16`) — production-general 1↔4 confusion when month out of range.  
+8. **Reject:** Truncating-year invent (`जून199` → guess last digit by age≈28) — would bias wrong years; keep as raw OCR fidelity gap.  
+9. **GT-20 DOB now:** **17/20 (85%)** post-PDF+month recovery (baseline was 25%). Remaining misses: `28.pdf`, `D (1).jpeg` (truncated year), `D (8).jpeg` (garbled `२४०३/९९९९`).  
+10. **Next:** Preprocess / higher-fidelity OCR on the 3 remaining raw gaps (not more inventive date guessing).
 
-**Production generality check:** month/label/glued-year, PDF usable-text filter, and PDF raster apply to real intakes, not GT-20-only tricks.
+**Production generality check:** month/label/glued-year, PDF usable-text filter, PDF raster, and invalid-month digit recovery apply to real intakes, not GT-20-only tricks.
 
 ---
 
@@ -46,3 +49,4 @@
 | 2026-07-15 | Fidelity objective; raw-vs-parser forensic; month/label fix |
 | 2026-07-15 | Glued month-year; PDF raster-OCR fallback (needs Ghostscript on Windows Imagick) |
 | 2026-07-15 | GS user-local install; ITRANS embed reject; bare-तारीख/month line DOB; PDF bench 2/3 DOB OK |
+| 2026-07-15 | Invalid-month OCR recovery; DOB 17/20 (85%); reject truncated-year invent |

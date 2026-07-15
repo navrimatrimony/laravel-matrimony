@@ -13,10 +13,10 @@ class OcrEnsembleDobNormalizer
     /**
      * Fuzzy Marathi / English DOB labels (Tesseract often corrupts leading ज / birth glyphs).
      */
-    public const DOB_LABEL_PATTERN = '/(?:[जऄ]|ज्)?\.?\s*न्म\s*तार्?[ीईि]?ख|जन्मतारीख|जन्म\s*तारीख|जन्म\s*दिनांक|जन्मदि|DOB|date\s*of\s*birth/ui';
+    public const DOB_LABEL_PATTERN = '/(?:[जऄ]|ज्)?\.?\s*न्म\s*तार्?[ीईि]?ख|जन्मतारीख|जन्म\s*तारीख|जन्म\s*दिनांक|जन्म\s*दि|जन्मदि|DOB|date\s*of\s*birth/ui';
 
     /**
-     * Common single-glyph OCR digit confusions (year recovery only).
+     * Common single-glyph OCR digit confusions (year / month recovery).
      *
      * @var array<string, list<string>>
      */
@@ -157,9 +157,55 @@ class OcrEnsembleDobNormalizer
             if ($recovered !== null) {
                 return $recovered;
             }
+
+            // Invalid month (e.g. 16/14/1996) — try one-glyph month OCR fixes only.
+            $monthRecovered = $this->recoverMonthDigitOcr($day, $month, $year);
+            if ($monthRecovered !== null) {
+                return $monthRecovered;
+            }
         }
 
         return null;
+    }
+
+    /**
+     * When slash-date month is out of range / invalid (e.g. 14), try single-glyph month confusions.
+     */
+    private function recoverMonthDigitOcr(int $day, int $month, int $year): ?string
+    {
+        if ($month >= 1 && $month <= 12 && checkdate($month, $day, $year)) {
+            return null;
+        }
+
+        $monthDigits = str_pad((string) $month, 2, '0', STR_PAD_LEFT);
+        $candidates = [];
+
+        for ($i = 0; $i < 2; $i++) {
+            $digit = $monthDigits[$i];
+            foreach (self::YEAR_DIGIT_ALTS[$digit] ?? [] as $alt) {
+                $try = $monthDigits;
+                $try[$i] = $alt;
+                $tryMonth = (int) $try;
+                $iso = $this->isoDateIfCandidateAge($day, $tryMonth, $year);
+                if ($iso === null) {
+                    continue;
+                }
+                $age = Carbon::createFromDate($year, $tryMonth, $day)->age;
+                $candidates[$iso] = [
+                    'iso' => $iso,
+                    'distance_from_28' => abs($age - 28),
+                ];
+            }
+        }
+
+        if ($candidates === []) {
+            return null;
+        }
+
+        uasort($candidates, static fn (array $a, array $b): int => $a['distance_from_28'] <=> $b['distance_from_28']);
+        $best = reset($candidates);
+
+        return is_array($best) ? (string) $best['iso'] : null;
     }
 
     /**
