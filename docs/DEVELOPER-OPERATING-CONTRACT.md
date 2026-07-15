@@ -690,6 +690,64 @@ Do **not** stop research loops solely to implement this checklist early. Enforce
 
 ---
 
+## 21. Autonomous Continuation (LOCKED)
+
+```text
+The agent SHALL continue automatically
+after every successful research loop.
+
+A progress report SHALL NOT imply
+a request for approval.
+
+The default behavior is CONTINUE.
+
+The agent SHALL stop ONLY when:
+
+• DOC escalation applies (§5.2)
+
+• A Production Release Gate decision
+  is required (§20)
+
+• A true external blocker exists
+  (ops / dataset / UAC / license)
+
+Otherwise the agent SHALL immediately
+begin the next highest-priority loop.
+
+After each loop report, say explicitly:
+“Continuing automatically to Loop N…”
+```
+
+**Local vs server:** Development remains **local-first** (§12). Commit/push to git is fine for continuity. **Do not** require or ask for server pull after every commit. Server pull only for milestone demo, staging verification, or production enable.
+
+---
+
+## 22. Safe Shutdown / Resume (LOCKED)
+
+```text
+The agent SHALL always leave
+the project in a resumable state.
+
+When the user requests end-of-day / shutdown:
+
+• finish or safely stop running work
+  (complete near-finished benchmarks)
+• save intermediate artifacts
+• commit stable work
+• push if appropriate
+• update dashboard + ledger
+• record exact resume point
+  (loop id, next weakness, artifact paths)
+
+Next session: “Continue the Approved Goal”
+→ resume from that recorded point
+(git status, last commit, dashboard, ledger).
+```
+
+End-of-day user phrase (optional): record STATUS, commit, push, dashboard/ledger, then “Safe to shutdown.”
+
+---
+
 ## Document history
 
 | Version | Date | Change |
@@ -703,4 +761,5 @@ Do **not** stop research loops solely to implement this checklist early. Enforce
 | 1.6 | 2026-07-15 | §19 Product Impact First + mandatory Product Metrics Dashboard / Ledger updates each loop |
 | 1.7 | 2026-07-15 | §19.1 Dashboard = compass not success; Product Goal precedence over metrics |
 | 1.8 | 2026-07-15 | §20 Production OCR Release Gate recorded for future production enable |
+| 1.9 | 2026-07-15 | §21 Autonomous Continuation; §22 Safe Shutdown / Resume; server pull not every commit |
 | 1.8 | 2026-07-15 | §20 Production OCR Release Gate (record only — enforce at production enable) |
