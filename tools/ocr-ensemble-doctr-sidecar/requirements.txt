@@ -1,0 +1,11 @@
+# DocTR benchmark sidecar (Sprint 2 — evaluation only)
+#
+# Python 3.10–3.12 recommended.
+#   python -m venv C:\dov
+#   C:\dov\Scripts\pip install -r requirements.txt
+#   C:\dov\Scripts\python run_ocr.py --image ABS_PATH.jpg
+
+python-doctr[torch]>=0.9.0,<1.0.0
+torch
+torchvision
+Pillow>=10.4.0

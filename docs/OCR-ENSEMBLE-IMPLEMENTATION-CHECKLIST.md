@@ -291,9 +291,9 @@ Authority: **`OCR-ENSEMBLE-PIPELINE-BLUEPRINT.md` §19** (2026-07-14) + **§19.6
 |--------|------|------------------|--------|
 | — | Phase 4 Judge HTTP / soft-fail / merge_noop forensics | Done | **CLOSED** (#771 Judge 200) |
 | 1 | Phase 3 validator / DOB candidate forensics | Forensic + extract/normalize fixes | **DONE** (2026-07-15) — see `OCR-ENSEMBLE-SPRINT-1-DOB-FORENSICS.md` |
-| 2 | OCR Engine Evaluation (Tesseract / PaddleOCR v5 / EasyOCR / DocTR) | **Benchmark only** | **DONE** — EasyOCR **NO-GO** (−14.74pp on GT-20); Paddle/DocTR incomplete; see `ocr-ensemble-benchmark-v2-sprint2.md` |
-| 3 | Multi-OCR vote in production | Only if Sprint 2 GO | **SKIPPED** (no engine GO) |
-| 4 | Knowledge / Learning layer (SSOT-governed) | Design then implement | **NEXT** |
+| 2 | OCR Engine Evaluation (Tesseract / PaddleOCR v5 / EasyOCR / DocTR) | **Benchmark only** | **CLOSED** (2026-07-15) — all four engines scored on GT-20; EasyOCR/Paddle/DocTR **NO-GO**; Tesseract baseline — see `ocr-ensemble-benchmark-v2-sprint2.md` |
+| 3 | Multi-OCR vote in production | Only if Sprint 2 GO | **SKIPPED** — no engine GO |
+| 4 | Knowledge / Learning layer (SSOT-governed) | Design then implement | **NEXT** — design first (no silent overwrite; PHASE-5 / MutationService) |
 
 Still out of casual scope:
 
@@ -319,3 +319,4 @@ Still out of casual scope:
 | 1.8 | 2026-07-15 | Point execution to DEVELOPER-OPERATING-CONTRACT.md |
 | 1.9 | 2026-07-15 | Sprint 1 DOB forensics + Phase 3 extract fixes DONE; Sprint 2 NEXT |
 | 1.9 | 2026-07-15 | DOC v1.2 local-first + Marathi user interaction |
+| 2.0 | 2026-07-15 | Sprint 2 CLOSED (Tesseract/EasyOCR/Paddle/DocTR GT-20); Sprint 3 SKIPPED; Sprint 4 NEXT |
