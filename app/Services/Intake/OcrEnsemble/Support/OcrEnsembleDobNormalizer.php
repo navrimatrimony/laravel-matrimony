@@ -13,7 +13,7 @@ class OcrEnsembleDobNormalizer
     /**
      * Fuzzy Marathi / English DOB labels (Tesseract often corrupts leading ज / birth glyphs).
      */
-    public const DOB_LABEL_PATTERN = '/(?:[जअलग]|ज्)?\.?\s*न्म\s*तार्[ीईि]?ख|जन्मतारीख|जन्म\s*दिनांक|जन्मदि|DOB|date\s*of\s*birth/ui';
+    public const DOB_LABEL_PATTERN = '/(?:[जऄ]|ज्)?\.?\s*न्म\s*तार्?[ीईि]?ख|जन्मतारीख|जन्म\s*तारीख|जन्म\s*दिनांक|जन्मदि|DOB|date\s*of\s*birth/ui';
 
     /**
      * Common single-glyph OCR digit confusions (year recovery only).

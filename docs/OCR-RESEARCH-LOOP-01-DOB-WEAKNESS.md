@@ -51,24 +51,15 @@ Loop 01 closes when: DOB mode mix documented + one measured intervention accepte
 
 ---
 
-## 5. Preliminary forensic (2026-07-15)
+## 5. Forensic result (definitive for images)
 
-From Sprint 2 GT-20 Tesseract score (`sprint2_gt20_score_20260715_130342.json`):
+Full-page re-OCR of GT-20 DOB misses (see ledger):
 
-| Bucket | Count | Note |
-|--------|------:|------|
-| DOB misses (match=false) | 15 | |
-| Wrong prediction (non-null) | **0** | Not primarily wrong-date confusions |
-| Empty OCR (`raw_ocr_len=0`) | 1 | PDF/path edge |
-| Null prediction with OCR text | **14** | Dominant — extract miss **or** no calendar date in transcript |
-
-Folder artifact prefix scan (`sprint2_batch001_tesseract_folder_*`, `raw_ocr_text_prefix` only):
-
-| Signal | Count |
+| Bucket | Count |
 |--------|------:|
-| Prefix shows `DD/MM/YYYY`-like pattern | **2** |
-| Prefix shows no date pattern | **13** |
+| PDF skipped (image CLI) | 3 |
+| Date signal in raw → parser/label miss (before fix) | 11 |
+| Fresh OCR already extractable | 1 |
+| No date signal in image raw | 0 |
 
-**Working conclusion:** Prefer **Mode A/D** (date not reliably in OCR text / only birth-time labels) over pure extract bugs. Next interventions: date-line crop + preprocess, then OCR — **not** engine shopping. Extract improve is secondary for the 2 HAS_DATE cases.
-
-**Next concrete step:** Prototype date-band preprocess + re-OCR on the 13 NO_DATE_PATTERN images; measure DOB Δ on GT-20.
+Prefix-only earlier “no date” counts were **incomplete**. Product goal remains **Raw OCR quality**; this cycle first recovered dates **already present** in raw (broken `तारीख` label + month forms). Next: PDF raster + garbled digit OCR.

@@ -66,6 +66,8 @@ class OcrNormalize
             'फेब्रुवारी' => 'February',
             'जानेवारी' => 'January',
             'सप्टेंबर' => 'September',
+            'सप्टेंबट' => 'September',
+            'सप्टेंब' => 'September',
             'ऑक्टोबर' => 'October',
             'नोव्हेंबर' => 'November',
             'डिसेंबर' => 'December',
@@ -303,12 +305,12 @@ class OcrNormalize
         }
 
         // August-only OCR: month token often varies (ऑ/ऑ + nukta, ZWJ). "…गस्ट" is unique among Marathi months here.
-        if (preg_match('/(\d{1,2})\s+\S*गस्ट\s+(\d{4})/u', $value, $m)) {
+        if (preg_match('/(\d{1,2})\s*\S*गस्ट\s+(\d{4})/u', $value, $m)) {
             return $m[2].'-08-'.str_pad($m[1], 2, '0', STR_PAD_LEFT);
         }
 
         // Common OCR misread: ऑजस्ट (ज instead of ग) for August.
-        if (preg_match('/(\d{1,2})\s+ऑजस्ट\s+(\d{4})/u', $value, $m)) {
+        if (preg_match('/(\d{1,2})\s*ऑजस्ट\s+(\d{4})/u', $value, $m)) {
             return $m[2].'-08-'.str_pad($m[1], 2, '0', STR_PAD_LEFT);
         }
 
@@ -316,10 +318,10 @@ class OcrNormalize
         $marathiMonthToNum = [
             'जानेवारी' => '01', 'फेब्रुवारी' => '02', 'मार्च' => '03', 'एप्रिल' => '04',
             'मे' => '05', 'जून' => '06', 'जुलै' => '07', 'ऑगस्ट' => '08', 'ऑजस्ट' => '08',
-            'सप्टेंबर' => '09', 'ऑक्टोबर' => '10', 'नोव्हेंबर' => '11', 'डिसेंबर' => '12',
+            'सप्टेंबर' => '09', 'सप्टेंबट' => '09', 'ऑक्टोबर' => '10', 'नोव्हेंबर' => '11', 'डिसेंबर' => '12',
         ];
         $monthAlt = implode('|', array_map(static fn (string $k): string => preg_quote($k, '/'), array_keys($marathiMonthToNum)));
-        if (preg_match('/(\d{1,2})\s+('.$monthAlt.')\s+(\d{4})/u', $value, $m)) {
+        if (preg_match('/(\d{1,2})\s*('.$monthAlt.')\s+(\d{4})/u', $value, $m)) {
             $month = $marathiMonthToNum[$m[2]] ?? null;
             if ($month !== null) {
                 $day = str_pad($m[1], 2, '0', STR_PAD_LEFT);
@@ -328,8 +330,21 @@ class OcrNormalize
             }
         }
 
-        // After Marathi→English month replace: "8 August 1997"
+        // English "December 10, 1995" / "Dec 10, 1995"
         $fullMonth = 'january|february|march|april|may|june|july|august|september|october|november|december';
+        if (preg_match('/('.$fullMonth.')\s+(\d{1,2}),?\s+(\d{4})/iu', $value, $m)) {
+            $monthMap = [
+                'january' => '01', 'february' => '02', 'march' => '03', 'april' => '04',
+                'may' => '05', 'june' => '06', 'july' => '07', 'august' => '08',
+                'september' => '09', 'october' => '10', 'november' => '11', 'december' => '12',
+            ];
+            $month = $monthMap[strtolower($m[1])] ?? null;
+            if ($month !== null) {
+                return $m[3].'-'.$month.'-'.str_pad($m[2], 2, '0', STR_PAD_LEFT);
+            }
+        }
+
+        // After Marathi→English month replace: "8 August 1997"
         if (preg_match('/(\d{1,2})\s+('.$fullMonth.')\s+(\d{4})/iu', $value, $m)) {
             $monthMap = [
                 'january' => '01', 'february' => '02', 'march' => '03', 'april' => '04',
@@ -342,6 +357,19 @@ class OcrNormalize
                 $day = str_pad($m[1], 2, '0', STR_PAD_LEFT);
 
                 return $m[3].'-'.$month.'-'.$day;
+            }
+        }
+
+        // Day glued to English month after Marathi replace: "9September 2000"
+        if (preg_match('/(\d{1,2})('.$fullMonth.')\s+(\d{4})/iu', $value, $m)) {
+            $monthMap = [
+                'january' => '01', 'february' => '02', 'march' => '03', 'april' => '04',
+                'may' => '05', 'june' => '06', 'july' => '07', 'august' => '08',
+                'september' => '09', 'october' => '10', 'november' => '11', 'december' => '12',
+            ];
+            $month = $monthMap[strtolower($m[2])] ?? null;
+            if ($month !== null) {
+                return $m[3].'-'.$month.'-'.str_pad($m[1], 2, '0', STR_PAD_LEFT);
             }
         }
 

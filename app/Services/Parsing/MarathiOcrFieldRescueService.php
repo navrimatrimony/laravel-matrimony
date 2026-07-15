@@ -216,7 +216,7 @@ final class MarathiOcrFieldRescueService
 
             $afterLabel = $this->valueAfterLabelPattern(
                 $line,
-                '(?:[जअलग]|ज्)?\.?\s*न्म\s*तार्[ीईि]?ख|जन्मतारीख|जन्म\s*दिनांक|जन्मदि|DOB|date\s*of\s*birth'
+                '(?:[जऄ]|ज्)?\.?\s*न्म\s*तार्?[ीईि]?ख|जन्मतारीख|जन्म\s*तारीख|जन्म\s*दिनांक|जन्मदि|DOB|date\s*of\s*birth'
             );
             foreach (array_filter([$afterLabel, $line], 'is_string') as $candidate) {
                 $dob = $this->normalizeDobFromText($candidate);

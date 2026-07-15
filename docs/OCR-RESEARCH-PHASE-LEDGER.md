@@ -1,87 +1,37 @@
-# OCR Research Phase — Problem-driven Ledger (§20)
+# OCR Research Phase — Ledger (§20)
 
-> **Approved Goal:** Maximize Marathi + Devanagari + English OCR quality for production biodata.  
-> **Method:** **Problem-driven** research — not an engine shopping queue.  
-> **Status:** **In Progress** (2026-07-15)
-
----
-
-## 0. Authority
-
-```text
-The objective is NOT to benchmark OCR engines.
-
-The objective IS to maximize
-Marathi + Devanagari + English
-OCR accuracy for production biodata.
-```
-
-Loop (mandatory):
-
-```text
-Current accuracy → Biggest weakness → Candidate solutions for THAT weakness
-  → Benchmark → Keep only measurable gains → Repeat → 90%+ → Stop
-```
-
-Engines (Surya, Paddle, …) may appear **only** as candidates for a named weakness — never as the roadmap itself.
+> **Approved Goal (2026-07-15):** Maximize **RAW OCR TEXT** quality for Marathi + Devanagari + English biodata (problem-driven; not engine shopping).  
+> **Status:** **In Progress**
 
 ---
 
-## 1. Current accuracy (baseline)
+## Forensic answer (required gate)
 
-| Metric | Value | Source |
-|--------|------:|--------|
-| Tesseract critical (5 fields) | **42.11%** | Sprint 2 GT-20 |
-| EasyOCR / Paddle / DocTR | below baseline | Sprint 2 NO-GO vintages |
+**Q:** Of GT-20’s 15 DOB misses, how many lack a date in Raw OCR vs date present but parser miss?
 
-### Per-field (Tesseract GT-20) — weakness rank
+**A (full-page Tesseract re-OCR + expanded date signals; artifact `sprint2_gt20_dob_raw_vs_parser_forensic_20260715_152255.json`):**
 
-| Field | Accuracy | Rank |
-|-------|---------:|------|
-| date_of_birth | **25.0%** | **#1 weakest critical** |
-| full_name | 30.0% | #2 |
-| religion | 47.1% | |
-| gender | 55.0% | |
-| primary_contact_number | 55.6% | strongest critical |
+| Bucket | Count | Meaning |
+|--------|------:|---------|
+| PDF not classified via image CLI | **3** | Need PDF→image path (raw pipeline gap) |
+| Date signal in raw; extract failed (before fix) | **11** | Mostly Marathi/English month lines; label regex bug `तारीख` |
+| Extracted correctly on fresh OCR | **1** | Already recoverable |
+| No date signal in raw (images) | **0** | Earlier prefix-only “no date” was incomplete |
+
+**Implication:** Do not spend the next cycle only on slash-DD/MM parsers. Primary image gap was **recognizing calendar dates that are already in raw** (month-name DOB + broken `जन्म तारीख` label match). Remaining hard cases are **garbled digit dates** and **PDF raster OCR** → true Raw OCR / preprocess work.
 
 ---
 
-## 2. Active loop
+## Active improvement cycle
 
-### Loop 01 — DOB critical accuracy (OPEN)
-
-| Step | Content |
-|------|---------|
-| Weakness | DOB extract/OCR at **25%** on hard-heavy GT-20 |
-| Hypothesis set (problem-first) | (A) transcript never contains date → OCR/preprocess; (B) date present but label/format miss → Sprint 1 extract/normalize expand; (C) digit glyph confusion → lexicon/post-correct |
-| Next action | Forensic sample of GT-20 DOB misses: OCR text contains `DD/MM`? → choose A vs B vs C |
-| Engine experiments | Only if forensic says **A** dominates (e.g. try preprocess + optional second engine for date lines) |
-| Success | +measurable DOB pp on same GT-20; no SSOT break |
-| Forensic (prefix) | 13/15 misses lack date pattern in OCR prefix → Mode A/D lead |
-
-See: `docs/OCR-RESEARCH-LOOP-01-DOB-WEAKNESS.md`
+1. **Done (measurable recognition):** Fix `तारीख` label match + Marathi OCR month typos (`सप्टेंबट`) + `December 10, 1995` — dates already in raw become extractable.  
+2. **Next:** Preprocess / PDF page render for the 3 PDFs + digit-garbled slash dates (raw quality).
 
 ---
 
-## 3. Rejected / parked (not a queue)
+## Baseline (Sprint 2 GT-20)
 
-| Item | Status | Why parked |
-|------|--------|------------|
-| EasyOCR / Paddle 3.7 / DocTR 0.12 | NO-GO vintage | Failed critical gate; re-open only for a named weakness with new evidence |
-| Engine-first “try Surya next” | Forbidden as roadmap | May be a Loop 01/02 **candidate** if forensic warrants |
-
----
-
-## 4. Stop conditions
-
-- Critical + text usability toward **90%+** on representative Marathi biodata, **or**
-- Consecutive loops with no meaningful measurable uplift under practical effort
-
----
-
-## 5. Admin comparison surface
-
-Correct candidate shows: field table + **engine metrics** (confidence, time, fields found/missing, critical errors, Judge used?) + per-engine Raw OCR.
+Tesseract critical **42.11%**; DOB field historically **25%**. Re-score after each kept change.
 
 ---
 
@@ -89,5 +39,5 @@ Correct candidate shows: field table + **engine metrics** (confidence, time, fie
 
 | Date | Note |
 |------|------|
-| 2026-07-15 | Ledger opened (engine queue — superseded) |
-| 2026-07-15 | Reframed to **problem-driven**; Loop 01 = DOB; Admin metrics |
+| 2026-07-15 | Problem-driven ledger; Loop 01 DOB |
+| 2026-07-15 | Forensic raw-vs-parser; Approved Goal = Raw OCR quality; label/month recognition fix |

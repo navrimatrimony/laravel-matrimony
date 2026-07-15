@@ -89,6 +89,33 @@ test('production dob normalizer recovers fuzzy जन्म label and year glyph
     ]))->toBe('1992-01-04');
 });
 
+test('production dob normalizer reads Marathi month forms present in raw OCR', function () {
+    $normalizer = app(OcrEnsembleDobNormalizer::class);
+
+    expect($normalizer->lineLooksLikeDobLabel('जन्म तारीख :-_ ०८ ऑगस्ट १९९७'))->toBeTrue()
+        ->and($normalizer->normalizeFromLines([
+            'जन्म तारीख :-_ ०८ ऑगस्ट १९९७ जन्म वार व वेळ :-_ शुक्रवार',
+        ]))->toBe('1997-08-08')
+        ->and($normalizer->normalize('9सप्टेंबट 2000'))->toBe('2000-09-09')
+        ->and($normalizer->normalize('December 10, 1995'))->toBe('1995-12-10');
+});
+
+test('production field extractor recovers Marathi month DOB from raw-like page text', function () {
+    $text = <<<'TXT'
+॥ श्री गणेश प्रसन्न ॥
+बायोडाटा
+जन्म तारीख :-_ ०८ ऑगस्ट १९९७
+जन्म वार व वेळ :-_ शुक्रवार दुपारी
+TXT;
+
+    $dto = app(OcrEnsembleFieldExtractor::class)->extractFromText(
+        $text,
+        OcrEnsemblePhase3Constants::ENGINE_LARAVEL_NATIVE_OCR,
+    );
+
+    expect($dto->field('date_of_birth'))->toBe('1997-08-08');
+});
+
 test('production field extractor recovers dob from corrupted जन्म label line', function () {
     $text = <<<'TXT'
 मुलाचे नाव : कु. प्रौती राजेंद्र पाटील
