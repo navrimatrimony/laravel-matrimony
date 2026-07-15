@@ -20,6 +20,7 @@
 | Dates often already in raw OCR; Label/month bugs hide them | Yes | Prefer parser recovery before new engines |
 | ITRANS / wrong PDF text layer looks “long” but is unusable | Yes | Force raster when no Devanagari/English biodata keywords |
 | English resumes OCR’d as Marathi produce Devanagari garbage that scores high | Yes | Include `eng`; don’t apply latin_garbage when English biodata keywords present |
+| Most GT-20 **name** misses are Mode B (tokens in raw) | Yes | Extractor gaps (English Name, biodata-title names, OCR honorific noise) over new OCR engine |
 | Ordinal English DOB (`24th March 1991`) | Yes | Common resume form; must parse |
 | Horizontal date-band crop | Partial | Fixes glued slash form; does not fix wrong day under overlay |
 | Blue watermark opaque wipe / red-channel | No (so far) | Overlay destroys or confuses day digits (`D (8)` still 24≠21) |
@@ -52,7 +53,7 @@
 | PDF DPI/crop/channel only (`28.pdf`) | **Rejected** | Marathi multipass still preferred garbage |
 | English ordinal date parse (`24th March 1991`) | **Accepted** | Resume-style DOB in raw |
 | Multipass: include `eng`; don’t penalize Latin resumes | **Accepted** | Stops Marathi hallucination winning over English resumes |
-| PDF raster 300 DPI + multipass (not forced `off`) | **Accepted** | `28.pdf` → DOB **1991-03-24** |
+| English resume `Name:` + strip Ms/Mr; biodata-title name lines; `चच.` honorific; garble prefix before `कु.` | **Accepted** | Loop 03 Mode B name recovery (production-general) |
 
 ---
 
@@ -88,7 +89,7 @@ Residual Mode A (ranked for Loop 02+):
 1. **Done (accept):** English resume path — `28.pdf` recovered (`24th March 1991`).  
 2. **Reject so far on `D (8)`:** bands, color channel, de-blue — OCR still prefers day **24** vs GT **21** (watermark overlap).  
 3. **Dashboard + DOC §19** — Product Metrics + Impact First.  
-4. **Next:** After GT-20 remasure, pick highest residual (name vs `D (8)` watermark) by production impact; continue.  
+4. **Next:** Loop 03 Name — forensic **Mode B 12 / Mode A 1**; English Name + biodata-title extract implemented. Remasure after accept.  
 5. Plateau only per DOC §17 after multiple approaches exhausted.
 
 ---

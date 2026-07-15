@@ -156,6 +156,23 @@ test('production name extractor tolerates ocr text with no candidate name', func
     expect($extractor->extract($lines))->toBeNull();
 });
 
+test('production name extractor reads English resume Name and biodata-title name lines', function () {
+    $extractor = app(OcrEnsembleNameExtractor::class);
+
+    expect($extractor->extract([
+        "RESUME Name: - Ms. Sonam Sanjeev Father’s Name: - Mr. Sanjeev Gopi",
+    ]))->toBe('Sonam Sanjeev')
+        ->and($extractor->extract([
+            'मुलाचे नाव : चच.ओंकार सुभाष भोसले. जन्म दिनांक : 08',
+        ]))->toBe('ओंकार सुभाष भोसले')
+        ->and($extractor->extract([
+            'बायोडाटा रेखा शिवदास पाटील जन्मतारीख 15 जून 1999',
+        ]))->toBe('रेखा शिवदास पाटील')
+        ->and($extractor->extract([
+            'र : कु. प्रतीक्षा दशरथ कचरे. जन्म : २४/०३/१९९९',
+        ]))->toBe('प्रतीक्षा दशरथ कचरे');
+});
+
 test('production field extractor extracts candidates from ocr attempts', function () {
     $attempt = new BiodataIntakeOcrAttempt([
         'engine' => BiodataIntakeOcrAttempt::ENGINE_LARAVEL_NATIVE_OCR,

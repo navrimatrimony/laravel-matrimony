@@ -83,11 +83,13 @@ class OcrEnsembleNameExtractor
         $name = $this->stripHtmlAndOcrArtifacts($name);
         $name = $this->stopAtNextCandidateField($name);
         $name = preg_replace('/\([^)]*\)/u', '', $name) ?? $name;
+        // OCR garble before honorific: "र : कु. प्रतीक्षा ..."
+        $name = preg_replace('/^(?:[\p{L}\p{M}]{1,3}\s*[:：]\s*)+/u', '', $name) ?? $name;
         $name = $this->stripNameEdgeNoiseTokens($name);
 
         do {
             $before = $name;
-            $name = preg_replace('/^(?:bio\s*data|candidate|full\s*name|name)\s*[:：\-–—.\s]+/iu', '', $name) ?? $name;
+            $name = preg_replace('/^(?:bio\s*data|candidate|full\s*name|name|resume)\s*[:：\-–—.\s]+/iu', '', $name) ?? $name;
             $name = $this->stripNameEdgeNoiseTokens($name);
             $name = $this->stripCandidateNameLabelPrefix($name);
             $name = $this->stripNameHonorificPrefix($name);
@@ -129,16 +131,24 @@ class OcrEnsembleNameExtractor
 
     private function valueAfterNameLabel(string $line): ?string
     {
-        if (preg_match('/(?:मुलाचे\s+नां?व|मुलीचे\s+नां?व|वधूचे\s+नां?व|वराचे\s+नां?व|नां?व)\s*(?::\s*-\s*|[:\-：]\s*|[८8]\s*|\s+)\s*(.+)$/ui', $line, $matches) !== 1) {
-            return null;
+        if (preg_match('/(?:मुलाचे\s+नां?व|मुलीचे\s+नां?व|वधूचे\s+नां?व|वराचे\s+नां?व|नां?व)\s*(?::\s*-\s*|[:\-：]\s*|[८8]\s*|\s+)\s*(.+)$/ui', $line, $matches) === 1) {
+            return $this->stopAtNextCandidateField(trim((string) $matches[1]));
         }
 
-        return $this->stopAtNextCandidateField(trim((string) $matches[1]));
+        // Mask relation English name labels (ASCII or curly apostrophe), then take Name: value.
+        $masked = preg_replace('/\b(?:Father|Mother|Birth)\S{0,2}\s*Name\b/iu', 'REL_NAME', $line) ?? $line;
+        if (preg_match('/(?:^|(?<=\s))(?:full\s+)?name\s*(?::\s*-\s*|[:\-]\s+)\s*(.+)$/iu', $masked, $matches) === 1) {
+            return $this->stopAtNextCandidateField(trim((string) $matches[1]));
+        }
+
+        return null;
     }
 
     private function stopAtNextCandidateField(string $value): string
     {
-        $stops = 'जन्म\s*तारीख|जन्मतारीख|जन्म\s*दिनांक|जन्मदि|जन्म\s*ठिकाण|जन्म\s*स्थळ|उंची|ऊंची|लिंग|शिक्षण|शैक्षणिक|नोकरी|व्यवसाय|पद|मोबाईल|मोबाइल|मोबा\.?|मो\.?\s*नं\.?|संपर्क|वडील|वडिलांचे\s+नाव|आई|आईचे\s+नाव|मामा|आत्या|भाऊ|बहिण|बहीण|पत्ता|धर्म|जात|रास|राशी|नक्षत्र';
+        $stops = 'जन्म\s*तारीख|जन्मतारीख|जन्म\s*दिनांक|जन्मदि|जन्म\s*ठिकाण|जन्म\s*स्थळ|उंची|ऊंची|लिंग|शिक्षण|शैक्षणिक|नोकरी|व्यवसाय|पद|मोबाईल|मोबाइल|मोबा\.?|मो\.?\s*नं\.?|संपर्क|वडील|वडिलांचे\s+नाव|आई|आईचे\s+नाव|मामा|आत्या|भाऊ|बहिण|बहीण|पत्ता|धर्म|जात|रास|राशी|नक्षत्र'
+            .'|Father\S{0,2}\s*Name|Mother\S{0,2}\s*Name|Date\s*of\s*Birth|Birth\s*Time|Place\s*of\s*Birth|Birth\s*Name|REL_NAME'
+            .'|जन्म\b';
         $value = preg_split('/\s+(?:'.$stops.')(?:\s*[:：\-–—.]|\s+)/ui', $value, 2)[0] ?? $value;
 
         return trim($value);
@@ -169,7 +179,7 @@ class OcrEnsembleNameExtractor
 
     private function stripNameHonorificPrefix(string $value): string
     {
-        $value = preg_replace('/^(?:\*[\s]*)?(?:कु\.|कुं\.|कुमारी\s+|चि\.|चिरंजीव\s+|श्री\.|श्रीमती\s+|सौ\.)/u', '', $value) ?? $value;
+        $value = preg_replace('/^(?:\*[\s]*)?(?:Ms\.|Mr\.|Mrs\.|Miss\s+|कु\.|कुं\.|कुमारी\s+|चि\.|चच\.|चिरंजीव\s+|श्री\.|श्रीमती\s+|सौ\.)/iu', '', $value) ?? $value;
 
         foreach ([
             'चिरंजीव',
@@ -178,7 +188,9 @@ class OcrEnsembleNameExtractor
             'कुमारी',
             'कुमार',
             'चि.',
+            'चच.',
             'चि',
+            'चच',
             'कुं.',
             'कुं',
             'कु.',
@@ -187,8 +199,12 @@ class OcrEnsembleNameExtractor
             'श्री',
             'सौ.',
             'सौ',
+            'Ms.',
+            'Mr.',
+            'Mrs.',
+            'Miss',
         ] as $prefix) {
-            if (str_starts_with($value, $prefix)) {
+            if (str_starts_with(mb_strtolower($value, 'UTF-8'), mb_strtolower($prefix, 'UTF-8'))) {
                 return $this->trimEdgePunctuation(mb_substr($value, mb_strlen($prefix, 'UTF-8'), null, 'UTF-8'));
             }
         }
@@ -283,13 +299,21 @@ class OcrEnsembleNameExtractor
 
     private function looksLikeBiodataTitle(string $value): bool
     {
-        return preg_match('/^(?:बायो\s*डाटा|bio\s*data|marriage\s*biodata|वैवाहिक\s*बायो\s*डाटा)\b/iu', trim($value)) === 1;
+        $trimmed = trim($value);
+        if (preg_match('/^(?:बायो\s*डाटा|बायोडाटा|bio\s*data|marriage\s*biodata|वैवाहिक\s*बायो\s*डाटा|resume)\b/iu', $trimmed) !== 1) {
+            return false;
+        }
+
+        // "बायोडाटा रेखा शिवदास पाटील" is a title + name — strip title and keep rest for cleaner.
+        $rest = trim(preg_replace('/^(?:बायो\s*डाटा|बायोडाटा|bio\s*data|marriage\s*biodata|वैवाहिक\s*बायो\s*डाटा|resume)\s*/iu', '', $trimmed) ?? '');
+
+        return $rest === '';
     }
 
     private function hasCandidateHonorific(string $line): bool
     {
-        return preg_match('/(?:^|[\s:：\-–—(])(?:चि\.|चि\s+|चिरंजीव\s*|कु\.|कुं\.|कुमारी\s+|श्री\.|श्रीमती\s+|सौ\.)\s*[\p{L}\p{M}]/u', $line) === 1
-            || preg_match('/(?:^|[\s*])(?:\*[\s]*)?(?:कु\.|चि\.|श्री\.|श्रीमती\.|सौ\.)/u', $line) === 1;
+        return preg_match('/(?:^|[\s:：\-–—(])(?:चि\.|चच\.|चि\s+|चिरंजीव\s*|कु\.|कुं\.|कुमारी\s+|श्री\.|श्रीमती\s+|सौ\.|Ms\.|Mr\.|Mrs\.)\s*[\p{L}\p{M}]/iu', $line) === 1
+            || preg_match('/(?:^|[\s*])(?:\*[\s]*)?(?:कु\.|चि\.|चच\.|श्री\.|श्रीमती\.|सौ\.)/u', $line) === 1;
     }
 
     private function hasCandidateNameLabel(string $line): bool
@@ -298,8 +322,13 @@ class OcrEnsembleNameExtractor
             return true;
         }
 
-        return preg_match('/(?:^|\s)नां?व(?:[\s:：\-–—.]|$)/u', $line) === 1
-            && ! $this->hasRelationContext($line);
+        if (preg_match('/(?:^|\s)नां?व(?:[\s:：\-–—.]|$)/u', $line) === 1 && ! $this->hasRelationContext($line)) {
+            return true;
+        }
+
+        $masked = preg_replace('/\b(?:Father|Mother|Birth)\S{0,2}\s*Name\b/iu', 'REL_NAME', $line) ?? $line;
+
+        return preg_match('/(?:^|(?<=\s))(?:full\s+)?name\s*(?::\s*-\s*|[:\-]\s+)/iu', $masked) === 1;
     }
 
     private function hasRelationContext(string $value): bool
