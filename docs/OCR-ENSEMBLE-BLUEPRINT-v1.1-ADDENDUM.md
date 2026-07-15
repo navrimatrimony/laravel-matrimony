@@ -79,13 +79,9 @@ Do not reopen Phase 4 HTTP debugging for empty DOB / `merge_noop` class issues.
 
 ## A13. Goal-centric autonomous delivery (2026-07-15)
 
-See parent blueprint **§19.6**:
-
-- One **Approved Goal** may chain Sprint 1→4 without mid-sprint chat approval.
-- Escalate only per Escalation Matrix (automatic vs human).
-- **Complete** only when Definition of Done is fully satisfied; otherwise **In Progress**.
-- Benchmark-before-second-OCR and Learning-after-stable-OCR **unchanged**.
-- Sprint 2 dataset missing = external ops blocker — **do not skip benchmark**.
+- **Execution:** `docs/DEVELOPER-OPERATING-CONTRACT.md` (DOC) — DoD, escalation, evidence, “owns the goal”.
+- **OCR product:** Blueprint §19 sprint order + benchmark/learning gates.
+- Canonical goal text: see Blueprint §19.6 + DOC §3.2.
 
 ---
 

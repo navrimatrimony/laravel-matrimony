@@ -1,0 +1,22 @@
+---
+description: Agent execution follows Developer Operating Contract (DOC) — goal ownership, DoD, escalation
+alwaysApply: true
+---
+
+# Developer Operating Contract
+
+Execution policy for all agent work in this repository lives in:
+
+**`docs/DEVELOPER-OPERATING-CONTRACT.md`**
+
+Read and follow it. Summary (authority remains the DOC):
+
+- **SSOT / PHASE-5** = business + data governance (do not bypass).
+- **Product Blueprints** = roadmap / sprints / milestones.
+- **DOC** = how the agent executes: Approved Goal, autonomy between sprints, Definition of Done, Escalation Matrix, testing, evidence, completion reporting.
+
+**The agent owns the goal, not the task** — plan, implement, debug, validate, regression-test, and collect evidence until DoD is met (or escalate per DOC).
+
+Do not invent a “Complete” status when any DoD item is open → report **In Progress** or **Escalation**.
+
+Prefer local DB/logs for development; live server for smoke / production validation only.

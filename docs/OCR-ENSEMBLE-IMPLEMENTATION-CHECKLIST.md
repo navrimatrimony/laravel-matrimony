@@ -285,7 +285,7 @@ Next Phase only
 
 Authority: **`OCR-ENSEMBLE-PIPELINE-BLUEPRINT.md` §19** (2026-07-14) + **§19.6** goal-centric execution (2026-07-15).
 
-**Execution mode:** Prefer **one Approved Goal** (Program Completion §19 / mandate in §19.6). Agent may run Sprint 1→4 continuously. Escalate only per §19.6 Escalation Matrix. Report **Complete** only when §19.6 Definition of Done is fully satisfied (else **In Progress**).
+**Execution mode:** `docs/DEVELOPER-OPERATING-CONTRACT.md` (DOC). Prefer **one Approved Goal**. Chain Sprint 1→4 under DOC autonomy. Report **Complete** only when DOC Definition of Done is fully satisfied (else **In Progress** / **Escalation**).
 
 | Sprint | Name | Production code? | Status |
 |--------|------|------------------|--------|
@@ -316,3 +316,4 @@ Still out of casual scope:
 | 1.5 | 2026-07-14 | Post-v1.0 locked sprint order (§19 blueprint) — Phase 4 closed; Sprint 1 next |
 | 1.6 | 2026-07-15 | §19.6 goal-centric autonomous delivery — chain sprints under one Approved Goal |
 | 1.7 | 2026-07-15 | §19.6 DoD + Escalation Matrix refinement |
+| 1.8 | 2026-07-15 | Point execution to DEVELOPER-OPERATING-CONTRACT.md |
