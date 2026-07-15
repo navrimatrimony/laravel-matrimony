@@ -526,6 +526,69 @@ No fourth foundational “process” document is required for maturity. Prefer i
 
 ---
 
+## 17. Plateau Rule (LOCKED)
+
+```text
+A plateau SHALL NOT be declared
+because one technique failed.
+
+A plateau may be declared ONLY after
+multiple reasonable,
+production-feasible approaches
+have been:
+
+1. designed against the measured weakness,
+2. implemented or evaluated offline,
+3. benchmarked against ground truth,
+4. accepted or rejected with evidence
+   in the OCR Research Ledger,
+
+and further attempts are variations
+unlikely to change Raw OCR fidelity.
+
+One failed install,
+one failed crop,
+one failed engine,
+or one failed preprocessor
+is NEVER by itself a plateau.
+```
+
+**Product Goal stays In Progress** while measurable fidelity work remains on ranked residual losses — even after a research loop closes.
+
+---
+
+## 18. Research Phase Completion (LOCKED)
+
+```text
+Research Phase Complete may be declared
+ONLY when the agent reports:
+
+I have exhausted all practical,
+production-feasible improvements
+for Raw OCR text fidelity
+under the current architecture.
+
+Further meaningful gains require
+model training, a new OCR research
+direction, or a business /
+architecture decision.
+
+Evidence: Ledger accept/reject table,
+residual Mode-A cases,
+and plateau criteria (§17) met.
+```
+
+Loop Complete ≠ Product Goal Complete ≠ Research Phase Complete.
+
+| Status | Meaning |
+|--------|---------|
+| **Loop Complete** | One measured weakness cycle finished (accept/reject + commit) |
+| **Product Goal In Progress** | Fidelity objective not yet at DoD / plateau |
+| **Research Phase Complete** | §18 statement + evidence; only then Product OCR research may freeze |
+| **Escalation** | §5.2 only |
+
+---
+
 ## Document history
 
 | Version | Date | Change |
@@ -535,3 +598,4 @@ No fourth foundational “process” document is required for maturity. Prefer i
 | 1.2 | 2026-07-15 | User Interaction / Local-first / Marathi instructions / Minimal ask / Single Active Goal |
 | 1.3 | 2026-07-15 | §5.4 mid-goal commits without ask; §13.5–13.7 batch/folder/dataset ownership + Sprint 2 Batch-001 contract |
 | 1.4 | 2026-07-15 | §12.1 Local Development Ownership — agent installs deps (Ghostscript, Python, OCR models, …); user only for UAC/license/paid login |
+| 1.5 | 2026-07-15 | §17 Plateau Rule; §18 Research Phase Completion — loop ≠ goal; multi-approach evidence required |

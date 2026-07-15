@@ -1,6 +1,7 @@
 # OCR Research Loop 01 — DOB weakness (problem-driven)
 
-> **Status:** OPEN — forensic first, tools second  
+> **Status:** **COMPLETE** (2026-07-15)  
+> **Product Goal:** still **In Progress** — Loop Complete ≠ Goal Complete (DOC §18)  
 > **Authority:** Blueprint §20 problem-driven research  
 > **Baseline:** Tesseract GT-20 `date_of_birth` = **25%** (weakest critical field)
 
@@ -19,47 +20,19 @@ Production biodata OCR fails most often on **date of birth** among critical fiel
 
 ---
 
-## 2. Method (no engine shopping)
+## 2. Outcome
 
-1. For each GT-20 row with truth DOB and Tesseract miss: inspect Batch-001 OCR / parse-input text.  
-2. Classify A/B/C/D.  
-3. Rank modes by share.  
-4. Implement **only** the top mode’s cheapest high-leverage fix.  
-5. Re-score GT-20 DOB + critical %.  
-6. Keep if uplift; else discard.
-
-Candidate tools (only after classification):
-
-- Preprocess sidecar (deskew/contrast) if A  
-- Extractor label/fuzzy expand if B  
-- Digit maps if C  
-- Offline second OCR on date-band crop if A still high after preprocess
+| Result | Detail |
+|--------|--------|
+| Forensic | Most early “misses” were Mode B (date in raw); residual Mode A: `28.pdf`, `D (8).jpeg` |
+| Accepted | Label/month/glued-year; PDF raster+GS; ITRANS reject; bare तारीख; 14→11; multipass valid-date scoring |
+| Rejected | Wide month invent; truncated-year invent; DPI/preset-only for `28.pdf`; invent day on `D (8)` |
+| Ledger | Technique register in `docs/OCR-RESEARCH-PHASE-LEDGER.md` |
 
 ---
 
-## 3. SSOT / DOC
+## 3. Exit (met)
 
-- No production second OCR without new GO report  
-- No silent profile writes  
-- Local GT only; PII not committed  
+Loop 01 closes when: DOB mode mix documented + measured interventions accepted/rejected with evidence. **Met.**
 
----
-
-## 4. Exit
-
-Loop 01 closes when: DOB mode mix documented + one measured intervention accepted or rejected with evidence.
-
----
-
-## 5. Forensic result (definitive for images)
-
-Full-page re-OCR of GT-20 DOB misses (see ledger):
-
-| Bucket | Count |
-|--------|------:|
-| PDF skipped (image CLI) | 3 |
-| Date signal in raw → parser/label miss (before fix) | 11 |
-| Fresh OCR already extractable | 1 |
-| No date signal in image raw | 0 |
-
-Prefix-only earlier “no date” counts were **incomplete**. Product goal remains **Raw OCR quality**; this cycle first recovered dates **already present** in raw (broken `जन्म तारीख` label + month forms). PDF raster + Ghostscript + invalid-month digit recovery followed. Remaining: hard raw garbles / truncated year / bad PDF raster.
+Next: Loop 02 — date-band / region OCR for remaining Mode A (not a new engine sprint).
