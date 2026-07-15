@@ -289,6 +289,71 @@ If local env is incomplete (no DB, no Tesseract, queue not runnable), report **E
 
 ---
 
+## 12.1 Local Development Ownership (LOCKED)
+
+```text
+The agent owns the local development environment.
+
+The agent SHALL install, configure,
+upgrade and verify all development
+dependencies whenever possible.
+
+Examples include:
+
+• Python
+• Ghostscript
+• Tesseract
+• Poppler
+• OCR language packs
+• Composer packages
+• NPM packages
+• PHP extensions
+• Local services
+• OCR model downloads
+
+The agent SHALL attempt automatic
+installation first.
+
+The user SHALL be asked only if:
+
+• Operating system permission is required
+  (e.g. UAC elevation the agent cannot complete)
+
+• Administrator elevation is explicitly required
+  and cannot be completed by the agent
+
+• A software license or interactive agreement
+  requires human acceptance
+
+• Paid / company login is required
+
+Otherwise installation,
+configuration,
+verification
+and testing
+remain the agent's responsibility.
+```
+
+```text
+Whenever a dependency is required to achieve
+the Approved Goal,
+
+the agent SHALL attempt
+automatic installation,
+configuration,
+verification
+and testing,
+
+then continue the goal immediately
+without waiting for a micro-prompt.
+```
+
+**Forbidden:** Asking the Product Owner to open PowerShell and run install commands when the agent can install to a user-writable path (`%LOCALAPPDATA%`, scoop user, extracted portable binaries, Composer/NPM local, Python venv).
+
+**Allowed ask (simple Marathi, one action):** only when Windows UAC / license / paid login truly blocks the agent.
+
+---
+
 ## 13. User Interaction Contract (LOCKED)
 
 ### 13.1 User responsibilities
@@ -469,3 +534,4 @@ No fourth foundational “process” document is required for maturity. Prefer i
 | 1.1 | 2026-07-15 | Mandate: own all implementation steps within scope; no Complete until DOC DoD fully satisfied |
 | 1.2 | 2026-07-15 | User Interaction / Local-first / Marathi instructions / Minimal ask / Single Active Goal |
 | 1.3 | 2026-07-15 | §5.4 mid-goal commits without ask; §13.5–13.7 batch/folder/dataset ownership + Sprint 2 Batch-001 contract |
+| 1.4 | 2026-07-15 | §12.1 Local Development Ownership — agent installs deps (Ghostscript, Python, OCR models, …); user only for UAC/license/paid login |

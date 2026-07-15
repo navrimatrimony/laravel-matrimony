@@ -90,7 +90,27 @@ class OcrEnsembleDobNormalizer
             }
         }
 
+        // Bare "तारीखDecember 10, 1995" / month-name lines without a fuzzy जन्म label.
+        // Only accept when the line itself normalizes to a calendar ISO (no free invention).
+        foreach ($lines as $line) {
+            if (preg_match('/तारीख|'.$this->monthNameSignalPattern().'/ui', $line) !== 1) {
+                continue;
+            }
+
+            $iso = $this->normalize($line);
+            if ($iso !== null) {
+                return $iso;
+            }
+        }
+
         return null;
+    }
+
+    private function monthNameSignalPattern(): string
+    {
+        return 'january|february|march|april|may|june|july|august|september|october|november|december'
+            .'|जानेवारी|फेब्रुवारी|मार्च|एप्रिल|मे|जून|जुलै|ऑगस्ट|ऑजस्ट|सप्टेंबर|सप्टेंबट|ऑक्टोबर|नोव्हेंबर|डिसेंबर'
+            .'|गस्ट';
     }
 
     public function lineLooksLikeDobLabel(string $line): bool

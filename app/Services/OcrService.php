@@ -450,7 +450,7 @@ class OcrService
 
     /**
      * Digital biodata PDFs usually have substantial selectable text.
-     * Empty / tiny layers are typical of scanned photo PDFs — those need raster OCR.
+     * Empty / tiny / encoding-garbage layers (common WinAnsi/ITRANS scans) need raster OCR.
      */
     private function pdfEmbeddedTextIsUsable(string $text): bool
     {
@@ -468,12 +468,63 @@ class OcrService
             return true;
         }
 
+        // Real English biodata layers carry recognizable field words.
         if (preg_match('/\b(name|dob|date of birth|mobile|education|caste|religion|height)\b/iu', $text) === 1) {
             return true;
         }
 
-        // Long Latin-only selectable text (generated PDF biodata)
-        return $len >= 200;
+        // Long Latin without Devanagari/keywords is usually a broken text layer
+        // (e.g. ITRANS garbage). Prefer page raster → Tesseract for raw fidelity.
+        return false;
+    }
+
+    /**
+     * Ensure Ghostscript is visible to Imagick on Windows (user PDF raster OCR).
+     * Prefer already-configured PATH; otherwise use agent-installed user-local GS.
+     */
+    private function ensureGhostscriptAvailableForImagick(): void
+    {
+        $localApp = getenv('LOCALAPPDATA') ?: (getenv('USERPROFILE') ? getenv('USERPROFILE').'\\AppData\\Local' : null);
+        $candidates = [
+            getenv('MAGICK_GHOSTSCRIPT_PATH') ?: null,
+            $localApp ? $localApp.'\\Ghostscript\\extracted\\bin\\gswin64c.exe' : null,
+            $localApp ? $localApp.'\\Ghostscript\\extracted\\bin\\gs.exe' : null,
+        ];
+
+        // Common Chocolatey / Program Files layouts
+        foreach ([
+            'C:\\Program Files\\gs',
+            'C:\\Program Files\\Ghostscript',
+        ] as $root) {
+            if (! is_dir($root)) {
+                continue;
+            }
+            $hits = glob($root.'\\*\\bin\\gswin64c.exe') ?: [];
+            foreach ($hits as $hit) {
+                $candidates[] = $hit;
+            }
+        }
+
+        $gs = null;
+        foreach ($candidates as $candidate) {
+            if (is_string($candidate) && $candidate !== '' && is_file($candidate)) {
+                $gs = $candidate;
+                break;
+            }
+        }
+
+        if ($gs === null) {
+            return;
+        }
+
+        putenv('MAGICK_GHOSTSCRIPT_PATH='.$gs);
+        $_ENV['MAGICK_GHOSTSCRIPT_PATH'] = $gs;
+        $bin = dirname($gs);
+        $path = getenv('PATH') ?: '';
+        if (! str_contains($path, $bin)) {
+            putenv('PATH='.$bin.PATH_SEPARATOR.$path);
+            $_ENV['PATH'] = $bin.PATH_SEPARATOR.$path;
+        }
     }
 
     /**
@@ -492,6 +543,8 @@ class OcrService
 
             return '';
         }
+
+        $this->ensureGhostscriptAvailableForImagick();
 
         $maxPages = 8;
         try {

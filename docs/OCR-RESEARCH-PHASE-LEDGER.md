@@ -29,10 +29,13 @@
 
 1. **Done:** Recover dates already in raw (label + months). Image remasure earlier: 7/12 OK.  
 2. **Done:** Glued month+year (`ऑगस्ट1998`) — production-general OCR noise, not GT-only.  
-3. **In progress:** Scanned **PDF** raw fidelity — production path now attempts Imagick page raster → Tesseract when embedded PDF text is unusable. **Blocked locally without Ghostscript** (`gs` / `gswin64c`); code degrades safely.  
-4. **Next:** Remaining image DOB raw garble (digit confusions) + unblock PDF raster (Ghostscript).
+3. **Done:** Ghostscript installed user-local (`%LOCALAPPDATA%\Ghostscript\extracted`); Imagick PDF raster works.  
+4. **Done (accept):** Reject ITRANS/Latin encoding-garbage as “usable” PDF text → raster OCR (`27.pdf` DOB recovered).  
+5. **Done (accept):** Bare `तारीख` / English–Marathi month-name line pass in DOB normalizer (`testing …pdf` → `1995-12-10`).  
+6. **Reject / defer:** `28.pdf` raster still has no parseable date (`24 फिट 1991` only) — true raw OCR fidelity / preprocess, not parser.  
+7. **Next:** Remaining image DOB raw-garble cases (digit confusions) + optional better raster/preprocess for hard PDFs like `28.pdf`.
 
-**Production generality check:** month/label/glued-year and PDF raster apply to real intakes, not GT-20-only tricks.
+**Production generality check:** month/label/glued-year, PDF usable-text filter, and PDF raster apply to real intakes, not GT-20-only tricks.
 
 ---
 
@@ -42,3 +45,4 @@
 |------|------|
 | 2026-07-15 | Fidelity objective; raw-vs-parser forensic; month/label fix |
 | 2026-07-15 | Glued month-year; PDF raster-OCR fallback (needs Ghostscript on Windows Imagick) |
+| 2026-07-15 | GS user-local install; ITRANS embed reject; bare-तारीख/month line DOB; PDF bench 2/3 DOB OK |

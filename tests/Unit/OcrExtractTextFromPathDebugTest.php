@@ -190,11 +190,14 @@ test('usable embedded pdf text heuristics prefer real biodata layers', function 
     $ocr = $this->app->make(OcrService::class);
     $long = str_repeat('नाव जन्म तारीख शिक्षण व्यवसाय मोबाइल ', 20);
 
+    $itransGarbage = str_repeat('Jh Jh Lokeh leFkZ dkWEiqVj tUefnukad 11@04@1998 ', 8);
+
     expect($method->invoke($ocr, ''))->toBeFalse()
         ->and($method->invoke($ocr, 'short'))->toBeFalse()
         ->and($method->invoke($ocr, $long))->toBeTrue()
         ->and($method->invoke(
             $ocr,
             'Hello biodata DOB name mobile education caste religion height text here with enough latin keywords'
-        ))->toBeTrue();
+        ))->toBeTrue()
+        ->and($method->invoke($ocr, $itransGarbage))->toBeFalse();
 });
