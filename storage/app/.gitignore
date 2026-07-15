@@ -2,3 +2,5 @@
 !private/
 !public/
 !.gitignore
+!ocr-dev-batches/
+!ocr-dev-batches/**
