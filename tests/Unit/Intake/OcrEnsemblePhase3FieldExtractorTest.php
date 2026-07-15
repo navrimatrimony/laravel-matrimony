@@ -64,6 +64,15 @@ test('production mobile selector prefers candidate mobile over relative numbers'
     expect($phone)->toBe('9876543210');
 });
 
+test('production mobile selector recovers मो.नं. on glued megapage OCR lines', function () {
+    $line = '// / गणेशाय नमः //नावनवनाथ पाटीलणे तारीखDecember 10, 1995णे वेळ06:50 AM'
+        .'णे िठकाणतडवळे जातिहंदू मराठा मो.नं.7057066223,7776010849 वडील मोबाईल 9123456789';
+
+    $phone = app(OcrEnsembleMobileSelector::class)->selectPrimary([$line]);
+
+    expect($phone)->toBe('7057066223');
+});
+
 test('production dob normalizer parses dd/mm/yyyy and recovers ocr digit substitutions', function () {
     $normalizer = app(OcrEnsembleDobNormalizer::class);
 

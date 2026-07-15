@@ -21,12 +21,16 @@ class OcrEnsembleMobileSelector
                 continue;
             }
 
-            $lineScore = $this->lineContextScore($lines, $index, $line);
-            if ($lineScore < -50) {
-                continue;
-            }
-
             foreach ($this->extractPhones($line) as $phone) {
+                $snippet = $this->localSnippetAroundPhone($line, $phone);
+                $lineScore = $this->snippetContextScore($snippet);
+                // Page-level boosts only when the line is not a huge OCR dump.
+                if (mb_strlen($line, 'UTF-8') < 220) {
+                    $lineScore += $this->pageContextBoost($lines, $index, $line);
+                }
+                if ($lineScore < -50) {
+                    continue;
+                }
                 $scores[$phone] = max($scores[$phone] ?? PHP_INT_MIN, $lineScore);
             }
 
@@ -36,8 +40,15 @@ class OcrEnsembleMobileSelector
             }
 
             if ($this->lineHasMobileLabel($line) && ! $this->hasRelationContext($line)) {
+                $labelScore = $this->snippetContextScore($line) + 5;
+                if (mb_strlen($line, 'UTF-8') < 220) {
+                    $labelScore += $this->pageContextBoost($lines, $index, $line);
+                }
                 foreach ($this->extractPhones($nextLine) as $phone) {
-                    $scores[$phone] = max($scores[$phone] ?? PHP_INT_MIN, $lineScore + 5);
+                    if ($labelScore < -50) {
+                        continue;
+                    }
+                    $scores[$phone] = max($scores[$phone] ?? PHP_INT_MIN, $labelScore);
                 }
             }
         }
@@ -52,17 +63,47 @@ class OcrEnsembleMobileSelector
     }
 
     /**
-     * @param  list<string>  $lines
+     * Score a short window around a phone so megapage OCR lines
+     * (birth + family + mobile glued) do not zero out candidate contact.
      */
-    private function lineContextScore(array $lines, int $index, string $line): int
+    private function snippetContextScore(string $snippet): int
     {
         $score = 0;
 
-        if ($this->lineHasDirectContactLabel($line) && ! $this->hasRelationContext($line)) {
+        if ($this->lineHasDirectContactLabel($snippet) && ! $this->hasRelationContext($snippet)) {
             $score += 50;
-        } elseif ($this->lineHasMobileLabel($line) && ! $this->hasRelationContext($line)) {
+        } elseif ($this->lineHasMobileLabel($snippet) && ! $this->hasRelationContext($snippet)) {
             $score += 35;
         }
+
+        if ($this->hasRelationContext($snippet)) {
+            $score -= 100;
+        }
+
+        if ($this->hasNonContactPhoneContext($snippet) && ! $this->lineHasMobileLabel($snippet)) {
+            $score -= 40;
+        }
+
+        if (preg_match('/(?:वडील|आई|मामा|भाऊ|बहिण|बहीण|काका|मावशी)\s+.*(?:मोबाईल|मोबाइल|संपर्क)/ui', $snippet) === 1) {
+            $score -= 90;
+        }
+
+        // Unlabeled orphan digit strings (suchak overlay stickers) are weaker than मो.नं. lines.
+        $compact = preg_replace('/\s+/u', '', OcrNormalize::normalizeDigits($snippet)) ?? '';
+        if ($this->lineHasMobileLabel($snippet) === false
+            && preg_match('/^[0-9+\-\/,:]{10,}$/u', $compact) === 1) {
+            $score -= 25;
+        }
+
+        return $score;
+    }
+
+    /**
+     * @param  list<string>  $lines
+     */
+    private function pageContextBoost(array $lines, int $index, string $line): int
+    {
+        $score = 0;
 
         if ($this->hasCandidateNameLabelNearby($lines, $index)) {
             $score += 25;
@@ -72,23 +113,45 @@ class OcrEnsembleMobileSelector
             $score += 15;
         }
 
-        if ($this->hasRelationContext($line)) {
-            $score -= 100;
-        }
-
         if ($this->hasNearbyParentContext($lines, $index) && ! $this->lineHasDirectContactLabel($line)) {
             $score -= 80;
         }
 
-        if ($this->hasNonContactPhoneContext($line)) {
-            $score -= 40;
-        }
-
-        if (preg_match('/(?:वडील|आई|मामा|भाऊ|बहिण|बहीण|काका|मावशी)\s+.*(?:मोबाईल|मोबाइल|संपर्क)/ui', $line) === 1) {
-            $score -= 90;
-        }
-
         return $score;
+    }
+
+    private function localSnippetAroundPhone(string $line, string $phone): string
+    {
+        $normalizedLine = OcrNormalize::normalizeDigits($line);
+        $pos = mb_strpos($normalizedLine, $phone);
+        if ($pos === false) {
+            return mb_strlen($normalizedLine, 'UTF-8') <= 160
+                ? $normalizedLine
+                : mb_substr($normalizedLine, 0, 160, 'UTF-8');
+        }
+
+        // Left-biased window: owning label is usually before the digits.
+        // Looking far right on megapage OCR pulls in the next relative's मोबाईल
+        // and falsely zeros a valid मो.नं. candidate.
+        $start = max(0, $pos - 56);
+        $after = 14;
+        $tail = mb_substr(
+            $normalizedLine,
+            $pos + mb_strlen($phone, 'UTF-8'),
+            40,
+            'UTF-8'
+        );
+        // Allow a comma-twin secondary number immediately after; stop before relation labels.
+        if (preg_match('/^([,\/\s]*[6-9]\d{9})?/u', $tail, $m) === 1 && ($m[0] ?? '') !== '') {
+            $after = mb_strlen($m[0], 'UTF-8');
+        }
+
+        return mb_substr(
+            $normalizedLine,
+            $start,
+            mb_strlen($phone, 'UTF-8') + ($pos - $start) + $after,
+            'UTF-8'
+        );
     }
 
     /**

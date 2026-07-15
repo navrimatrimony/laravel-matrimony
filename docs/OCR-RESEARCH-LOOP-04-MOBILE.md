@@ -1,16 +1,39 @@
 # OCR Research Loop 04 — Mobile (`primary_contact_number`)
 
-> **Status:** OPEN  
+> **Status:** COMPLETE (partial residual remains)  
 > **Authority:** Blueprint §20 + DOC §19 Impact First + §21 Continue  
-> **Why:** GT-20 mobile **55.6%** (flat since Sprint 2) — worse structured accuracy than Name (65%); every intake needs contact.
+> **Why:** GT-20 mobile was **55.6%** (flat since Sprint 2).
 
-## Impact gate
+## Results
 
-> Affects thousands of intakes? **Yes.**
+| Metric | Before | After |
+|--------|-------:|------:|
+| Mobile | 55.6% | **66.7%** |
+| Critical | 66.3% | **68.4%** |
 
-## Method
+**Artifact:** `product_metrics_gt20_20260715_194518.json`
 
-1. Forensic mobile misses: digits in raw (B) vs absent (A).  
-2. Production-general extract fix (no invent digits).  
-3. Remasure critical + dashboard; accept only uplift.  
-4. Commit + push; **continue next loop automatically** (§21).
+## Forensic
+
+- Mode A (digits absent): **0**
+- Mode B (digits in raw; wrong/null extract): **8** (pre-fix sample)
+
+## Accepted
+
+- Score a **local snippet** around each phone (not whole megapage line).
+- **Left-biased** window so glued `वडील मोबाईल` after `मो.नं.` does not zero the candidate.
+- Page boosts only on short lines (<220 chars).
+- Orphan unlabeled digit-line penalty.
+
+## Rejected
+
+- Inventing missing digits from relatives’ numbers.
+- Preferring father/mother numbers as primary when candidate `मो.नं.` exists.
+
+## Residual (defer / Loop later)
+
+`28.pdf`, `D (8)`, digit-shifted OCR (`8145932593` vs `9881459325`), etc. — Mode B preference or Mode A OCR fidelity; not invent.
+
+## Next
+
+Continuing automatically to **Loop 05 — Religion** (§21).
