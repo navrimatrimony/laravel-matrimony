@@ -18,6 +18,12 @@ from ocr_engine import extract_text_from_image
 
 
 def main() -> int:
+  # Windows consoles default to cp1252; Marathi OCR JSON must emit UTF-8.
+  if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+  if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
   parser = argparse.ArgumentParser(description="Run EasyOCR once and print JSON result.")
   parser.add_argument("--image", required=True, help="Absolute path to image file")
   args = parser.parse_args()
@@ -28,7 +34,7 @@ def main() -> int:
     return 2
 
   try:
-    result = extract_text_from_image(str(image_path))
+    result = extract_text_from_image(str(image_path.resolve()))
   except Exception as exc:  # noqa: BLE001 - surface failure as JSON for ops
     print(json.dumps({"error": str(exc)}), file=sys.stderr)
     return 1

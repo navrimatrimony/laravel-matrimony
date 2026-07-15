@@ -291,7 +291,7 @@ Authority: **`OCR-ENSEMBLE-PIPELINE-BLUEPRINT.md` §19** (2026-07-14) + **§19.6
 |--------|------|------------------|--------|
 | — | Phase 4 Judge HTTP / soft-fail / merge_noop forensics | Done | **CLOSED** (#771 Judge 200) |
 | 1 | Phase 3 validator / DOB candidate forensics | Forensic + extract/normalize fixes | **DONE** (2026-07-15) — see `OCR-ENSEMBLE-SPRINT-1-DOB-FORENSICS.md` |
-| 2 | OCR Engine Evaluation (Tesseract / PaddleOCR v5 / EasyOCR / DocTR) | **Benchmark only** | **NEXT** — inbox `storage/app/ocr-dev-batches/Batch-001` (50 files; GT subset later per DOC §13.6–13.7) |
+| 2 | OCR Engine Evaluation (Tesseract / PaddleOCR v5 / EasyOCR / DocTR) | **Benchmark only** | **IN PROGRESS** — Batch-001 Tesseract+EasyOCR Stage A done; GT-20 needed for formal GO/NO-GO (`docs/ocr-ensemble-benchmark-v2-sprint2.md`) |
 | 3 | Multi-OCR vote in production | Only if Sprint 2 GO | Auto after GO |
 | 4 | Knowledge / Learning layer (SSOT-governed) | Design then implement | Auto after Sprint 3 DoD |
 
