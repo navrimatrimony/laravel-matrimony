@@ -293,7 +293,7 @@ Authority: **`OCR-ENSEMBLE-PIPELINE-BLUEPRINT.md` §19** (2026-07-14) + **§19.6
 | 1 | Phase 3 validator / DOB candidate forensics | Forensic + extract/normalize fixes | **DONE** (2026-07-15) — see `OCR-ENSEMBLE-SPRINT-1-DOB-FORENSICS.md` |
 | 2 | OCR Engine Evaluation (Tesseract / PaddleOCR v5 / EasyOCR / DocTR) | **Benchmark only** | **CLOSED** (2026-07-15) — all four engines scored on GT-20; EasyOCR/Paddle/DocTR **NO-GO**; Tesseract baseline — see `ocr-ensemble-benchmark-v2-sprint2.md` |
 | 3 | Multi-OCR vote in production | Only if Sprint 2 GO | **SKIPPED** — no engine GO |
-| 4 | Knowledge / Learning layer (SSOT-governed) | Design then implement | **DESIGN SIGNED** (2026-07-15) — see `OCR-ENSEMBLE-SPRINT-4-KNOWLEDGE-LEARNING-DESIGN.md`; **4b implement not started** |
+| 4 | Knowledge / Learning layer (SSOT-governed) | Design then implement | **4a+4b DONE** (2026-07-15) — design + SSOT guard tests; **4c deferred**; AI learning flags unchanged — see `OCR-ENSEMBLE-SPRINT-4-KNOWLEDGE-LEARNING-DESIGN.md` |
 
 Still out of casual scope:
 
@@ -321,3 +321,4 @@ Still out of casual scope:
 | 1.9 | 2026-07-15 | DOC v1.2 local-first + Marathi user interaction |
 | 2.0 | 2026-07-15 | Sprint 2 CLOSED (Tesseract/EasyOCR/Paddle/DocTR GT-20); Sprint 3 SKIPPED; Sprint 4 NEXT |
 | 2.1 | 2026-07-15 | Sprint 4 design signed (4a); implement gated on Phase Contract 4b |
+| 2.2 | 2026-07-15 | Sprint 4 4b SSOT guards; 4c deferred |

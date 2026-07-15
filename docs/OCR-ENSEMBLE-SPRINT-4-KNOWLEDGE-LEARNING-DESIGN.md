@@ -217,17 +217,15 @@ Conflicting corrected values → **conflict row**, not silent winner swap (Day-3
 | Done when | Doc merged/committed; Sprint 4 status = design signed |
 | Date | 2026-07-15 |
 
-### Phase Contract 4b — First implementation slice (NOT started)
+### Phase Contract 4b — First implementation slice
 
-Eligible only after 4a and an explicit “start 4b” mandate (may be same Approved Goal if product accepts this contract text as sign-off):
-
-1. **No flag flips** that enable AI generalize or broad learning promotion.  
-2. Allowed code (additive, optional):  
-   - Tests documenting read/write invariants above  
-   - Curated alias seeds for known `96 Kuli` / Marathi OCR variants (seeder only; no column reuse)  
-   - Guard tests: learning job never updates `biodata_profiles`  
-3. **Forbidden in 4b:** ensemble voter injection of frequency patterns; new LLM cleanup; Sprint 3 engines.  
-4. Exit: Feature tests green; short close note in this doc’s changelog.
+| Item | Value |
+|------|-------|
+| Deliverable | SSOT guard Feature tests — learning job never mutates profiles |
+| Code | `tests/Feature/Intake/OcrKnowledgeLearningSsotGuardTest.php` |
+| Flags | No production enablement of `ai_generalize_*` |
+| Done when | Tests green (2026-07-15) |
+| Explicitly deferred | Alias seed churn; ensemble voter injection (4c); AI flag on |
 
 ### Phase Contract 4c — Ensemble read-path (future)
 
@@ -252,7 +250,8 @@ Escalate to product only if 4b would change business truth rules (actor weight, 
 | Sprint 2 all engines GO/NO-GO | **Done** |
 | Sprint 3 | **Skipped** |
 | Sprint 4 **design signed** (4a) | **Done** (this doc) |
-| Sprint 4 **implement** (4b+) | **Not started** — awaits 4b execution under Approved Goal / product confirm of §12 |
+| Sprint 4 **implement** (4b SSOT guards) | **Done** — Feature tests; flags unchanged |
+| Sprint 4 **4c ensemble read-path** | **Deferred** — needs metrics / explicit start |
 
 **Near-term Blueprint §19.4:** “Learning design signed” = **satisfied**. Implementation is a subsequent contract.
 
@@ -263,3 +262,4 @@ Escalate to product only if 4b would change business truth rules (actor weight, 
 | Date | Change |
 |------|--------|
 | 2026-07-15 | Initial design signed (4a); Sprint 2 close / Sprint 3 skip recorded |
+| 2026-07-15 | 4b SSOT guard tests landed (`OcrKnowledgeLearningSsotGuardTest`) |
