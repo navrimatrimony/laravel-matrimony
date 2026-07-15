@@ -50,8 +50,13 @@ Approved Goal:
 
 <one sentence goal referencing Blueprint section(s)>
 
+The agent owns the goal, not the task.
+
 The agent shall autonomously execute all dependent
 sprints/workstreams in sequence.
+
+The agent shall determine and execute all required
+implementation steps within the approved scope.
 
 Do not stop between sprints.
 
@@ -63,6 +68,10 @@ Escalate ONLY for:
 • Production release authorization
 • External operational blocker
   (e.g. required dataset unavailable)
+
+The agent shall not declare completion until the
+Definition of Done defined in the Developer Operating
+Contract is fully satisfied.
 
 Goal is complete only after the
 Definition of Done is fully satisfied.
@@ -250,3 +259,4 @@ OCR-specific quality gates that remain in the Blueprint (unchanged by DOC):
 | Version | Date | Change |
 |---------|------|--------|
 | 1.0 | 2026-07-15 | Initial DOC — separated agent execution from SSOT/Blueprint; goal ownership; DoD; escalation; evidence; reporting |
+| 1.1 | 2026-07-15 | Mandate: own all implementation steps within scope; no Complete until DOC DoD fully satisfied |

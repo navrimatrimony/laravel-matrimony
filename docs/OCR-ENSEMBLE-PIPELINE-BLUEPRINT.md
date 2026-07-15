@@ -643,6 +643,7 @@ IntakeApprovalService → MutationService (unchanged)
 | 1.0c | 2026-07-15 | **§19.6 Goal-centric autonomous delivery** — one Approved Goal may chain sprints; STOP only SSOT/business/destructive/prod release |
 | 1.0d | 2026-07-15 | §19.6 DoD LOCKED + Escalation Matrix (automatic vs human) + canonical mandate + Sprint 2 dataset blocker |
 | 1.0e | 2026-07-15 | §19.6 points to `DEVELOPER-OPERATING-CONTRACT.md` for execution; OCR product gates remain here |
+| 1.0f | 2026-07-15 | §19.6 / DOC mandate: implementation steps within scope; Complete only after DOC DoD |
 
 **Related:** `docs/OCR-ENSEMBLE-PHASE-CONTRACTS.md`  
 **Readiness package:** `OCR-ENSEMBLE-PRODUCTION-READINESS-REVIEW.md`, `OCR-ENSEMBLE-IMPLEMENTATION-CHECKLIST.md`, `OCR-ENSEMBLE-TEST-PLAN.md`, `OCR-ENSEMBLE-BLUEPRINT-v1.1-ADDENDUM.md`
@@ -759,8 +760,20 @@ Sprint 4 — Knowledge / Learning layer (design + SSOT-governed)
 Canonical OCR mandate: use DOC §3.2 with goal text:
 
 ```text
+Approved Goal:
+
 Achieve Blueprint §19 Program Completion
-according to Blueprint §19.6 and docs/DEVELOPER-OPERATING-CONTRACT.md.
+according to Blueprint §19.6 and
+docs/DEVELOPER-OPERATING-CONTRACT.md.
+
+The agent owns the goal, not the task.
+
+The agent shall determine and execute all required
+implementation steps within the approved scope.
+
+The agent shall not declare completion until the
+Definition of Done defined in the Developer Operating
+Contract is fully satisfied.
 ```
 
 ---

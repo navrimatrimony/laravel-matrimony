@@ -15,7 +15,7 @@ Read and follow it. Summary (authority remains the DOC):
 - **Product Blueprints** = roadmap / sprints / milestones.
 - **DOC** = how the agent executes: Approved Goal, autonomy between sprints, Definition of Done, Escalation Matrix, testing, evidence, completion reporting.
 
-**The agent owns the goal, not the task** — plan, implement, debug, validate, regression-test, and collect evidence until DoD is met (or escalate per DOC).
+**The agent owns the goal, not the task** — determine and execute all required steps within approved scope; plan, implement, debug, validate, regression-test, and collect evidence until DOC Definition of Done is fully satisfied (or escalate per DOC). Never declare Complete on a partial subtask alone.
 
 Do not invent a “Complete” status when any DoD item is open → report **In Progress** or **Escalation**.
 
