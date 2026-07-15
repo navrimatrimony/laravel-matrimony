@@ -9,6 +9,7 @@ use App\Services\Intake\OcrEnsemble\Data\OcrEnsembleExtractionResultDto;
 use App\Services\Intake\OcrEnsemble\Support\OcrEnsembleCommunityExtractor;
 use App\Services\Intake\OcrEnsemble\Support\OcrEnsembleDobNormalizer;
 use App\Services\Intake\OcrEnsemble\Support\OcrEnsembleFieldTextSupport;
+use App\Services\Intake\OcrEnsemble\Support\OcrEnsembleGenderExtractor;
 use App\Services\Intake\OcrEnsemble\Support\OcrEnsembleMobileSelector;
 use App\Services\Intake\OcrEnsemble\Support\OcrEnsembleNameExtractor;
 use App\Services\Ocr\OcrNormalize;
@@ -27,6 +28,7 @@ final class OcrEnsembleFieldExtractor implements OcrEnsembleFieldExtractorInterf
         private readonly OcrEnsembleDobNormalizer $dobNormalizer,
         private readonly OcrEnsembleMobileSelector $mobileSelector,
         private readonly OcrEnsembleNameExtractor $nameExtractor,
+        private readonly OcrEnsembleGenderExtractor $genderExtractor,
     ) {}
 
     public function extractCandidates(array $attempts): OcrEnsembleExtractionResultDto
@@ -99,7 +101,8 @@ final class OcrEnsembleFieldExtractor implements OcrEnsembleFieldExtractorInterf
                 $hintName,
             ),
             'date_of_birth' => $dob,
-            'gender' => OcrEnsembleFieldTextSupport::normalizeGender(
+            'gender' => $this->genderExtractor->extract(
+                $lines,
                 OcrEnsembleFieldTextSupport::stringOrNull($core['gender'] ?? null),
             ),
             'primary_contact_number' => $this->mobileSelector->selectPrimary(

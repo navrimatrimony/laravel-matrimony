@@ -265,3 +265,42 @@ test('production community extractor recovers धर्म-जात compound wi
     expect($result['religion'])->toBe('Hindu')
         ->and($result['caste'])->toBe('Maratha');
 });
+
+test('production gender extractor recovers Ms. on English Name line', function () {
+    $lines = [
+        'RESUME',
+        'Name: - Ms. Sonam Sanjeev',
+        'Father’s Name: - Mr. Sanjeev Gopi',
+    ];
+
+    expect(app(\App\Services\Intake\OcrEnsemble\Support\OcrEnsembleGenderExtractor::class)->extract($lines))
+        ->toBe('female');
+});
+
+test('production gender extractor recovers मुलीची माहिती section', function () {
+    $lines = ['* मुलीची माहिती *', 'नाव : स्नेहा'];
+
+    expect(app(\App\Services\Intake\OcrEnsemble\Support\OcrEnsembleGenderExtractor::class)->extract($lines))
+        ->toBe('female');
+});
+
+test('production gender extractor recovers candidate कुमारी honorific', function () {
+    $lines = ['नाव : कुमारी प्रतीक्षा नितिन मगर'];
+
+    expect(app(\App\Services\Intake\OcrEnsemble\Support\OcrEnsembleGenderExtractor::class)->extract($lines))
+        ->toBe('female');
+});
+
+test('production gender extractor does not treat OCR कु. on male name as female', function () {
+    $lines = ['नाव: कु. अविनाश प्रकाश कदम'];
+
+    expect(app(\App\Services\Intake\OcrEnsemble\Support\OcrEnsembleGenderExtractor::class)->extract($lines, 'male'))
+        ->toBe('male');
+});
+
+test('production gender extractor prefers मुलीची माहिती over male fallback', function () {
+    $lines = ['* मुलीची माहिती *', 'नाव : स्नेहा'];
+
+    expect(app(\App\Services\Intake\OcrEnsemble\Support\OcrEnsembleGenderExtractor::class)->extract($lines, 'male'))
+        ->toBe('female');
+});

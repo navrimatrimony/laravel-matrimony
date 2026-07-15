@@ -61,6 +61,9 @@
 | Invent mobile digits / steal relative number as candidate | **Rejected** | Not fidelity |
 | Religion: glued जातिहंदू / हहंद / कुळ / धर्म-जात+Maratha | **Accepted** | Loop 05 Mode B |
 | Keep OCR garbage string as religion | **Rejected** | normalizeReligion → null |
+| Gender: Ms. / मुलीची माहिती / कुमारी extractor | **Accepted** | Loop 06; critical **73.7%** |
+| Short `कु.` as female | **Rejected** | Misreads `चि.` on male names |
+| Drop male fallback on नावरस | **Rejected** | Regressed true male gender |
 
 ---
 
@@ -110,11 +113,18 @@ Residual Mode A (ranked for Loop 02+):
 2. **Accepted:** glued जातिहंदू; हहंद corrupt; कुळ label; धर्म-जात+Maratha; reject garbage religion.  
 3. Religion **52.9% → 76.5%**; Critical **68.4% → 71.6%**.
 
-## Active improvement cycle (Loop 06 Gender)
+## Loop 06 — Gender (complete slice)
 
-1. **Why:** GT-20 gender **60%** — next weakest critical field (8 misses).  
-2. Forensic Mode A/B → production-general extract → remasure → continue (§21).  
-3. **Resume point:** Loop 05 committed; artifact `product_metrics_gt20_20260715_200824.json`.
+1. **Forensic:** Mode A **4** / Mode B **4** (pre-fix sample).  
+2. **Accepted:** Ms. on Name; `मुलीची माहिती`; `कुमारी`; name labels via `OcrEnsembleGenderExtractor`.  
+3. **Rejected:** short `कु.`; aggressive नावरस fallback drop.  
+4. Gender **60% → 70%**; Critical **71.6% → 73.7%**.
+
+## Active improvement cycle (Loop 07 — after Safe Shutdown)
+
+1. **Resume:** [`docs/OCR-STATUS.md`](OCR-STATUS.md)  
+2. **Why next:** Name **65%** then Mobile **61.1%** residuals.  
+3. **Artifact:** `product_metrics_gt20_20260715_212444.json`.
 
 ---
 
@@ -131,3 +141,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-15 | DOC §19.1 Dashboard = compass not success; Production scoreboard scaffold (anti GT-overfit) |
 | 2026-07-15 | DOC §21 Continue / §22 Safe Shutdown; Loop 04 mobile → **66.7%**; critical **68.4%**; Loop 05 Religion next |
 | 2026-07-15 | Loop 05 religion → **76.5%**; critical **71.6%**; Loop 06 Gender next |
+| 2026-07-15 | Loop 06 gender → **70%**; critical **73.7%**; Safe Shutdown STATUS |
