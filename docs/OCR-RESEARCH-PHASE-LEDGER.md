@@ -1,7 +1,10 @@
 # OCR Research Phase — Ledger (§20)
 
-> **Approved Goal (2026-07-15):** Maximize **RAW OCR TEXT** quality for Marathi + Devanagari + English biodata (problem-driven; not engine shopping).  
+> **Approved Goal:** Maximize **raw OCR text fidelity** (Marathi + Devanagari + English biodata).  
+> Downstream stages preserve/utilize that fidelity — they do not replace poor OCR.  
 > **Status:** **In Progress**
+
+**Triage each loop:** raw has info? → parser/normalizer. Else → OCR/preprocess. Never re-optimize solved layers; attack largest remaining information loss.
 
 ---
 
@@ -24,8 +27,8 @@
 
 ## Active improvement cycle
 
-1. **Done (measurable recognition):** Fix `तारीख` label match + Marathi OCR month typos (`सप्टेंबट`) + `December 10, 1995` — dates already in raw become extractable.  
-2. **Next:** Preprocess / PDF page render for the 3 PDFs + digit-garbled slash dates (raw quality).
+1. **Done:** Recover dates already in raw (label + Marathi/English months). Re-measure former DOB misses: **7/12 images NOW_OK**, **5 STILL_MISS** (raw/garbled), **3 PDF** pending.  
+2. **Next (largest remaining loss):** Raw OCR fidelity on the 5 STILL_MISS images + PDF→image raster for 3 PDFs — not more parser tweaks for already-solved month forms.
 
 ---
 
@@ -40,4 +43,5 @@ Tesseract critical **42.11%**; DOB field historically **25%**. Re-score after ea
 | Date | Note |
 |------|------|
 | 2026-07-15 | Problem-driven ledger; Loop 01 DOB |
-| 2026-07-15 | Forensic raw-vs-parser; Approved Goal = Raw OCR quality; label/month recognition fix |
+| 2026-07-15 | Forensic raw-vs-parser; month/label recognition fix |
+| 2026-07-15 | Primary objective named **raw OCR text fidelity**; 7/12 DOB image misses recovered on re-OCR+extract |

@@ -647,6 +647,7 @@ IntakeApprovalService → MutationService (unchanged)
 | 1.0g | 2026-07-15 | DOC v1.2 — local-first, user interaction, Marathi instructions |
 | 1.0h | 2026-07-15 | **§20 OCR Research Vision** — product goal beyond §19 sprints; Sprint ≠ Vision Complete |
 | 1.0i | 2026-07-15 | §20 **problem-driven** amendment — no engine queue; OCR Knowledge Base; Admin comparison metrics |
+| 1.0j | 2026-07-15 | §20.1 **Raw OCR text fidelity** as primary objective; triage + largest information-loss rule |
 
 **Related:** `docs/OCR-ENSEMBLE-PHASE-CONTRACTS.md`  
 **Readiness package:** `OCR-ENSEMBLE-PRODUCTION-READINESS-REVIEW.md`, `OCR-ENSEMBLE-IMPLEMENTATION-CHECKLIST.md`, `OCR-ENSEMBLE-TEST-PLAN.md`, `OCR-ENSEMBLE-BLUEPRINT-v1.1-ADDENDUM.md`
@@ -794,26 +795,36 @@ Contract is fully satisfied.
 ### 20.1 Product objective
 
 ```text
-The objective is NOT
-to benchmark OCR engines.
+Primary Objective
 
-The objective IS
+Produce the highest possible
+raw OCR text fidelity
+for Marathi, Devanagari and English
+biodata.
 
-to maximize
-Marathi + Devanagari + English
-OCR accuracy
-for production biodata.
+All downstream pipeline stages
+exist to preserve and utilize
+that fidelity,
+not to compensate for poor OCR.
 ```
 
 Also:
 
 ```text
-Find or Build the best OCR pipeline
-for Marathi biodata — including preprocessing,
-post-processing, ensemble, training, and knowledge.
+The objective is NOT to benchmark OCR engines.
+The objective IS maximum fidelity of raw OCR text
+(and only then structured fields) for production biodata.
 ```
 
-Canonical pipeline vision (unchanged intent):
+**Per-loop triage (locked):**
+
+1. Is the information present in raw OCR?  
+   - Yes → fix parser / normalizer / date recognition.  
+   - No → fix preprocessing / OCR / rasterization.  
+2. Do not optimize what is already solved.  
+3. Optimize the largest remaining source of **information loss**.
+
+Canonical pipeline vision:
 
 ```text
 Image → Best preprocessing → Multiple OCR → Compare → Vote
