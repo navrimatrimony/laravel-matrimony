@@ -313,11 +313,17 @@ class OcrEnsembleNameExtractor
             return false;
         }
 
-        if ($this->looksLikeAddress($name) || $this->looksLikeBiodataTitle($name)) {
+        if ($this->looksLikeAddress($name) || $this->looksLikeBiodataTitle($name) || $this->looksLikeInvocation($name)) {
             return false;
         }
 
         return preg_match('/\p{L}/u', $name) === 1;
+    }
+
+    private function looksLikeInvocation(string $value): bool
+    {
+        return preg_match('/गणेशाय\s*नम|श्री\s*गणेश|जय\s*श्री|शुभमं|प्रसन्न/u', $value) === 1
+            && preg_match('/(?:कु\.|चि\.|श्री\.|सौ\.|Ms\.|Mr\.)/u', $value) !== 1;
     }
 
     private function validRescuedName(?string $name): bool
