@@ -59,6 +59,8 @@
 | Trailing OCR junk after 3-token Marathi names; `मुलीचे बां` OCR for नाव | **Accepted** | Loop 03 residual; production-general |
 | Mobile: local snippet + left-biased megapage context | **Accepted** | Loop 04; Mode B megapage no longer discards `मो.नं.` |
 | Invent mobile digits / steal relative number as candidate | **Rejected** | Not fidelity |
+| Religion: glued जातिहंदू / हहंद / कुळ / धर्म-जात+Maratha | **Accepted** | Loop 05 Mode B |
+| Keep OCR garbage string as religion | **Rejected** | normalizeReligion → null |
 
 ---
 
@@ -102,11 +104,17 @@ Residual Mode A (ranked for Loop 02+):
 3. Mobile **55.6% → 66.7%**; Critical **66.3% → 68.4%**.  
 4. Residual digit-shift / wrong secondary preference deferred (no invent).
 
-## Active improvement cycle (Loop 05 Religion)
+## Loop 05 — Religion (complete slice)
 
-1. **Why:** GT-20 religion **52.9%** — lowest remaining critical field accuracy (8 misses).  
+1. **Forensic:** Mode A **5** / Mode B **3**.  
+2. **Accepted:** glued जातिहंदू; हहंद corrupt; कुळ label; धर्म-जात+Maratha; reject garbage religion.  
+3. Religion **52.9% → 76.5%**; Critical **68.4% → 71.6%**.
+
+## Active improvement cycle (Loop 06 Gender)
+
+1. **Why:** GT-20 gender **60%** — next weakest critical field (8 misses).  
 2. Forensic Mode A/B → production-general extract → remasure → continue (§21).  
-3. **Resume point:** after Loop 04 commit; artifact `product_metrics_gt20_20260715_194518.json`.
+3. **Resume point:** Loop 05 committed; artifact `product_metrics_gt20_20260715_200824.json`.
 
 ---
 
@@ -122,3 +130,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-15 | DOC §19 Product Impact First; Product Metrics Dashboard; remasure critical **60%**, DOB **95%**; **Name** ranked next |
 | 2026-07-15 | DOC §19.1 Dashboard = compass not success; Production scoreboard scaffold (anti GT-overfit) |
 | 2026-07-15 | DOC §21 Continue / §22 Safe Shutdown; Loop 04 mobile → **66.7%**; critical **68.4%**; Loop 05 Religion next |
+| 2026-07-15 | Loop 05 religion → **76.5%**; critical **71.6%**; Loop 06 Gender next |

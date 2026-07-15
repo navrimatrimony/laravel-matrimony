@@ -17,7 +17,7 @@ class OcrEnsembleCommunityExtractor
     {
         $religion = $this->normalizeReligion($this->labelValue($lines, ['धर्म', 'धम', 'Religion']));
         $caste = null;
-        $jatiRaw = $this->labelValue($lines, ['जात', 'Caste', 'Community']);
+        $jatiRaw = $this->labelValue($lines, ['जात', 'जाति', 'कुल', 'कुळ', 'Caste', 'Community']);
         $subCaste = $this->normalizeSubCaste($this->labelValue($lines, ['पोटजात', 'उपजात', 'Sub caste', 'Sub-caste', 'Subcaste']));
 
         if ($jatiRaw !== null) {
@@ -27,14 +27,36 @@ class OcrEnsembleCommunityExtractor
             $subCaste = $subCaste ?? $parsed['sub_caste'];
         }
 
+        // Compound OCR label धर्म-जात with mangled religion but clear Maratha caste.
+        if ($religion === null) {
+            foreach ($lines as $line) {
+                if (preg_match('/धर्म\s*[-–]?\s*जात/ui', $line) === 1
+                    && preg_match('/मराठा|maratha/ui', $line) === 1) {
+                    $religion = 'Hindu';
+                    $caste = $caste ?? 'Maratha';
+                    break;
+                }
+            }
+        }
+
         foreach ($lines as $line) {
             if ($religion !== null && $caste !== null) {
                 break;
+            }
+            $glued = $this->parseGluedJatiHindu($line);
+            if ($glued['religion'] !== null) {
+                $religion = $religion ?? $glued['religion'];
+                $caste = $caste ?? $glued['caste'];
+                $subCaste = $subCaste ?? $glued['sub_caste'];
             }
             if (preg_match('/हिंद[ुू]\s*[-–]\s*मराठा/ui', $line) === 1) {
                 $religion = $religion ?? 'Hindu';
                 $caste = $caste ?? 'Maratha';
             }
+        }
+
+        if ($religion === null) {
+            $religion = $this->inferReligionFromLooseTokens($lines);
         }
 
         return [
@@ -47,12 +69,63 @@ class OcrEnsembleCommunityExtractor
     /**
      * @return array{religion: ?string, caste: ?string, sub_caste: ?string}
      */
+    /**
+     * Megapage OCR often glues जाति+हिंदू without colon: जातिहंदू मराठा (96 कुळी)
+     *
+     * @return array{religion: ?string, caste: ?string, sub_caste: ?string}
+     */
+    private function parseGluedJatiHindu(string $line): array
+    {
+        $v = OcrNormalize::normalizeDigits($line);
+        if (preg_match(
+            '/जात[िी]?ह(?:ि)?ंद[ुू]\s*[-–]?\s*(मराठा|maratha)?(?:\s*\(([०-९0-9]+)\s*(?:कुळी|क्‌ळी|कळी)\))?/ui',
+            $v,
+            $m
+        ) !== 1) {
+            return ['religion' => null, 'caste' => null, 'sub_caste' => null];
+        }
+
+        $sub = null;
+        if (! empty($m[2])) {
+            $sub = ((int) $m[2]).' कुळी';
+        }
+
+        return [
+            'religion' => 'Hindu',
+            'caste' => ! empty($m[1]) ? 'Maratha' : null,
+            'sub_caste' => $sub,
+        ];
+    }
+
+    /**
+     * @param  list<string>  $lines
+     */
+    private function inferReligionFromLooseTokens(array $lines): ?string
+    {
+        foreach ($lines as $line) {
+            $v = OcrNormalize::normalizeDigits($line);
+            // OCR often drops matra: हहंद / हंदू near जात / गुरव / मराठा.
+            if (preg_match('/जात\s*[:：\-–—.]+\s*ह[ह]?ंद[ुू]?/ui', $v) === 1
+                || preg_match('/(?:धर्म|Religion)\s*[:：\-–—.]+\s*(?:हिंद|ह[ह]?ंद|Hindu)/ui', $v) === 1) {
+                return 'Hindu';
+            }
+            if (preg_match('/\bHindu\b/ui', $v) === 1) {
+                return 'Hindu';
+            }
+        }
+
+        return null;
+    }
+
     private function parseJatiLine(string $raw): array
     {
         $v = OcrNormalize::normalizeDigits(trim($raw));
         $religion = null;
         $caste = null;
         $subCaste = null;
+
+        // OCR corruption: हहंद / हंद for हिंदू before caste dash.
+        $v = preg_replace('/ह[ह]?ंद[ुू]?/ui', 'हिंदू', $v) ?? $v;
 
         if (preg_match('/हिंद[ुू]\s*[-–]\s*मराठा(?:\s*\(([०-९0-9]+)\s*(?:कुळी|क्‌ळी|कळी)\))?/ui', $v, $m)) {
             $religion = 'Hindu';
@@ -99,7 +172,7 @@ class OcrEnsembleCommunityExtractor
             return null;
         }
         $v = OcrNormalize::normalizeDigits(trim($value));
-        if (preg_match('/हिंद[ुू]|hindu/i', $v)) {
+        if (preg_match('/हिंद[ुू]|ह[ह]?ंद[ुू]?|hindu/i', $v)) {
             return 'Hindu';
         }
         if (preg_match('/मुस्लिम|muslim/i', $v)) {
@@ -115,7 +188,8 @@ class OcrEnsembleCommunityExtractor
             return 'Christian';
         }
 
-        return trim($v);
+        // Never keep OCR garbage as a "religion" master value.
+        return null;
     }
 
     public function normalizeCaste(?string $value): ?string

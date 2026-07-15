@@ -228,3 +228,40 @@ test('production community extractor splits hindu maratha jati line', function (
         ->and($result['caste'])->toBe('Maratha')
         ->and($result['sub_caste'])->toBe('96 कुळी');
 });
+
+test('production community extractor recovers glued जातिहंदू megapage OCR', function () {
+    $lines = ['उंची5 फूट 7 इंच जातिहंदू मराठा (96 कुळी)देवकपाचपालवी'];
+    $result = app(OcrEnsembleCommunityExtractor::class)->extract($lines);
+
+    expect($result['religion'])->toBe('Hindu')
+        ->and($result['caste'])->toBe('Maratha')
+        ->and($result['sub_caste'])->toBe('96 कुळी');
+});
+
+test('production community extractor recovers OCR-corrupt जात हहंद line', function () {
+    $lines = ['जात :- हहंद –गुरव'];
+    $result = app(OcrEnsembleCommunityExtractor::class)->extract($lines);
+
+    expect($result['religion'])->toBe('Hindu');
+});
+
+test('production community extractor rejects OCR garbage as religion', function () {
+    expect(app(OcrEnsembleCommunityExtractor::class)->normalizeReligion('जात 1 न - मराठा ठे ) | र'))
+        ->toBeNull();
+});
+
+test('production community extractor recovers कुळ हिंदु मराठा line', function () {
+    $lines = ['कुळ : हिंदु मराठा (96 कुळी मराठा)'];
+    $result = app(OcrEnsembleCommunityExtractor::class)->extract($lines);
+
+    expect($result['religion'])->toBe('Hindu')
+        ->and($result['caste'])->toBe('Maratha');
+});
+
+test('production community extractor recovers धर्म-जात compound with Maratha', function () {
+    $lines = ['धर्म-जात 1 न - मराठा ठे ) | र'];
+    $result = app(OcrEnsembleCommunityExtractor::class)->extract($lines);
+
+    expect($result['religion'])->toBe('Hindu')
+        ->and($result['caste'])->toBe('Maratha');
+});
