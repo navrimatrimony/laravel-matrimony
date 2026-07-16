@@ -1,8 +1,8 @@
 # OCR Product Metrics Dashboard
 
 > Compass only. Goal = RAW OCR fidelity.  
-> **Updated:** 2026-07-16 11:12 IST  
-> **Artifact:** `product_metrics_gt20_20260716_111153.json`
+> **Updated:** 2026-07-16 13:50 IST  
+> **Artifact:** `product_metrics_gt20_20260716_111153.json` (production baseline; Loop 13 candidate **73.7%** rejected)
 
 | Metric | Baseline | Current | Delta |
 |--------|--------:|--------:|------:|
@@ -16,10 +16,10 @@
 ## Research focus
 
 **RAW OCR** (religion/gender Mode A; OCR-garbled names).  
-Parser only for clear Mode B. Global multipass widening **rejected** (crit 68.4% regression).
+Parser only for clear Mode B. Global multipass widening **rejected** (crit 68.4%). Loop 13 name-label tie-break **rejected** (crit 73.7%).
 
 ## Priority
 
-1. Image-gated RAW OCR (safe multipass / preprocess)  
-2. Name Mode A OCR garble  
-3. Gender / religion Mode A  
+1. Name Mode A residual @ 75% (no global multipass demotion)  
+2. Religion Mode A  
+3. Gender Mode A (snehal probe shows RAW path exists; needs cohort-safe selection)  

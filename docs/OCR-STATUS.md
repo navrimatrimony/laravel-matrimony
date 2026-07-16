@@ -1,6 +1,6 @@
 # OCR STATUS
 
-> **2026-07-16 11:12 IST** · Product Goal **In Progress**
+> **2026-07-16 13:50 IST** · Product Goal **In Progress**
 
 | Item | Value |
 |------|------:|
@@ -12,12 +12,15 @@
 | Gender | 70% |
 | DOB | 95% |
 
-## Loop 11
+## Loop 12
 
-- Audit: Mode A=8 / B=12; fidelity gap → RAW OCR  
-- Accepted: biodata next-line name → name **75%**, crit **80%**  
-- Rejected: global photo_capture default + noisy_scan multipass (crit 68.4%)
+- **Rejected:** image-only `clean_document` multipass — **0 uplift**, crit **80%** (`112834`)
 
-## NEXT Loop 12
+## Loop 13
 
-Image-only RAW OCR (no PDF default changes).
+- **Rejected:** multipass `v2_name_signal` — crit **80% → 73.7%** on remeasure (`134838`); code reverted  
+- **Kept:** probe tools + knowledge (snehal gender gain; global demotion on `27.pdf`, `10-33-15`, etc.)
+
+## NEXT Loop 14
+
+Name / religion Mode A residual on GT-20 @ 80% baseline. Avoid global multipass tie-break; prefer cohort-safe or extractor paths where RAW already contains truth.

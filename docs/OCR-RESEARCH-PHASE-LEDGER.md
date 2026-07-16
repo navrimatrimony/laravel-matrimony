@@ -161,10 +161,21 @@ Residual Mode A (ranked for Loop 02+):
 3. **Rejected:** global photo_capture default + noisy_scan multipass (critical **68.4%** regression).  
 4. **Pivot:** RAW OCR continues image-gated only.
 
-## Active (Loop 12 — image-only clean_document multipass)
+## Loop 12 — Image-only clean_document (complete)
 
-1. Add `clean_document` multipass variant for jpg/png/webp only (no PDF default change).  
-2. Remasure; reject on any critical regression.
+1. Add `clean_document` multipass for images only.  
+2. **Rejected:** crit **80%**, **0 flips** (`112834`); reverted.
+
+## Loop 13 — Multipass name-label signal (complete)
+
+1. Boost + tie-break after नाव labels to break 115/141 saturation.  
+2. **Rejected:** crit **80% → 73.7%** (`134838`); snehal gender gain but `27.pdf` / `10-33-15` / `1.3` name losses.  
+3. Code reverted; probe tools kept.
+
+## Active (Loop 14 — name / religion Mode A @ 80% baseline)
+
+1. Forensic remaining GT-20 misses without global multipass demotion.  
+2. Cohort-safe RAW or extractor-only where truth already in raw.
 
 ---
 
@@ -187,3 +198,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-16 | Loop 09 address-संपर्क → mobile **77.8%**; critical **77.9%**; Loop 10 next |
 | 2026-07-16 | Loop 10a father/address mobile → **83.3%**; critical **78.9%**; Loop 10b name/gender next |
 | 2026-07-16 | Loop 11 loss audit + biodata next-line name → **80%** crit; RAW global preset REJECTED |
+| 2026-07-16 | Loop 12 clean_document REJECTED (0 uplift); Loop 13 name-label multipass REJECTED (73.7%) |
