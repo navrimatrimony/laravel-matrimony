@@ -183,9 +183,14 @@ Residual Mode A (ranked for Loop 02+):
 2. **Accepted:** if direct cues fail and fallback absent, infer female from extracted candidate name leading `कु.`.  
 3. Gender **70% → 75%**; crit **81.1% → 82.1%** (`151836`); zero regressions.
 
-## Active (Loop 16 — Mode A RAW residual)
+## Loop 16 — OCR `मिस.` + English Cast (complete)
 
-1. `snehal` / religion nulls / `1.1` garble — cohort-safe RAW only.  
+1. `मिस.` female honorific; English `Cast:` Hindu inference.  
+2. **Accepted:** gender **75% → 80%**; crit **82.1% → 83.2%** (`155920`).
+
+## Active (Loop 17 — Mode A RAW residual)
+
+1. `snehal` / `1.1` / `D(8)` / religion nulls — cohort-safe RAW only.  
 2. No global multipass tie-break.
 
 ---
@@ -212,3 +217,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-16 | Loop 12 clean_document REJECTED (0 uplift); Loop 13 name-label multipass REJECTED (73.7%) |
 | 2026-07-16 | Loop 14 father-line surname → name **80%**; crit **81.1%** |
 | 2026-07-16 | Loop 15 extracted-name `कु.` gender fallback → gender **75%**; crit **82.1%** |
+| 2026-07-16 | Loop 16 OCR `मिस.` + English Cast → gender **80%**; crit **83.2%** |

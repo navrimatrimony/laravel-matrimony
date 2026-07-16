@@ -381,3 +381,24 @@ test('production gender extractor infers female from extracted candidate name ku
             OcrEnsemblePhase3Constants::ENGINE_LARAVEL_NATIVE_OCR,
         )->field('gender'))->toBe('female');
 });
+
+test('production gender extractor recovers OCR मिस honorific over male rescue fallback', function () {
+    $lines = [
+        'जे निडिमिडिमििििि मिस.',
+        'बायोडाटा',
+        'नाव : सुप्रिया गणेशराव बोबडे',
+    ];
+
+    expect(app(\App\Services\Intake\OcrEnsemble\Support\OcrEnsembleGenderExtractor::class)->extract($lines, 'male'))
+        ->toBe('female');
+});
+
+test('production community extractor infers Hindu from English resume Cast line', function () {
+    $lines = [
+        'RESUME',
+        'Name: - Ms. Sonam Sanjeev',
+        'Cast: - Ezhava',
+    ];
+
+    expect(app(OcrEnsembleCommunityExtractor::class)->extract($lines)['religion'])->toBe('Hindu');
+});

@@ -135,6 +135,10 @@ class OcrEnsembleGenderExtractor
             if (preg_match('/Father|Mother|Parent/ui', $line) === 1) {
                 continue;
             }
+            // OCR often reads Ms. as Devanagari "मिस." on noisy photo biodata.
+            if (preg_match('/मिस\.?/u', $line) === 1) {
+                return 'female';
+            }
             if (preg_match('/(?:^|\bName\b|\bCandidate\b).{0,40}\b(?:Ms\.?|Miss|Mrs\.?)\b/ui', $line) === 1
                 || preg_match('/^\s*(?:Ms\.?|Miss|Mrs\.?)\s+[\p{L}]/ui', $line) === 1) {
                 return 'female';
