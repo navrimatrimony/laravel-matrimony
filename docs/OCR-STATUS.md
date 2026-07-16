@@ -1,33 +1,35 @@
 # OCR STATUS — resume point
 
-> **Recorded:** 2026-07-16 09:45 IST  
-> **Product Goal:** RAW OCR fidelity — **In Progress**
+> **Recorded:** 2026-07-16 10:00 IST  
+> **Product Goal:** RAW OCR fidelity — **In Progress** (NOT complete)
 
 ## Last facts
 
 | Item | Value |
 |------|------:|
-| Artifact | `product_metrics_gt20_20260716_094041.json` |
-| Critical | **76.8%** |
+| Artifact | `product_metrics_gt20_20260716_095820.json` |
+| Critical | **77.9%** |
 | DOB | 95% |
 | Name | 70% |
-| Mobile | **72.2%** |
+| Mobile | **77.8%** |
 | Religion | 76.5% |
 | Gender | 70% |
 
-## Loops
+## Loops done today
 
-| Loop | Status |
+| Loop | Result |
 |------|--------|
-| 01–07 | Complete slices |
-| **08 Mobile residual** | **Complete slice** |
-| **09** | **NEXT — `27.pdf` mobile flip + remaining Mode A mobiles** |
+| 07 Name | 65% → **70%** |
+| 08 Mobile merge/labels | 61.1% → **72.2%** |
+| 09 Address संपर्क | 72.2% → **77.8%**; critical **77.9%** |
 
-## Resume
+## NEXT
+
+**Loop 10 — Name / Gender residual (both 70%)**
 
 ```text
 Continue the Approved Goal.
 Resume from the last committed state.
 ```
 
-Leave alone: `database/seeders/location/LocationSeeder.php`
+Leave alone: `LocationSeeder.php`

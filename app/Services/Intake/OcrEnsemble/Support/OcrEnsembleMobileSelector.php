@@ -27,6 +27,13 @@ class OcrEnsembleMobileSelector
                 if ($this->isFirstPhoneAfterContactLabel($line, $phone) && ! $this->hasRelationContext($snippet)) {
                     $lineScore += 80;
                 }
+                if ($this->looksLikeAddressContactLine($line)) {
+                    $lineScore -= 70;
+                }
+                if (preg_match('/संपर्क\s*नं|मोबाईल\s*नं|mobile\s*n/ui', $line) === 1
+                    && ! $this->looksLikeAddressContactLine($line)) {
+                    $lineScore += 40;
+                }
                 // Page-level boosts only when the line is not a huge OCR dump.
                 if (mb_strlen($line, 'UTF-8') < 220) {
                     $lineScore += $this->pageContextBoost($lines, $index, $line);
@@ -89,6 +96,8 @@ class OcrEnsembleMobileSelector
             $score -= 40;
         }
 
+        // Address / संपर्क-नंबर line boosts applied on full line in selectPrimary.
+
         if (preg_match('/(?:वडील|आई|मामा|भाऊ|बहिण|बहीण|काका|मावशी)\s+.*(?:मोबाईल|मोबाइल|संपर्क|संपक)/ui', $snippet) === 1) {
             $score -= 90;
         }
@@ -103,11 +112,16 @@ class OcrEnsembleMobileSelector
         return $score;
     }
 
+    private function looksLikeAddressContactLine(string $line): bool
+    {
+        return preg_match('/(?:मु\.?\s*पो\.?|ता\s*\.|जि\s*\.|पिन\s*कोड|pincode|पोस्ट|कॉलनी|रोड|नगर|वाडी)/ui', $line) === 1;
+    }
+
     private function isFirstPhoneAfterContactLabel(string $line, string $phone): bool
     {
         $n = OcrNormalize::normalizeDigits($line);
         if (preg_match(
-            '/(?:मोबाईल|मोबाइल|मोबा\.?|मो\.?\s*नं\.?|मो\.|संपर्क|संपकण?|भ्रमणध्वनी|contact|phone|mobile|cell)\s*[:：\-–—.]{0,3}\s*([6-9]\d{9})/ui',
+            '/(?:मोबाईल|मोबाइल|मोबा\.?|मो\.?\s*नं\.?|मो\.|संपर्क\s*नंबर|संपर्क\s*नं\.?|संपर्क|संपकण?|भ्रमणध्वनी|contact|phone|mobile|cell)\s*(?:नंबर|नं\.?|no\.?)?\s*[:：\-–—.]{0,4}\s*([6-9]\d{9})/ui',
             $n,
             $m
         ) !== 1) {

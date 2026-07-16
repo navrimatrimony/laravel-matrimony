@@ -68,6 +68,7 @@
 | Invent शि from चिवाजी / invent missing surname | **Rejected** | Not fidelity |
 | Mobile: no whitespace-merge phones; संपर्क/संपकण; first-after-label | **Accepted** | Loop 08; mobile **72.2%** |
 | Invent missing/shifted mobile digits | **Rejected** | Not fidelity |
+| Mobile: address-line संपर्क penalty; संपर्क नंबर boost | **Accepted** | Loop 09; `27.pdf` restored; mobile **77.8%** |
 
 ---
 
@@ -137,10 +138,16 @@ Residual Mode A (ranked for Loop 02+):
 3. Mobile **61.1% → 72.2%**; Critical **74.7% → 76.8%**.  
 4. Residual: `27.pdf` OK→wrong flip; Mode A digit OCR.
 
-## Active improvement cycle (Loop 09)
+## Loop 09 — Address संपर्क vs संपर्क नंबर (complete)
 
-1. **Why:** `27.pdf` mobile regression + remaining mobile/name Mode A.  
-2. **Artifact:** `product_metrics_gt20_20260716_094041.json`.
+1. **Root:** `27.pdf` address `संपर्क : 960…` beat `संपर्क नंबर :-- 994…`.  
+2. **Accepted:** address-line penalty; `संपर्क नंबर` boost.  
+3. Mobile **72.2% → 77.8%**; Critical **76.8% → 77.9%**.
+
+## Active improvement cycle (Loop 10)
+
+1. **Why:** Name **70%** and Gender **70%** — next shared floor.  
+2. **Artifact:** `product_metrics_gt20_20260716_095820.json`.
 
 ---
 
@@ -160,3 +167,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-15 | Loop 06 gender → **70%**; critical **73.7%**; Safe Shutdown STATUS |
 | 2026-07-16 | Loop 07 name residual → **70%**; critical **74.7%**; Loop 08 Mobile next |
 | 2026-07-16 | Loop 08 mobile → **72.2%**; critical **76.8%**; Loop 09 next |
+| 2026-07-16 | Loop 09 address-संपर्क → mobile **77.8%**; critical **77.9%**; Loop 10 next |

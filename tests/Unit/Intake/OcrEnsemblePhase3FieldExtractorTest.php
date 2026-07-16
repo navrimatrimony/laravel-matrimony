@@ -92,6 +92,16 @@ test('production mobile selector recovers OCR संपकण नं label', fun
     expect(app(OcrEnsembleMobileSelector::class)->selectPrimary($lines))->toBe('8698501396');
 });
 
+test('production mobile selector prefers संपर्क नंबर over address संपर्क', function () {
+    $lines = [
+        'मुलाचे नाव : नाथ सिध्देश्वर पाटील',
+        'संपर्क नंबर :-- 9940168213',
+        'विटा. ता .खानापूर, जि.सांगली. संपर्क : 9604289289',
+    ];
+
+    expect(app(OcrEnsembleMobileSelector::class)->selectPrimary($lines))->toBe('9940168213');
+});
+
 test('production dob normalizer parses dd/mm/yyyy and recovers ocr digit substitutions', function () {
     $normalizer = app(OcrEnsembleDobNormalizer::class);
 
