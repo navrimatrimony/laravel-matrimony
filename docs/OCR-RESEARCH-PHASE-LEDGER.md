@@ -241,3 +241,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-16 | Loop 17 Cast next-line → religion **82.4%**; crit **84.2%** |
 | 2026-07-16 | Loop 18 Hindu-from-caste + शश्री peel → religion **94.1%**; crit **86.3%** |
 | 2026-07-16 | Loop 19 mobile prev-संपर्क + digit-soup reject → mobile **94.4%**; crit **88.4%** |
+| 2026-07-16 | Loop 20 D8 orphan-sticker vs father paren mobile → crit **89.5%**; mobile **100%** |
