@@ -102,6 +102,27 @@ test('production mobile selector prefers वडील मोबाईल over ad
     expect(app(OcrEnsembleMobileSelector::class)->selectPrimary($lines))->toBe('8805526197');
 });
 
+test('production mobile selector reads phones on the line before संपर्क label', function () {
+    $lines = [
+        'नाव : रोहन सुभाष दळवी',
+        '9765771101, 7620688798',
+        'संपर्कः',
+    ];
+
+    expect(app(OcrEnsembleMobileSelector::class)->selectPrimary($lines))->toBe('9765771101');
+});
+
+test('production mobile selector ignores occupation OCR digit soup as a phone', function () {
+    $lines = [
+        'नाव : रोहन सुभाष दळवी',
+        'नोकरी िंठप्राउब [तप्त ४, ७0 $पाट्वणा 1007 1९०॥॥१ुपण',
+        '9765771101, 7620688798',
+        'संपर्कः',
+    ];
+
+    expect(app(OcrEnsembleMobileSelector::class)->selectPrimary($lines))->toBe('9765771101');
+});
+
 test('production mobile selector prefers संपर्क नंबर over address संपर्क', function () {
     $lines = [
         'मुलाचे नाव : नाथ सिध्देश्वर पाटील',

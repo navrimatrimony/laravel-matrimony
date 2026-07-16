@@ -48,20 +48,23 @@ class OcrEnsembleMobileSelector
             }
 
             $nextLine = $lines[$index + 1] ?? null;
-            if (! is_string($nextLine) || $this->hasRelationContext($nextLine) || $this->hasNonContactPhoneContext($nextLine)) {
-                continue;
-            }
-
+            $prevLine = $lines[$index - 1] ?? null;
             if ($this->lineHasMobileLabel($line) && ! $this->hasRelationContext($line)) {
                 $labelScore = $this->snippetContextScore($line) + 5;
                 if (mb_strlen($line, 'UTF-8') < 220) {
                     $labelScore += $this->pageContextBoost($lines, $index, $line);
                 }
-                foreach ($this->extractPhones($nextLine) as $phone) {
-                    if ($labelScore < -50) {
-                        continue;
+                if ($labelScore >= -50) {
+                    foreach ([$nextLine, $prevLine] as $adjacent) {
+                        if (! is_string($adjacent)
+                            || $this->hasRelationContext($adjacent)
+                            || $this->hasNonContactPhoneContext($adjacent)) {
+                            continue;
+                        }
+                        foreach ($this->extractPhones($adjacent) as $phone) {
+                            $scores[$phone] = max($scores[$phone] ?? PHP_INT_MIN, $labelScore);
+                        }
                     }
-                    $scores[$phone] = max($scores[$phone] ?? PHP_INT_MIN, $labelScore);
                 }
             }
         }
@@ -255,9 +258,13 @@ class OcrEnsembleMobileSelector
             }
         }
 
-        $phone = OcrNormalize::normalizePhone($line);
-        if ($this->validPhone($phone)) {
-            $phones[$phone] = $phone;
+        // Only accept whole-line normalize when the line is essentially one phone
+        // (do not invent mobiles from occupation OCR digit soup).
+        if ($phones === []) {
+            $compact = preg_replace('/\D+/u', '', $line) ?? '';
+            if (preg_match('/^[6-9]\d{9}$/', $compact) === 1) {
+                $phones[$compact] = $compact;
+            }
         }
 
         return array_values($phones);

@@ -198,7 +198,12 @@ Residual Mode A (ranked for Loop 02+):
 1. Infer Hindu when caste is Maratha/Kunbi/… and religion null; peel OCR `शश्री`.  
 2. **Accepted:** religion **82.4% → 94.1%**; crit **84.2% → 86.3%** (`172006`).
 
-## Active (Loop 19 — Mode A RAW residual)
+## Loop 19 — Mobile previous-line संपर्क + digit-soup reject (complete)
+
+1. Bidirectional label↔phone adjacency; no whole-line phone invent from OCR soup.  
+2. **Accepted:** mobile **83.3% → 94.4%**; crit **86.3% → 88.4%** (`174313`).
+
+## Active (Loop 20 — Mode A RAW residual)
 
 1. `snehal` / `1.1` / `D(8)` DOB-gender-mobile / PDF name / `10-33-15` gender.  
 2. No global multipass tie-break.
