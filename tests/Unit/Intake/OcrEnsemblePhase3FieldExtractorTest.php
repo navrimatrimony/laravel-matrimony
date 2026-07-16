@@ -400,5 +400,12 @@ test('production community extractor infers Hindu from English resume Cast line'
         'Cast: - Ezhava',
     ];
 
-    expect(app(OcrEnsembleCommunityExtractor::class)->extract($lines)['religion'])->toBe('Hindu');
+    expect(app(OcrEnsembleCommunityExtractor::class)->extract($lines)['religion'])->toBe('Hindu')
+        ->and(app(OcrEnsembleCommunityExtractor::class)->extract([
+            'Mother Tongue: - Malayalam/ Marathi Cast: - Ezhava Uncle’s/Mama’s Surname',
+        ])['religion'])->toBe('Hindu')
+        ->and(app(OcrEnsembleCommunityExtractor::class)->extract([
+            'Cast: -',
+            'Ezhava',
+        ])['religion'])->toBe('Hindu');
 });

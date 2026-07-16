@@ -126,31 +126,48 @@ class OcrEnsembleCommunityExtractor
      */
     private function inferReligionFromEnglishCast(array $lines): ?string
     {
-        foreach ($lines as $line) {
-            if (preg_match('/\bCast\b\s*[:：\-–—.]+\s*(.+)$/iu', $line, $matches) !== 1) {
+        foreach ($lines as $index => $line) {
+            if (preg_match('/\bCast\b\s*[:\-–—\s]*$/iu', trim($line)) === 1) {
+                $next = trim((string) ($lines[$index + 1] ?? ''));
+                $religion = $this->religionFromEnglishCastValue($next);
+                if ($religion !== null) {
+                    return $religion;
+                }
+            }
+
+            if (preg_match('/\bCast\b\s*[:\-–—\s]+([A-Za-z][A-Za-z]+)/iu', $line, $matches) !== 1) {
                 continue;
             }
 
-            $value = trim((string) ($matches[1] ?? ''));
-            if ($value === '') {
-                continue;
+            $religion = $this->religionFromEnglishCastValue(trim((string) ($matches[1] ?? '')));
+            if ($religion !== null) {
+                return $religion;
             }
+        }
 
-            if (preg_match('/\bJain\b/i', $value)) {
-                return 'Jain';
-            }
-            if (preg_match('/\bMuslim\b/i', $value)) {
-                return 'Muslim';
-            }
-            if (preg_match('/\bChristian\b/i', $value)) {
-                return 'Christian';
-            }
-            if (preg_match('/\bBuddhist\b/i', $value)) {
-                return 'Buddhist';
-            }
-            if (preg_match('/\b(?:Ezhava|Maratha|Brahmin|Kunbi|Yadav|Lingayat|Gurav|Patil|Nair)\b/i', $value)) {
-                return 'Hindu';
-            }
+        return null;
+    }
+
+    private function religionFromEnglishCastValue(string $value): ?string
+    {
+        if ($value === '') {
+            return null;
+        }
+
+        if (preg_match('/\bJain\b/i', $value)) {
+            return 'Jain';
+        }
+        if (preg_match('/\bMuslim\b/i', $value)) {
+            return 'Muslim';
+        }
+        if (preg_match('/\bChristian\b/i', $value)) {
+            return 'Christian';
+        }
+        if (preg_match('/\bBuddhist\b/i', $value)) {
+            return 'Buddhist';
+        }
+        if (preg_match('/\b(?:Ezhava|Maratha|Brahmin|Kunbi|Yadav|Lingayat|Gurav|Patil|Nair)\b/i', $value)) {
+            return 'Hindu';
         }
 
         return null;

@@ -188,9 +188,14 @@ Residual Mode A (ranked for Loop 02+):
 1. `मिस.` female honorific; English `Cast:` Hindu inference.  
 2. **Accepted:** gender **75% → 80%**; crit **82.1% → 83.2%** (`155920`).
 
-## Active (Loop 17 — Mode A RAW residual)
+## Loop 17 — English Cast next-line (complete)
 
-1. `snehal` / `1.1` / `D(8)` / religion nulls — cohort-safe RAW only.  
+1. `Cast: -` / next-line `Ezhava` on English resumes.  
+2. **Accepted:** religion **76.5% → 82.4%**; crit **83.2% → 84.2%** (`162754`).
+
+## Active (Loop 18 — Mode A RAW residual)
+
+1. `snehal` / `1.1` / `D(8)` / remaining religion-gender — cohort-safe RAW only.  
 2. No global multipass tie-break.
 
 ---
@@ -218,3 +223,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-16 | Loop 14 father-line surname → name **80%**; crit **81.1%** |
 | 2026-07-16 | Loop 15 extracted-name `कु.` gender fallback → gender **75%**; crit **82.1%** |
 | 2026-07-16 | Loop 16 OCR `मिस.` + English Cast → gender **80%**; crit **83.2%** |
+| 2026-07-16 | Loop 17 Cast next-line → religion **82.4%**; crit **84.2%** |
