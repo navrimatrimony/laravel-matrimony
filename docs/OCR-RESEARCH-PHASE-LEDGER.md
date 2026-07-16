@@ -203,10 +203,15 @@ Residual Mode A (ranked for Loop 02+):
 1. Bidirectional label↔phone adjacency; no whole-line phone invent from OCR soup.  
 2. **Accepted:** mobile **83.3% → 94.4%**; crit **86.3% → 88.4%** (`174313`).
 
-## Active (Loop 20 — Mode A RAW residual)
+## Loop 20 — D8 orphan sticker vs father paren mobile (complete)
 
-1. `snehal` / `1.1` / `D(8)` DOB-gender-mobile / PDF name / `10-33-15` gender.  
-2. No global multipass tie-break.
+1. Orphan sticker penalty; prefer clean trailing `(mobile)`.  
+2. **Accepted:** crit **88.4% → 89.5%**; mobile **100%** (`180251`).
+
+## Active (Loop 21 — hard Mode A RAW residual)
+
+1. `snehal` / `1.1` / PDF name OCR / `D(8)` DOB-gender / remaining gender.  
+2. No invent; no global multipass demotion.
 
 ---
 

@@ -123,6 +123,17 @@ test('production mobile selector ignores occupation OCR digit soup as a phone', 
     expect(app(OcrEnsembleMobileSelector::class)->selectPrimary($lines))->toBe('9765771101');
 });
 
+test('production mobile selector prefers father paren phone over orphan sticker digits', function () {
+    $lines = [
+        'नाव : कु. प्रतीक्षा दशरथ कचरे',
+        'क: / ९५९४००१२६२',
+        '& श्री. दशरथ रंगराव कचरे. ( सैवानिवृत्त 8६५1 ८०0०७४८1०7 ) (९८२१२१२०७८)',
+        'चुलते १ श्री. जयकर रंगराव कचरे. ( माजी सरपंच ) (७५८८५८७२५९)',
+    ];
+
+    expect(app(OcrEnsembleMobileSelector::class)->selectPrimary($lines))->toBe('9821212078');
+});
+
 test('production mobile selector prefers संपर्क नंबर over address संपर्क', function () {
     $lines = [
         'मुलाचे नाव : नाथ सिध्देश्वर पाटील',

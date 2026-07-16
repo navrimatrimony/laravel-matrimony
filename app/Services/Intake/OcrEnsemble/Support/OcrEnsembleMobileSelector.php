@@ -21,7 +21,7 @@ class OcrEnsembleMobileSelector
                 continue;
             }
 
-            foreach ($this->extractPhones($line) as $phone) {
+                foreach ($this->extractPhones($line) as $phone) {
                 $snippet = $this->localSnippetAroundPhone($line, $phone);
                 $lineScore = $this->snippetContextScore($snippet);
                 if ($this->isFirstPhoneAfterContactLabel($line, $phone)) {
@@ -36,6 +36,11 @@ class OcrEnsembleMobileSelector
                 if (preg_match('/संपर्क\s*नं|मोबाईल\s*नं|mobile\s*n/ui', $line) === 1
                     && ! $this->looksLikeAddressContactLine($line)) {
                     $lineScore += 40;
+                }
+                // Prefer a clean trailing "(mobile)" over earlier OCR-digit soup in the same line.
+                $normalizedLine = OcrNormalize::normalizeDigits($line);
+                if (preg_match('/\(\s*'.$phone.'\s*\)\s*$/u', $normalizedLine) === 1) {
+                    $lineScore += 35;
                 }
                 // Page-level boosts only when the line is not a huge OCR dump.
                 if (mb_strlen($line, 'UTF-8') < 220) {
@@ -98,8 +103,10 @@ class OcrEnsembleMobileSelector
         // Phone glued/adjacent scoring handled in selectPrimary via isFirstPhoneAfterContactLabel.
 
         if ($this->hasRelationContext($snippet)) {
-            // Family-row मोबाईल is often the biodata's listed contact; soft-penalize only.
-            $score -= $this->lineHasMobileLabel($snippet) ? 40 : 100;
+            // Family-row मोबाईल / trailing (phone) is often the biodata contact; soft-penalize only.
+            $score -= ($this->lineHasMobileLabel($snippet) || preg_match('/\([^\)]*[6-9]\d{9}[^\)]*\)\s*$/u', $snippet) === 1)
+                ? 40
+                : 100;
         }
 
         if ($this->hasNonContactPhoneContext($snippet) && ! $this->lineHasMobileLabel($snippet)) {
@@ -111,11 +118,19 @@ class OcrEnsembleMobileSelector
         // Extra family-mobile stack penalty removed — soft relation penalty above is enough,
         // and many biodata list only वडील मोबाईल as the reachable contact.
 
-        // Unlabeled orphan digit strings (suchak overlay stickers) are weaker than मो.नं. lines.
+        // Unlabeled orphan digit / sticker fragments are weaker than named contact lines.
         $compact = preg_replace('/\s+/u', '', OcrNormalize::normalizeDigits($snippet)) ?? '';
         if ($this->lineHasMobileLabel($snippet) === false
             && preg_match('/^[0-9+\-\/,:]{10,}$/u', $compact) === 1) {
-            $score -= 25;
+            $score -= 70;
+        }
+        $letterCount = preg_match_all('/\p{L}/u', $snippet);
+        $letterCount = $letterCount === false ? 0 : $letterCount;
+        if ($this->lineHasMobileLabel($snippet) === false
+            && $letterCount <= 3
+            && mb_strlen($snippet, 'UTF-8') <= 48
+            && preg_match('/[6-9]\d{9}/u', OcrNormalize::normalizeDigits($snippet)) === 1) {
+            $score -= 80;
         }
 
         return $score;
