@@ -438,6 +438,17 @@ test('production gender extractor recovers OCR मिस honorific over male res
         ->toBe('female');
 });
 
+test('production gender extractor recovers कन्या वर्ण over male rescue fallback', function () {
+    $lines = [
+        'बायोडाटा',
+        'नावरस नांव :-__ षामली ट',
+        'कन्या वर्ण :- गोरा',
+    ];
+
+    expect(app(\App\Services\Intake\OcrEnsemble\Support\OcrEnsembleGenderExtractor::class)->extract($lines, 'male'))
+        ->toBe('female');
+});
+
 test('production community extractor infers Hindu from English resume Cast line', function () {
     $lines = [
         'RESUME',

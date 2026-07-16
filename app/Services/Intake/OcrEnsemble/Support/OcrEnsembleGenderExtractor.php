@@ -40,6 +40,11 @@ class OcrEnsembleGenderExtractor
 
         // Note: short `कु.` is NOT used — OCR frequently misreads `चि.` as `कु.` on male biodata.
 
+        $kanya = $this->fromKanyaDescriptor($lines);
+        if ($kanya !== null) {
+            return $kanya;
+        }
+
         $fallback = is_string($fallback) ? strtolower(trim($fallback)) : null;
         if (in_array($fallback, ['male', 'female'], true)) {
             return $fallback;
@@ -177,6 +182,25 @@ class OcrEnsembleGenderExtractor
             }
             if (preg_match('/(?:नाव|नांव|Name)\s*[:：\-–—._]*\s*कुमारी/ui', $line) === 1
                 || preg_match('/(?:^|[\s:：\-–—(])कुमारी\s*[\p{L}\p{M}]/u', $line) === 1) {
+                return 'female';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Marathi biodata often labels complexion/status as `कन्या वर्ण` (bride/girl).
+     *
+     * @param  list<string>  $lines
+     */
+    private function fromKanyaDescriptor(array $lines): ?string
+    {
+        foreach ($lines as $line) {
+            if (preg_match('/(?:वडील|आई|Father|Mother|मामा|काका|कन्यादान)/u', $line) === 1) {
+                continue;
+            }
+            if (preg_match('/कन्या\s*वर्ण|(?:^|[\s:：\-–—._])कन्या(?:[\s:：\-–—._]|$)/u', $line) === 1) {
                 return 'female';
             }
         }

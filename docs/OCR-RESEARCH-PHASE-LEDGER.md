@@ -213,10 +213,17 @@ Residual Mode A (ranked for Loop 02+):
 1. Recover female when cleaner strips `कु.` but OCR line still has it.  
 2. **Accepted:** crit **89.5% → 90.5%**; gender **80% → 85%** (`181938`).
 
-## Active (Loop 22 — hard Mode A RAW residual)
+## Loop 22 — `कन्या वर्ण` gender (complete)
 
-1. PDF name/gender/religion; `snehal`/`1.1`; `D(8)` DOB; remaining gender.  
-2. No invent; no global multipass demotion.
+1. Female cue from `कन्या वर्ण` before rescue fallback.  
+2. **Accepted:** crit **90.5% → 91.6%**; gender **85% → 90%** (`191007`).  
+3. Workflow: Tier A residual-pack PASS → Tier B remasure.
+
+## Active (Loop 23 — hard Mode A RAW residual)
+
+1. PDF name/gender/religion; `snehal`/`1.1` names; `D(8)` DOB; `10-33-15` gender.  
+2. No invent; no global multipass demotion.  
+3. Use Tier A residual-pack before full remasure.
 
 ---
 
