@@ -254,6 +254,9 @@ test('production name extractor recovers glued नाव and does not truncate �
         ]))->toContain('प्रतिक्षा')
         ->and($extractor->extract([
             'श्रीनाथ सिध्देश्वर पाटील',
+        ]))->toBe('नाथ सिध्देश्वर पाटील')
+        ->and($extractor->extract([
+            'शश्रीनाथ सिध्देश्वर पाटील',
         ]))->toBe('नाथ सिध्देश्वर पाटील');
 });
 
@@ -407,5 +410,12 @@ test('production community extractor infers Hindu from English resume Cast line'
         ->and(app(OcrEnsembleCommunityExtractor::class)->extract([
             'Cast: -',
             'Ezhava',
+        ])['religion'])->toBe('Hindu')
+        ->and(app(OcrEnsembleCommunityExtractor::class)->extract([
+            'जात ल मराठा (९६ कुळी)',
+        ])['religion'])->toBe('Hindu')
+        ->and(app(OcrEnsembleCommunityExtractor::class)->extract([
+            'जात',
+            '९६ कुळी मराठा',
         ])['religion'])->toBe('Hindu');
 });

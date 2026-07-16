@@ -63,6 +63,10 @@ class OcrEnsembleCommunityExtractor
             $religion = $this->inferReligionFromEnglishCast($lines);
         }
 
+        if ($religion === null) {
+            $religion = $this->inferReligionFromHinduCaste($caste);
+        }
+
         return [
             'religion' => $religion,
             'caste' => $caste,
@@ -167,6 +171,19 @@ class OcrEnsembleCommunityExtractor
             return 'Buddhist';
         }
         if (preg_match('/\b(?:Ezhava|Maratha|Brahmin|Kunbi|Yadav|Lingayat|Gurav|Patil|Nair)\b/i', $value)) {
+            return 'Hindu';
+        }
+
+        return null;
+    }
+
+    private function inferReligionFromHinduCaste(?string $caste): ?string
+    {
+        if ($caste === null || trim($caste) === '') {
+            return null;
+        }
+
+        if (preg_match('/^(?:Maratha|Kunbi|Ezhava|Gurav|Lingayat|Brahmin|Yadav|Nair)$/iu', trim($caste)) === 1) {
             return 'Hindu';
         }
 

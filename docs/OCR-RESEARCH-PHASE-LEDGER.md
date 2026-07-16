@@ -193,9 +193,14 @@ Residual Mode A (ranked for Loop 02+):
 1. `Cast: -` / next-line `Ezhava` on English resumes.  
 2. **Accepted:** religion **76.5% → 82.4%**; crit **83.2% → 84.2%** (`162754`).
 
-## Active (Loop 18 — Mode A RAW residual)
+## Loop 18 — Hindu-from-caste + शश्री peel (complete)
 
-1. `snehal` / `1.1` / `D(8)` / remaining religion-gender — cohort-safe RAW only.  
+1. Infer Hindu when caste is Maratha/Kunbi/… and religion null; peel OCR `शश्री`.  
+2. **Accepted:** religion **82.4% → 94.1%**; crit **84.2% → 86.3%** (`172006`).
+
+## Active (Loop 19 — Mode A RAW residual)
+
+1. `snehal` / `1.1` / `D(8)` DOB-gender-mobile / PDF name / `10-33-15` gender.  
 2. No global multipass tie-break.
 
 ---
@@ -224,3 +229,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-16 | Loop 15 extracted-name `कु.` gender fallback → gender **75%**; crit **82.1%** |
 | 2026-07-16 | Loop 16 OCR `मिस.` + English Cast → gender **80%**; crit **83.2%** |
 | 2026-07-16 | Loop 17 Cast next-line → religion **82.4%**; crit **84.2%** |
+| 2026-07-16 | Loop 18 Hindu-from-caste + शश्री peel → religion **94.1%**; crit **86.3%** |

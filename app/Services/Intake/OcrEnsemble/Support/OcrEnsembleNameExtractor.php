@@ -273,6 +273,9 @@ class OcrEnsembleNameExtractor
 
     private function stripNameHonorificPrefix(string $value): string
     {
+        // OCR sometimes doubles श्री as शश्रीनाथ; peel one श before glued श्री.
+        $value = preg_replace('/^श(?=श्री)/u', '', $value) ?? $value;
+
         // Require separator after short honorifics so चिवाजी / कुमार are not truncated.
         $value = preg_replace(
             '/^(?:\*[\s]*)?(?:Ms\.|Mr\.|Mrs\.|Miss\s+|कु\.|कुं\.|कुमारी\s+|चि\.|चच\.|चिरंजीव\s+|श्री\.|श्रीमती\s+|सौ\.)\s*/iu',
