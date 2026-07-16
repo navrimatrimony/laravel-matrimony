@@ -65,7 +65,7 @@
 | Short `कु.` as female | **Rejected** | Misreads `चि.` on male names |
 | Drop male fallback on नावरस | **Rejected** | Regressed true male gender |
 | Name: no bare चि/कु truncate; glued नाव/नाब; reject tiny fragments | **Accepted** | Loop 07; name **70%** |
-| Invent शि from चिवाजी / invent missing surname | **Rejected** | Not fidelity |
+| Name-band crop prepend (ungated / gated) | **Rejected** | Offline needle gains; Tier A D8/D1/PDF canary losses |
 | Mobile: no whitespace-merge phones; संपर्क/संपकण; first-after-label | **Accepted** | Loop 08; mobile **72.2%** |
 | Invent missing/shifted mobile digits | **Rejected** | Not fidelity |
 | Mobile: address-line संपर्क penalty; संपर्क नंबर boost | **Accepted** | Loop 09; `27.pdf` restored; mobile **77.8%** |
@@ -225,10 +225,16 @@ Residual Mode A (ranked for Loop 02+):
 2. **Accepted:** crit **91.6% → 92.6%**; gender **90% → 95%** (`193354`).  
 3. Tier A residual-pack PASS → Tier B remasure.
 
-## Active (Loop 24 — hard Mode A RAW residual)
+## Loop 24 — Name-band crop OCR (rejected)
+
+1. Offline probe recovered `स्नेहल` / `अनिल` / `प्रकाश` needles.  
+2. Production merge attempts failed Tier A (D8/D1 losses; PDF canary collapse).  
+3. Reverted; baseline held at **92.6%**.
+
+## Active (Loop 25 — hard Mode A RAW residual)
 
 1. PDF name/gender/religion; `snehal`/`1.1` names; `D(8)` DOB; PDF3 `चि`≠`शि`.  
-2. No invent; no global multipass demotion.  
+2. No invent; no unsafe global OCR demotion.  
 3. Use Tier A residual-pack before full remasure.
 
 ---
@@ -264,3 +270,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-16 | Loop 22 `कन्या वर्ण` gender → gender **90%**; crit **91.6%**; Tier A residual-pack workflow |
 | 2026-07-16 | Loop 23 strong female given-name gender → gender **95%**; crit **92.6%** |
 | 2026-07-16 | DOC §23 Fast Execution Workflow locked (Tier A before Tier B) |
+| 2026-07-16 | Loop 24 name-band OCR probe positive; production merge **rejected** (Tier A losses) |
