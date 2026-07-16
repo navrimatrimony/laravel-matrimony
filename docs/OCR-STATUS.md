@@ -1,26 +1,27 @@
 # OCR STATUS
 
-> **2026-07-16 13:50 IST** · Product Goal **In Progress**
+> **2026-07-16 14:22 IST** · Product Goal **In Progress**
 
 | Item | Value |
 |------|------:|
-| Artifact | `product_metrics_gt20_20260716_111153.json` |
-| Critical | **80.0%** |
-| Name | **75%** |
+| Artifact | `product_metrics_gt20_20260716_142130.json` |
+| Critical | **81.1%** |
+| Name | **80%** |
 | Mobile | 83.3% |
 | Religion | 76.5% |
 | Gender | 70% |
 | DOB | 95% |
 
-## Loop 12
+## Loop 12–13 (recovery)
 
-- **Rejected:** image-only `clean_document` multipass — **0 uplift**, crit **80%** (`112834`)
+- Loop 12 `clean_document` — **rejected** (0 uplift)  
+- Loop 13 multipass `v2_name_signal` — **rejected** (73.7% remeasure); code reverted
 
-## Loop 13
+## Loop 14
 
-- **Rejected:** multipass `v2_name_signal` — crit **80% → 73.7%** on remeasure (`134838`); code reverted  
-- **Kept:** probe tools + knowledge (snehal gender gain; global demotion on `27.pdf`, `10-33-15`, etc.)
+- **Accepted:** father-line surname append for 2-token candidate names  
+- Name **75% → 80%**; crit **80% → 81.1%**; WhatsApp `full_name` recovered
 
-## NEXT Loop 14
+## NEXT Loop 15
 
-Name / religion Mode A residual on GT-20 @ 80% baseline. Avoid global multipass tie-break; prefer cohort-safe or extractor paths where RAW already contains truth.
+Mode A RAW: `snehal` name/gender, religion nulls, `1.1` garble. No global multipass demotion.

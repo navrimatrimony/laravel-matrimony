@@ -94,7 +94,18 @@ class OcrEnsembleNameExtractor
 
         usort($candidates, static fn (array $left, array $right): int => $right['score'] <=> $left['score']);
 
-        return $candidates[0]['name'];
+        $best = $candidates[0];
+        if ((int) $best['score'] >= 90 && $this->devanagariNameWordCount((string) $best['name']) === 2) {
+            $surname = $this->surnameFromFatherLine($lines);
+            if ($surname !== null && mb_stripos((string) $best['name'], $surname) === false) {
+                $extended = $this->cleanCandidateName($best['name'].' '.$surname);
+                if ($this->validCandidateName($extended) && $this->devanagariNameWordCount((string) $extended) === 3) {
+                    return $extended;
+                }
+            }
+        }
+
+        return $best['name'];
     }
 
     public function cleanCandidateName(?string $name): ?string
@@ -493,5 +504,54 @@ class OcrEnsembleNameExtractor
     private function isFooterNoise(string $line): bool
     {
         return preg_match('/print|printing|shop|प्रिंट|छपाई/ui', $line) === 1;
+    }
+
+    private function devanagariNameWordCount(string $name): int
+    {
+        $tokens = preg_split('/\s+/u', trim($name)) ?: [];
+
+        return count(array_filter($tokens, static fn (string $tok): bool => preg_match('/^[\x{0900}-\x{097F}.]{2,}$/u', $tok) === 1));
+    }
+
+    /**
+     * @param  list<string>  $lines
+     */
+    private function surnameFromFatherLine(array $lines): ?string
+    {
+        $patterns = [
+            '/(?:चंडिलांचे|वडिलांचे|पित्याचे)\s*नाव\s*[:\-–—.\s]+(.+)$/u',
+            '/Father\S{0,2}\s*Name\s*[:\-]\s*(.+)$/iu',
+        ];
+
+        foreach ($lines as $line) {
+            foreach ($patterns as $pattern) {
+                if (preg_match($pattern, $line, $matches) !== 1) {
+                    continue;
+                }
+
+                $value = trim((string) ($matches[1] ?? ''));
+                $value = preg_split('/\s*\(/u', $value, 2)[0] ?? $value;
+                $value = $this->stopAtNextCandidateField($value);
+                $cleaned = $this->cleanCandidateName($value);
+                if ($cleaned === null) {
+                    continue;
+                }
+
+                $tokens = preg_split('/\s+/u', $cleaned) ?: [];
+                $devTokens = array_values(array_filter(
+                    $tokens,
+                    static fn (string $tok): bool => preg_match('/^[\x{0900}-\x{097F}.]{2,}$/u', $tok) === 1
+                ));
+                if ($devTokens === []) {
+                    continue;
+                }
+
+                $surname = (string) end($devTokens);
+
+                return mb_strlen($surname, 'UTF-8') >= 2 ? $surname : null;
+            }
+        }
+
+        return null;
     }
 }

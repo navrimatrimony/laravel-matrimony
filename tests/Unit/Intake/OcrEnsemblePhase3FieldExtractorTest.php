@@ -232,7 +232,12 @@ test('production name extractor reads English resume Name and biodata-title name
             'बायोडाटा',
             'रेखा शिवदास पाटील',
             'जन्मतारीख 15 जून 1999',
-        ]))->toBe('रेखा शिवदास पाटील');
+        ]))->toBe('रेखा शिवदास पाटील')
+        ->and($extractor->extract([
+            'मुलाचे नाव : विशाल पांडुरंग sree जन्म तारीख : ०२/११/१९९५',
+            'कौटुंबिक माहिती',
+            'चंडिलांचे नाव : चॉड्डरंग लक्ष्मण डाकवे (नोकरी-9322202146)',
+        ]))->toBe('विशाल पांडुरंग डाकवे');
 });
 
 test('production name extractor recovers glued नाव and does not truncate चिवाजी', function () {

@@ -172,10 +172,15 @@ Residual Mode A (ranked for Loop 02+):
 2. **Rejected:** crit **80% → 73.7%** (`134838`); snehal gender gain but `27.pdf` / `10-33-15` / `1.3` name losses.  
 3. Code reverted; probe tools kept.
 
-## Active (Loop 14 — name / religion Mode A @ 80% baseline)
+## Loop 14 — Father-line surname (complete)
 
-1. Forensic remaining GT-20 misses without global multipass demotion.  
-2. Cohort-safe RAW or extractor-only where truth already in raw.
+1. Mode B: 2-token candidate + labeled father surname.  
+2. **Accepted:** name **75% → 80%**; crit **80% → 81.1%** (`142130`).
+
+## Active (Loop 15 — Mode A RAW residual)
+
+1. `snehal` / religion nulls / `1.1` garble — cohort-safe RAW only.  
+2. No global multipass tie-break.
 
 ---
 
@@ -199,3 +204,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-16 | Loop 10a father/address mobile → **83.3%**; critical **78.9%**; Loop 10b name/gender next |
 | 2026-07-16 | Loop 11 loss audit + biodata next-line name → **80%** crit; RAW global preset REJECTED |
 | 2026-07-16 | Loop 12 clean_document REJECTED (0 uplift); Loop 13 name-label multipass REJECTED (73.7%) |
+| 2026-07-16 | Loop 14 father-line surname → name **80%**; crit **81.1%** |
