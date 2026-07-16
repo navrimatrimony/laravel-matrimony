@@ -24,11 +24,14 @@ class OcrEnsembleMobileSelector
             foreach ($this->extractPhones($line) as $phone) {
                 $snippet = $this->localSnippetAroundPhone($line, $phone);
                 $lineScore = $this->snippetContextScore($snippet);
-                if ($this->isFirstPhoneAfterContactLabel($line, $phone) && ! $this->hasRelationContext($snippet)) {
-                    $lineScore += 80;
+                if ($this->isFirstPhoneAfterContactLabel($line, $phone)) {
+                    // Allow boost even on वडील/आई rows — that number is often the biodata contact.
+                    if (! $this->hasRelationContext($snippet) || $this->lineHasMobileLabel($snippet)) {
+                        $lineScore += 80;
+                    }
                 }
                 if ($this->looksLikeAddressContactLine($line)) {
-                    $lineScore -= 70;
+                    $lineScore -= 120;
                 }
                 if (preg_match('/संपर्क\s*नं|मोबाईल\s*नं|mobile\s*n/ui', $line) === 1
                     && ! $this->looksLikeAddressContactLine($line)) {
@@ -84,12 +87,16 @@ class OcrEnsembleMobileSelector
             $score += 50;
         } elseif ($this->lineHasMobileLabel($snippet) && ! $this->hasRelationContext($snippet)) {
             $score += 35;
+        } elseif ($this->lineHasMobileLabel($snippet) && $this->hasRelationContext($snippet)) {
+            // Family-row labeled mobile still counts as a contact cue.
+            $score += 25;
         }
 
         // Phone glued/adjacent scoring handled in selectPrimary via isFirstPhoneAfterContactLabel.
 
         if ($this->hasRelationContext($snippet)) {
-            $score -= 100;
+            // Family-row मोबाईल is often the biodata's listed contact; soft-penalize only.
+            $score -= $this->lineHasMobileLabel($snippet) ? 40 : 100;
         }
 
         if ($this->hasNonContactPhoneContext($snippet) && ! $this->lineHasMobileLabel($snippet)) {
@@ -98,9 +105,8 @@ class OcrEnsembleMobileSelector
 
         // Address / संपर्क-नंबर line boosts applied on full line in selectPrimary.
 
-        if (preg_match('/(?:वडील|आई|मामा|भाऊ|बहिण|बहीण|काका|मावशी)\s+.*(?:मोबाईल|मोबाइल|संपर्क|संपक)/ui', $snippet) === 1) {
-            $score -= 90;
-        }
+        // Extra family-mobile stack penalty removed — soft relation penalty above is enough,
+        // and many biodata list only वडील मोबाईल as the reachable contact.
 
         // Unlabeled orphan digit strings (suchak overlay stickers) are weaker than मो.नं. lines.
         $compact = preg_replace('/\s+/u', '', OcrNormalize::normalizeDigits($snippet)) ?? '';
@@ -114,7 +120,8 @@ class OcrEnsembleMobileSelector
 
     private function looksLikeAddressContactLine(string $line): bool
     {
-        return preg_match('/(?:मु\.?\s*पो\.?|ता\s*\.|जि\s*\.|पिन\s*कोड|pincode|पोस्ट|कॉलनी|रोड|नगर|वाडी)/ui', $line) === 1;
+        // Do not treat पोस्टमास्टर (job title) as postal address.
+        return preg_match('/(?:मु\.?\s*पो\.?|ता\s*\.|जि\s*\.|पत्ता|पिन\s*कोड|pincode|पोस्ट\s|कॉलनी|रोड|नगर|वाडी)/ui', $line) === 1;
     }
 
     private function isFirstPhoneAfterContactLabel(string $line, string $phone): bool

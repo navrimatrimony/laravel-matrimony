@@ -1,7 +1,10 @@
-# OCR Research Loop 10 — Name / Gender residual
+# OCR Research Loop 10 — Name / Gender (+ mobile 10a)
 
-> **Status:** OPEN  
-> **Why:** Both at **70%** after Loop 09; next critical floor.  
-> **Artifact base:** `product_metrics_gt20_20260716_095820.json`
+## 10a Mobile — COMPLETE
 
-Prefer Name Mode B extract gaps first (higher structured impact per miss), then Gender.
+Father `मोबाईल` vs address `मोबाईल`: mobile **77.8% → 83.3%**, critical **78.9%**.  
+Artifact: `product_metrics_gt20_20260716_101758.json`
+
+## 10b Name / Gender — NEXT
+
+Both still **70%**. Mostly Mode A OCR / garbled tokens; invent rejected.

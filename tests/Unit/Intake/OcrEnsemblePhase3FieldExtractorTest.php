@@ -92,6 +92,16 @@ test('production mobile selector recovers OCR संपकण नं label', fun
     expect(app(OcrEnsembleMobileSelector::class)->selectPrimary($lines))->toBe('8698501396');
 });
 
+test('production mobile selector prefers वडील मोबाईल over address मोबाईल', function () {
+    $lines = [
+        'मुलाचे नाव : अनिकेत जयवंत पाटील',
+        'वडील :- श्री.जयवंत तुकाराम पाटील (पोस्टमास्टर) मोबाईल-8805526197',
+        'एक(विवाहित) पत्ता-बिउर,ता.शिराळा,जिसांगली मोबाईल-9209905005',
+    ];
+
+    expect(app(OcrEnsembleMobileSelector::class)->selectPrimary($lines))->toBe('8805526197');
+});
+
 test('production mobile selector prefers संपर्क नंबर over address संपर्क', function () {
     $lines = [
         'मुलाचे नाव : नाथ सिध्देश्वर पाटील',
