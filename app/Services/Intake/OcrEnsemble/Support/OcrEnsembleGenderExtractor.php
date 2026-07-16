@@ -50,6 +50,11 @@ class OcrEnsembleGenderExtractor
             return $nameHonorific;
         }
 
+        $nameOnLine = $this->fromExtractedNameWithKuOnSourceLine($lines, $extractedName);
+        if ($nameOnLine !== null) {
+            return $nameOnLine;
+        }
+
         return null;
     }
 
@@ -186,5 +191,35 @@ class OcrEnsembleGenderExtractor
         }
 
         return preg_match('/^\s*कु\.\s*[\p{L}\p{M}]/u', $name) === 1 ? 'female' : null;
+    }
+
+    /**
+     * Name cleaner strips `कु.`; recover female cue when source line still has `कु.` before the extracted given name.
+     *
+     * @param  list<string>  $lines
+     */
+    private function fromExtractedNameWithKuOnSourceLine(array $lines, ?string $extractedName): ?string
+    {
+        if (! is_string($extractedName) || trim($extractedName) === '') {
+            return null;
+        }
+
+        $tokens = preg_split('/\s+/u', trim($extractedName)) ?: [];
+        $first = $tokens[0] ?? '';
+        if ($first === '' || mb_strlen($first, 'UTF-8') < 2) {
+            return null;
+        }
+
+        $quoted = preg_quote($first, '/');
+        foreach ($lines as $line) {
+            if (preg_match('/(?:वडील|आई|Father|Mother|मामा|काका)/u', $line) === 1) {
+                continue;
+            }
+            if (preg_match('/कु\.\s*'.$quoted.'/u', $line) === 1) {
+                return 'female';
+            }
+        }
+
+        return null;
     }
 }

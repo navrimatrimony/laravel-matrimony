@@ -417,6 +417,16 @@ test('production gender extractor infers female from extracted candidate name ku
         )->field('gender'))->toBe('female');
 });
 
+test('production gender extractor recovers कु. on source line after name cleaner strips it', function () {
+    $lines = [
+        'र >: कु. प्रतीक्षा दशरथ कचरे. जन्म :२४०३/१९९९',
+    ];
+
+    expect(app(\App\Services\Intake\OcrEnsemble\Support\OcrEnsembleGenderExtractor::class)
+        ->extract($lines, null, 'प्रतीक्षा दशरथ कचरे'))
+        ->toBe('female');
+});
+
 test('production gender extractor recovers OCR मिस honorific over male rescue fallback', function () {
     $lines = [
         'जे निडिमिडिमििििि मिस.',

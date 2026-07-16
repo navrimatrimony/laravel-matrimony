@@ -1,29 +1,29 @@
 # OCR STATUS
 
-> **2026-07-16 18:05 IST** · Product Goal **In Progress**
+> **2026-07-16 18:20 IST** · Product Goal **In Progress**
 
 | Item | Value |
 |------|------:|
-| Artifact | `product_metrics_gt20_20260716_180251.json` |
-| Critical | **89.5%** |
+| Artifact | `product_metrics_gt20_20260716_181938.json` |
+| Critical | **90.5%** |
 | Name | **80%** |
 | Mobile | **100%** |
 | Religion | **94.1%** |
-| Gender | **80%** |
+| Gender | **85%** |
 | DOB | 95% |
 
 ## Current Accepted Baseline
 
-- Critical: **89.5%**
-- Artifact: `product_metrics_gt20_20260716_180251.json`
+- Critical: **90.5%**
+- Artifact: `product_metrics_gt20_20260716_181938.json`
 - Any future loop must benchmark against this accepted baseline.
 - No loop may become production unless it equals or exceeds this baseline.
 
-## Loop 20
+## Loop 21
 
-- **Accepted:** orphan-sticker penalty + trailing `(mobile)` preference  
-- Crit **88.4% → 89.5%**; D8 mobile recovered; mobile field **100%** on GT-20
+- **Accepted:** source-line `कु.` after name strip  
+- Crit **89.5% → 90.5%**; gender **80% → 85%**; D8 gender recovered
 
-## NEXT Loop 21
+## NEXT Loop 22
 
-Hard Mode A: `snehal`/`1.1` names, PDF name OCR, `D(8)` DOB/gender, `10-33-15`/`snehal` gender, PDF2 religion.
+Hard Mode A residuals (9 fields): PDF name/gender/religion, `snehal`/`1.1` names, `D(8)` DOB, `10-33-15`/`snehal` gender.

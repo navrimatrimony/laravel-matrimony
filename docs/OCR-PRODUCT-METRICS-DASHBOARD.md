@@ -1,8 +1,8 @@
 # OCR Product Metrics Dashboard
 
 > Compass only. Goal = RAW OCR fidelity.  
-> **Updated:** 2026-07-16 18:05 IST  
-> **Artifact:** `product_metrics_gt20_20260716_180251.json`
+> **Updated:** 2026-07-16 18:20 IST  
+> **Artifact:** `product_metrics_gt20_20260716_181938.json`
 
 | Metric | Baseline | Current | Delta |
 |--------|--------:|--------:|------:|
