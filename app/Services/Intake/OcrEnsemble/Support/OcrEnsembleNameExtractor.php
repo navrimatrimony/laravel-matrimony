@@ -116,7 +116,15 @@ class OcrEnsembleNameExtractor
 
         $name = $this->stripHtmlAndOcrArtifacts($name);
         $name = $this->stopAtNextCandidateField($name);
-        $name = preg_replace('/\([^)]*\)/u', '', $name) ?? $name;
+        // Drop phone/occupation parentheses; keep short Devanagari surname aliases like (कदम).
+        $name = preg_replace_callback('/\(([^)]*)\)/u', static function (array $m): string {
+            $inner = trim((string) ($m[1] ?? ''));
+            if (preg_match('/^[\x{0900}-\x{097F}]{2,12}$/u', $inner) === 1) {
+                return '('.$inner.')';
+            }
+
+            return '';
+        }, $name) ?? $name;
         // OCR garble before honorific: "र : कु. प्रतीक्षा ..."
         $name = preg_replace('/^(?:[\p{L}\p{M}]{1,3}\s*[:：]\s*)+/u', '', $name) ?? $name;
         $name = $this->stripNameEdgeNoiseTokens($name);
@@ -154,10 +162,18 @@ class OcrEnsembleNameExtractor
             }
 
             $isDevName = preg_match('/^[\x{0900}-\x{097F}.]+$/u', $tok) === 1;
+            $isDevAlias = preg_match('/^\([\x{0900}-\x{097F}]{2,12}\)$/u', $tok) === 1;
             $isLatinName = preg_match('/^[A-Za-z.]{2,}$/', $tok) === 1;
             $hasDigit = preg_match('/\d/u', $tok) === 1;
 
             if ($hasDigit) {
+                break;
+            }
+
+            if ($isDevAlias) {
+                if (count($kept) >= 2) {
+                    $kept[] = $tok;
+                }
                 break;
             }
 

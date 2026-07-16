@@ -199,5 +199,9 @@ test('usable embedded pdf text heuristics prefer real biodata layers', function 
             $ocr,
             'Hello biodata DOB name mobile education caste religion height text here with enough latin keywords'
         ))->toBeTrue()
-        ->and($method->invoke($ocr, $itransGarbage))->toBeFalse();
+        ->and($method->invoke($ocr, $itransGarbage))->toBeFalse()
+        ->and($method->invoke(
+            $ocr,
+            '// गणेशाय नमः //नावनवनाथ ेशगा पाटील (कदम)णे तारीखDecember 10, 1995णे वेळ06:50 AM जातिहंदू मराठा '.str_repeat('कौटुंबिक माहिती ', 30)
+        ))->toBeFalse();
 });

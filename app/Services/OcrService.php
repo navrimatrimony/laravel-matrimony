@@ -465,6 +465,19 @@ class OcrService
         }
 
         if (preg_match('/\p{Devanagari}/u', $text) === 1) {
+            // Megapage / broken PDF text layers glue biodata into 1–2 huge lines
+            // (e.g. नावनवनाथ…णे तारीख…जातिहंदू). Prefer page raster for raw fidelity.
+            $nonEmptyLines = 0;
+            foreach (preg_split('/\R/u', $text) ?: [] as $line) {
+                if (trim($line) !== '') {
+                    $nonEmptyLines++;
+                }
+            }
+            if ($nonEmptyLines <= 2 && $len >= 400
+                && preg_match('/नावन|णे\s*तारीख|जातिहंदू/u', $text) === 1) {
+                return false;
+            }
+
             return true;
         }
 
@@ -598,7 +611,9 @@ class OcrService
                     $pagePath,
                     $rel,
                     'pdf-page-'.($i + 1).'.png',
-                    $presetOverride ?? null
+                    // PDF page rasters are already large; null/auto preprocessing can burn the
+                    // multipass time budget before any Tesseract attempt (attempt_count=0).
+                    $presetOverride ?? 'off'
                 );
                 $pageText = trim((string) ($result['text'] ?? ''));
                 if ($pageText !== '') {

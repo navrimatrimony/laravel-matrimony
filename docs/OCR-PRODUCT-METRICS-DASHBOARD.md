@@ -1,25 +1,24 @@
 # OCR Product Metrics Dashboard
 
 > Compass only. Goal = RAW OCR fidelity.  
-> **Updated:** 2026-07-16 19:35 IST  
-> **Artifact:** `product_metrics_gt20_20260716_193354.json`
+> **Updated:** 2026-07-16 21:10 IST  
+> **Artifact:** `product_metrics_gt20_20260716_210840.json`
 
 | Metric | Baseline | Current | Delta |
 |--------|--------:|--------:|------:|
-| Critical | 42.1% | **92.6%** | **+50.5** |
+| Critical | 42.1% | **94.7%** | **+52.6** |
 | DOB | 25% | **95%** | +70 |
-| Name | 30% | **80%** | +50 |
+| Name | 30% | **85%** | +55 |
 | Mobile | 55.6% | **100%** | +44.4 |
 | Religion | 47.1% | **94.1%** | +47.0 |
-| Gender | 55.0% | **95%** | +40 |
+| Gender | 55.0% | **100%** | +45 |
 
 ## Research focus
 
-Hard Mode A residuals (name OCR garble, D8 DOB day, PDF religion with no tokens).  
-Parser only for clear Mode B. Global multipass demotion rejected.
+Hard Mode A residuals: `snehal`/`1.1` names, PDF3 `चि`≠`शि`, PDF2 religion, D8 DOB day.
 
 ## Priority
 
-1. Hard Mode A name residual (`snehal`, `1.1`, PDF1/PDF3) against **92.6%** baseline  
-2. PDF2 religion Mode A (no religion/caste tokens in raw)  
-3. `D(8)` DOB Mode A (OCR day 24 ≠ GT 21)  
+1. Image name Mode A (`snehal`, `1.1`) against **94.7%** baseline  
+2. PDF3 name invent-forbidden residual  
+3. PDF2 religion / D8 DOB Mode A  

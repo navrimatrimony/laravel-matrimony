@@ -1,30 +1,29 @@
 # OCR STATUS
 
-> **2026-07-16 20:05 IST** · Product Goal **In Progress**
+> **2026-07-16 21:10 IST** · Product Goal **In Progress**
 
 | Item | Value |
 |------|------:|
-| Artifact | `product_metrics_gt20_20260716_193354.json` |
-| Critical | **92.6%** |
-| Name | **80%** |
+| Artifact | `product_metrics_gt20_20260716_210840.json` |
+| Critical | **94.7%** |
+| Name | **85%** |
 | Mobile | **100%** |
 | Religion | **94.1%** |
-| Gender | **95%** |
+| Gender | **100%** |
 | DOB | 95% |
 
 ## Current Accepted Baseline
 
-- Critical: **92.6%**
-- Artifact: `product_metrics_gt20_20260716_193354.json`
+- Critical: **94.7%**
+- Artifact: `product_metrics_gt20_20260716_210840.json`
 - Any future loop must benchmark against this accepted baseline.
 - No loop may become production unless it equals or exceeds this baseline.
 
-## Loop 24
+## Loop 25
 
-- **Rejected:** production name-band merge (Tier A regressions)  
-- Offline probe kept as research evidence (`tools/ocr-loop24-name-band-probe.php`)  
-- Baseline unchanged at **92.6%**
+- **Accepted:** megapage PDF → raster + PDF multipass `off` + keep `(कदम)` alias  
+- Crit **92.6% → 94.7%**; name **85%**; gender **100%**; PDF1 recovered  
 
-## NEXT Loop 25
+## NEXT Loop 26
 
-Hard Mode A residuals only; safer additive OCR variants must pass Tier A canaries (incl. PDFs) before Tier B.
+Hard Mode A: `snehal`/`1.1` names, PDF3 `चि`≠`शि`, PDF2 religion, D8 DOB.
