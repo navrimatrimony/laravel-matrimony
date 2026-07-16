@@ -38,6 +38,22 @@ class OcrEnsembleNameExtractor
                 continue;
             }
 
+            $glued = $this->valueAfterGluedNavLabel($line);
+            if ($glued !== null) {
+                $cleaned = $this->cleanCandidateName($glued);
+                if ($this->validCandidateName($cleaned)) {
+                    $candidates[] = ['name' => $cleaned, 'score' => 95];
+                }
+            }
+
+            $fromTitle = $this->valueAfterBiodataTitle($line);
+            if ($fromTitle !== null) {
+                $cleaned = $this->cleanCandidateName($fromTitle);
+                if ($this->validCandidateName($cleaned)) {
+                    $candidates[] = ['name' => $cleaned, 'score' => 90];
+                }
+            }
+
             if ($this->isHtmlNoiseLine($line)) {
                 continue;
             }
@@ -189,7 +205,7 @@ class OcrEnsembleNameExtractor
 
     private function valueAfterNameLabel(string $line): ?string
     {
-        if (preg_match('/(?:मुलाचे\s+नां?व|मुलीचे\s+नां?व|वधूचे\s+नां?व|वराचे\s+नां?व|नां?व|मुलाचे\s+बां|मुलीचे\s+बां)\s*(?::\s*-\s*|[:\-：]\s*|[८8]\s*|\s+)\s*(.+)$/ui', $line, $matches) === 1) {
+        if (preg_match('/(?:मुलाचे\s+नां?व|मुलीचे\s+नां?व|वधूचे\s+नां?व|वराचे\s+नां?व|नां?व|नाब|मुलाचे\s+बां|मुलीचे\s+बां)\s*(?::\s*-\s*|[:\-：]\s*|[८8]\s*|\s+)\s*(.+)$/ui', $line, $matches) === 1) {
             return $this->stopAtNextCandidateField(trim((string) $matches[1]));
         }
 
@@ -239,37 +255,73 @@ class OcrEnsembleNameExtractor
 
     private function stripNameHonorificPrefix(string $value): string
     {
-        $value = preg_replace('/^(?:\*[\s]*)?(?:Ms\.|Mr\.|Mrs\.|Miss\s+|कु\.|कुं\.|कुमारी\s+|चि\.|चच\.|चिरंजीव\s+|श्री\.|श्रीमती\s+|सौ\.)/iu', '', $value) ?? $value;
+        // Require separator after short honorifics so चिवाजी / कुमार are not truncated.
+        $value = preg_replace(
+            '/^(?:\*[\s]*)?(?:Ms\.|Mr\.|Mrs\.|Miss\s+|कु\.|कुं\.|कुमारी\s+|चि\.|चच\.|चिरंजीव\s+|श्री\.|श्रीमती\s+|सौ\.)\s*/iu',
+            '',
+            $value
+        ) ?? $value;
 
         foreach ([
             'चिरंजीव',
             'श्रीमती.',
             'श्रीमती',
             'कुमारी',
-            'कुमार',
             'चि.',
             'चच.',
-            'चि',
-            'चच',
             'कुं.',
-            'कुं',
             'कु.',
-            'कु',
             'श्री.',
             'श्री',
             'सौ.',
-            'सौ',
             'Ms.',
             'Mr.',
             'Mrs.',
             'Miss',
         ] as $prefix) {
-            if (str_starts_with(mb_strtolower($value, 'UTF-8'), mb_strtolower($prefix, 'UTF-8'))) {
-                return $this->trimEdgePunctuation(mb_substr($value, mb_strlen($prefix, 'UTF-8'), null, 'UTF-8'));
+            $lower = mb_strtolower($value, 'UTF-8');
+            $p = mb_strtolower($prefix, 'UTF-8');
+            if (! str_starts_with($lower, $p)) {
+                continue;
+            }
+            $rest = mb_substr($value, mb_strlen($prefix, 'UTF-8'), null, 'UTF-8');
+            // Bare `श्री` may be glued (श्रीनाथ). Never strip bare चि/कु — those begin real names (चिवाजी/कुमार).
+            if (in_array($prefix, ['श्रीमती', 'कुमारी', 'चिरंजीव', 'Miss', 'श्री'], true)
+                || str_ends_with($prefix, '.')
+                || preg_match('/^[\s:：\-–—(]/u', $rest) === 1) {
+                return $this->trimEdgePunctuation($rest);
             }
         }
 
         return $value;
+    }
+
+    /**
+     * Megapage OCR often glues label+name: नावनवनाथ / नाबप्रतीक्षा
+     */
+    private function valueAfterGluedNavLabel(string $line): ?string
+    {
+        if (preg_match('/(?:^|[^\p{L}\p{M}])(?:नां?व|नाब)(?=[\x{0900}-\x{097F}])/u', $line, $m, PREG_OFFSET_CAPTURE) !== 1) {
+            return null;
+        }
+
+        // Byte offset from PREG_OFFSET_CAPTURE is not UTF-8 safe for mb_substr — re-match with capture.
+        if (preg_match('/(?:^|[^\p{L}\p{M}])(?:नां?व|नाब)([\x{0900}-\x{097F}][\x{0900}-\x{097F}\s.]*?)(?=(?:णे\s*)?(?:तारीख|जन्म|उंची|ऊंची|मो\.|मोबाईल|धर्म|जात|$))/u', $line, $m) !== 1) {
+            return null;
+        }
+
+        $value = trim((string) $m[1]);
+
+        return $value !== '' ? $this->stopAtNextCandidateField($value) : null;
+    }
+
+    private function valueAfterBiodataTitle(string $line): ?string
+    {
+        if (preg_match('/^(?:बायो\s*डाटा|बायोडाटा|bio\s*data|marriage\s*biodata|वैवाहिक\s*बायो\s*डाटा)\s+(.+)$/iu', trim($line), $m) !== 1) {
+            return null;
+        }
+
+        return $this->stopAtNextCandidateField(trim((string) $m[1]));
     }
 
     private function stripNameEdgeNoiseTokens(string $value): string
@@ -314,6 +366,19 @@ class OcrEnsembleNameExtractor
         }
 
         if ($this->looksLikeAddress($name) || $this->looksLikeBiodataTitle($name) || $this->looksLikeInvocation($name)) {
+            return false;
+        }
+
+        // Reject tiny OCR fragments ("न्स", "डे कू") that beat real names via weak scores.
+        $tokens = preg_split('/\s+/u', trim($name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if ($tokens === []) {
+            return false;
+        }
+        if (count($tokens) === 1 && mb_strlen($tokens[0], 'UTF-8') <= 3) {
+            return false;
+        }
+        $compactLen = mb_strlen(implode('', $tokens), 'UTF-8');
+        if (count($tokens) <= 2 && $compactLen <= 4) {
             return false;
         }
 
@@ -388,7 +453,7 @@ class OcrEnsembleNameExtractor
             return true;
         }
 
-        if (preg_match('/(?:^|\s)नां?व(?:[\s:：\-–—.]|$)/u', $line) === 1 && ! $this->hasRelationContext($line)) {
+        if (preg_match('/(?:^|\s)(?:नां?व|नाब)(?:[\s:：\-–—._]|$)/u', $line) === 1 && ! $this->hasRelationContext($line)) {
             return true;
         }
 

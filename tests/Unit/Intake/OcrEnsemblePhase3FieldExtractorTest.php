@@ -191,6 +191,23 @@ test('production name extractor reads English resume Name and biodata-title name
         ]))->toBe('मोहित पंढरीनाथ पवाट');
 });
 
+test('production name extractor recovers glued नाव and does not truncate चिवाजी', function () {
+    $extractor = app(OcrEnsembleNameExtractor::class);
+
+    expect($extractor->extract([
+        '// / गणेशाय नमः //नावनवनाथ पाटीलणे तारीखDecember 10, 1995',
+    ]))->toContain('नवनाथ')
+        ->and($extractor->extract([
+            'मुलाचे नाव :- चि. चिवाजी प्रकाि गुरव',
+        ]))->toBe('चिवाजी प्रकाि गुरव')
+        ->and($extractor->extract([
+            '(*) नाब :_ कु.प्रतिक्षा नितिन मगर (0)',
+        ]))->toContain('प्रतिक्षा')
+        ->and($extractor->extract([
+            'श्रीनाथ सिध्देश्वर पाटील',
+        ]))->toBe('नाथ सिध्देश्वर पाटील');
+});
+
 test('production field extractor extracts candidates from ocr attempts', function () {
     $attempt = new BiodataIntakeOcrAttempt([
         'engine' => BiodataIntakeOcrAttempt::ENGINE_LARAVEL_NATIVE_OCR,

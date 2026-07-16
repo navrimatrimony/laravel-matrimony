@@ -64,6 +64,8 @@
 | Gender: Ms. / मुलीची माहिती / कुमारी extractor | **Accepted** | Loop 06; critical **73.7%** |
 | Short `कु.` as female | **Rejected** | Misreads `चि.` on male names |
 | Drop male fallback on नावरस | **Rejected** | Regressed true male gender |
+| Name: no bare चि/कु truncate; glued नाव/नाब; reject tiny fragments | **Accepted** | Loop 07; name **70%** |
+| Invent शि from चिवाजी / invent missing surname | **Rejected** | Not fidelity |
 
 ---
 
@@ -120,11 +122,17 @@ Residual Mode A (ranked for Loop 02+):
 3. **Rejected:** short `कु.`; aggressive नावरस fallback drop.  
 4. Gender **60% → 70%**; Critical **71.6% → 73.7%**.
 
-## Active improvement cycle (Loop 07 — after Safe Shutdown)
+## Loop 07 — Name residual (complete slice)
 
-1. **Resume:** [`docs/OCR-STATUS.md`](OCR-STATUS.md)  
-2. **Why next:** Name **65%** then Mobile **61.1%** residuals.  
-3. **Artifact:** `product_metrics_gt20_20260715_212444.json`.
+1. **Forensic:** Mode A **1** / Mode B **6**.  
+2. **Accepted:** no bare चि/कु truncate; glued नाव/नाब; biodata-title score; reject tiny fragments; keep श्री glue strip.  
+3. Name **65% → 70%**; Critical **73.7% → 74.7%**.
+
+## Active improvement cycle (Loop 08 Mobile residual)
+
+1. **Why:** GT-20 mobile **61.1%** — lowest remaining critical accuracy.  
+2. Forensic Mode A/B → fix → remasure → continue (§21).  
+3. **Resume:** artifact `product_metrics_gt20_20260716_091807.json`.
 
 ---
 
@@ -142,3 +150,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-15 | DOC §21 Continue / §22 Safe Shutdown; Loop 04 mobile → **66.7%**; critical **68.4%**; Loop 05 Religion next |
 | 2026-07-15 | Loop 05 religion → **76.5%**; critical **71.6%**; Loop 06 Gender next |
 | 2026-07-15 | Loop 06 gender → **70%**; critical **73.7%**; Safe Shutdown STATUS |
+| 2026-07-16 | Loop 07 name residual → **70%**; critical **74.7%**; Loop 08 Mobile next |
