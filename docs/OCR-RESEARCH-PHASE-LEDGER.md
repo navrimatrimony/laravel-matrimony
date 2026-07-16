@@ -66,6 +66,7 @@
 | Drop male fallback on नावरस | **Rejected** | Regressed true male gender |
 | Name: no bare चि/कु truncate; glued नाव/नाब; reject tiny fragments | **Accepted** | Loop 07; name **70%** |
 | Name-band crop prepend (ungated / gated) | **Rejected** | Offline needle gains; Tier A D8/D1/PDF canary losses |
+| Megapage PDF glue → raster + multipass `off` + keep `(alias)` | **Accepted** | Loop 25; PDF1 name+gender; crit **94.7%** |
 | Mobile: no whitespace-merge phones; संपर्क/संपकण; first-after-label | **Accepted** | Loop 08; mobile **72.2%** |
 | Invent missing/shifted mobile digits | **Rejected** | Not fidelity |
 | Mobile: address-line संपर्क penalty; संपर्क नंबर boost | **Accepted** | Loop 09; `27.pdf` restored; mobile **77.8%** |
@@ -231,11 +232,15 @@ Residual Mode A (ranked for Loop 02+):
 2. Production merge attempts failed Tier A (D8/D1 losses; PDF canary collapse).  
 3. Reverted; baseline held at **92.6%**.
 
-## Active (Loop 25 — hard Mode A RAW residual)
+## Loop 25 — Megapage PDF raster + surname alias (complete)
 
-1. PDF name/gender/religion; `snehal`/`1.1` names; `D(8)` DOB; PDF3 `चि`≠`शि`.  
-2. No invent; no unsafe global OCR demotion.  
-3. Use Tier A residual-pack before full remasure.
+1. Reject megapage embedded glue; PDF raster multipass default `off`; keep `(कदम)`.  
+2. **Accepted:** crit **92.6% → 94.7%**; name **85%**; gender **100%** (`210840`).  
+
+## Active (Loop 26 — hard Mode A RAW residual)
+
+1. `snehal`/`1.1` names; PDF3 `चि`≠`शि`; PDF2 religion; `D(8)` DOB.  
+2. No invent; Tier A residual-pack before remasure.
 
 ---
 
@@ -271,3 +276,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-16 | Loop 23 strong female given-name gender → gender **95%**; crit **92.6%** |
 | 2026-07-16 | DOC §23 Fast Execution Workflow locked (Tier A before Tier B) |
 | 2026-07-16 | Loop 24 name-band OCR probe positive; production merge **rejected** (Tier A losses) |
+| 2026-07-16 | Loop 25 megapage PDF raster + alias keep → crit **94.7%**; name **85%**; gender **100%** |
