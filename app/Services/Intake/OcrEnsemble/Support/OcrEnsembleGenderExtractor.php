@@ -11,7 +11,7 @@ class OcrEnsembleGenderExtractor
     /**
      * @param  list<string>  $lines
      */
-    public function extract(array $lines, ?string $fallback = null): ?string
+    public function extract(array $lines, ?string $fallback = null, ?string $extractedName = null): ?string
     {
         $explicit = $this->fromExplicitLabel($lines);
         if ($explicit !== null) {
@@ -43,6 +43,11 @@ class OcrEnsembleGenderExtractor
         $fallback = is_string($fallback) ? strtolower(trim($fallback)) : null;
         if (in_array($fallback, ['male', 'female'], true)) {
             return $fallback;
+        }
+
+        $nameHonorific = $this->fromExtractedCandidateName($extractedName);
+        if ($nameHonorific !== null) {
+            return $nameHonorific;
         }
 
         return null;
@@ -168,5 +173,14 @@ class OcrEnsembleGenderExtractor
         }
 
         return null;
+    }
+
+    private function fromExtractedCandidateName(?string $name): ?string
+    {
+        if (! is_string($name) || trim($name) === '') {
+            return null;
+        }
+
+        return preg_match('/^\s*कु\.\s*[\p{L}\p{M}]/u', $name) === 1 ? 'female' : null;
     }
 }

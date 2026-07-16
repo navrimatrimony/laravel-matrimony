@@ -94,16 +94,19 @@ final class OcrEnsembleFieldExtractor implements OcrEnsembleFieldExtractorInterf
             $height = HeightDisplay::formatCm((int) round((float) $core['height_cm']));
         }
 
+        $fullName = $this->nameExtractor->extract(
+            $lines,
+            OcrEnsembleFieldTextSupport::stringOrNull($core['full_name'] ?? null),
+            $hintName,
+        );
+
         $fields = [
-            'full_name' => $this->nameExtractor->extract(
-                $lines,
-                OcrEnsembleFieldTextSupport::stringOrNull($core['full_name'] ?? null),
-                $hintName,
-            ),
+            'full_name' => $fullName,
             'date_of_birth' => $dob,
             'gender' => $this->genderExtractor->extract(
                 $lines,
                 OcrEnsembleFieldTextSupport::stringOrNull($core['gender'] ?? null),
+                $fullName,
             ),
             'primary_contact_number' => $this->mobileSelector->selectPrimary(
                 $lines,

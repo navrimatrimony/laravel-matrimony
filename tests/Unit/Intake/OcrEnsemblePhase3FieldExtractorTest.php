@@ -370,3 +370,14 @@ test('production gender extractor prefers मुलीची माहिती 
     expect(app(\App\Services\Intake\OcrEnsemble\Support\OcrEnsembleGenderExtractor::class)->extract($lines, 'male'))
         ->toBe('female');
 });
+
+test('production gender extractor infers female from extracted candidate name ku honorific when no fallback exists', function () {
+    $lines = ['शिक्षण : बी.ई.', 'मोबाईल : 9637999016'];
+
+    expect(app(\App\Services\Intake\OcrEnsemble\Support\OcrEnsembleGenderExtractor::class)->extract($lines, null, 'कु.प्रतिक्षा नितिन मगर'))
+        ->toBe('female')
+        ->and(app(OcrEnsembleFieldExtractor::class)->extractFromText(
+            "नाब :_ कु.प्रतिक्षा नितिन मगर\nशिक्षण : बी.ई.(आय.ही.)\nजन्म तारीख : ०८ सप्टेंबर १९९४",
+            OcrEnsemblePhase3Constants::ENGINE_LARAVEL_NATIVE_OCR,
+        )->field('gender'))->toBe('female');
+});
