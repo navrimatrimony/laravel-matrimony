@@ -208,9 +208,14 @@ Residual Mode A (ranked for Loop 02+):
 1. Orphan sticker penalty; prefer clean trailing `(mobile)`.  
 2. **Accepted:** crit **88.4% → 89.5%**; mobile **100%** (`180251`).
 
-## Active (Loop 21 — hard Mode A RAW residual)
+## Loop 21 — Source-line `कु.` after name strip (complete)
 
-1. `snehal` / `1.1` / PDF name OCR / `D(8)` DOB-gender / remaining gender.  
+1. Recover female when cleaner strips `कु.` but OCR line still has it.  
+2. **Accepted:** crit **89.5% → 90.5%**; gender **80% → 85%** (`181938`).
+
+## Active (Loop 22 — hard Mode A RAW residual)
+
+1. PDF name/gender/religion; `snehal`/`1.1`; `D(8)` DOB; remaining gender.  
 2. No invent; no global multipass demotion.
 
 ---
@@ -242,3 +247,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-16 | Loop 18 Hindu-from-caste + शश्री peel → religion **94.1%**; crit **86.3%** |
 | 2026-07-16 | Loop 19 mobile prev-संपर्क + digit-soup reject → mobile **94.4%**; crit **88.4%** |
 | 2026-07-16 | Loop 20 D8 orphan-sticker vs father paren mobile → crit **89.5%**; mobile **100%** |
+| 2026-07-16 | Loop 21 source-line `कु.` after name strip → gender **85%**; crit **90.5%** |
