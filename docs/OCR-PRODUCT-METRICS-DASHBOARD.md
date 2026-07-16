@@ -6,10 +6,10 @@
 
 | Metric | Baseline | Current | Delta |
 |--------|--------:|--------:|------:|
-| Critical | 42.1% | **86.3%** | **+44.2** |
+| Critical | 42.1% | **88.4%** | **+46.3** |
 | DOB | 25% | **95%** | +70 |
 | Name | 30% | **80%** | +50 |
-| Mobile | 55.6% | **83.3%** | +27.7 |
+| Mobile | 55.6% | **94.4%** | +38.8 |
 | Religion | 47.1% | **94.1%** | +47.0 |
 | Gender | 55.0% | **80%** | +25 |
 
@@ -20,6 +20,6 @@ Parser only for clear Mode B. Global multipass widening **rejected** (crit 68.4%
 
 ## Priority
 
-1. Name / gender / mobile Mode A residual against the **86.3%** accepted baseline  
+1. Name / gender / DOB Mode A residual against the **88.4%** accepted baseline  
 2. Religion Mode A  
 3. Gender Mode A (`snehal`, `10-33-15`, `10-33-22`) without global multipass demotion  
