@@ -438,6 +438,23 @@ test('production gender extractor recovers OCR मिस honorific over male res
         ->toBe('female');
 });
 
+test('production gender extractor recovers strong female given name when no other cue exists', function () {
+    $extractor = app(\App\Services\Intake\OcrEnsemble\Support\OcrEnsembleGenderExtractor::class);
+
+    expect($extractor->extract([
+        'बायोडाटा',
+        'रेखा शिवदास पाटील',
+        'जन्मतारीख',
+        '15 जून 1999',
+    ], null, 'रेखा शिवदास पाटील'))->toBe('female')
+        ->and($extractor->extract([
+            'बायोडाटा',
+            'विशाल पांडुरंग डाकवे',
+            'जन्मतारीख',
+            '15 जून 1999',
+        ], null, 'विशाल पांडुरंग डाकवे'))->toBeNull();
+});
+
 test('production gender extractor recovers कन्या वर्ण over male rescue fallback', function () {
     $lines = [
         'बायोडाटा',

@@ -60,6 +60,11 @@ class OcrEnsembleGenderExtractor
             return $nameOnLine;
         }
 
+        $strongFemale = $this->fromStrongFemaleGivenName($extractedName);
+        if ($strongFemale !== null) {
+            return $strongFemale;
+        }
+
         return null;
     }
 
@@ -215,6 +220,39 @@ class OcrEnsembleGenderExtractor
         }
 
         return preg_match('/^\s*कु\.\s*[\p{L}\p{M}]/u', $name) === 1 ? 'female' : null;
+    }
+
+    /**
+     * High-confidence Marathi female given names only (exact first token).
+     * Used when honorific/section cues are absent; does not invent from relatives.
+     */
+    private function fromStrongFemaleGivenName(?string $name): ?string
+    {
+        if (! is_string($name) || trim($name) === '') {
+            return null;
+        }
+
+        $tokens = preg_split('/\s+/u', trim($name)) ?: [];
+        $first = $tokens[0] ?? '';
+        if ($first === '') {
+            return null;
+        }
+
+        // Conservative allowlist — common biodata given names that are almost never male.
+        static $female = [
+            'रेखा' => true,
+            'स्नेहल' => true,
+            'प्रतिक्षा' => true,
+            'प्रीती' => true,
+            'प्रीति' => true,
+            'पूजा' => true,
+            'प्रियंका' => true,
+            'अश्विनी' => true,
+            'सुप्रिया' => true,
+            'कामिनी' => true,
+        ];
+
+        return isset($female[$first]) ? 'female' : null;
     }
 
     /**

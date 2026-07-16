@@ -219,9 +219,15 @@ Residual Mode A (ranked for Loop 02+):
 2. **Accepted:** crit **90.5% → 91.6%**; gender **85% → 90%** (`191007`).  
 3. Workflow: Tier A residual-pack PASS → Tier B remasure.
 
-## Active (Loop 23 — hard Mode A RAW residual)
+## Loop 23 — Strong female given-name gender (complete)
 
-1. PDF name/gender/religion; `snehal`/`1.1` names; `D(8)` DOB; `10-33-15` gender.  
+1. Conservative first-token female allowlist when honorific/section cues absent.  
+2. **Accepted:** crit **91.6% → 92.6%**; gender **90% → 95%** (`193354`).  
+3. Tier A residual-pack PASS → Tier B remasure.
+
+## Active (Loop 24 — hard Mode A RAW residual)
+
+1. PDF name/gender/religion; `snehal`/`1.1` names; `D(8)` DOB; PDF3 `चि`≠`शि`.  
 2. No invent; no global multipass demotion.  
 3. Use Tier A residual-pack before full remasure.
 
@@ -255,3 +261,6 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-16 | Loop 19 mobile prev-संपर्क + digit-soup reject → mobile **94.4%**; crit **88.4%** |
 | 2026-07-16 | Loop 20 D8 orphan-sticker vs father paren mobile → crit **89.5%**; mobile **100%** |
 | 2026-07-16 | Loop 21 source-line `कु.` after name strip → gender **85%**; crit **90.5%** |
+| 2026-07-16 | Loop 22 `कन्या वर्ण` gender → gender **90%**; crit **91.6%**; Tier A residual-pack workflow |
+| 2026-07-16 | Loop 23 strong female given-name gender → gender **95%**; crit **92.6%** |
+| 2026-07-16 | DOC §23 Fast Execution Workflow locked (Tier A before Tier B) |

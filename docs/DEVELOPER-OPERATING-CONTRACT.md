@@ -763,3 +763,110 @@ End-of-day user phrase (optional): record STATUS, commit, push, dashboard/ledger
 | 1.8 | 2026-07-15 | §20 Production OCR Release Gate recorded for future production enable |
 | 1.9 | 2026-07-15 | §21 Autonomous Continuation; §22 Safe Shutdown / Resume; server pull not every commit |
 | 1.8 | 2026-07-15 | §20 Production OCR Release Gate (record only — enforce at production enable) |
+| 2.0 | 2026-07-16 | §23 Fast Execution Workflow (LOCKED) — Tier A residual-pack before Tier B remasure |
+
+
+## 23. Fast Execution Workflow (LOCKED)
+
+### Purpose
+
+Reduce execution time without reducing
+quality, regression safety, evidence quality
+or Product Vision fidelity.
+
+This workflow changes only the execution speed.
+
+It does NOT change:
+
+- SSOT
+- Blueprint
+- Product Vision
+- Definition of Done
+- Production Release Gate
+
+---
+
+### Execution Rules
+
+For every implementation loop:
+
+1. Measure the current highest production-impact problem.
+
+2. Perform forensic analysis only on the affected files.
+
+3. Implement ONE production-safe change.
+
+4. Run Tier A validation.
+
+Tier A consists of:
+
+- Unit tests
+- Targeted regression tests
+- Residual pack replay
+- Only the affected files
+- Cached OCR where possible
+
+Tier A exists only to validate the current hypothesis.
+
+5. Only after Tier A succeeds,
+run Tier B validation.
+
+Tier B consists of:
+
+- Full benchmark
+- GT remasure
+- Product metrics update
+- Dashboard refresh
+
+Tier B is the acceptance gate,
+not the thinking gate.
+
+6. If Tier A fails:
+
+Reject the change immediately.
+
+Do NOT run the full benchmark.
+
+7. Never bundle multiple production
+changes into one validation cycle.
+
+One hypothesis.
+
+One implementation.
+
+One validation.
+
+8. After acceptance:
+
+- Update Dashboard
+- Update Ledger
+- Commit
+- Push
+
+Immediately continue to the next
+highest-priority production problem.
+
+Do NOT stop after documentation.
+
+Progress reports do NOT require
+human approval.
+
+The default action is CONTINUE.
+
+---
+
+### Execution Principles
+
+The agent SHALL optimize
+the execution loop,
+not the Product Vision.
+
+The Product Goal always remains:
+
+Highest practical RAW OCR Text Fidelity
+for production Marathi, Devanagari
+and English biodata.
+
+Execution speed may improve.
+
+Quality requirements shall never decrease.
