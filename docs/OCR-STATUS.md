@@ -1,35 +1,23 @@
-# OCR STATUS — resume point
+# OCR STATUS
 
-> **Recorded:** 2026-07-16 10:18 IST  
-> **Product Goal:** RAW OCR fidelity — **In Progress**
-
-## Last facts
+> **2026-07-16 11:12 IST** · Product Goal **In Progress**
 
 | Item | Value |
 |------|------:|
-| Artifact | `product_metrics_gt20_20260716_101758.json` |
-| Critical | **78.9%** |
-| DOB | 95% |
-| Name | 70% |
-| Mobile | **83.3%** |
+| Artifact | `product_metrics_gt20_20260716_111153.json` |
+| Critical | **80.0%** |
+| Name | **75%** |
+| Mobile | 83.3% |
 | Religion | 76.5% |
 | Gender | 70% |
+| DOB | 95% |
 
-## Today’s loops (committed)
+## Loop 11
 
-| Loop | Result |
-|------|--------|
-| 07 Name | → 70% |
-| 08 Mobile merge/labels | → 72.2% |
-| 09 Address संपर्क | → 77.8% |
-| 10a Father vs address मोबाईल | → **83.3%**; critical **78.9%** |
+- Audit: Mode A=8 / B=12; fidelity gap → RAW OCR  
+- Accepted: biodata next-line name → name **75%**, crit **80%**  
+- Rejected: global photo_capture default + noisy_scan multipass (crit 68.4%)
 
-## NEXT
+## NEXT Loop 12
 
-**Loop 10b — Name / Gender residual (both 70%)**  
-Remaining mobiles (3) are mostly Mode A digit OCR — no invent.
-
-```text
-Continue the Approved Goal.
-Resume from the last committed state.
-```
+Image-only RAW OCR (no PDF default changes).

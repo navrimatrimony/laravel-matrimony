@@ -373,6 +373,12 @@ class TesseractMultiPassOcrService
         $configured = config('ocr.tesseract_multipass.preprocessing_presets', ['resolved', 'photo_capture', 'high_contrast']);
         $configured = is_array($configured) ? $configured : ['resolved', 'photo_capture', 'high_contrast'];
 
+        // Image-only additive variant (Loop 12): mild clean_document without touching PDF defaults.
+        $ext = strtolower(pathinfo((string) ($originalName ?: $relativeStoredPath), PATHINFO_EXTENSION));
+        if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'bmp'], true)) {
+            $configured[] = 'clean_document';
+        }
+
         $out = [];
         foreach ($configured as $entry) {
             $name = (string) $entry;

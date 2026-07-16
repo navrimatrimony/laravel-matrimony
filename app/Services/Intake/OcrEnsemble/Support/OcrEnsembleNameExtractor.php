@@ -52,6 +52,13 @@ class OcrEnsembleNameExtractor
                 if ($this->validCandidateName($cleaned)) {
                     $candidates[] = ['name' => $cleaned, 'score' => 90];
                 }
+            } elseif (preg_match('/^(?:बायो\s*डाटा|बायोडाटा|bio\s*data)\s*$/iu', trim($line)) === 1) {
+                // Title alone on its line; candidate name often on the next line.
+                $next = trim((string) ($lines[$index + 1] ?? ''));
+                $cleaned = $this->cleanCandidateName($next);
+                if ($this->validCandidateName($cleaned)) {
+                    $candidates[] = ['name' => $cleaned, 'score' => 92];
+                }
             }
 
             if ($this->isHtmlNoiseLine($line)) {

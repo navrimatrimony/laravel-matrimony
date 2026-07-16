@@ -70,6 +70,9 @@
 | Invent missing/shifted mobile digits | **Rejected** | Not fidelity |
 | Mobile: address-line संपर्क penalty; संपर्क नंबर boost | **Accepted** | Loop 09; `27.pdf` restored; mobile **77.8%** |
 | Mobile: soft family-मोबाईल; don’t treat पोस्टमास्टर as address | **Accepted** | Loop 10a; mobile **83.3%** |
+| Loss audit Mode A/B on remaining GT-20 misses | **Accepted** | Loop 11; religion 100% Mode A |
+| Biodata title alone → next-line name | **Accepted** | Loop 11; name **75%**; crit **80%** |
+| Global jpg→photo_capture + noisy_scan multipass | **Rejected** | Crit **68.4%**; PDF DOB collapse |
 
 ---
 
@@ -151,10 +154,17 @@ Residual Mode A (ranked for Loop 02+):
 2. **Accepted:** soft family labeled-mobile; exclude पोस्टमास्टर from address; boost family first-phone.  
 3. Mobile **77.8% → 83.3%**; Critical **77.9% → 78.9%**.
 
-## Active improvement cycle (Loop 10b Name/Gender)
+## Loop 11 — Loss audit + RAW pivot attempt (complete)
 
-1. **Why:** Name & Gender both **70%**.  
-2. **Artifact:** `product_metrics_gt20_20260716_101758.json`.
+1. **Audit:** Mode A **8** / Mode B **12**; religion 100% Mode A; many name “B” = OCR garble.  
+2. **Accepted:** biodata title→next-line name; name **70→75%**; critical **78.9→80%**.  
+3. **Rejected:** global photo_capture default + noisy_scan multipass (critical **68.4%** regression).  
+4. **Pivot:** RAW OCR continues image-gated only.
+
+## Active (Loop 12 — image-only clean_document multipass)
+
+1. Add `clean_document` multipass variant for jpg/png/webp only (no PDF default change).  
+2. Remasure; reject on any critical regression.
 
 ---
 
@@ -176,3 +186,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-16 | Loop 08 mobile → **72.2%**; critical **76.8%**; Loop 09 next |
 | 2026-07-16 | Loop 09 address-संपर्क → mobile **77.8%**; critical **77.9%**; Loop 10 next |
 | 2026-07-16 | Loop 10a father/address mobile → **83.3%**; critical **78.9%**; Loop 10b name/gender next |
+| 2026-07-16 | Loop 11 loss audit + biodata next-line name → **80%** crit; RAW global preset REJECTED |

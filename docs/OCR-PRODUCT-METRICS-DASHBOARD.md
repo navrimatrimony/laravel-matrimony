@@ -1,27 +1,25 @@
 # OCR Product Metrics Dashboard
 
 > Compass only. Goal = RAW OCR fidelity.  
-> **Updated:** 2026-07-16 10:18 IST  
-> **Artifact:** `product_metrics_gt20_20260716_101758.json`
+> **Updated:** 2026-07-16 11:12 IST  
+> **Artifact:** `product_metrics_gt20_20260716_111153.json`
 
 | Metric | Baseline | Current | Delta |
 |--------|--------:|--------:|------:|
-| Critical | 42.1% | **78.9%** | **+36.8** |
+| Critical | 42.1% | **80.0%** | **+37.9** |
 | DOB | 25% | **95%** | +70 |
-| Name | 30% | **70%** | +40 |
-| Mobile | 55.6% | **83.3%** | **+27.7** |
+| Name | 30% | **75%** | +45 |
+| Mobile | 55.6% | **83.3%** | +27.7 |
 | Religion | 47.1% | **76.5%** | +29.4 |
 | Gender | 55.0% | **70%** | +15 |
 
+## Research focus
+
+**RAW OCR** (religion/gender Mode A; OCR-garbled names).  
+Parser only for clear Mode B. Global multipass widening **rejected** (crit 68.4% regression).
+
 ## Priority
 
-1. Name residual (70%)  
-2. Gender residual (70%)  
-3. Mobile Mode A (3 misses)
-
-## History
-
-| Date | Event |
-|------|-------|
-| 2026-07-16 | Loop 07–09; critical 77.9%; mobile 77.8% |
-| 2026-07-16 | Loop 10a father/address mobile → **83.3%**; critical **78.9%** |
+1. Image-gated RAW OCR (safe multipass / preprocess)  
+2. Name Mode A OCR garble  
+3. Gender / religion Mode A  
