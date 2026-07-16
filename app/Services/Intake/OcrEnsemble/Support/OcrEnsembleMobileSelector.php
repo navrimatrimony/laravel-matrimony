@@ -24,6 +24,9 @@ class OcrEnsembleMobileSelector
             foreach ($this->extractPhones($line) as $phone) {
                 $snippet = $this->localSnippetAroundPhone($line, $phone);
                 $lineScore = $this->snippetContextScore($snippet);
+                if ($this->isFirstPhoneAfterContactLabel($line, $phone) && ! $this->hasRelationContext($snippet)) {
+                    $lineScore += 80;
+                }
                 // Page-level boosts only when the line is not a huge OCR dump.
                 if (mb_strlen($line, 'UTF-8') < 220) {
                     $lineScore += $this->pageContextBoost($lines, $index, $line);
@@ -76,6 +79,8 @@ class OcrEnsembleMobileSelector
             $score += 35;
         }
 
+        // Phone glued/adjacent scoring handled in selectPrimary via isFirstPhoneAfterContactLabel.
+
         if ($this->hasRelationContext($snippet)) {
             $score -= 100;
         }
@@ -84,7 +89,7 @@ class OcrEnsembleMobileSelector
             $score -= 40;
         }
 
-        if (preg_match('/(?:वडील|आई|मामा|भाऊ|बहिण|बहीण|काका|मावशी)\s+.*(?:मोबाईल|मोबाइल|संपर्क)/ui', $snippet) === 1) {
+        if (preg_match('/(?:वडील|आई|मामा|भाऊ|बहिण|बहीण|काका|मावशी)\s+.*(?:मोबाईल|मोबाइल|संपर्क|संपक)/ui', $snippet) === 1) {
             $score -= 90;
         }
 
@@ -96,6 +101,20 @@ class OcrEnsembleMobileSelector
         }
 
         return $score;
+    }
+
+    private function isFirstPhoneAfterContactLabel(string $line, string $phone): bool
+    {
+        $n = OcrNormalize::normalizeDigits($line);
+        if (preg_match(
+            '/(?:मोबाईल|मोबाइल|मोबा\.?|मो\.?\s*नं\.?|मो\.|संपर्क|संपकण?|भ्रमणध्वनी|contact|phone|mobile|cell)\s*[:：\-–—.]{0,3}\s*([6-9]\d{9})/ui',
+            $n,
+            $m
+        ) !== 1) {
+            return false;
+        }
+
+        return ($m[1] ?? '') === $phone;
     }
 
     /**
@@ -204,7 +223,9 @@ class OcrEnsembleMobileSelector
         $line = OcrNormalize::normalizeDigits($line);
         $phones = [];
 
-        if (preg_match_all('/(?:\+?91[\s\-]*)?[6-9][0-9\s\-\/]{9,14}/u', $line, $matches)) {
+        // Do not allow whitespace inside the digit body — OCR lines with two
+        // numbers ("9850959973 8437054414") must not merge into a fake phone.
+        if (preg_match_all('/(?:\+?91[\s\-]*)?[6-9]\d{9}/u', $line, $matches)) {
             foreach ($matches[0] as $raw) {
                 $phone = OcrNormalize::normalizePhone($raw);
                 if ($this->validPhone($phone)) {
@@ -228,12 +249,12 @@ class OcrEnsembleMobileSelector
 
     private function lineHasMobileLabel(string $line): bool
     {
-        return preg_match('/मोबाईल|मोबाइल|मोबा\.?|मो\.?\s*नं\.?|मो\.|भ्रमणध्वनी|संपर्क|mobile|phone|contact/ui', $line) === 1;
+        return preg_match('/मोबाईल|मोबाइल|मोबा\.?|मो\.?\s*नं\.?|मो\.|भ्रमणध्वनी|संपर्क|संपकण?|mobile|phone|contact|cell/ui', $line) === 1;
     }
 
     private function lineHasDirectContactLabel(string $line): bool
     {
-        return preg_match('/(?:मोबाईल|मोबाइल|मो\.?\s*नं\.?|संपर्क|mobile|phone|contact)/ui', $line) === 1;
+        return preg_match('/(?:मोबाईल|मोबाइल|मो\.?\s*नं\.?|संपर्क|संपकण?|mobile|phone|contact|cell)/ui', $line) === 1;
     }
 
     private function hasRelationContext(string $value): bool

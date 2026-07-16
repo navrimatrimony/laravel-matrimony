@@ -66,6 +66,8 @@
 | Drop male fallback on नावरस | **Rejected** | Regressed true male gender |
 | Name: no bare चि/कु truncate; glued नाव/नाब; reject tiny fragments | **Accepted** | Loop 07; name **70%** |
 | Invent शि from चिवाजी / invent missing surname | **Rejected** | Not fidelity |
+| Mobile: no whitespace-merge phones; संपर्क/संपकण; first-after-label | **Accepted** | Loop 08; mobile **72.2%** |
+| Invent missing/shifted mobile digits | **Rejected** | Not fidelity |
 
 ---
 
@@ -128,11 +130,17 @@ Residual Mode A (ranked for Loop 02+):
 2. **Accepted:** no bare चि/कु truncate; glued नाव/नाब; biodata-title score; reject tiny fragments; keep श्री glue strip.  
 3. Name **65% → 70%**; Critical **73.7% → 74.7%**.
 
-## Active improvement cycle (Loop 08 Mobile residual)
+## Loop 08 — Mobile residual (complete slice)
 
-1. **Why:** GT-20 mobile **61.1%** — lowest remaining critical accuracy.  
-2. Forensic Mode A/B → fix → remasure → continue (§21).  
-3. **Resume:** artifact `product_metrics_gt20_20260716_091807.json`.
+1. **Forensic:** Mode A **0** / Mode B **7**.  
+2. **Accepted:** no whitespace phone-merge; `संपर्क`/`संपकण`; first phone after label.  
+3. Mobile **61.1% → 72.2%**; Critical **74.7% → 76.8%**.  
+4. Residual: `27.pdf` OK→wrong flip; Mode A digit OCR.
+
+## Active improvement cycle (Loop 09)
+
+1. **Why:** `27.pdf` mobile regression + remaining mobile/name Mode A.  
+2. **Artifact:** `product_metrics_gt20_20260716_094041.json`.
 
 ---
 
@@ -151,3 +159,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-15 | Loop 05 religion → **76.5%**; critical **71.6%**; Loop 06 Gender next |
 | 2026-07-15 | Loop 06 gender → **70%**; critical **73.7%**; Safe Shutdown STATUS |
 | 2026-07-16 | Loop 07 name residual → **70%**; critical **74.7%**; Loop 08 Mobile next |
+| 2026-07-16 | Loop 08 mobile → **72.2%**; critical **76.8%**; Loop 09 next |

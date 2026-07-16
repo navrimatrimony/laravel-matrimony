@@ -73,6 +73,25 @@ test('production mobile selector recovers मो.नं. on glued megapage OCR l
     expect($phone)->toBe('7057066223');
 });
 
+test('production mobile selector prefers phone immediately after संपर्क label', function () {
+    $lines = [
+        'नाव : अविनाश प्रकाश कदम',
+        'संपर्क: 9850959973 8437054414',
+        'वडील मोबाईल 9123456789',
+    ];
+
+    expect(app(OcrEnsembleMobileSelector::class)->selectPrimary($lines))->toBe('9850959973');
+});
+
+test('production mobile selector recovers OCR संपकण नं label', function () {
+    $lines = [
+        'मुलाचे नाव : शिवाजी',
+        'संपकण नं 8698501396',
+    ];
+
+    expect(app(OcrEnsembleMobileSelector::class)->selectPrimary($lines))->toBe('8698501396');
+});
+
 test('production dob normalizer parses dd/mm/yyyy and recovers ocr digit substitutions', function () {
     $normalizer = app(OcrEnsembleDobNormalizer::class);
 

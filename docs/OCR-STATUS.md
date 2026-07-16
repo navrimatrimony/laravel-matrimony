@@ -1,18 +1,17 @@
 # OCR STATUS — resume point
 
-> **Recorded:** 2026-07-16 09:20 IST  
-> **Authority:** DOC §22  
-> **Product Goal:** RAW OCR text fidelity — **In Progress**
+> **Recorded:** 2026-07-16 09:45 IST  
+> **Product Goal:** RAW OCR fidelity — **In Progress**
 
 ## Last facts
 
 | Item | Value |
 |------|------:|
-| Artifact | `product_metrics_gt20_20260716_091807.json` |
-| Critical | **74.7%** |
+| Artifact | `product_metrics_gt20_20260716_094041.json` |
+| Critical | **76.8%** |
 | DOB | 95% |
-| Name | **70%** |
-| Mobile | 61.1% |
+| Name | 70% |
+| Mobile | **72.2%** |
 | Religion | 76.5% |
 | Gender | 70% |
 
@@ -20,12 +19,15 @@
 
 | Loop | Status |
 |------|--------|
-| 01–06 | Complete slices |
-| **07 Name residual** | **Complete slice** |
-| **08 Mobile residual** | **NEXT** |
+| 01–07 | Complete slices |
+| **08 Mobile residual** | **Complete slice** |
+| **09** | **NEXT — `27.pdf` mobile flip + remaining Mode A mobiles** |
 
-## Next
+## Resume
 
-Continue Loop 08 Mobile (61.1%) — Mode B preference / digit OCR; no invent.
+```text
+Continue the Approved Goal.
+Resume from the last committed state.
+```
 
 Leave alone: `database/seeders/location/LocationSeeder.php`
