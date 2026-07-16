@@ -870,3 +870,51 @@ and English biodata.
 Execution speed may improve.
 
 Quality requirements shall never decrease.
+
+
+## 24 Product Owner Visibility (LOCKED)
+
+The Product Owner shall always be able
+to answer these questions without
+reading commits or source code.
+
+For every Approved Goal,
+the agent SHALL maintain:
+
+1.
+Overall Goal Completion (%)
+
+2.
+Current Stage
+
+3.
+Current Activity
+
+4.
+Current Highest Priority Problem
+
+5.
+Remaining Major Work
+
+6.
+Estimated Remaining Time
+
+7.
+Current Blockers
+
+8.
+Next Automatic Step
+
+9.
+Last Stable Commit
+
+10.
+Exact Resume Point
+
+The agent SHALL automatically
+refresh this information
+after every accepted implementation loop.
+
+The Product Owner shall not
+need to infer project status
+from technical logs.
