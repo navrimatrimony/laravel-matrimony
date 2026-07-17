@@ -296,3 +296,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-16 | Loop 25 megapage PDF raster + alias keep → crit **94.7%**; name **85%**; gender **100%** |
 | 2026-07-17 | Loop 26 image-only gated name-band → crit **95.8%**; name **90%**; snehal recovered |
 | 2026-07-17 | Loop 27 `वडीलांचे` father surname → crit **96.8%**; name **95%**; 1.1 recovered |
+| 2026-07-17 | **GT correction rebase:** PDF2 religion removed; Adv title normalize → crit **97.9%** (not OCR) |
