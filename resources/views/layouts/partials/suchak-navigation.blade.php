@@ -1,25 +1,31 @@
 @php
+    use App\Support\Suchak\SuchakMvpFeatures;
+
     $suchakUser = auth()->user();
     $suchakName = $suchakAccount?->suchak_name ?: $suchakUser?->name;
     $statusLabel = \Illuminate\Support\Str::headline((string) ($suchakAccount?->verification_status ?? 'pending'));
     $hasMatrimonyProfile = (bool) $suchakUser?->matrimonyProfile;
-    $dashboardTabKeys = ['profile', 'work', 'profiles', 'requests', 'money', 'sharing', 'records'];
+    $visibleDashboardTabs = SuchakMvpFeatures::visibleDashboardTabs();
+    $dashboardTabKeys = $visibleDashboardTabs;
     $dashboardHasBusinessFilters = request('business_q', '') !== ''
         || request('note_type') !== null
         || request('ledger_status') !== null;
     $requestedDashboardTab = (string) request('dashboard_tab', '');
+    $defaultDashboardTab = in_array('work', $dashboardTabKeys, true)
+        ? 'work'
+        : ($dashboardTabKeys[0] ?? 'work');
     $activeDashboardTab = in_array($requestedDashboardTab, $dashboardTabKeys, true)
         ? $requestedDashboardTab
-        : ($dashboardHasBusinessFilters ? 'profiles' : 'work');
+        : ($dashboardHasBusinessFilters && in_array('profiles', $dashboardTabKeys, true) ? 'profiles' : $defaultDashboardTab);
     $dashboardTabUrl = static fn (string $tab): string => route(
         'suchak.dashboard',
         $tab === 'work' ? [] : ['dashboard_tab' => $tab],
     );
 
     $suchakMainSection = 'dashboard';
-    if (request()->routeIs('suchak.intakes.*', 'suchak.manual-profiles.*', 'suchak.search.*')) {
+    if (request()->routeIs('suchak.intakes.*', 'suchak.manual-profiles.*', 'suchak.search.*', 'suchak.collaborations.*')) {
         $suchakMainSection = 'work';
-    } elseif (request()->routeIs('suchak.collaborations.*', 'suchak.offline-camps.*')) {
+    } elseif (request()->routeIs('suchak.offline-camps.*')) {
         $suchakMainSection = 'network';
     } elseif (request()->routeIs('suchak.export-retention.*', 'suchak.training-academy.*')) {
         $suchakMainSection = 'tools';
@@ -27,35 +33,78 @@
         $suchakMainSection = 'account';
     }
 
-    $mainItems = [
+    $mainItems = collect([
         ['label' => 'Dashboard', 'href' => route('suchak.dashboard'), 'section' => 'dashboard'],
         ['label' => 'Work', 'href' => route('suchak.intakes.create'), 'section' => 'work'],
         ['label' => 'Network', 'href' => route('suchak.collaborations.index'), 'section' => 'network'],
         ['label' => 'Tools', 'href' => route('suchak.export-retention.index'), 'section' => 'tools'],
+    ])->filter(fn (array $item): bool => SuchakMvpFeatures::navSectionVisible($item['section']))->values()->all();
+
+    $dashboardSubItems = [
+        'profile' => ['label' => 'Profile setup', 'href' => $dashboardTabUrl('profile')],
+        'work' => ['label' => 'Today', 'href' => $dashboardTabUrl('work')],
+        'profiles' => ['label' => 'Customers', 'href' => $dashboardTabUrl('profiles')],
+        'requests' => ['label' => 'Requests', 'href' => $dashboardTabUrl('requests')],
+        'money' => ['label' => 'Money', 'href' => $dashboardTabUrl('money')],
+        'sharing' => ['label' => 'Sharing', 'href' => $dashboardTabUrl('sharing')],
+        'records' => ['label' => 'Records', 'href' => $dashboardTabUrl('records')],
     ];
     $subItemsBySection = [
-        'dashboard' => [
-            ['label' => 'Profile setup', 'href' => $dashboardTabUrl('profile'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'profile'],
-            ['label' => 'Today', 'href' => $dashboardTabUrl('work'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'work'],
-            ['label' => 'Customers', 'href' => $dashboardTabUrl('profiles'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'profiles'],
-            ['label' => 'Requests', 'href' => $dashboardTabUrl('requests'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'requests'],
-            ['label' => 'Money', 'href' => $dashboardTabUrl('money'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'money'],
-            ['label' => 'Sharing', 'href' => $dashboardTabUrl('sharing'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'sharing'],
-            ['label' => 'Records', 'href' => $dashboardTabUrl('records'), 'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === 'records'],
-        ],
-        'work' => [
-            ['label' => 'Upload / Paste', 'href' => route('suchak.intakes.create'), 'active' => request()->routeIs('suchak.intakes.*')],
-            ['label' => 'Manual Form', 'href' => route('suchak.manual-profiles.create'), 'active' => request()->routeIs('suchak.manual-profiles.*')],
-            ['label' => 'Find Matches', 'href' => route('suchak.search.index'), 'active' => request()->routeIs('suchak.search.*')],
-        ],
-        'network' => [
-            ['label' => 'Collaborations', 'href' => route('suchak.collaborations.index'), 'active' => request()->routeIs('suchak.collaborations.*')],
-            ['label' => 'Offline Camps', 'href' => route('suchak.offline-camps.index'), 'active' => request()->routeIs('suchak.offline-camps.*')],
-        ],
-        'tools' => [
-            ['label' => 'Export / Retention', 'href' => route('suchak.export-retention.index'), 'active' => request()->routeIs('suchak.export-retention.*')],
-            ['label' => 'Training Academy', 'href' => route('suchak.training-academy.index'), 'active' => request()->routeIs('suchak.training-academy.*')],
-        ],
+        'dashboard' => collect($dashboardSubItems)
+            ->only($visibleDashboardTabs)
+            ->map(fn (array $item, string $tab): array => array_merge($item, [
+                'active' => request()->routeIs('suchak.dashboard') && $activeDashboardTab === $tab,
+            ]))
+            ->values()
+            ->all(),
+        'work' => collect([
+            ['label' => 'Upload / Paste', 'href' => route('suchak.intakes.create'), 'key' => 'upload'],
+            ['label' => 'Manual Form', 'href' => route('suchak.manual-profiles.create'), 'key' => 'manual'],
+            ['label' => 'Find Matches', 'href' => route('suchak.search.index'), 'key' => 'search'],
+            ['label' => 'Collaborations', 'href' => route('suchak.collaborations.index'), 'key' => 'collaborations'],
+        ])->filter(function (array $item): bool {
+            if ($item['key'] === 'collaborations') {
+                return SuchakMvpFeatures::navSubitemVisible('collaborations');
+            }
+
+            return true;
+        })->map(fn (array $item): array => [
+            'label' => $item['label'],
+            'href' => $item['href'],
+            'active' => match ($item['key']) {
+                'upload' => request()->routeIs('suchak.intakes.*'),
+                'manual' => request()->routeIs('suchak.manual-profiles.*'),
+                'search' => request()->routeIs('suchak.search.*'),
+                'collaborations' => request()->routeIs('suchak.collaborations.*'),
+                default => false,
+            },
+        ])->values()->all(),
+        'network' => collect([
+            ['label' => 'Collaborations', 'href' => route('suchak.collaborations.index'), 'key' => 'collaborations'],
+            ['label' => 'Offline Camps', 'href' => route('suchak.offline-camps.index'), 'key' => 'offline_camps'],
+        ])->filter(fn (array $item): bool => SuchakMvpFeatures::navSubitemVisible($item['key']))
+            ->map(fn (array $item): array => [
+                'label' => $item['label'],
+                'href' => $item['href'],
+                'active' => match ($item['key']) {
+                    'collaborations' => request()->routeIs('suchak.collaborations.*'),
+                    'offline_camps' => request()->routeIs('suchak.offline-camps.*'),
+                    default => false,
+                },
+            ])->values()->all(),
+        'tools' => collect([
+            ['label' => 'Export / Retention', 'href' => route('suchak.export-retention.index'), 'key' => 'export_retention'],
+            ['label' => 'Training Academy', 'href' => route('suchak.training-academy.index'), 'key' => 'training_academy'],
+        ])->filter(fn (array $item): bool => SuchakMvpFeatures::navSubitemVisible($item['key']))
+            ->map(fn (array $item): array => [
+                'label' => $item['label'],
+                'href' => $item['href'],
+                'active' => match ($item['key']) {
+                    'export_retention' => request()->routeIs('suchak.export-retention.*'),
+                    'training_academy' => request()->routeIs('suchak.training-academy.*'),
+                    default => false,
+                },
+            ])->values()->all(),
         'account' => [
             ['label' => 'Suchak privacy & public listing', 'href' => route('suchak.register.status'), 'active' => request()->routeIs('suchak.register.*')],
             ['label' => 'Contact numbers', 'href' => route('suchak.account-settings.edit'), 'active' => request()->routeIs('suchak.account-settings.*')],

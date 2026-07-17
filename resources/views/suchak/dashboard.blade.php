@@ -2,6 +2,9 @@
 
 @php
     $suchakText = \App\Support\Suchak\SuchakLocalizedText::class;
+    $visibleDashboardTabs = \App\Support\Suchak\SuchakMvpFeatures::visibleDashboardTabs();
+    $showWorkflowWhatsappTemplates = \App\Support\Suchak\SuchakMvpFeatures::dashboardPanelVisible('workflow_whatsapp_templates');
+    $showWhiteLabelKit = \App\Support\Suchak\SuchakMvpFeatures::dashboardPanelVisible('white_label_kit');
     $adminReviewPending = (bool) ($onboarding['admin_review_pending'] ?? false);
     $suchakCanOperate = (bool) ($canOperate ?? false);
     $statusTone = match (true) {
@@ -76,14 +79,17 @@
         ->mapWithKeys(fn (string $collector) => [$collector => ucwords(str_replace('_', ' ', $collector))])
         ->all();
     $formatAnalyticsMoney = fn ($amount, string $currency = 'INR') => $currency.' '.number_format((float) ($amount ?? 0), 2);
-    $dashboardSectionKeys = ['profile', 'work', 'profiles', 'requests', 'money', 'sharing', 'records'];
+    $dashboardSectionKeys = $visibleDashboardTabs;
     $dashboardHasBusinessFilters = $businessRecordFilters['business_q'] !== ''
         || $businessRecordFilters['note_type'] !== null
         || $businessRecordFilters['ledger_status'] !== null;
     $requestedDashboardTab = (string) request('dashboard_tab', '');
+    $defaultDashboardTab = in_array('work', $dashboardSectionKeys, true)
+        ? 'work'
+        : ($dashboardSectionKeys[0] ?? 'work');
     $activeDashboardTab = in_array($requestedDashboardTab, $dashboardSectionKeys, true)
         ? $requestedDashboardTab
-        : ($dashboardHasBusinessFilters ? 'profiles' : 'work');
+        : ($dashboardHasBusinessFilters && in_array('profiles', $dashboardSectionKeys, true) ? 'profiles' : $defaultDashboardTab);
     $selectedRepresentationId = (int) request('manage_representation', 0);
     $selectedRepresentationCard = $selectedRepresentationId > 0
         ? $representationCards->first(fn (array $card): bool => (int) $card['representation']->id === $selectedRepresentationId)
@@ -370,6 +376,7 @@
         </div>
     </section>
 
+    @if ($showWhiteLabelKit)
     <section id="white-label-sharing-kit" class="{{ $activeDashboardTab !== 'sharing' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
@@ -419,6 +426,7 @@
             @endforelse
         </div>
     </section>
+    @endif
 
     <section id="income-analytics" class="{{ $activeDashboardTab !== 'money' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -668,6 +676,7 @@
         </div>
 
         <div class="mt-5">
+            @if ($showWorkflowWhatsappTemplates)
             <h3 class="text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">WhatsApp copy templates</h3>
             <div class="mt-3 grid gap-3 md:grid-cols-2">
                 @foreach ($workflowTemplates as $templateKey => $template)
@@ -681,6 +690,7 @@
                     </div>
                 @endforeach
             </div>
+            @endif
         </div>
     </section>
 
@@ -1567,7 +1577,7 @@
                 </div>
             </section>
 
-            <section class="{{ $activeDashboardTab !== 'sharing' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <section class="{{ $activeDashboardTab !== 'records' ? 'hidden ' : '' }}rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Recent PDF/QR Records</h2>
                 <div class="mt-4 space-y-3">
                     @forelse ($recentExports as $export)
