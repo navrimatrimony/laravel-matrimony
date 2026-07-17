@@ -918,3 +918,15 @@ after every accepted implementation loop.
 The Product Owner shall not
 need to infer project status
 from technical logs.
+
+
+----------------
+
+At the beginning of every resumed session,
+before any implementation starts,
+
+the agent SHALL automatically present
+the Product Owner Status defined in §24.
+
+This SHALL happen without requiring
+a separate user request.
