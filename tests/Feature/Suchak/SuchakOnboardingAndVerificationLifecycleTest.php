@@ -869,7 +869,10 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
             ->assertSee('Manual Suchak Candidate', false);
 
         $this->actingAs($user)
-            ->get(route('suchak.dashboard', ['dashboard_tab' => 'profiles']))
+            ->get(route('suchak.dashboard', [
+                'dashboard_tab' => 'profiles',
+                'manage_representation' => $representation->id,
+            ]))
             ->assertOk()
             ->assertSee('Matrimony ID', false)
             ->assertSee('#'.$profile->id, false)

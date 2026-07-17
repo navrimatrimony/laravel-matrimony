@@ -28,16 +28,19 @@ use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Tests\Feature\Suchak\Support\CreatesSuchakAdmin;
 use Tests\TestCase;
 
 class SuchakWhiteLabelSharingKitTest extends TestCase
 {
+    use CreatesSuchakAdmin;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
 
+        $this->enableFullSuchakUiSurfaces();
         $this->seed(MinimalLocationSeeder::class);
         ProfileCanonicalResidenceService::forgetCachedMasters();
     }

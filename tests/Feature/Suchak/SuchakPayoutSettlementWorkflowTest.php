@@ -248,7 +248,7 @@ class SuchakPayoutSettlementWorkflowTest extends TestCase
      */
     private function platformContextFixture(): array
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $suchakUser = User::factory()->create();
         $account = SuchakAccount::factory()->create([
             'user_id' => $suchakUser->id,

@@ -16,15 +16,17 @@ use App\Models\SuchakSubscription;
 use App\Models\SuchakVerificationRecord;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Feature\Suchak\Support\CreatesSuchakAdmin;
 use Tests\TestCase;
 
 class SuchakAdminOperationalDashboardTest extends TestCase
 {
+    use CreatesSuchakAdmin;
     use RefreshDatabase;
 
     public function test_admin_can_inspect_operational_state_with_source_links_and_masked_evidence(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->createSuchakSuperAdmin();
         $suchakUser = User::factory()->create(['email' => 'day27-suchak@example.test']);
 
         $account = SuchakAccount::factory()->create([

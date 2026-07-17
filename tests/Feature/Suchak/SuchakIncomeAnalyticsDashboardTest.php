@@ -30,7 +30,7 @@ class SuchakIncomeAnalyticsDashboardTest extends TestCase
     public function test_day_50_income_analytics_keeps_financial_flows_separate_and_suchak_scoped(): void
     {
         [$user, $account] = $this->verifiedSuchakActor();
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         [$package, $paymentRequest, $payment, $paymentContext] = $this->customerIncomeFixture($account, $user);
 
         SuchakLedgerEntry::query()->create([

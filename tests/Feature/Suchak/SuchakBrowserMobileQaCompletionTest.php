@@ -109,23 +109,23 @@ class SuchakBrowserMobileQaCompletionTest extends TestCase
             'Suchak Dashboard',
             'Dashboard',
             'Work',
-            'Network',
-            'Tools',
             'Profile setup',
             'Today',
             'Customers',
             'Money',
-            'Sharing',
             'Records',
             'Suchak Quick Links',
+            'Collaborations',
         ]);
         $dashboard
             ->assertSee('data-suchak-nav', false)
             ->assertSee('data-suchak-subnav', false)
+            ->assertDontSee('Network', false)
+            ->assertDontSee('Tools', false)
+            ->assertDontSee('Sharing', false)
             ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'profile']), false)
             ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'profiles']), false)
             ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'money']), false)
-            ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'sharing']), false)
             ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'records']), false)
             ->assertDontSee('role="tab"', false)
             ->assertDontSee('x-data="{ tab:', false);

@@ -60,7 +60,7 @@ class SuchakIntegratedQaTest extends TestCase
     {
         Bus::fake();
 
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         [$suchakUser, $suchakAccount] = $this->pendingSuchakAccount();
 
         app(SuchakAccountLifecycleService::class)->approve(
@@ -114,7 +114,7 @@ class SuchakIntegratedQaTest extends TestCase
         $qrScan = app(SuchakPdfQrFoundationService::class)->scanQrToken($pdfResult['raw_qr_token']);
         $this->assertMaskedPayloadHasNoPrivateCandidateData($qrScan['candidate_summary']);
 
-        $viewer = User::factory()->create(['is_admin' => true]);
+        $viewer = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $viewerProfile = $this->activeProfile([
             'user_id' => $viewer->id,
             'full_name' => 'Integrated Viewer',

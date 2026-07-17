@@ -16,15 +16,17 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Tests\Feature\Suchak\Support\CreatesSuchakAdmin;
 use Tests\TestCase;
 
 class SuchakPlanCatalogEntitlementUiTest extends TestCase
 {
+    use CreatesSuchakAdmin;
     use RefreshDatabase;
 
     public function test_admin_can_create_and_update_suchak_plan_catalog_without_member_plan_rows(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->createSuchakSuperAdmin();
 
         $this->actingAs($admin)
             ->get(route('admin.suchak.plans.index'))
@@ -130,7 +132,7 @@ class SuchakPlanCatalogEntitlementUiTest extends TestCase
 
     public function test_admin_assigns_suchak_plan_and_suchak_dashboard_displays_limits_and_usage(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->createSuchakSuperAdmin();
         [$suchakUser, $account] = $this->verifiedSuchakActor();
         $plan = SuchakPlan::factory()->create([
             'name' => 'Suchak Operator',

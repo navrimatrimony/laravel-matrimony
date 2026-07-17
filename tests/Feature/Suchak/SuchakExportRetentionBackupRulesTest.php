@@ -104,7 +104,7 @@ class SuchakExportRetentionBackupRulesTest extends TestCase
     public function test_day_58_sensitive_export_requires_admin_approval_and_retention_job_never_deletes_records(): void
     {
         [$suchakUser, $account] = $this->verifiedSuchakFixture();
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $ledger = $this->ledgerEntry($account);
         $ledger->forceFill([
             'created_at' => now()->subYears(2),

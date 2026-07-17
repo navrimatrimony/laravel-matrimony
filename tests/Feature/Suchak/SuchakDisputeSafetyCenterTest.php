@@ -39,7 +39,7 @@ class SuchakDisputeSafetyCenterTest extends TestCase
 
     public function test_admin_can_open_review_and_close_suchak_dispute_with_audit(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         [, $account, $profile, $representation] = $this->activeRepresentationFixture();
 
         $this->actingAs($admin)
@@ -127,7 +127,7 @@ class SuchakDisputeSafetyCenterTest extends TestCase
 
     public function test_admin_freeze_pause_and_resume_controls_block_relevant_suchak_actions(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         [, $account] = $this->activeRepresentationFixture();
         $access = app(SuchakAccessService::class);
 
@@ -191,7 +191,7 @@ class SuchakDisputeSafetyCenterTest extends TestCase
 
     public function test_admin_revoke_representation_preserves_history_and_blocks_qr_access(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         [$suchakUser, $account, $profile, $representation, $consent] = $this->activeRepresentationFixture();
         $dispute = SuchakDispute::factory()->create([
             'suchak_account_id' => $account->id,

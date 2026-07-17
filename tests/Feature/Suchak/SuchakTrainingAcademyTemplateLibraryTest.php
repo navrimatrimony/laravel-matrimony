@@ -67,7 +67,7 @@ class SuchakTrainingAcademyTemplateLibraryTest extends TestCase
             $this->assertFalse(Schema::hasColumn('suchak_message_template_usages', $forbiddenColumn), $forbiddenColumn);
         }
 
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         [$suchakUser, $account] = $this->verifiedSuchakActor([
             'suchak_name' => 'Day56 Academy Suchak',
         ]);
@@ -151,7 +151,7 @@ class SuchakTrainingAcademyTemplateLibraryTest extends TestCase
 
     public function test_day_56_internal_certificate_requires_training_and_does_not_leak_public_badge(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         [, $account] = $this->verifiedSuchakActor([
             'suchak_name' => 'Day56 Certified Suchak',
         ]);

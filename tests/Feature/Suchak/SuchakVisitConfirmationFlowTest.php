@@ -333,7 +333,7 @@ class SuchakVisitConfirmationFlowTest extends TestCase
      */
     private function visitFixture(array $overrides = []): array
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $suchakUser = User::factory()->create();
         $requestingUser = User::factory()->create();
         $account = SuchakAccount::factory()->create(array_merge([

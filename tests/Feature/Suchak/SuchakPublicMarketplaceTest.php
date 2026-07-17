@@ -19,6 +19,8 @@ use App\Models\Taluka;
 use App\Models\User;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use Database\Seeders\MinimalLocationSeeder;
+use Database\Seeders\PlanStandardFeatureKeysSeeder;
+use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -33,6 +35,8 @@ class SuchakPublicMarketplaceTest extends TestCase
         parent::setUp();
 
         $this->seed(MinimalLocationSeeder::class);
+        $this->seed(SubscriptionPlansSeeder::class);
+        $this->seed(PlanStandardFeatureKeysSeeder::class);
         ProfileCanonicalResidenceService::forgetCachedMasters();
     }
 

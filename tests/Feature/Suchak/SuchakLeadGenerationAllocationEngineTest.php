@@ -94,7 +94,7 @@ class SuchakLeadGenerationAllocationEngineTest extends TestCase
 
     public function test_admin_allocates_platform_lead_by_area_community_policy_with_platform_payment_collector(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         [, $account] = $this->verifiedSuchakAccount();
         $profile = $this->profile('Day 46 Platform Lead Candidate');
         $service = app(SuchakLeadAllocationService::class);
@@ -156,7 +156,7 @@ class SuchakLeadGenerationAllocationEngineTest extends TestCase
 
     public function test_rotation_policy_moves_next_matching_suchak_in_same_bucket(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         [, $firstAccount] = $this->verifiedSuchakAccount();
         [, $secondAccount] = $this->verifiedSuchakAccount();
         $service = app(SuchakLeadAllocationService::class);
@@ -199,7 +199,7 @@ class SuchakLeadGenerationAllocationEngineTest extends TestCase
 
     public function test_plan_wise_open_lead_limit_blocks_platform_allocation_before_mutation(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         [, $account] = $this->verifiedSuchakAccount();
         $this->assignLeadLimit($account, $admin, 1);
         $service = app(SuchakLeadAllocationService::class);
@@ -234,7 +234,7 @@ class SuchakLeadGenerationAllocationEngineTest extends TestCase
 
     public function test_lead_text_rejects_private_contact_before_assignment(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $service = app(SuchakLeadAllocationService::class);
 
         try {
@@ -252,7 +252,7 @@ class SuchakLeadGenerationAllocationEngineTest extends TestCase
     public function test_suchak_acceptance_and_sla_expiry_update_status_without_contact_leak(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-10 09:00:00'));
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         [$suchakUser, $account] = $this->verifiedSuchakAccount();
         $service = app(SuchakLeadAllocationService::class);
         $acceptedLead = $service->createPlatformLead($admin, $this->leadPayload($this->profile('Accepted Lead'), [

@@ -205,7 +205,7 @@ class SuchakDirectPaymentTrustProtectionTest extends TestCase
 
     public function test_admin_review_can_freeze_payment_ability_and_direct_collection_guard_blocks_requests(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         [$suchakUser, $account, $customerContext, $package, $agreement, $paymentContext] = $this->directPaymentRequestFixture();
         $dispute = SuchakDispute::query()->create([
             'suchak_account_id' => $account->id,

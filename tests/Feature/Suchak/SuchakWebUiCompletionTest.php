@@ -19,10 +19,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Tests\Feature\Suchak\Support\CreatesSuchakAdmin;
 use Tests\TestCase;
 
 class SuchakWebUiCompletionTest extends TestCase
 {
+    use CreatesSuchakAdmin;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -137,7 +139,7 @@ class SuchakWebUiCompletionTest extends TestCase
 
     public function test_admin_suchak_dashboard_exposes_account_review_navigation(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->createSuchakSuperAdmin();
         SuchakAccount::factory()->create([
             'verification_status' => SuchakAccount::VERIFICATION_PENDING,
         ]);

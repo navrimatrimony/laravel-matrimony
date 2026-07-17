@@ -26,10 +26,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
+use Tests\Feature\Suchak\Support\CreatesSuchakAdmin;
 use Tests\TestCase;
 
 class SuchakQualityControlSuspensionTest extends TestCase
 {
+    use CreatesSuchakAdmin;
     use RefreshDatabase;
 
     public function test_day_54_quality_control_schema_admin_ui_audit_and_public_non_leak(): void
@@ -50,7 +52,7 @@ class SuchakQualityControlSuspensionTest extends TestCase
             $this->assertTrue(Schema::hasColumn('suchak_feature_suspensions', $column), $column);
         }
 
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->createSuchakSuperAdmin();
         $nonAdmin = User::factory()->create(['is_admin' => false]);
         [$suchakUser, $account] = $this->verifiedSuchakActor([
             'suchak_name' => 'Day54 Quality Suchak',
@@ -111,7 +113,7 @@ class SuchakQualityControlSuspensionTest extends TestCase
     {
         Bus::fake();
 
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $qualityControlService = app(SuchakQualityControlService::class);
 
         [$uploadUser, $uploadAccount] = $this->verifiedSuchakActor();

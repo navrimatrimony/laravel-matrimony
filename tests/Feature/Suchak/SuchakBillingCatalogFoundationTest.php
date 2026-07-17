@@ -102,7 +102,7 @@ class SuchakBillingCatalogFoundationTest extends TestCase
     {
         [$user, $account] = $this->verifiedSuchakActor();
         [, $otherAccount] = $this->verifiedSuchakActor();
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $nonAdmin = User::factory()->create(['is_admin' => false]);
 
         SuchakPlan::factory()->create([
@@ -135,7 +135,7 @@ class SuchakBillingCatalogFoundationTest extends TestCase
     public function test_admin_can_assign_manual_suchak_subscription_with_audit_without_normal_payment_execution(): void
     {
         [, $account] = $this->verifiedSuchakActor();
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $plan = $this->planWithFeature('Suchak Professional', 'suchak-professional', SuchakPlanFeature::FEATURE_MONTHLY_UPLOAD_LIMIT, '50');
 
         $subscription = app(SuchakBillingCatalogService::class)->assignManualSubscription(
@@ -184,7 +184,7 @@ class SuchakBillingCatalogFoundationTest extends TestCase
     public function test_reassignment_cancels_previous_active_subscription_and_resolves_plan_limits(): void
     {
         [, $account] = $this->verifiedSuchakActor();
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $starter = $this->planWithFeature('Suchak Starter', 'suchak-starter-day-16', SuchakPlanFeature::FEATURE_ACTIVE_PROFILE_LIMIT, '25');
         $bureau = $this->planWithFeature('Suchak Bureau', 'suchak-bureau-day-16', SuchakPlanFeature::FEATURE_ACTIVE_PROFILE_LIMIT, '100');
 
@@ -214,7 +214,7 @@ class SuchakBillingCatalogFoundationTest extends TestCase
     public function test_inactive_or_expired_suchak_plan_subscription_does_not_provide_current_limits(): void
     {
         [, $account] = $this->verifiedSuchakActor();
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $inactivePlan = SuchakPlan::factory()->create([
             'is_active' => false,
             'is_visible' => true,

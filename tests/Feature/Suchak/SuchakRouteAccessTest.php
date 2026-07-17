@@ -11,10 +11,12 @@ use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Tests\Feature\Suchak\Support\CreatesSuchakAdmin;
 use Tests\TestCase;
 
 class SuchakRouteAccessTest extends TestCase
 {
+    use CreatesSuchakAdmin;
     use RefreshDatabase;
 
     public function test_guest_is_redirected_from_suchak_dashboard_by_auth(): void
@@ -129,19 +131,20 @@ class SuchakRouteAccessTest extends TestCase
             ->assertSee('data-suchak-nav', false)
             ->assertSee('data-suchak-subnav', false)
             ->assertSee('Work', false)
-            ->assertSee('Network', false)
-            ->assertSee('Tools', false)
+            ->assertDontSee('Network', false)
+            ->assertDontSee('Tools', false)
             ->assertSee('Profile setup', false)
             ->assertSee('Today', false)
             ->assertSee('Customers', false)
             ->assertSee('Money', false)
-            ->assertSee('Sharing', false)
+            ->assertDontSee('Sharing', false)
             ->assertSee('Records', false)
             ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'profile']), false)
             ->assertSee(route('suchak.dashboard', ['dashboard_tab' => 'profiles']), false)
             ->assertSee('Upload / Paste', false)
             ->assertSee('Manual Form', false)
-            ->assertSee('Offline Camps', false)
+            ->assertSee('Collaborations', false)
+            ->assertDontSee('Offline Camps', false)
             ->assertSee('Suchak privacy & public listing', false)
             ->assertSee('Contact numbers', false)
             ->assertSee('Account & Security', false)
@@ -239,7 +242,7 @@ class SuchakRouteAccessTest extends TestCase
 
     public function test_admin_suchak_dashboard_still_resolves_under_admin_middleware(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->createSuchakSuperAdmin();
 
         $this->actingAs($admin)
             ->get(route('admin.suchak.dashboard'))

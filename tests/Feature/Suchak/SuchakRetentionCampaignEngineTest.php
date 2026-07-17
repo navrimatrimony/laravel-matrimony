@@ -28,10 +28,12 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 use RuntimeException;
+use Tests\Feature\Suchak\Support\CreatesSuchakAdmin;
 use Tests\TestCase;
 
 class SuchakRetentionCampaignEngineTest extends TestCase
 {
+    use CreatesSuchakAdmin;
     use RefreshDatabase;
 
     public function test_day_55_retention_tables_and_admin_center_are_available_without_public_leak(): void
@@ -73,7 +75,7 @@ class SuchakRetentionCampaignEngineTest extends TestCase
             'is_active' => true,
         ]);
 
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->createSuchakSuperAdmin();
         $nonAdmin = User::factory()->create(['is_admin' => false]);
         [$suchakUser] = $this->retentionFixture($admin);
 
@@ -101,7 +103,7 @@ class SuchakRetentionCampaignEngineTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-06-15 10:00:00'));
 
         try {
-            $admin = User::factory()->create(['is_admin' => true]);
+            $admin = $this->createSuchakSuperAdmin();
             [, $account] = $this->retentionFixture($admin);
             $service = app(SuchakRetentionCampaignService::class);
 

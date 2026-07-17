@@ -21,15 +21,17 @@ use App\Models\User;
 use App\Modules\Suchak\Services\SuchakRiskComplianceCenterService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Tests\Feature\Suchak\Support\CreatesSuchakAdmin;
 use Tests\TestCase;
 
 class SuchakRiskComplianceCenterTest extends TestCase
 {
+    use CreatesSuchakAdmin;
     use RefreshDatabase;
 
     public function test_day_53_admin_risk_compliance_center_links_evidence_without_public_leak(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->createSuchakSuperAdmin();
         $nonAdmin = User::factory()->create(['is_admin' => false]);
         [$suchakUser, $account, $payment, $correction, $dispute, $qrToken, $attribution, $agreement] = $this->riskFixture($admin);
 

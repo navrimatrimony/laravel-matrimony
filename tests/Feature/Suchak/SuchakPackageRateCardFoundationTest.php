@@ -86,7 +86,7 @@ class SuchakPackageRateCardFoundationTest extends TestCase
 
     public function test_admin_can_create_package_template_with_structured_stages_deliverables_and_claim_guard(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
 
         $template = $this->createApprovedTemplate($admin);
 
@@ -139,7 +139,7 @@ class SuchakPackageRateCardFoundationTest extends TestCase
 
     public function test_verified_suchak_can_clone_template_without_touching_suchak_platform_plan(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $template = $this->createApprovedTemplate($admin);
         [$suchakUser, $account] = $this->verifiedSuchakActor();
 
@@ -220,6 +220,16 @@ class SuchakPackageRateCardFoundationTest extends TestCase
             'public_status' => SuchakAccount::PUBLIC_HIDDEN,
         ]);
 
+        SuchakPolicy::query()->updateOrCreate(
+            ['policy_key' => SuchakPolicyService::KEY_SUCHAK_ALLOW_WORK_BEFORE_ADMIN_APPROVAL],
+            [
+                'policy_value' => 'false',
+                'value_type' => SuchakPolicy::TYPE_BOOLEAN,
+                'description' => 'Block pending Suchak package management in this test.',
+                'is_active' => true,
+            ],
+        );
+
         try {
             app(SuchakPackageCatalogService::class)->createCustomPackage(
                 $pendingAccount,
@@ -252,7 +262,7 @@ class SuchakPackageRateCardFoundationTest extends TestCase
     public function test_admin_can_approve_pending_package_with_audit(): void
     {
         [$suchakUser, $account] = $this->verifiedSuchakActor();
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
 
         $package = app(SuchakPackageCatalogService::class)->createCustomPackage(
             $account,
@@ -302,7 +312,7 @@ class SuchakPackageRateCardFoundationTest extends TestCase
 
     public function test_package_template_and_service_package_delete_are_blocked(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $template = $this->createApprovedTemplate($admin);
         [$suchakUser, $account] = $this->verifiedSuchakActor();
         $package = app(SuchakPackageCatalogService::class)->cloneTemplateForSuchak($account, $suchakUser, $template);

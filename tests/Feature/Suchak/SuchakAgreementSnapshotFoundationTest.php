@@ -275,7 +275,7 @@ class SuchakAgreementSnapshotFoundationTest extends TestCase
      */
     private function publishedPackageFixture(string $packageName = 'Premium Match Coordination'): array
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         [$suchakUser, $account] = $this->verifiedSuchakActor();
 
         SuchakPolicy::query()->updateOrCreate(

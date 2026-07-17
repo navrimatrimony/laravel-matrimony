@@ -28,10 +28,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
+use Tests\Feature\Suchak\Support\CreatesSuchakAdmin;
 use Tests\TestCase;
 
 class SuchakRolePrivacySecurityRegressionTest extends TestCase
 {
+    use CreatesSuchakAdmin;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -47,7 +49,7 @@ class SuchakRolePrivacySecurityRegressionTest extends TestCase
         $regularUser = User::factory()->create();
         $verifiedUser = User::factory()->create();
         $pendingUser = User::factory()->create();
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->createSuchakSuperAdmin();
 
         SuchakAccount::factory()->create([
             'user_id' => $verifiedUser->id,
@@ -84,6 +86,16 @@ class SuchakRolePrivacySecurityRegressionTest extends TestCase
             ->get(route('suchak.dashboard'))
             ->assertOk()
             ->assertSee('Suchak Dashboard', false);
+
+        SuchakPolicy::query()->updateOrCreate(
+            ['policy_key' => SuchakPolicyService::KEY_SUCHAK_ALLOW_WORK_BEFORE_ADMIN_APPROVAL],
+            [
+                'policy_value' => 'false',
+                'value_type' => SuchakPolicy::TYPE_BOOLEAN,
+                'description' => 'Block pending Suchak work for verified-only surface test.',
+                'is_active' => true,
+            ],
+        );
 
         $this->actingAs($pendingUser)
             ->get(route('suchak.search.index'))
@@ -168,7 +180,7 @@ class SuchakRolePrivacySecurityRegressionTest extends TestCase
 
     public function test_day_60_payout_admin_only_and_marketplace_privacy_regressions(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = $this->createSuchakSuperAdmin();
         $nonAdmin = User::factory()->create();
         $suchakUser = User::factory()->create();
         $account = $this->verifiedAccount($suchakUser, [

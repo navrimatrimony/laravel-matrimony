@@ -84,7 +84,7 @@ class SuchakActivityFoundationTest extends TestCase
 
     public function test_admin_activity_can_link_to_admin_audit_log(): void
     {
-        $admin = User::factory()->create(['is_admin' => true]);
+        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $account = SuchakAccount::factory()->create();
         $adminAuditLog = AdminAuditLog::query()->create([
             'admin_id' => $admin->id,
