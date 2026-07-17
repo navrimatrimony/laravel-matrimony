@@ -65,6 +65,12 @@ class SuchakMobileApiAdapterTest extends TestCase
                     'pagination' => ['current_page', 'last_page', 'per_page', 'total'],
                 ],
             ]);
+
+        $this->getJson('/api/v1/suchak/collaborations')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.account_id', $account->id)
+            ->assertJsonStructure(['data' => ['collaborations']]);
     }
 
     public function test_suchak_mobile_adapters_require_suchak_account(): void
