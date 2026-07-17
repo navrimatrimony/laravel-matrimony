@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\Suchak\SuchakCollaborationsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomersApiController;
 use App\Http\Controllers\Api\Suchak\SuchakDashboardApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeApiController;
+use App\Http\Controllers\Api\Suchak\SuchakPaymentsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakSearchApiController;
 use Illuminate\Support\Facades\Route;
 
@@ -21,4 +22,5 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::get('/customers', SuchakCustomersApiController::class);
     Route::get('/search', SuchakSearchApiController::class);
     Route::get('/collaborations', SuchakCollaborationsApiController::class);
+    Route::get('/payments', SuchakPaymentsApiController::class);
 });

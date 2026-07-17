@@ -71,6 +71,12 @@ class SuchakMobileApiAdapterTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.account_id', $account->id)
             ->assertJsonStructure(['data' => ['collaborations']]);
+
+        $this->getJson('/api/v1/suchak/payments')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.account_id', $account->id)
+            ->assertJsonStructure(['data' => ['ledger_entries']]);
     }
 
     public function test_suchak_mobile_adapters_require_suchak_account(): void
