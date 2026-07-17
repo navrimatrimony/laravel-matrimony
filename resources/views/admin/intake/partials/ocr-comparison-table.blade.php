@@ -14,6 +14,7 @@
         'sarvam_judge' => 'border-violet-200 bg-violet-50 text-violet-800',
         'vote' => 'border-indigo-200 bg-indigo-50 text-indigo-800',
         'single_engine' => 'border-teal-200 bg-teal-50 text-teal-800',
+        'manual_override' => 'border-rose-200 bg-rose-50 text-rose-800',
         'missing' => 'border-gray-300 bg-gray-50 text-gray-600',
     ];
 
@@ -43,6 +44,7 @@
                     <th scope="col" class="px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Tesseract</th>
                     <th scope="col" class="px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Second OCR</th>
                     <th scope="col" class="px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Sarvam</th>
+                    <th scope="col" class="px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Winner</th>
                     <th scope="col" class="px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Reason</th>
                     <th scope="col" class="px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Status</th>
                     <th scope="col" class="px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Source</th>
@@ -53,12 +55,15 @@
                     @php
                         $status = is_string($row->status) && $row->status !== '' ? $row->status : null;
                         $source = is_string($row->source) && $row->source !== '' ? $row->source : null;
+                        $winner = is_string($row->winningEngine ?? null) && trim((string) $row->winningEngine) !== ''
+                            ? $row->winningEngine
+                            : null;
                         $final = is_string($row->finalValue) && trim($row->finalValue) !== '' ? $row->finalValue : null;
                         $isResolvedFinal = $status === 'resolved' && $final !== null;
                         $statusClass = $statusBadgeClasses[$status] ?? $defaultBadgeClass;
                         $sourceClass = $sourceBadgeClasses[$source] ?? $defaultBadgeClass;
                     @endphp
-                    <tr data-testid="ocr-comparison-row-{{ $row->fieldKey }}" data-field-key="{{ $row->fieldKey }}" data-row-index="{{ $index }}" data-status="{{ $status ?? '' }}" data-source="{{ $source ?? '' }}">
+                    <tr data-testid="ocr-comparison-row-{{ $row->fieldKey }}" data-field-key="{{ $row->fieldKey }}" data-row-index="{{ $index }}" data-status="{{ $status ?? '' }}" data-source="{{ $source ?? '' }}" data-winning-engine="{{ $winner ?? '' }}">
                         <td class="px-3 py-2 align-top whitespace-nowrap">
                             <div class="font-medium text-gray-900" data-testid="ocr-comparison-field-label">{{ $row->fieldLabel ?: $row->fieldKey }}</div>
                             <div class="text-[11px] text-gray-500">{{ $row->fieldKey }}</div>
@@ -90,6 +95,13 @@
                         <td class="px-3 py-2 align-top text-gray-800" data-testid="ocr-comparison-sarvam">
                             @if (is_string($row->sarvamValue) && trim($row->sarvamValue) !== '')
                                 {{ $row->sarvamValue }}
+                            @else
+                                <span class="text-gray-400" data-empty="1">{{ $emptyDisplay }}</span>
+                            @endif
+                        </td>
+                        <td class="px-3 py-2 align-top text-gray-800" data-testid="ocr-comparison-winner">
+                            @if ($winner !== null)
+                                <span class="font-medium text-gray-900">{{ $winner }}</span>
                             @else
                                 <span class="text-gray-400" data-empty="1">{{ $emptyDisplay }}</span>
                             @endif

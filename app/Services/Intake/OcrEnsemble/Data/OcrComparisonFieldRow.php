@@ -14,7 +14,8 @@ namespace App\Services\Intake\OcrEnsemble\Data;
  *     sarvam_value: string|null,
  *     reason: string|null,
  *     status: string|null,
- *     source: string|null
+ *     source: string|null,
+ *     winning_engine: string|null
  * }
  */
 final class OcrComparisonFieldRow
@@ -29,6 +30,7 @@ final class OcrComparisonFieldRow
         public readonly ?string $reason,
         public readonly ?string $status = null,
         public readonly ?string $source = null,
+        public readonly ?string $winningEngine = null,
     ) {}
 
     /**
@@ -46,6 +48,7 @@ final class OcrComparisonFieldRow
             reason: isset($data['reason']) && is_string($data['reason']) ? $data['reason'] : null,
             status: isset($data['status']) && is_string($data['status']) ? $data['status'] : null,
             source: isset($data['source']) && is_string($data['source']) ? $data['source'] : null,
+            winningEngine: isset($data['winning_engine']) && is_string($data['winning_engine']) ? $data['winning_engine'] : null,
         );
     }
 
@@ -64,6 +67,7 @@ final class OcrComparisonFieldRow
             'reason' => $this->reason,
             'status' => $this->status,
             'source' => $this->source,
+            'winning_engine' => $this->winningEngine,
         ];
     }
 }

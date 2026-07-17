@@ -53,7 +53,7 @@ final class OcrEnsembleComparisonTableBuilder implements OcrEnsembleComparisonTa
     ): OcrComparisonFieldRow {
         return new OcrComparisonFieldRow(
             fieldKey: $fieldKey,
-            fieldLabel: $fieldKey,
+            fieldLabel: OcrEnsemblePhase5Constants::fieldLabel($fieldKey),
             finalValue: $this->explicitString($record->final),
             tesseractValue: $this->engineColumnValue(
                 present: $evidence->tesseract->present,
@@ -83,6 +83,7 @@ final class OcrEnsembleComparisonTableBuilder implements OcrEnsembleComparisonTa
             reason: $this->explicitString($record->reason !== '' ? $record->reason : null),
             status: $this->explicitString($record->status),
             source: $this->explicitString($record->source),
+            winningEngine: $this->explicitString($record->winningEngine),
         );
     }
 

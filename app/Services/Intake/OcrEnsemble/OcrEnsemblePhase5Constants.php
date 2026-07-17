@@ -54,4 +54,35 @@ final class OcrEnsemblePhase5Constants
     public const EMPTY_STATE_LEGACY_INTAKE = 'legacy_intake';
 
     public const EMPTY_STATE_GATE_DISABLED = 'phase5_gate_disabled';
+
+    /**
+     * Plain operator labels for Blueprint §7.1 / Phase 5 (aligned with Correct Candidate form).
+     *
+     * @var array<string, string>
+     */
+    public const STRUCTURED_FIELD_LABELS = [
+        'full_name' => 'Full name',
+        'date_of_birth' => 'DOB',
+        'gender' => 'Gender',
+        'primary_contact_number' => 'Mobile',
+        'height' => 'Height',
+        'education' => 'Education',
+        'occupation' => 'Occupation',
+        'income' => 'Income',
+        'religion' => 'Religion',
+        'caste' => 'Caste',
+        'sub_caste' => 'Sub-caste',
+        'state' => 'State',
+        'district' => 'District',
+        'taluka' => 'Taluka',
+        'village' => 'Village',
+        'marital_status' => 'Marital status',
+    ];
+
+    public const FIELD_SOURCE_MANUAL_OVERRIDE = 'manual_override';
+
+    public static function fieldLabel(string $fieldKey): string
+    {
+        return self::STRUCTURED_FIELD_LABELS[$fieldKey] ?? $fieldKey;
+    }
 }
