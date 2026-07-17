@@ -1,28 +1,20 @@
 # OCR STATUS
 
-> **2026-07-17 ~11:30 IST** · Product Goal **In Progress**  
-> **Accepted baseline:** Tesseract SSOT **98.9%** — production unchanged
+> **2026-07-17** · Product Goal: Blueprint Phase 5 / §20.6 **Complete**  
+> **OCR research baseline:** Tesseract **98.9%** accepted · no further OCR research loops · no Sarvam prod wire
 
 | Item | Value |
 |------|------:|
 | Artifact | `product_metrics_gt20_20260717_101021.json` |
-| Critical | **98.9%** (93/94) |
-| Name | **100%** |
-| Mobile | **100%** |
-| Religion | **100%** |
-| Gender | **100%** |
-| DOB | 95% |
+| Critical (Tesseract) | **98.9%** |
+| Phase 5 / §20.6 PO Visibility | **Complete** |
 
-## Loop 30 / 31 (accepted research)
+## Admin OCR Comparison
 
-- Loop 30: local multi-engine/preprocess exhaust — no clean day **21** on Tesseract path  
-- Loop 31: watermark wipe **reject**; Sarvam DI RAW **`२१/०३/१९९९`** (4/4) — **research finding only**  
-- **No** Sarvam production integration · **No** second-pass / residual routing · **No** Loop 32 yet
+Correct Candidate embeds read-only comparison: fields · finals · per-engine values · winner · reason/source · metrics · Judge · Raw OCR.
 
-## Production
-
-Hold Tesseract multipass. One Mode A residual: `D (8).jpeg` DOB (day 24 vs GT 21). Invent forbidden.
+Doc: `docs/OCR-ENSEMBLE-PHASE-5-PRODUCT-OWNER-VISIBILITY.md`
 
 ## NEXT
 
-Benchmark on a **much larger dataset** (target ≥ **500** biodatas). After evidence volume, decide whether Sarvam is needed, where, and if accuracy justifies cost.
+Large-dataset OCR benchmarking (≥500) when scheduled — **not** Loop 32 Sarvam integration.
