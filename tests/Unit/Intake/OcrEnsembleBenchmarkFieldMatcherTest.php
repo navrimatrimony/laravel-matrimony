@@ -11,6 +11,12 @@ test('benchmark matcher uses fuzzy threshold for names', function () {
     expect(OcrEnsembleBenchmarkFieldMatcher::match('full_name', 'अविनाश खोडवे', 'अविनाश खोडवे'))->toBeTrue();
 });
 
+test('benchmark matcher normalizes Adv title forms on names', function () {
+    expect(OcrEnsembleBenchmarkFieldMatcher::match('full_name', 'स्नेहल शहाजी भोसले', 'Adv. स्नेहल शहाजी भोसले'))->toBeTrue()
+        ->and(OcrEnsembleBenchmarkFieldMatcher::match('full_name', 'स्नेहल शहाजी भोसले', 'अॅड. स्नेहल शहाजी भोसले'))->toBeTrue()
+        ->and(OcrEnsembleBenchmarkFieldMatcher::match('full_name', 'स्नेहल शहाजी भोसले', 'स्नेहल शहानी भोसले'))->toBeTrue();
+});
+
 test('benchmark matcher normalizes gender', function () {
     expect(OcrEnsembleBenchmarkFieldMatcher::match('gender', 'male', 'Male'))->toBeTrue();
 });

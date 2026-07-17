@@ -294,7 +294,7 @@ class OcrEnsembleNameExtractor
 
         // Require separator after short honorifics so चिवाजी / कुमार are not truncated.
         $value = preg_replace(
-            '/^(?:\*[\s]*)?(?:Ms\.|Mr\.|Mrs\.|Miss\s+|कु\.|कुं\.|कुमारी\s+|चि\.|चच\.|चिरंजीव\s+|श्री\.|श्रीमती\s+|सौ\.)\s*/iu',
+            '/^(?:\*[\s]*)?(?:Ms\.|Mr\.|Mrs\.|Miss\s+|Adv\.?|Advocate\s+|अॅड\.?|ॲड\.?|अँड\.?|कु\.|कुं\.|कुमारी\s+|चि\.|चच\.|चिरंजीव\s+|श्री\.|श्रीमती\s+|सौ\.)\s*/iu',
             '',
             $value
         ) ?? $value;
@@ -304,10 +304,19 @@ class OcrEnsembleNameExtractor
             'श्रीमती.',
             'श्रीमती',
             'कुमारी',
+            'Advocate',
             'चि.',
             'चच.',
             'कुं.',
             'कु.',
+            'अॅड.',
+            'ॲड.',
+            'अँड.',
+            'अॅड',
+            'ॲड',
+            'अँड',
+            'Adv.',
+            'Adv',
             'श्री.',
             'श्री',
             'सौ.',
@@ -323,7 +332,7 @@ class OcrEnsembleNameExtractor
             }
             $rest = mb_substr($value, mb_strlen($prefix, 'UTF-8'), null, 'UTF-8');
             // Bare `श्री` may be glued (श्रीनाथ). Never strip bare चि/कु — those begin real names (चिवाजी/कुमार).
-            if (in_array($prefix, ['श्रीमती', 'कुमारी', 'चिरंजीव', 'Miss', 'श्री'], true)
+            if (in_array($prefix, ['श्रीमती', 'कुमारी', 'चिरंजीव', 'Miss', 'Advocate', 'श्री', 'Adv', 'अॅड', 'ॲड', 'अँड'], true)
                 || str_ends_with($prefix, '.')
                 || preg_match('/^[\s:：\-–—(]/u', $rest) === 1) {
                 return $this->trimEdgePunctuation($rest);
@@ -370,12 +379,12 @@ class OcrEnsembleNameExtractor
             return trim($value);
         }
 
-        // OCR often inserts & / अँड. / short Latin junk before the real given name.
-        $value = preg_replace('/^(?:&\s*|अँड\.?\s*|and\.?\s*)+/iu', '', $value) ?? $value;
+        // OCR often inserts & / Adv / अॅड. / अँड. junk before the real given name.
+        $value = preg_replace('/^(?:&\s*|Adv\.?\s*|Advocate\s+|अॅड\.?\s*|ॲड\.?\s*|अँड\.?\s*|and\.?\s*)+/iu', '', $value) ?? $value;
         $value = preg_replace('/^(?:[a-z]{1,5}\s+){1,4}(?=[\x{0900}-\x{097F}])/iu', '', $value) ?? $value;
         $value = preg_replace('/\s+(?:[a-z]{1,5}\s*){1,5}$/iu', '', $value) ?? $value;
-        // Drop isolated & / अँड tokens between Devanagari name parts.
-        $value = preg_replace('/\s+(?:&|अँड\.?|and\.?)\s+/iu', ' ', $value) ?? $value;
+        // Drop isolated & / Adv / अॅड tokens between Devanagari name parts.
+        $value = preg_replace('/\s+(?:&|Adv\.?|Advocate|अॅड\.?|ॲड\.?|अँड\.?|and\.?)\s+/iu', ' ', $value) ?? $value;
 
         return trim($value);
     }

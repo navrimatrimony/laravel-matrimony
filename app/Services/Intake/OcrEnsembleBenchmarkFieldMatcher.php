@@ -51,6 +51,11 @@ class OcrEnsembleBenchmarkFieldMatcher
         }
 
         $value = mb_strtolower($value, 'UTF-8');
+        if ($field === 'full_name') {
+            // Product Owner: Adv / Advocate / अॅड. / ॲड. are title forms, not name tokens.
+            $value = preg_replace('/^(?:&\s*|adv\.?\s*|advocate\s+|अॅड\.?\s*|ॲड\.?\s*|अँड\.?\s*)+/u', '', $value) ?? $value;
+            $value = preg_replace('/\s+(?:&|adv\.?|advocate|अॅड\.?|ॲड\.?|अँड\.?)\s+/u', ' ', $value) ?? $value;
+        }
         $value = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $value) ?? $value;
         $value = preg_replace('/\s+/u', ' ', trim($value)) ?? $value;
 

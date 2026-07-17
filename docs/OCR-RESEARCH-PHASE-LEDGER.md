@@ -249,9 +249,14 @@ Residual Mode A (ranked for Loop 02+):
 1. OCR father-label variant + last-token surname without 3-token trim.  
 2. **Accepted:** crit **95.8% → 96.8%**; name **95%** (`092259`).  
 
-## Active (Loop 28 — 3 hard Mode A residuals)
+## GT corrections 2026-07-17 (not an OCR loop)
 
-1. PDF2 religion (no religion/caste in raw); PDF3 `चि`≠`शि`; D8 DOB day 24≠21.  
+1. PDF2 religion removed from GT; Adv/अॅड title normalize; snehal/1.1 spellings confirmed.  
+2. **Rebaseline:** crit **96.8% → 97.9%** (`094932`) — denom change only.
+
+## Active (Loop 28 — 2 hard Mode A residuals)
+
+1. PDF3 `चिवाजी`≠`शिवाजी`; D8 DOB day 24≠21.  
 2. No invent; multi-approach evidence per DOC §17.
 
 ---
