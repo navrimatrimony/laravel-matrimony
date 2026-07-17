@@ -23,6 +23,7 @@ final class OcrEnsembleEngineDebugMetricsBuilder
      *     fields_found: int|null,
      *     fields_missing: int|null,
      *     critical_errors: int|null,
+     *     critical_missing_fields: list<string>,
      *     judge_used: bool|null,
      *     status: string,
      *     attempt_id: int|null
@@ -51,6 +52,7 @@ final class OcrEnsembleEngineDebugMetricsBuilder
                 'fields_found' => $fieldStats['found'],
                 'fields_missing' => $fieldStats['missing'],
                 'critical_errors' => $fieldStats['critical_errors'],
+                'critical_missing_fields' => $fieldStats['critical_missing_fields'],
                 'judge_used' => $judgeUsedGlobally,
                 'status' => $summary->status,
                 'attempt_id' => $summary->attemptId > 0 ? $summary->attemptId : null,
@@ -79,6 +81,7 @@ final class OcrEnsembleEngineDebugMetricsBuilder
                     'fields_found' => $fieldStats['found'],
                     'fields_missing' => $fieldStats['missing'],
                     'critical_errors' => $fieldStats['critical_errors'],
+                    'critical_missing_fields' => $fieldStats['critical_missing_fields'],
                     'judge_used' => $judgeUsedGlobally,
                     'status' => 'no_attempt_row',
                     'attempt_id' => null,
@@ -126,17 +129,18 @@ final class OcrEnsembleEngineDebugMetricsBuilder
     }
 
     /**
-     * @return array{found: int|null, missing: int|null, critical_errors: int|null}
+     * @return array{found: int|null, missing: int|null, critical_errors: int|null, critical_missing_fields: list<string>}
      */
     private function fieldStatsForEngine(?OcrComparisonTable $table, string $engineKey): array
     {
         if (! $table instanceof OcrComparisonTable || $table->rows === []) {
-            return ['found' => null, 'missing' => null, 'critical_errors' => null];
+            return ['found' => null, 'missing' => null, 'critical_errors' => null, 'critical_missing_fields' => []];
         }
 
         $found = 0;
         $missing = 0;
         $criticalErrors = 0;
+        $criticalMissingFields = [];
         $total = 0;
 
         foreach ($table->rows as $row) {
@@ -156,17 +160,19 @@ final class OcrEnsembleEngineDebugMetricsBuilder
             $isConflict = $row->status === OcrEnsemblePhase3Constants::FIELD_STATUS_CONFLICT;
             if ($isCritical && (! $hasValue || $isConflict)) {
                 $criticalErrors++;
+                $criticalMissingFields[] = $row->fieldKey;
             }
         }
 
         if ($total === 0) {
-            return ['found' => null, 'missing' => null, 'critical_errors' => null];
+            return ['found' => null, 'missing' => null, 'critical_errors' => null, 'critical_missing_fields' => []];
         }
 
         return [
             'found' => $found,
             'missing' => $missing,
             'critical_errors' => $criticalErrors,
+            'critical_missing_fields' => $criticalMissingFields,
         ];
     }
 

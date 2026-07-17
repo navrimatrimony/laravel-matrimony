@@ -98,6 +98,7 @@
             'embedded' => true,
             'ocrAttemptSummaries' => $ocrAttemptSummaries ?? [],
             'ocrEngineDebugMetrics' => $ocrEngineDebugMetrics ?? [],
+            'ocrJudgeParticipation' => $ocrJudgeParticipation ?? [],
         ])
     </section>
 

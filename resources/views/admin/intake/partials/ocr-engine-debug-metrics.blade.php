@@ -40,12 +40,21 @@
                         <th class="px-3 py-2">Fields found</th>
                         <th class="px-3 py-2">Fields missing</th>
                         <th class="px-3 py-2">Critical errors</th>
+                        <th class="px-3 py-2">Critical gaps</th>
                         <th class="px-3 py-2">Judge used?</th>
                         <th class="px-3 py-2">Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 bg-white text-gray-900">
                     @foreach ($ocrEngineDebugMetrics as $index => $row)
+                        @php
+                            $criticalGaps = is_array($row['critical_missing_fields'] ?? null)
+                                ? $row['critical_missing_fields']
+                                : [];
+                            $criticalGapsLabel = $criticalGaps === []
+                                ? '—'
+                                : implode(', ', $criticalGaps);
+                        @endphp
                         <tr data-testid="ocr-engine-debug-row-{{ $index }}"
                             data-engine="{{ $row['engine'] ?? '' }}">
                             <td class="px-3 py-2 font-medium">
@@ -59,6 +68,7 @@
                             <td class="px-3 py-2" data-testid="ocr-engine-debug-found-{{ $index }}">{{ $fmt($row['fields_found'] ?? null) }}</td>
                             <td class="px-3 py-2" data-testid="ocr-engine-debug-missing-{{ $index }}">{{ $fmt($row['fields_missing'] ?? null) }}</td>
                             <td class="px-3 py-2" data-testid="ocr-engine-debug-critical-{{ $index }}">{{ $fmt($row['critical_errors'] ?? null) }}</td>
+                            <td class="px-3 py-2 text-xs text-gray-700" data-testid="ocr-engine-debug-critical-gaps-{{ $index }}">{{ $criticalGapsLabel }}</td>
                             <td class="px-3 py-2" data-testid="ocr-engine-debug-judge-{{ $index }}">{{ $fmt($row['judge_used'] ?? null) }}</td>
                             <td class="px-3 py-2 text-xs text-gray-600">{{ $fmt($row['status'] ?? null) }}</td>
                         </tr>

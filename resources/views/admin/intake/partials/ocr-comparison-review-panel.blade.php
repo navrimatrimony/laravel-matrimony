@@ -16,7 +16,9 @@
                 OCR comparison review
             </h2>
             <p class="text-sm text-gray-600">
-                Intake #{{ $intake->id }} — read-only ensemble comparison (Field / Final / Tesseract / Second OCR / Sarvam / Reason).
+                Intake #{{ $intake->id }} — read-only ensemble comparison for Product Owner review:
+                per-engine structured fields, finals, win reason (vote / validator / Sarvam / manual),
+                engine metrics, Judge participation, and Raw OCR.
             </p>
         </div>
         @unless ($embedded)
@@ -26,6 +28,12 @@
                 Back to intake
             </a>
         @endunless
+    </div>
+
+    <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700"
+         data-testid="ocr-comparison-human-path-note">
+        Human correction / approve path: use the <strong>Correct candidate fields</strong> form below this panel.
+        Ensemble comparison is read-only and does not change OCR behaviour.
     </div>
 
     <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4"
@@ -76,6 +84,10 @@
 
     @include('admin.intake.partials.ocr-engine-debug-metrics', [
         'ocrEngineDebugMetrics' => $ocrEngineDebugMetrics ?? [],
+    ])
+
+    @include('admin.intake.partials.ocr-judge-participation', [
+        'ocrJudgeParticipation' => $ocrJudgeParticipation ?? [],
     ])
 
     @include('admin.intake.partials.ocr-attempt-raw-transcripts', [

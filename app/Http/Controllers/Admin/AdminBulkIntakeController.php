@@ -34,6 +34,7 @@ use App\Services\Intake\IntakeOwnerAssignmentService;
 use App\Services\Intake\OcrEnsemble\Contracts\OcrEnsembleComparisonEvidenceLoaderInterface;
 use App\Services\Intake\OcrEnsemble\OcrEnsembleBulkListBadgePresenter;
 use App\Services\Intake\OcrEnsemble\OcrEnsembleEngineDebugMetricsBuilder;
+use App\Services\Intake\OcrEnsemble\OcrEnsembleJudgeParticipationBuilder;
 use App\Support\MobileNumber;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -490,6 +491,7 @@ class AdminBulkIntakeController extends Controller
         IntakeOcrEnsemblePhase5Service $phase5Service,
         OcrEnsembleComparisonEvidenceLoaderInterface $evidenceLoader,
         OcrEnsembleEngineDebugMetricsBuilder $engineDebugMetricsBuilder,
+        OcrEnsembleJudgeParticipationBuilder $judgeParticipationBuilder,
     ) {
         abort_unless((int) $bulkIntakeBatchItem->bulk_intake_batch_id === (int) $bulkIntakeBatch->id, 404);
 
@@ -502,6 +504,7 @@ class AdminBulkIntakeController extends Controller
         $comparisonResult = $phase5Service->buildComparisonForIntake($intake);
         $ocrAttemptSummaries = $evidenceLoader->loadForIntake($intake)->attemptSummaries;
         $ocrEngineDebugMetrics = $engineDebugMetricsBuilder->build($ocrAttemptSummaries, $comparisonResult);
+        $ocrJudgeParticipation = $judgeParticipationBuilder->build($ocrAttemptSummaries, $comparisonResult);
 
         return view('admin.bulk-intakes.correct-candidate', [
             'batch' => $bulkIntakeBatch,
@@ -517,6 +520,7 @@ class AdminBulkIntakeController extends Controller
             'comparisonResult' => $comparisonResult,
             'ocrAttemptSummaries' => $ocrAttemptSummaries,
             'ocrEngineDebugMetrics' => $ocrEngineDebugMetrics,
+            'ocrJudgeParticipation' => $ocrJudgeParticipation,
         ]);
     }
 
