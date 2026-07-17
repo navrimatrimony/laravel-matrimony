@@ -11,6 +11,7 @@ use App\Models\SuchakPipeline;
 use App\Models\SuchakPlatformLeadAllocation;
 use App\Models\SuchakProfileNote;
 use App\Models\SuchakProfileRepresentation;
+use App\Modules\Suchak\Support\SuchakWorklistSourceQueries;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -50,12 +51,7 @@ class SuchakDailyOpportunityService
 
     private function followUpsDue(SuchakAccount $account, Carbon $at): Collection
     {
-        return SuchakProfileNote::query()
-            ->where('suchak_account_id', $account->id)
-            ->whereNotNull('follow_up_at')
-            ->where('follow_up_at', '<=', $at)
-            ->orderBy('follow_up_at')
-            ->orderBy('id')
+        return SuchakWorklistSourceQueries::dueFollowUpNotes($account, $at)
             ->limit(self::PER_BUCKET_LIMIT)
             ->get()
             ->map(fn (SuchakProfileNote $note): array => [
@@ -73,15 +69,9 @@ class SuchakDailyOpportunityService
 
     private function consentsExpiring(SuchakAccount $account, Carbon $at): Collection
     {
-        return SuchakProfileRepresentation::query()
+        return SuchakWorklistSourceQueries::expiringConsentedRepresentations($account, $at)
             ->with(['matrimonyProfile.religion', 'matrimonyProfile.caste'])
-            ->where('suchak_account_id', $account->id)
-            ->withValidConsent()
-            ->whereNotNull('consent_valid_until')
-            ->whereBetween('consent_valid_until', [$at, $at->copy()->addDays(7)])
             ->whereHas('matrimonyProfile', fn (Builder $query) => $this->activeProfileQuery($query))
-            ->orderBy('consent_valid_until')
-            ->orderBy('id')
             ->limit(self::PER_BUCKET_LIMIT)
             ->get()
             ->map(fn (SuchakProfileRepresentation $representation): array => [
@@ -179,16 +169,7 @@ class SuchakDailyOpportunityService
 
     private function paymentsDue(SuchakAccount $account, Carbon $at): Collection
     {
-        $ledgerEntries = SuchakLedgerEntry::query()
-            ->where('suchak_account_id', $account->id)
-            ->whereIn('status', [
-                SuchakLedgerEntry::STATUS_DUE,
-                SuchakLedgerEntry::STATUS_EXPECTED,
-            ])
-            ->whereNotNull('due_date')
-            ->whereDate('due_date', '<=', $at->toDateString())
-            ->orderBy('due_date')
-            ->orderBy('id')
+        $ledgerEntries = SuchakWorklistSourceQueries::dueLedgerEntries($account, $at)
             ->limit(self::PER_BUCKET_LIMIT)
             ->get()
             ->map(fn (SuchakLedgerEntry $entry): array => [
@@ -203,25 +184,7 @@ class SuchakDailyOpportunityService
                 'action_url' => route('suchak.dashboard'),
             ]);
 
-        $paymentRequests = SuchakPaymentRequest::query()
-            ->where('suchak_account_id', $account->id)
-            ->whereIn('payment_status', [
-                SuchakPaymentRequest::STATUS_SENT,
-                SuchakPaymentRequest::STATUS_OPENED,
-                SuchakPaymentRequest::STATUS_PENDING,
-                SuchakPaymentRequest::STATUS_PARTIALLY_PAID,
-                SuchakPaymentRequest::STATUS_OVERDUE,
-            ])
-            ->where(function (Builder $query) use ($at): void {
-                $query->where('payment_status', SuchakPaymentRequest::STATUS_OVERDUE)
-                    ->orWhere(function (Builder $query) use ($at): void {
-                        $query->whereNotNull('expires_at')
-                            ->where('expires_at', '<=', $at->copy()->addDays(3));
-                    });
-            })
-            ->orderByRaw('expires_at IS NULL')
-            ->orderBy('expires_at')
-            ->orderBy('id')
+        $paymentRequests = SuchakWorklistSourceQueries::paymentRequestsNeedingFollowUp($account, $at)
             ->limit(self::PER_BUCKET_LIMIT)
             ->get()
             ->map(fn (SuchakPaymentRequest $request): array => [

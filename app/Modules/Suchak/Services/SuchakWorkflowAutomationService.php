@@ -12,6 +12,7 @@ use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakVisitConfirmation;
 use App\Models\SuchakWorkflowReminder;
 use App\Models\SuchakWorkflowTimelineEvent;
+use App\Modules\Suchak\Support\SuchakWorklistSourceQueries;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -98,13 +99,8 @@ class SuchakWorkflowAutomationService
 
     private function followUpPayloads(?SuchakAccount $account, Carbon $at): Collection
     {
-        return SuchakProfileNote::query()
+        return SuchakWorklistSourceQueries::dueFollowUpNotes($account, $at)
             ->with('matrimonyProfile')
-            ->when($account, fn (Builder $query) => $query->where('suchak_account_id', $account->id))
-            ->whereNotNull('follow_up_at')
-            ->where('follow_up_at', '<=', $at)
-            ->orderBy('follow_up_at')
-            ->orderBy('id')
             ->limit(self::PER_SOURCE_LIMIT)
             ->get()
             ->map(fn (SuchakProfileNote $note): array => $this->payload(
@@ -124,17 +120,8 @@ class SuchakWorkflowAutomationService
 
     private function ledgerPaymentPayloads(?SuchakAccount $account, Carbon $at): Collection
     {
-        return SuchakLedgerEntry::query()
+        return SuchakWorklistSourceQueries::dueLedgerEntries($account, $at)
             ->with('matrimonyProfile')
-            ->when($account, fn (Builder $query) => $query->where('suchak_account_id', $account->id))
-            ->whereIn('status', [
-                SuchakLedgerEntry::STATUS_DUE,
-                SuchakLedgerEntry::STATUS_EXPECTED,
-            ])
-            ->whereNotNull('due_date')
-            ->whereDate('due_date', '<=', $at->toDateString())
-            ->orderBy('due_date')
-            ->orderBy('id')
             ->limit(self::PER_SOURCE_LIMIT)
             ->get()
             ->map(fn (SuchakLedgerEntry $entry): array => $this->payload(
@@ -154,26 +141,8 @@ class SuchakWorkflowAutomationService
 
     private function paymentRequestPayloads(?SuchakAccount $account, Carbon $at): Collection
     {
-        return SuchakPaymentRequest::query()
+        return SuchakWorklistSourceQueries::paymentRequestsNeedingFollowUp($account, $at)
             ->with('customerContext.candidateProfile')
-            ->when($account, fn (Builder $query) => $query->where('suchak_account_id', $account->id))
-            ->whereIn('payment_status', [
-                SuchakPaymentRequest::STATUS_SENT,
-                SuchakPaymentRequest::STATUS_OPENED,
-                SuchakPaymentRequest::STATUS_PENDING,
-                SuchakPaymentRequest::STATUS_PARTIALLY_PAID,
-                SuchakPaymentRequest::STATUS_OVERDUE,
-            ])
-            ->where(function (Builder $query) use ($at): void {
-                $query->where('payment_status', SuchakPaymentRequest::STATUS_OVERDUE)
-                    ->orWhere(function (Builder $query) use ($at): void {
-                        $query->whereNotNull('expires_at')
-                            ->where('expires_at', '<=', $at->copy()->addDays(3));
-                    });
-            })
-            ->orderByRaw('expires_at IS NULL')
-            ->orderBy('expires_at')
-            ->orderBy('id')
             ->limit(self::PER_SOURCE_LIMIT)
             ->get()
             ->map(fn (SuchakPaymentRequest $request): array => $this->payload(
