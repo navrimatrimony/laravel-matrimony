@@ -1,15 +1,18 @@
 # OCR Research Phase — Ledger (§20)
 
-> **Approved Goal:** Continue Product OCR Vision — maximize **raw OCR text fidelity** (Marathi + Devanagari + English biodata).  
+> **Approved Goal (suspended):** Product OCR Vision — maximize **raw OCR text fidelity** (Marathi + Devanagari + English biodata).  
 > Downstream stages preserve/utilize that fidelity — they do not replace poor OCR.  
-> **Product Goal status:** **In Progress** (NOT complete)  
+> **Product Goal status:** **RESEARCH HOLD** (NOT Complete — strategic priority change)  
 > **Loop 01 status:** **Complete**  
-> **Research Phase status:** **Open** (plateau §17 / completion §18 not met)
+> **Research Phase status:** **HOLD** (plateau §17 / completion §18 not claimed)  
+> **Suspended:** 2026-07-17 · Next org priority: Flutter Matchmaker APK  
 
-**Authority:** Blueprint §20 + DOC (§17–19).  
+**Authority:** Blueprint §20 + DOC (§17–19, §22 Safe Shutdown).  
 **Product dashboard:** [`docs/OCR-PRODUCT-METRICS-DASHBOARD.md`](OCR-PRODUCT-METRICS-DASHBOARD.md)  
+**Live state / resume:** [`docs/OCR-STATUS.md`](OCR-STATUS.md)  
 **Triage:** raw has info? → parser/normalizer. Else → OCR/preprocess. **Product Impact First** (loss × frequency).  
-**Do not stop after each loop** — measure → rank → fix → bench → dashboard + ledger → commit → push → repeat.
+
+**While RESEARCH HOLD:** do **not** continue OCR research loops. Resume only after a new Approved Goal (default recommendation: ≥500 biodata benchmark).
 
 ---
 
@@ -289,11 +292,27 @@ Residual Mode A (ranked for Loop 02+):
 5. Tesseract SSOT metrics still **98.9%**; **production unchanged**.  
 6. **PO decision:** Do **not** integrate Sarvam / second-pass yet (paid; single residual insufficient). No Loop 32.
 
+## Phase 5 / §20.6 Product Owner Visibility (complete)
+
+1. Correct Candidate OCR comparison: attempts, raw text, per-engine fields, finals, win reason, metrics, Judge.  
+2. Production OCR behaviour unchanged.  
+3. Doc: `OCR-ENSEMBLE-PHASE-5-PRODUCT-OWNER-VISIBILITY.md`.
+
+## RESEARCH HOLD (2026-07-17)
+
+1. **State:** RESEARCH HOLD — not Complete.  
+2. **Why:** Strategic priority → Flutter Matchmaker APK.  
+3. **Accepted baseline:** `product_metrics_gt20_20260717_101021.json` @ **98.9%**.  
+4. **Unresolved:** D8 DOB Mode A; Sarvam deferred; ≥500 bench pending; ensemble prod flags need approval.  
+5. **Recommended next OCR loop (when resumed):** large-dataset benchmarking (≥500), then paid-OCR decision.  
+6. **Resume:** follow exact command in `docs/OCR-STATUS.md` — no chat history required.  
+7. **Do not** run OCR research loops while HOLD is active.
+
 ## Active
 
-1. Product Goal **In Progress** — accept Tesseract baseline **98.9%** (1 Mode A DOB residual).  
-2. Sarvam DI = research finding only. Next: large-dataset benchmarking (≥500 biodatas) before any paid-OCR architecture decision.  
-3. No invent; no D8 hardcode; watermark preprocess **not** for production.
+1. **OCR:** RESEARCH HOLD (suspended).  
+2. **Org next:** Flutter Matchmaker APK.  
+3. Resumable via STATUS + Dashboard + Ledger + Blueprint + DOC + SSOT.
 
 ---
 
@@ -301,6 +320,7 @@ Residual Mode A (ranked for Loop 02+):
 
 | Date | Note |
 |------|------|
+| 2026-07-17 | **RESEARCH HOLD** — strategic suspend; baseline 98.9%; §20.6 complete; Flutter APK next |
 | 2026-07-15 | Fidelity objective; raw-vs-parser forensic; month/label fix |
 | 2026-07-15 | Glued month-year; PDF raster-OCR fallback (Ghostscript) |
 | 2026-07-15 | GS user-local; ITRANS reject; bare-तारीख; multipass date scoring |
