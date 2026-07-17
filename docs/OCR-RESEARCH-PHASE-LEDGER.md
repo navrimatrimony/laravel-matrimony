@@ -69,6 +69,7 @@
 | Megapage PDF glue → raster + multipass `off` + keep `(alias)` | **Accepted** | Loop 25; PDF1 name+gender; crit **94.7%** |
 | Image-only gated name-band + `&`/`अँड.` strip | **Accepted** | Loop 26; snehal name; crit **95.8%** |
 | Father label `वडीलांचे` + surname without 3-token trim | **Accepted** | Loop 27; 1.1 name; crit **96.8%** |
+| PDF embedded + page-0 name-band label lines | **Accepted** | Loop 28; PDF3 शिवाजी; crit **98.9%** |
 | Mobile: no whitespace-merge phones; संपर्क/संपकण; first-after-label | **Accepted** | Loop 08; mobile **72.2%** |
 | Invent missing/shifted mobile digits | **Rejected** | Not fidelity |
 | Mobile: address-line संपर्क penalty; संपर्क नंबर boost | **Accepted** | Loop 09; `27.pdf` restored; mobile **77.8%** |
@@ -302,3 +303,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-17 | Loop 26 image-only gated name-band → crit **95.8%**; name **90%**; snehal recovered |
 | 2026-07-17 | Loop 27 `वडीलांचे` father surname → crit **96.8%**; name **95%**; 1.1 recovered |
 | 2026-07-17 | **GT correction rebase:** PDF2 religion removed; Adv title normalize → crit **97.9%** (not OCR) |
+| 2026-07-17 | Loop 28 PDF embedded name-band → crit **98.9%**; name **100%**; PDF3 `शिवाजी` recovered |
