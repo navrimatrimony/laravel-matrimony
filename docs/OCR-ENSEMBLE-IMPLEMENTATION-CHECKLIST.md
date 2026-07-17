@@ -267,6 +267,8 @@ Next Phase only
 | 5.T04 | Unit: evidence / builder / orchestration | ✅ |
 | 5.T05 | Feature: auth, gate skip, empty, resolved | ✅ |
 | 5.T06 | Feature: bulk list badges (legacy / Phase 3 / Phase 4 / order) | ✅ |
+| 5.T07 | Feature: Correct Candidate embedding (P5-B1) | ✅ |
+| 5.T08 | Feature: §20.6 PO Visibility (labels/winner/judge/raw/metrics) | ✅ |
 
 ### Phase 5 freeze
 
@@ -276,8 +278,9 @@ Next Phase only
 | 5.F01 | Blueprint UI items 5.01–5.05 checked (5.06 ops smoke) | ✅ |
 | 5.F02 | **Program v1.0 application complete** — production flag rollout approved | ☐ **ops/product** (P5-B4) |
 | 5.F03 | Staging acceptance (READY FOR STAGING) | ✅ doc/code — ops drills still open (RO3–RO7 / P5-B3) |
+| 5.F04 | Blueprint §20.6 Product Owner Visibility | ✅ — `OCR-ENSEMBLE-PHASE-5-PRODUCT-OWNER-VISIBILITY.md` |
 
-**v1.0 application freeze:** **READY FOR STAGING** — **NOT READY FOR PRODUCTION**. See Phase 5 validation doc §10.
+**v1.0 + §20.6 PO Visibility:** **COMPLETE** on Correct Candidate (read-only). Production OCR behaviour unchanged. Flag enable still requires approval.
 
 ---
 
