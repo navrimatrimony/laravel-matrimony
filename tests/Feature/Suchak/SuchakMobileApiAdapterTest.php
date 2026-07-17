@@ -85,6 +85,12 @@ class SuchakMobileApiAdapterTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.account_id', $account->id)
             ->assertJsonStructure(['data' => ['ledger_entries']]);
+
+        $this->getJson('/api/v1/suchak/meetings')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.account_id', $account->id)
+            ->assertJsonStructure(['data' => ['visits']]);
     }
 
     public function test_suchak_intake_adapter_creates_source_link_via_existing_service(): void
