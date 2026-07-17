@@ -19,7 +19,7 @@
 | 6 | Estimated Remaining Time | N/A while held |
 | 7 | Current Blockers | Org priority = Flutter APK (not a technical blocker) |
 | 8 | Next Automatic Step | **None** until OCR goal is re-approved |
-| 9 | Last Stable Commit | `bcf044e6` (`main` tip · Research Hold) |
+| 9 | Last Stable Commit | `ade1ca51` (Research Hold entered) · tip = `git rev-parse --short HEAD` on `main` |
 | 10 | Exact Resume Point | Section **Resume command** below |
 
 ---
