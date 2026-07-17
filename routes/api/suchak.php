@@ -1,0 +1,20 @@
+<?php
+
+use App\Http\Controllers\Api\Suchak\SuchakCustomersApiController;
+use App\Http\Controllers\Api\Suchak\SuchakDashboardApiController;
+use App\Http\Controllers\Api\Suchak\SuchakMeApiController;
+use Illuminate\Support\Facades\Route;
+
+/*
+|--------------------------------------------------------------------------
+| API v1 — Suchak mobile adapters (auth:sanctum + suchak.account)
+|--------------------------------------------------------------------------
+| Thin JSON transport over existing Suchak services. No new business rules.
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(function () {
+    Route::get('/me', SuchakMeApiController::class);
+    Route::get('/dashboard', SuchakDashboardApiController::class);
+    Route::get('/customers', SuchakCustomersApiController::class);
+});
