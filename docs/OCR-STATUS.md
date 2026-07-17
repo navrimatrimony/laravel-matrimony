@@ -1,28 +1,34 @@
 # OCR STATUS
 
-> **2026-07-17 09:50 IST** · Product Goal **In Progress**
+> **2026-07-17 10:12 IST** · Product Goal **In Progress**
 
 | Item | Value |
 |------|------:|
-| Artifact | `product_metrics_gt20_20260717_094932.json` |
-| Critical | **97.9%** (92/94) |
-| Name | **95%** |
+| Artifact | `product_metrics_gt20_20260717_101021.json` |
+| Critical | **98.9%** (93/94) |
+| Name | **100%** |
 | Mobile | **100%** |
 | Religion | **100%** |
 | Gender | **100%** |
 | DOB | 95% |
 
-## Current Accepted Baseline
+## Baseline
 
-- Critical: **97.9%**
-- Artifact: `product_metrics_gt20_20260717_094932.json`
-- **GT correction rebase** (not OCR loop): PDF2 religion removed; Adv title normalize; spellings confirmed
+- Critical: **98.9%**
+- Artifact: `product_metrics_gt20_20260717_101021.json`
 
-## Remaining misses (2)
+## GT vs OCR (this session)
 
-1. PDF3 name — OCR `चिवाजी` ≠ GT `शिवाजी` (invent forbidden)  
-2. D8 DOB — OCR day 24 ≠ GT 21 (invent forbidden)  
+| Change | Type | Effect |
+|--------|------|--------|
+| PDF2 religion removed | **GT correction** | 96.8% → 97.9% |
+| Adv/अॅड title normalize | GT/matcher support | (no cell flip alone) |
+| PDF3 name-band | **OCR improvement** | 97.9% → **98.9%** |
 
-## NEXT Loop 28
+## Remaining (1)
 
-Hard Mode A only on those two; multi-approach evidence per DOC §17.
+`D (8).jpeg` DOB — day 24 in OCR vs GT 21 (Mode A; invent rejected).
+
+## NEXT Loop 29
+
+D8 DOB Mode A only — multi-approach evidence; no invent.

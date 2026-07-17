@@ -417,7 +417,13 @@ class OcrService
         ];
 
         if ($embeddedUsable) {
-            return $embedded;
+            $enriched = $this->enrichEmbeddedPdfWithNameBand($fullPath, $embedded);
+            if ($enriched !== $embedded) {
+                $this->lastExtractTextFromPathDebug['pdf_pipeline'] = 'embedded_text_plus_name_band';
+                $this->lastExtractTextFromPathDebug['name_band_merged'] = true;
+            }
+
+            return $enriched;
         }
 
         $raster = $this->extractTextFromPdfViaRasterOcr($fullPath, $storageRelative, $presetOverride);
@@ -433,6 +439,54 @@ class OcrService
             : 'pdf_raster_failed_empty';
 
         return $embedded;
+    }
+
+    /**
+     * Embedded PDF text can carry wrong चि/शि name glyphs while a top-band raster reads correctly.
+     * Additive only: prepend मुलाचे/मुलीचे label lines from page-0 band OCR.
+     */
+    private function enrichEmbeddedPdfWithNameBand(string $fullPath, string $embedded): string
+    {
+        if (! class_exists(\Imagick::class) || trim($embedded) === '') {
+            return $embedded;
+        }
+
+        $this->ensureGhostscriptAvailableForImagick();
+        $tmp = null;
+        try {
+            $image = new \Imagick;
+            $image->setResolution(200, 200);
+            $image->readImage($fullPath.'[0]');
+            $image->setImageBackgroundColor('white');
+            try {
+                $image->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
+                $image->mergeImageLayers(\Imagick::LAYERMETHOD_FLATTEN);
+            } catch (\Throwable) {
+                // Some pages lack alpha.
+            }
+            $image->setImageFormat('png');
+            $tmp = storage_path('app/private/ocr-temp/pdf-name-band-'.uniqid('', true).'.png');
+            if (! is_dir(dirname($tmp))) {
+                mkdir(dirname($tmp), 0755, true);
+            }
+            $image->writeImage($tmp);
+            $image->clear();
+
+            $bandLines = $this->tesseractMultiPassOcr->extractNameBandLabelLinesFromImage($tmp);
+            if ($bandLines === '') {
+                return $embedded;
+            }
+
+            return $bandLines."\n\n".$embedded;
+        } catch (\Throwable $e) {
+            Log::debug('ocr_pdf_name_band: skipped', ['path' => $fullPath, 'error' => $e->getMessage()]);
+
+            return $embedded;
+        } finally {
+            if (is_string($tmp) && is_file($tmp)) {
+                @unlink($tmp);
+            }
+        }
     }
 
     private function extractEmbeddedPdfText(string $fullPath): string

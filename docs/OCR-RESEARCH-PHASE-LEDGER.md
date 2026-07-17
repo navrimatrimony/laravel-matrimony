@@ -254,10 +254,15 @@ Residual Mode A (ranked for Loop 02+):
 1. PDF2 religion removed from GT; Adv/अॅड title normalize; snehal/1.1 spellings confirmed.  
 2. **Rebaseline:** crit **96.8% → 97.9%** (`094932`) — denom change only.
 
-## Active (Loop 28 — 2 hard Mode A residuals)
+## Loop 28 — PDF embedded name-band (complete)
 
-1. PDF3 `चिवाजी`≠`शिवाजी`; D8 DOB day 24≠21.  
-2. No invent; multi-approach evidence per DOC §17.
+1. Enrich usable embedded PDF text with page-0 name-label band OCR.  
+2. **Accepted:** crit **97.9% → 98.9%**; name **100%** (`101021`).  
+
+## Active (Loop 29 — D8 DOB Mode A)
+
+1. `D (8).jpeg` day 24≠21; invent rejected; prior date-band/color approaches rejected.  
+2. Multi-approach evidence per DOC §17.
 
 ---
 

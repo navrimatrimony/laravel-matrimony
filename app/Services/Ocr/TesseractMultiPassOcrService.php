@@ -11,7 +11,7 @@ use Throwable;
 
 class TesseractMultiPassOcrService
 {
-    public const SELECTION_POLICY_VERSION = 'tesseract_multipass_v2_img_name_band';
+    public const SELECTION_POLICY_VERSION = 'tesseract_multipass_v2_pdf_name_band';
 
     /** @var list<string> */
     private const MARATHI_LABELS = [
@@ -149,8 +149,9 @@ class TesseractMultiPassOcrService
     }
 
     /**
-     * Image biodata only: top-band OCR can recover candidate names full-page multipass garbles.
-     * Skips PDF page rasters. Additive label lines only; gated to avoid demoting good pages.
+     * Photo biodata + PDF page rasters: top-band OCR can recover names full-page multipass garbles.
+     * Label lines only; skip when candidate region already has कु./कुमारी (protects D8).
+     * Does not skip for चि. — band often fixes चि/शि OCR confusion.
      */
     private function maybeExtractImageNameBandLabelLines(
         string $absolutePath,
@@ -158,18 +159,14 @@ class TesseractMultiPassOcrService
         ?string $originalName,
         string $pageText
     ): string {
-        // Never run on PDF page rasters (saved as .png with pdf-page-* names).
-        if (str_contains($relativeStoredPath, 'pdf-raster')
-            || str_starts_with((string) $originalName, 'pdf-page-')) {
-            return '';
-        }
-
         $ext = strtolower(pathinfo((string) ($originalName ?: $absolutePath), PATHINFO_EXTENSION));
-        if (! in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'bmp'], true)) {
+        $isPdfPage = str_contains($relativeStoredPath, 'pdf-raster')
+            || str_starts_with((string) $originalName, 'pdf-page-');
+        if (! $isPdfPage && ! in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'bmp'], true)) {
             return '';
         }
 
-        if ($this->candidateRegionHasHonorificName($pageText)) {
+        if ($this->candidateRegionHasKumariHonorificName($pageText)) {
             return '';
         }
 
@@ -177,10 +174,10 @@ class TesseractMultiPassOcrService
     }
 
     /**
-     * Honorific candidate in header region only (before family block).
-     * Relative भाऊ/बहिण `चि.` lines must not suppress the band.
+     * Skip band only when कु./कुमारी candidate already present in header region.
+     * Relative भाऊ/बहिण lines must not suppress; चि. alone must not suppress (शि recovery).
      */
-    private function candidateRegionHasHonorificName(string $pageText): bool
+    private function candidateRegionHasKumariHonorificName(string $pageText): bool
     {
         $regionLines = [];
         foreach (preg_split('/\R/u', $pageText) ?: [] as $line) {
@@ -196,9 +193,17 @@ class TesseractMultiPassOcrService
         }
 
         return preg_match(
-            '/(?:^|[\s:：\-–—(])(?:कु\.|चि\.|कुमारी)\s*[\x{0900}-\x{097F}]{2,}(?:\s+[\x{0900}-\x{097F}]{2,}){1,}/u',
+            '/(?:^|[\s:：\-–—(])(?:कु\.|कुमारी)\s*[\x{0900}-\x{097F}]{2,}(?:\s+[\x{0900}-\x{097F}]{2,}){1,}/u',
             $region
         ) === 1;
+    }
+
+    /**
+     * Public entry for PDF embedded-text enrichment: OCR top-band name-label lines only.
+     */
+    public function extractNameBandLabelLinesFromImage(string $absolutePath, float $fraction = 0.25): string
+    {
+        return $this->extractTopNameBandLabelLines($absolutePath, $fraction);
     }
 
     private function extractTopNameBandLabelLines(string $absolutePath, float $fraction = 0.25): string

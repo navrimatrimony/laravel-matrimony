@@ -18,7 +18,7 @@ use App\Services\Intake\OcrEnsemble\OcrEnsemblePhase3Constants;
 use App\Services\Intake\OcrEnsembleBenchmarkFieldMatcher;
 use App\Services\OcrService;
 
-$baselinePath = $argv[1] ?? storage_path('app/private/ocr-ensemble-benchmark/product_metrics_gt20_20260717_094932.json');
+$baselinePath = $argv[1] ?? storage_path('app/private/ocr-ensemble-benchmark/product_metrics_gt20_20260717_101021.json');
 $refresh = in_array('--refresh-cache', $argv, true);
 
 if (! is_file($baselinePath)) {
