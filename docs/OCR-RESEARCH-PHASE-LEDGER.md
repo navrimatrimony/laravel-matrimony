@@ -27,6 +27,8 @@
 | Ordinal English DOB (`24th March 1991`) | Yes | Common resume form; must parse |
 | Horizontal date-band crop | Partial | Fixes glued slash form; does not fix wrong day under overlay |
 | Blue watermark opaque wipe / red-channel | No (so far) | Overlay destroys or confuses day digits (`D (8)` still 24≠21) |
+| D8 day glyph: `१` + `/` pixel-bridge → OCR `४` | Yes | Loop 30; all engines fail clean 21; slash-split morph insufficient |
+| D8 blue watermark overlaps DOB; wipe ≠ Tesseract 21 | Yes | Loop 31; Sarvam DI still reads 21 on wiped + original |
 | Wide month-digit invent / truncated-year invent | No | False ISOs / age-bias guessing |
 | Replace Tesseract with EasyOCR/Paddle/DocTR | No | Sprint 2 NO-GO on GT-20 critical |
 
@@ -71,6 +73,9 @@
 | Father label `वडीलांचे` + surname without 3-token trim | **Accepted** | Loop 27; 1.1 name; crit **96.8%** |
 | PDF embedded + page-0 name-band label lines | **Accepted** | Loop 28; PDF3 शिवाजी; crit **98.9%** |
 | D8 DOB invent 21 from OCR 24 (incl. region preprocess on original) | **Rejected** | Loop 29; Mode A limitation |
+| D8 multi-engine + preprocess + slash-bridge exhaust (Loop 30) | **Rejected (recovery)** | Still no clean day 21; limitation proven |
+| D8 blue watermark wipe for Tesseract (Loop 31) | **Rejected** | Still day 24 after HSV/RGB/LAB |
+| Sarvam Document Intelligence RAW DOB (Loop 31) | **Accepted (research only)** | 4/4 `२१/०३/१९९९`; **not** production-wired (cost / N=1 residual) |
 | Mobile: no whitespace-merge phones; संपर्क/संपकण; first-after-label | **Accepted** | Loop 08; mobile **72.2%** |
 | Invent missing/shifted mobile digits | **Rejected** | Not fidelity |
 | Mobile: address-line संपर्क penalty; संपर्क नंबर boost | **Accepted** | Loop 09; `27.pdf` restored; mobile **77.8%** |
@@ -267,10 +272,28 @@ Residual Mode A (ranked for Loop 02+):
 2. DOB-band preprocess matrix still reads day **२४**; Marathi digits OK; invent **rejected**.  
 3. Baseline held at **98.9%**.
 
+## Loop 30 — D8 exhaustive RAW (complete / Tesseract limitation)
+
+1. Multi-engine on original + tight DOB crop: Tesseract **24**, EasyOCR **20**, Paddle **28**, DocTR **24**/garbage.  
+2. Glyph: **१/** merge → **४**-like; enlargements + boxes saved.  
+3. Segmentation + Imagick/OpenCV matrix + bridge-split: **0** clean day-21 extractions.  
+4. Pipeline: `store('intakes')` → `extractTextFromPath` on original; no resize-before-OCR SSOT bug.  
+5. **No production change**; invent/vote **rejected**; baseline **98.9%**.
+
+## Loop 31 — Watermark + Sarvam DI (complete)
+
+1. HSV/RGB/LAB/black-text watermark removal on ORIGINAL → Tesseract still **२४** (`repro_21_03_1999=0`).  
+2. Sarvam Document Intelligence → RAW **`२१/०३/१९९९`** on original + DOB crops (**4/4**).  
+3. Glyph: watermark interferes; wipe does not fix Tesseract `१/`→`४`.  
+4. **Accepted evidence (research only):** Sarvam DI recovers without invent/hardcode.  
+5. Tesseract SSOT metrics still **98.9%**; **production unchanged**.  
+6. **PO decision:** Do **not** integrate Sarvam / second-pass yet (paid; single residual insufficient). No Loop 32.
+
 ## Active
 
-1. Product Goal **In Progress** — 1 Mode A residual (`D (8)` DOB).  
-2. No invent; reopen only with new RAW evidence or PO GT decision.
+1. Product Goal **In Progress** — accept Tesseract baseline **98.9%** (1 Mode A DOB residual).  
+2. Sarvam DI = research finding only. Next: large-dataset benchmarking (≥500 biodatas) before any paid-OCR architecture decision.  
+3. No invent; no D8 hardcode; watermark preprocess **not** for production.
 
 ---
 
@@ -312,3 +335,5 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-17 | **GT correction rebase:** PDF2 religion removed; Adv title normalize → crit **97.9%** (not OCR) |
 | 2026-07-17 | Loop 28 PDF embedded name-band → crit **98.9%**; name **100%**; PDF3 `शिवाजी` recovered |
 | 2026-07-17 | Loop 29 D8 DOB: original-file + region preprocess still day **24**; invent rejected; baseline held |
+| 2026-07-17 | Loop 30 D8 exhaustive multi-engine/preprocess: no clean **21**; limitation proven; baseline held |
+| 2026-07-17 | Loop 31 watermark wipe reject; Sarvam DI recovers **२१/०३/१९९९** (4/4); **research only** — no prod wire; no Loop 32 |

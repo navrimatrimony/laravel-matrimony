@@ -1,6 +1,7 @@
 # OCR STATUS
 
-> **2026-07-17 10:30 IST** · Product Goal **In Progress**
+> **2026-07-17 ~11:30 IST** · Product Goal **In Progress**  
+> **Accepted baseline:** Tesseract SSOT **98.9%** — production unchanged
 
 | Item | Value |
 |------|------:|
@@ -12,22 +13,16 @@
 | Gender | **100%** |
 | DOB | 95% |
 
-## Baseline
+## Loop 30 / 31 (accepted research)
 
-- Critical: **98.9%**
-- Artifact: `product_metrics_gt20_20260717_101021.json`
+- Loop 30: local multi-engine/preprocess exhaust — no clean day **21** on Tesseract path  
+- Loop 31: watermark wipe **reject**; Sarvam DI RAW **`२१/०३/१९९९`** (4/4) — **research finding only**  
+- **No** Sarvam production integration · **No** second-pass / residual routing · **No** Loop 32 yet
 
-## Loop 29
+## Production
 
-- **Complete (limitation):** D8 DOB on **original** 720×1016 JPEG  
-- Region preprocess (crop/zoom/contrast/sharpen/threshold/red) still reads day **२४**  
-- Pipeline audit: OCR uses original upload (`store` → `extractTextFromPath`); no pre-OCR resize bug  
-- Invent day 21 **forbidden**
-
-## Remaining (1 Mode A)
-
-`D (8).jpeg` DOB — unavoidable under current OCR/preprocess evidence.
+Hold Tesseract multipass. One Mode A residual: `D (8).jpeg` DOB (day 24 vs GT 21). Invent forbidden.
 
 ## NEXT
 
-Escalate only if PO wants GT revisit or new RAW engine/preprocess class; otherwise hold baseline and continue Product Goal as In Progress with 1 known Mode A residual.
+Benchmark on a **much larger dataset** (target ≥ **500** biodatas). After evidence volume, decide whether Sarvam is needed, where, and if accuracy justifies cost.
