@@ -1,12 +1,12 @@
 # OCR STATUS
 
-> **2026-07-16 21:10 IST** · Product Goal **In Progress**
+> **2026-07-17 09:25 IST** · Product Goal **In Progress**
 
 | Item | Value |
 |------|------:|
-| Artifact | `product_metrics_gt20_20260716_210840.json` |
-| Critical | **94.7%** |
-| Name | **85%** |
+| Artifact | `product_metrics_gt20_20260717_092259.json` |
+| Critical | **96.8%** |
+| Name | **95%** |
 | Mobile | **100%** |
 | Religion | **94.1%** |
 | Gender | **100%** |
@@ -14,16 +14,14 @@
 
 ## Current Accepted Baseline
 
-- Critical: **94.7%**
-- Artifact: `product_metrics_gt20_20260716_210840.json`
-- Any future loop must benchmark against this accepted baseline.
-- No loop may become production unless it equals or exceeds this baseline.
+- Critical: **96.8%**
+- Artifact: `product_metrics_gt20_20260717_092259.json`
 
-## Loop 25
+## Loop 26–27
 
-- **Accepted:** megapage PDF → raster + PDF multipass `off` + keep `(कदम)` alias  
-- Crit **92.6% → 94.7%**; name **85%**; gender **100%**; PDF1 recovered  
+- **26 Accepted:** image name-band → snehal; crit **95.8%**  
+- **27 Accepted:** `वडीलांचे` father surname → 1.1; crit **96.8%**; name **95%**  
 
-## NEXT Loop 26
+## NEXT Loop 28
 
-Hard Mode A: `snehal`/`1.1` names, PDF3 `चि`≠`शि`, PDF2 religion, D8 DOB.
+Hard Mode A only (3 misses): PDF2 religion, PDF3 `चि`≠`शि`, D8 DOB. No invent.

@@ -11,7 +11,7 @@ use Throwable;
 
 class TesseractMultiPassOcrService
 {
-    public const SELECTION_POLICY_VERSION = 'tesseract_multipass_v1';
+    public const SELECTION_POLICY_VERSION = 'tesseract_multipass_v2_img_name_band';
 
     /** @var list<string> */
     private const MARATHI_LABELS = [
@@ -129,10 +129,143 @@ class TesseractMultiPassOcrService
 
         $this->cleanupVariants($variants);
 
+        $text = trim((string) ($chosen['text'] ?? ''));
+        $bandLines = $this->maybeExtractImageNameBandLabelLines(
+            $absolutePath,
+            $relativeStoredPath,
+            $originalName,
+            $text
+        );
+        if ($bandLines !== '') {
+            $text = $bandLines."\n\n".$text;
+            $debug['name_band_chars'] = mb_strlen($bandLines, 'UTF-8');
+            $debug['name_band_merged'] = true;
+        }
+
         return [
-            'text' => trim((string) ($chosen['text'] ?? '')),
+            'text' => $text,
             'debug' => $debug,
         ];
+    }
+
+    /**
+     * Image biodata only: top-band OCR can recover candidate names full-page multipass garbles.
+     * Skips PDF page rasters. Additive label lines only; gated to avoid demoting good pages.
+     */
+    private function maybeExtractImageNameBandLabelLines(
+        string $absolutePath,
+        string $relativeStoredPath,
+        ?string $originalName,
+        string $pageText
+    ): string {
+        // Never run on PDF page rasters (saved as .png with pdf-page-* names).
+        if (str_contains($relativeStoredPath, 'pdf-raster')
+            || str_starts_with((string) $originalName, 'pdf-page-')) {
+            return '';
+        }
+
+        $ext = strtolower(pathinfo((string) ($originalName ?: $absolutePath), PATHINFO_EXTENSION));
+        if (! in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'bmp'], true)) {
+            return '';
+        }
+
+        if ($this->candidateRegionHasHonorificName($pageText)) {
+            return '';
+        }
+
+        return $this->extractTopNameBandLabelLines($absolutePath);
+    }
+
+    /**
+     * Honorific candidate in header region only (before family block).
+     * Relative भाऊ/बहिण `चि.` lines must not suppress the band.
+     */
+    private function candidateRegionHasHonorificName(string $pageText): bool
+    {
+        $regionLines = [];
+        foreach (preg_split('/\R/u', $pageText) ?: [] as $line) {
+            if (preg_match('/कौटुंबिक|वडीलांचे|वडिलांचे|पित्याचे|आईचे\s*नां?व|भाऊ|बहिण|बहीण|मामा|चुलत|Father|Mother/u', $line) === 1) {
+                break;
+            }
+            $regionLines[] = $line;
+        }
+
+        $region = trim(implode("\n", $regionLines));
+        if ($region === '') {
+            return false;
+        }
+
+        return preg_match(
+            '/(?:^|[\s:：\-–—(])(?:कु\.|चि\.|कुमारी)\s*[\x{0900}-\x{097F}]{2,}(?:\s+[\x{0900}-\x{097F}]{2,}){1,}/u',
+            $region
+        ) === 1;
+    }
+
+    private function extractTopNameBandLabelLines(string $absolutePath, float $fraction = 0.25): string
+    {
+        $band = $this->extractTopNameBandText($absolutePath, $fraction);
+        if ($band === '') {
+            return '';
+        }
+
+        $kept = [];
+        foreach (preg_split('/\R/u', $band) ?: [] as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            if (preg_match('/(?:मुलाचे|मुलीचे|वधूचे|वराचे)\s*नां?व/u', $line) !== 1) {
+                continue;
+            }
+            if (preg_match('/(?:मुलाचे|मुलीचे|वधूचे|वराचे)\s*नां?व\s*[:：\-–—._]*\s*.*[\x{0900}-\x{097F}]{2,}/u', $line) !== 1) {
+                continue;
+            }
+            $kept[] = $line;
+        }
+
+        return $kept === [] ? '' : implode("\n", $kept);
+    }
+
+    private function extractTopNameBandText(string $absolutePath, float $fraction = 0.25): string
+    {
+        if ($fraction < 0.08 || $fraction > 0.4 || ! is_file($absolutePath) || ! class_exists(\Imagick::class)) {
+            return '';
+        }
+
+        $cropPath = null;
+        try {
+            $image = new \Imagick($absolutePath);
+            $width = $image->getImageWidth();
+            $height = $image->getImageHeight();
+            if ($width < 40 || $height < 40) {
+                $image->clear();
+
+                return '';
+            }
+
+            $bandHeight = max(40, (int) round($height * $fraction));
+            $image->cropImage($width, $bandHeight, 0, 0);
+            $image->setImagePage(0, 0, 0, 0);
+            $image->setImageFormat('png');
+            $cropPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.'ocr_name_band_'.uniqid('', true).'.png';
+            $image->writeImage($cropPath);
+            $image->clear();
+
+            $text = trim($this->runTesseractAttempt($cropPath, $this->languageArgs('mixed'), 6));
+            if ($text === '' || preg_match('/[\x{0900}-\x{097F}]{3,}/u', $text) !== 1) {
+                return '';
+            }
+
+            return $text;
+        } catch (Throwable $e) {
+            Log::debug('ocr_name_band: skipped', ['path' => $absolutePath, 'error' => $e->getMessage()]);
+
+            return '';
+        } finally {
+            if (is_string($cropPath) && is_file($cropPath)) {
+                @unlink($cropPath);
+            }
+        }
     }
 
     /**

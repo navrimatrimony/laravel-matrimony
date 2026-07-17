@@ -370,8 +370,12 @@ class OcrEnsembleNameExtractor
             return trim($value);
         }
 
+        // OCR often inserts & / अँड. / short Latin junk before the real given name.
+        $value = preg_replace('/^(?:&\s*|अँड\.?\s*|and\.?\s*)+/iu', '', $value) ?? $value;
         $value = preg_replace('/^(?:[a-z]{1,5}\s+){1,4}(?=[\x{0900}-\x{097F}])/iu', '', $value) ?? $value;
         $value = preg_replace('/\s+(?:[a-z]{1,5}\s*){1,5}$/iu', '', $value) ?? $value;
+        // Drop isolated & / अँड tokens between Devanagari name parts.
+        $value = preg_replace('/\s+(?:&|अँड\.?|and\.?)\s+/iu', ' ', $value) ?? $value;
 
         return trim($value);
     }
@@ -538,7 +542,7 @@ class OcrEnsembleNameExtractor
     private function surnameFromFatherLine(array $lines): ?string
     {
         $patterns = [
-            '/(?:चंडिलांचे|वडिलांचे|पित्याचे)\s*नाव\s*[:\-–—.\s]+(.+)$/u',
+            '/(?:चंडिलांचे|वडिलांचे|वडीलांचे|पित्याचे)\s*नाव\s*[:\-–—.\s]+(.+)$/u',
             '/Father\S{0,2}\s*Name\s*[:\-]\s*(.+)$/iu',
         ];
 
@@ -551,12 +555,15 @@ class OcrEnsembleNameExtractor
                 $value = trim((string) ($matches[1] ?? ''));
                 $value = preg_split('/\s*\(/u', $value, 2)[0] ?? $value;
                 $value = $this->stopAtNextCandidateField($value);
-                $cleaned = $this->cleanCandidateName($value);
-                if ($cleaned === null) {
+                // Do not run full person-name trim (caps at ~3 tokens and can drop the true surname).
+                $value = $this->stripNameHonorificPrefix($value);
+                $value = preg_replace('/^(?:धि|श्री\.?|कै\.?)\s*/u', '', $value) ?? $value;
+                $value = trim(preg_replace('/\s+/u', ' ', $value) ?? '');
+                if ($value === '') {
                     continue;
                 }
 
-                $tokens = preg_split('/\s+/u', $cleaned) ?: [];
+                $tokens = preg_split('/\s+/u', $value) ?: [];
                 $devTokens = array_values(array_filter(
                     $tokens,
                     static fn (string $tok): bool => preg_match('/^[\x{0900}-\x{097F}.]{2,}$/u', $tok) === 1

@@ -67,6 +67,8 @@
 | Name: no bare चि/कु truncate; glued नाव/नाब; reject tiny fragments | **Accepted** | Loop 07; name **70%** |
 | Name-band crop prepend (ungated / gated) | **Rejected** | Offline needle gains; Tier A D8/D1/PDF canary losses |
 | Megapage PDF glue → raster + multipass `off` + keep `(alias)` | **Accepted** | Loop 25; PDF1 name+gender; crit **94.7%** |
+| Image-only gated name-band + `&`/`अँड.` strip | **Accepted** | Loop 26; snehal name; crit **95.8%** |
+| Father label `वडीलांचे` + surname without 3-token trim | **Accepted** | Loop 27; 1.1 name; crit **96.8%** |
 | Mobile: no whitespace-merge phones; संपर्क/संपकण; first-after-label | **Accepted** | Loop 08; mobile **72.2%** |
 | Invent missing/shifted mobile digits | **Rejected** | Not fidelity |
 | Mobile: address-line संपर्क penalty; संपर्क नंबर boost | **Accepted** | Loop 09; `27.pdf` restored; mobile **77.8%** |
@@ -237,10 +239,20 @@ Residual Mode A (ranked for Loop 02+):
 1. Reject megapage embedded glue; PDF raster multipass default `off`; keep `(कदम)`.  
 2. **Accepted:** crit **92.6% → 94.7%**; name **85%**; gender **100%** (`210840`).  
 
-## Active (Loop 26 — hard Mode A RAW residual)
+## Loop 26 — Image-only gated name-band (complete)
 
-1. `snehal`/`1.1` names; PDF3 `चि`≠`शि`; PDF2 religion; `D(8)` DOB.  
-2. No invent; Tier A residual-pack before remasure.
+1. Label-only top-band on images; never PDF rasters; strip `&`/`अँड.` noise.  
+2. **Accepted:** crit **94.7% → 95.8%**; name **90%** (`090918`).  
+
+## Loop 27 — Father `वडीलांचे` surname (complete)
+
+1. OCR father-label variant + last-token surname without 3-token trim.  
+2. **Accepted:** crit **95.8% → 96.8%**; name **95%** (`092259`).  
+
+## Active (Loop 28 — 3 hard Mode A residuals)
+
+1. PDF2 religion (no religion/caste in raw); PDF3 `चि`≠`शि`; D8 DOB day 24≠21.  
+2. No invent; multi-approach evidence per DOC §17.
 
 ---
 
@@ -277,3 +289,5 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-16 | DOC §23 Fast Execution Workflow locked (Tier A before Tier B) |
 | 2026-07-16 | Loop 24 name-band OCR probe positive; production merge **rejected** (Tier A losses) |
 | 2026-07-16 | Loop 25 megapage PDF raster + alias keep → crit **94.7%**; name **85%**; gender **100%** |
+| 2026-07-17 | Loop 26 image-only gated name-band → crit **95.8%**; name **90%**; snehal recovered |
+| 2026-07-17 | Loop 27 `वडीलांचे` father surname → crit **96.8%**; name **95%**; 1.1 recovered |
