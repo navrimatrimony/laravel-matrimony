@@ -260,10 +260,16 @@ Residual Mode A (ranked for Loop 02+):
 1. Enrich usable embedded PDF text with page-0 name-label band OCR.  
 2. **Accepted:** crit **97.9% → 98.9%**; name **100%** (`101021`).  
 
-## Active (Loop 29 — D8 DOB Mode A)
+## Loop 29 — D8 DOB original + region preprocess (complete / limitation)
 
-1. `D (8).jpeg` day 24≠21; invent rejected; prior date-band/color approaches rejected.  
-2. Multi-approach evidence per DOC §17.
+1. Verified original Batch-001 JPEG (720×1016, q=100); OCR input = upload original (no pre-OCR resize bug).  
+2. DOB-band preprocess matrix still reads day **२४**; Marathi digits OK; invent **rejected**.  
+3. Baseline held at **98.9%**.
+
+## Active
+
+1. Product Goal **In Progress** — 1 Mode A residual (`D (8)` DOB).  
+2. No invent; reopen only with new RAW evidence or PO GT decision.
 
 ---
 
@@ -304,3 +310,4 @@ Residual Mode A (ranked for Loop 02+):
 | 2026-07-17 | Loop 27 `वडीलांचे` father surname → crit **96.8%**; name **95%**; 1.1 recovered |
 | 2026-07-17 | **GT correction rebase:** PDF2 religion removed; Adv title normalize → crit **97.9%** (not OCR) |
 | 2026-07-17 | Loop 28 PDF embedded name-band → crit **98.9%**; name **100%**; PDF3 `शिवाजी` recovered |
+| 2026-07-17 | Loop 29 D8 DOB: original-file + region preprocess still day **24**; invent rejected; baseline held |

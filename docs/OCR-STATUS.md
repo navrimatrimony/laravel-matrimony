@@ -1,6 +1,6 @@
 # OCR STATUS
 
-> **2026-07-17 10:12 IST** · Product Goal **In Progress**
+> **2026-07-17 10:30 IST** · Product Goal **In Progress**
 
 | Item | Value |
 |------|------:|
@@ -17,18 +17,17 @@
 - Critical: **98.9%**
 - Artifact: `product_metrics_gt20_20260717_101021.json`
 
-## GT vs OCR (this session)
+## Loop 29
 
-| Change | Type | Effect |
-|--------|------|--------|
-| PDF2 religion removed | **GT correction** | 96.8% → 97.9% |
-| Adv/अॅड title normalize | GT/matcher support | (no cell flip alone) |
-| PDF3 name-band | **OCR improvement** | 97.9% → **98.9%** |
+- **Complete (limitation):** D8 DOB on **original** 720×1016 JPEG  
+- Region preprocess (crop/zoom/contrast/sharpen/threshold/red) still reads day **२४**  
+- Pipeline audit: OCR uses original upload (`store` → `extractTextFromPath`); no pre-OCR resize bug  
+- Invent day 21 **forbidden**
 
-## Remaining (1)
+## Remaining (1 Mode A)
 
-`D (8).jpeg` DOB — day 24 in OCR vs GT 21 (Mode A; invent rejected).
+`D (8).jpeg` DOB — unavoidable under current OCR/preprocess evidence.
 
-## NEXT Loop 29
+## NEXT
 
-D8 DOB Mode A only — multi-approach evidence; no invent.
+Escalate only if PO wants GT revisit or new RAW engine/preprocess class; otherwise hold baseline and continue Product Goal as In Progress with 1 known Mode A residual.
