@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Suchak\SuchakCustomerDetailApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomersApiController;
 use App\Http\Controllers\Api\Suchak\SuchakDashboardApiController;
 use App\Http\Controllers\Api\Suchak\SuchakIntakeApiController;
+use App\Http\Controllers\Api\Suchak\SuchakLoginApiController;
 use App\Http\Controllers\Api\Suchak\SuchakManualProfileApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeetingsApiController;
@@ -19,6 +20,7 @@ use App\Http\Controllers\Api\Suchak\SuchakPaymentRequestOptionsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakPaymentRequestsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakPaymentsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakPayuCheckoutApiController;
+use App\Http\Controllers\Api\Suchak\SuchakRegisterApiController;
 use App\Http\Controllers\Api\Suchak\SuchakSearchApiController;
 use Illuminate\Support\Facades\Route;
 
@@ -30,7 +32,26 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
+/*
+| Public Suchak auth + registration (User ≠ Suchak — separate from member OTP).
+*/
+Route::prefix('suchak')->group(function () {
+    Route::post('/login/otp/send', [SuchakLoginApiController::class, 'sendOtp']);
+    Route::post('/login/otp/verify', [SuchakLoginApiController::class, 'verifyOtp']);
+    Route::post('/login/password', [SuchakLoginApiController::class, 'loginWithPassword']);
+    Route::post('/login/google', [SuchakLoginApiController::class, 'loginWithGoogle']);
+
+    Route::post('/register', [SuchakRegisterApiController::class, 'store']);
+    Route::post('/register/resolve-location', [SuchakRegisterApiController::class, 'resolveLocation']);
+});
+
 Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(function () {
+    Route::post('/register/otp/resend', [SuchakRegisterApiController::class, 'resendOtp']);
+    Route::post('/register/otp/verify', [SuchakRegisterApiController::class, 'verifyOtp']);
+    Route::post('/register/photo', [SuchakRegisterApiController::class, 'storePhoto']);
+    Route::post('/register/documents', [SuchakRegisterApiController::class, 'storeDocument']);
+    Route::get('/register/status', [SuchakRegisterApiController::class, 'status']);
+
     Route::get('/me', SuchakMeApiController::class);
     Route::get('/dashboard', SuchakDashboardApiController::class);
     Route::get('/customers', SuchakCustomersApiController::class);
