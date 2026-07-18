@@ -51,13 +51,21 @@ class SuchakPaymentRequestsApiController extends Controller
             return response()->json(['success' => false, 'message' => 'Package does not belong to this Suchak account.'], 403);
         }
 
+        $attributes = $validated;
+        if (array_key_exists('amount', $attributes)) {
+            $attributes['amount_due'] = $attributes['amount'];
+        }
+        if (array_key_exists('note', $attributes)) {
+            $attributes['request_note'] = $attributes['note'];
+        }
+
         try {
             $result = $paymentRequestService->createAndSend(
                 $package,
                 $agreement,
                 $paymentContext,
                 $user,
-                $validated,
+                $attributes,
                 $request->ip(),
                 $request->userAgent(),
             );
