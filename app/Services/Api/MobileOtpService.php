@@ -6,6 +6,7 @@ use App\Models\AdminSetting;
 use App\Models\MobileOtpChallenge;
 use App\Models\User;
 use App\Models\UserConsent;
+use App\Services\Messaging\MetaWhatsAppCloudService;
 use App\Support\MobileNumber;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -274,8 +275,13 @@ class MobileOtpService
 
     private function deliverSmsOtp(string $mobile, string $otp): bool
     {
-        unset($mobile, $otp);
+        /** @var MetaWhatsAppCloudService $whatsapp */
+        $whatsapp = app(MetaWhatsAppCloudService::class);
+        if ($whatsapp->isConfiguredForOtp()) {
+            return $whatsapp->sendOtp($mobile, $otp);
+        }
 
+        // Development-only fallback when WhatsApp OTP is not configured.
         return $this->shouldExposeDebugOtp();
     }
 
