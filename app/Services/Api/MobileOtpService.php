@@ -2,7 +2,6 @@
 
 namespace App\Services\Api;
 
-use App\Models\AdminSetting;
 use App\Models\MobileOtpChallenge;
 use App\Models\User;
 use App\Models\UserConsent;
@@ -33,7 +32,7 @@ class MobileOtpService
     private const VERIFY_IP_LIMIT = 60;
 
     /**
-     * @return array{challenge: MobileOtpChallenge, expires_in: int, resend_after: int, debug_otp: string|null}
+     * @return array{challenge: MobileOtpChallenge, expires_in: int, resend_after: int, delivery_channel: string, debug_otp: string|null}
      */
     public function sendChallenge(array $validated, Request $request): array
     {
@@ -49,15 +48,16 @@ class MobileOtpService
 
         $otp = (string) random_int(100000, 999999);
 
-        if (! $this->deliverSmsOtp($mobile, $otp)) {
-            throw new HttpException(503, 'SMS OTP provider is not configured.');
+        $delivery = $this->deliverOtp($mobile, $otp);
+        if ($delivery === null) {
+            throw new HttpException(503, 'OTP provider is not configured. Configure WhatsApp Cloud OTP for production.');
         }
 
         $now = now();
         $challenge = MobileOtpChallenge::query()->create([
             'challenge_id' => (string) Str::uuid(),
             'mobile' => $mobile,
-            'channel' => 'sms',
+            'channel' => $delivery['channel'],
             'purpose' => (string) ($validated['purpose'] ?? 'login_or_register'),
             'otp_hash' => Hash::make($otp),
             'attempts' => 0,
@@ -81,6 +81,7 @@ class MobileOtpService
             'challenge' => $challenge,
             'expires_in' => self::OTP_TTL_SECONDS,
             'resend_after' => self::RESEND_AFTER_SECONDS,
+            'delivery_channel' => $delivery['channel'],
             'debug_otp' => $this->shouldExposeDebugOtp() ? $otp : null,
         ];
     }
@@ -273,29 +274,41 @@ class MobileOtpService
         }
     }
 
-    private function deliverSmsOtp(string $mobile, string $otp): bool
+    /**
+     * Deliver OTP via production WhatsApp Cloud. Never pretend success without sending
+     * except on local/testing (for automated tests only).
+     *
+     * @return array{channel: string}|null
+     */
+    private function deliverOtp(string $mobile, string $otp): ?array
     {
+        // Feature tests must not depend on live Meta credentials.
+        if (app()->environment('testing')) {
+            return ['channel' => 'dev'];
+        }
+
         /** @var MetaWhatsAppCloudService $whatsapp */
         $whatsapp = app(MetaWhatsAppCloudService::class);
         if ($whatsapp->isConfiguredForOtp()) {
-            return $whatsapp->sendOtp($mobile, $otp);
+            if (! $whatsapp->sendOtp($mobile, $otp)) {
+                return null;
+            }
+
+            return ['channel' => 'whatsapp'];
         }
 
-        // Development-only fallback when WhatsApp OTP is not configured.
-        return $this->shouldExposeDebugOtp();
+        // Local-only fallback for developers without WhatsApp credentials.
+        if (app()->environment('local')) {
+            return ['channel' => 'dev'];
+        }
+
+        return null;
     }
 
     private function shouldExposeDebugOtp(): bool
     {
-        if (app()->environment(['local', 'testing'])) {
-            return true;
-        }
-
-        try {
-            return AdminSetting::getValue('mobile_verification_mode', '') === 'dev_show';
-        } catch (\Throwable) {
-            return false;
-        }
+        // Never expose OTP codes outside local/testing — even if AdminSetting is dev_show.
+        return app()->environment(['local', 'testing']);
     }
 
     private function persistConsents(User $user, MobileOtpChallenge $challenge): void

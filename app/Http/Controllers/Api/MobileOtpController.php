@@ -22,7 +22,7 @@ class MobileOtpController extends Controller
                 }
             }],
             'locale' => ['nullable', 'string', Rule::in(['mr', 'en'])],
-            'channel' => ['nullable', 'string', Rule::in(['sms'])],
+            'channel' => ['nullable', 'string', Rule::in(['sms', 'whatsapp'])],
             'purpose' => ['nullable', 'string', Rule::in(['login_or_register'])],
             'terms_accepted' => ['accepted'],
             'privacy_accepted' => ['accepted'],
@@ -31,7 +31,6 @@ class MobileOtpController extends Controller
             'whatsapp_alerts_opt_in' => ['nullable', 'boolean'],
         ]);
 
-        $validated['channel'] = 'sms';
         $validated['purpose'] = $validated['purpose'] ?? 'login_or_register';
 
         try {
@@ -41,13 +40,16 @@ class MobileOtpController extends Controller
         }
 
         $challenge = $result['challenge'];
+        $channel = (string) ($result['delivery_channel'] ?? $challenge->channel ?? 'whatsapp');
         $response = [
             'success' => true,
             'challenge_id' => $challenge->challenge_id,
             'expires_in' => $result['expires_in'],
             'resend_after' => $result['resend_after'],
-            'delivery_channel' => 'sms',
-            'message' => 'OTP sent',
+            'delivery_channel' => $channel,
+            'message' => $channel === 'whatsapp'
+                ? 'OTP sent via WhatsApp'
+                : 'OTP sent',
         ];
 
         if ($result['debug_otp'] !== null) {

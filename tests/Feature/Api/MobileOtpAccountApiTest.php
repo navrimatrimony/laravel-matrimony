@@ -60,7 +60,7 @@ class MobileOtpAccountApiTest extends TestCase
         $challenge = MobileOtpChallenge::query()->where('challenge_id', $response['challenge_id'])->first();
         $this->assertNotNull($challenge);
         $this->assertSame('9876543210', $challenge->mobile);
-        $this->assertSame('sms', $challenge->channel);
+        $this->assertSame('dev', $challenge->channel);
         $this->assertNotEmpty($challenge->otp_hash);
         $this->assertNotSame($response['debug_otp'], $challenge->otp_hash);
     }
