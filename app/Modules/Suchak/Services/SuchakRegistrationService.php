@@ -240,16 +240,9 @@ class SuchakRegistrationService
             ]);
         }
 
-        $address = $this->nullableString($addressLine);
-        if ($address === null) {
-            throw ValidationException::withMessages([
-                'address_line' => 'Address is required.',
-            ]);
-        }
-
         $locationColumns = $this->suchakLocationColumns($locationId);
         $account->forceFill([
-            'address_line' => $address,
+            'address_line' => $this->nullableString($addressLine),
             'city_id' => $locationColumns['city_id'],
             'taluka_id' => $locationColumns['taluka_id'],
             'district_id' => $locationColumns['district_id'],

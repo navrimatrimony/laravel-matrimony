@@ -231,14 +231,14 @@ class SuchakRegisterApiController extends Controller
         }
 
         $validated = $request->validate([
-            'address_line' => ['required', 'string', 'max:1000'],
+            'address_line' => ['nullable', 'string', 'max:1000'],
             'location_id' => ['required', 'integer', AddressHierarchyRules::existsLocationLeafId()],
         ]);
 
         $account = $registrationService->updateLocation(
             $user->suchakAccount,
             (int) $validated['location_id'],
-            (string) $validated['address_line'],
+            isset($validated['address_line']) ? (string) $validated['address_line'] : null,
         );
 
         return response()->json([
