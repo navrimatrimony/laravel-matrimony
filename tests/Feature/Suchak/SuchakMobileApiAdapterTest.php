@@ -72,6 +72,14 @@ class SuchakMobileApiAdapterTest extends TestCase
             ->assertJsonPath('data.account_id', $account->id)
             ->assertJsonStructure(['data' => ['customers']]);
 
+        $this->postJson('/api/v1/suchak/customers/999999/consents', [
+            'consent_given_by_name' => 'Test',
+            'consent_giver_relation' => 'candidate_self',
+            'intended_mobile' => '9876500001',
+        ])
+            ->assertNotFound()
+            ->assertJsonPath('success', false);
+
         $this->getJson('/api/v1/suchak/search')
             ->assertOk()
             ->assertJsonPath('success', true)

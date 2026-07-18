@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Suchak\SuchakBillingApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCollaborationsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCollaborationsMutationsApiController;
+use App\Http\Controllers\Api\Suchak\SuchakConsentsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomerDetailApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomersApiController;
 use App\Http\Controllers\Api\Suchak\SuchakDashboardApiController;
@@ -30,6 +31,8 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::get('/dashboard', SuchakDashboardApiController::class);
     Route::get('/customers', SuchakCustomersApiController::class);
     Route::get('/customers/{representation}', [SuchakCustomerDetailApiController::class, 'show']);
+    Route::post('/customers/{representation}/consents', [SuchakConsentsApiController::class, 'store']);
+    Route::post('/customers/{representation}/consents/renew', [SuchakConsentsApiController::class, 'renew']);
     Route::get('/search', SuchakSearchApiController::class);
     Route::get('/collaborations', SuchakCollaborationsApiController::class);
     Route::post('/collaborations', [SuchakCollaborationsMutationsApiController::class, 'store']);
