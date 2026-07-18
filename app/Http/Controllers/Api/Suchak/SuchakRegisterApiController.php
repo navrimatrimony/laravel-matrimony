@@ -13,20 +13,19 @@ use App\Support\Suchak\SuchakOnboardingPresenter;
 use App\Support\Validation\AddressHierarchyRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Suchak API adapter: native mobile registration over SuchakRegistrationService.
- * Mirrors web AccountRequestController validation and workflow. No new business rules.
+ * Goal 4 native staged registration adapters over SuchakRegistrationService.
  */
 class SuchakRegisterApiController extends Controller
 {
     private const PUBLIC_LOCATION_RESOLVE_CACHE_USER_ID = 0;
 
+    /** @deprecated Use staged startMobile + complete. Kept for older APK builds during rollout. */
     public function store(Request $request, SuchakRegistrationService $registrationService): JsonResponse
     {
         if ($request->user()?->suchakAccount) {
@@ -36,30 +35,25 @@ class SuchakRegisterApiController extends Controller
             ], 409);
         }
 
-        if ($request->user()) {
-            return response()->json([
-                'success' => false,
-                'code' => 'member_account_conflict',
-                'message' => __('suchak.register.separate_account_body'),
-            ], 403);
-        }
-
         $validated = $request->validate([
             'suchak_name' => ['required', 'string', 'max:255'],
             'office_name' => [
-                Rule::requiredIf(fn (): bool => in_array((string) $request->input('business_type'), [
-                    SuchakAccount::BUSINESS_TYPE_BUREAU,
-                    SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
-                ], true)),
+                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_ORGANIZATION),
                 'nullable',
                 'string',
                 'max:255',
             ],
             'business_type' => ['required', 'string', Rule::in([
                 SuchakAccount::BUSINESS_TYPE_INDIVIDUAL,
-                SuchakAccount::BUSINESS_TYPE_BUREAU,
                 SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
             ])],
+            'employee_count' => [
+                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_ORGANIZATION),
+                'nullable',
+                'integer',
+                'min:1',
+                'max:100000',
+            ],
             'whatsapp_number' => ['required', 'string', 'max:32'],
             'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')],
             'address_line' => ['required', 'string', 'max:1000'],
@@ -81,11 +75,11 @@ class SuchakRegisterApiController extends Controller
             ]);
         }
 
-        Validator::make(
-            ['whatsapp_number' => $whatsapp],
-            ['whatsapp_number' => ['required', Rule::unique('users', 'mobile')]],
-            ['whatsapp_number.unique' => __('auth.mobile_duplicate_register')]
-        )->validate();
+        if (User::query()->where('mobile', $whatsapp)->exists()) {
+            throw ValidationException::withMessages([
+                'whatsapp_number' => __('auth.mobile_duplicate_register'),
+            ]);
+        }
 
         $validated['whatsapp_number'] = $whatsapp;
         $validated['mobile_number'] = $whatsapp;
@@ -97,35 +91,27 @@ class SuchakRegisterApiController extends Controller
             $request->userAgent()
         );
 
-        /** @var User $user */
         $user = $result['user'];
         $token = $user->createToken('suchak-app')->plainTextToken;
 
-        $response = [
-            'success' => true,
-            'message' => 'Suchak registration created. Verify mobile OTP.',
-            'token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'mobile' => $user->mobile,
-                'email' => $user->email,
-            ],
-            'account' => [
-                'id' => $result['account']->id,
-                'verification_status' => $result['account']->verification_status,
-            ],
-            'otp' => [
-                'delivery' => $result['delivery'],
-                'delivery_channel' => $result['delivery'] === 'dev_show' ? 'dev' : $result['delivery'],
-            ],
-        ];
+        return $this->otpBootstrapResponse($result, $token, 201);
+    }
 
-        if ($result['otp'] !== null) {
-            $response['otp']['debug_otp'] = $result['otp'];
-        }
+    public function startMobile(Request $request, SuchakRegistrationService $registrationService): JsonResponse
+    {
+        $validated = $request->validate([
+            'whatsapp_number' => ['required', 'string', 'max:32'],
+        ]);
 
-        return response()->json($response, 201);
+        $result = $registrationService->startMobileRegistration(
+            (string) $validated['whatsapp_number'],
+            $request->ip(),
+            $request->userAgent()
+        );
+
+        $token = $result['user']->createToken('suchak-app')->plainTextToken;
+
+        return $this->otpBootstrapResponse($result, $token, 201);
     }
 
     public function resolveLocation(
@@ -167,19 +153,12 @@ class SuchakRegisterApiController extends Controller
         }
 
         $result = $registrationService->resendOtp($user);
-        $response = [
+
+        return response()->json([
             'success' => true,
             'message' => 'OTP resent.',
-            'otp' => [
-                'delivery' => $result['delivery'],
-                'delivery_channel' => $result['delivery'] === 'dev_show' ? 'dev' : $result['delivery'],
-            ],
-        ];
-        if ($result['otp'] !== null) {
-            $response['otp']['debug_otp'] = $result['otp'];
-        }
-
-        return response()->json($response);
+            'otp' => $this->otpPayload($result),
+        ]);
     }
 
     public function verifyOtp(Request $request, SuchakRegistrationService $registrationService): JsonResponse
@@ -194,45 +173,158 @@ class SuchakRegisterApiController extends Controller
         }
 
         $registrationService->verifyOtp($user, (string) $validated['otp']);
+        $account = $user->suchakAccount;
+        $account?->forceFill(['onboarding_step' => 'identity'])->save();
 
         return response()->json([
             'success' => true,
             'message' => 'Mobile verified. Continue onboarding.',
+            'next_step' => 'identity',
         ]);
     }
 
-    public function storePhoto(Request $request, SuchakRegistrationService $registrationService): JsonResponse
+    public function updateIdentity(Request $request, SuchakRegistrationService $registrationService): JsonResponse
     {
         $user = $this->requireSuchakUser($request);
         if ($user instanceof JsonResponse) {
             return $user;
         }
 
-        if (! $user->mobile_verified_at) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Verify mobile OTP before uploading photo.',
-            ], 422);
+        $validated = $request->validate([
+            'suchak_name' => ['required', 'string', 'max:255'],
+            'business_type' => ['required', 'string', Rule::in([
+                SuchakAccount::BUSINESS_TYPE_INDIVIDUAL,
+                SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
+            ])],
+            'office_name' => [
+                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_ORGANIZATION),
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'employee_count' => [
+                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_ORGANIZATION),
+                'nullable',
+                'integer',
+                'min:1',
+                'max:100000',
+            ],
+        ]);
+
+        $account = $registrationService->updateIdentity($user->suchakAccount, $validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Identity saved.',
+            'data' => [
+                'business_type' => $account->business_type,
+                'next_step' => 'profile_photo',
+            ],
+        ]);
+    }
+
+    public function updateLocation(Request $request, SuchakRegistrationService $registrationService): JsonResponse
+    {
+        $user = $this->requireSuchakUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
         }
 
         $validated = $request->validate([
-            'profile_photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'address_line' => ['required', 'string', 'max:1000'],
+            'location_id' => ['required', 'integer', AddressHierarchyRules::existsLocationLeafId()],
         ]);
 
-        $account = $user->suchakAccount;
-        $registrationService->uploadVerificationDocument(
-            $account,
-            $validated['profile_photo'],
-            SuchakVerificationRecord::TYPE_PROFILE_PHOTO,
-            (int) $user->id,
-            $request->ip(),
-            $request->userAgent(),
+        $account = $registrationService->updateLocation(
+            $user->suchakAccount,
+            (int) $validated['location_id'],
+            (string) $validated['address_line'],
         );
 
         return response()->json([
             'success' => true,
-            'message' => 'Photo uploaded for review.',
+            'message' => 'Location saved.',
+            'data' => [
+                'account_id' => $account->id,
+                'next_step' => 'email',
+            ],
         ]);
+    }
+
+    public function setPassword(Request $request, SuchakRegistrationService $registrationService): JsonResponse
+    {
+        $user = $this->requireSuchakUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        $validated = $request->validate([
+            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+        ]);
+
+        $registrationService->setPassword($user, (string) $validated['password']);
+        $account = $registrationService->completeRegistration($user->fresh()->suchakAccount);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Registration complete.',
+            'data' => [
+                'registration_completed_at' => $account->registration_completed_at?->toIso8601String(),
+                'next_step' => 'done',
+            ],
+        ]);
+    }
+
+    public function storePhoto(Request $request, SuchakRegistrationService $registrationService): JsonResponse
+    {
+        return $this->storeTypedPhoto(
+            $request,
+            $registrationService,
+            SuchakVerificationRecord::TYPE_PROFILE_PHOTO,
+            'profile_photo',
+        );
+    }
+
+    public function storeOrganizationLogo(Request $request, SuchakRegistrationService $registrationService): JsonResponse
+    {
+        $user = $this->requireSuchakUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+        if ($user->suchakAccount?->business_type !== SuchakAccount::BUSINESS_TYPE_ORGANIZATION) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Organization logo is only for organization accounts.',
+            ], 422);
+        }
+
+        return $this->storeTypedPhoto(
+            $request,
+            $registrationService,
+            SuchakVerificationRecord::TYPE_ORGANIZATION_LOGO,
+            'organization_logo',
+        );
+    }
+
+    public function storeOfficePhoto(Request $request, SuchakRegistrationService $registrationService): JsonResponse
+    {
+        $user = $this->requireSuchakUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+        if ($user->suchakAccount?->business_type !== SuchakAccount::BUSINESS_TYPE_ORGANIZATION) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Office photo is only for organization accounts.',
+            ], 422);
+        }
+
+        return $this->storeTypedPhoto(
+            $request,
+            $registrationService,
+            SuchakVerificationRecord::TYPE_OFFICE_PHOTO,
+            'office_photo',
+        );
     }
 
     public function storeDocument(Request $request, SuchakRegistrationService $registrationService): JsonResponse
@@ -251,9 +343,8 @@ class SuchakRegisterApiController extends Controller
             'document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
         ]);
 
-        $account = $user->suchakAccount;
         $registrationService->uploadVerificationDocument(
-            $account,
+            $user->suchakAccount,
             $validated['document'],
             (string) $validated['verification_type'],
             (int) $user->id,
@@ -280,7 +371,6 @@ class SuchakRegisterApiController extends Controller
         ]);
 
         $onboarding = $onboardingPresenter->forAccount($account, $account->verificationRecords);
-        // Strip web-only action URLs for mobile clients.
         $onboarding['steps'] = collect($onboarding['steps'] ?? [])
             ->map(function (array $step): array {
                 unset($step['action_url']);
@@ -300,8 +390,12 @@ class SuchakRegisterApiController extends Controller
                     'id' => $account->id,
                     'suchak_name' => $account->suchak_name,
                     'business_type' => $account->business_type,
+                    'employee_count' => $account->employee_count,
                     'verification_status' => $account->verification_status,
                     'public_status' => $account->public_status,
+                    'registration_completed' => $account->isRegistrationComplete(),
+                    'registration_completed_at' => $account->registration_completed_at?->toIso8601String(),
+                    'onboarding_step' => $account->onboarding_step,
                 ],
                 'user' => [
                     'id' => $user->id,
@@ -311,8 +405,127 @@ class SuchakRegisterApiController extends Controller
                     'email_verified_at' => $user->email_verified_at?->toIso8601String(),
                 ],
                 'onboarding' => $onboarding,
+                'next_step' => $this->resolveNextStep($user, $account),
             ],
         ]);
+    }
+
+    private function storeTypedPhoto(
+        Request $request,
+        SuchakRegistrationService $registrationService,
+        string $verificationType,
+        string $field,
+    ): JsonResponse {
+        $user = $this->requireSuchakUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        if (! $user->mobile_verified_at) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Verify mobile OTP before uploading photos.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            $field => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+
+        $registrationService->uploadVerificationDocument(
+            $user->suchakAccount,
+            $validated[$field],
+            $verificationType,
+            (int) $user->id,
+            $request->ip(),
+            $request->userAgent(),
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Photo uploaded for review.',
+            'verification_type' => $verificationType,
+        ]);
+    }
+
+    /**
+     * @param  array{user: User, account: SuchakAccount, delivery: string, otp: string|null}  $result
+     */
+    private function otpBootstrapResponse(array $result, string $token, int $status): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'message' => 'Suchak registration started. Verify mobile OTP.',
+            'token' => $token,
+            'user' => [
+                'id' => $result['user']->id,
+                'name' => $result['user']->name,
+                'mobile' => $result['user']->mobile,
+                'email' => $result['user']->email,
+            ],
+            'account' => [
+                'id' => $result['account']->id,
+                'verification_status' => $result['account']->verification_status,
+                'registration_completed' => $result['account']->isRegistrationComplete(),
+                'onboarding_step' => $result['account']->onboarding_step,
+            ],
+            'otp' => $this->otpPayload($result),
+        ], $status);
+    }
+
+    /**
+     * @param  array{delivery: string, otp?: string|null}  $result
+     * @return array{delivery: string, delivery_channel: string, debug_otp?: string}
+     */
+    private function otpPayload(array $result): array
+    {
+        $payload = [
+            'delivery' => $result['delivery'],
+            'delivery_channel' => $result['delivery'] === 'dev_show' ? 'dev' : $result['delivery'],
+        ];
+        if (($result['otp'] ?? null) !== null) {
+            $payload['debug_otp'] = $result['otp'];
+        }
+
+        return $payload;
+    }
+
+    private function resolveNextStep(User $user, SuchakAccount $account): string
+    {
+        if ($account->isRegistrationComplete()) {
+            return 'done';
+        }
+        if (! $user->mobile_verified_at) {
+            return 'otp';
+        }
+        if (trim((string) $account->suchak_name) === '' || $account->suchak_name === 'Suchak') {
+            return 'identity';
+        }
+
+        $hasProfilePhoto = $account->verificationRecords
+            ->contains(fn ($r) => $r->verification_type === SuchakVerificationRecord::TYPE_PROFILE_PHOTO && filled($r->document_path))
+            || filled($account->profile_photo_path);
+        if (! $hasProfilePhoto) {
+            return 'profile_photo';
+        }
+
+        if ($account->business_type === SuchakAccount::BUSINESS_TYPE_ORGANIZATION) {
+            $hasOffice = $account->verificationRecords
+                ->contains(fn ($r) => $r->verification_type === SuchakVerificationRecord::TYPE_OFFICE_PHOTO && filled($r->document_path));
+            if (! $hasOffice) {
+                return 'office_photo';
+            }
+        }
+
+        if ($account->city_id === null && $account->taluka_id === null) {
+            return 'location';
+        }
+
+        if ($user->email_verified_at === null) {
+            return 'email';
+        }
+
+        return 'password';
     }
 
     private function requireSuchakUser(Request $request): User|JsonResponse

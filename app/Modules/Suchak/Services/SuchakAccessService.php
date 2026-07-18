@@ -16,6 +16,11 @@ class SuchakAccessService
             return false;
         }
 
+        // Staged native registration: account exists after mobile OTP but must finish onboarding.
+        if (! $account->isRegistrationComplete()) {
+            return false;
+        }
+
         if ($account->verification_status === SuchakAccount::VERIFICATION_VERIFIED) {
             return true;
         }
@@ -27,6 +32,7 @@ class SuchakAccessService
     public function canPrepareCustomers(?SuchakAccount $account): bool
     {
         return $account !== null
+            && $account->isRegistrationComplete()
             && in_array($account->verification_status, [
                 SuchakAccount::VERIFICATION_PENDING,
                 SuchakAccount::VERIFICATION_VERIFIED,

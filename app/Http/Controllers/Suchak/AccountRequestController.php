@@ -65,19 +65,22 @@ class AccountRequestController extends Controller
         $validated = $request->validate([
             'suchak_name' => ['required', 'string', 'max:255'],
             'office_name' => [
-                Rule::requiredIf(fn (): bool => in_array((string) $request->input('business_type'), [
-                    SuchakAccount::BUSINESS_TYPE_BUREAU,
-                    SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
-                ], true)),
+                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_ORGANIZATION),
                 'nullable',
                 'string',
                 'max:255',
             ],
             'business_type' => ['required', 'string', Rule::in([
                 SuchakAccount::BUSINESS_TYPE_INDIVIDUAL,
-                SuchakAccount::BUSINESS_TYPE_BUREAU,
                 SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
             ])],
+            'employee_count' => [
+                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_ORGANIZATION),
+                'nullable',
+                'integer',
+                'min:1',
+                'max:100000',
+            ],
             'whatsapp_number' => ['required', 'string', 'max:32'],
             'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')],
             'address_line' => ['required', 'string', 'max:1000'],
@@ -364,7 +367,6 @@ class AccountRequestController extends Controller
     {
         return [
             SuchakAccount::BUSINESS_TYPE_INDIVIDUAL => __('suchak.business_types.individual'),
-            SuchakAccount::BUSINESS_TYPE_BUREAU => __('suchak.business_types.bureau'),
             SuchakAccount::BUSINESS_TYPE_ORGANIZATION => __('suchak.business_types.organization'),
         ];
     }

@@ -31,6 +31,11 @@ class SuchakPolicyService
     public const KEY_SUCHAK_HERO_IMAGE_PATH = 'suchak_hero_image_path';
     public const KEY_SUCHAK_HOMEPAGE_COPY_JSON = 'suchak_homepage_copy_json';
     public const KEY_SUCHAK_HOMEPAGE_STYLE_JSON = 'suchak_homepage_style_json';
+    public const KEY_SUCHAK_APK_THEME_COLOR = 'suchak_apk_theme_color';
+    public const KEY_SUCHAK_APK_HOMEPAGE_PHOTO_PATH = 'suchak_apk_homepage_photo_path';
+    public const KEY_SUCHAK_APK_LOGO_LIGHT_PATH = 'suchak_apk_logo_light_path';
+    public const KEY_SUCHAK_APK_LOGO_DARK_PATH = 'suchak_apk_logo_dark_path';
+    public const KEY_SUCHAK_APK_TAGLINE_JSON = 'suchak_apk_tagline_json';
     public const KEY_SUCHAK_WORK_AREA_MIN_CONSENTED_CUSTOMERS = 'suchak_work_area_min_consented_customers';
     public const KEY_SUCHAK_COMMISSION_RULES_JSON = 'suchak_commission_rules_json';
     public const KEY_SUCHAK_PACKAGE_PUBLISH_APPROVAL_MODE = 'suchak_package_publish_approval_mode';
@@ -59,6 +64,11 @@ class SuchakPolicyService
     public const DEFAULT_SUCHAK_CONSENT_WHATSAPP_PRIVACY_PARAGRAPH = 'तुम्ही होकार दिल्यानंतरच हे स्थळ विवाह जुळवणीसाठी पुढे दाखवले जाईल. तुमचा मोबाईल नंबर किंवा कुटुंबाची खाजगी माहिती तुमच्या मंजुरीशिवाय कोणालाही दिली जाणार नाही, याची खात्री बाळगा.';
     public const DEFAULT_SUCHAK_HERO_REGISTRATION_FORM_ENABLED = true;
     public const DEFAULT_SUCHAK_HERO_IMAGE_PATH = '';
+    public const DEFAULT_SUCHAK_APK_THEME_COLOR = '#1F6B4F';
+    public const DEFAULT_SUCHAK_APK_TAGLINE = [
+        'mr' => 'विश्वासातून काम करणाऱ्या मॅचमेकर्साठी',
+        'en' => 'Professional matchmaking workspace',
+    ];
     public const DEFAULT_SUCHAK_HOMEPAGE_COPY = [
         'mr' => [
             'eyebrow' => 'Suchak platform',
@@ -402,6 +412,37 @@ class SuchakPolicyService
             self::KEY_SUCHAK_HOMEPAGE_STYLE_JSON,
             self::DEFAULT_SUCHAK_HOMEPAGE_STYLE,
         ));
+    }
+
+    /**
+     * Suchak APK branding (Goal 4).
+     *
+     * @return array{
+     *   theme_color: string,
+     *   homepage_photo_path: string,
+     *   logo_light_path: string,
+     *   logo_dark_path: string,
+     *   tagline: array{mr: string, en: string}
+     * }
+     */
+    public function apkConfig(): array
+    {
+        $tagline = $this->array(self::KEY_SUCHAK_APK_TAGLINE_JSON, self::DEFAULT_SUCHAK_APK_TAGLINE);
+        $theme = $this->string(self::KEY_SUCHAK_APK_THEME_COLOR, self::DEFAULT_SUCHAK_APK_THEME_COLOR);
+        if (! preg_match('/^#[0-9A-Fa-f]{6}$/', $theme)) {
+            $theme = self::DEFAULT_SUCHAK_APK_THEME_COLOR;
+        }
+
+        return [
+            'theme_color' => $theme,
+            'homepage_photo_path' => $this->string(self::KEY_SUCHAK_APK_HOMEPAGE_PHOTO_PATH, ''),
+            'logo_light_path' => $this->string(self::KEY_SUCHAK_APK_LOGO_LIGHT_PATH, ''),
+            'logo_dark_path' => $this->string(self::KEY_SUCHAK_APK_LOGO_DARK_PATH, ''),
+            'tagline' => [
+                'mr' => trim((string) ($tagline['mr'] ?? self::DEFAULT_SUCHAK_APK_TAGLINE['mr'])),
+                'en' => trim((string) ($tagline['en'] ?? self::DEFAULT_SUCHAK_APK_TAGLINE['en'])),
+            ],
+        ];
     }
 
     public function workAreaMinimumConsentedCustomers(): int

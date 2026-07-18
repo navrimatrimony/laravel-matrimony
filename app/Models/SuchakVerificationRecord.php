@@ -15,6 +15,10 @@ class SuchakVerificationRecord extends Model
     public const TYPE_BUSINESS = 'business';
     public const TYPE_PHONE = 'phone';
     public const TYPE_PROFILE_PHOTO = 'profile_photo';
+    /** Organization branding — optional during native APK onboarding. */
+    public const TYPE_ORGANIZATION_LOGO = 'organization_logo';
+    /** Organization office photo — required for organization native onboarding. */
+    public const TYPE_OFFICE_PHOTO = 'office_photo';
     public const TYPE_OTHER = 'other';
 
     public const STATUS_PENDING = 'pending';

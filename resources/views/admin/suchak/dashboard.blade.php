@@ -41,6 +41,9 @@
                 <a href="{{ route('admin.suchak.settings.index') }}" class="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700">
                     Settings
                 </a>
+                <a href="{{ route('admin.suchak.apk-settings.index') }}" class="rounded-md border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-200 dark:hover:bg-emerald-950">
+                    APK Settings
+                </a>
             </div>
         </div>
     </div>

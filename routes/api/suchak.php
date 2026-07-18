@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Suchak\SuchakAppConfigApiController;
 use App\Http\Controllers\Api\Suchak\SuchakBillingApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCollaborationsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCollaborationsMutationsApiController;
@@ -26,29 +27,32 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| API v1 — Suchak mobile adapters (auth:sanctum + suchak.account)
-|--------------------------------------------------------------------------
-| Thin JSON transport over existing Suchak services. No new business rules.
+| API v1 — Suchak mobile adapters
 |--------------------------------------------------------------------------
 */
 
-/*
-| Public Suchak auth + registration (User ≠ Suchak — separate from member OTP).
-*/
 Route::prefix('suchak')->group(function () {
+    Route::get('/app-config', SuchakAppConfigApiController::class);
+
     Route::post('/login/otp/send', [SuchakLoginApiController::class, 'sendOtp']);
     Route::post('/login/otp/verify', [SuchakLoginApiController::class, 'verifyOtp']);
     Route::post('/login/password', [SuchakLoginApiController::class, 'loginWithPassword']);
     Route::post('/login/google', [SuchakLoginApiController::class, 'loginWithGoogle']);
 
     Route::post('/register', [SuchakRegisterApiController::class, 'store']);
+    Route::post('/register/start', [SuchakRegisterApiController::class, 'startMobile']);
     Route::post('/register/resolve-location', [SuchakRegisterApiController::class, 'resolveLocation']);
 });
 
 Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(function () {
     Route::post('/register/otp/resend', [SuchakRegisterApiController::class, 'resendOtp']);
     Route::post('/register/otp/verify', [SuchakRegisterApiController::class, 'verifyOtp']);
+    Route::post('/register/identity', [SuchakRegisterApiController::class, 'updateIdentity']);
+    Route::post('/register/location', [SuchakRegisterApiController::class, 'updateLocation']);
+    Route::post('/register/password', [SuchakRegisterApiController::class, 'setPassword']);
     Route::post('/register/photo', [SuchakRegisterApiController::class, 'storePhoto']);
+    Route::post('/register/organization-logo', [SuchakRegisterApiController::class, 'storeOrganizationLogo']);
+    Route::post('/register/office-photo', [SuchakRegisterApiController::class, 'storeOfficePhoto']);
     Route::post('/register/documents', [SuchakRegisterApiController::class, 'storeDocument']);
     Route::get('/register/status', [SuchakRegisterApiController::class, 'status']);
 
@@ -84,3 +88,4 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::get('/manual-profiles/meta', [SuchakManualProfileApiController::class, 'meta']);
     Route::post('/manual-profiles', [SuchakManualProfileApiController::class, 'store']);
 });
+

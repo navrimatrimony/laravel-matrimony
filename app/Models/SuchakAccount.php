@@ -34,6 +34,7 @@ class SuchakAccount extends Model
         'office_name',
         'office_name_mr',
         'business_type',
+        'employee_count',
         'mobile_number',
         'whatsapp_number',
         'email',
@@ -50,6 +51,8 @@ class SuchakAccount extends Model
         'verification_status',
         'public_status',
         'verified_at',
+        'registration_completed_at',
+        'onboarding_step',
         'rejected_at',
         'suspended_at',
         'archived_at',
@@ -58,11 +61,18 @@ class SuchakAccount extends Model
 
     protected $casts = [
         'verified_at' => 'datetime',
+        'registration_completed_at' => 'datetime',
         'rejected_at' => 'datetime',
         'suspended_at' => 'datetime',
         'archived_at' => 'datetime',
         'payment_qr_updated_at' => 'datetime',
+        'employee_count' => 'integer',
     ];
+
+    public function isRegistrationComplete(): bool
+    {
+        return $this->registration_completed_at !== null;
+    }
 
     /**
      * Track A (customer → Suchak) payment identity only. Never mix with Track B PayU fields.
