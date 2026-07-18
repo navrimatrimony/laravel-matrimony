@@ -19,8 +19,8 @@ use Illuminate\Http\Request;
 use InvalidArgumentException;
 
 /**
- * Thin money adapters: Track B catalog/status + Track A request/mark-paid over existing services.
- * No UPI/QR schema (PO gate D1).
+ * Thin money adapters: Track A payment request create + mark-paid over existing services.
+ * Payment identity (UPI/QR) is account-scoped Track A data (PO D1).
  */
 class SuchakPaymentRequestsApiController extends Controller
 {
@@ -68,6 +68,9 @@ class SuchakPaymentRequestsApiController extends Controller
         /** @var SuchakPaymentRequest $paymentRequest */
         $paymentRequest = $result['payment_request'];
 
+        /** @var SuchakAccount $account */
+        $account = $user->suchakAccount;
+
         return response()->json([
             'success' => true,
             'message' => 'Payment request created.',
@@ -76,6 +79,8 @@ class SuchakPaymentRequestsApiController extends Controller
                 'public_url' => $result['public_url'] ?? null,
                 'portal_url' => $result['portal_url'] ?? null,
                 'payment_status' => $paymentRequest->payment_status,
+                'track' => 'A',
+                'payment_identity' => $account->trackAPaymentIdentity(),
             ],
         ], 201);
     }

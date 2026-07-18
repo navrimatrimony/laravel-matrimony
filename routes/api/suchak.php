@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\Suchak\SuchakManualProfileApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeetingsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeetingsMutationsApiController;
+use App\Http\Controllers\Api\Suchak\SuchakPaymentIdentityApiController;
 use App\Http\Controllers\Api\Suchak\SuchakPaymentRequestsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakPaymentsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakSearchApiController;
@@ -35,6 +36,8 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::post('/collaborations/{collaboration}/accept', [SuchakCollaborationsMutationsApiController::class, 'accept']);
     Route::post('/collaborations/{collaboration}/reject', [SuchakCollaborationsMutationsApiController::class, 'reject']);
     Route::get('/payments', SuchakPaymentsApiController::class);
+    Route::get('/payment-identity', [SuchakPaymentIdentityApiController::class, 'show']);
+    Route::post('/payment-identity', [SuchakPaymentIdentityApiController::class, 'update']);
     Route::post('/payment-requests', [SuchakPaymentRequestsApiController::class, 'store']);
     Route::post('/payment-requests/{paymentRequest}/mark-paid', [SuchakPaymentRequestsApiController::class, 'markPaid']);
     Route::get('/plans', [SuchakBillingApiController::class, 'plans']);

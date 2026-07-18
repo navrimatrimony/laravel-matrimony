@@ -10,7 +10,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Thin mobile adapter: recent Suchak ledger entries for the owning account.
+ * Thin mobile adapter: Track A ledger + payment identity for the owning account.
+ * Track B (plans/billing) lives on SuchakBillingApiController.
  */
 class SuchakPaymentsApiController extends Controller
 {
@@ -65,6 +66,8 @@ class SuchakPaymentsApiController extends Controller
             'message' => 'Suchak payment ledger loaded.',
             'data' => [
                 'account_id' => $account->id,
+                'track' => 'A',
+                'payment_identity' => $account->trackAPaymentIdentity(),
                 'ledger_entries' => $entries,
             ],
         ]);

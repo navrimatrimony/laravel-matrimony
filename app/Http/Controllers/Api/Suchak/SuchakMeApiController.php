@@ -58,6 +58,8 @@ class SuchakMeApiController extends Controller
                     'public_status' => $account->public_status,
                     'verified_at' => $account->verified_at?->toIso8601String(),
                 ],
+                // Track A only — never PayU / platform billing fields.
+                'payment_identity' => $account->trackAPaymentIdentity(),
                 'access' => [
                     'can_operate' => $accessService->canOperate($account),
                     'can_prepare_customers' => $accessService->canPrepareCustomers($account),

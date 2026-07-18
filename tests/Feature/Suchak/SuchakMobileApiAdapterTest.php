@@ -41,8 +41,16 @@ class SuchakMobileApiAdapterTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.account.id', $account->id)
             ->assertJsonPath('data.access.can_operate', true)
+            ->assertJsonPath('data.payment_identity.is_configured', false)
             ->assertJsonStructure([
                 'data' => [
+                    'payment_identity' => [
+                        'upi_vpa',
+                        'payment_qr_path',
+                        'payment_qr_url',
+                        'payment_qr_updated_at',
+                        'is_configured',
+                    ],
                     'mvp_surface' => [
                         'nav',
                         'nav_subitems',
@@ -84,7 +92,8 @@ class SuchakMobileApiAdapterTest extends TestCase
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.account_id', $account->id)
-            ->assertJsonStructure(['data' => ['ledger_entries']]);
+            ->assertJsonPath('data.track', 'A')
+            ->assertJsonStructure(['data' => ['ledger_entries', 'payment_identity']]);
 
         $this->getJson('/api/v1/suchak/meetings')
             ->assertOk()
@@ -242,6 +251,46 @@ class SuchakMobileApiAdapterTest extends TestCase
         ])
             ->assertStatus(409)
             ->assertJsonPath('data.outcome', 'existing_profile_confirmation_required');
+    }
+
+    public function test_suchak_payment_identity_track_a_can_be_updated(): void
+    {
+        $user = User::factory()->create([
+            'mobile' => '9876500016',
+            'mobile_verified_at' => now(),
+        ]);
+        $account = SuchakAccount::factory()->create([
+            'user_id' => $user->id,
+            'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+            'public_status' => SuchakAccount::PUBLIC_ACTIVE,
+            'verified_at' => now(),
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/v1/suchak/payment-identity')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.track', 'A')
+            ->assertJsonPath('data.payment_identity.is_configured', false);
+
+        $this->postJson('/api/v1/suchak/payment-identity', [
+            'upi_vpa' => 'suchak@okaxis',
+        ])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.payment_identity.upi_vpa', 'suchak@okaxis')
+            ->assertJsonPath('data.payment_identity.is_configured', true);
+
+        $this->assertDatabaseHas('suchak_accounts', [
+            'id' => $account->id,
+            'upi_vpa' => 'suchak@okaxis',
+        ]);
+
+        $this->postJson('/api/v1/suchak/payment-identity', [
+            'upi_vpa' => 'not-a-vpa',
+        ])
+            ->assertStatus(422);
     }
 
     public function test_suchak_mobile_adapters_require_suchak_account(): void

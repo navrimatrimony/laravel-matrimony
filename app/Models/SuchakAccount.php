@@ -40,6 +40,9 @@ class SuchakAccount extends Model
         'address_line',
         'address_line_mr',
         'profile_photo_path',
+        'upi_vpa',
+        'payment_qr_path',
+        'payment_qr_updated_at',
         'city_id',
         'taluka_id',
         'district_id',
@@ -58,7 +61,28 @@ class SuchakAccount extends Model
         'rejected_at' => 'datetime',
         'suspended_at' => 'datetime',
         'archived_at' => 'datetime',
+        'payment_qr_updated_at' => 'datetime',
     ];
+
+    /**
+     * Track A (customer → Suchak) payment identity only. Never mix with Track B PayU fields.
+     *
+     * @return array{upi_vpa: ?string, payment_qr_path: ?string, payment_qr_url: ?string, payment_qr_updated_at: ?string, is_configured: bool}
+     */
+    public function trackAPaymentIdentity(): array
+    {
+        $upi = trim((string) ($this->upi_vpa ?? ''));
+        $path = trim((string) ($this->payment_qr_path ?? ''));
+        $url = $path !== '' ? asset('storage/'.$path) : null;
+
+        return [
+            'upi_vpa' => $upi !== '' ? $upi : null,
+            'payment_qr_path' => $path !== '' ? $path : null,
+            'payment_qr_url' => $url,
+            'payment_qr_updated_at' => $this->payment_qr_updated_at?->toIso8601String(),
+            'is_configured' => $upi !== '' || $path !== '',
+        ];
+    }
 
     public function user(): BelongsTo
     {
