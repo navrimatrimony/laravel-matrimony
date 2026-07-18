@@ -84,6 +84,10 @@ class SuchakMobileApiAdapterTest extends TestCase
             ->assertNotFound()
             ->assertJsonPath('success', false);
 
+        $this->postJson('/api/v1/suchak/customers/999999/payment-setup')
+            ->assertNotFound()
+            ->assertJsonPath('success', false);
+
         $this->getJson('/api/v1/suchak/search')
             ->assertOk()
             ->assertJsonPath('success', true)

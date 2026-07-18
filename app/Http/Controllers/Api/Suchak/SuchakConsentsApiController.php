@@ -139,6 +139,90 @@ class SuchakConsentsApiController extends Controller
         }
     }
 
+    public function resend(
+        Request $request,
+        int $consent,
+        SuchakConsentService $consentService,
+    ): JsonResponse {
+        $user = $request->user();
+        if (! $user instanceof User || $user->suchakAccount === null) {
+            return response()->json(['success' => false, 'message' => 'Suchak account is required.'], 403);
+        }
+
+        /** @var SuchakConsent|null $model */
+        $model = SuchakConsent::query()
+            ->whereKey($consent)
+            ->where('suchak_account_id', $user->suchakAccount->id)
+            ->first();
+
+        if ($model === null) {
+            return response()->json(['success' => false, 'message' => 'Consent not found for this account.'], 404);
+        }
+
+        try {
+            $result = $consentService->resendConsent(
+                $model,
+                $user,
+                $request->ip(),
+                $request->userAgent(),
+            );
+        } catch (InvalidArgumentException $exception) {
+            return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
+        }
+
+        /** @var SuchakConsent $fresh */
+        $fresh = $result['consent'];
+        $message = (string) ($result['message'] ?? '');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Consent link regenerated.',
+            'data' => [
+                'consent_id' => $fresh->id,
+                'consent_url' => $result['consent_url'] ?? null,
+                'forward_message' => $message,
+                'whatsapp_url' => $this->whatsappShareUrl($fresh, $message),
+            ],
+        ]);
+    }
+
+    public function cancelPending(
+        Request $request,
+        int $consent,
+        SuchakConsentService $consentService,
+    ): JsonResponse {
+        $user = $request->user();
+        if (! $user instanceof User || $user->suchakAccount === null) {
+            return response()->json(['success' => false, 'message' => 'Suchak account is required.'], 403);
+        }
+
+        /** @var SuchakConsent|null $model */
+        $model = SuchakConsent::query()
+            ->whereKey($consent)
+            ->where('suchak_account_id', $user->suchakAccount->id)
+            ->first();
+
+        if ($model === null) {
+            return response()->json(['success' => false, 'message' => 'Consent not found for this account.'], 404);
+        }
+
+        try {
+            $consentService->cancelPendingConsent(
+                $model,
+                $user,
+                'Suchak cancelled pending consent from mobile to create a new request.',
+            );
+        } catch (InvalidArgumentException $exception) {
+            return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pending consent cancelled.',
+            'data' => ['consent_id' => $model->id],
+        ]);
+    }
+
     /**
      * @return array<string, mixed>
      */
