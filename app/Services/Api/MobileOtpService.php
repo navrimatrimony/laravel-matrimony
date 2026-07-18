@@ -2,6 +2,7 @@
 
 namespace App\Services\Api;
 
+use App\Models\AdminSetting;
 use App\Models\MobileOtpChallenge;
 use App\Models\User;
 use App\Models\UserConsent;
@@ -275,40 +276,87 @@ class MobileOtpService
     }
 
     /**
-     * Deliver OTP via production WhatsApp Cloud. Never pretend success without sending
-     * except on local/testing (for automated tests only).
+     * Environment matrix:
+     * - local / testing → Dev OTP (QA never blocked)
+     * - staging → configurable; WhatsApp if configured else Dev OTP
+     * - production → WhatsApp when configured; optional AdminSetting
+     *   `mobile_verification_mode=dev_show` ONLY while WhatsApp is not yet wired
+     *   (TEST OTP, clearly marked — never silent fake success)
      *
      * @return array{channel: string}|null
      */
     private function deliverOtp(string $mobile, string $otp): ?array
     {
-        // Feature tests must not depend on live Meta credentials.
-        if (app()->environment('testing')) {
+        $mode = $this->resolveDeliveryMode();
+
+        if ($mode === 'dev') {
             return ['channel' => 'dev'];
         }
 
         /** @var MetaWhatsAppCloudService $whatsapp */
         $whatsapp = app(MetaWhatsAppCloudService::class);
-        if ($whatsapp->isConfiguredForOtp()) {
-            if (! $whatsapp->sendOtp($mobile, $otp)) {
-                return null;
+        if (! $whatsapp->isConfiguredForOtp()) {
+            return null;
+        }
+
+        if (! $whatsapp->sendOtp($mobile, $otp)) {
+            return null;
+        }
+
+        return ['channel' => 'whatsapp'];
+    }
+
+    /**
+     * @return 'dev'|'whatsapp'
+     */
+    private function resolveDeliveryMode(): string
+    {
+        if (app()->environment(['local', 'testing'])) {
+            return 'dev';
+        }
+
+        /** @var MetaWhatsAppCloudService $whatsapp */
+        $whatsapp = app(MetaWhatsAppCloudService::class);
+        $whatsappReady = $whatsapp->isConfiguredForOtp();
+        $explicit = strtolower(trim((string) config('otp.delivery', '')));
+
+        if (app()->isProduction()) {
+            if ($whatsappReady) {
+                return 'whatsapp';
             }
 
-            return ['channel' => 'whatsapp'];
+            // Temporary QA bridge until WhatsApp Cloud OTP is connected.
+            // Must be explicit (env or AdminSetting). Response is marked TEST.
+            if ($explicit === 'dev' || $this->adminAllowsTemporaryDevOtp()) {
+                return 'dev';
+            }
+
+            return 'whatsapp';
         }
 
-        // Local-only fallback for developers without WhatsApp credentials.
-        if (app()->environment('local')) {
-            return ['channel' => 'dev'];
+        // staging (and any non-production named env)
+        if ($explicit === 'dev') {
+            return 'dev';
+        }
+        if ($explicit === 'whatsapp') {
+            return 'whatsapp';
         }
 
-        return null;
+        return $whatsappReady ? 'whatsapp' : 'dev';
+    }
+
+    private function adminAllowsTemporaryDevOtp(): bool
+    {
+        try {
+            return AdminSetting::getValue('mobile_verification_mode', '') === 'dev_show';
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function shouldExposeDebugOtp(): bool
     {
-        // Never expose OTP codes outside local/testing — even if AdminSetting is dev_show.
-        return app()->environment(['local', 'testing']);
+        return $this->resolveDeliveryMode() === 'dev';
     }
 
     private function persistConsents(User $user, MobileOtpChallenge $challenge): void

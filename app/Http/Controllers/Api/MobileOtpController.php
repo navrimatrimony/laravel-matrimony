@@ -47,9 +47,11 @@ class MobileOtpController extends Controller
             'expires_in' => $result['expires_in'],
             'resend_after' => $result['resend_after'],
             'delivery_channel' => $channel,
-            'message' => $channel === 'whatsapp'
-                ? 'OTP sent via WhatsApp'
-                : 'OTP sent',
+            'message' => match ($channel) {
+                'whatsapp' => 'OTP sent via WhatsApp',
+                'dev' => 'TEST OTP issued (development / staging only)',
+                default => 'OTP sent',
+            },
         ];
 
         if ($result['debug_otp'] !== null) {
