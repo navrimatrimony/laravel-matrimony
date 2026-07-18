@@ -91,6 +91,24 @@ class SuchakMobileApiAdapterTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.account_id', $account->id)
             ->assertJsonStructure(['data' => ['visits']]);
+
+        $this->getJson('/api/v1/suchak/plans')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonStructure(['data' => ['plans']]);
+
+        $this->getJson('/api/v1/suchak/billing')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonStructure(['data' => ['status', 'plan_invoices']]);
+    }
+
+    public function test_password_reset_forgot_endpoint_is_available(): void
+    {
+        $this->postJson('/api/v1/auth/password/forgot', [
+            'login' => '9999999999',
+        ])->assertStatus(422)
+            ->assertJsonPath('success', false);
     }
 
     public function test_suchak_intake_adapter_creates_source_link_via_existing_service(): void

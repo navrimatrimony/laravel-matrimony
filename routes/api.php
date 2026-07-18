@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\PasswordResetApiController;
 use App\Http\Controllers\Api\EducationDegreeSearchController;
 use App\Http\Controllers\Api\GenderLookupController;
 use App\Http\Controllers\Api\LocationController;
@@ -76,6 +77,8 @@ Route::prefix('v1')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/auth/mobile-otp/send', [MobileOtpController::class, 'send']);
     Route::post('/auth/mobile-otp/verify', [MobileOtpController::class, 'verify']);
+    Route::post('/auth/password/forgot', [PasswordResetApiController::class, 'forgot']);
+    Route::post('/auth/password/reset', [PasswordResetApiController::class, 'reset']);
     Route::get('/onboarding/lookups/bootstrap', [OnboardingLookupController::class, 'bootstrap'])
         ->middleware('mobile.cache:public,43200,86400,onboarding-bootstrap');
     Route::patch('/account/details', [MobileAccountController::class, 'update'])
