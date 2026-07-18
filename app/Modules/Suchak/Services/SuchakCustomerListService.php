@@ -142,6 +142,7 @@ class SuchakCustomerListService
             'default_consent_mobile' => $profile?->primary_contact_number,
             'default_consent_giver_name' => $profile?->full_name,
             'has_pending_consent' => $pendingConsent !== null,
+            'pending_consent_id' => $pendingConsent?->id,
             'has_active_consent' => $acceptedConsent !== null && $representation->hasValidConsent(),
             'lifecycle_label' => $profile ? ucfirst((string) ($profile->lifecycle_state ?? 'unknown')) : null,
             'view_url' => $profile ? route('matrimony.profile.show', $profile) : null,

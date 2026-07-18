@@ -57,6 +57,7 @@ class SuchakCustomersApiController extends Controller
                 'consent_label' => $row['consent_label'] ?? null,
                 'consent_status' => $row['consent_status'] ?? null,
                 'has_pending_consent' => (bool) ($row['has_pending_consent'] ?? false),
+                'pending_consent_id' => $row['pending_consent_id'] ?? null,
                 'has_active_consent' => (bool) ($row['has_active_consent'] ?? false),
                 'can_request_consent' => (bool) ($row['can_request_consent'] ?? false),
                 'can_renew_consent' => (bool) ($row['can_renew_consent'] ?? false),
