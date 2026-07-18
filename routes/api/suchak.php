@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\Suchak\SuchakPaymentIdentityApiController;
 use App\Http\Controllers\Api\Suchak\SuchakPaymentRequestOptionsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakPaymentRequestsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakPaymentsApiController;
+use App\Http\Controllers\Api\Suchak\SuchakPayuCheckoutApiController;
 use App\Http\Controllers\Api\Suchak\SuchakSearchApiController;
 use Illuminate\Support\Facades\Route;
 
@@ -47,6 +48,7 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::post('/payment-requests/{paymentRequest}/mark-paid', [SuchakPaymentRequestsApiController::class, 'markPaid']);
     Route::get('/plans', [SuchakBillingApiController::class, 'plans']);
     Route::get('/billing', [SuchakBillingApiController::class, 'status']);
+    Route::post('/plans/{plan}/payu/start', [SuchakPayuCheckoutApiController::class, 'start']);
     Route::get('/meetings', SuchakMeetingsApiController::class);
     Route::post('/meetings', [SuchakMeetingsMutationsApiController::class, 'schedule']);
     Route::post('/meetings/{visit}/complete', [SuchakMeetingsMutationsApiController::class, 'complete']);
