@@ -46,7 +46,6 @@ class SuchakCustomerOpsApiController extends Controller
                     'note_text' => $validated['note_text'],
                     'follow_up_at' => $validated['follow_up_at'] ?? null,
                 ],
-                null,
                 $request->ip(),
                 $request->userAgent(),
             );
