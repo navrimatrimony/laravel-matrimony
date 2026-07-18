@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Suchak;
 use App\Http\Controllers\Controller;
 use App\Models\SuchakAccount;
 use App\Models\SuchakLedgerEntry;
+use App\Models\SuchakPaymentRequest;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -61,6 +62,38 @@ class SuchakPaymentsApiController extends Controller
             ->values()
             ->all();
 
+        $openRequests = SuchakPaymentRequest::query()
+            ->where('suchak_account_id', $account->id)
+            ->whereIn('payment_status', [
+                SuchakPaymentRequest::STATUS_SENT,
+                SuchakPaymentRequest::STATUS_OPENED,
+                SuchakPaymentRequest::STATUS_PENDING,
+                SuchakPaymentRequest::STATUS_PARTIALLY_PAID,
+                SuchakPaymentRequest::STATUS_OVERDUE,
+            ])
+            ->latest('id')
+            ->limit(30)
+            ->get([
+                'id',
+                'request_title',
+                'amount_due',
+                'currency',
+                'payment_status',
+                'sent_at',
+                'expires_at',
+            ])
+            ->map(static fn (SuchakPaymentRequest $request): array => [
+                'id' => $request->id,
+                'request_title' => $request->request_title,
+                'amount_due' => $request->amount_due,
+                'currency' => $request->currency,
+                'payment_status' => $request->payment_status,
+                'sent_at' => $request->sent_at?->toIso8601String(),
+                'expires_at' => $request->expires_at?->toIso8601String(),
+            ])
+            ->values()
+            ->all();
+
         return response()->json([
             'success' => true,
             'message' => 'Suchak payment ledger loaded.',
@@ -68,6 +101,7 @@ class SuchakPaymentsApiController extends Controller
                 'account_id' => $account->id,
                 'track' => 'A',
                 'payment_identity' => $account->trackAPaymentIdentity(),
+                'open_payment_requests' => $openRequests,
                 'ledger_entries' => $entries,
             ],
         ]);
