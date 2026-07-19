@@ -8,9 +8,11 @@ use App\Models\SuchakVerificationRecord;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakAccessService;
 use App\Modules\Suchak\Services\SuchakEntitlementService;
+use App\Modules\Suchak\Services\SuchakPaymentStatusService;
 use App\Support\Suchak\SuchakMvpFeatures;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Thin mobile adapter over existing Suchak account/access services.
@@ -22,6 +24,7 @@ class SuchakMeApiController extends Controller
         Request $request,
         SuchakAccessService $accessService,
         SuchakEntitlementService $entitlementService,
+        SuchakPaymentStatusService $paymentStatusService,
     ): JsonResponse {
         $user = $request->user();
         if (! $user instanceof User) {
@@ -41,6 +44,7 @@ class SuchakMeApiController extends Controller
         }
 
         $limits = $entitlementService->currentFeatureLimits($account);
+        $hasPaidPlan = $paymentStatusService->activeSubscriptionFor($account) !== null;
 
         return response()->json([
             'success' => true,
@@ -63,8 +67,8 @@ class SuchakMeApiController extends Controller
                     'registration_completed' => $account->isRegistrationComplete(),
                     'registration_completed_at' => $account->registration_completed_at?->toIso8601String(),
                     'onboarding_step' => $account->onboarding_step,
-                    // Thin APK adapters — existing stored paths only (home header).
-                    'profile_photo_url' => $this->publicStorageUrl($account->profile_photo_path),
+                    // Thin APK adapters — approved path, else pending verification preview.
+                    'profile_photo_url' => $this->profilePhotoUrl($account),
                     'organization_logo_url' => $this->organizationLogoUrl($account),
                 ],
                 // Track A only — never PayU / platform billing fields.
@@ -73,6 +77,8 @@ class SuchakMeApiController extends Controller
                     'can_operate' => $accessService->canOperate($account),
                     'can_prepare_customers' => $accessService->canPrepareCustomers($account),
                     'can_publicly_route' => $accessService->canPubliclyRoute($account),
+                    // Biodata text/file intake is a paid-plan capability.
+                    'can_use_biodata_intake' => $hasPaidPlan,
                 ],
                 'entitlements' => $limits,
                 'mvp_surface' => [
@@ -85,6 +91,21 @@ class SuchakMeApiController extends Controller
         ]);
     }
 
+    private function profilePhotoUrl(SuchakAccount $account): ?string
+    {
+        $approved = $this->publicStorageUrl($account->profile_photo_path);
+        if ($approved !== null) {
+            return $approved;
+        }
+
+        $record = $account->verificationRecords()
+            ->where('verification_type', SuchakVerificationRecord::TYPE_PROFILE_PHOTO)
+            ->latest('id')
+            ->first();
+
+        return $this->verificationPreviewUrl($account, $record);
+    }
+
     private function organizationLogoUrl(SuchakAccount $account): ?string
     {
         $logo = $account->verificationRecords()
@@ -92,7 +113,48 @@ class SuchakMeApiController extends Controller
             ->latest('id')
             ->first();
 
-        return $this->publicStorageUrl($logo?->document_path);
+        return $this->verificationPreviewUrl($account, $logo);
+    }
+
+    private function verificationPreviewUrl(
+        SuchakAccount $account,
+        ?SuchakVerificationRecord $record,
+    ): ?string {
+        if ($record === null) {
+            return null;
+        }
+
+        $sourcePath = trim((string) ($record->document_path ?? ''));
+        if ($sourcePath === '') {
+            return null;
+        }
+
+        if (str_starts_with($sourcePath, 'http://') || str_starts_with($sourcePath, 'https://')) {
+            return $sourcePath;
+        }
+
+        if (Storage::disk('public')->exists($sourcePath)) {
+            return asset('storage/'.$sourcePath);
+        }
+
+        if (! Storage::disk('local')->exists($sourcePath)) {
+            return null;
+        }
+
+        $extension = strtolower((string) pathinfo($sourcePath, PATHINFO_EXTENSION));
+        if (! in_array($extension, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+            $extension = 'jpg';
+        }
+
+        $publicPath = 'suchak/profile-photos/'.$account->id.'/apk-preview-'.$record->id.'.'.$extension;
+        if (! Storage::disk('public')->exists($publicPath)) {
+            Storage::disk('public')->put(
+                $publicPath,
+                Storage::disk('local')->get($sourcePath),
+            );
+        }
+
+        return asset('storage/'.$publicPath);
     }
 
     private function publicStorageUrl(?string $path): ?string
@@ -103,6 +165,9 @@ class SuchakMeApiController extends Controller
         }
         if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
             return $path;
+        }
+        if (! Storage::disk('public')->exists($path)) {
+            return null;
         }
 
         return asset('storage/'.$path);

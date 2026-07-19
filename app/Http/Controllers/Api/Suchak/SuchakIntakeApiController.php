@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Suchak;
 use App\Http\Controllers\Controller;
 use App\Models\SuchakAccount;
 use App\Models\User;
+use App\Modules\Suchak\Services\SuchakPaymentStatusService;
 use App\Modules\Suchak\Services\SuchakSourceLinkService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,8 +16,11 @@ use InvalidArgumentException;
  */
 class SuchakIntakeApiController extends Controller
 {
-    public function store(Request $request, SuchakSourceLinkService $sourceLinkService): JsonResponse
-    {
+    public function store(
+        Request $request,
+        SuchakSourceLinkService $sourceLinkService,
+        SuchakPaymentStatusService $paymentStatusService,
+    ): JsonResponse {
         $user = $request->user();
         if (! $user instanceof User) {
             return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
@@ -28,6 +32,13 @@ class SuchakIntakeApiController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Only active Suchak accounts can create biodata intake source links.',
+            ], 403);
+        }
+
+        if ($paymentStatusService->activeSubscriptionFor($account) === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Biodata text intake is available on a paid Suchak plan.',
             ], 403);
         }
 
