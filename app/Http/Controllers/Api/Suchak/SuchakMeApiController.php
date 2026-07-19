@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Suchak;
 
 use App\Http\Controllers\Controller;
 use App\Models\SuchakAccount;
+use App\Models\SuchakVerificationRecord;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakAccessService;
 use App\Modules\Suchak\Services\SuchakEntitlementService;
@@ -62,6 +63,9 @@ class SuchakMeApiController extends Controller
                     'registration_completed' => $account->isRegistrationComplete(),
                     'registration_completed_at' => $account->registration_completed_at?->toIso8601String(),
                     'onboarding_step' => $account->onboarding_step,
+                    // Thin APK adapters — existing stored paths only (home header).
+                    'profile_photo_url' => $this->publicStorageUrl($account->profile_photo_path),
+                    'organization_logo_url' => $this->organizationLogoUrl($account),
                 ],
                 // Track A only — never PayU / platform billing fields.
                 'payment_identity' => $account->trackAPaymentIdentity(),
@@ -79,5 +83,28 @@ class SuchakMeApiController extends Controller
                 ],
             ],
         ]);
+    }
+
+    private function organizationLogoUrl(SuchakAccount $account): ?string
+    {
+        $logo = $account->verificationRecords()
+            ->where('verification_type', SuchakVerificationRecord::TYPE_ORGANIZATION_LOGO)
+            ->latest('id')
+            ->first();
+
+        return $this->publicStorageUrl($logo?->document_path);
+    }
+
+    private function publicStorageUrl(?string $path): ?string
+    {
+        $path = trim((string) $path);
+        if ($path === '') {
+            return null;
+        }
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        return asset('storage/'.$path);
     }
 }
