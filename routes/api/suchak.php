@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\Suchak\SuchakPaymentRequestsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakPaymentsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakPayuCheckoutApiController;
 use App\Http\Controllers\Api\Suchak\SuchakRegisterApiController;
+use App\Http\Controllers\Api\Suchak\SuchakRepresentedProfileApiController;
 use App\Http\Controllers\Api\Suchak\SuchakSearchApiController;
 use Illuminate\Support\Facades\Route;
 
@@ -87,5 +88,7 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::post('/intakes', [SuchakIntakeApiController::class, 'store']);
     Route::get('/manual-profiles/meta', [SuchakManualProfileApiController::class, 'meta']);
     Route::post('/manual-profiles', [SuchakManualProfileApiController::class, 'store']);
+    Route::post('/nxt/{representation}/profile/save-step', [SuchakRepresentedProfileApiController::class, 'saveStep']);
+    Route::post('/nxt/{representation}/profile/photo', [SuchakRepresentedProfileApiController::class, 'uploadPhoto']);
 });
-
+
