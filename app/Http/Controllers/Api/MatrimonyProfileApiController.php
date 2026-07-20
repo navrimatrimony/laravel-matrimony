@@ -1620,12 +1620,21 @@ class MatrimonyProfileApiController extends Controller
             ], 404);
         }
 
+        return $this->showForProfile($profile, $user);
+    }
+
+    /**
+     * Shared read payload for member self-edit and Suchak represented edit.
+     * Caller owns authorization / profile resolution.
+     */
+    public function showForProfile(MatrimonyProfile $profile, ?User $viewer = null)
+    {
         $profileData = $this->buildGovernanceParityProfilePayload($profile);
 
         return response()->json([
             'success' => true,
             'profile' => $profileData,
-            'display' => app(MobileProfileDisplayPresenter::class)->forProfile($profile, $user),
+            'display' => app(MobileProfileDisplayPresenter::class)->forProfile($profile, $viewer),
         ]);
     }
 
@@ -1634,9 +1643,6 @@ class MatrimonyProfileApiController extends Controller
      */
     public function update(Request $request)
     {
-        // Phase-4 Day-8: Location hierarchy validation
-        $this->validateMobileProfileRequest($request, creating: false);
-
         $user = $request->user();
 
         $profile = MatrimonyProfile::where('user_id', $user->id)->first();
@@ -1647,6 +1653,18 @@ class MatrimonyProfileApiController extends Controller
                 'message' => 'Profile not found',
             ], 404);
         }
+
+        return $this->updateForProfile($request, $profile, $user);
+    }
+
+    /**
+     * Shared write path for member self-edit and Suchak represented edit.
+     * Caller owns authorization / profile resolution. Actor is the mutating user.
+     */
+    public function updateForProfile(Request $request, MatrimonyProfile $profile, User $actor)
+    {
+        // Phase-4 Day-8: Location hierarchy validation
+        $this->validateMobileProfileRequest($request, creating: false);
 
         // Day 7: Archived/Suspended → edit blocked
         if (! \App\Services\ProfileLifecycleService::isEditable($profile)) {
@@ -1669,11 +1687,11 @@ class MatrimonyProfileApiController extends Controller
         // Phase-5B: All updates via MutationService (source=manual, profile_change_history)
         $snapshot = $this->buildMobileProfileSnapshotFromApi($request, $profile);
         if ($this->mobileSnapshotHasWritableData($snapshot)) {
-            $changedFields = $this->lockKeysForMobileSnapshot($snapshot['core']);
-            ProfileFieldLockService::removeActorOwnedLocks($profile, $changedFields, $user);
-            app(MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
+            $changedFields = $this->lockKeysForMobileSnapshot($snapshot['core'] ?? []);
+            ProfileFieldLockService::removeActorOwnedLocks($profile, $changedFields, $actor);
+            app(MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $actor->id, 'manual');
             if (! empty($changedFields)) {
-                ProfileFieldLockService::applyLocks($profile, $changedFields, 'CORE', $user);
+                ProfileFieldLockService::applyLocks($profile, $changedFields, 'CORE', $actor);
             }
         }
         $this->syncMobilePartnerCommunityFlags($profile, $request);

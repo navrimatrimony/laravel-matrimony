@@ -88,6 +88,8 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::post('/intakes', [SuchakIntakeApiController::class, 'store']);
     Route::get('/manual-profiles/meta', [SuchakManualProfileApiController::class, 'meta']);
     Route::post('/manual-profiles', [SuchakManualProfileApiController::class, 'store']);
+    Route::get('/nxt/{representation}/profile', [SuchakRepresentedProfileApiController::class, 'show']);
+    Route::put('/nxt/{representation}/profile', [SuchakRepresentedProfileApiController::class, 'update']);
     Route::post('/nxt/{representation}/profile/save-step', [SuchakRepresentedProfileApiController::class, 'saveStep']);
     Route::post('/nxt/{representation}/profile/photo', [SuchakRepresentedProfileApiController::class, 'uploadPhoto']);
 });

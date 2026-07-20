@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Suchak;
 
+use App\Http\Controllers\Api\MatrimonyProfileApiController;
 use App\Http\Controllers\Controller;
 use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
@@ -19,7 +20,8 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Thin mobile adapter: Suchak fills a represented candidate via the same
- * MobileProfileStepSnapshotService + MutationService path as member onboarding.
+ * MobileProfileStepSnapshotService + MutationService path as member onboarding,
+ * and full profile edit via MatrimonyProfileApiController write helpers.
  * No new profile business rules — representation ownership gate only.
  */
 class SuchakRepresentedProfileApiController extends Controller
@@ -27,7 +29,66 @@ class SuchakRepresentedProfileApiController extends Controller
     public function __construct(
         private readonly MobileOnboardingDraftService $draftService,
         private readonly MobileProfileStepSnapshotService $snapshotService,
+        private readonly MatrimonyProfileApiController $matrimonyProfileApi,
     ) {}
+
+    /**
+     * Full profile prefill for native Suchak edit (member governance payload).
+     */
+    public function show(
+        Request $request,
+        SuchakProfileRepresentation $representation,
+        SuchakAccessService $accessService,
+    ): JsonResponse {
+        $context = $this->authorizedContext($request, $representation, $accessService);
+        if ($context instanceof JsonResponse) {
+            return $context;
+        }
+        [$account, $profile] = $context;
+
+        $response = $this->matrimonyProfileApi->showForProfile($profile, $request->user());
+        $payload = $response->getData(true);
+        if (! is_array($payload)) {
+            $payload = [];
+        }
+        $payload['data'] = [
+            'representation_id' => (int) $representation->id,
+            'profile_id' => (int) $profile->id,
+            'suchak_account_id' => (int) $account->id,
+        ];
+
+        return response()->json($payload, $response->status());
+    }
+
+    /**
+     * Full profile update for native Suchak edit (same snapshot engine as member PUT).
+     */
+    public function update(
+        Request $request,
+        SuchakProfileRepresentation $representation,
+        SuchakAccessService $accessService,
+    ): JsonResponse {
+        $context = $this->authorizedContext($request, $representation, $accessService);
+        if ($context instanceof JsonResponse) {
+            return $context;
+        }
+        [$account, $profile] = $context;
+
+        /** @var User $actor */
+        $actor = $request->user();
+        $response = $this->matrimonyProfileApi->updateForProfile($request, $profile, $actor);
+        $payload = $response->getData(true);
+        if (! is_array($payload)) {
+            $payload = [];
+        }
+        $payload['data'] = [
+            'representation_id' => (int) $representation->id,
+            'profile_id' => (int) $profile->id,
+            'suchak_account_id' => (int) $account->id,
+        ];
+
+        return response()->json($payload, $response->status());
+    }
 
     public function saveStep(
         Request $request,
