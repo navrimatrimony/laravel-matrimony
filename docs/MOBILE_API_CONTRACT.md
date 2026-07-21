@@ -1327,11 +1327,27 @@ Rules:
 - `siblings.*.name`, `siblings.*.occupation`, `siblings.*.address_line`: nullable string, max 255
 - `siblings.*.notes`: nullable string, max 1000
 - `siblings.*.sort_order`: nullable integer, min 0
+- `siblings.*.contact_number`, `siblings.*.contact_number_2`, `siblings.*.contact_number_3`: nullable string, max 20, must match `/^[0-9+\-\s()]{7,20}$/`. **Changed 2026-07-21** — previously rejected outright; now accepted and returned. See "Sub-record contact numbers" below.
 - Send `siblings: []` with `has_siblings: false` to clear sibling rows through the same governed replace behavior used by the Laravel wizard. Omitting `siblings` preserves existing sibling rows.
+
+### Sub-record contact numbers (changed 2026-07-21)
+
+Contact numbers on `siblings`, `relatives`, `marriages`, `children`, `self_addresses`, `parents_addresses`, and `alliance_networks` rows were previously `prohibited` by the validator for every caller. They are now writable and readable, so a Suchak can enter the contact details that appear on the physical biodata they work from.
+
+**Privacy is enforced by authorization scoping, not by blocking the field:**
+
+| Caller | Sees sub-record contact numbers? |
+|---|---|
+| Member, own profile (`GET/PUT /matrimony-profile`) | Yes |
+| Suchak, a candidate they represent (`/suchak/nxt/{representation}/profile`) | Yes |
+| Suchak, a representation they do **not** own | No — 404 |
+| Any member viewing another profile (`GET /matrimony-profiles/{id}`) | **No — keys stripped from the response** |
+
+The last row is a hard boundary: the shared row builders feed both the owner view and the browse-someone-else view, so the other-profile path strips these keys (`forgetPrivateRowKeys`). Regression tests: `SuchakRepresentedProfileContactNumbersTest`, plus the existing "does not expose ... to other profiles" assertions in `MobileMatrimonyProfileApiTest`.
 - `relatives`: nullable array, max 20 rows. Each row may include `id`, `relation_type`, and `relative_details`.
 - `relatives.*.relation_type`: nullable but required when the row has other data; one of `paternal_grandfather`, `paternal_grandmother`, `paternal_uncle`, `wife_paternal_uncle`, `paternal_aunt`, `husband_paternal_aunt`, `Cousin`, `maternal_address_ajol`, `maternal_grandfather`, `maternal_grandmother`, `maternal_uncle`, `wife_maternal_uncle`, `maternal_aunt`, `husband_maternal_aunt`, `maternal_cousin`
 - `relatives.*.relative_details`: nullable string, max 2000. Use this one field for relative name, occupation, address, and notes.
-- `relatives.*.contact_number`, `relatives.*.contact_number_2`, and `relatives.*.contact_number_3` are not accepted by the mobile contract. Send `relatives: []` to clear relative rows. Omitting `relatives` preserves existing relative rows.
+- `relatives.*.contact_number`, `relatives.*.contact_number_2`, and `relatives.*.contact_number_3`: nullable string, max 20, must match `/^[0-9+\-\s()]{7,20}$/`. **Changed 2026-07-21** — previously rejected outright; now accepted and returned. See "Sub-record contact numbers" below. Send `relatives: []` to clear relative rows. Omitting `relatives` preserves existing relative rows.
 - `alliance_networks`: nullable array, max 20 rows. Each row may include `id`, `surname`, `city_id`, `state_id`, `district_id`, `taluka_id`, and `notes`.
 - `alliance_networks.*.surname`: nullable string, max 255, but required when that row has any location or note data because `profile_alliance_networks.surname` is required.
 - `alliance_networks.*.city_id`, `alliance_networks.*.state_id`, `alliance_networks.*.district_id`, `alliance_networks.*.taluka_id`: nullable, must exist in `addresses.id`
