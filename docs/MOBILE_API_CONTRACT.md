@@ -2458,3 +2458,168 @@ Success response: HTTP 200
   "message": "Interest withdrawn successfully."
 }
 ```
+
+## Suchak — represented candidate APIs
+
+All routes below sit under `/api/v1/suchak`, behind `auth:sanctum` + the
+`suchak.account` middleware, and additionally require
+`SuchakAccessService::canOwnerPrepareCustomers`. A representation the caller
+does not own returns **404** (never 403 — existence is not confirmed to other
+Suchaks).
+
+### POST `/api/v1/suchak/manual-profiles`
+
+Creates the candidate shell + representation.
+
+| Field | Rule |
+|---|---|
+| `candidate_name` | required, max 255 |
+| `candidate_mobile` | **required** (changed 2026-07-22 — was nullable), normalized to a 10-digit Indian number |
+| `candidate_gender` | required, active `master_genders.key` |
+| `registering_for` | required, one of self/parent_guardian/sibling/relative/friend/other |
+| `candidate_email` | nullable, unique |
+| `use_existing_profile` | nullable boolean — resubmit `true` after a 409 |
+
+`candidate_mobile` is required because consent delivery depends on having at
+least one reachable number; a profile with no number cannot be progressed.
+
+Outcomes: `201 created`, `200 linked_existing`, `409
+existing_profile_confirmation_required`, `422` (validation / unparseable mobile).
+
+### POST `/api/v1/suchak/manual-profiles/duplicate-check`
+
+Pre-create duplicate probe for wizard step 1. **Reports only — never blocks.**
+
+Request: `candidate_name` (required), `candidate_mobile` (required),
+`date_of_birth` (`Y-m-d`, optional), `candidate_gender` (optional key).
+
+```json
+{
+  "success": true,
+  "data": {
+    "match_count": 1,
+    "matches": [{
+      "profile_id": 402,
+      "display_name": "Shriram K.",
+      "age_years": 26,
+      "gender": "male",
+      "location_label": "Dighi, Pune",
+      "confidence": "confirmed",
+      "signals": {
+        "mobile": true,
+        "mobile_sources": ["self_mobile"],
+        "name": "strong",
+        "dob": "exact",
+        "gender": true
+      },
+      "shared_number_possible": false,
+      "already_represented_by_me": false,
+      "representation_id": null,
+      "can_link_existing": true
+    }]
+  }
+}
+```
+
+Scoring (approved 2026-07-22):
+
+| Signals | `confidence` |
+|---|---|
+| mobile hit **and** strong name **and** DOB **and** gender agree | `confirmed` |
+| mobile hit alone | `high` |
+| strong fuzzy name + DOB + gender, no mobile | `high` |
+| partial name + exact DOB + gender | `medium` |
+| anything less | not returned |
+
+A mobile hit alone is deliberately **not** decisive: rural families share one
+number, so three sisters on a father's phone are separate people, not
+duplicates. `shared_number_possible` is true when the number matched a
+family slot rather than the candidate's own account mobile, and
+`can_link_existing` is true only for own-mobile matches (the `409`
+`use_existing_profile` flow). Names are matched with `App\Support\NameMatcher`
+(token-set + Marathi transliteration folding, so Shriram/Sriram/Shreeram and
+"Kadam Shriram" all match). Display names are masked (`Shriram K.`).
+
+### GET `/api/v1/suchak/nxt/{representation}/profile`
+
+Same governance payload as the member `GET /matrimony-profile`, plus:
+
+```json
+{
+  "data": {
+    "representation_id": 42,
+    "profile_id": 402,
+    "suchak_account_id": 7,
+    "completion": {
+      "percent": 40,
+      "sections": [{"key": "basic-info", "status": "completed"}],
+      "incomplete_sections": ["photo", "about-preferences"]
+    }
+  }
+}
+```
+
+`completion` comes from the member-side `ProfileCompletionService` (same
+sections and weights members see) so the two roles can never disagree about
+what "complete" means. Section keys match `ProfileCompletionService::SECTIONS`.
+
+### PUT `/api/v1/suchak/nxt/{representation}/profile`
+
+Delegates to the member full-PUT engine, so it accepts marriages/children and
+applies the canonical marital rules. Since 2026-07-22 it also enforces:
+
+- **Minimum marriage age** (`App\Support\MarriageAgePolicy`): female 18 / male
+  21, gender taken from the request when present, else the stored profile.
+  Future DOBs rejected. Applies to the web wizard and step engine too.
+- **Marital year sanity** (`App\Support\MaritalDependencyRules`):
+  divorce/separation/spouse-death year must be ≥ marriage year, and no year may
+  be in the future. These rules previously existed only in the web wizard, so
+  the mobile path silently accepted a divorce before the marriage.
+
+### POST `/api/v1/suchak/nxt/{representation}/profile/save-step`
+
+Step engine (`MobileProfileStepSnapshotService`). Note: `marriages` in a step
+payload is rejected (422) by design and `children` is accepted-then-dropped —
+use the full PUT for marital detail rows.
+
+### GET `/api/v1/suchak/nxt/{representation}/consent-contacts`
+
+Numbers this representation's consent may target, in try-order.
+
+```json
+{
+  "success": true,
+  "data": {
+    "options": [{
+      "mobile": "9822012345",
+      "mobile_masked": "98220•••45",
+      "role": "father",
+      "role_label": "Father",
+      "role_label_mr": "वडील",
+      "owner_name": "Ramesh Patil",
+      "already_tried": false
+    }],
+    "suggest_alternate": true,
+    "suggestion_reason": "no_response",
+    "pending_consent_id": 11,
+    "no_response_hours": 72
+  }
+}
+```
+
+Rules (approved 2026-07-22):
+
+- Consent may **only** target a number already stored on the profile. Sources,
+  in priority order: candidate's own account mobile → `profile_contacts`
+  (relation-aware) → `father_contact_*` / `mother_contact_*` → sibling rows →
+  relative rows. Duplicates collapse to the highest-priority owner.
+- `already_tried` is derived from this representation's consent history.
+- `suggest_alternate` turns true only after `no_response_hours` of silence on
+  the pending consent **and** an untried number exists. `suggestion_reason` is
+  `no_response` (never opened) or `started_not_completed` (link opened / OTP
+  sent but not verified); `no_untried_contacts` means every number was tried.
+- The system only **suggests** — it never sends to a fallback number by itself.
+
+Ordering, labels and the no-response window are shared with the bulk-intake
+consent queue (`App\Support\ConsentContactRole` +
+`whatsapp.bulk_consent_no_response_hours`), so both pipelines behave the same.
