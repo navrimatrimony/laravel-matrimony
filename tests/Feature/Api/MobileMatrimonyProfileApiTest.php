@@ -1862,7 +1862,11 @@ test('MobileProfile PUT api v1 matrimony-profile persists and syncs siblings thr
     expect($response->json('profile.siblings.0.relation_type'))->toBe('brother');
     expect($response->json('profile.siblings.0.name'))->toBe('Test Brother');
     expect($response->json('profile.siblings.0.address_line'))->toBe('Pune sibling address');
-    expect(array_key_exists('contact_number', $response->json('profile.siblings.0')))->toBeFalse();
+    // Approved 2026-07-21: contact numbers ARE exposed on your OWN profile
+    // (and to an authorized Suchak). Privacy is enforced by authorization
+    // scoping — see the "does not expose ... to other profiles" tests below,
+    // which still assert these keys are absent when viewing someone else.
+    expect(array_key_exists('contact_number', $response->json('profile.siblings.0')))->toBeTrue();
 
     $getResponse = $this->getJson('/api/v1/matrimony-profile');
     $getResponse->assertOk();
@@ -1961,7 +1965,9 @@ test('MobileProfile PUT api v1 matrimony-profile persists syncs relatives and hi
     expect($response->json('profile.relatives.0.relation_type'))->toBe('paternal_uncle');
     expect($response->json('profile.relatives.0.relative_details'))->toContain('Test Uncle');
     expect($response->json('profile.relatives.0.relative_details'))->toContain('Pune relative address');
-    expect(array_key_exists('contact_number', $response->json('profile.relatives.0')))->toBeFalse();
+    // Approved 2026-07-21 — own-profile view exposes contact numbers; the
+    // other-profile assertion later in this file still requires them hidden.
+    expect(array_key_exists('contact_number', $response->json('profile.relatives.0')))->toBeTrue();
 
     $getResponse = $this->getJson('/api/v1/matrimony-profile');
     $getResponse->assertOk();

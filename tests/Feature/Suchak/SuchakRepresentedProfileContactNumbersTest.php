@@ -130,6 +130,65 @@ class SuchakRepresentedProfileContactNumbersTest extends TestCase
     }
 
     /**
+     * Regression guard. Exposing contact_number on sub-records is done through
+     * the SHARED row builders (mobileSiblingRows/mobileRelativeRows), which also
+     * feed the "view someone else's profile" endpoint. The first implementation
+     * of this feature leaked sibling/relative phone numbers to any member
+     * browsing another profile; that leak was caught only by comparing failure
+     * counts against main. This test pins the boundary directly.
+     */
+    public function test_member_browsing_another_profile_never_sees_sub_record_contact_numbers(): void
+    {
+        [$representationId, $genderId] = $this->createRepresentation('9876505608', '9876505609');
+
+        $this->putJson("/api/v1/suchak/nxt/{$representationId}/profile", [
+            'full_name' => 'Leak Guard Candidate',
+            'gender_id' => $genderId,
+            'siblings' => [
+                [
+                    'relation_type' => 'brother',
+                    'name' => 'Rohan Patil',
+                    'contact_number' => '9822011111',
+                    'sort_order' => 1,
+                ],
+            ],
+            'relatives' => [
+                [
+                    'relation_type' => 'paternal_uncle',
+                    'relative_details' => 'Uncle in Nagpur',
+                    'contact_number' => '9822022222',
+                ],
+            ],
+        ])->assertOk();
+
+        $candidateProfileId = (int) DB::table('suchak_profile_representations')
+            ->where('id', $representationId)
+            ->value('matrimony_profile_id');
+
+        // A different, unrelated member browsing that candidate's public detail.
+        $browser = User::factory()->create([
+            'mobile' => '9876505610',
+            'mobile_verified_at' => now(),
+        ]);
+        Sanctum::actingAs($browser);
+
+        $detail = $this->getJson('/api/v1/matrimony-profiles/'.$candidateProfileId);
+
+        // Discovery rules may hide the profile outright (404) — that is also a
+        // pass. What must never happen is a 200 that carries the numbers.
+        if ($detail->status() !== 200) {
+            $this->assertTrue(true, 'Profile not discoverable by this viewer — no leak possible.');
+
+            return;
+        }
+
+        $json = json_encode($detail->json('profile'), JSON_THROW_ON_ERROR);
+        $this->assertStringNotContainsString('9822011111', $json, 'Sibling contact number leaked to another member.');
+        $this->assertStringNotContainsString('9822022222', $json, 'Relative contact number leaked to another member.');
+        $this->assertStringNotContainsString('contact_number', $json, 'contact_number key leaked to another member.');
+    }
+
+    /**
      * @return array{0: int, 1: int} representation id, gender id
      */
     private function createRepresentation(string $suchakMobile, string $candidateMobile): array

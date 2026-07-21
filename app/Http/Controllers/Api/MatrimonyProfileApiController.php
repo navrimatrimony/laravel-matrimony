@@ -2405,6 +2405,7 @@ class MatrimonyProfileApiController extends Controller
             unset($profileData['self_addresses'], $profileData['parents_addresses']);
             $this->forgetParentContactPayloadKeys($profileData);
             $this->sanitizeAllianceNetworkRowsForOtherProfile($profileData);
+            $this->sanitizeSubRecordContactNumbersForOtherProfile($profileData);
             if ((bool) ($profile->income_private ?? false)) {
                 $this->forgetIncomePayloadKeys($profileData, 'income');
                 unset($profileData['annual_income']);
@@ -3195,21 +3196,49 @@ class MatrimonyProfileApiController extends Controller
      */
     private function sanitizeAllianceNetworkRowsForOtherProfile(array &$profileData): void
     {
-        if (! isset($profileData['alliance_networks']) || ! is_array($profileData['alliance_networks'])) {
+        $this->forgetPrivateRowKeys($profileData, 'alliance_networks', [
+            'notes', 'contact_number', 'contact_number_2', 'contact_number_3',
+            'phone_number', 'mobile_number', 'primary_contact_number',
+        ]);
+    }
+
+    /**
+     * Contact numbers on sub-records are owner/authorized-agent data. They are
+     * editable (approved 2026-07-21) but must never reach a viewer looking at
+     * someone else's profile — that scoping IS the privacy control.
+     */
+    private function sanitizeSubRecordContactNumbersForOtherProfile(array &$profileData): void
+    {
+        $contactKeys = [
+            'contact_number', 'contact_number_2', 'contact_number_3',
+            'phone_number', 'mobile_number', 'primary_contact_number',
+        ];
+
+        foreach (['siblings', 'relatives', 'marriages', 'children'] as $collection) {
+            $this->forgetPrivateRowKeys($profileData, $collection, $contactKeys);
+        }
+    }
+
+    /**
+     * @param  array<int, string>  $privateKeys
+     */
+    private function forgetPrivateRowKeys(array &$profileData, string $collection, array $privateKeys): void
+    {
+        if (! isset($profileData[$collection]) || ! is_array($profileData[$collection])) {
             return;
         }
 
-        $profileData['alliance_networks'] = array_values(array_map(static function (mixed $row): mixed {
+        $profileData[$collection] = array_values(array_map(static function (mixed $row) use ($privateKeys): mixed {
             if (! is_array($row)) {
                 return $row;
             }
 
-            foreach (['notes', 'contact_number', 'contact_number_2', 'contact_number_3', 'phone_number', 'mobile_number', 'primary_contact_number'] as $privateKey) {
+            foreach ($privateKeys as $privateKey) {
                 unset($row[$privateKey]);
             }
 
             return $row;
-        }, $profileData['alliance_networks']));
+        }, $profileData[$collection]));
     }
 
     private function masterTableLookupLabel(string $table, mixed $id): ?string
