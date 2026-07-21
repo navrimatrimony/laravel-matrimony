@@ -26,6 +26,7 @@ use App\Services\ProfileFieldLockService;
 use App\Services\ProfilePartnerCommunityFlagService;
 use App\Services\ProfileRotationService;
 use App\Services\ViewTrackingService;
+use App\Support\MaritalDependencyRules;
 use App\Support\MarriageAgePolicy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -73,7 +74,8 @@ class MatrimonyProfileApiController extends Controller
 
     private const MOBILE_MARRIAGE_DIVORCE_STATUSES = ['pending', 'finalized', 'mutual', 'contested'];
 
-    private const MOBILE_MARRIAGE_DETAIL_STATUS_KEYS = ['divorced', 'annulled', 'separated', 'widowed'];
+    /** @see MaritalDependencyRules::DETAIL_STATUS_KEYS — canonical source. */
+    private const MOBILE_MARRIAGE_DETAIL_STATUS_KEYS = MaritalDependencyRules::DETAIL_STATUS_KEYS;
 
     private const MOBILE_CHILD_GENDERS = ['male', 'female', 'other', 'prefer_not_say'];
 
@@ -1311,6 +1313,21 @@ class MatrimonyProfileApiController extends Controller
                 $ageError = MarriageAgePolicy::dateOfBirthError($request->input('date_of_birth'), $genderKey);
                 if ($ageError !== null) {
                     $validator->errors()->add('date_of_birth', $ageError);
+                }
+            }
+
+            // Canonical marital year sanity (App\Support\MaritalDependencyRules).
+            // The web wizard has enforced these since day one; the mobile path
+            // silently accepted divorce-before-marriage until 2026-07-22.
+            $marriageRowsForYears = $request->input('marriages', []);
+            if (is_array($marriageRowsForYears)) {
+                foreach (array_values($marriageRowsForYears) as $index => $marriageRow) {
+                    if (! is_array($marriageRow)) {
+                        continue;
+                    }
+                    foreach (MaritalDependencyRules::yearSanityErrors($marriageRow, 'marriages.'.$index) as $key => $message) {
+                        $validator->errors()->add($key, $message);
+                    }
                 }
             }
 

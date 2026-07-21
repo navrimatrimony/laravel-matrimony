@@ -1108,7 +1108,7 @@ class MobileProfileDisplayPresenter
     private function familySection(MatrimonyProfile $profile): ?array
     {
         $maritalStatusKey = $profile->maritalStatus?->key;
-        $showMarriageChildren = in_array($maritalStatusKey, ['divorced', 'annulled', 'separated', 'widowed'], true);
+        $showMarriageChildren = \App\Support\MaritalDependencyRules::requiresMarriageDetails($maritalStatusKey);
         $items = [
             $this->item('Family Type', $this->labelFrom($profile->familyType), 'family'),
             $this->item('Parents Details', $this->parentsDetails($profile), 'parents'),

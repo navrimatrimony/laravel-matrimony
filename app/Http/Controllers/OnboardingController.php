@@ -402,7 +402,7 @@ class OnboardingController extends Controller
         if (! $request->has('children')) {
             $maritalId = (int) $request->input('marital_status_id', $profile->marital_status_id ?? 0);
             $statusKey = MasterMaritalStatus::where('id', $maritalId)->value('key');
-            $statusesRequiringChildren = ['divorced', 'annulled', 'separated', 'widowed'];
+            $statusesRequiringChildren = \App\Support\MaritalDependencyRules::DETAIL_STATUS_KEYS;
             $needsChildrenBlock = $statusKey && in_array($statusKey, $statusesRequiringChildren, true);
             $hc = $request->input('has_children');
             $hasChildrenYes = $hc === '1' || $hc === 1 || $hc === true;

@@ -77,7 +77,7 @@ class OnboardingLookupController extends Controller
             'mother_tongues' => $this->simpleMasterOptions(MasterMotherTongue::class, 'master_mother_tongues', $locale, ['label_mr'], ['label'], ['key']),
             'marital_statuses' => $this->simpleMasterOptions(MasterMaritalStatus::class, 'master_marital_statuses', $locale, ['label_mr'], ['label'], ['key']),
             'children_rules' => [
-                'show_for_keys' => ['divorced', 'annulled', 'separated', 'widowed'],
+                'show_for_keys' => \App\Support\MaritalDependencyRules::DETAIL_STATUS_KEYS,
                 'hide_for_keys' => ['never_married'],
             ],
             'height_options' => $this->heightOptions(),

@@ -37,7 +37,8 @@ use Illuminate\Support\Str;
 
 class ProfileSetupLookupController extends Controller
 {
-    private const MARITAL_STATUS_KEYS = ['never_married', 'divorced', 'annulled', 'separated', 'widowed'];
+    /** @see \App\Support\MaritalDependencyRules::ALL_STATUS_KEYS — canonical source. */
+    private const MARITAL_STATUS_KEYS = \App\Support\MaritalDependencyRules::ALL_STATUS_KEYS;
 
     private const SPECTACLES_KEYS = ['no', 'spectacles', 'contact_lens', 'both'];
 
