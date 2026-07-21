@@ -9,7 +9,9 @@ use App\Models\SuchakAccount;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakAccessService;
+use App\Modules\Suchak\Services\SuchakConsentContactSuggestionService;
 use App\Services\MutationService;
+use App\Services\ProfileCompletionService;
 use App\Services\Onboarding\MobileOnboardingDraftService;
 use App\Services\Onboarding\MobileProfileStepSnapshotService;
 use Illuminate\Http\JsonResponse;
@@ -55,9 +57,65 @@ class SuchakRepresentedProfileApiController extends Controller
             'representation_id' => (int) $representation->id,
             'profile_id' => (int) $profile->id,
             'suchak_account_id' => (int) $account->id,
+            // Which sections still need filling — reuses the member-side
+            // ProfileCompletionService so Suchak and member never disagree
+            // about what "complete" means (PO decision 2026-07-22).
+            'completion' => $this->completionPayload($profile),
         ];
 
         return response()->json($payload, $response->status());
+    }
+
+    /**
+     * Numbers this representation's consent may target, in try-order, plus
+     * whether the system suggests falling back to another stored number.
+     */
+    public function consentContacts(
+        Request $request,
+        SuchakProfileRepresentation $representation,
+        SuchakAccessService $accessService,
+        SuchakConsentContactSuggestionService $suggestionService,
+    ): JsonResponse {
+        $context = $this->authorizedContext($request, $representation, $accessService);
+        if ($context instanceof JsonResponse) {
+            return $context;
+        }
+        [$account, $profile] = $context;
+
+        $result = $suggestionService->forRepresentation($representation, $profile);
+        $result['representation_id'] = (int) $representation->id;
+        $result['profile_id'] = (int) $profile->id;
+        $result['suchak_account_id'] = (int) $account->id;
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Consent contact options loaded.',
+            'data' => $result,
+        ]);
+    }
+
+    /**
+     * @return array{percent: int, sections: array<int, array<string, string>>, incomplete_sections: array<int, string>}
+     */
+    private function completionPayload(MatrimonyProfile $profile): array
+    {
+        $sectionKeys = array_keys(ProfileCompletionService::SECTIONS);
+        $statuses = ProfileCompletionService::getSectionStatuses($profile, $sectionKeys);
+
+        $sections = [];
+        $incomplete = [];
+        foreach ($statuses as $key => $status) {
+            $sections[] = ['key' => $key, 'status' => $status];
+            if ($status !== 'completed') {
+                $incomplete[] = $key;
+            }
+        }
+
+        return [
+            'percent' => ProfileCompletionService::calculateCompletionPercentage($profile),
+            'sections' => $sections,
+            'incomplete_sections' => $incomplete,
+        ];
     }
 
     /**
