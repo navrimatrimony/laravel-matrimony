@@ -54,7 +54,24 @@ class SuchakManualProfileMobileRequiredTest extends TestCase
         ])->assertCreated()->assertJsonPath('data.outcome', 'created');
     }
 
-    private function actingAsVerifiedSuchak(string $mobile): void
+    /**
+     * The web form is the other door into the same flow — leaving it nullable
+     * would let unreachable profiles in while the API rejected them.
+     */
+    public function test_web_manual_profile_also_requires_mobile(): void
+    {
+        $user = $this->actingAsVerifiedSuchak('9876505705');
+
+        $this->actingAs($user)
+            ->post(route('suchak.manual-profiles.store'), [
+                'candidate_name' => 'Web No Mobile Candidate',
+                'candidate_gender' => 'female',
+                'registering_for' => 'self',
+            ])
+            ->assertSessionHasErrors(['candidate_mobile']);
+    }
+
+    private function actingAsVerifiedSuchak(string $mobile): User
     {
         MasterGender::query()->firstOrCreate(
             ['key' => 'female'],
@@ -74,5 +91,7 @@ class SuchakManualProfileMobileRequiredTest extends TestCase
         ]);
 
         Sanctum::actingAs($user);
+
+        return $user;
     }
 }
