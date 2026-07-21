@@ -2623,3 +2623,20 @@ Rules (approved 2026-07-22):
 Ordering, labels and the no-response window are shared with the bulk-intake
 consent queue (`App\Support\ConsentContactRole` +
 `whatsapp.bulk_consent_no_response_hours`), so both pipelines behave the same.
+
+### POST `/api/v1/suchak/nxt/{representation}/preferences/auto-draft`
+
+Drafts partner preferences for the **represented candidate** from the profile
+data already entered (age, height, caste, location, income bands).
+
+Body: `force_regenerate` (nullable boolean). Response is the shared
+`RegistrationPartnerPreferenceService::persist()` payload plus
+`representation_id`, `profile_id`, `suchak_account_id`.
+
+Why a Suchak-specific route exists: the member route
+`POST /onboarding/preferences/auto-draft` derives preferences for
+`$request->user()`, which for a Suchak is the **Suchak's own** profile — the
+wrong person. This adapter resolves the candidate's user and calls the same
+service, so the suggestion engine is reused rather than duplicated.
+`persist()` will not overwrite preferences that were edited manually, so the
+call is safe to repeat.
