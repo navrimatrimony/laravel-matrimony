@@ -14,6 +14,7 @@ use App\Services\MutationService;
 use App\Services\ProfileCompletionService;
 use App\Services\Onboarding\MobileOnboardingDraftService;
 use App\Services\Onboarding\MobileProfileStepSnapshotService;
+use App\Services\Onboarding\RegistrationPartnerPreferenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -92,6 +93,47 @@ class SuchakRepresentedProfileApiController extends Controller
             'message' => 'Consent contact options loaded.',
             'data' => $result,
         ]);
+    }
+
+    /**
+     * Draft partner preferences for the REPRESENTED candidate.
+     *
+     * The member endpoint (/onboarding/preferences/auto-draft) derives them
+     * for $request->user(), which for a Suchak would be the Suchak's own
+     * profile — wrong person entirely. This adapter passes the candidate's
+     * user to the same RegistrationPartnerPreferenceService, so the suggestion
+     * engine (age/height/caste/location/income from the candidate's own data)
+     * is reused rather than reimplemented.
+     */
+    public function autoDraftPreferences(
+        Request $request,
+        SuchakProfileRepresentation $representation,
+        SuchakAccessService $accessService,
+        RegistrationPartnerPreferenceService $preferences,
+    ): JsonResponse {
+        $context = $this->authorizedContext($request, $representation, $accessService);
+        if ($context instanceof JsonResponse) {
+            return $context;
+        }
+        [$account, $profile] = $context;
+
+        $candidate = User::query()->find($profile->user_id);
+        if (! $candidate instanceof User) {
+            return response()->json(['success' => false, 'message' => 'Candidate account missing.'], 404);
+        }
+
+        $validated = $request->validate([
+            'force_regenerate' => ['nullable', 'boolean'],
+        ]);
+
+        // persist() refuses to overwrite preferences the user edited manually,
+        // so re-running this is safe.
+        $result = $preferences->persist($candidate, (bool) ($validated['force_regenerate'] ?? false));
+        $result['representation_id'] = (int) $representation->id;
+        $result['profile_id'] = (int) $profile->id;
+        $result['suchak_account_id'] = (int) $account->id;
+
+        return response()->json($result);
     }
 
     /**

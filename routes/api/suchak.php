@@ -94,5 +94,6 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::post('/nxt/{representation}/profile/save-step', [SuchakRepresentedProfileApiController::class, 'saveStep']);
     Route::post('/nxt/{representation}/profile/photo', [SuchakRepresentedProfileApiController::class, 'uploadPhoto']);
     Route::get('/nxt/{representation}/consent-contacts', [SuchakRepresentedProfileApiController::class, 'consentContacts']);
+    Route::post('/nxt/{representation}/preferences/auto-draft', [SuchakRepresentedProfileApiController::class, 'autoDraftPreferences']);
 });
 
