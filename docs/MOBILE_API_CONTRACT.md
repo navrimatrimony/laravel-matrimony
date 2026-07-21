@@ -1395,7 +1395,7 @@ Governance note:
 - Parent contact numbers are accepted only for the authenticated owner's edit/read payload: `father_contact_1`, `father_contact_2`, `mother_contact_1`, and `mother_contact_2`. `father_contact_3` and `mother_contact_3` are accepted only on deployments where those DB columns still exist. Own profile responses include `parent_contact_max_slots` so mobile can show the correct number of slots. Other-profile detail/list responses must not expose parent contact keys or `parent_contact_max_slots`. WhatsApp/contact-preference flags for parent contact fields are not accepted by the mobile API because they are not stored on `matrimony_profiles`.
 - Parent contact values are private. Other-profile detail/list responses and public display sections must not expose them.
 - Sibling contact numbers, relative contact numbers, contact unlock/payment fields, and preference repeaters are intentionally not accepted in this mobile contract.
-- Sibling and relative contact number columns exist in the Laravel web schema but are not accepted or returned by this mobile contract. Other-profile detail/list responses must not expose sibling or relative contact numbers.
+- **Changed 2026-07-21/22:** sibling (`contact_number`, `_2`, `_3`) and relative (`contact_number`) numbers ARE now accepted and returned — see "Sub-record contact numbers". Other-profile detail/list responses must still never expose them; that stripping is the privacy control.
 - Relative repeaters are intentionally deferred until a row-preserving, privacy-safe mobile contract is added.
 
 Success response: HTTP 200
