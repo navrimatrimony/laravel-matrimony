@@ -11,6 +11,7 @@ use App\Models\SuchakCustomerContext;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakAccessService;
+use App\Modules\Suchak\Services\SuchakCandidateDuplicateCheckService;
 use App\Modules\Suchak\Services\SuchakConsentService;
 use App\Modules\Suchak\Services\SuchakCustomerLifecycleService;
 use App\Modules\Suchak\Services\SuchakRepresentationService;
@@ -59,6 +60,62 @@ class SuchakManualProfileApiController extends Controller
                 ])->values()->all(),
                 'registering_for_options' => $this->registeringForOptions(),
             ],
+        ]);
+    }
+
+    /**
+     * Pre-create duplicate check (PO decision 2026-07-22): after wizard step 1
+     * the app asks whether this person already has a profile, so the Suchak can
+     * jump straight to consent-on-existing instead of re-typing a duplicate.
+     * Reporting only — never blocks; the Suchak decides.
+     */
+    public function duplicateCheck(
+        Request $request,
+        SuchakAccessService $accessService,
+        SuchakCandidateDuplicateCheckService $duplicateCheckService,
+    ): JsonResponse {
+        $user = $request->user();
+        if (! $user instanceof User) {
+            return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
+        }
+
+        /** @var SuchakAccount|null $account */
+        $account = $user->suchakAccount;
+        if ($account === null || ! $accessService->canOwnerPrepareCustomers($account, $user)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only active Suchak accounts can create a manual candidate profile.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'candidate_name' => ['required', 'string', 'max:255'],
+            'candidate_mobile' => ['required', 'string', 'max:32'],
+            'date_of_birth' => ['nullable', 'date_format:Y-m-d'],
+            'candidate_gender' => ['nullable', Rule::exists('master_genders', 'key')->where('is_active', true)],
+        ]);
+
+        $mobile = MobileNumber::normalize((string) $validated['candidate_mobile']);
+        if ($mobile === null) {
+            return response()->json([
+                'success' => false,
+                'message' => __('otp.enter_valid_10_digit_mobile'),
+                'errors' => ['candidate_mobile' => [__('otp.enter_valid_10_digit_mobile')]],
+            ], 422);
+        }
+
+        $result = $duplicateCheckService->check(
+            $mobile,
+            (string) $validated['candidate_name'],
+            $validated['date_of_birth'] ?? null,
+            $validated['candidate_gender'] ?? null,
+            $account,
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Duplicate check completed.',
+            'data' => $result,
         ]);
     }
 
