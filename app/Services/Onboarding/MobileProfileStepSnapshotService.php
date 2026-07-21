@@ -9,6 +9,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\SubCaste;
 use App\Models\User;
 use App\Services\EducationService;
+use App\Support\MarriageAgePolicy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
@@ -215,7 +216,17 @@ class MobileProfileStepSnapshotService
 
         $rules = $this->rulesFor($step, $user);
         $validator = Validator::make($data, $rules);
-        $validator->after(function ($validator) use ($step, $data): void {
+        $validator->after(function ($validator) use ($step, $data, $user): void {
+            if ($step === 'basic_info' && ($data['date_of_birth'] ?? null) !== null && $data['date_of_birth'] !== '') {
+                // Minimum marriage age (shared MarriageAgePolicy — PO 2026-07-22).
+                $genderKey = MarriageAgePolicy::genderKeyForId(
+                    ($data['gender_id'] ?? null) ?: $user->matrimonyProfile?->gender_id
+                );
+                $ageError = MarriageAgePolicy::dateOfBirthError($data['date_of_birth'], $genderKey);
+                if ($ageError !== null) {
+                    $validator->errors()->add('date_of_birth', $ageError);
+                }
+            }
             if ($step === 'religion_caste') {
                 $this->validateReligionCasteDependency($validator, $data);
             }

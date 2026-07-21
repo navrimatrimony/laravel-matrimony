@@ -14,6 +14,7 @@ use App\Services\PartnerPreferenceNavService;
 use App\Services\PartnerPreferenceSnapshotBuilder;
 use App\Services\ProfileCompletionEngine;
 use App\Support\ErrorFactory;
+use App\Support\MarriageAgePolicy;
 use App\Support\Validation\AddressHierarchyRules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -978,6 +979,19 @@ class ProfileWizardController extends Controller
             'sub_caste_id' => ['nullable', Rule::exists('master_sub_castes', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'mother_tongue_id' => ['nullable', Rule::exists('master_mother_tongues', 'id')->where(fn ($q) => $q->where('is_active', true))],
         ]);
+
+        // Minimum marriage age (shared MarriageAgePolicy — PO 2026-07-22).
+        if ($request->filled('date_of_birth')) {
+            $genderKey = MarriageAgePolicy::genderKeyForId(
+                $request->input('gender_id') ?: $profile->gender_id
+            );
+            $ageError = MarriageAgePolicy::dateOfBirthError($request->input('date_of_birth'), $genderKey);
+            if ($ageError !== null) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'date_of_birth' => $ageError,
+                ]);
+            }
+        }
 
         if (! $request->attributes->get(self::SKIP_BASIC_INFO_RESIDENCE_VALIDATION)) {
             $this->validateSelfAddressesForBasicInfo($request);

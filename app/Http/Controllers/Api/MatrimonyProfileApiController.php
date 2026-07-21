@@ -26,6 +26,7 @@ use App\Services\ProfileFieldLockService;
 use App\Services\ProfilePartnerCommunityFlagService;
 use App\Services\ProfileRotationService;
 use App\Services\ViewTrackingService;
+use App\Support\MarriageAgePolicy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Http\Request;
@@ -1065,7 +1066,7 @@ class MatrimonyProfileApiController extends Controller
         return $row;
     }
 
-    private function validateMobileProfileRequest(Request $request, bool $creating): void
+    private function validateMobileProfileRequest(Request $request, bool $creating, ?MatrimonyProfile $profile = null): void
     {
         $this->normalizeMobileEducationCareerInputs($request);
 
@@ -1301,7 +1302,18 @@ class MatrimonyProfileApiController extends Controller
         }
 
         $validator = Validator::make($request->all(), $rules);
-        $validator->after(function ($validator) use ($request): void {
+        $validator->after(function ($validator) use ($request, $profile): void {
+            // Minimum marriage age (shared MarriageAgePolicy — PO 2026-07-22).
+            if ($request->filled('date_of_birth')) {
+                $genderKey = MarriageAgePolicy::genderKeyForId(
+                    $request->input('gender_id') ?: $profile?->gender_id
+                );
+                $ageError = MarriageAgePolicy::dateOfBirthError($request->input('date_of_birth'), $genderKey);
+                if ($ageError !== null) {
+                    $validator->errors()->add('date_of_birth', $ageError);
+                }
+            }
+
             $religionId = $request->input('religion_id');
             $casteId = $request->input('caste_id');
             $subCasteId = $request->input('sub_caste_id');
@@ -1696,7 +1708,7 @@ class MatrimonyProfileApiController extends Controller
     public function updateForProfile(Request $request, MatrimonyProfile $profile, User $actor)
     {
         // Phase-4 Day-8: Location hierarchy validation
-        $this->validateMobileProfileRequest($request, creating: false);
+        $this->validateMobileProfileRequest($request, creating: false, profile: $profile);
 
         // Day 7: Archived/Suspended → edit blocked
         if (! \App\Services\ProfileLifecycleService::isEditable($profile)) {
