@@ -1330,9 +1330,17 @@ Rules:
 - `siblings.*.contact_number`, `siblings.*.contact_number_2`, `siblings.*.contact_number_3`: nullable string, max 20, must match `/^[0-9+\-\s()]{7,20}$/`. **Changed 2026-07-21** — previously rejected outright; now accepted and returned. See "Sub-record contact numbers" below.
 - Send `siblings: []` with `has_siblings: false` to clear sibling rows through the same governed replace behavior used by the Laravel wizard. Omitting `siblings` preserves existing sibling rows.
 
-### Sub-record contact numbers (changed 2026-07-21)
+### Sub-record contact numbers (changed 2026-07-21, corrected 2026-07-22)
 
-Contact numbers on `siblings`, `relatives`, `marriages`, `children`, `self_addresses`, `parents_addresses`, and `alliance_networks` rows were previously `prohibited` by the validator for every caller. They are now writable and readable, so a Suchak can enter the contact details that appear on the physical biodata they work from.
+Writable contact numbers exist ONLY where the database actually stores them:
+
+| Row type | Writable keys | Storage |
+|---|---|---|
+| `siblings.*` | `contact_number`, `contact_number_2`, `contact_number_3` | `profile_siblings` columns |
+| `relatives.*` | `contact_number` only (`_2`/`_3` remain prohibited) | `profile_relatives.contact_number` |
+| `marriages.*`, `children.*`, `self_addresses.*`, `parents_addresses.*`, `alliance_networks.*` | **none — all contact keys prohibited** | no contact columns on those tables |
+
+Parent numbers use the dedicated core fields (`father_contact_1/2`, `mother_contact_1/2`) and the candidate's own number lives in `profile_contacts` (primary). The 2026-07-21 change briefly accepted contact keys on marriage/children/address/alliance rows; those were dead (silently dropped at the MutationService column-intersect) and were re-prohibited on 2026-07-22 so clients get an honest 422 instead of silent data loss.
 
 **Privacy is enforced by authorization scoping, not by blocking the field:**
 
@@ -1347,7 +1355,7 @@ The last row is a hard boundary: the shared row builders feed both the owner vie
 - `relatives`: nullable array, max 20 rows. Each row may include `id`, `relation_type`, and `relative_details`.
 - `relatives.*.relation_type`: nullable but required when the row has other data; one of `paternal_grandfather`, `paternal_grandmother`, `paternal_uncle`, `wife_paternal_uncle`, `paternal_aunt`, `husband_paternal_aunt`, `Cousin`, `maternal_address_ajol`, `maternal_grandfather`, `maternal_grandmother`, `maternal_uncle`, `wife_maternal_uncle`, `maternal_aunt`, `husband_maternal_aunt`, `maternal_cousin`
 - `relatives.*.relative_details`: nullable string, max 2000. Use this one field for relative name, occupation, address, and notes.
-- `relatives.*.contact_number`, `relatives.*.contact_number_2`, and `relatives.*.contact_number_3`: nullable string, max 20, must match `/^[0-9+\-\s()]{7,20}$/`. **Changed 2026-07-21** — previously rejected outright; now accepted and returned. See "Sub-record contact numbers" below. Send `relatives: []` to clear relative rows. Omitting `relatives` preserves existing relative rows.
+- `relatives.*.contact_number`: nullable string, max 20, must match `/^[0-9+\-\s()]{7,20}$/`. **Changed 2026-07-21** — previously rejected outright; now accepted and returned. `relatives.*.contact_number_2`/`_3` remain prohibited (no columns). See "Sub-record contact numbers" below. Send `relatives: []` to clear relative rows. Omitting `relatives` preserves existing relative rows.
 - `alliance_networks`: nullable array, max 20 rows. Each row may include `id`, `surname`, `city_id`, `state_id`, `district_id`, `taluka_id`, and `notes`.
 - `alliance_networks.*.surname`: nullable string, max 255, but required when that row has any location or note data because `profile_alliance_networks.surname` is required.
 - `alliance_networks.*.city_id`, `alliance_networks.*.state_id`, `alliance_networks.*.district_id`, `alliance_networks.*.taluka_id`: nullable, must exist in `addresses.id`

@@ -79,9 +79,17 @@ class MatrimonyProfileApiController extends Controller
     private const MOBILE_ADDRESS_TYPE_KEYS = ['current', 'permanent', 'native', 'work', 'other'];
 
     /**
-     * Approved 2026-07-21: relative/sibling/marriage/address/alliance contact numbers are
-     * editable (same rule shape as mobileParentContactFields()). Privacy is enforced by
-     * authorization scoping (owner/represented-candidate/admin), not by blocking the field.
+     * Approved 2026-07-21: sibling/relative contact numbers are editable (same rule shape
+     * as mobileParentContactFields()). Privacy is enforced by authorization scoping
+     * (owner/represented-candidate/admin), not by blocking the field.
+     *
+     * Schema reality check 2026-07-22: contact columns exist ONLY on profile_siblings
+     * (contact_number, _2, _3) and profile_relatives (contact_number). profile_marriages,
+     * profile_children, profile_addresses and profile_alliance_networks have NO contact
+     * columns — accepting those keys would silently drop data at the MutationService
+     * column-intersect, so they stay 'prohibited' (honest 422 instead of silent loss).
+     * Consent-fallback numbers come from parent slots + profile_contacts + siblings +
+     * relatives; the other tables were never meant to store phones.
      */
     private const MOBILE_CONTACT_NUMBER_RULES = ['nullable', 'string', 'max:20', 'regex:/^[0-9+\-\s()]{7,20}$/'];
 
@@ -376,11 +384,9 @@ class MatrimonyProfileApiController extends Controller
             $relationType = isset($row['relation_type']) ? trim((string) $row['relation_type']) : null;
             $relationType = $relationType !== '' ? $relationType : null;
             $relativeDetails = $this->relativeDetailsFromMobileRelativeRow($row);
-            $contactNumbers = [];
-            foreach (['contact_number', 'contact_number_2', 'contact_number_3'] as $contactField) {
-                $value = trim((string) ($row[$contactField] ?? ''));
-                $contactNumbers[$contactField] = $value !== '' ? $value : null;
-            }
+            // profile_relatives stores a single contact_number (no _2/_3 columns).
+            $contactValue = trim((string) ($row['contact_number'] ?? ''));
+            $contactNumbers = ['contact_number' => $contactValue !== '' ? $contactValue : null];
 
             $hasMeaningfulData = ($relationType !== null && array_key_exists($relationType, self::MOBILE_RELATIVE_RELATION_LABELS))
                 || $relativeDetails !== null
@@ -1171,11 +1177,12 @@ class MatrimonyProfileApiController extends Controller
             'marriages.*.divorce_status' => ['nullable', Rule::in(self::MOBILE_MARRIAGE_DIVORCE_STATUSES)],
             'marriages.*.remarriage_reason' => ['nullable', 'string', 'max:1000'],
             'marriages.*.notes' => ['nullable', 'string', 'max:1000'],
-            'marriages.*.contact_number' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'marriages.*.contact_number_2' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'marriages.*.contact_number_3' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'marriages.*.phone_number' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'marriages.*.mobile_number' => self::MOBILE_CONTACT_NUMBER_RULES,
+            // No contact columns on profile_marriages — see MOBILE_CONTACT_NUMBER_RULES note.
+            'marriages.*.contact_number' => ['prohibited'],
+            'marriages.*.contact_number_2' => ['prohibited'],
+            'marriages.*.contact_number_3' => ['prohibited'],
+            'marriages.*.phone_number' => ['prohibited'],
+            'marriages.*.mobile_number' => ['prohibited'],
             'children' => ['nullable', 'array', 'max:20'],
             'children.*' => ['array'],
             'children.*.id' => ['nullable', 'integer'],
@@ -1188,11 +1195,12 @@ class MatrimonyProfileApiController extends Controller
                 Rule::exists('master_child_living_with', 'id')->where(fn ($query) => $query->where('is_active', true)),
             ],
             'children.*.sort_order' => ['nullable', 'integer', 'min:0'],
-            'children.*.contact_number' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'children.*.contact_number_2' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'children.*.contact_number_3' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'children.*.phone_number' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'children.*.mobile_number' => self::MOBILE_CONTACT_NUMBER_RULES,
+            // No contact columns on profile_children — see MOBILE_CONTACT_NUMBER_RULES note.
+            'children.*.contact_number' => ['prohibited'],
+            'children.*.contact_number_2' => ['prohibited'],
+            'children.*.contact_number_3' => ['prohibited'],
+            'children.*.phone_number' => ['prohibited'],
+            'children.*.mobile_number' => ['prohibited'],
             'self_addresses' => ['nullable', 'array', 'max:10'],
             'self_addresses.*' => ['array'],
             'self_addresses.*.id' => ['nullable', 'integer'],
@@ -1201,12 +1209,13 @@ class MatrimonyProfileApiController extends Controller
             'self_addresses.*.address_line' => ['nullable', 'string', 'max:255'],
             'self_addresses.*.location_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
             'self_addresses.*.city_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
-            'self_addresses.*.contact_number' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'self_addresses.*.contact_number_2' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'self_addresses.*.contact_number_3' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'self_addresses.*.phone_number' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'self_addresses.*.mobile_number' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'self_addresses.*.primary_contact_number' => self::MOBILE_CONTACT_NUMBER_RULES,
+            // No contact columns on profile_addresses — see MOBILE_CONTACT_NUMBER_RULES note.
+            'self_addresses.*.contact_number' => ['prohibited'],
+            'self_addresses.*.contact_number_2' => ['prohibited'],
+            'self_addresses.*.contact_number_3' => ['prohibited'],
+            'self_addresses.*.phone_number' => ['prohibited'],
+            'self_addresses.*.mobile_number' => ['prohibited'],
+            'self_addresses.*.primary_contact_number' => ['prohibited'],
             'parents_addresses' => ['nullable', 'array', 'max:10'],
             'parents_addresses.*' => ['array'],
             'parents_addresses.*.id' => ['nullable', 'integer'],
@@ -1215,20 +1224,22 @@ class MatrimonyProfileApiController extends Controller
             'parents_addresses.*.address_line' => ['nullable', 'string', 'max:255'],
             'parents_addresses.*.location_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
             'parents_addresses.*.city_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
-            'parents_addresses.*.contact_number' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'parents_addresses.*.contact_number_2' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'parents_addresses.*.contact_number_3' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'parents_addresses.*.phone_number' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'parents_addresses.*.mobile_number' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'parents_addresses.*.primary_contact_number' => self::MOBILE_CONTACT_NUMBER_RULES,
+            // No contact columns on profile_addresses — see MOBILE_CONTACT_NUMBER_RULES note.
+            'parents_addresses.*.contact_number' => ['prohibited'],
+            'parents_addresses.*.contact_number_2' => ['prohibited'],
+            'parents_addresses.*.contact_number_3' => ['prohibited'],
+            'parents_addresses.*.phone_number' => ['prohibited'],
+            'parents_addresses.*.mobile_number' => ['prohibited'],
+            'parents_addresses.*.primary_contact_number' => ['prohibited'],
             'relatives' => ['nullable', 'array', 'max:20'],
             'relatives.*' => ['array'],
             'relatives.*.id' => ['nullable', 'integer'],
             'relatives.*.relation_type' => ['nullable', Rule::in(array_keys(self::MOBILE_RELATIVE_RELATION_LABELS))],
             'relatives.*.relative_details' => ['nullable', 'string', 'max:2000'],
             'relatives.*.contact_number' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'relatives.*.contact_number_2' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'relatives.*.contact_number_3' => self::MOBILE_CONTACT_NUMBER_RULES,
+            // profile_relatives has only contact_number — no _2/_3 columns.
+            'relatives.*.contact_number_2' => ['prohibited'],
+            'relatives.*.contact_number_3' => ['prohibited'],
             'alliance_networks' => ['nullable', 'array', 'max:20'],
             'alliance_networks.*' => ['array'],
             'alliance_networks.*.id' => ['nullable', 'integer'],
@@ -1238,12 +1249,13 @@ class MatrimonyProfileApiController extends Controller
             'alliance_networks.*.district_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
             'alliance_networks.*.taluka_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
             'alliance_networks.*.notes' => ['nullable', 'string', 'max:1000'],
-            'alliance_networks.*.contact_number' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'alliance_networks.*.contact_number_2' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'alliance_networks.*.contact_number_3' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'alliance_networks.*.phone_number' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'alliance_networks.*.mobile_number' => self::MOBILE_CONTACT_NUMBER_RULES,
-            'alliance_networks.*.primary_contact_number' => self::MOBILE_CONTACT_NUMBER_RULES,
+            // No contact columns on profile_alliance_networks — see MOBILE_CONTACT_NUMBER_RULES note.
+            'alliance_networks.*.contact_number' => ['prohibited'],
+            'alliance_networks.*.contact_number_2' => ['prohibited'],
+            'alliance_networks.*.contact_number_3' => ['prohibited'],
+            'alliance_networks.*.phone_number' => ['prohibited'],
+            'alliance_networks.*.mobile_number' => ['prohibited'],
+            'alliance_networks.*.primary_contact_number' => ['prohibited'],
             'other_relatives_text' => ['nullable', 'string', 'max:4000'],
             'property_details' => ['nullable', 'string', 'max:4000'],
             'rashi_id' => ['nullable', 'integer', Rule::exists('master_rashis', 'id')->where('is_active', true)],
@@ -2927,8 +2939,6 @@ class MatrimonyProfileApiController extends Controller
                     'relation_type_label' => $this->relativeRelationTypeLabel($relative->relation_type),
                     'relative_details' => $relative->relative_details,
                     'contact_number' => $relative->contact_number,
-                    'contact_number_2' => $relative->contact_number_2,
-                    'contact_number_3' => $relative->contact_number_3,
                 ];
             })
             ->all();

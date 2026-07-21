@@ -86,7 +86,9 @@ class SuchakManualProfileApiController extends Controller
 
         $validated = $request->validate([
             'candidate_name' => ['required', 'string', 'max:255'],
-            'candidate_mobile' => ['nullable', 'string', 'max:32'],
+            // Required as of 2026-07-22 (PO decision): every profile needs at least one
+            // reachable number — consent delivery depends on it. Was nullable before.
+            'candidate_mobile' => ['required', 'string', 'max:32'],
             'candidate_email' => ['nullable', 'email', 'max:255'],
             'candidate_gender' => ['required', Rule::exists('master_genders', 'key')->where('is_active', true)],
             'registering_for' => [
@@ -96,34 +98,31 @@ class SuchakManualProfileApiController extends Controller
             'use_existing_profile' => ['nullable', 'boolean'],
         ]);
 
-        $mobile = null;
-        if (trim((string) ($validated['candidate_mobile'] ?? '')) !== '') {
-            $mobile = MobileNumber::normalize((string) $validated['candidate_mobile']);
-            if ($mobile === null) {
-                return response()->json([
-                    'success' => false,
-                    'message' => __('otp.enter_valid_10_digit_mobile'),
-                    'errors' => ['candidate_mobile' => [__('otp.enter_valid_10_digit_mobile')]],
-                ], 422);
-            }
+        $mobile = MobileNumber::normalize((string) $validated['candidate_mobile']);
+        if ($mobile === null) {
+            return response()->json([
+                'success' => false,
+                'message' => __('otp.enter_valid_10_digit_mobile'),
+                'errors' => ['candidate_mobile' => [__('otp.enter_valid_10_digit_mobile')]],
+            ], 422);
+        }
 
-            $existingMember = User::query()
-                ->where('mobile', $mobile)
-                ->with('matrimonyProfile')
-                ->first();
+        $existingMember = User::query()
+            ->where('mobile', $mobile)
+            ->with('matrimonyProfile')
+            ->first();
 
-            if ($existingMember !== null) {
-                return $this->handleExistingMobileProfile(
-                    $request,
-                    $validated,
-                    $mobile,
-                    $existingMember,
-                    $account,
-                    $representationService,
-                    $customerLifecycleService,
-                    $consentService,
-                );
-            }
+        if ($existingMember !== null) {
+            return $this->handleExistingMobileProfile(
+                $request,
+                $validated,
+                $mobile,
+                $existingMember,
+                $account,
+                $representationService,
+                $customerLifecycleService,
+                $consentService,
+            );
         }
 
         if (! empty($validated['candidate_email'])) {
