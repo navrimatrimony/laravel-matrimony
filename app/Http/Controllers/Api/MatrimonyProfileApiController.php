@@ -316,11 +316,18 @@ class MatrimonyProfileApiController extends Controller
             $addressLine = trim((string) ($row['address_line'] ?? ''));
             $notes = trim((string) ($row['notes'] ?? ''));
             $cityId = $row['city_id'] ?? null;
+            $contactNumbers = [];
+            foreach (['contact_number', 'contact_number_2', 'contact_number_3'] as $contactField) {
+                $value = trim((string) ($row[$contactField] ?? ''));
+                $contactNumbers[$contactField] = $value !== '' ? $value : null;
+            }
+            $hasContactNumber = count(array_filter($contactNumbers)) > 0;
             $hasMeaningfulData = in_array($relationType, self::MOBILE_SIBLING_RELATION_TYPES, true)
                 || $name !== ''
                 || $occupation !== ''
                 || $addressLine !== ''
                 || $notes !== ''
+                || $hasContactNumber
                 || ($cityId !== null && $cityId !== '');
 
             if (! $hasMeaningfulData) {
@@ -338,7 +345,7 @@ class MatrimonyProfileApiController extends Controller
                 'address_line' => $addressLine !== '' ? $addressLine : null,
                 'notes' => $notes !== '' ? $notes : null,
                 'sort_order' => isset($row['sort_order']) && $row['sort_order'] !== '' ? (int) $row['sort_order'] : $idx,
-            ];
+            ] + $contactNumbers;
 
             if (! empty($row['id'])) {
                 $sibling['id'] = (int) $row['id'];
@@ -369,9 +376,15 @@ class MatrimonyProfileApiController extends Controller
             $relationType = isset($row['relation_type']) ? trim((string) $row['relation_type']) : null;
             $relationType = $relationType !== '' ? $relationType : null;
             $relativeDetails = $this->relativeDetailsFromMobileRelativeRow($row);
+            $contactNumbers = [];
+            foreach (['contact_number', 'contact_number_2', 'contact_number_3'] as $contactField) {
+                $value = trim((string) ($row[$contactField] ?? ''));
+                $contactNumbers[$contactField] = $value !== '' ? $value : null;
+            }
 
             $hasMeaningfulData = ($relationType !== null && array_key_exists($relationType, self::MOBILE_RELATIVE_RELATION_LABELS))
-                || $relativeDetails !== null;
+                || $relativeDetails !== null
+                || count(array_filter($contactNumbers)) > 0;
 
             if (! $hasMeaningfulData) {
                 continue;
@@ -380,7 +393,7 @@ class MatrimonyProfileApiController extends Controller
             $relative = [
                 'relation_type' => $relationType,
                 'relative_details' => $relativeDetails,
-            ];
+            ] + $contactNumbers;
 
             if (! empty($row['id'])) {
                 $relative['id'] = (int) $row['id'];
@@ -2887,6 +2900,9 @@ class MatrimonyProfileApiController extends Controller
                     'city_label' => $this->masterLookupLabel($sibling->city),
                     'address_line' => $sibling->address_line,
                     'notes' => $sibling->notes,
+                    'contact_number' => $sibling->contact_number,
+                    'contact_number_2' => $sibling->contact_number_2,
+                    'contact_number_3' => $sibling->contact_number_3,
                     'sort_order' => $sibling->sort_order !== null ? (int) $sibling->sort_order : 0,
                 ];
             })
@@ -2909,6 +2925,9 @@ class MatrimonyProfileApiController extends Controller
                     'relation_type' => $relative->relation_type,
                     'relation_type_label' => $this->relativeRelationTypeLabel($relative->relation_type),
                     'relative_details' => $relative->relative_details,
+                    'contact_number' => $relative->contact_number,
+                    'contact_number_2' => $relative->contact_number_2,
+                    'contact_number_3' => $relative->contact_number_3,
                 ];
             })
             ->all();
