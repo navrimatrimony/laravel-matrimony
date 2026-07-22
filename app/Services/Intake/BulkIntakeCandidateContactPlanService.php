@@ -6,6 +6,7 @@ use App\Models\BiodataIntake;
 use App\Models\BulkIntakeBatchItem;
 use App\Services\BiodataParserService;
 use App\Services\Ocr\OcrNormalize;
+use App\Support\ConsentContactRole;
 use App\Support\MobileNumber;
 use Illuminate\Support\Facades\DB;
 
@@ -14,15 +15,20 @@ use Illuminate\Support\Facades\DB;
  */
 class BulkIntakeCandidateContactPlanService
 {
-    public const ROLE_SELF = 'self';
+    /**
+     * Role vocabulary lives in App\Support\ConsentContactRole so the Suchak
+     * consent-fallback surface can share the same ordering and labels.
+     * These aliases keep existing call sites unchanged.
+     */
+    public const ROLE_SELF = ConsentContactRole::SELF;
 
-    public const ROLE_FATHER = 'father';
+    public const ROLE_FATHER = ConsentContactRole::FATHER;
 
-    public const ROLE_MOTHER = 'mother';
+    public const ROLE_MOTHER = ConsentContactRole::MOTHER;
 
-    public const ROLE_OTHER_FAMILY = 'other_family';
+    public const ROLE_OTHER_FAMILY = ConsentContactRole::OTHER_FAMILY;
 
-    public const ROLE_OCR_OTHER = 'ocr_other';
+    public const ROLE_OCR_OTHER = ConsentContactRole::OTHER;
 
     /**
      * @return array{
@@ -707,14 +713,7 @@ class BulkIntakeCandidateContactPlanService
 
     private function roleLabel(string $role): ?string
     {
-        return match ($role) {
-            self::ROLE_SELF => 'Candidate',
-            self::ROLE_FATHER => 'Father',
-            self::ROLE_MOTHER => 'Mother',
-            self::ROLE_OTHER_FAMILY => 'Family',
-            self::ROLE_OCR_OTHER => 'Other',
-            default => $role !== '' ? str_replace('_', ' ', $role) : null,
-        };
+        return ConsentContactRole::label($role);
     }
 
     /**

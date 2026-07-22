@@ -1327,11 +1327,35 @@ Rules:
 - `siblings.*.name`, `siblings.*.occupation`, `siblings.*.address_line`: nullable string, max 255
 - `siblings.*.notes`: nullable string, max 1000
 - `siblings.*.sort_order`: nullable integer, min 0
+- `siblings.*.contact_number`, `siblings.*.contact_number_2`, `siblings.*.contact_number_3`: nullable string, max 20, must match `/^[0-9+\-\s()]{7,20}$/`. **Changed 2026-07-21** — previously rejected outright; now accepted and returned. See "Sub-record contact numbers" below.
 - Send `siblings: []` with `has_siblings: false` to clear sibling rows through the same governed replace behavior used by the Laravel wizard. Omitting `siblings` preserves existing sibling rows.
+
+### Sub-record contact numbers (changed 2026-07-21, corrected 2026-07-22)
+
+Writable contact numbers exist ONLY where the database actually stores them:
+
+| Row type | Writable keys | Storage |
+|---|---|---|
+| `siblings.*` | `contact_number`, `contact_number_2`, `contact_number_3` | `profile_siblings` columns |
+| `relatives.*` | `contact_number` only (`_2`/`_3` remain prohibited) | `profile_relatives.contact_number` |
+| `marriages.*`, `children.*`, `self_addresses.*`, `parents_addresses.*`, `alliance_networks.*` | **none — all contact keys prohibited** | no contact columns on those tables |
+
+Parent numbers use the dedicated core fields (`father_contact_1/2`, `mother_contact_1/2`) and the candidate's own number lives in `profile_contacts` (primary). The 2026-07-21 change briefly accepted contact keys on marriage/children/address/alliance rows; those were dead (silently dropped at the MutationService column-intersect) and were re-prohibited on 2026-07-22 so clients get an honest 422 instead of silent data loss.
+
+**Privacy is enforced by authorization scoping, not by blocking the field:**
+
+| Caller | Sees sub-record contact numbers? |
+|---|---|
+| Member, own profile (`GET/PUT /matrimony-profile`) | Yes |
+| Suchak, a candidate they represent (`/suchak/nxt/{representation}/profile`) | Yes |
+| Suchak, a representation they do **not** own | No — 404 |
+| Any member viewing another profile (`GET /matrimony-profiles/{id}`) | **No — keys stripped from the response** |
+
+The last row is a hard boundary: the shared row builders feed both the owner view and the browse-someone-else view, so the other-profile path strips these keys (`forgetPrivateRowKeys`). Regression tests: `SuchakRepresentedProfileContactNumbersTest`, plus the existing "does not expose ... to other profiles" assertions in `MobileMatrimonyProfileApiTest`.
 - `relatives`: nullable array, max 20 rows. Each row may include `id`, `relation_type`, and `relative_details`.
 - `relatives.*.relation_type`: nullable but required when the row has other data; one of `paternal_grandfather`, `paternal_grandmother`, `paternal_uncle`, `wife_paternal_uncle`, `paternal_aunt`, `husband_paternal_aunt`, `Cousin`, `maternal_address_ajol`, `maternal_grandfather`, `maternal_grandmother`, `maternal_uncle`, `wife_maternal_uncle`, `maternal_aunt`, `husband_maternal_aunt`, `maternal_cousin`
 - `relatives.*.relative_details`: nullable string, max 2000. Use this one field for relative name, occupation, address, and notes.
-- `relatives.*.contact_number`, `relatives.*.contact_number_2`, and `relatives.*.contact_number_3` are not accepted by the mobile contract. Send `relatives: []` to clear relative rows. Omitting `relatives` preserves existing relative rows.
+- `relatives.*.contact_number`: nullable string, max 20, must match `/^[0-9+\-\s()]{7,20}$/`. **Changed 2026-07-21** — previously rejected outright; now accepted and returned. `relatives.*.contact_number_2`/`_3` remain prohibited (no columns). See "Sub-record contact numbers" below. Send `relatives: []` to clear relative rows. Omitting `relatives` preserves existing relative rows.
 - `alliance_networks`: nullable array, max 20 rows. Each row may include `id`, `surname`, `city_id`, `state_id`, `district_id`, `taluka_id`, and `notes`.
 - `alliance_networks.*.surname`: nullable string, max 255, but required when that row has any location or note data because `profile_alliance_networks.surname` is required.
 - `alliance_networks.*.city_id`, `alliance_networks.*.state_id`, `alliance_networks.*.district_id`, `alliance_networks.*.taluka_id`: nullable, must exist in `addresses.id`
@@ -1371,7 +1395,7 @@ Governance note:
 - Parent contact numbers are accepted only for the authenticated owner's edit/read payload: `father_contact_1`, `father_contact_2`, `mother_contact_1`, and `mother_contact_2`. `father_contact_3` and `mother_contact_3` are accepted only on deployments where those DB columns still exist. Own profile responses include `parent_contact_max_slots` so mobile can show the correct number of slots. Other-profile detail/list responses must not expose parent contact keys or `parent_contact_max_slots`. WhatsApp/contact-preference flags for parent contact fields are not accepted by the mobile API because they are not stored on `matrimony_profiles`.
 - Parent contact values are private. Other-profile detail/list responses and public display sections must not expose them.
 - Sibling contact numbers, relative contact numbers, contact unlock/payment fields, and preference repeaters are intentionally not accepted in this mobile contract.
-- Sibling and relative contact number columns exist in the Laravel web schema but are not accepted or returned by this mobile contract. Other-profile detail/list responses must not expose sibling or relative contact numbers.
+- **Changed 2026-07-21/22:** sibling (`contact_number`, `_2`, `_3`) and relative (`contact_number`) numbers ARE now accepted and returned — see "Sub-record contact numbers". Other-profile detail/list responses must still never expose them; that stripping is the privacy control.
 - Relative repeaters are intentionally deferred until a row-preserving, privacy-safe mobile contract is added.
 
 Success response: HTTP 200
@@ -2434,3 +2458,185 @@ Success response: HTTP 200
   "message": "Interest withdrawn successfully."
 }
 ```
+
+## Suchak — represented candidate APIs
+
+All routes below sit under `/api/v1/suchak`, behind `auth:sanctum` + the
+`suchak.account` middleware, and additionally require
+`SuchakAccessService::canOwnerPrepareCustomers`. A representation the caller
+does not own returns **404** (never 403 — existence is not confirmed to other
+Suchaks).
+
+### POST `/api/v1/suchak/manual-profiles`
+
+Creates the candidate shell + representation.
+
+| Field | Rule |
+|---|---|
+| `candidate_name` | required, max 255 |
+| `candidate_mobile` | **required** (changed 2026-07-22 — was nullable), normalized to a 10-digit Indian number |
+| `candidate_gender` | required, active `master_genders.key` |
+| `registering_for` | required, one of self/parent_guardian/sibling/relative/friend/other |
+| `candidate_email` | nullable, unique |
+| `use_existing_profile` | nullable boolean — resubmit `true` after a 409 |
+
+`candidate_mobile` is required because consent delivery depends on having at
+least one reachable number; a profile with no number cannot be progressed.
+
+Outcomes: `201 created`, `200 linked_existing`, `409
+existing_profile_confirmation_required`, `422` (validation / unparseable mobile).
+
+### POST `/api/v1/suchak/manual-profiles/duplicate-check`
+
+Pre-create duplicate probe for wizard step 1. **Reports only — never blocks.**
+
+Request: `candidate_name` (required), `candidate_mobile` (required),
+`date_of_birth` (`Y-m-d`, optional), `candidate_gender` (optional key).
+
+```json
+{
+  "success": true,
+  "data": {
+    "match_count": 1,
+    "matches": [{
+      "profile_id": 402,
+      "display_name": "Shriram K.",
+      "age_years": 26,
+      "gender": "male",
+      "location_label": "Dighi, Pune",
+      "confidence": "confirmed",
+      "signals": {
+        "mobile": true,
+        "mobile_sources": ["self_mobile"],
+        "name": "strong",
+        "dob": "exact",
+        "gender": true
+      },
+      "shared_number_possible": false,
+      "already_represented_by_me": false,
+      "representation_id": null,
+      "can_link_existing": true
+    }]
+  }
+}
+```
+
+Scoring (approved 2026-07-22):
+
+| Signals | `confidence` |
+|---|---|
+| mobile hit **and** strong name **and** DOB **and** gender agree | `confirmed` |
+| mobile hit alone | `high` |
+| strong fuzzy name + DOB + gender, no mobile | `high` |
+| partial name + exact DOB + gender | `medium` |
+| anything less | not returned |
+
+A mobile hit alone is deliberately **not** decisive: rural families share one
+number, so three sisters on a father's phone are separate people, not
+duplicates. `shared_number_possible` is true when the number matched a
+family slot rather than the candidate's own account mobile, and
+`can_link_existing` is true only for own-mobile matches (the `409`
+`use_existing_profile` flow). Names are matched with `App\Support\NameMatcher`
+(token-set + Marathi transliteration folding, so Shriram/Sriram/Shreeram and
+"Kadam Shriram" all match). Display names are masked (`Shriram K.`).
+
+### GET `/api/v1/suchak/nxt/{representation}/profile`
+
+Same governance payload as the member `GET /matrimony-profile`, plus:
+
+```json
+{
+  "data": {
+    "representation_id": 42,
+    "profile_id": 402,
+    "suchak_account_id": 7,
+    "completion": {
+      "percent": 40,
+      "sections": [{"key": "basic-info", "status": "completed"}],
+      "incomplete_sections": ["photo", "about-preferences"]
+    }
+  }
+}
+```
+
+`completion` comes from the member-side `ProfileCompletionService` (same
+sections and weights members see) so the two roles can never disagree about
+what "complete" means. Section keys match `ProfileCompletionService::SECTIONS`.
+
+### PUT `/api/v1/suchak/nxt/{representation}/profile`
+
+Delegates to the member full-PUT engine, so it accepts marriages/children and
+applies the canonical marital rules. Since 2026-07-22 it also enforces:
+
+- **Minimum marriage age** (`App\Support\MarriageAgePolicy`): female 18 / male
+  21, gender taken from the request when present, else the stored profile.
+  Future DOBs rejected. Applies to the web wizard and step engine too.
+- **Marital year sanity** (`App\Support\MaritalDependencyRules`):
+  divorce/separation/spouse-death year must be ≥ marriage year, and no year may
+  be in the future. These rules previously existed only in the web wizard, so
+  the mobile path silently accepted a divorce before the marriage.
+
+### POST `/api/v1/suchak/nxt/{representation}/profile/save-step`
+
+Step engine (`MobileProfileStepSnapshotService`). Note: `marriages` in a step
+payload is rejected (422) by design and `children` is accepted-then-dropped —
+use the full PUT for marital detail rows.
+
+### GET `/api/v1/suchak/nxt/{representation}/consent-contacts`
+
+Numbers this representation's consent may target, in try-order.
+
+```json
+{
+  "success": true,
+  "data": {
+    "options": [{
+      "mobile": "9822012345",
+      "mobile_masked": "98220•••45",
+      "role": "father",
+      "role_label": "Father",
+      "role_label_mr": "वडील",
+      "owner_name": "Ramesh Patil",
+      "already_tried": false
+    }],
+    "suggest_alternate": true,
+    "suggestion_reason": "no_response",
+    "pending_consent_id": 11,
+    "no_response_hours": 72
+  }
+}
+```
+
+Rules (approved 2026-07-22):
+
+- Consent may **only** target a number already stored on the profile. Sources,
+  in priority order: candidate's own account mobile → `profile_contacts`
+  (relation-aware) → `father_contact_*` / `mother_contact_*` → sibling rows →
+  relative rows. Duplicates collapse to the highest-priority owner.
+- `already_tried` is derived from this representation's consent history.
+- `suggest_alternate` turns true only after `no_response_hours` of silence on
+  the pending consent **and** an untried number exists. `suggestion_reason` is
+  `no_response` (never opened) or `started_not_completed` (link opened / OTP
+  sent but not verified); `no_untried_contacts` means every number was tried.
+- The system only **suggests** — it never sends to a fallback number by itself.
+
+Ordering, labels and the no-response window are shared with the bulk-intake
+consent queue (`App\Support\ConsentContactRole` +
+`whatsapp.bulk_consent_no_response_hours`), so both pipelines behave the same.
+
+### POST `/api/v1/suchak/nxt/{representation}/preferences/auto-draft`
+
+Drafts partner preferences for the **represented candidate** from the profile
+data already entered (age, height, caste, location, income bands).
+
+Body: `force_regenerate` (nullable boolean). Response is the shared
+`RegistrationPartnerPreferenceService::persist()` payload plus
+`representation_id`, `profile_id`, `suchak_account_id`.
+
+Why a Suchak-specific route exists: the member route
+`POST /onboarding/preferences/auto-draft` derives preferences for
+`$request->user()`, which for a Suchak is the **Suchak's own** profile — the
+wrong person. This adapter resolves the candidate's user and calls the same
+service, so the suggestion engine is reused rather than duplicated.
+`persist()` will not overwrite preferences that were edited manually, so the
+call is safe to repeat.

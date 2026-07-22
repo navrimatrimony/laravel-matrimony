@@ -14,6 +14,8 @@ use App\Services\PartnerPreferenceNavService;
 use App\Services\PartnerPreferenceSnapshotBuilder;
 use App\Services\ProfileCompletionEngine;
 use App\Support\ErrorFactory;
+use App\Support\MaritalDependencyRules;
+use App\Support\MarriageAgePolicy;
 use App\Support\Validation\AddressHierarchyRules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -978,6 +980,19 @@ class ProfileWizardController extends Controller
             'sub_caste_id' => ['nullable', Rule::exists('master_sub_castes', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'mother_tongue_id' => ['nullable', Rule::exists('master_mother_tongues', 'id')->where(fn ($q) => $q->where('is_active', true))],
         ]);
+
+        // Minimum marriage age (shared MarriageAgePolicy — PO 2026-07-22).
+        if ($request->filled('date_of_birth')) {
+            $genderKey = MarriageAgePolicy::genderKeyForId(
+                $request->input('gender_id') ?: $profile->gender_id
+            );
+            $ageError = MarriageAgePolicy::dateOfBirthError($request->input('date_of_birth'), $genderKey);
+            if ($ageError !== null) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'date_of_birth' => $ageError,
+                ]);
+            }
+        }
 
         if (! $request->attributes->get(self::SKIP_BASIC_INFO_RESIDENCE_VALIDATION)) {
             $this->validateSelfAddressesForBasicInfo($request);
@@ -2061,14 +2076,14 @@ class ProfileWizardController extends Controller
     {
         $maritalStatusId = $request->input('marital_status_id');
         $statusKey = \App\Models\MasterMaritalStatus::where('id', $maritalStatusId)->value('key');
-        $statusesRequiringChildren = ['divorced', 'annulled', 'separated', 'widowed'];
+        $statusesRequiringChildren = MaritalDependencyRules::DETAIL_STATUS_KEYS;
 
         $rules = [
             'marital_status_id' => ['required', Rule::exists('master_marital_statuses', 'id')->where(fn ($q) => $q->where('is_active', true))],
-            'marriages.*.marriage_year' => ['nullable', 'integer', 'min:1901', 'max:'.(int) date('Y')],
-            'marriages.*.separation_year' => ['nullable', 'integer', 'min:1901', 'max:'.(int) date('Y')],
-            'marriages.*.divorce_year' => ['nullable', 'integer', 'min:1901', 'max:'.(int) date('Y')],
-            'marriages.*.spouse_death_year' => ['nullable', 'integer', 'min:1901', 'max:'.(int) date('Y')],
+            'marriages.*.marriage_year' => MaritalDependencyRules::yearFieldRules(),
+            'marriages.*.separation_year' => MaritalDependencyRules::yearFieldRules(),
+            'marriages.*.divorce_year' => MaritalDependencyRules::yearFieldRules(),
+            'marriages.*.spouse_death_year' => MaritalDependencyRules::yearFieldRules(),
         ];
         if ($statusKey && in_array($statusKey, $statusesRequiringChildren, true)) {
             $rules['has_children'] = ['nullable', 'in:0,1'];
@@ -2111,27 +2126,20 @@ class ProfileWizardController extends Controller
         $divorceYear = ! empty($marriageRow['divorce_year']) ? (int) $marriageRow['divorce_year'] : null;
         $separationYear = ! empty($marriageRow['separation_year']) ? (int) $marriageRow['separation_year'] : null;
         $spouseDeathYear = ! empty($marriageRow['spouse_death_year']) ? (int) $marriageRow['spouse_death_year'] : null;
-        $currentYear = (int) date('Y');
-        if ($marriageYear !== null && $divorceYear !== null && $divorceYear < $marriageYear) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['marriages.0.divorce_year' => ['Divorce year must be greater than or equal to marriage year.']]);
-        }
-        if ($marriageYear !== null && $separationYear !== null && $separationYear < $marriageYear) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['marriages.0.separation_year' => ['Separation year must be greater than or equal to marriage year.']]);
-        }
-        if ($marriageYear !== null && $spouseDeathYear !== null && $spouseDeathYear < $marriageYear) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['marriages.0.spouse_death_year' => ['Spouse death year must be greater than or equal to marriage year.']]);
-        }
-        if ($marriageYear !== null && $marriageYear > $currentYear) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['marriages.0.marriage_year' => ['Marriage year cannot be in the future.']]);
-        }
-        if ($divorceYear !== null && $divorceYear > $currentYear) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['marriages.0.divorce_year' => ['Divorce year cannot be in the future.']]);
-        }
-        if ($separationYear !== null && $separationYear > $currentYear) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['marriages.0.separation_year' => ['Separation year cannot be in the future.']]);
-        }
-        if ($spouseDeathYear !== null && $spouseDeathYear > $currentYear) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['marriages.0.spouse_death_year' => ['Spouse death year cannot be in the future.']]);
+        // Canonical cross-field year sanity (App\Support\MaritalDependencyRules).
+        // These rules used to live inline here; they were moved so the mobile
+        // API can apply the identical checks instead of silently accepting
+        // divorce-before-marriage.
+        $yearErrors = MaritalDependencyRules::yearSanityErrors([
+            'marriage_year' => $marriageYear,
+            'divorce_year' => $divorceYear,
+            'separation_year' => $separationYear,
+            'spouse_death_year' => $spouseDeathYear,
+        ]);
+        if ($yearErrors !== []) {
+            throw \Illuminate\Validation\ValidationException::withMessages(
+                array_map(static fn (string $message): array => [$message], $yearErrors)
+            );
         }
 
         $marriageId = ! empty($marriageRow['id']) ? (int) $marriageRow['id'] : null;

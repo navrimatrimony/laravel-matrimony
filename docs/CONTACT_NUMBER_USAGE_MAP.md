@@ -1,5 +1,15 @@
 # matrimony_profiles.contact_number & profile_contacts — Full Usage Map
 
+> ⚠ **PARTIALLY STALE (checked 2026-07-22).** The physical
+> `matrimony_profiles.contact_number` column has since been **dropped**;
+> `contact_number` is now a virtual accessor over `profile_contacts`, which is
+> the canonical store (relation_type + contact_name + is_primary +
+> visibility_rule). Sections below that describe the physical column are
+> historical. Verified current state, including which sub-record tables really
+> have contact columns and who may read them, is in
+> `PRODUCT_MAP.md` §5 and `docs/MOBILE_API_CONTRACT.md`
+> ("Sub-record contact numbers").
+
 Factual usage only. No architecture suggestions.
 
 ---

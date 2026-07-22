@@ -26,6 +26,8 @@ use App\Services\ProfileFieldLockService;
 use App\Services\ProfilePartnerCommunityFlagService;
 use App\Services\ProfileRotationService;
 use App\Services\ViewTrackingService;
+use App\Support\MaritalDependencyRules;
+use App\Support\MarriageAgePolicy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Http\Request;
@@ -72,11 +74,27 @@ class MatrimonyProfileApiController extends Controller
 
     private const MOBILE_MARRIAGE_DIVORCE_STATUSES = ['pending', 'finalized', 'mutual', 'contested'];
 
-    private const MOBILE_MARRIAGE_DETAIL_STATUS_KEYS = ['divorced', 'annulled', 'separated', 'widowed'];
+    /** @see MaritalDependencyRules::DETAIL_STATUS_KEYS — canonical source. */
+    private const MOBILE_MARRIAGE_DETAIL_STATUS_KEYS = MaritalDependencyRules::DETAIL_STATUS_KEYS;
 
     private const MOBILE_CHILD_GENDERS = ['male', 'female', 'other', 'prefer_not_say'];
 
     private const MOBILE_ADDRESS_TYPE_KEYS = ['current', 'permanent', 'native', 'work', 'other'];
+
+    /**
+     * Approved 2026-07-21: sibling/relative contact numbers are editable (same rule shape
+     * as mobileParentContactFields()). Privacy is enforced by authorization scoping
+     * (owner/represented-candidate/admin), not by blocking the field.
+     *
+     * Schema reality check 2026-07-22: contact columns exist ONLY on profile_siblings
+     * (contact_number, _2, _3) and profile_relatives (contact_number). profile_marriages,
+     * profile_children, profile_addresses and profile_alliance_networks have NO contact
+     * columns — accepting those keys would silently drop data at the MutationService
+     * column-intersect, so they stay 'prohibited' (honest 422 instead of silent loss).
+     * Consent-fallback numbers come from parent slots + profile_contacts + siblings +
+     * relatives; the other tables were never meant to store phones.
+     */
+    private const MOBILE_CONTACT_NUMBER_RULES = ['nullable', 'string', 'max:20', 'regex:/^[0-9+\-\s()]{7,20}$/'];
 
     private const MOBILE_RELATIVE_RELATION_LABELS = [
         'paternal_grandfather' => 'Paternal Grandfather',
@@ -309,11 +327,18 @@ class MatrimonyProfileApiController extends Controller
             $addressLine = trim((string) ($row['address_line'] ?? ''));
             $notes = trim((string) ($row['notes'] ?? ''));
             $cityId = $row['city_id'] ?? null;
+            $contactNumbers = [];
+            foreach (['contact_number', 'contact_number_2', 'contact_number_3'] as $contactField) {
+                $value = trim((string) ($row[$contactField] ?? ''));
+                $contactNumbers[$contactField] = $value !== '' ? $value : null;
+            }
+            $hasContactNumber = count(array_filter($contactNumbers)) > 0;
             $hasMeaningfulData = in_array($relationType, self::MOBILE_SIBLING_RELATION_TYPES, true)
                 || $name !== ''
                 || $occupation !== ''
                 || $addressLine !== ''
                 || $notes !== ''
+                || $hasContactNumber
                 || ($cityId !== null && $cityId !== '');
 
             if (! $hasMeaningfulData) {
@@ -331,7 +356,7 @@ class MatrimonyProfileApiController extends Controller
                 'address_line' => $addressLine !== '' ? $addressLine : null,
                 'notes' => $notes !== '' ? $notes : null,
                 'sort_order' => isset($row['sort_order']) && $row['sort_order'] !== '' ? (int) $row['sort_order'] : $idx,
-            ];
+            ] + $contactNumbers;
 
             if (! empty($row['id'])) {
                 $sibling['id'] = (int) $row['id'];
@@ -362,9 +387,13 @@ class MatrimonyProfileApiController extends Controller
             $relationType = isset($row['relation_type']) ? trim((string) $row['relation_type']) : null;
             $relationType = $relationType !== '' ? $relationType : null;
             $relativeDetails = $this->relativeDetailsFromMobileRelativeRow($row);
+            // profile_relatives stores a single contact_number (no _2/_3 columns).
+            $contactValue = trim((string) ($row['contact_number'] ?? ''));
+            $contactNumbers = ['contact_number' => $contactValue !== '' ? $contactValue : null];
 
             $hasMeaningfulData = ($relationType !== null && array_key_exists($relationType, self::MOBILE_RELATIVE_RELATION_LABELS))
-                || $relativeDetails !== null;
+                || $relativeDetails !== null
+                || count(array_filter($contactNumbers)) > 0;
 
             if (! $hasMeaningfulData) {
                 continue;
@@ -373,7 +402,7 @@ class MatrimonyProfileApiController extends Controller
             $relative = [
                 'relation_type' => $relationType,
                 'relative_details' => $relativeDetails,
-            ];
+            ] + $contactNumbers;
 
             if (! empty($row['id'])) {
                 $relative['id'] = (int) $row['id'];
@@ -1039,7 +1068,7 @@ class MatrimonyProfileApiController extends Controller
         return $row;
     }
 
-    private function validateMobileProfileRequest(Request $request, bool $creating): void
+    private function validateMobileProfileRequest(Request $request, bool $creating, ?MatrimonyProfile $profile = null): void
     {
         $this->normalizeMobileEducationCareerInputs($request);
 
@@ -1137,9 +1166,9 @@ class MatrimonyProfileApiController extends Controller
             'siblings.*.address_line' => ['nullable', 'string', 'max:255'],
             'siblings.*.notes' => ['nullable', 'string', 'max:1000'],
             'siblings.*.sort_order' => ['nullable', 'integer', 'min:0'],
-            'siblings.*.contact_number' => ['prohibited'],
-            'siblings.*.contact_number_2' => ['prohibited'],
-            'siblings.*.contact_number_3' => ['prohibited'],
+            'siblings.*.contact_number' => self::MOBILE_CONTACT_NUMBER_RULES,
+            'siblings.*.contact_number_2' => self::MOBILE_CONTACT_NUMBER_RULES,
+            'siblings.*.contact_number_3' => self::MOBILE_CONTACT_NUMBER_RULES,
             'marriages' => ['nullable', 'array', 'max:10'],
             'marriages.*' => ['array'],
             'marriages.*.id' => ['nullable', 'integer'],
@@ -1151,6 +1180,7 @@ class MatrimonyProfileApiController extends Controller
             'marriages.*.divorce_status' => ['nullable', Rule::in(self::MOBILE_MARRIAGE_DIVORCE_STATUSES)],
             'marriages.*.remarriage_reason' => ['nullable', 'string', 'max:1000'],
             'marriages.*.notes' => ['nullable', 'string', 'max:1000'],
+            // No contact columns on profile_marriages — see MOBILE_CONTACT_NUMBER_RULES note.
             'marriages.*.contact_number' => ['prohibited'],
             'marriages.*.contact_number_2' => ['prohibited'],
             'marriages.*.contact_number_3' => ['prohibited'],
@@ -1168,6 +1198,7 @@ class MatrimonyProfileApiController extends Controller
                 Rule::exists('master_child_living_with', 'id')->where(fn ($query) => $query->where('is_active', true)),
             ],
             'children.*.sort_order' => ['nullable', 'integer', 'min:0'],
+            // No contact columns on profile_children — see MOBILE_CONTACT_NUMBER_RULES note.
             'children.*.contact_number' => ['prohibited'],
             'children.*.contact_number_2' => ['prohibited'],
             'children.*.contact_number_3' => ['prohibited'],
@@ -1181,6 +1212,7 @@ class MatrimonyProfileApiController extends Controller
             'self_addresses.*.address_line' => ['nullable', 'string', 'max:255'],
             'self_addresses.*.location_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
             'self_addresses.*.city_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            // No contact columns on profile_addresses — see MOBILE_CONTACT_NUMBER_RULES note.
             'self_addresses.*.contact_number' => ['prohibited'],
             'self_addresses.*.contact_number_2' => ['prohibited'],
             'self_addresses.*.contact_number_3' => ['prohibited'],
@@ -1195,6 +1227,7 @@ class MatrimonyProfileApiController extends Controller
             'parents_addresses.*.address_line' => ['nullable', 'string', 'max:255'],
             'parents_addresses.*.location_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
             'parents_addresses.*.city_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            // No contact columns on profile_addresses — see MOBILE_CONTACT_NUMBER_RULES note.
             'parents_addresses.*.contact_number' => ['prohibited'],
             'parents_addresses.*.contact_number_2' => ['prohibited'],
             'parents_addresses.*.contact_number_3' => ['prohibited'],
@@ -1206,7 +1239,8 @@ class MatrimonyProfileApiController extends Controller
             'relatives.*.id' => ['nullable', 'integer'],
             'relatives.*.relation_type' => ['nullable', Rule::in(array_keys(self::MOBILE_RELATIVE_RELATION_LABELS))],
             'relatives.*.relative_details' => ['nullable', 'string', 'max:2000'],
-            'relatives.*.contact_number' => ['prohibited'],
+            'relatives.*.contact_number' => self::MOBILE_CONTACT_NUMBER_RULES,
+            // profile_relatives has only contact_number — no _2/_3 columns.
             'relatives.*.contact_number_2' => ['prohibited'],
             'relatives.*.contact_number_3' => ['prohibited'],
             'alliance_networks' => ['nullable', 'array', 'max:20'],
@@ -1218,6 +1252,7 @@ class MatrimonyProfileApiController extends Controller
             'alliance_networks.*.district_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
             'alliance_networks.*.taluka_id' => ['nullable', 'integer', 'exists:'.Location::geoTable().',id'],
             'alliance_networks.*.notes' => ['nullable', 'string', 'max:1000'],
+            // No contact columns on profile_alliance_networks — see MOBILE_CONTACT_NUMBER_RULES note.
             'alliance_networks.*.contact_number' => ['prohibited'],
             'alliance_networks.*.contact_number_2' => ['prohibited'],
             'alliance_networks.*.contact_number_3' => ['prohibited'],
@@ -1247,7 +1282,7 @@ class MatrimonyProfileApiController extends Controller
         ];
 
         foreach ($this->mobileParentContactFields() as $field) {
-            $rules[$field] = ['nullable', 'string', 'max:20', 'regex:/^[0-9+\-\s()]{7,20}$/'];
+            $rules[$field] = self::MOBILE_CONTACT_NUMBER_RULES;
         }
         foreach ($this->mobileParentContactPreferenceFields() as $field) {
             $rules[$field] = ['prohibited'];
@@ -1269,7 +1304,33 @@ class MatrimonyProfileApiController extends Controller
         }
 
         $validator = Validator::make($request->all(), $rules);
-        $validator->after(function ($validator) use ($request): void {
+        $validator->after(function ($validator) use ($request, $profile): void {
+            // Minimum marriage age (shared MarriageAgePolicy — PO 2026-07-22).
+            if ($request->filled('date_of_birth')) {
+                $genderKey = MarriageAgePolicy::genderKeyForId(
+                    $request->input('gender_id') ?: $profile?->gender_id
+                );
+                $ageError = MarriageAgePolicy::dateOfBirthError($request->input('date_of_birth'), $genderKey);
+                if ($ageError !== null) {
+                    $validator->errors()->add('date_of_birth', $ageError);
+                }
+            }
+
+            // Canonical marital year sanity (App\Support\MaritalDependencyRules).
+            // The web wizard has enforced these since day one; the mobile path
+            // silently accepted divorce-before-marriage until 2026-07-22.
+            $marriageRowsForYears = $request->input('marriages', []);
+            if (is_array($marriageRowsForYears)) {
+                foreach (array_values($marriageRowsForYears) as $index => $marriageRow) {
+                    if (! is_array($marriageRow)) {
+                        continue;
+                    }
+                    foreach (MaritalDependencyRules::yearSanityErrors($marriageRow, 'marriages.'.$index) as $key => $message) {
+                        $validator->errors()->add($key, $message);
+                    }
+                }
+            }
+
             $religionId = $request->input('religion_id');
             $casteId = $request->input('caste_id');
             $subCasteId = $request->input('sub_caste_id');
@@ -1664,7 +1725,7 @@ class MatrimonyProfileApiController extends Controller
     public function updateForProfile(Request $request, MatrimonyProfile $profile, User $actor)
     {
         // Phase-4 Day-8: Location hierarchy validation
-        $this->validateMobileProfileRequest($request, creating: false);
+        $this->validateMobileProfileRequest($request, creating: false, profile: $profile);
 
         // Day 7: Archived/Suspended → edit blocked
         if (! \App\Services\ProfileLifecycleService::isEditable($profile)) {
@@ -2385,6 +2446,7 @@ class MatrimonyProfileApiController extends Controller
             unset($profileData['self_addresses'], $profileData['parents_addresses']);
             $this->forgetParentContactPayloadKeys($profileData);
             $this->sanitizeAllianceNetworkRowsForOtherProfile($profileData);
+            $this->sanitizeSubRecordContactNumbersForOtherProfile($profileData);
             if ((bool) ($profile->income_private ?? false)) {
                 $this->forgetIncomePayloadKeys($profileData, 'income');
                 unset($profileData['annual_income']);
@@ -2880,6 +2942,9 @@ class MatrimonyProfileApiController extends Controller
                     'city_label' => $this->masterLookupLabel($sibling->city),
                     'address_line' => $sibling->address_line,
                     'notes' => $sibling->notes,
+                    'contact_number' => $sibling->contact_number,
+                    'contact_number_2' => $sibling->contact_number_2,
+                    'contact_number_3' => $sibling->contact_number_3,
                     'sort_order' => $sibling->sort_order !== null ? (int) $sibling->sort_order : 0,
                 ];
             })
@@ -2902,6 +2967,7 @@ class MatrimonyProfileApiController extends Controller
                     'relation_type' => $relative->relation_type,
                     'relation_type_label' => $this->relativeRelationTypeLabel($relative->relation_type),
                     'relative_details' => $relative->relative_details,
+                    'contact_number' => $relative->contact_number,
                 ];
             })
             ->all();
@@ -3169,21 +3235,49 @@ class MatrimonyProfileApiController extends Controller
      */
     private function sanitizeAllianceNetworkRowsForOtherProfile(array &$profileData): void
     {
-        if (! isset($profileData['alliance_networks']) || ! is_array($profileData['alliance_networks'])) {
+        $this->forgetPrivateRowKeys($profileData, 'alliance_networks', [
+            'notes', 'contact_number', 'contact_number_2', 'contact_number_3',
+            'phone_number', 'mobile_number', 'primary_contact_number',
+        ]);
+    }
+
+    /**
+     * Contact numbers on sub-records are owner/authorized-agent data. They are
+     * editable (approved 2026-07-21) but must never reach a viewer looking at
+     * someone else's profile — that scoping IS the privacy control.
+     */
+    private function sanitizeSubRecordContactNumbersForOtherProfile(array &$profileData): void
+    {
+        $contactKeys = [
+            'contact_number', 'contact_number_2', 'contact_number_3',
+            'phone_number', 'mobile_number', 'primary_contact_number',
+        ];
+
+        foreach (['siblings', 'relatives', 'marriages', 'children'] as $collection) {
+            $this->forgetPrivateRowKeys($profileData, $collection, $contactKeys);
+        }
+    }
+
+    /**
+     * @param  array<int, string>  $privateKeys
+     */
+    private function forgetPrivateRowKeys(array &$profileData, string $collection, array $privateKeys): void
+    {
+        if (! isset($profileData[$collection]) || ! is_array($profileData[$collection])) {
             return;
         }
 
-        $profileData['alliance_networks'] = array_values(array_map(static function (mixed $row): mixed {
+        $profileData[$collection] = array_values(array_map(static function (mixed $row) use ($privateKeys): mixed {
             if (! is_array($row)) {
                 return $row;
             }
 
-            foreach (['notes', 'contact_number', 'contact_number_2', 'contact_number_3', 'phone_number', 'mobile_number', 'primary_contact_number'] as $privateKey) {
+            foreach ($privateKeys as $privateKey) {
                 unset($row[$privateKey]);
             }
 
             return $row;
-        }, $profileData['alliance_networks']));
+        }, $profileData[$collection]));
     }
 
     private function masterTableLookupLabel(string $table, mixed $id): ?string
