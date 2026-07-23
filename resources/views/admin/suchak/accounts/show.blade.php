@@ -305,22 +305,26 @@
                                 <a href="{{ $docUrl }}" target="_blank" rel="noopener" class="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200">Open</a>
                             @endif
                             @if ($isRecordPending)
-                                <button type="button" onclick="document.getElementById('rec-{{ $record->id }}-approve').classList.toggle('hidden')"
+                                {{-- Inline display toggle rather than a `hidden` class:
+                                     Tailwind's sm:flex beats .hidden at >=640px, which
+                                     left every reason field open — the exact clutter
+                                     this redesign removes. --}}
+                                <button type="button" onclick="(function(a,r){a.style.display=a.style.display==='flex'?'none':'flex';r.style.display='none';})(document.getElementById('rec-{{ $record->id }}-approve'),document.getElementById('rec-{{ $record->id }}-reject'))"
                                         class="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">Approve</button>
-                                <button type="button" onclick="document.getElementById('rec-{{ $record->id }}-reject').classList.toggle('hidden')"
+                                <button type="button" onclick="(function(a,r){r.style.display=r.style.display==='flex'?'none':'flex';a.style.display='none';})(document.getElementById('rec-{{ $record->id }}-approve'),document.getElementById('rec-{{ $record->id }}-reject'))"
                                         class="rounded-md border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:border-rose-500/40 dark:text-rose-300">Reject</button>
                             @endif
                         </div>
                     </div>
 
                     @if ($isRecordPending)
-                        <form id="rec-{{ $record->id }}-approve" method="POST" action="{{ route('admin.suchak.accounts.verification-records.approve', [$suchakAccount, $record]) }}" class="mt-3 hidden gap-2 sm:flex">
+                        <form id="rec-{{ $record->id }}-approve" style="display:none" method="POST" action="{{ route('admin.suchak.accounts.verification-records.approve', [$suchakAccount, $record]) }}" class="mt-3 gap-2">
                             @csrf
                             <input type="text" name="reason" required minlength="10" maxlength="500" placeholder="Why is this approved? (min 10 characters)"
                                    class="flex-1 rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                             <button type="submit" class="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Confirm approve</button>
                         </form>
-                        <form id="rec-{{ $record->id }}-reject" method="POST" action="{{ route('admin.suchak.accounts.verification-records.reject', [$suchakAccount, $record]) }}" class="mt-3 hidden gap-2 sm:flex">
+                        <form id="rec-{{ $record->id }}-reject" style="display:none" method="POST" action="{{ route('admin.suchak.accounts.verification-records.reject', [$suchakAccount, $record]) }}" class="mt-3 gap-2">
                             @csrf
                             <input type="text" name="reason" required minlength="10" maxlength="500" placeholder="Why is this rejected? The Suchak sees this."
                                    class="flex-1 rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
