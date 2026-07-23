@@ -279,8 +279,13 @@ class AccountVerificationController extends Controller
         }
 
         if (request()->input('return_to') === 'photo_reviews') {
+            $queue = (string) request()->input('return_queue', '');
+            $params = in_array($queue, PhotoReviewController::queues(), true)
+                ? ['queue' => $queue]
+                : [];
+
             return redirect()
-                ->route('admin.suchak.photo-reviews.index')
+                ->route('admin.suchak.photo-reviews.index', $params)
                 ->with('success', $successMessage);
         }
 

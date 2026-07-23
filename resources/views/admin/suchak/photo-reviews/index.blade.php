@@ -11,6 +11,13 @@
 
         return in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true);
     };
+    $queueLabels = [
+        \App\Http\Controllers\Admin\Suchak\PhotoReviewController::QUEUE_NEEDS_REVIEW => 'Review करा',
+        \App\Http\Controllers\Admin\Suchak\PhotoReviewController::QUEUE_AUTO_REJECTED => 'Auto-rejected',
+        \App\Http\Controllers\Admin\Suchak\PhotoReviewController::QUEUE_AUTO_PASSED => 'Auto-passed',
+    ];
+    $defaultApproveReason = 'Approved from Suchak photo review queue.';
+    $defaultRejectReason = 'Rejected from Suchak photo review queue.';
 @endphp
 
 <div class="space-y-6">
@@ -19,11 +26,8 @@
             <div>
                 <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Suchak photo review</h1>
                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                    Onboarding profile, office, and logo photos awaiting admin review.
-                    AI safety already ran at upload — this queue is human verification.
-                </p>
-                <p class="mt-2 text-sm font-semibold text-amber-800 dark:text-amber-200">
-                    Pending photos: {{ number_format($pendingCount) }}
+                    Safe photos auto-pass. Only uncertain or unsafe photos need your attention.
+                    Account approval is separate — this queue is photos only.
                 </p>
             </div>
             <div class="flex flex-wrap gap-2">
@@ -40,15 +44,22 @@
         <div class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100">{{ session('error') }}</div>
     @endif
 
+    <div class="grid gap-3 sm:grid-cols-3">
+        @foreach ($queueLabels as $queueKey => $queueLabel)
+            @php
+                $count = (int) ($counts[$queueKey] ?? 0);
+                $active = $queue === $queueKey;
+            @endphp
+            <a href="{{ route('admin.suchak.photo-reviews.index', array_filter(['queue' => $queueKey, 'verification_type' => $type])) }}"
+               class="rounded-lg border p-4 shadow-sm transition {{ $active ? 'border-amber-400 bg-amber-50 dark:border-amber-500 dark:bg-amber-950/40' : 'border-gray-200 bg-white hover:border-indigo-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-indigo-500' }}">
+                <div class="text-xs font-semibold uppercase tracking-wide {{ $active ? 'text-amber-800 dark:text-amber-200' : 'text-gray-500 dark:text-gray-400' }}">{{ $queueLabel }}</div>
+                <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ number_format($count) }}</div>
+            </a>
+        @endforeach
+    </div>
+
     <form method="GET" action="{{ route('admin.suchak.photo-reviews.index') }}" class="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <div>
-            <label for="admin_status" class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Status</label>
-            <select id="admin_status" name="admin_status" class="mt-1 rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
-                @foreach ($allowedStatuses as $allowed)
-                    <option value="{{ $allowed }}" @selected($status === $allowed)>{{ ucfirst($allowed) }}</option>
-                @endforeach
-            </select>
-        </div>
+        <input type="hidden" name="queue" value="{{ $queue }}">
         <div>
             <label for="verification_type" class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Type</label>
             <select id="verification_type" name="verification_type" class="mt-1 rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
@@ -69,9 +80,9 @@
                         <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Preview</th>
                         <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Type</th>
                         <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Suchak</th>
-                        <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Status</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">AI</th>
                         <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Uploaded</th>
-                        <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Review</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Action</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -81,6 +92,11 @@
                             $docUrl = $account
                                 ? route('admin.suchak.accounts.verification-records.document', [$account, $record])
                                 : null;
+                            $canApprove = $account && in_array($record->admin_status, [
+                                \App\Models\SuchakVerificationRecord::STATUS_PENDING,
+                                \App\Models\SuchakVerificationRecord::STATUS_REJECTED,
+                            ], true);
+                            $canReject = $account && $record->admin_status === \App\Models\SuchakVerificationRecord::STATUS_PENDING;
                         @endphp
                         <tr class="align-top">
                             <td class="px-3 py-3">
@@ -108,32 +124,42 @@
                                     <span class="text-gray-500">Missing account</span>
                                 @endif
                             </td>
-                            <td class="px-3 py-3 text-gray-800 dark:text-gray-200">{{ ucfirst((string) $record->admin_status) }}</td>
+                            <td class="px-3 py-3">
+                                <div class="text-gray-800 dark:text-gray-200">{{ $record->moderation_decision ? ucfirst((string) $record->moderation_decision) : '—' }}</div>
+                                @if ($record->remarks)
+                                    <div class="mt-1 max-w-xs text-xs text-gray-500 dark:text-gray-400">{{ \Illuminate\Support\Str::limit($record->remarks, 80) }}</div>
+                                @endif
+                            </td>
                             <td class="px-3 py-3 text-gray-700 dark:text-gray-300">{{ $record->created_at?->format('Y-m-d H:i') }}</td>
                             <td class="px-3 py-3">
-                                @if ($account && $record->admin_status === \App\Models\SuchakVerificationRecord::STATUS_PENDING)
-                                    <div class="grid max-w-xs gap-2">
-                                        <form method="POST" action="{{ route('admin.suchak.accounts.verification-records.approve', [$account, $record]) }}" class="space-y-1">
-                                            @csrf
-                                            <input type="hidden" name="return_to" value="photo_reviews">
-                                            <textarea name="reason" rows="2" required minlength="10" maxlength="500" placeholder="Approval reason (min 10 chars)" class="w-full rounded-md border-gray-300 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"></textarea>
-                                            <button type="submit" class="rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700">Approve</button>
-                                        </form>
-                                        <form method="POST" action="{{ route('admin.suchak.accounts.verification-records.reject', [$account, $record]) }}" class="space-y-1">
-                                            @csrf
-                                            <input type="hidden" name="return_to" value="photo_reviews">
-                                            <textarea name="reason" rows="2" required minlength="10" maxlength="500" placeholder="Reject reason (min 10 chars)" class="w-full rounded-md border-gray-300 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"></textarea>
-                                            <button type="submit" class="rounded-md bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700">Reject</button>
-                                        </form>
+                                @if ($canApprove || $canReject)
+                                    <div class="flex flex-wrap gap-2">
+                                        @if ($canApprove)
+                                            <form method="POST" action="{{ route('admin.suchak.accounts.verification-records.approve', [$account, $record]) }}">
+                                                @csrf
+                                                <input type="hidden" name="return_to" value="photo_reviews">
+                                                <input type="hidden" name="return_queue" value="{{ $queue }}">
+                                                <input type="hidden" name="reason" value="{{ $defaultApproveReason }}">
+                                                <button type="submit" class="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">
+                                                    {{ $record->admin_status === \App\Models\SuchakVerificationRecord::STATUS_REJECTED ? 'Override approve' : 'Approve' }}
+                                                </button>
+                                            </form>
+                                        @endif
+                                        @if ($canReject)
+                                            <form method="POST" action="{{ route('admin.suchak.accounts.verification-records.reject', [$account, $record]) }}">
+                                                @csrf
+                                                <input type="hidden" name="return_to" value="photo_reviews">
+                                                <input type="hidden" name="return_queue" value="{{ $queue }}">
+                                                <input type="hidden" name="reason" value="{{ $defaultRejectReason }}">
+                                                <button type="submit" class="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700">Reject</button>
+                                            </form>
+                                        @endif
                                     </div>
                                 @else
                                     <div class="text-xs text-gray-500 dark:text-gray-400">
-                                        Reviewed
+                                        {{ ucfirst((string) $record->admin_status) }}
                                         @if ($record->adminUser?->email)
                                             · {{ $record->adminUser->email }}
-                                        @endif
-                                        @if ($record->remarks)
-                                            <div class="mt-1">{{ $record->remarks }}</div>
                                         @endif
                                     </div>
                                 @endif
@@ -142,7 +168,7 @@
                     @empty
                         <tr>
                             <td colspan="6" class="px-3 py-8 text-center text-gray-500 dark:text-gray-400">
-                                No Suchak photos match this filter.
+                                No photos in this queue.
                             </td>
                         </tr>
                     @endforelse

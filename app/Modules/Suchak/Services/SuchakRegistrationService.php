@@ -573,9 +573,8 @@ class SuchakRegistrationService
     }
 
     /**
-     * Suchak onboarding photos: same NudeNet moderation + 3:4 WebP optimize as
-     * member photos, then store on the Suchak verification-document disk (not
-     * matrimony gallery). Admin Suchak approval remains separate.
+     * Suchak onboarding photos: NudeNet + WebP optimize, then route by AI outcome:
+     * safe → auto-approve, review/error → admin "Needs review", unsafe → store rejected + 422.
      */
     private function storeModeratedOptimizedPhoto(
         SuchakAccount $account,
@@ -591,21 +590,16 @@ class SuchakRegistrationService
         }
 
         $moderation = app(ImageModerationService::class)->moderateProfilePhoto($sourcePath);
-        $status = (string) ($moderation['status'] ?? '');
+        $aiStatus = (string) ($moderation['status'] ?? '');
+        $aiReason = (string) ($moderation['reason'] ?? '');
 
-        if ($status === 'rejected') {
-            throw ValidationException::withMessages([
-                $field => (string) ($moderation['reason'] ?? 'Photo rejected by moderation.'),
-            ]);
-        }
+        $moderationDecision = match ($aiStatus) {
+            'approved' => SuchakVerificationRecord::MODERATION_SAFE,
+            'rejected' => SuchakVerificationRecord::MODERATION_REJECTED,
+            'error' => SuchakVerificationRecord::MODERATION_ERROR,
+            default => SuchakVerificationRecord::MODERATION_REVIEW,
+        };
 
-        if ($status === 'error') {
-            throw ValidationException::withMessages([
-                $field => 'Photo safety check is temporarily unavailable. Please try again shortly.',
-            ]);
-        }
-
-        // approved | pending_manual → optimize then queue for Suchak admin review
         try {
             $encoded = app(ImageOptimizationService::class)->encodeCoverWebp($sourcePath);
         } catch (\Throwable) {
@@ -621,20 +615,49 @@ class SuchakRegistrationService
             ]);
         }
 
-        return SuchakVerificationRecord::query()->updateOrCreate(
+        $adminStatus = match ($moderationDecision) {
+            SuchakVerificationRecord::MODERATION_SAFE => SuchakVerificationRecord::STATUS_APPROVED,
+            SuchakVerificationRecord::MODERATION_REJECTED => SuchakVerificationRecord::STATUS_REJECTED,
+            default => SuchakVerificationRecord::STATUS_PENDING,
+        };
+
+        $remarks = match ($moderationDecision) {
+            SuchakVerificationRecord::MODERATION_SAFE => 'Auto-approved by AI safety check (safe).',
+            SuchakVerificationRecord::MODERATION_REJECTED => $aiReason !== ''
+                ? $aiReason
+                : 'Rejected by automated moderation (unsafe).',
+            SuchakVerificationRecord::MODERATION_ERROR => 'AI safety check unavailable — needs human review.',
+            default => $aiReason !== '' ? $aiReason : 'AI flagged for human review.',
+        };
+
+        $record = SuchakVerificationRecord::query()->updateOrCreate(
             [
                 'suchak_account_id' => $account->id,
                 'verification_type' => $verificationType,
             ],
             [
                 'document_path' => $relative,
-                'admin_status' => SuchakVerificationRecord::STATUS_PENDING,
+                'admin_status' => $adminStatus,
+                'moderation_decision' => $moderationDecision,
                 'admin_user_id' => null,
-                'remarks' => null,
+                'remarks' => $remarks,
                 'remarks_mr' => null,
-                'verified_at' => null,
-                'rejected_at' => null,
+                'verified_at' => $adminStatus === SuchakVerificationRecord::STATUS_APPROVED ? now() : null,
+                'rejected_at' => $adminStatus === SuchakVerificationRecord::STATUS_REJECTED ? now() : null,
             ],
         );
+
+        if ($adminStatus === SuchakVerificationRecord::STATUS_APPROVED) {
+            app(SuchakAccountLifecycleService::class)
+                ->publishApprovedProfilePhotoFromRecord($record->fresh());
+        }
+
+        if ($moderationDecision === SuchakVerificationRecord::MODERATION_REJECTED) {
+            throw ValidationException::withMessages([
+                $field => $remarks,
+            ]);
+        }
+
+        return $record;
     }
 }

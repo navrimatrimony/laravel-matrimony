@@ -64,6 +64,7 @@ class SuchakStagedRegistrationApiTest extends TestCase
     public function test_staged_identity_rejects_incomplete_password_complete_without_photo(): void
     {
         Storage::fake('local');
+        Storage::fake('public');
 
         $start = $this->postJson('/api/v1/suchak/register/start', [
             'whatsapp_number' => '9876501236',
@@ -108,8 +109,12 @@ class SuchakStagedRegistrationApiTest extends TestCase
 
         $this->assertDatabaseHas('suchak_verification_records', [
             'verification_type' => SuchakVerificationRecord::TYPE_PROFILE_PHOTO,
-            'admin_status' => SuchakVerificationRecord::STATUS_PENDING,
+            'admin_status' => SuchakVerificationRecord::STATUS_APPROVED,
+            'moderation_decision' => SuchakVerificationRecord::MODERATION_SAFE,
         ]);
+
+        $account = $user->suchakAccount()->firstOrFail();
+        $this->assertNotEmpty($account->fresh()->profile_photo_path);
 
         // Location still required for complete — password complete still 422 without location.
         $this->postJson('/api/v1/suchak/register/password', [
@@ -154,9 +159,55 @@ class SuchakStagedRegistrationApiTest extends TestCase
         ])->assertStatus(422)
             ->assertJsonValidationErrors(['profile_photo']);
 
-        $this->assertDatabaseMissing('suchak_verification_records', [
+        $this->assertDatabaseHas('suchak_verification_records', [
             'suchak_account_id' => $user->suchakAccount->id,
             'verification_type' => SuchakVerificationRecord::TYPE_PROFILE_PHOTO,
+            'admin_status' => SuchakVerificationRecord::STATUS_REJECTED,
+            'moderation_decision' => SuchakVerificationRecord::MODERATION_REJECTED,
+        ]);
+    }
+
+    public function test_register_photo_ai_error_queues_for_human_review(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $start = $this->postJson('/api/v1/suchak/register/start', [
+            'whatsapp_number' => '9876501298',
+        ])->assertCreated();
+
+        $user = User::query()->where('mobile', '9876501298')->firstOrFail();
+        $debugOtp = $start->json('otp.debug_otp');
+        $this->assertNotEmpty($debugOtp);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/suchak/register/otp/verify', [
+            'otp' => $debugOtp,
+        ])->assertOk();
+
+        $this->mock(\App\Services\Image\ImageModerationService::class, function ($mock): void {
+            $mock->shouldReceive('moderateProfilePhoto')
+                ->once()
+                ->andReturn([
+                    'status' => 'error',
+                    'reason' => 'AI unavailable',
+                    'meta' => [],
+                ]);
+        });
+
+        $file = UploadedFile::fake()->image('unclear.jpg', 600, 800);
+        $this->post('/api/v1/suchak/register/photo', [
+            'profile_photo' => $file,
+        ], [
+            'Accept' => 'application/json',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('suchak_verification_records', [
+            'suchak_account_id' => $user->suchakAccount->id,
+            'verification_type' => SuchakVerificationRecord::TYPE_PROFILE_PHOTO,
+            'admin_status' => SuchakVerificationRecord::STATUS_PENDING,
+            'moderation_decision' => SuchakVerificationRecord::MODERATION_ERROR,
         ]);
     }
 

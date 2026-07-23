@@ -25,6 +25,12 @@ class SuchakVerificationRecord extends Model
     public const STATUS_APPROVED = 'approved';
     public const STATUS_REJECTED = 'rejected';
 
+    /** AI safety outcome at upload (ops queue routing). */
+    public const MODERATION_SAFE = 'safe';
+    public const MODERATION_REVIEW = 'review';
+    public const MODERATION_REJECTED = 'rejected';
+    public const MODERATION_ERROR = 'error';
+
     protected $table = 'suchak_verification_records';
 
     protected $fillable = [
@@ -32,6 +38,7 @@ class SuchakVerificationRecord extends Model
         'verification_type',
         'document_path',
         'admin_status',
+        'moderation_decision',
         'admin_user_id',
         'remarks',
         'remarks_mr',

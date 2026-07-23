@@ -362,7 +362,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
         $this->assertSame(2, $summary['earned_areas'][0]['customer_count']);
     }
 
-    public function test_suchak_profile_photo_upload_uses_review_record_before_public_card_photo(): void
+    public function test_suchak_profile_photo_ai_safe_auto_approves_and_publishes_card_photo(): void
     {
         Storage::fake('local');
         Storage::fake('public');
@@ -407,14 +407,59 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
             ->where('verification_type', SuchakVerificationRecord::TYPE_PROFILE_PHOTO)
             ->firstOrFail();
 
-        $this->assertNull($account->profile_photo_path);
-        $this->assertSame(SuchakVerificationRecord::STATUS_PENDING, $record->admin_status);
+        $this->assertSame(SuchakVerificationRecord::STATUS_APPROVED, $record->admin_status);
+        $this->assertSame(SuchakVerificationRecord::MODERATION_SAFE, $record->moderation_decision);
         $this->assertNotEmpty($record->document_path);
         $this->assertStringEndsWith('.webp', $record->document_path);
         Storage::disk('local')->assertExists($record->document_path);
+        $this->assertNotEmpty($account->profile_photo_path);
+        Storage::disk('public')->assertExists($account->profile_photo_path);
         $this->assertDatabaseMissing('matrimony_profiles', [
             'user_id' => $user->id,
         ]);
+    }
+
+    public function test_suchak_profile_photo_ai_review_stays_pending_until_admin_approve(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $this->mock(\App\Services\Image\ImageModerationService::class, function ($mock): void {
+            $mock->shouldReceive('moderateProfilePhoto')
+                ->once()
+                ->andReturn([
+                    'status' => 'pending_manual',
+                    'reason' => 'Uncertain',
+                    'meta' => [],
+                ]);
+        });
+
+        $user = User::factory()->create([
+            'mobile' => '9876543220',
+            'mobile_verified_at' => now(),
+        ]);
+        $account = SuchakAccount::factory()->create([
+            'user_id' => $user->id,
+            'mobile_number' => '9876543220',
+            'verification_status' => SuchakAccount::VERIFICATION_PENDING,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('suchak.register.photo.store'), [
+                'profile_photo' => UploadedFile::fake()->image('suchak-card.jpg', 320, 320),
+            ])
+            ->assertRedirect(route('suchak.register.status'))
+            ->assertSessionHas('success');
+
+        $account->refresh();
+        $record = SuchakVerificationRecord::query()
+            ->where('suchak_account_id', $account->id)
+            ->where('verification_type', SuchakVerificationRecord::TYPE_PROFILE_PHOTO)
+            ->firstOrFail();
+
+        $this->assertNull($account->profile_photo_path);
+        $this->assertSame(SuchakVerificationRecord::STATUS_PENDING, $record->admin_status);
+        $this->assertSame(SuchakVerificationRecord::MODERATION_REVIEW, $record->moderation_decision);
 
         $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
 

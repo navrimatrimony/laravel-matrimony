@@ -84,6 +84,7 @@ class DashboardController extends Controller
                 ->whereNotNull('document_path')
                 ->where('document_path', '!=', '')
                 ->count(),
+            'photo_queue_counts' => PhotoReviewController::queueCounts(),
             'records_approved_last_7_days' => SuchakVerificationRecord::query()->where('verified_at', '>=', $now->copy()->subDays(7))->count(),
             'records_rejected_last_7_days' => SuchakVerificationRecord::query()->where('rejected_at', '>=', $now->copy()->subDays(7))->count(),
         ];
