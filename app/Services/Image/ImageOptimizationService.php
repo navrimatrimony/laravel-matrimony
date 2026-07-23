@@ -13,11 +13,11 @@ class ImageOptimizationService
     public const TARGET_HEIGHT = 960;
 
     /**
-     * Optimize a source image and store it on the public disk.
+     * Cover-crop to 3:4 and encode WebP (shared by member + Suchak photo paths).
      *
-     * @return array{filename:string,relative_path:string,bytes:int,quality:int}
+     * @return array{bytes:string,quality:int}
      */
-    public function optimizeAndStoreProfilePhoto(string $sourcePath, string $outputFilenameBase): array
+    public function encodeCoverWebp(string $sourcePath): array
     {
         if (! is_file($sourcePath)) {
             throw new \RuntimeException('Source image not found for optimization.');
@@ -62,16 +62,31 @@ class ImageOptimizationService
             $best = $image->toWebp(quality: $bestQuality)->toString();
         }
 
+        return [
+            'bytes' => $best,
+            'quality' => $bestQuality,
+        ];
+    }
+
+    /**
+     * Optimize a source image and store it on the public disk.
+     *
+     * @return array{filename:string,relative_path:string,bytes:int,quality:int}
+     */
+    public function optimizeAndStoreProfilePhoto(string $sourcePath, string $outputFilenameBase): array
+    {
+        $encoded = $this->encodeCoverWebp($sourcePath);
+
         $filename = $outputFilenameBase.'.webp';
         $relative = 'matrimony_photos/'.$filename;
 
-        Storage::disk('public')->put($relative, $best, ['visibility' => 'public']);
+        Storage::disk('public')->put($relative, $encoded['bytes'], ['visibility' => 'public']);
 
         return [
             'filename' => $filename,
             'relative_path' => $relative,
-            'bytes' => strlen($best),
-            'quality' => $bestQuality,
+            'bytes' => strlen($encoded['bytes']),
+            'quality' => $encoded['quality'],
         ];
     }
 }

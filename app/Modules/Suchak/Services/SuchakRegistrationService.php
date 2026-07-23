@@ -8,6 +8,8 @@ use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakVerificationRecord;
 use App\Models\User;
+use App\Services\Image\ImageModerationService;
+use App\Services\Image\ImageOptimizationService;
 use App\Services\Location\LocationService;
 use App\Services\Messaging\MetaWhatsAppCloudService;
 use App\Support\MobileNumber;
@@ -15,6 +17,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -395,8 +398,9 @@ class SuchakRegistrationService
         ?int $actorUserId = null,
         ?string $ipAddress = null,
         ?string $userAgent = null,
+        string $field = 'document',
     ): SuchakVerificationRecord {
-        $record = $this->storeVerificationDocument($account, $document, $verificationType, 'document');
+        $record = $this->storeVerificationDocument($account, $document, $verificationType, $field);
 
         $this->activityLogger->record([
             'suchak_account_id' => $account->id,
@@ -538,6 +542,21 @@ class SuchakRegistrationService
         string $verificationType,
         string $field,
     ): SuchakVerificationRecord {
+        $photoTypes = [
+            SuchakVerificationRecord::TYPE_PROFILE_PHOTO,
+            SuchakVerificationRecord::TYPE_OFFICE_PHOTO,
+            SuchakVerificationRecord::TYPE_ORGANIZATION_LOGO,
+        ];
+
+        if (in_array($verificationType, $photoTypes, true)) {
+            return $this->storeModeratedOptimizedPhoto(
+                $account,
+                $document,
+                $verificationType,
+                $field,
+            );
+        }
+
         $path = $document->store('suchak/verification-documents/'.$account->id, 'local');
 
         if (! is_string($path) || $path === '') {
@@ -553,6 +572,72 @@ class SuchakRegistrationService
             ],
             [
                 'document_path' => $path,
+                'admin_status' => SuchakVerificationRecord::STATUS_PENDING,
+                'admin_user_id' => null,
+                'remarks' => null,
+                'remarks_mr' => null,
+                'verified_at' => null,
+                'rejected_at' => null,
+            ],
+        );
+    }
+
+    /**
+     * Suchak onboarding photos: same NudeNet moderation + 3:4 WebP optimize as
+     * member photos, then store on the Suchak verification-document disk (not
+     * matrimony gallery). Admin Suchak approval remains separate.
+     */
+    private function storeModeratedOptimizedPhoto(
+        SuchakAccount $account,
+        UploadedFile $document,
+        string $verificationType,
+        string $field,
+    ): SuchakVerificationRecord {
+        $sourcePath = $document->getRealPath();
+        if (! is_string($sourcePath) || $sourcePath === '' || ! is_file($sourcePath)) {
+            throw ValidationException::withMessages([
+                $field => 'Unable to read uploaded photo.',
+            ]);
+        }
+
+        $moderation = app(ImageModerationService::class)->moderateProfilePhoto($sourcePath);
+        $status = (string) ($moderation['status'] ?? '');
+
+        if ($status === 'rejected') {
+            throw ValidationException::withMessages([
+                $field => (string) ($moderation['reason'] ?? 'Photo rejected by moderation.'),
+            ]);
+        }
+
+        if ($status === 'error') {
+            throw ValidationException::withMessages([
+                $field => 'Photo safety check is temporarily unavailable. Please try again shortly.',
+            ]);
+        }
+
+        // approved | pending_manual → optimize then queue for Suchak admin review
+        try {
+            $encoded = app(ImageOptimizationService::class)->encodeCoverWebp($sourcePath);
+        } catch (\Throwable) {
+            throw ValidationException::withMessages([
+                $field => 'Unable to process photo. Please try another image.',
+            ]);
+        }
+
+        $relative = 'suchak/verification-documents/'.$account->id.'/'.(string) Str::uuid().'.webp';
+        if (! Storage::disk('local')->put($relative, $encoded['bytes'])) {
+            throw ValidationException::withMessages([
+                $field => 'Unable to store Suchak verification document.',
+            ]);
+        }
+
+        return SuchakVerificationRecord::query()->updateOrCreate(
+            [
+                'suchak_account_id' => $account->id,
+                'verification_type' => $verificationType,
+            ],
+            [
+                'document_path' => $relative,
                 'admin_status' => SuchakVerificationRecord::STATUS_PENDING,
                 'admin_user_id' => null,
                 'remarks' => null,

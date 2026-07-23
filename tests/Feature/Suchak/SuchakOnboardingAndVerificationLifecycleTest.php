@@ -367,6 +367,16 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
         Storage::fake('local');
         Storage::fake('public');
 
+        $this->mock(\App\Services\Image\ImageModerationService::class, function ($mock): void {
+            $mock->shouldReceive('moderateProfilePhoto')
+                ->once()
+                ->andReturn([
+                    'status' => 'approved',
+                    'reason' => null,
+                    'meta' => [],
+                ]);
+        });
+
         $user = User::factory()->create([
             'mobile' => '9876543219',
             'mobile_verified_at' => now(),
@@ -400,6 +410,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
         $this->assertNull($account->profile_photo_path);
         $this->assertSame(SuchakVerificationRecord::STATUS_PENDING, $record->admin_status);
         $this->assertNotEmpty($record->document_path);
+        $this->assertStringEndsWith('.webp', $record->document_path);
         Storage::disk('local')->assertExists($record->document_path);
         $this->assertDatabaseMissing('matrimony_profiles', [
             'user_id' => $user->id,

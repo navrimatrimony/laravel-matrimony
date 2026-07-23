@@ -310,6 +310,7 @@ class AccountRequestController extends Controller
             (int) $user->id,
             $request->ip(),
             $request->userAgent(),
+            'profile_photo',
         );
 
         $request->session()->flash('success', __('suchak.status.photo_upload_success'));
