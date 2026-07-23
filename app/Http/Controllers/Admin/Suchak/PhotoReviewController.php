@@ -84,13 +84,17 @@ class PhotoReviewController extends Controller
         $queue = (string) $request->query('queue', self::QUEUE_ALL);
         $queue = in_array($queue, self::queues(), true) ? $queue : self::QUEUE_ALL;
 
+        // Status dropdown is authoritative for admin_status. Queue cards only apply when Status = All,
+        // otherwise AND-ing both creates empty/conflicting lists (e.g. Status=All + stale queue=auto_rejected).
+        $effectiveQueue = $status === self::STATUS_ALL ? $queue : self::QUEUE_ALL;
+
         $type = $request->query('verification_type');
         $type = in_array($type, $photoTypes, true) ? $type : null;
 
         $records = self::photoBaseQuery()
             ->with(['suchakAccount.user', 'adminUser'])
             ->tap(fn (Builder $query) => self::applyStatusFilter($query, $status))
-            ->tap(fn (Builder $query) => self::applyQueueFilter($query, $queue))
+            ->tap(fn (Builder $query) => self::applyQueueFilter($query, $effectiveQueue))
             ->when($type, fn (Builder $query) => $query->where('verification_type', $type))
             ->latest('id')
             ->paginate(20)
@@ -105,7 +109,7 @@ class PhotoReviewController extends Controller
             'records' => $records,
             'photoTypes' => $photoTypes,
             'status' => $status,
-            'queue' => $queue,
+            'queue' => $effectiveQueue,
             'type' => $type,
             'counts' => self::queueCounts(),
             'queues' => self::queues(),

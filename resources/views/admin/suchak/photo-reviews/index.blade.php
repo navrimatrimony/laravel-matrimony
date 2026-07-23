@@ -157,11 +157,12 @@
             @php
                 $count = (int) ($counts[$queueKey] ?? 0);
                 $active = $queue === $queueKey;
-                $cardStatus = $queueKey === \App\Http\Controllers\Admin\Suchak\PhotoReviewController::QUEUE_NEEDS_REVIEW
-                    ? \App\Models\SuchakVerificationRecord::STATUS_PENDING
-                    : \App\Http\Controllers\Admin\Suchak\PhotoReviewController::STATUS_ALL;
             @endphp
-            <a href="{{ route('admin.suchak.photo-reviews.index', array_filter(['queue' => $queueKey, 'status' => $cardStatus, 'verification_type' => $type])) }}"
+            <a href="{{ route('admin.suchak.photo-reviews.index', array_filter([
+                    'queue' => $queueKey,
+                    'status' => \App\Http\Controllers\Admin\Suchak\PhotoReviewController::STATUS_ALL,
+                    'verification_type' => $type,
+                ])) }}"
                class="rounded-lg border p-4 shadow-sm transition {{ $active ? 'border-amber-400 bg-amber-50 dark:border-amber-500 dark:bg-amber-950/40' : 'border-gray-200 bg-white hover:border-indigo-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-indigo-500' }}">
                 <div class="text-xs font-semibold uppercase tracking-wide {{ $active ? 'text-amber-800 dark:text-amber-200' : 'text-gray-500 dark:text-gray-400' }}">{{ $queueLabel }}</div>
                 <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ number_format($count) }}</div>
@@ -170,7 +171,8 @@
     </div>
 
     <form method="GET" action="{{ route('admin.suchak.photo-reviews.index') }}" class="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <input type="hidden" name="queue" value="{{ $queue }}">
+        {{-- Status/Type filter is independent of queue cards — always reset queue so All works. --}}
+        <input type="hidden" name="queue" value="all">
         <div>
             <label for="status" class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Status</label>
             <select id="status" name="status" class="mt-1 rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
@@ -375,9 +377,12 @@
                 </tbody>
             </table>
         </div>
-        @if ($records->hasPages())
-            <div class="border-t border-gray-200 px-4 py-3 dark:border-gray-700">
-                {{ $records->links() }}
+        @if ($records->total() > 0)
+            <div class="border-t border-gray-200 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:text-gray-300">
+                Showing {{ $records->firstItem() }}–{{ $records->lastItem() }} of {{ number_format($records->total()) }}
+                @if ($records->hasPages())
+                    <div class="mt-2">{{ $records->links() }}</div>
+                @endif
             </div>
         @endif
     </div>
