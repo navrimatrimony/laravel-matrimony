@@ -138,7 +138,6 @@
                                     >
                                         <img src="{{ $docUrl }}" alt="Photo preview" class="h-full w-full object-cover">
                                     </button>
-                                    <a href="{{ $docUrl }}" target="_blank" rel="noopener" class="mt-1 inline-block text-[11px] font-semibold text-indigo-600 hover:underline dark:text-indigo-300">Open full</a>
                                 @elseif ($docUrl)
                                     <a href="{{ $docUrl }}" target="_blank" rel="noopener" class="text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-300">Open file</a>
                                 @else
