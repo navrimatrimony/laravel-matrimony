@@ -37,6 +37,7 @@ class SuchakVerificationRecord extends Model
         'suchak_account_id',
         'verification_type',
         'document_path',
+        'file_meta',
         'admin_status',
         'moderation_decision',
         'admin_user_id',
@@ -47,6 +48,7 @@ class SuchakVerificationRecord extends Model
     ];
 
     protected $casts = [
+        'file_meta' => 'array',
         'verified_at' => 'datetime',
         'rejected_at' => 'datetime',
     ];

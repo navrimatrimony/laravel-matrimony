@@ -35,12 +35,18 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
         ]);
 
         $path = 'suchak/verification-documents/'.$account->id.'/face.webp';
-        Storage::disk('local')->put($path, 'fake-webp');
+        Storage::disk('local')->put($path, str_repeat('x', 2500));
 
         SuchakVerificationRecord::query()->create([
             'suchak_account_id' => $account->id,
             'verification_type' => SuchakVerificationRecord::TYPE_PROFILE_PHOTO,
             'document_path' => $path,
+            'file_meta' => [
+                'bytes' => 2500,
+                'width' => 720,
+                'height' => 960,
+                'format' => 'webp',
+            ],
             'admin_status' => SuchakVerificationRecord::STATUS_PENDING,
             'moderation_decision' => SuchakVerificationRecord::MODERATION_REVIEW,
         ]);
@@ -60,6 +66,11 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
             ->assertSee('Review करा', false)
             ->assertSee('Photo Queue Suchak', false)
             ->assertSee('Profile photo', false)
+            ->assertSee('Pending', false)
+            ->assertSee('Needs review', false)
+            ->assertSee('2.4 KB', false)
+            ->assertSee('WEBP', false)
+            ->assertSee('720×960', false)
             ->assertDontSee('Identity', false);
 
         $this->actingAs($admin)
@@ -72,10 +83,10 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
             ]), [
                 'reason' => 'Approved from Suchak photo review queue.',
                 'return_to' => 'photo_reviews',
-                'return_queue' => PhotoReviewController::QUEUE_NEEDS_REVIEW,
+                'return_queue' => PhotoReviewController::QUEUE_HUMAN_REVIEWED,
             ])
             ->assertRedirect(route('admin.suchak.photo-reviews.index', [
-                'queue' => PhotoReviewController::QUEUE_NEEDS_REVIEW,
+                'queue' => PhotoReviewController::QUEUE_HUMAN_REVIEWED,
             ]))
             ->assertSessionHas('success');
 
@@ -84,9 +95,18 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
             'verification_type' => SuchakVerificationRecord::TYPE_PROFILE_PHOTO,
             'admin_status' => SuchakVerificationRecord::STATUS_APPROVED,
         ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.suchak.photo-reviews.index', [
+                'queue' => PhotoReviewController::QUEUE_HUMAN_REVIEWED,
+            ]))
+            ->assertOk()
+            ->assertSee('Photo Queue Suchak', false)
+            ->assertSee('Approved', false)
+            ->assertSee('Admin reviewed', false);
     }
 
-    public function test_photo_review_tabs_separate_auto_rejected_and_auto_passed(): void
+    public function test_photo_review_tabs_separate_queues_including_human_reviewed(): void
     {
         Storage::fake('local');
 
@@ -105,17 +125,30 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
             'mobile_number' => '9876505556',
         ]);
 
+        $humanUser = User::factory()->create([
+            'mobile' => '9876505557',
+            'mobile_verified_at' => now(),
+        ]);
+        $humanAccount = SuchakAccount::factory()->create([
+            'user_id' => $humanUser->id,
+            'suchak_name' => 'Human Reviewed Suchak',
+            'mobile_number' => '9876505557',
+        ]);
+
         $safePath = 'suchak/verification-documents/'.$account->id.'/safe.webp';
         $unsafePath = 'suchak/verification-documents/'.$account->id.'/unsafe.webp';
         $reviewPath = 'suchak/verification-documents/'.$account->id.'/review.webp';
-        Storage::disk('local')->put($safePath, 'safe');
-        Storage::disk('local')->put($unsafePath, 'unsafe');
-        Storage::disk('local')->put($reviewPath, 'review');
+        $humanPath = 'suchak/verification-documents/'.$humanAccount->id.'/human.webp';
+        Storage::disk('local')->put($safePath, str_repeat('s', 2048));
+        Storage::disk('local')->put($unsafePath, str_repeat('u', 3072));
+        Storage::disk('local')->put($reviewPath, str_repeat('r', 1024));
+        Storage::disk('local')->put($humanPath, str_repeat('h', 4096));
 
         SuchakVerificationRecord::query()->create([
             'suchak_account_id' => $account->id,
             'verification_type' => SuchakVerificationRecord::TYPE_PROFILE_PHOTO,
             'document_path' => $safePath,
+            'file_meta' => ['bytes' => 2048, 'width' => 720, 'height' => 960, 'format' => 'webp'],
             'admin_status' => SuchakVerificationRecord::STATUS_APPROVED,
             'moderation_decision' => SuchakVerificationRecord::MODERATION_SAFE,
             'verified_at' => now(),
@@ -124,6 +157,7 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
             'suchak_account_id' => $account->id,
             'verification_type' => SuchakVerificationRecord::TYPE_OFFICE_PHOTO,
             'document_path' => $unsafePath,
+            'file_meta' => ['bytes' => 3072, 'width' => 720, 'height' => 960, 'format' => 'webp'],
             'admin_status' => SuchakVerificationRecord::STATUS_REJECTED,
             'moderation_decision' => SuchakVerificationRecord::MODERATION_REJECTED,
             'rejected_at' => now(),
@@ -132,14 +166,27 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
             'suchak_account_id' => $account->id,
             'verification_type' => SuchakVerificationRecord::TYPE_ORGANIZATION_LOGO,
             'document_path' => $reviewPath,
+            'file_meta' => ['bytes' => 1024, 'width' => 720, 'height' => 960, 'format' => 'webp'],
             'admin_status' => SuchakVerificationRecord::STATUS_PENDING,
             'moderation_decision' => SuchakVerificationRecord::MODERATION_REVIEW,
+        ]);
+        SuchakVerificationRecord::query()->create([
+            'suchak_account_id' => $humanAccount->id,
+            'verification_type' => SuchakVerificationRecord::TYPE_PROFILE_PHOTO,
+            'document_path' => $humanPath,
+            'file_meta' => ['bytes' => 4096, 'width' => 720, 'height' => 960, 'format' => 'webp'],
+            'admin_status' => SuchakVerificationRecord::STATUS_APPROVED,
+            'moderation_decision' => SuchakVerificationRecord::MODERATION_REVIEW,
+            'admin_user_id' => $admin->id,
+            'remarks' => 'Approved from Suchak photo review queue.',
+            'verified_at' => now(),
         ]);
 
         $this->actingAs($admin)
             ->get(route('admin.suchak.photo-reviews.index', ['queue' => PhotoReviewController::QUEUE_AUTO_PASSED]))
             ->assertOk()
             ->assertSee('Profile photo', false)
+            ->assertSee('By AI (auto-passed)', false)
             ->assertDontSee('Override approve', false);
 
         $this->actingAs($admin)
@@ -156,9 +203,17 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
             ->assertSee('Reject', false)
             ->assertDontSee('Override approve', false);
 
+        $this->actingAs($admin)
+            ->get(route('admin.suchak.photo-reviews.index', ['queue' => PhotoReviewController::QUEUE_HUMAN_REVIEWED]))
+            ->assertOk()
+            ->assertSee('Human Reviewed Suchak', false)
+            ->assertSee('Approved', false)
+            ->assertSee('4 KB', false);
+
         $counts = PhotoReviewController::queueCounts();
         $this->assertSame(1, $counts[PhotoReviewController::QUEUE_NEEDS_REVIEW]);
         $this->assertSame(1, $counts[PhotoReviewController::QUEUE_AUTO_REJECTED]);
         $this->assertSame(1, $counts[PhotoReviewController::QUEUE_AUTO_PASSED]);
+        $this->assertSame(1, $counts[PhotoReviewController::QUEUE_HUMAN_REVIEWED]);
     }
 }

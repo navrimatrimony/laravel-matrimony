@@ -108,6 +108,14 @@
                         </a>
                     </dd>
                 </div>
+                <div>
+                    <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Photos — admin reviewed</dt>
+                    <dd class="mt-1 text-xl font-bold text-gray-900 dark:text-gray-100">
+                        <a href="{{ route('admin.suchak.photo-reviews.index', ['queue' => 'human_reviewed']) }}" class="hover:text-indigo-600 dark:hover:text-indigo-300">
+                            {{ number_format($approvalsSummary['photo_queue_counts']['human_reviewed'] ?? 0) }}
+                        </a>
+                    </dd>
+                </div>
             </dl>
         </section>
 
