@@ -103,6 +103,7 @@ class SuchakProductionReadinessGateTest extends TestCase
             'admin.suchak.dashboard',
             'admin.suchak.accounts.index',
             'admin.suchak.accounts.verification-records.document',
+            'admin.suchak.photo-reviews.index',
             'admin.suchak.plans.index',
             'admin.suchak.safety.index',
             'admin.suchak.retention.index',

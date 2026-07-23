@@ -96,12 +96,13 @@ final class AdminNavigationCatalog
                 'tabs' => [
                     self::tab('Dashboard', 'admin.suchak.dashboard', ['admin.suchak.dashboard']),
                     self::tab('Accounts', 'admin.suchak.accounts.index', ['admin.suchak.accounts.*']),
+                    self::tab('Photo review', 'admin.suchak.photo-reviews.index', ['admin.suchak.photo-reviews.*']),
                     self::tab('Safety', 'admin.suchak.safety.index', ['admin.suchak.safety.*']),
                     self::tab('Plans', 'admin.suchak.plans.index', ['admin.suchak.plans.*']),
                     self::tab('Payouts', 'admin.suchak.payouts.index', ['admin.suchak.payouts.*']),
                     self::tab('Retention', 'admin.suchak.retention.index', ['admin.suchak.retention.*']),
                     self::tab('Academy', 'admin.suchak.academy.index', ['admin.suchak.academy.*']),
-                    self::tab('Settings', 'admin.suchak.settings.index', ['admin.suchak.settings.*']),
+                    self::tab('Settings', 'admin.suchak.settings.index', ['admin.suchak.settings.*', 'admin.suchak.apk-settings.*']),
                 ],
             ],
             AdminNavigationAccess::COMMERCE => [

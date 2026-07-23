@@ -278,6 +278,12 @@ class AccountVerificationController extends Controller
             return back()->with('error', $exception->getMessage());
         }
 
+        if (request()->input('return_to') === 'photo_reviews') {
+            return redirect()
+                ->route('admin.suchak.photo-reviews.index')
+                ->with('success', $successMessage);
+        }
+
         return redirect()
             ->route('admin.suchak.accounts.show', $account)
             ->with('success', $successMessage);
