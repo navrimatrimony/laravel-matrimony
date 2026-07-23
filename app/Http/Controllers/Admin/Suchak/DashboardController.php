@@ -74,6 +74,16 @@ class DashboardController extends Controller
             'accounts_approved_last_7_days' => SuchakAccount::query()->where('verified_at', '>=', $now->copy()->subDays(7))->count(),
             'accounts_rejected_last_7_days' => SuchakAccount::query()->where('rejected_at', '>=', $now->copy()->subDays(7))->count(),
             'records_pending' => SuchakVerificationRecord::query()->where('admin_status', SuchakVerificationRecord::STATUS_PENDING)->count(),
+            'photo_records_pending' => SuchakVerificationRecord::query()
+                ->whereIn('verification_type', [
+                    SuchakVerificationRecord::TYPE_PROFILE_PHOTO,
+                    SuchakVerificationRecord::TYPE_OFFICE_PHOTO,
+                    SuchakVerificationRecord::TYPE_ORGANIZATION_LOGO,
+                ])
+                ->where('admin_status', SuchakVerificationRecord::STATUS_PENDING)
+                ->whereNotNull('document_path')
+                ->where('document_path', '!=', '')
+                ->count(),
             'records_approved_last_7_days' => SuchakVerificationRecord::query()->where('verified_at', '>=', $now->copy()->subDays(7))->count(),
             'records_rejected_last_7_days' => SuchakVerificationRecord::query()->where('rejected_at', '>=', $now->copy()->subDays(7))->count(),
         ];

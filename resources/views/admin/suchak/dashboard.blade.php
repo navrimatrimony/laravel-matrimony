@@ -22,6 +22,12 @@
                 <a href="{{ route('admin.suchak.safety.index') }}" class="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
                     Safety center
                 </a>
+                <a href="{{ route('admin.suchak.photo-reviews.index') }}" class="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">
+                    Photo review
+                    @if (($approvalsSummary['photo_records_pending'] ?? 0) > 0)
+                        ({{ number_format($approvalsSummary['photo_records_pending']) }})
+                    @endif
+                </a>
                 <a href="{{ route('admin.suchak.accounts.index') }}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
                     Review accounts
                 </a>
@@ -77,6 +83,14 @@
                 <div>
                     <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Records pending</dt>
                     <dd class="mt-1 text-xl font-bold text-gray-900 dark:text-gray-100">{{ number_format($approvalsSummary['records_pending']) }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Photos pending</dt>
+                    <dd class="mt-1 text-xl font-bold text-gray-900 dark:text-gray-100">
+                        <a href="{{ route('admin.suchak.photo-reviews.index') }}" class="hover:text-indigo-600 dark:hover:text-indigo-300">
+                            {{ number_format($approvalsSummary['photo_records_pending'] ?? 0) }}
+                        </a>
+                    </dd>
                 </div>
             </dl>
         </section>
