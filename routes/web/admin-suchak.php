@@ -63,6 +63,8 @@ Route::middleware(['auth', 'admin', 'admin.section'])
         Route::get('/apk-settings', [ApkSettingsController::class, 'index'])->name('apk-settings.index');
         Route::post('/apk-settings', [ApkSettingsController::class, 'update'])->name('apk-settings.update');
         Route::get('/accounts', [AccountVerificationController::class, 'index'])->name('accounts.index');
+        // Declared before the {suchakAccount} routes so "bulk" is never taken as an id.
+        Route::post('/accounts/bulk', [AccountVerificationController::class, 'bulkAction'])->name('accounts.bulk');
         Route::get('/accounts/{suchakAccount}', [AccountVerificationController::class, 'show'])->name('accounts.show');
         Route::post('/accounts/{suchakAccount}/approve', [AccountVerificationController::class, 'approve'])->name('accounts.approve');
         Route::post('/accounts/{suchakAccount}/reject', [AccountVerificationController::class, 'reject'])->name('accounts.reject');
