@@ -2,11 +2,12 @@
 
 namespace Tests\Feature\Suchak;
 
-use App\Console\Commands\PurgeAbandonedSuchakSignups;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\User;
+use App\Modules\Suchak\Services\AbandonedSignupPurgeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Feature\Suchak\Support\CreatesSuchakAdmin;
 use Tests\TestCase;
 
 /**
@@ -16,6 +17,7 @@ use Tests\TestCase;
  */
 class PurgeAbandonedSuchakSignupsTest extends TestCase
 {
+    use CreatesSuchakAdmin;
     use RefreshDatabase;
 
     private function account(array $attributes = []): SuchakAccount
@@ -54,7 +56,51 @@ class PurgeAbandonedSuchakSignupsTest extends TestCase
         $this->artisan('suchak:purge-abandoned-signups --days=7 --force')->assertFailed();
 
         $this->assertDatabaseHas('suchak_accounts', ['id' => $account->id]);
-        $this->assertSame(30, PurgeAbandonedSuchakSignups::MINIMUM_AGE_DAYS);
+        $this->assertSame(30, AbandonedSignupPurgeService::MINIMUM_AGE_DAYS);
+    }
+
+    public function test_admin_cleanup_page_previews_without_deleting_anything(): void
+    {
+        $admin = $this->createSuchakSuperAdmin();
+        $account = $this->account(['suchak_name' => 'GhostSignup']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.suchak.accounts.cleanup'))
+            ->assertOk()
+            ->assertSee('GhostSignup', false);
+
+        $this->assertDatabaseHas('suchak_accounts', ['id' => $account->id]);
+    }
+
+    public function test_admin_cleanup_button_deletes_only_the_empty_old_signups(): void
+    {
+        $admin = $this->createSuchakSuperAdmin();
+        $empty = $this->account(['suchak_name' => 'EmptyOld']);
+        $verified = $this->account([
+            'suchak_name' => 'RealSuchak',
+            'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+            'registration_completed_at' => now()->subDays(90),
+        ]);
+        $recent = $this->account(['suchak_name' => 'JustStarted', 'created_at' => now()->subDay()]);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.suchak.accounts.cleanup.destroy'))
+            ->assertRedirect(route('admin.suchak.accounts.index'));
+
+        $this->assertDatabaseMissing('suchak_accounts', ['id' => $empty->id]);
+        $this->assertDatabaseHas('suchak_accounts', ['id' => $verified->id]);
+        $this->assertDatabaseHas('suchak_accounts', ['id' => $recent->id]);
+    }
+
+    public function test_cleanup_is_closed_to_non_admins(): void
+    {
+        $account = $this->account();
+
+        $this->actingAs(User::factory()->create())
+            ->delete(route('admin.suchak.accounts.cleanup.destroy'))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('suchak_accounts', ['id' => $account->id]);
     }
 
     public function test_a_verified_account_is_never_deleted_however_old(): void

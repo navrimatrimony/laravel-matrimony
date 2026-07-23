@@ -46,6 +46,12 @@
             <div>
                 <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Suchak Accounts</h1>
                 <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Review queue — oldest reviewable request first.</p>
+                {{-- Opens a preview of exactly what would be deleted; nothing is
+                     removed from here. --}}
+                <a href="{{ route('admin.suchak.accounts.cleanup') }}"
+                   class="mt-2 inline-block text-sm font-medium text-rose-600 underline hover:text-rose-800 dark:text-rose-300">
+                    Clean up abandoned signups…
+                </a>
             </div>
 
             <div class="flex flex-wrap gap-2">

@@ -7,6 +7,7 @@ use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakConsent;
 use App\Models\SuchakVerificationRecord;
+use App\Modules\Suchak\Services\AbandonedSignupPurgeService;
 use App\Modules\Suchak\Services\SuchakAccountLifecycleService;
 use App\Modules\Suchak\Services\SuchakBillingCatalogService;
 use App\Modules\Suchak\Services\SuchakPaymentStatusService;
@@ -322,6 +323,35 @@ class AccountVerificationController extends Controller
         }
 
         return $flags;
+    }
+
+    /**
+     * Preview screen behind the cleanup button: shows exactly which abandoned
+     * signups would be deleted, before anything happens. Read-only.
+     */
+    public function cleanup(AbandonedSignupPurgeService $purger): View
+    {
+        return view('admin.suchak.accounts.cleanup', [
+            'eligible' => $purger->eligible(),
+            'minimumAgeDays' => AbandonedSignupPurgeService::MINIMUM_AGE_DAYS,
+            'relatedTableCount' => count($purger->referencingTables()),
+        ]);
+    }
+
+    /**
+     * Performs the cleanup. Eligibility is re-resolved inside the service rather
+     * than trusting anything posted from the form, so the set cannot be widened
+     * by a stale or tampered submission.
+     */
+    public function cleanupDestroy(AbandonedSignupPurgeService $purger): RedirectResponse
+    {
+        $deleted = $purger->purge();
+
+        return redirect()
+            ->route('admin.suchak.accounts.index')
+            ->with('success', $deleted === 0
+                ? 'Nothing to clean up — no abandoned, unused signups were old enough.'
+                : sprintf('Deleted %d abandoned signup(s).', $deleted));
     }
 
     /**
