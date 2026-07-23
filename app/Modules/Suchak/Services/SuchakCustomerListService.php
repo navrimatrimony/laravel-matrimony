@@ -168,8 +168,26 @@ class SuchakCustomerListService
     }
 
     /**
-     * Section keys that are not yet complete, in the order the profile defines
-     * them — so the app can resume onboarding at the first one still missing.
+     * The profile sections the Suchak onboarding wizard actually collects.
+     *
+     * Deliberately NOT every section: most of ProfileCompletionService::SECTIONS
+     * carry weight 0 (siblings, relatives, alliance, property, horoscope,
+     * about-me) and are normally empty for a perfectly good candidate. Treating
+     * those as "unfinished" would brand every profile incomplete forever, which
+     * is noise, not a signal. "Incomplete" here means the onboarding run itself
+     * was abandoned.
+     */
+    public const ONBOARDING_SECTIONS = [
+        'basic-info',
+        'physical',
+        'education-career',
+        'about-preferences',
+        'photo',
+    ];
+
+    /**
+     * Onboarding sections still missing, in wizard order, so the app can send
+     * the Suchak back to the first one.
      *
      * @return list<string>
      */
@@ -177,12 +195,12 @@ class SuchakCustomerListService
     {
         $statuses = ProfileCompletionService::getSectionStatuses(
             $profile,
-            array_keys(ProfileCompletionService::SECTIONS)
+            self::ONBOARDING_SECTIONS
         );
 
         $incomplete = [];
-        foreach ($statuses as $key => $status) {
-            if ($status !== 'completed') {
+        foreach (self::ONBOARDING_SECTIONS as $key) {
+            if (($statuses[$key] ?? 'incomplete') !== 'completed') {
                 $incomplete[] = $key;
             }
         }

@@ -6,6 +6,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
+use App\Modules\Suchak\Services\SuchakCustomerListService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -51,5 +52,47 @@ class SuchakCustomerListCompletionTest extends TestCase
         // something to resume from.
         $this->assertLessThan(100, $row['completion_percent']);
         $this->assertNotEmpty($row['incomplete_sections']);
+    }
+
+    /**
+     * Most completion sections carry weight 0 and are normally empty for a
+     * perfectly good candidate. If those counted, every profile would read
+     * "incomplete" forever — noise instead of a signal — so only the sections
+     * the onboarding wizard actually collects are reported.
+     */
+    public function test_optional_empty_sections_are_not_reported_as_unfinished_onboarding(): void
+    {
+        $suchakUser = User::factory()->create();
+        $account = SuchakAccount::factory()->create([
+            'user_id' => $suchakUser->id,
+            'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+            'public_status' => SuchakAccount::PUBLIC_ACTIVE,
+            'registration_completed_at' => now(),
+        ]);
+
+        $profile = MatrimonyProfile::factory()->create();
+        SuchakProfileRepresentation::factory()->create([
+            'suchak_account_id' => $account->id,
+            'matrimony_profile_id' => $profile->id,
+        ]);
+
+        Sanctum::actingAs($suchakUser);
+
+        $row = collect($this->getJson('/api/v1/suchak/customers')->assertOk()->json('data.customers'))
+            ->firstWhere('profile_id', $profile->id);
+
+        $noise = ['siblings', 'relatives', 'alliance', 'property', 'horoscope', 'about-me', 'family-details'];
+        foreach ($noise as $section) {
+            $this->assertNotContains(
+                $section,
+                $row['incomplete_sections'],
+                "Optional section [$section] must not mark onboarding unfinished."
+            );
+        }
+
+        // Everything reported must be a section the wizard can actually fill.
+        foreach ($row['incomplete_sections'] as $section) {
+            $this->assertContains($section, SuchakCustomerListService::ONBOARDING_SECTIONS);
+        }
     }
 }
