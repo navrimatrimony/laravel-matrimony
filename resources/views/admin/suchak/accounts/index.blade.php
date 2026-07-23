@@ -5,17 +5,32 @@
     use App\Http\Controllers\Admin\Suchak\AccountVerificationController as AccountsController;
 
     /**
-     * One badge for the account's real state. verification_status and
-     * public_status repeat each other in the normal case, so the public state is
-     * only called out when it actually diverges (e.g. verified but hidden).
+     * ONE badge carrying the account's real state — no second line repeating it.
+     *
+     * A pending account's useful state is not "pending" (the filter already says
+     * that); it is whether it is actually reviewable. So the badge itself says
+     * "Ready to review" or "Incomplete · <step>". public_status is only called
+     * out when it genuinely diverges from verified.
      */
     $statusBadge = function (SuchakAccount $account): array {
+        $amber = 'bg-amber-50 text-amber-800 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300';
+        $grey = 'bg-gray-100 text-gray-600 ring-gray-500/20 dark:bg-gray-700 dark:text-gray-300';
+
+        if ($account->verification_status === SuchakAccount::VERIFICATION_PENDING) {
+            if ($account->registration_completed_at !== null) {
+                return ['Ready to review', $amber];
+            }
+            $step = trim((string) $account->onboarding_step);
+
+            return [$step !== '' ? 'Incomplete · '.$step : 'Signup incomplete', $grey];
+        }
+
         return match ($account->verification_status) {
             SuchakAccount::VERIFICATION_VERIFIED => ['Verified', 'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300'],
             SuchakAccount::VERIFICATION_REJECTED => ['Rejected', 'bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300'],
             SuchakAccount::VERIFICATION_SUSPENDED => ['Suspended', 'bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-500/10 dark:text-orange-300'],
             SuchakAccount::VERIFICATION_ARCHIVED => ['Archived', 'bg-gray-100 text-gray-600 ring-gray-500/20 dark:bg-gray-700 dark:text-gray-300'],
-            default => ['Pending', 'bg-amber-50 text-amber-800 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300'],
+            default => ['Pending', $amber],
         };
     };
 
@@ -159,7 +174,12 @@
                             [$badgeLabel, $badgeClass] = $statusBadge($account);
                             $isPending = $account->verification_status === SuchakAccount::VERIFICATION_PENDING;
                             $signupDone = $account->registration_completed_at !== null;
-                            $waitingDays = $account->created_at?->diffInDays(now()) ?? 0;
+                            // Whole calendar days. Carbon 3's diffInDays() returns a
+                            // float, which rendered as "42.047526034479d" — compare
+                            // day boundaries and cast so the queue reads cleanly.
+                            $waitingDays = $account->created_at
+                                ? (int) $account->created_at->copy()->startOfDay()->diffInDays(now()->startOfDay())
+                                : 0;
                             $photoUrl = $account->profile_photo_path
                                 ? \Illuminate\Support\Facades\Storage::disk('public')->url($account->profile_photo_path)
                                 : null;
@@ -212,14 +232,12 @@
 
                             <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ ucfirst($account->business_type) }}</td>
 
-                            {{-- One status column. Public state shown only when it disagrees. --}}
+                            {{-- Exactly one signal. The badge already carries the
+                                 pending sub-state, so no second line repeats it;
+                                 public state appears only when it disagrees. --}}
                             <td class="px-4 py-3">
                                 <span class="inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset {{ $badgeClass }}">{{ $badgeLabel }}</span>
-                                @if ($isPending)
-                                    <div class="mt-1 text-xs {{ $signupDone ? 'font-medium text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400' }}">
-                                        {{ $signupDone ? 'Ready to review' : 'Signup incomplete'.($account->onboarding_step ? ' ('.$account->onboarding_step.')' : '') }}
-                                    </div>
-                                @elseif ($account->verification_status === SuchakAccount::VERIFICATION_VERIFIED && $account->public_status !== SuchakAccount::PUBLIC_ACTIVE)
+                                @if ($account->verification_status === SuchakAccount::VERIFICATION_VERIFIED && $account->public_status !== SuchakAccount::PUBLIC_ACTIVE)
                                     <div class="mt-1 text-xs font-medium text-orange-700 dark:text-orange-300">Not public ({{ $account->public_status }})</div>
                                 @endif
                             </td>
