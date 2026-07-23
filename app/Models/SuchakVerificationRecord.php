@@ -17,7 +17,7 @@ class SuchakVerificationRecord extends Model
     public const TYPE_PROFILE_PHOTO = 'profile_photo';
     /** Organization branding — optional during native APK onboarding. */
     public const TYPE_ORGANIZATION_LOGO = 'organization_logo';
-    /** Organization office photo — required for organization native onboarding. */
+    /** Organization office photo — optional during native APK onboarding. */
     public const TYPE_OFFICE_PHOTO = 'office_photo';
     public const TYPE_OTHER = 'other';
 
