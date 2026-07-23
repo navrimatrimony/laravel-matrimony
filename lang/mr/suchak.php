@@ -300,6 +300,12 @@ return [
         'bureau' => 'विवाह bureau',
         'organization' => 'संस्था',
     ],
+    'manual_profile' => [
+        'consent_relation' => 'हा मोबाइल कोणाचा?',
+        'consent_relation_hint' => 'वधू / वराशी त्यांचे नाते — याच व्यक्तीकडून संमती मागितली जाईल.',
+        'consent_relation_self' => 'उमेदवार स्वतः',
+    ],
+
     'labels' => [
         'common' => [
             'active' => 'सक्रिय',

@@ -49,16 +49,27 @@ class SuchakManualProfileApiController extends Controller
             ], 403);
         }
 
+        // Both languages already exist in the master tables and the translation
+        // files; the app just has to ask for one. Without this every label came
+        // back English and appeared mid-sentence in a Marathi screen.
+        $locale = in_array($request->query('locale'), ['en', 'mr'], true)
+            ? (string) $request->query('locale')
+            : 'en';
+        app()->setLocale($locale);
+
         return response()->json([
             'success' => true,
             'message' => 'Manual profile form options loaded.',
             'data' => [
+                'locale' => $locale,
                 'genders' => $this->activeGenders()->map(static fn (MasterGender $g): array => [
                     'id' => $g->id,
                     'key' => $g->key,
-                    'label' => $g->label,
+                    'label' => $locale === 'mr' && filled($g->label_mr) ? $g->label_mr : $g->label,
                 ])->values()->all(),
                 'registering_for_options' => $this->registeringForOptions(),
+                'consent_relation_label' => __('suchak.manual_profile.consent_relation'),
+                'consent_relation_hint' => __('suchak.manual_profile.consent_relation_hint'),
             ],
         ]);
     }
@@ -480,15 +491,26 @@ class SuchakManualProfileApiController extends Controller
     /**
      * @return array<string, string>
      */
+    /**
+     * Who the entered mobile belongs to, as their relation to the candidate —
+     * this is the person consent will be requested from.
+     *
+     * Labels come from the existing translation files, which already hold both
+     * languages, instead of English being hardcoded here. Only "self" needs its
+     * own wording: the shared key reads "Myself", which is right for a member
+     * registering themselves and wrong for a Suchak filling in someone else.
+     *
+     * @return array<string, string>
+     */
     private function registeringForOptions(): array
     {
         return [
-            'self' => 'Candidate self',
-            'parent_guardian' => 'Parent / guardian',
-            'sibling' => 'Sibling',
-            'relative' => 'Relative',
-            'friend' => 'Friend',
-            'other' => 'Other',
+            'self' => __('suchak.manual_profile.consent_relation_self'),
+            'parent_guardian' => __('onboarding.registering_for_parent_guardian'),
+            'sibling' => __('onboarding.registering_for_sibling'),
+            'relative' => __('onboarding.registering_for_relative'),
+            'friend' => __('onboarding.registering_for_friend'),
+            'other' => __('onboarding.registering_for_other'),
         ];
     }
 }

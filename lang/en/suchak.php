@@ -300,6 +300,12 @@ return [
         'bureau' => 'Marriage bureau',
         'organization' => 'Organization',
     ],
+    'manual_profile' => [
+        'consent_relation' => 'Whose mobile is this?',
+        'consent_relation_hint' => 'Their relation to the candidate — this is who consent will be requested from.',
+        'consent_relation_self' => 'Candidate themselves',
+    ],
+
     'labels' => [
         'common' => [
             'active' => 'Active',
