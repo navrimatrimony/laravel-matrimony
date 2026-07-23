@@ -630,6 +630,13 @@ class SuchakRegistrationService
             default => $aiReason !== '' ? $aiReason : 'AI flagged for human review.',
         };
 
+        $fileMeta = [
+            'bytes' => strlen($encoded['bytes']),
+            'width' => ImageOptimizationService::TARGET_WIDTH,
+            'height' => ImageOptimizationService::TARGET_HEIGHT,
+            'format' => 'webp',
+        ];
+
         $record = SuchakVerificationRecord::query()->updateOrCreate(
             [
                 'suchak_account_id' => $account->id,
@@ -637,6 +644,7 @@ class SuchakRegistrationService
             ],
             [
                 'document_path' => $relative,
+                'file_meta' => $fileMeta,
                 'admin_status' => $adminStatus,
                 'moderation_decision' => $moderationDecision,
                 'admin_user_id' => null,

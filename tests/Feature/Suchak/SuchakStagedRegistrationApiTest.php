@@ -113,6 +113,12 @@ class SuchakStagedRegistrationApiTest extends TestCase
             'moderation_decision' => SuchakVerificationRecord::MODERATION_SAFE,
         ]);
 
+        $record = SuchakVerificationRecord::query()
+            ->where('verification_type', SuchakVerificationRecord::TYPE_PROFILE_PHOTO)
+            ->firstOrFail();
+        $this->assertSame('webp', $record->file_meta['format'] ?? null);
+        $this->assertGreaterThan(0, (int) ($record->file_meta['bytes'] ?? 0));
+
         $account = $user->suchakAccount()->firstOrFail();
         $this->assertNotEmpty($account->fresh()->profile_photo_path);
 
