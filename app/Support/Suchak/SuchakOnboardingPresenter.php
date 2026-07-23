@@ -137,17 +137,30 @@ class SuchakOnboardingPresenter
      * @param  Collection<int, SuchakVerificationRecord>  $verificationRecords
      * @return Collection<int, array<string, mixed>>
      */
-    private function documentRows(SuchakAccount $account, Collection $verificationRecords): Collection
+    /**
+     * Which KYC document types apply to a business type, and whether each is
+     * required. Public and static so the admin accounts queue can show a
+     * "documents in" signal from the same rule instead of restating it — there
+     * is one definition of what a Suchak must submit.
+     *
+     * @return array<string, bool>  document type => required
+     */
+    public static function documentRequirements(string $businessType): array
     {
-        $recordsByType = $verificationRecords->keyBy('verification_type');
-        $types = [
+        return [
             SuchakVerificationRecord::TYPE_IDENTITY => true,
-            SuchakVerificationRecord::TYPE_OFFICE => in_array($account->business_type, [
+            SuchakVerificationRecord::TYPE_OFFICE => in_array($businessType, [
                 SuchakAccount::BUSINESS_TYPE_BUREAU,
                 SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
             ], true),
-            SuchakVerificationRecord::TYPE_BUSINESS => $account->business_type === SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
+            SuchakVerificationRecord::TYPE_BUSINESS => $businessType === SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
         ];
+    }
+
+    private function documentRows(SuchakAccount $account, Collection $verificationRecords): Collection
+    {
+        $recordsByType = $verificationRecords->keyBy('verification_type');
+        $types = self::documentRequirements((string) $account->business_type);
 
         return collect($types)->map(function (bool $required, string $type) use ($recordsByType): array {
             $record = $recordsByType->get($type);

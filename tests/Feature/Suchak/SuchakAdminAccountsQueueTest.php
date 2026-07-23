@@ -3,6 +3,7 @@
 namespace Tests\Feature\Suchak;
 
 use App\Models\SuchakAccount;
+use App\Models\SuchakVerificationRecord;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Feature\Suchak\Support\CreatesSuchakAdmin;
@@ -101,6 +102,37 @@ class SuchakAdminAccountsQueueTest extends TestCase
             ->assertOk()
             ->assertSee('Sunita Patil', false)
             ->assertDontSee('Balaji Shinde', false);
+    }
+
+    /**
+     * Approving an account and approving its documents are separate steps, and
+     * the review screen made that easy to miss — an account could read
+     * "Verified" while its identity document was still pending.
+     */
+    public function test_queue_shows_how_many_required_documents_are_approved(): void
+    {
+        $admin = $this->createSuchakSuperAdmin();
+        $account = $this->account([
+            'suchak_name' => 'DocsPending',
+            'business_type' => SuchakAccount::BUSINESS_TYPE_INDIVIDUAL,
+            'registration_completed_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.suchak.accounts.index'))
+            ->assertOk()
+            ->assertSee('Docs 0/1', false);
+
+        SuchakVerificationRecord::factory()->create([
+            'suchak_account_id' => $account->id,
+            'verification_type' => SuchakVerificationRecord::TYPE_IDENTITY,
+            'admin_status' => SuchakVerificationRecord::STATUS_APPROVED,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.suchak.accounts.index'))
+            ->assertOk()
+            ->assertSee('Docs 1/1', false);
     }
 
     public function test_duplicate_mobile_rows_are_flagged_to_the_admin(): void

@@ -195,6 +195,7 @@
                             $place = $account->cityLocation?->name ?? $account->districtLocation?->name;
                             $duplicate = $duplicateKeys[$account->id] ?? null;
                             $lastAction = $lastActions[$account->id] ?? null;
+                            $docs = $documentStatus[$account->id] ?? null;
                         @endphp
                         <tr class="{{ $isPending && $signupDone ? 'bg-amber-50/40 dark:bg-amber-500/5' : '' }}">
                             <td class="px-3 py-3 align-top">
@@ -264,6 +265,14 @@
                                 <span class="inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset {{ $badgeClass }}">{{ $badgeLabel }}</span>
                                 @if ($account->verification_status === SuchakAccount::VERIFICATION_VERIFIED && $account->public_status !== SuchakAccount::PUBLIC_ACTIVE)
                                     <div class="mt-1 text-xs font-medium text-orange-700 dark:text-orange-300">Not public ({{ $account->public_status }})</div>
+                                @endif
+                                {{-- Approving the account and approving its KYC documents are
+                                     separate; this stops "Verified" being read as "documents
+                                     checked too". --}}
+                                @if ($docs)
+                                    <div class="mt-1 text-xs {{ $docs['approved'] >= $docs['required'] ? 'text-emerald-700 dark:text-emerald-300' : 'font-medium text-amber-700 dark:text-amber-300' }}">
+                                        Docs {{ $docs['approved'] }}/{{ $docs['required'] }}{{ $docs['approved'] >= $docs['required'] ? ' ✓' : '' }}
+                                    </div>
                                 @endif
                             </td>
 

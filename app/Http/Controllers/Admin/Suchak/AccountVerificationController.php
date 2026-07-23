@@ -13,6 +13,7 @@ use App\Modules\Suchak\Services\SuchakBillingCatalogService;
 use App\Modules\Suchak\Services\SuchakPaymentStatusService;
 use App\Modules\Suchak\Services\SuchakPolicyService;
 use App\Support\NameMatcher;
+use App\Support\Suchak\SuchakOnboardingPresenter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -150,6 +151,7 @@ class AccountVerificationController extends Controller
             'queueCounts' => $this->queueCounts(),
             'duplicateKeys' => $this->duplicateKeys($accounts->getCollection()),
             'lastActions' => $this->lastActions($accounts->getCollection()),
+            'documentStatus' => $this->documentStatus($accounts->getCollection()),
             'stalledAfterDays' => self::STALLED_AFTER_DAYS,
         ]);
     }
@@ -230,6 +232,49 @@ class AccountVerificationController extends Controller
                 ];
             })
             ->all();
+    }
+
+    /**
+     * How many required KYC documents each account has actually got approved.
+     *
+     * Approving an account and approving its documents are two different things,
+     * and the review screen made that easy to miss: an account could read
+     * "Verified" while its identity document was still pending. This surfaces it
+     * in the queue itself.
+     *
+     * Which documents count comes from SuchakOnboardingPresenter, so the rule is
+     * not restated here. One query for the page.
+     *
+     * @param  \Illuminate\Support\Collection<int, SuchakAccount>  $accounts
+     * @return array<int, array{approved: int, required: int}>
+     */
+    private function documentStatus($accounts): array
+    {
+        if ($accounts->isEmpty()) {
+            return [];
+        }
+
+        $approvedByAccount = SuchakVerificationRecord::query()
+            ->whereIn('suchak_account_id', $accounts->pluck('id')->all())
+            ->where('admin_status', SuchakVerificationRecord::STATUS_APPROVED)
+            ->get(['suchak_account_id', 'verification_type'])
+            ->groupBy('suchak_account_id')
+            ->map(fn ($rows) => $rows->pluck('verification_type')->all())
+            ->all();
+
+        $status = [];
+        foreach ($accounts as $account) {
+            $required = array_keys(array_filter(
+                SuchakOnboardingPresenter::documentRequirements((string) $account->business_type)
+            ));
+            $approved = $approvedByAccount[$account->id] ?? [];
+            $status[$account->id] = [
+                'approved' => count(array_intersect($required, $approved)),
+                'required' => count($required),
+            ];
+        }
+
+        return $status;
     }
 
     /** A shared name this common is a placeholder, not a duplicate. */
