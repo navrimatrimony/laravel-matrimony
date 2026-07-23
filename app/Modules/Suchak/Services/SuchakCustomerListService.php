@@ -7,6 +7,7 @@ use App\Models\SuchakAccount;
 use App\Models\SuchakBiodataIntakeLink;
 use App\Models\SuchakConsent;
 use App\Models\SuchakProfileRepresentation;
+use App\Services\ProfileCompletionService;
 use Illuminate\Support\Carbon;
 
 class SuchakCustomerListService
@@ -41,6 +42,8 @@ class SuchakCustomerListService
      *     has_pending_consent: bool,
      *     has_active_consent: bool,
      *     lifecycle_label: ?string,
+     *     completion_percent: int,
+     *     incomplete_sections: list<string>,
      *     view_url: ?string,
      *     edit_url: ?string,
      *     manage_url: ?string,
@@ -145,6 +148,14 @@ class SuchakCustomerListService
             'pending_consent_id' => $pendingConsent?->id,
             'has_active_consent' => $acceptedConsent !== null && $representation->hasValidConsent(),
             'lifecycle_label' => $profile ? ucfirst((string) ($profile->lifecycle_state ?? 'unknown')) : null,
+            // So the app can mark a half-finished profile in the list and send the
+            // Suchak back into onboarding at the section they stopped at, rather
+            // than opening the edit hub. Same ProfileCompletionService the detail
+            // endpoint uses — completeness is not recalculated here.
+            'completion_percent' => $profile
+                ? ProfileCompletionService::calculateCompletionPercentage($profile)
+                : 0,
+            'incomplete_sections' => $profile ? $this->incompleteSections($profile) : [],
             'view_url' => $profile ? route('matrimony.profile.show', $profile) : null,
             'edit_url' => route('suchak.representations.profile-form', $representation),
             'manage_url' => route('suchak.dashboard', [
@@ -154,6 +165,29 @@ class SuchakCustomerListService
             'review_url' => null,
             'sort_at' => $representation->created_at,
         ];
+    }
+
+    /**
+     * Section keys that are not yet complete, in the order the profile defines
+     * them — so the app can resume onboarding at the first one still missing.
+     *
+     * @return list<string>
+     */
+    private function incompleteSections(MatrimonyProfile $profile): array
+    {
+        $statuses = ProfileCompletionService::getSectionStatuses(
+            $profile,
+            array_keys(ProfileCompletionService::SECTIONS)
+        );
+
+        $incomplete = [];
+        foreach ($statuses as $key => $status) {
+            if ($status !== 'completed') {
+                $incomplete[] = $key;
+            }
+        }
+
+        return $incomplete;
     }
 
     /**
