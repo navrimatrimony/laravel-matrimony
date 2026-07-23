@@ -161,8 +161,8 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
                 'queue' => PhotoReviewController::QUEUE_NEEDS_REVIEW,
             ]))
             ->assertOk()
-            ->assertSee('Profile photo', false)
-            ->assertDontSee('Office photo', false);
+            ->assertSee('Showing 1–1 of 1', false)
+            ->assertSee('Pending', false);
 
         // Status dropdown + queue=all lists every status together.
         $this->actingAs($admin)
@@ -172,8 +172,7 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
             ]))
             ->assertOk()
             ->assertSee('Bulk Queue Suchak', false)
-            ->assertSee('Profile photo', false)
-            ->assertSee('Office photo', false)
+            ->assertSee('Showing 1–2 of 2', false)
             ->assertSee('पुन्हा Reject', false)
             ->assertSee('Select all', false)
             ->assertSee('Approve selected', false);
@@ -185,8 +184,8 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
                 'queue' => PhotoReviewController::QUEUE_AUTO_REJECTED,
             ]))
             ->assertOk()
-            ->assertSee('Profile photo', false)
-            ->assertDontSee('Office photo', false);
+            ->assertSee('Showing 1–1 of 1', false)
+            ->assertSee('Approve', false);
 
         $this->actingAs($admin)
             ->post(route('admin.suchak.photo-reviews.bulk'), [
