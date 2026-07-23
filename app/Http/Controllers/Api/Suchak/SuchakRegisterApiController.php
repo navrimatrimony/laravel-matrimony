@@ -439,6 +439,7 @@ class SuchakRegisterApiController extends Controller
             (int) $user->id,
             $request->ip(),
             $request->userAgent(),
+            $field,
         );
 
         return response()->json([
