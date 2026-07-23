@@ -11,6 +11,7 @@ use App\Modules\Suchak\Services\SuchakAccountLifecycleService;
 use App\Modules\Suchak\Services\SuchakBillingCatalogService;
 use App\Modules\Suchak\Services\SuchakPaymentStatusService;
 use App\Modules\Suchak\Services\SuchakPolicyService;
+use App\Support\NameMatcher;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -34,6 +35,15 @@ class AccountVerificationController extends Controller
     public const READINESS_READY = 'ready';
 
     public const READINESS_INCOMPLETE = 'incomplete';
+
+    public const READINESS_STALLED = 'stalled';
+
+    /**
+     * A signup that never completed and has sat this long is treated as junk
+     * and kept out of the working queue (PO decision 2026-07-23). It is only
+     * ever hidden/archived here — deletion has a separate, much higher bar.
+     */
+    public const STALLED_AFTER_DAYS = 7;
 
     /** @return array<int, string> */
     public static function sortOptions(): array
@@ -74,7 +84,7 @@ class AccountVerificationController extends Controller
         $businessType = in_array($businessType, self::businessTypes(), true) ? $businessType : null;
 
         $readiness = $request->query('readiness');
-        $readiness = in_array($readiness, [self::READINESS_READY, self::READINESS_INCOMPLETE], true)
+        $readiness = in_array($readiness, [self::READINESS_READY, self::READINESS_INCOMPLETE, self::READINESS_STALLED], true)
             ? $readiness
             : null;
 
@@ -92,9 +102,17 @@ class AccountVerificationController extends Controller
                 $readiness === self::READINESS_READY,
                 fn ($query) => $query->whereNotNull('registration_completed_at')
             )
+            // "Incomplete" means still plausibly in progress; anything older
+            // than the stalled threshold moves to its own bucket.
             ->when(
                 $readiness === self::READINESS_INCOMPLETE,
                 fn ($query) => $query->whereNull('registration_completed_at')
+                    ->where('created_at', '>=', now()->subDays(self::STALLED_AFTER_DAYS))
+            )
+            ->when(
+                $readiness === self::READINESS_STALLED,
+                fn ($query) => $query->whereNull('registration_completed_at')
+                    ->where('created_at', '<', now()->subDays(self::STALLED_AFTER_DAYS))
             )
             ->when($search, function ($query) use ($search): void {
                 // Mobile is the real identity here (most Suchaks register by OTP
@@ -127,6 +145,8 @@ class AccountVerificationController extends Controller
             'search' => $search,
             'queueCounts' => $this->queueCounts(),
             'duplicateKeys' => $this->duplicateKeys($accounts->getCollection()),
+            'lastActions' => $this->lastActions($accounts->getCollection()),
+            'stalledAfterDays' => self::STALLED_AFTER_DAYS,
         ]);
     }
 
@@ -157,73 +177,167 @@ class AccountVerificationController extends Controller
     private function queueCounts(): array
     {
         $pending = SuchakAccount::query()->where('verification_status', SuchakAccount::VERIFICATION_PENDING);
+        $cutoff = now()->subDays(self::STALLED_AFTER_DAYS);
 
         return [
             'ready' => (clone $pending)->whereNotNull('registration_completed_at')->count(),
-            'incomplete' => (clone $pending)->whereNull('registration_completed_at')->count(),
+            'incomplete' => (clone $pending)->whereNull('registration_completed_at')
+                ->where('created_at', '>=', $cutoff)->count(),
+            'stalled' => (clone $pending)->whereNull('registration_completed_at')
+                ->where('created_at', '<', $cutoff)->count(),
             'verified' => SuchakAccount::query()->where('verification_status', SuchakAccount::VERIFICATION_VERIFIED)->count(),
-            'rejected' => SuchakAccount::query()->where('verification_status', SuchakAccount::VERIFICATION_REJECTED)->count(),
-            'suspended' => SuchakAccount::query()->where('verification_status', SuchakAccount::VERIFICATION_SUSPENDED)->count(),
         ];
     }
 
     /**
-     * Flags rows on this page that share a mobile number or a normalised name,
-     * so two near-identical "राज" rows are visibly related instead of looking
-     * like an admin mistake. Advisory only — it never blocks an action.
+     * Who touched each account last, so two admins do not review the same row.
+     * One query for the whole page — the data already exists in SuchakActivityLog.
      *
      * @param  \Illuminate\Support\Collection<int, SuchakAccount>  $accounts
-     * @return array<int, string>  account id => duplicate reason
+     * @return array<int, array{actor: string, at: \Illuminate\Support\Carbon|null}>
+     */
+    private function lastActions($accounts): array
+    {
+        if ($accounts->isEmpty()) {
+            return [];
+        }
+
+        return SuchakActivityLog::query()
+            ->with('actorUser:id,name')
+            ->whereIn('suchak_account_id', $accounts->pluck('id')->all())
+            ->latest('occurred_at')
+            ->get(['id', 'suchak_account_id', 'actor_user_id', 'action_type', 'occurred_at'])
+            ->groupBy('suchak_account_id')
+            ->map(function ($logs): array {
+                $latest = $logs->first();
+
+                return [
+                    'actor' => $latest->actorUser?->name ?: 'System',
+                    'at' => $latest->occurred_at,
+                ];
+            })
+            ->all();
+    }
+
+    /** A shared name this common is a placeholder, not a duplicate. */
+    private const DUPLICATE_NAME_GROUP_CEILING = 5;
+
+    /**
+     * Advisory duplicate hints. Never blocks an action.
+     *
+     * Name alone is NOT a duplicate signal (PO correction 2026-07-23): the live
+     * queue holds 18 accounts literally named "Suchak", which name-only matching
+     * flagged as duplicates of each other — pure noise. A duplicate needs either
+     * the same mobile, or the same name *in the same place*.
+     *
+     * Matching runs over the whole table, not just the current page, so a twin
+     * on page 2 is still found. Name comparison reuses App\Support\NameMatcher
+     * (Marathi spelling folding) rather than a fourth string comparator.
+     *
+     * @param  \Illuminate\Support\Collection<int, SuchakAccount>  $accounts  rows on this page
+     * @return array<int, array{label: string, twin: int|null}>
      */
     private function duplicateKeys($accounts): array
     {
-        $byMobile = [];
-        $byName = [];
-        foreach ($accounts as $account) {
-            $mobile = preg_replace('/\D+/', '', (string) $account->mobile_number) ?? '';
-            if ($mobile !== '') {
-                $byMobile[$mobile][] = $account->id;
-            }
-            $name = Str::lower(trim((string) $account->suchak_name));
-            if ($name !== '') {
-                $byName[$name][] = $account->id;
-            }
+        if ($accounts->isEmpty()) {
+            return [];
         }
 
-        $flags = [];
-        foreach ($byMobile as $ids) {
-            if (count($ids) < 2) {
-                continue;
-            }
-            foreach ($ids as $id) {
-                $flags[$id] = 'Same mobile as another row';
-            }
+        $mobiles = $accounts
+            ->map(fn (SuchakAccount $a): string => preg_replace('/\D+/', '', (string) $a->mobile_number) ?? '')
+            ->filter(fn (string $m): bool => $m !== '')
+            ->unique()
+            ->values();
+
+        // One query for mobile twins anywhere in the table.
+        $mobileTwins = [];
+        if ($mobiles->isNotEmpty()) {
+            SuchakAccount::query()
+                ->select(['id', 'mobile_number'])
+                ->whereIn('mobile_number', $mobiles->all())
+                ->get()
+                ->groupBy(fn (SuchakAccount $a): string => preg_replace('/\D+/', '', (string) $a->mobile_number) ?? '')
+                ->each(function ($group, $key) use (&$mobileTwins): void {
+                    if ($group->count() > 1) {
+                        $mobileTwins[$key] = $group->pluck('id')->all();
+                    }
+                });
         }
-        foreach ($byName as $ids) {
-            if (count($ids) < 2) {
+
+        // One query for same-place candidates, then fuzzy-match names in PHP.
+        $cityIds = $accounts->pluck('city_id')->filter()->unique()->values();
+        $placeCandidates = $cityIds->isEmpty()
+            ? collect()
+            : SuchakAccount::query()
+                ->select(['id', 'suchak_name', 'city_id'])
+                ->whereIn('city_id', $cityIds->all())
+                ->get();
+
+        $flags = [];
+        foreach ($accounts as $account) {
+            $mobile = preg_replace('/\D+/', '', (string) $account->mobile_number) ?? '';
+            if ($mobile !== '' && isset($mobileTwins[$mobile])) {
+                $twin = collect($mobileTwins[$mobile])->first(fn ($id): bool => (int) $id !== (int) $account->id);
+                $flags[$account->id] = ['label' => 'Same mobile', 'twin' => $twin ? (int) $twin : null];
+
                 continue;
             }
-            foreach ($ids as $id) {
-                $flags[$id] ??= 'Same name as another row';
+
+            if ($account->city_id === null || trim((string) $account->suchak_name) === '') {
+                continue;
             }
+
+            $samePlace = $placeCandidates->filter(
+                fn (SuchakAccount $other): bool => (int) $other->city_id === (int) $account->city_id
+                    && (int) $other->id !== (int) $account->id
+                    && in_array(
+                        NameMatcher::matchLevel($other->suchak_name, $account->suchak_name),
+                        [NameMatcher::LEVEL_EXACT, NameMatcher::LEVEL_STRONG],
+                        true
+                    )
+            );
+
+            // A big cluster means the name is generic, not that they are twins.
+            if ($samePlace->isEmpty() || $samePlace->count() >= self::DUPLICATE_NAME_GROUP_CEILING) {
+                continue;
+            }
+
+            $flags[$account->id] = [
+                'label' => 'Same name & place',
+                'twin' => (int) $samePlace->first()->id,
+            ];
         }
 
         return $flags;
     }
 
     /**
-     * Bulk approve/reject straight from the queue. Deliberately routed through
-     * the same SuchakAccountLifecycleService the single-account actions use, so
-     * activity logging, public-status handling and guard rails are identical —
-     * there is no second approval path.
+     * Bulk is for clearing junk, never for granting access.
+     *
+     * Reject only — not archive: SuchakAccountLifecycleService::archive() accepts
+     * verified/suspended accounts only, and the junk this queue needs cleared is
+     * `pending`. Rather than loosen that lifecycle rule to suit the UI, bulk
+     * offers the action that actually applies. Rejection is reversible via
+     * reactivate() on the review screen.
+     */
+    public const BULK_ACTIONS = ['reject'];
+
+    /**
+     * Bulk reject/archive straight from the queue, routed through the same
+     * SuchakAccountLifecycleService the single-account actions use, so activity
+     * logging and guard rails are identical.
+     *
+     * **Approve is deliberately NOT available in bulk** (PO decision
+     * 2026-07-23). Approving a Suchak grants access to real member data and must
+     * stay a per-account decision taken on the review screen, where the
+     * verification documents are actually visible.
      */
     public function bulkAction(
         Request $request,
-        SuchakAccountLifecycleService $lifecycleService,
-        SuchakPolicyService $policyService
+        SuchakAccountLifecycleService $lifecycleService
     ): RedirectResponse {
         $validated = $request->validate([
-            'bulk_action' => ['required', Rule::in(['approve', 'reject'])],
+            'bulk_action' => ['required', Rule::in(self::BULK_ACTIONS)],
             'reason' => ['required', 'string', 'min:10', 'max:500'],
             'account_ids' => ['required', 'array', 'min:1', 'max:50'],
             'account_ids.*' => ['integer'],
@@ -240,25 +354,13 @@ class AccountVerificationController extends Controller
         $admin = $request->user();
         $ip = $request->ip();
         $agent = Str::limit((string) $request->userAgent(), 512, '');
-        $approve = $validated['bulk_action'] === 'approve';
 
         $done = 0;
         $failures = [];
 
         foreach ($accounts as $account) {
             try {
-                if ($approve) {
-                    $lifecycleService->approve(
-                        $account,
-                        $admin,
-                        $validated['reason'],
-                        $ip,
-                        $agent,
-                        $policyService->autoPublishesOnApproval()
-                    );
-                } else {
-                    $lifecycleService->reject($account, $admin, $validated['reason'], $ip, $agent);
-                }
+                $lifecycleService->reject($account, $admin, $validated['reason'], $ip, $agent);
                 $done++;
             } catch (InvalidArgumentException $exception) {
                 // One bad row must not silently swallow the rest, and must not
@@ -267,7 +369,7 @@ class AccountVerificationController extends Controller
             }
         }
 
-        $verb = $approve ? 'approved' : 'rejected';
+        $verb = 'rejected';
         $redirect = redirect()->route('admin.suchak.accounts.index', $request->only([
             'verification_status', 'business_type', 'readiness', 'sort', 'q', 'page',
         ]));

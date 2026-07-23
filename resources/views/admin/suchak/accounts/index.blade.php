@@ -57,17 +57,17 @@
                 <a href="{{ route('admin.suchak.accounts.index', ['verification_status' => SuchakAccount::VERIFICATION_PENDING, 'readiness' => AccountsController::READINESS_INCOMPLETE]) }}"
                    class="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-center dark:border-gray-600 dark:bg-gray-900">
                     <div class="text-lg font-bold text-gray-700 dark:text-gray-200">{{ $queueCounts['incomplete'] }}</div>
-                    <div class="text-xs font-medium text-gray-600 dark:text-gray-400">Signup incomplete</div>
+                    <div class="text-xs font-medium text-gray-600 dark:text-gray-400">In progress</div>
+                </a>
+                <a href="{{ route('admin.suchak.accounts.index', ['verification_status' => SuchakAccount::VERIFICATION_PENDING, 'readiness' => AccountsController::READINESS_STALLED]) }}"
+                   class="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-center dark:border-slate-600 dark:bg-slate-800">
+                    <div class="text-lg font-bold text-slate-700 dark:text-slate-200">{{ $queueCounts['stalled'] }}</div>
+                    <div class="text-xs font-medium text-slate-600 dark:text-slate-400">Stalled {{ $stalledAfterDays }}d+</div>
                 </a>
                 <a href="{{ route('admin.suchak.accounts.index', ['verification_status' => SuchakAccount::VERIFICATION_VERIFIED]) }}"
                    class="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-center dark:border-emerald-500/40 dark:bg-emerald-500/10">
                     <div class="text-lg font-bold text-emerald-800 dark:text-emerald-300">{{ $queueCounts['verified'] }}</div>
                     <div class="text-xs font-medium text-emerald-700 dark:text-emerald-300">Verified</div>
-                </a>
-                <a href="{{ route('admin.suchak.accounts.index', ['verification_status' => SuchakAccount::VERIFICATION_SUSPENDED]) }}"
-                   class="rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-center dark:border-orange-500/40 dark:bg-orange-500/10">
-                    <div class="text-lg font-bold text-orange-800 dark:text-orange-300">{{ $queueCounts['suspended'] }}</div>
-                    <div class="text-xs font-medium text-orange-700 dark:text-orange-300">Suspended</div>
                 </a>
             </div>
         </div>
@@ -92,7 +92,8 @@
                 <select id="readiness" name="readiness" class="mt-1 rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
                     <option value="">Any</option>
                     <option value="{{ AccountsController::READINESS_READY }}" @selected($readiness === AccountsController::READINESS_READY)>Signup complete</option>
-                    <option value="{{ AccountsController::READINESS_INCOMPLETE }}" @selected($readiness === AccountsController::READINESS_INCOMPLETE)>Signup incomplete</option>
+                    <option value="{{ AccountsController::READINESS_INCOMPLETE }}" @selected($readiness === AccountsController::READINESS_INCOMPLETE)>In progress (&lt;{{ $stalledAfterDays }}d)</option>
+                    <option value="{{ AccountsController::READINESS_STALLED }}" @selected($readiness === AccountsController::READINESS_STALLED)>Stalled ({{ $stalledAfterDays }}d+)</option>
                 </select>
             </div>
             <div>
@@ -134,15 +135,15 @@
             <input type="text" name="reason" x-model="reason" minlength="10" maxlength="500"
                    placeholder="Reason (min 10 characters) — recorded in the activity log"
                    class="min-w-[280px] flex-1 rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
-            <button type="submit" name="bulk_action" value="approve"
-                    :disabled="reason.trim().length < 10"
-                    @click="return confirm('Approve ' + selected.length + ' Suchak account(s)?')"
-                    class="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">Approve selected</button>
+            {{-- No bulk approve by design (PO 2026-07-23): approving grants
+                 access to real member data and stays a per-account decision on
+                 the review screen. Bulk exists to clear junk, not to grant. --}}
             <button type="submit" name="bulk_action" value="reject"
                     :disabled="reason.trim().length < 10"
                     @click="return confirm('Reject ' + selected.length + ' Suchak account(s)?')"
                     class="rounded-md bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50">Reject selected</button>
             <button type="button" @click="selected = []" class="text-sm font-medium text-indigo-800 underline dark:text-indigo-200">Clear</button>
+            <span class="w-full text-xs text-indigo-800/80 dark:text-indigo-200/80">Approval stays per-account — open Review to approve.</span>
         </div>
 
         <div class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -157,13 +158,13 @@
                                    class="rounded border-gray-300 dark:border-gray-600">
                         </th>
                         <th class="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">
-                            <a href="{{ $sortLink(AccountsController::SORT_NAME) }}" class="hover:underline">Suchak</a>
+                            <a href="{{ $sortLink(AccountsController::SORT_NAME) }}" class="hover:underline">Suchak{{ $sort === AccountsController::SORT_NAME ? ' ▾' : '' }}</a>
                         </th>
                         <th class="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">Location</th>
                         <th class="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">Type</th>
                         <th class="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">Status</th>
                         <th class="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">
-                            <a href="{{ $sortLink(AccountsController::SORT_WAITING) }}" class="hover:underline">Waiting</a>
+                            <a href="{{ $sortLink(AccountsController::SORT_WAITING) }}" class="hover:underline">Waiting{{ in_array($sort, [AccountsController::SORT_WAITING, AccountsController::SORT_SMART], true) ? ' ▾' : '' }}</a>
                         </th>
                         <th class="px-4 py-3 text-right font-semibold text-gray-700 dark:text-gray-200">Action</th>
                     </tr>
@@ -186,6 +187,7 @@
                             $isOrg = $account->business_type !== SuchakAccount::BUSINESS_TYPE_INDIVIDUAL;
                             $place = $account->cityLocation?->name ?? $account->districtLocation?->name;
                             $duplicate = $duplicateKeys[$account->id] ?? null;
+                            $lastAction = $lastActions[$account->id] ?? null;
                         @endphp
                         <tr class="{{ $isPending && $signupDone ? 'bg-amber-50/40 dark:bg-amber-500/5' : '' }}">
                             <td class="px-3 py-3 align-top">
@@ -218,9 +220,16 @@
                                             {{ $account->mobile_number ?: ($account->email ?: $account->user?->email ?: 'No contact on file') }}
                                         </div>
                                         @if ($duplicate)
-                                            <div class="mt-1 inline-flex items-center rounded bg-yellow-100 px-1.5 py-0.5 text-[11px] font-medium text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-300">
-                                                ⚠ {{ $duplicate }}
-                                            </div>
+                                            @if (!empty($duplicate['twin']))
+                                                <a href="{{ route('admin.suchak.accounts.show', $duplicate['twin']) }}"
+                                                   class="mt-1 inline-flex items-center rounded bg-yellow-100 px-1.5 py-0.5 text-[11px] font-medium text-yellow-800 hover:bg-yellow-200 dark:bg-yellow-500/15 dark:text-yellow-300">
+                                                    ⚠ {{ $duplicate['label'] }} as #{{ $duplicate['twin'] }}
+                                                </a>
+                                            @else
+                                                <span class="mt-1 inline-flex items-center rounded bg-yellow-100 px-1.5 py-0.5 text-[11px] font-medium text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-300">
+                                                    ⚠ {{ $duplicate['label'] }}
+                                                </span>
+                                            @endif
                                         @endif
                                     </div>
                                 </div>
@@ -252,6 +261,12 @@
 
                             <td class="px-4 py-3 text-right">
                                 <a href="{{ route('admin.suchak.accounts.show', $account) }}" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-200">Review</a>
+                                @if ($lastAction)
+                                    {{-- So two admins do not work the same row. --}}
+                                    <div class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                                        {{ $lastAction['actor'] }}{{ $lastAction['at'] ? ' · '.$lastAction['at']->diffForHumans(short: true) : '' }}
+                                    </div>
+                                @endif
                             </td>
                         </tr>
                     @empty
@@ -263,7 +278,14 @@
             </table>
             </div>
 
-            <div class="border-t border-gray-200 px-4 py-3 dark:border-gray-700">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
+                <div class="text-xs text-gray-600 dark:text-gray-400">
+                    @if ($accounts->total() > 0)
+                        Showing {{ $accounts->firstItem() }}–{{ $accounts->lastItem() }} of {{ $accounts->total() }}
+                    @else
+                        No results
+                    @endif
+                </div>
                 {{ $accounts->links() }}
             </div>
         </div>
