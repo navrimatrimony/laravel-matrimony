@@ -4,20 +4,22 @@ namespace App\Http\Controllers\Admin\Suchak;
 
 use App\Http\Controllers\Controller;
 use App\Models\SuchakVerificationRecord;
+use App\Modules\Suchak\Services\SuchakAccountLifecycleService;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
+use InvalidArgumentException;
 
 /**
  * Dedicated Suchak onboarding photo triage queue (profile / office / logo).
  * Approvals still go through AccountVerificationController + lifecycle service.
  *
- * Queues:
- * - needs_review: human must decide (AI review / AI error / legacy pending)
- * - auto_rejected: AI unsafe, not yet human-overridden
- * - auto_passed: AI safe auto-approved
- * - human_reviewed: admin approved/rejected (history)
+ * Status filter (dropdown): pending | approved | rejected | all
+ * Queue cards (optional): needs_review | auto_rejected | auto_passed | human_reviewed
+ * These are independent — status is not the same as bulk photo checkboxes.
  */
 class PhotoReviewController extends Controller
 {
@@ -28,6 +30,10 @@ class PhotoReviewController extends Controller
     public const QUEUE_AUTO_PASSED = 'auto_passed';
 
     public const QUEUE_HUMAN_REVIEWED = 'human_reviewed';
+
+    public const QUEUE_ALL = 'all';
+
+    public const STATUS_ALL = 'all';
 
     /**
      * @return list<string>
@@ -51,20 +57,39 @@ class PhotoReviewController extends Controller
             self::QUEUE_AUTO_REJECTED,
             self::QUEUE_AUTO_PASSED,
             self::QUEUE_HUMAN_REVIEWED,
+            self::QUEUE_ALL,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function statuses(): array
+    {
+        return [
+            SuchakVerificationRecord::STATUS_PENDING,
+            SuchakVerificationRecord::STATUS_APPROVED,
+            SuchakVerificationRecord::STATUS_REJECTED,
+            self::STATUS_ALL,
         ];
     }
 
     public function index(Request $request): View
     {
         $photoTypes = self::photoTypes();
-        $queue = (string) $request->query('queue', self::QUEUE_NEEDS_REVIEW);
-        $queue = in_array($queue, self::queues(), true) ? $queue : self::QUEUE_NEEDS_REVIEW;
+
+        $status = (string) $request->query('status', SuchakVerificationRecord::STATUS_PENDING);
+        $status = in_array($status, self::statuses(), true) ? $status : SuchakVerificationRecord::STATUS_PENDING;
+
+        $queue = (string) $request->query('queue', self::QUEUE_ALL);
+        $queue = in_array($queue, self::queues(), true) ? $queue : self::QUEUE_ALL;
 
         $type = $request->query('verification_type');
         $type = in_array($type, $photoTypes, true) ? $type : null;
 
         $records = self::photoBaseQuery()
             ->with(['suchakAccount.user', 'adminUser'])
+            ->tap(fn (Builder $query) => self::applyStatusFilter($query, $status))
             ->tap(fn (Builder $query) => self::applyQueueFilter($query, $queue))
             ->when($type, fn (Builder $query) => $query->where('verification_type', $type))
             ->latest('id')
@@ -79,21 +104,78 @@ class PhotoReviewController extends Controller
         return view('admin.suchak.photo-reviews.index', [
             'records' => $records,
             'photoTypes' => $photoTypes,
+            'status' => $status,
             'queue' => $queue,
             'type' => $type,
             'counts' => self::queueCounts(),
+            'statusCounts' => self::statusCounts(),
             'queues' => self::queues(),
+            'statuses' => self::statuses(),
             'fileMetaById' => $fileMetaById,
         ]);
     }
 
+    public function bulk(Request $request, SuchakAccountLifecycleService $lifecycleService): RedirectResponse
+    {
+        $validated = $request->validate([
+            'record_ids' => ['required', 'array', 'min:1'],
+            'record_ids.*' => ['integer'],
+            'bulk_action' => ['required', 'string', 'in:approve,reject'],
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+            'return_status' => ['nullable', 'string'],
+            'return_queue' => ['nullable', 'string'],
+        ]);
+
+        $adminStatus = $validated['bulk_action'] === 'approve'
+            ? SuchakVerificationRecord::STATUS_APPROVED
+            : SuchakVerificationRecord::STATUS_REJECTED;
+
+        $records = self::photoBaseQuery()
+            ->whereIn('id', $validated['record_ids'])
+            ->with('suchakAccount')
+            ->get();
+
+        $ok = 0;
+        $failed = 0;
+
+        foreach ($records as $record) {
+            try {
+                $lifecycleService->updateVerificationRecordStatus(
+                    $record,
+                    $request->user(),
+                    $adminStatus,
+                    $validated['reason'],
+                    $request->ip(),
+                    Str::limit((string) $request->userAgent(), 512, ''),
+                );
+                $ok++;
+            } catch (InvalidArgumentException) {
+                $failed++;
+            }
+        }
+
+        $params = [];
+        $returnStatus = (string) ($validated['return_status'] ?? '');
+        $returnQueue = (string) ($validated['return_queue'] ?? '');
+        if (in_array($returnStatus, self::statuses(), true)) {
+            $params['status'] = $returnStatus;
+        }
+        if (in_array($returnQueue, self::queues(), true)) {
+            $params['queue'] = $returnQueue;
+        }
+
+        $message = $ok.' photo(s) updated.';
+        if ($failed > 0) {
+            $message .= ' '.$failed.' failed.';
+        }
+
+        return redirect()
+            ->route('admin.suchak.photo-reviews.index', $params)
+            ->with($failed > 0 && $ok === 0 ? 'error' : 'success', $message);
+    }
+
     /**
-     * @return array{
-     *     needs_review: int,
-     *     auto_rejected: int,
-     *     auto_passed: int,
-     *     human_reviewed: int
-     * }
+     * @return array{needs_review: int, auto_rejected: int, auto_passed: int, human_reviewed: int}
      */
     public static function queueCounts(): array
     {
@@ -110,6 +192,25 @@ class PhotoReviewController extends Controller
             self::QUEUE_HUMAN_REVIEWED => self::photoBaseQuery()
                 ->tap(fn (Builder $q) => self::applyQueueFilter($q, self::QUEUE_HUMAN_REVIEWED))
                 ->count(),
+        ];
+    }
+
+    /**
+     * @return array{pending: int, approved: int, rejected: int, all: int}
+     */
+    public static function statusCounts(): array
+    {
+        return [
+            SuchakVerificationRecord::STATUS_PENDING => self::photoBaseQuery()
+                ->where('admin_status', SuchakVerificationRecord::STATUS_PENDING)
+                ->count(),
+            SuchakVerificationRecord::STATUS_APPROVED => self::photoBaseQuery()
+                ->where('admin_status', SuchakVerificationRecord::STATUS_APPROVED)
+                ->count(),
+            SuchakVerificationRecord::STATUS_REJECTED => self::photoBaseQuery()
+                ->where('admin_status', SuchakVerificationRecord::STATUS_REJECTED)
+                ->count(),
+            self::STATUS_ALL => self::photoBaseQuery()->count(),
         ];
     }
 
@@ -167,6 +268,15 @@ class PhotoReviewController extends Controller
             ->where('document_path', '!=', '');
     }
 
+    private static function applyStatusFilter(Builder $query, string $status): void
+    {
+        if ($status === self::STATUS_ALL) {
+            return;
+        }
+
+        $query->where('admin_status', $status);
+    }
+
     private static function applyQueueFilter(Builder $query, string $queue): void
     {
         match ($queue) {
@@ -184,8 +294,8 @@ class PhotoReviewController extends Controller
                     SuchakVerificationRecord::STATUS_APPROVED,
                     SuchakVerificationRecord::STATUS_REJECTED,
                 ]),
-            // Pending = needs human review (includes legacy rows without moderation_decision).
-            default => $query->where('admin_status', SuchakVerificationRecord::STATUS_PENDING),
+            self::QUEUE_NEEDS_REVIEW => $query->where('admin_status', SuchakVerificationRecord::STATUS_PENDING),
+            default => null, // QUEUE_ALL — no extra filter
         };
     }
 }

@@ -17,6 +17,7 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
     public function test_photo_review_queue_lists_pending_onboarding_photos(): void
     {
         Storage::fake('local');
+        Storage::fake('public');
 
         $admin = User::factory()->create([
             'is_admin' => true,
@@ -51,7 +52,6 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
             'moderation_decision' => SuchakVerificationRecord::MODERATION_REVIEW,
         ]);
 
-        // Non-photo verification must not appear in the photo queue.
         SuchakVerificationRecord::query()->create([
             'suchak_account_id' => $account->id,
             'verification_type' => SuchakVerificationRecord::TYPE_IDENTITY,
@@ -60,53 +60,60 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
         ]);
 
         $this->actingAs($admin)
-            ->get(route('admin.suchak.photo-reviews.index', ['queue' => PhotoReviewController::QUEUE_NEEDS_REVIEW]))
+            ->get(route('admin.suchak.photo-reviews.index', [
+                'status' => SuchakVerificationRecord::STATUS_PENDING,
+            ]))
             ->assertOk()
             ->assertSee('Suchak photo review', false)
-            ->assertSee('Review करा', false)
-            ->assertSee('Photo Queue Suchak', false)
-            ->assertSee('Profile photo', false)
             ->assertSee('Pending', false)
-            ->assertSee('Needs review', false)
+            ->assertSee('Photo Queue Suchak', false)
+            ->assertSee('Account pending', false)
             ->assertSee('2.4 KB', false)
-            ->assertSee('WEBP', false)
-            ->assertSee('720×960', false)
+            ->assertDontSee('Review करा', false)
+            ->assertDontSee('Override approve', false)
             ->assertDontSee('Identity', false);
 
+        $record = SuchakVerificationRecord::query()
+            ->where('verification_type', SuchakVerificationRecord::TYPE_PROFILE_PHOTO)
+            ->firstOrFail();
+
         $this->actingAs($admin)
-            ->from(route('admin.suchak.photo-reviews.index', ['queue' => PhotoReviewController::QUEUE_NEEDS_REVIEW]))
-            ->post(route('admin.suchak.accounts.verification-records.approve', [
-                $account,
-                SuchakVerificationRecord::query()
-                    ->where('verification_type', SuchakVerificationRecord::TYPE_PROFILE_PHOTO)
-                    ->firstOrFail(),
-            ]), [
-                'reason' => 'Approved from Suchak photo review queue.',
+            ->post(route('admin.suchak.accounts.verification-records.approve', [$account, $record]), [
+                'reason' => 'Clear face photo approved by admin.',
                 'return_to' => 'photo_reviews',
-                'return_queue' => PhotoReviewController::QUEUE_HUMAN_REVIEWED,
+                'return_status' => SuchakVerificationRecord::STATUS_APPROVED,
+                'return_queue' => PhotoReviewController::QUEUE_ALL,
             ])
             ->assertRedirect(route('admin.suchak.photo-reviews.index', [
-                'queue' => PhotoReviewController::QUEUE_HUMAN_REVIEWED,
-            ]))
-            ->assertSessionHas('success');
+                'status' => SuchakVerificationRecord::STATUS_APPROVED,
+                'queue' => PhotoReviewController::QUEUE_ALL,
+            ]));
 
         $this->assertDatabaseHas('suchak_verification_records', [
-            'suchak_account_id' => $account->id,
-            'verification_type' => SuchakVerificationRecord::TYPE_PROFILE_PHOTO,
+            'id' => $record->id,
             'admin_status' => SuchakVerificationRecord::STATUS_APPROVED,
         ]);
 
+        $account->refresh();
+        $this->assertNotEmpty($account->profile_photo_path);
+
         $this->actingAs($admin)
-            ->get(route('admin.suchak.photo-reviews.index', [
-                'queue' => PhotoReviewController::QUEUE_HUMAN_REVIEWED,
-            ]))
-            ->assertOk()
-            ->assertSee('Photo Queue Suchak', false)
-            ->assertSee('Approved', false)
-            ->assertSee('Admin reviewed', false);
+            ->post(route('admin.suchak.accounts.verification-records.reject', [$account, $record->fresh()]), [
+                'reason' => 'Wrong photo, reject after approve mistake.',
+                'return_to' => 'photo_reviews',
+                'return_status' => SuchakVerificationRecord::STATUS_REJECTED,
+            ])
+            ->assertRedirect();
+
+        $account->refresh();
+        $this->assertNull($account->profile_photo_path);
+        $this->assertDatabaseHas('suchak_verification_records', [
+            'id' => $record->id,
+            'admin_status' => SuchakVerificationRecord::STATUS_REJECTED,
+        ]);
     }
 
-    public function test_photo_review_tabs_separate_queues_including_human_reviewed(): void
+    public function test_photo_review_status_all_and_bulk_actions(): void
     {
         Storage::fake('local');
 
@@ -121,99 +128,61 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
         ]);
         $account = SuchakAccount::factory()->create([
             'user_id' => $user->id,
-            'suchak_name' => 'Tab Queue Suchak',
+            'suchak_name' => 'Bulk Queue Suchak',
             'mobile_number' => '9876505556',
+            'verification_status' => SuchakAccount::VERIFICATION_PENDING,
         ]);
 
-        $humanUser = User::factory()->create([
-            'mobile' => '9876505557',
-            'mobile_verified_at' => now(),
-        ]);
-        $humanAccount = SuchakAccount::factory()->create([
-            'user_id' => $humanUser->id,
-            'suchak_name' => 'Human Reviewed Suchak',
-            'mobile_number' => '9876505557',
-        ]);
+        $pendingPath = 'suchak/verification-documents/'.$account->id.'/a.webp';
+        $approvedPath = 'suchak/verification-documents/'.$account->id.'/b.webp';
+        Storage::disk('local')->put($pendingPath, 'a');
+        Storage::disk('local')->put($approvedPath, 'b');
 
-        $safePath = 'suchak/verification-documents/'.$account->id.'/safe.webp';
-        $unsafePath = 'suchak/verification-documents/'.$account->id.'/unsafe.webp';
-        $reviewPath = 'suchak/verification-documents/'.$account->id.'/review.webp';
-        $humanPath = 'suchak/verification-documents/'.$humanAccount->id.'/human.webp';
-        Storage::disk('local')->put($safePath, str_repeat('s', 2048));
-        Storage::disk('local')->put($unsafePath, str_repeat('u', 3072));
-        Storage::disk('local')->put($reviewPath, str_repeat('r', 1024));
-        Storage::disk('local')->put($humanPath, str_repeat('h', 4096));
-
-        SuchakVerificationRecord::query()->create([
+        $pending = SuchakVerificationRecord::query()->create([
             'suchak_account_id' => $account->id,
             'verification_type' => SuchakVerificationRecord::TYPE_PROFILE_PHOTO,
-            'document_path' => $safePath,
-            'file_meta' => ['bytes' => 2048, 'width' => 720, 'height' => 960, 'format' => 'webp'],
-            'admin_status' => SuchakVerificationRecord::STATUS_APPROVED,
-            'moderation_decision' => SuchakVerificationRecord::MODERATION_SAFE,
-            'verified_at' => now(),
-        ]);
-        SuchakVerificationRecord::query()->create([
-            'suchak_account_id' => $account->id,
-            'verification_type' => SuchakVerificationRecord::TYPE_OFFICE_PHOTO,
-            'document_path' => $unsafePath,
-            'file_meta' => ['bytes' => 3072, 'width' => 720, 'height' => 960, 'format' => 'webp'],
-            'admin_status' => SuchakVerificationRecord::STATUS_REJECTED,
-            'moderation_decision' => SuchakVerificationRecord::MODERATION_REJECTED,
-            'rejected_at' => now(),
-        ]);
-        SuchakVerificationRecord::query()->create([
-            'suchak_account_id' => $account->id,
-            'verification_type' => SuchakVerificationRecord::TYPE_ORGANIZATION_LOGO,
-            'document_path' => $reviewPath,
-            'file_meta' => ['bytes' => 1024, 'width' => 720, 'height' => 960, 'format' => 'webp'],
+            'document_path' => $pendingPath,
             'admin_status' => SuchakVerificationRecord::STATUS_PENDING,
             'moderation_decision' => SuchakVerificationRecord::MODERATION_REVIEW,
         ]);
         SuchakVerificationRecord::query()->create([
-            'suchak_account_id' => $humanAccount->id,
-            'verification_type' => SuchakVerificationRecord::TYPE_PROFILE_PHOTO,
-            'document_path' => $humanPath,
-            'file_meta' => ['bytes' => 4096, 'width' => 720, 'height' => 960, 'format' => 'webp'],
+            'suchak_account_id' => $account->id,
+            'verification_type' => SuchakVerificationRecord::TYPE_OFFICE_PHOTO,
+            'document_path' => $approvedPath,
             'admin_status' => SuchakVerificationRecord::STATUS_APPROVED,
-            'moderation_decision' => SuchakVerificationRecord::MODERATION_REVIEW,
-            'admin_user_id' => $admin->id,
-            'remarks' => 'Approved from Suchak photo review queue.',
+            'moderation_decision' => SuchakVerificationRecord::MODERATION_SAFE,
             'verified_at' => now(),
         ]);
 
         $this->actingAs($admin)
-            ->get(route('admin.suchak.photo-reviews.index', ['queue' => PhotoReviewController::QUEUE_AUTO_PASSED]))
+            ->get(route('admin.suchak.photo-reviews.index', [
+                'status' => PhotoReviewController::STATUS_ALL,
+                'queue' => PhotoReviewController::QUEUE_ALL,
+            ]))
             ->assertOk()
+            ->assertSee('Bulk Queue Suchak', false)
             ->assertSee('Profile photo', false)
-            ->assertSee('By AI (auto-passed)', false)
-            ->assertDontSee('Override approve', false);
-
-        $this->actingAs($admin)
-            ->get(route('admin.suchak.photo-reviews.index', ['queue' => PhotoReviewController::QUEUE_AUTO_REJECTED]))
-            ->assertOk()
             ->assertSee('Office photo', false)
-            ->assertSee('Override approve', false);
+            ->assertSee('पुन्हा Reject', false)
+            ->assertSee('Approve selected', false);
 
         $this->actingAs($admin)
-            ->get(route('admin.suchak.photo-reviews.index', ['queue' => PhotoReviewController::QUEUE_NEEDS_REVIEW]))
-            ->assertOk()
-            ->assertSee('Organization logo', false)
-            ->assertSee('Approve', false)
-            ->assertSee('Reject', false)
-            ->assertDontSee('Override approve', false);
+            ->post(route('admin.suchak.photo-reviews.bulk'), [
+                'record_ids' => [$pending->id],
+                'bulk_action' => 'approve',
+                'reason' => 'Bulk approve clear photos now.',
+                'return_status' => PhotoReviewController::STATUS_ALL,
+                'return_queue' => PhotoReviewController::QUEUE_ALL,
+            ])
+            ->assertRedirect(route('admin.suchak.photo-reviews.index', [
+                'status' => PhotoReviewController::STATUS_ALL,
+                'queue' => PhotoReviewController::QUEUE_ALL,
+            ]))
+            ->assertSessionHas('success');
 
-        $this->actingAs($admin)
-            ->get(route('admin.suchak.photo-reviews.index', ['queue' => PhotoReviewController::QUEUE_HUMAN_REVIEWED]))
-            ->assertOk()
-            ->assertSee('Human Reviewed Suchak', false)
-            ->assertSee('Approved', false)
-            ->assertSee('4 KB', false);
-
-        $counts = PhotoReviewController::queueCounts();
-        $this->assertSame(1, $counts[PhotoReviewController::QUEUE_NEEDS_REVIEW]);
-        $this->assertSame(1, $counts[PhotoReviewController::QUEUE_AUTO_REJECTED]);
-        $this->assertSame(1, $counts[PhotoReviewController::QUEUE_AUTO_PASSED]);
-        $this->assertSame(1, $counts[PhotoReviewController::QUEUE_HUMAN_REVIEWED]);
+        $this->assertDatabaseHas('suchak_verification_records', [
+            'id' => $pending->id,
+            'admin_status' => SuchakVerificationRecord::STATUS_APPROVED,
+        ]);
     }
 }

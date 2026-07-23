@@ -25,6 +25,7 @@ Route::middleware(['auth', 'admin', 'admin.section'])
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::get('/photo-reviews', [PhotoReviewController::class, 'index'])->name('photo-reviews.index');
+        Route::post('/photo-reviews/bulk', [PhotoReviewController::class, 'bulk'])->name('photo-reviews.bulk');
         Route::get('/safety', [SafetyController::class, 'index'])->name('safety.index');
         Route::post('/safety/disputes', [SafetyController::class, 'storeDispute'])->name('safety.disputes.store');
         Route::post('/safety/disputes/{dispute}/review', [SafetyController::class, 'reviewDispute'])->name('safety.disputes.review');

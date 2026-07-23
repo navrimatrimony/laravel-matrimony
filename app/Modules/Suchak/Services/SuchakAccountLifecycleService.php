@@ -248,7 +248,7 @@ class SuchakAccountLifecycleService
                 'rejected_at' => $adminStatus === SuchakVerificationRecord::STATUS_REJECTED ? now() : null,
             ])->save();
 
-            $this->publishApprovedProfilePhoto($verificationRecord, $account, $adminStatus);
+            $this->syncPublicProfilePhoto($verificationRecord, $account, $adminStatus);
 
             $this->activityLogger->record([
                 'suchak_account_id' => $account->id,
@@ -271,7 +271,7 @@ class SuchakAccountLifecycleService
         });
     }
 
-    private function publishApprovedProfilePhoto(
+    private function syncPublicProfilePhoto(
         SuchakVerificationRecord $verificationRecord,
         SuchakAccount $account,
         string $adminStatus,
@@ -280,11 +280,15 @@ class SuchakAccountLifecycleService
             return;
         }
 
-        if ($adminStatus !== SuchakVerificationRecord::STATUS_APPROVED) {
+        if ($adminStatus === SuchakVerificationRecord::STATUS_APPROVED) {
+            $this->copyApprovedProfilePhotoToPublicDisk($verificationRecord, $account);
+
             return;
         }
 
-        $this->copyApprovedProfilePhotoToPublicDisk($verificationRecord, $account);
+        if ($adminStatus === SuchakVerificationRecord::STATUS_REJECTED) {
+            $this->clearPublicProfilePhoto($account);
+        }
     }
 
     /**
@@ -298,6 +302,18 @@ class SuchakAccountLifecycleService
         }
 
         $this->copyApprovedProfilePhotoToPublicDisk($verificationRecord, $account);
+    }
+
+    private function clearPublicProfilePhoto(SuchakAccount $account): void
+    {
+        $publicPath = trim((string) $account->profile_photo_path);
+        if ($publicPath !== '' && Storage::disk('public')->exists($publicPath)) {
+            Storage::disk('public')->delete($publicPath);
+        }
+
+        $account->forceFill([
+            'profile_photo_path' => null,
+        ])->save();
     }
 
     private function copyApprovedProfilePhotoToPublicDisk(
