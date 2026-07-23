@@ -22,7 +22,7 @@
                 <a href="{{ route('admin.suchak.safety.index') }}" class="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
                     Safety center
                 </a>
-                <a href="{{ route('admin.suchak.photo-reviews.index', ['queue' => 'needs_review']) }}" class="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">
+                <a href="{{ route('admin.suchak.photo-reviews.index', ['status' => 'pending', 'queue' => 'needs_review']) }}" class="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">
                     Photo review
                     @if (($approvalsSummary['photo_queue_counts']['needs_review'] ?? $approvalsSummary['photo_records_pending'] ?? 0) > 0)
                         ({{ number_format($approvalsSummary['photo_queue_counts']['needs_review'] ?? $approvalsSummary['photo_records_pending']) }})
@@ -85,9 +85,9 @@
                     <dd class="mt-1 text-xl font-bold text-gray-900 dark:text-gray-100">{{ number_format($approvalsSummary['records_pending']) }}</dd>
                 </div>
                 <div>
-                    <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Photos — review</dt>
+                    <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Photos — pending</dt>
                     <dd class="mt-1 text-xl font-bold text-gray-900 dark:text-gray-100">
-                        <a href="{{ route('admin.suchak.photo-reviews.index', ['queue' => 'needs_review']) }}" class="hover:text-indigo-600 dark:hover:text-indigo-300">
+                        <a href="{{ route('admin.suchak.photo-reviews.index', ['status' => 'pending']) }}" class="hover:text-indigo-600 dark:hover:text-indigo-300">
                             {{ number_format($approvalsSummary['photo_queue_counts']['needs_review'] ?? $approvalsSummary['photo_records_pending'] ?? 0) }}
                         </a>
                     </dd>
@@ -95,7 +95,7 @@
                 <div>
                     <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Photos — auto-rejected</dt>
                     <dd class="mt-1 text-xl font-bold text-gray-900 dark:text-gray-100">
-                        <a href="{{ route('admin.suchak.photo-reviews.index', ['queue' => 'auto_rejected']) }}" class="hover:text-indigo-600 dark:hover:text-indigo-300">
+                        <a href="{{ route('admin.suchak.photo-reviews.index', ['queue' => 'auto_rejected', 'status' => 'all']) }}" class="hover:text-indigo-600 dark:hover:text-indigo-300">
                             {{ number_format($approvalsSummary['photo_queue_counts']['auto_rejected'] ?? 0) }}
                         </a>
                     </dd>
@@ -103,7 +103,7 @@
                 <div>
                     <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Photos — auto-passed</dt>
                     <dd class="mt-1 text-xl font-bold text-gray-900 dark:text-gray-100">
-                        <a href="{{ route('admin.suchak.photo-reviews.index', ['queue' => 'auto_passed']) }}" class="hover:text-indigo-600 dark:hover:text-indigo-300">
+                        <a href="{{ route('admin.suchak.photo-reviews.index', ['queue' => 'auto_passed', 'status' => 'all']) }}" class="hover:text-indigo-600 dark:hover:text-indigo-300">
                             {{ number_format($approvalsSummary['photo_queue_counts']['auto_passed'] ?? 0) }}
                         </a>
                     </dd>
@@ -111,7 +111,7 @@
                 <div>
                     <dt class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Photos — admin reviewed</dt>
                     <dd class="mt-1 text-xl font-bold text-gray-900 dark:text-gray-100">
-                        <a href="{{ route('admin.suchak.photo-reviews.index', ['queue' => 'human_reviewed']) }}" class="hover:text-indigo-600 dark:hover:text-indigo-300">
+                        <a href="{{ route('admin.suchak.photo-reviews.index', ['queue' => 'human_reviewed', 'status' => 'all']) }}" class="hover:text-indigo-600 dark:hover:text-indigo-300">
                             {{ number_format($approvalsSummary['photo_queue_counts']['human_reviewed'] ?? 0) }}
                         </a>
                     </dd>

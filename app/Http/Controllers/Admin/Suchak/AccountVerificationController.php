@@ -279,10 +279,15 @@ class AccountVerificationController extends Controller
         }
 
         if (request()->input('return_to') === 'photo_reviews') {
+            $params = [];
+            $status = (string) request()->input('return_status', '');
             $queue = (string) request()->input('return_queue', '');
-            $params = in_array($queue, PhotoReviewController::queues(), true)
-                ? ['queue' => $queue]
-                : [];
+            if (in_array($status, PhotoReviewController::statuses(), true)) {
+                $params['status'] = $status;
+            }
+            if (in_array($queue, PhotoReviewController::queues(), true)) {
+                $params['queue'] = $queue;
+            }
 
             return redirect()
                 ->route('admin.suchak.photo-reviews.index', $params)
