@@ -108,7 +108,6 @@ class PhotoReviewController extends Controller
             'queue' => $queue,
             'type' => $type,
             'counts' => self::queueCounts(),
-            'statusCounts' => self::statusCounts(),
             'queues' => self::queues(),
             'statuses' => self::statuses(),
             'fileMetaById' => $fileMetaById,
@@ -196,25 +195,8 @@ class PhotoReviewController extends Controller
     }
 
     /**
-     * @return array{pending: int, approved: int, rejected: int, all: int}
-     */
-    public static function statusCounts(): array
-    {
-        return [
-            SuchakVerificationRecord::STATUS_PENDING => self::photoBaseQuery()
-                ->where('admin_status', SuchakVerificationRecord::STATUS_PENDING)
-                ->count(),
-            SuchakVerificationRecord::STATUS_APPROVED => self::photoBaseQuery()
-                ->where('admin_status', SuchakVerificationRecord::STATUS_APPROVED)
-                ->count(),
-            SuchakVerificationRecord::STATUS_REJECTED => self::photoBaseQuery()
-                ->where('admin_status', SuchakVerificationRecord::STATUS_REJECTED)
-                ->count(),
-            self::STATUS_ALL => self::photoBaseQuery()->count(),
-        ];
-    }
-
-    /**
+     * Fast list metadata only — avoid getimagesize() on every row (slow on VPS disk).
+     *
      * @return array{bytes: int|null, width: int|null, height: int|null, format: string|null, kb_label: string, dims_label: string, format_label: string}
      */
     public static function resolveFileMeta(SuchakVerificationRecord $record): array
@@ -226,20 +208,12 @@ class PhotoReviewController extends Controller
         $format = isset($stored['format']) ? strtolower((string) $stored['format']) : null;
 
         $path = trim((string) $record->document_path);
-        if ($path !== '' && Storage::disk('local')->exists($path)) {
-            if ($bytes === null || $bytes <= 0) {
-                $bytes = (int) Storage::disk('local')->size($path);
-            }
+        if ($path !== '') {
             if ($format === null || $format === '') {
                 $format = strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) ?: null;
             }
-            if (($width === null || $height === null) && in_array($format, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
-                $absolute = Storage::disk('local')->path($path);
-                $info = @getimagesize($absolute);
-                if (is_array($info)) {
-                    $width = $width ?? (int) ($info[0] ?? 0) ?: null;
-                    $height = $height ?? (int) ($info[1] ?? 0) ?: null;
-                }
+            if (($bytes === null || $bytes <= 0) && Storage::disk('local')->exists($path)) {
+                $bytes = (int) Storage::disk('local')->size($path);
             }
         }
 

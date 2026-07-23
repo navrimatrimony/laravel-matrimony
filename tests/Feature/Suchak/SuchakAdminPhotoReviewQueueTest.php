@@ -164,6 +164,7 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
             ->assertSee('Profile photo', false)
             ->assertSee('Office photo', false)
             ->assertSee('पुन्हा Reject', false)
+            ->assertSee('Select all', false)
             ->assertSee('Approve selected', false);
 
         $this->actingAs($admin)
