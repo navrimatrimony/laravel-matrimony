@@ -154,6 +154,17 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
             'verified_at' => now(),
         ]);
 
+        // Queue card works when Status = All.
+        $this->actingAs($admin)
+            ->get(route('admin.suchak.photo-reviews.index', [
+                'status' => PhotoReviewController::STATUS_ALL,
+                'queue' => PhotoReviewController::QUEUE_NEEDS_REVIEW,
+            ]))
+            ->assertOk()
+            ->assertSee('Profile photo', false)
+            ->assertDontSee('Office photo', false);
+
+        // Status dropdown + queue=all lists every status together.
         $this->actingAs($admin)
             ->get(route('admin.suchak.photo-reviews.index', [
                 'status' => PhotoReviewController::STATUS_ALL,
@@ -166,6 +177,16 @@ class SuchakAdminPhotoReviewQueueTest extends TestCase
             ->assertSee('पुन्हा Reject', false)
             ->assertSee('Select all', false)
             ->assertSee('Approve selected', false);
+
+        // Status=pending must ignore a conflicting queue card (would otherwise be empty).
+        $this->actingAs($admin)
+            ->get(route('admin.suchak.photo-reviews.index', [
+                'status' => SuchakVerificationRecord::STATUS_PENDING,
+                'queue' => PhotoReviewController::QUEUE_AUTO_REJECTED,
+            ]))
+            ->assertOk()
+            ->assertSee('Profile photo', false)
+            ->assertDontSee('Office photo', false);
 
         $this->actingAs($admin)
             ->post(route('admin.suchak.photo-reviews.bulk'), [
