@@ -35,6 +35,24 @@ class AbandonedSignupPurgeService
     public const MINIMUM_AGE_DAYS = 30;
 
     /**
+     * The account's OWN paperwork — its registration audit trail and the
+     * documents it submitted about itself. These are written for every signup,
+     * including one abandoned at step 1, so treating them as "this account is in
+     * use" made the purge permanently unable to delete anything (found on live
+     * data 2026-07-23: 24 activity-log rows and 3 verification records across
+     * the 18 abandoned signups). They carry no meaning once the account is gone,
+     * so they are removed with it instead of blocking it.
+     *
+     * This list is deliberately tiny and explicit. Everything else blocks by
+     * default, so a Suchak table added in future is protective automatically
+     * rather than being silently ignored.
+     */
+    public const SELF_PAPERWORK_TABLES = [
+        'suchak_activity_logs',
+        'suchak_verification_records',
+    ];
+
+    /**
      * Accounts that may be deleted right now. Safe to call any time — reads only.
      *
      * @return Collection<int, SuchakAccount>
@@ -74,6 +92,13 @@ class AbandonedSignupPurgeService
 
         $ids = $eligible->pluck('id')->all();
         DB::transaction(function () use ($ids): void {
+            // The account's own paperwork goes with it, children first so no
+            // foreign key is left dangling.
+            foreach (self::SELF_PAPERWORK_TABLES as $table) {
+                if (Schema::hasTable($table)) {
+                    DB::table($table)->whereIn('suchak_account_id', $ids)->delete();
+                }
+            }
             SuchakAccount::query()->whereIn('id', $ids)->delete();
         });
 
@@ -81,7 +106,9 @@ class AbandonedSignupPurgeService
     }
 
     /**
-     * Every table the live schema says points at suchak_accounts.
+     * Tables whose presence means the account did real work, so it must be kept.
+     * Everything referencing suchak_accounts counts, except the account's own
+     * paperwork.
      *
      * @return array<int, string>
      */
@@ -90,7 +117,7 @@ class AbandonedSignupPurgeService
         $tables = [];
         foreach (Schema::getTableListing() as $table) {
             $name = str_contains($table, '.') ? substr($table, strrpos($table, '.') + 1) : $table;
-            if ($name === 'suchak_accounts') {
+            if ($name === 'suchak_accounts' || in_array($name, self::SELF_PAPERWORK_TABLES, true)) {
                 continue;
             }
             if (Schema::hasColumn($name, 'suchak_account_id')) {

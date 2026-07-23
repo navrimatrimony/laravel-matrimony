@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\Suchak;
 
+use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
+use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Modules\Suchak\Services\AbandonedSignupPurgeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -135,22 +137,42 @@ class PurgeAbandonedSuchakSignupsTest extends TestCase
     }
 
     /**
-     * The core protection: an abandoned signup that nevertheless left a trace
-     * anywhere is spared, so no related record is ever orphaned.
+     * The core protection: an abandoned signup that did any real work is spared,
+     * so no meaningful record is ever orphaned. A representation is real work.
      */
-    public function test_an_account_with_any_related_record_is_spared(): void
+    public function test_an_account_that_did_real_work_is_spared(): void
     {
-        $withTrace = $this->account();
-        $withoutTrace = $this->account();
+        $didWork = $this->account();
+        $didNothing = $this->account();
 
+        SuchakProfileRepresentation::factory()->create([
+            'suchak_account_id' => $didWork->id,
+            'matrimony_profile_id' => MatrimonyProfile::factory()->create()->id,
+        ]);
+
+        $this->artisan('suchak:purge-abandoned-signups --force')->assertSuccessful();
+
+        $this->assertDatabaseHas('suchak_accounts', ['id' => $didWork->id]);
+        $this->assertDatabaseMissing('suchak_accounts', ['id' => $didNothing->id]);
+    }
+
+    /**
+     * Registration writes an activity log and can attach verification records
+     * for every signup, including one abandoned at step 1. Counting those as
+     * "in use" made the purge unable to ever delete anything (found on live
+     * data). They are the account's own paperwork and go with it.
+     */
+    public function test_the_accounts_own_paperwork_does_not_protect_it_and_is_removed_too(): void
+    {
+        $account = $this->account();
         SuchakActivityLog::factory()->create([
-            'suchak_account_id' => $withTrace->id,
+            'suchak_account_id' => $account->id,
             'occurred_at' => now()->subDays(40),
         ]);
 
         $this->artisan('suchak:purge-abandoned-signups --force')->assertSuccessful();
 
-        $this->assertDatabaseHas('suchak_accounts', ['id' => $withTrace->id]);
-        $this->assertDatabaseMissing('suchak_accounts', ['id' => $withoutTrace->id]);
+        $this->assertDatabaseMissing('suchak_accounts', ['id' => $account->id]);
+        $this->assertDatabaseMissing('suchak_activity_logs', ['suchak_account_id' => $account->id]);
     }
 }

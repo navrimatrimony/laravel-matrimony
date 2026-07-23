@@ -97,6 +97,9 @@ class AccountVerificationController extends Controller
 
         $accounts = SuchakAccount::query()
             ->with(['user', 'cityLocation', 'districtLocation'])
+            // How much work this Suchak has actually done — the single best
+            // signal of whether an account matters.
+            ->withCount('profileRepresentations')
             ->when($status, fn ($query) => $query->where('verification_status', $status))
             ->when($businessType, fn ($query) => $query->where('business_type', $businessType))
             ->when(
@@ -207,29 +210,25 @@ class AccountVerificationController extends Controller
             return [];
         }
 
-        $ownUserIds = $accounts->pluck('user_id', 'id')->all();
-
+        // Only genuine staff actions. Filtering merely on "not the account's own
+        // user" let ordinary non-admin users through, so the column showed a
+        // name that was neither the Suchak nor an admin (found on live data
+        // 2026-07-23) and told the reviewer nothing.
         return SuchakActivityLog::query()
             ->with('actorUser:id,name')
             ->whereIn('suchak_account_id', $accounts->pluck('id')->all())
-            ->whereNotNull('actor_user_id')
+            ->whereHas('actorUser', fn ($query) => $query->where('is_admin', true))
             ->latest('occurred_at')
             ->get(['id', 'suchak_account_id', 'actor_user_id', 'action_type', 'occurred_at'])
             ->groupBy('suchak_account_id')
-            ->map(function ($logs, $accountId) use ($ownUserIds): ?array {
-                $latest = $logs->first(
-                    fn ($log): bool => (int) $log->actor_user_id !== (int) ($ownUserIds[$accountId] ?? 0)
-                );
-                if ($latest === null) {
-                    return null;
-                }
+            ->map(function ($logs): array {
+                $latest = $logs->first();
 
                 return [
                     'actor' => $latest->actorUser?->name ?: 'Staff',
                     'at' => $latest->occurred_at,
                 ];
             })
-            ->filter()
             ->all();
     }
 

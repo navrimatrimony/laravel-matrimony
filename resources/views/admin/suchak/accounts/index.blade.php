@@ -168,6 +168,7 @@
                         </th>
                         <th class="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">Location</th>
                         <th class="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">Type</th>
+                        <th class="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">Profiles</th>
                         <th class="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">Status</th>
                         <th class="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">
                             <a href="{{ $sortLink(AccountsController::SORT_WAITING) }}" class="hover:underline">Waiting{{ in_array($sort, [AccountsController::SORT_WAITING, AccountsController::SORT_SMART], true) ? ' ▾' : '' }}</a>
@@ -247,6 +248,15 @@
 
                             <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ ucfirst($account->business_type) }}</td>
 
+                            {{-- Work actually done. A Suchak with profiles is never junk. --}}
+                            <td class="px-4 py-3">
+                                @if ($account->profile_representations_count > 0)
+                                    <span class="font-semibold text-gray-900 dark:text-gray-100">{{ $account->profile_representations_count }}</span>
+                                @else
+                                    <span class="text-gray-400 dark:text-gray-500">0</span>
+                                @endif
+                            </td>
+
                             {{-- Exactly one signal. The badge already carries the
                                  pending sub-state, so no second line repeats it;
                                  public state appears only when it disagrees. --}}
@@ -277,7 +287,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No Suchak accounts match these filters.</td>
+                            <td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No Suchak accounts match these filters.</td>
                         </tr>
                     @endforelse
                 </tbody>
