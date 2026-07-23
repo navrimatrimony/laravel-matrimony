@@ -39,70 +39,96 @@
             default => ['Pending', 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200'],
         };
     };
+    $visibleIds = $records->pluck('id')->values()->all();
 @endphp
 
-<div
-    class="space-y-6"
-    x-data="{
-        previewOpen: false,
-        previewUrl: '',
-        previewTitle: '',
-        reasonOpen: false,
-        reasonText: '',
-        reasonError: '',
-        reasonTitle: '',
-        reasonAction: '',
-        selected: {},
-        selectAll: false,
-        toggleAll(ids) {
-            this.selectAll = !this.selectAll;
-            ids.forEach((id) => { this.selected[id] = this.selectAll; });
-        },
-        selectedIds() {
-            return Object.keys(this.selected).filter((id) => this.selected[id]).map((id) => Number(id));
-        },
-        openReason(action, title) {
-            this.reasonAction = action;
-            this.reasonTitle = title;
-            this.reasonText = '';
-            this.reasonError = '';
-            this.reasonOpen = true;
-        },
-        confirmReason() {
-            const text = (this.reasonText || '').trim();
-            if (text.length < 10) {
-                this.reasonError = 'Reason must be at least 10 characters.';
-                return;
-            }
-            if (this.reasonAction === 'bulk-approve' || this.reasonAction === 'bulk-reject') {
-                const ids = this.selectedIds();
-                if (ids.length === 0) {
-                    this.reasonError = 'Select at least one photo.';
+<script>
+    window.suchakPhotoReview = function (visibleIds) {
+        return {
+            visibleIds: Array.isArray(visibleIds) ? visibleIds : [],
+            previewOpen: false,
+            previewUrl: '',
+            previewTitle: '',
+            reasonOpen: false,
+            reasonText: '',
+            reasonError: '',
+            reasonTitle: '',
+            reasonAction: '',
+            selected: {},
+            allVisibleSelected: false,
+            openPreview(url, title) {
+                this.previewUrl = url || '';
+                this.previewTitle = title || '';
+                this.previewOpen = true;
+            },
+            toggleVisible() {
+                this.allVisibleSelected = !this.allVisibleSelected;
+                this.visibleIds.forEach((id) => {
+                    this.selected[id] = this.allVisibleSelected;
+                });
+            },
+            selectedIds() {
+                return Object.keys(this.selected)
+                    .filter((id) => this.selected[id])
+                    .map((id) => Number(id));
+            },
+            openReason(action, title) {
+                this.reasonAction = action;
+                this.reasonTitle = title || '';
+                this.reasonText = '';
+                this.reasonError = '';
+                this.reasonOpen = true;
+            },
+            confirmReason() {
+                const text = (this.reasonText || '').trim();
+                if (text.length < 10) {
+                    this.reasonError = 'Reason must be at least 10 characters.';
                     return;
                 }
-                const form = document.getElementById('bulk-photo-form');
-                form.querySelector('[name=bulk_action]').value = this.reasonAction === 'bulk-approve' ? 'approve' : 'reject';
-                form.querySelector('[name=reason]').value = text;
-                form.querySelectorAll("[name='record_ids[]']").forEach((el) => el.remove());
-                ids.forEach((id) => {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'record_ids[]';
-                    input.value = String(id);
-                    form.appendChild(input);
-                });
+
+                if (this.reasonAction === 'bulk-approve' || this.reasonAction === 'bulk-reject') {
+                    const ids = this.selectedIds();
+                    if (ids.length === 0) {
+                        this.reasonError = 'Select at least one photo.';
+                        return;
+                    }
+
+                    const form = document.getElementById('bulk-photo-form');
+                    if (!form) {
+                        this.reasonError = 'Bulk form missing.';
+                        return;
+                    }
+
+                    form.querySelector('[name="bulk_action"]').value =
+                        this.reasonAction === 'bulk-approve' ? 'approve' : 'reject';
+                    form.querySelector('[name="reason"]').value = text;
+                    form.querySelectorAll('input[name="record_ids[]"]').forEach((el) => el.remove());
+                    ids.forEach((id) => {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = 'record_ids[]';
+                        input.value = String(id);
+                        form.appendChild(input);
+                    });
+                    this.reasonOpen = false;
+                    form.submit();
+                    return;
+                }
+
+                const form = document.getElementById(this.reasonAction);
+                if (!form) {
+                    this.reasonError = 'Action form missing.';
+                    return;
+                }
+                form.querySelector('[name="reason"]').value = text;
                 this.reasonOpen = false;
                 form.submit();
-                return;
-            }
-            const form = document.getElementById(this.reasonAction);
-            if (!form) return;
-            form.querySelector('[name=reason]').value = text;
-            this.reasonOpen = false;
-            form.submit();
-        }
-    }"
->
+            },
+        };
+    };
+</script>
+
+<div class="space-y-6" x-data="suchakPhotoReview(@js($visibleIds))">
     <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
@@ -166,16 +192,13 @@
     </form>
 
     <div class="flex flex-wrap items-center gap-2">
-        <button type="button" class="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700"
-                @click="toggleAll(@js($records->pluck('id')->values()->all()))">
-            Select page
+        <button type="button" class="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700" @click="toggleVisible()">
+            Select all
         </button>
-        <button type="button" class="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
-                @click="openReason('bulk-approve', 'Approve selected photos')">
+        <button type="button" class="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700" @click="openReason('bulk-approve', 'Approve selected photos')">
             Approve selected
         </button>
-        <button type="button" class="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
-                @click="openReason('bulk-reject', 'Reject selected photos')">
+        <button type="button" class="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700" @click="openReason('bulk-reject', 'Reject selected photos')">
             Reject selected
         </button>
     </div>
@@ -219,6 +242,7 @@
                             [$statusText, $statusClass] = $statusBadge((string) $record->admin_status);
                             $formApproveId = 'photo-approve-'.$record->id;
                             $formRejectId = 'photo-reject-'.$record->id;
+                            $previewTitle = ($account?->suchak_name ?: 'Photo').' · '.$typeLabel((string) $record->verification_type);
                             $decisionAt = $record->admin_status === \App\Models\SuchakVerificationRecord::STATUS_APPROVED
                                 ? $record->verified_at
                                 : ($record->admin_status === \App\Models\SuchakVerificationRecord::STATUS_REJECTED ? $record->rejected_at : null);
@@ -239,16 +263,18 @@
                         @endphp
                         <tr class="align-top">
                             <td class="px-3 py-3">
-                                <input type="checkbox" class="rounded border-gray-300 dark:border-gray-600" x-model="selected[{{ $record->id }}]">
+                                <input type="checkbox" class="rounded border-gray-300 dark:border-gray-600" :checked="!!selected[{{ $record->id }}]" @change="selected[{{ $record->id }}] = $event.target.checked">
                             </td>
                             <td class="px-3 py-3">
                                 @if ($docUrl && $isImage($record->document_path))
                                     <button
                                         type="button"
                                         class="block h-28 w-20 overflow-hidden rounded-md border border-gray-200 bg-gray-100 dark:border-gray-600 dark:bg-gray-900"
-                                        @click="previewOpen = true; previewUrl = @js($docUrl); previewTitle = @js(($account?->suchak_name ?: 'Photo').' · '.$typeLabel((string) $record->verification_type))"
+                                        data-preview-url="{{ $docUrl }}"
+                                        data-preview-title="{{ $previewTitle }}"
+                                        @click="openPreview($event.currentTarget.dataset.previewUrl, $event.currentTarget.dataset.previewTitle)"
                                     >
-                                        <img src="{{ $docUrl }}" alt="Photo preview" class="h-full w-full object-cover">
+                                        <img src="{{ $docUrl }}" alt="Photo preview" loading="lazy" decoding="async" class="h-full w-full object-cover">
                                     </button>
                                 @elseif ($docUrl)
                                     <a href="{{ $docUrl }}" target="_blank" rel="noopener" class="text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-300">Open file</a>
@@ -298,10 +324,13 @@
                                             <input type="hidden" name="return_queue" value="{{ $queue }}">
                                             <input type="hidden" name="reason" value="">
                                         </form>
-                                        <button type="button" class="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
-                                                @click="openReason(@js($formApproveId), @js($approveLabel))">
-                                            {{ $approveLabel }}
-                                        </button>
+                                        <button
+                                            type="button"
+                                            class="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+                                            data-form-id="{{ $formApproveId }}"
+                                            data-reason-title="{{ $approveLabel }}"
+                                            @click="openReason($event.currentTarget.dataset.formId, $event.currentTarget.dataset.reasonTitle)"
+                                        >{{ $approveLabel }}</button>
                                     @endif
                                     @if ($canReject)
                                         <form id="{{ $formRejectId }}" method="POST" action="{{ route('admin.suchak.accounts.verification-records.reject', [$account, $record]) }}" class="hidden">
@@ -311,17 +340,20 @@
                                             <input type="hidden" name="return_queue" value="{{ $queue }}">
                                             <input type="hidden" name="reason" value="">
                                         </form>
-                                        <button type="button" class="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
-                                                @click="openReason(@js($formRejectId), @js($rejectLabel))">
-                                            {{ $rejectLabel }}
-                                        </button>
+                                        <button
+                                            type="button"
+                                            class="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+                                            data-form-id="{{ $formRejectId }}"
+                                            data-reason-title="{{ $rejectLabel }}"
+                                            @click="openReason($event.currentTarget.dataset.formId, $event.currentTarget.dataset.reasonTitle)"
+                                        >{{ $rejectLabel }}</button>
                                     @endif
                                 </div>
-                                @if ($record->adminUser?->email || $decisionAt)
+                                @if ($record->adminUser?->email || $decisionAt || in_array($record->moderation_decision, [\App\Models\SuchakVerificationRecord::MODERATION_SAFE, \App\Models\SuchakVerificationRecord::MODERATION_REJECTED], true))
                                     <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
                                         @if ($record->adminUser?->email)
                                             By {{ $record->adminUser->email }}
-                                        @elseif ($record->moderation_decision === \App\Models\SuchakVerificationRecord::MODERATION_SAFE)
+                                        @elseif ($record->moderation_decision === \App\Models\SuchakVerificationRecord::MODERATION_SAFE && ! $record->admin_user_id)
                                             By AI (auto-passed)
                                         @elseif ($record->moderation_decision === \App\Models\SuchakVerificationRecord::MODERATION_REJECTED && ! $record->admin_user_id)
                                             By AI (auto-rejected)
@@ -385,7 +417,7 @@
                 class="mt-3 w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-950 dark:text-gray-100"
                 placeholder="Example: Clear face photo, good quality."
             ></textarea>
-            <p class="mt-1 text-xs text-red-600 dark:text-red-300" x-text="reasonError" x-show="reasonError"></p>
+            <p class="mt-1 text-xs text-red-600 dark:text-red-300" x-show="reasonError" x-text="reasonError"></p>
             <div class="mt-4 flex justify-end gap-2">
                 <button type="button" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-800" @click="reasonOpen = false">Cancel</button>
                 <button type="button" class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700" @click="confirmReason()">Confirm</button>
