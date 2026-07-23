@@ -510,13 +510,7 @@ class SuchakRegisterApiController extends Controller
             return 'profile_photo';
         }
 
-        if ($account->business_type === SuchakAccount::BUSINESS_TYPE_ORGANIZATION) {
-            $hasOffice = $account->verificationRecords
-                ->contains(fn ($r) => $r->verification_type === SuchakVerificationRecord::TYPE_OFFICE_PHOTO && filled($r->document_path));
-            if (! $hasOffice) {
-                return 'office_photo';
-            }
-        }
+        // Office photo is optional — do not block resume on it.
 
         if ($account->city_id === null && $account->taluka_id === null) {
             return 'location';

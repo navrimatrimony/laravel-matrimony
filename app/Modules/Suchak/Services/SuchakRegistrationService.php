@@ -306,17 +306,7 @@ class SuchakRegistrationService
             ]);
         }
 
-        if ($account->business_type === SuchakAccount::BUSINESS_TYPE_ORGANIZATION) {
-            $hasOfficePhoto = $account->verificationRecords()
-                ->where('verification_type', SuchakVerificationRecord::TYPE_OFFICE_PHOTO)
-                ->whereNotNull('document_path')
-                ->exists();
-            if (! $hasOfficePhoto) {
-                throw ValidationException::withMessages([
-                    'office_photo' => 'Upload an office photo before finishing registration.',
-                ]);
-            }
-        }
+        // Office photo is optional for organization accounts (native APK can skip).
 
         if (! filled($user->password)) {
             throw ValidationException::withMessages([
