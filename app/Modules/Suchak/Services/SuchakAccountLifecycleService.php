@@ -284,6 +284,26 @@ class SuchakAccountLifecycleService
             return;
         }
 
+        $this->copyApprovedProfilePhotoToPublicDisk($verificationRecord, $account);
+    }
+
+    /**
+     * Used by automated AI-safe photo approval during registration upload.
+     */
+    public function publishApprovedProfilePhotoFromRecord(SuchakVerificationRecord $verificationRecord): void
+    {
+        $account = $verificationRecord->suchakAccount()->first();
+        if (! $account) {
+            return;
+        }
+
+        $this->copyApprovedProfilePhotoToPublicDisk($verificationRecord, $account);
+    }
+
+    private function copyApprovedProfilePhotoToPublicDisk(
+        SuchakVerificationRecord $verificationRecord,
+        SuchakAccount $account,
+    ): void {
         $sourcePath = trim((string) $verificationRecord->document_path);
         if ($sourcePath === '' || ! Storage::disk('local')->exists($sourcePath)) {
             return;
