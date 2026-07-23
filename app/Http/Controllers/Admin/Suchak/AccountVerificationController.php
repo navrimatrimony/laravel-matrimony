@@ -190,8 +190,12 @@ class AccountVerificationController extends Controller
     }
 
     /**
-     * Who touched each account last, so two admins do not review the same row.
-     * One query for the whole page — the data already exists in SuchakActivityLog.
+     * Which ADMIN last touched each account, so two admins do not review the
+     * same row. One query for the whole page.
+     *
+     * The Suchak's own registration activity is excluded on purpose: showing it
+     * just reprinted the name already in the first column and told the reviewer
+     * nothing. Only third-party (staff) actions count as "someone is on this".
      *
      * @param  \Illuminate\Support\Collection<int, SuchakAccount>  $accounts
      * @return array<int, array{actor: string, at: \Illuminate\Support\Carbon|null}>
@@ -202,20 +206,29 @@ class AccountVerificationController extends Controller
             return [];
         }
 
+        $ownUserIds = $accounts->pluck('user_id', 'id')->all();
+
         return SuchakActivityLog::query()
             ->with('actorUser:id,name')
             ->whereIn('suchak_account_id', $accounts->pluck('id')->all())
+            ->whereNotNull('actor_user_id')
             ->latest('occurred_at')
             ->get(['id', 'suchak_account_id', 'actor_user_id', 'action_type', 'occurred_at'])
             ->groupBy('suchak_account_id')
-            ->map(function ($logs): array {
-                $latest = $logs->first();
+            ->map(function ($logs, $accountId) use ($ownUserIds): ?array {
+                $latest = $logs->first(
+                    fn ($log): bool => (int) $log->actor_user_id !== (int) ($ownUserIds[$accountId] ?? 0)
+                );
+                if ($latest === null) {
+                    return null;
+                }
 
                 return [
-                    'actor' => $latest->actorUser?->name ?: 'System',
+                    'actor' => $latest->actorUser?->name ?: 'Staff',
                     'at' => $latest->occurred_at,
                 ];
             })
+            ->filter()
             ->all();
     }
 
