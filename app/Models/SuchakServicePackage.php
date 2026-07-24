@@ -39,7 +39,6 @@ class SuchakServicePackage extends Model
     protected $fillable = [
         'suchak_account_id',
         'customer_context_id',
-        'source_template_id',
         'package_name',
         'package_name_mr',
         'package_description',
@@ -79,11 +78,6 @@ class SuchakServicePackage extends Model
     public function customerContext(): BelongsTo
     {
         return $this->belongsTo(SuchakCustomerContext::class, 'customer_context_id');
-    }
-
-    public function sourceTemplate(): BelongsTo
-    {
-        return $this->belongsTo(SuchakPackageTemplate::class, 'source_template_id');
     }
 
     public function customizedByUser(): BelongsTo

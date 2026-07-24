@@ -6,7 +6,6 @@ use App\Models\AdminAuditLog;
 use App\Models\Plan;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
-use App\Models\SuchakPackageTemplate;
 use App\Models\SuchakPolicy;
 use App\Models\SuchakServicePackage;
 use App\Models\SuchakPlan;
@@ -26,9 +25,6 @@ class SuchakPackageRateCardFoundationTest extends TestCase
     public function test_package_rate_card_tables_are_structured_and_separate_from_platform_plan(): void
     {
         foreach ([
-            'suchak_package_templates',
-            'suchak_package_template_stages',
-            'suchak_package_template_deliverables',
             'suchak_service_packages',
             'suchak_service_package_stages',
             'suchak_service_package_deliverables',
@@ -37,15 +33,11 @@ class SuchakPackageRateCardFoundationTest extends TestCase
         }
 
         foreach ([
-            'template_name',
-            'base_price_amount',
-            'currency',
-            'template_status',
-            'created_by_admin_user_id',
-            'approved_by_admin_user_id',
-            'approved_at',
-        ] as $column) {
-            $this->assertTrue(Schema::hasColumn('suchak_package_templates', $column), $column);
+            'suchak_package_templates',
+            'suchak_package_template_stages',
+            'suchak_package_template_deliverables',
+        ] as $droppedTable) {
+            $this->assertFalse(Schema::hasTable($droppedTable), $droppedTable);
         }
 
         foreach ([
@@ -56,7 +48,6 @@ class SuchakPackageRateCardFoundationTest extends TestCase
             'is_required',
             'expected_days',
         ] as $column) {
-            $this->assertTrue(Schema::hasColumn('suchak_package_template_stages', $column), $column);
             $this->assertTrue(Schema::hasColumn('suchak_service_package_stages', $column), $column);
         }
 
@@ -67,14 +58,15 @@ class SuchakPackageRateCardFoundationTest extends TestCase
             'sort_order',
             'is_required',
         ] as $column) {
-            $this->assertTrue(Schema::hasColumn('suchak_package_template_deliverables', $column), $column);
             $this->assertTrue(Schema::hasColumn('suchak_service_package_deliverables', $column), $column);
         }
 
-        foreach (['stages_json', 'deliverables_json', 'package_json', 'rate_card_json', 'suchak_plan_id'] as $forbiddenColumn) {
-            $this->assertFalse(Schema::hasColumn('suchak_package_templates', $forbiddenColumn));
+        foreach (['stages_json', 'deliverables_json', 'package_json', 'rate_card_json', 'suchak_plan_id', 'source_template_id'] as $forbiddenColumn) {
             $this->assertFalse(Schema::hasColumn('suchak_service_packages', $forbiddenColumn));
         }
+
+        $this->assertFalse(Schema::hasColumn('suchak_service_package_stages', 'template_stage_id'));
+        $this->assertFalse(Schema::hasColumn('suchak_service_package_deliverables', 'template_deliverable_id'));
 
         $this->assertDatabaseHas('suchak_policies', [
             'policy_key' => SuchakPolicyService::KEY_SUCHAK_PACKAGE_PUBLISH_APPROVAL_MODE,
@@ -84,100 +76,30 @@ class SuchakPackageRateCardFoundationTest extends TestCase
         ]);
     }
 
-    public function test_admin_can_create_package_template_with_structured_stages_deliverables_and_claim_guard(): void
+    public function test_custom_package_creation_blocks_misleading_claims(): void
     {
-        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
-
-        $template = $this->createApprovedTemplate($admin);
-
-        $this->assertSame(SuchakPackageTemplate::STATUS_APPROVED, $template->template_status);
-        $this->assertSame('15000.00', $template->base_price_amount);
-        $this->assertSame('INR', $template->currency);
-        $this->assertCount(2, $template->stages);
-        $this->assertCount(2, $template->deliverables);
-        $this->assertSame('intake_and_shortlist', $template->stages->first()->stage_key);
-
-        $this->assertDatabaseHas('suchak_package_template_deliverables', [
-            'package_template_id' => $template->id,
-            'template_stage_id' => $template->stages->first()->id,
-            'deliverable_key' => 'shortlist_report',
-        ]);
-        $this->assertDatabaseHas('admin_audit_logs', [
-            'admin_id' => $admin->id,
-            'action_type' => 'suchak_package_template_created',
-            'entity_type' => 'SuchakPackageTemplate',
-            'entity_id' => $template->id,
-        ]);
-        $this->assertDatabaseHas('suchak_activity_logs', [
-            'actor_user_id' => $admin->id,
-            'actor_type' => SuchakActivityLog::ACTOR_ADMIN,
-            'action_type' => SuchakActivityLog::ACTION_PACKAGE_TEMPLATE_CREATED,
-            'target_type' => 'suchak_package_template',
-            'target_id' => $template->id,
-        ]);
-        $this->assertSame(0, SuchakPlan::query()->count());
-        $this->assertSame(0, Plan::query()->count());
+        [$suchakUser, $account] = $this->verifiedSuchakActor();
 
         try {
-            app(SuchakPackageCatalogService::class)->createTemplate(
-                $admin,
+            app(SuchakPackageCatalogService::class)->createCustomPackage(
+                $account,
+                $suchakUser,
                 [
-                    'template_name' => '100% guaranteed marriage package',
-                    'base_price_amount' => '5000',
+                    'package_name' => '100% guaranteed marriage package',
+                    'price_amount' => '5000',
                     'currency' => 'INR',
                 ],
                 $this->stagePayload(),
                 $this->deliverablePayload(),
-                'Reject misleading package claim.',
             );
 
             $this->fail('Misleading package claims should be blocked.');
         } catch (InvalidArgumentException $exception) {
             $this->assertSame('Suchak packages must not contain misleading success or guarantee claims.', $exception->getMessage());
         }
-    }
 
-    public function test_verified_suchak_can_clone_template_without_touching_suchak_platform_plan(): void
-    {
-        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
-        $template = $this->createApprovedTemplate($admin);
-        [$suchakUser, $account] = $this->verifiedSuchakActor();
-
-        $package = app(SuchakPackageCatalogService::class)->cloneTemplateForSuchak(
-            $account,
-            $suchakUser,
-            $template,
-            [
-                'package_name' => 'Premium Match Facilitation',
-                'package_description' => 'Personalized shortlist and family coordination.',
-                'price_amount' => '12000',
-                'currency' => 'INR',
-            ],
-            null,
-            '127.0.0.1',
-            'Day-35 clone test',
-        );
-
-        $this->assertSame($account->id, $package->suchak_account_id);
-        $this->assertSame($template->id, $package->source_template_id);
-        $this->assertSame(SuchakServicePackage::STATUS_PENDING_REVIEW, $package->package_status);
-        $this->assertSame(SuchakServicePackage::APPROVAL_MODE_ADMIN_REVIEW, $package->approval_policy_mode);
-        $this->assertTrue($package->requires_admin_approval);
-        $this->assertSame('12000.00', $package->price_amount);
-        $this->assertCount(2, $package->stages);
-        $this->assertCount(2, $package->deliverables);
-        $this->assertSame($template->stages->first()->id, $package->stages->first()->template_stage_id);
-        $this->assertSame($package->stages->first()->id, $package->deliverables->first()->service_package_stage_id);
         $this->assertSame(0, SuchakPlan::query()->count());
-
-        $activity = SuchakActivityLog::query()
-            ->where('action_type', SuchakActivityLog::ACTION_SERVICE_PACKAGE_CREATED)
-            ->where('target_type', 'suchak_service_package')
-            ->where('target_id', $package->id)
-            ->firstOrFail();
-
-        $this->assertSame('template_clone', $activity->metadata_json['context']);
-        $this->assertSame(SuchakServicePackage::APPROVAL_MODE_ADMIN_REVIEW, $activity->metadata_json['approval_policy_mode']);
+        $this->assertSame(0, Plan::query()->count());
     }
 
     public function test_custom_package_flow_uses_policy_driven_publish_mode_and_owner_status_guards(): void
@@ -207,7 +129,6 @@ class SuchakPackageRateCardFoundationTest extends TestCase
             $this->deliverablePayload(),
         );
 
-        $this->assertNull($package->source_template_id);
         $this->assertSame(SuchakServicePackage::STATUS_PUBLISHED, $package->package_status);
         $this->assertSame(SuchakServicePackage::APPROVAL_MODE_AUTO_PUBLISH, $package->approval_policy_mode);
         $this->assertFalse($package->requires_admin_approval);
@@ -310,19 +231,16 @@ class SuchakPackageRateCardFoundationTest extends TestCase
         ]);
     }
 
-    public function test_package_template_and_service_package_delete_are_blocked(): void
+    public function test_service_package_delete_is_blocked(): void
     {
-        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
-        $template = $this->createApprovedTemplate($admin);
         [$suchakUser, $account] = $this->verifiedSuchakActor();
-        $package = app(SuchakPackageCatalogService::class)->cloneTemplateForSuchak($account, $suchakUser, $template);
-
-        try {
-            $template->delete();
-            $this->fail('Package templates should not be deleted.');
-        } catch (RuntimeException $exception) {
-            $this->assertSame('Suchak package templates cannot be deleted.', $exception->getMessage());
-        }
+        $package = app(SuchakPackageCatalogService::class)->createCustomPackage(
+            $account,
+            $suchakUser,
+            ['package_name' => 'Delete Guard Package'],
+            $this->stagePayload(),
+            $this->deliverablePayload(),
+        );
 
         try {
             $package->delete();
@@ -330,22 +248,6 @@ class SuchakPackageRateCardFoundationTest extends TestCase
         } catch (RuntimeException $exception) {
             $this->assertSame('Suchak service packages cannot be deleted.', $exception->getMessage());
         }
-    }
-
-    private function createApprovedTemplate(User $admin): SuchakPackageTemplate
-    {
-        return app(SuchakPackageCatalogService::class)->createTemplate(
-            $admin,
-            [
-                'template_name' => 'Premium Match Coordination',
-                'template_description' => 'Structured shortlist, family meeting, and follow-up coordination.',
-                'base_price_amount' => '15000',
-                'currency' => 'INR',
-            ],
-            $this->stagePayload(),
-            $this->deliverablePayload(),
-            'Create Day-35 package template.',
-        );
     }
 
     /**

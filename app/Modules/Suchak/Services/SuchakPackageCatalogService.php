@@ -6,9 +6,6 @@ use App\Models\AdminAuditLog;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakCustomerContext;
-use App\Models\SuchakPackageTemplate;
-use App\Models\SuchakPackageTemplateDeliverable;
-use App\Models\SuchakPackageTemplateStage;
 use App\Models\SuchakServicePackage;
 use App\Models\SuchakServicePackageDeliverable;
 use App\Models\SuchakServicePackageStage;
@@ -32,144 +29,6 @@ class SuchakPackageCatalogService
      * @param  array<int, array<string, mixed>>  $stages
      * @param  array<int, array<string, mixed>>  $deliverables
      */
-    public function createTemplate(
-        User $admin,
-        array $attributes,
-        array $stages,
-        array $deliverables,
-        string $reason,
-    ): SuchakPackageTemplate {
-        $this->assertAdmin($admin);
-        $reason = $this->requiredReason($reason, 'Suchak package template change reason is required.');
-        $stagePayloads = $this->normalizedStages($stages);
-        $deliverablePayloads = $this->normalizedDeliverables($deliverables, array_column($stagePayloads, 'stage_key'));
-        $templateAttributes = $this->normalizedTemplateAttributes($admin, $attributes);
-
-        return DB::transaction(function () use ($admin, $templateAttributes, $stagePayloads, $deliverablePayloads, $reason): SuchakPackageTemplate {
-            $template = SuchakPackageTemplate::query()->create($templateAttributes);
-            $stageIdsByKey = [];
-
-            foreach ($stagePayloads as $stagePayload) {
-                unset($stagePayload['template_stage_id']);
-                $stage = SuchakPackageTemplateStage::query()->create(array_merge($stagePayload, [
-                    'package_template_id' => $template->id,
-                ]));
-                $stageIdsByKey[$stage->stage_key] = $stage->id;
-            }
-
-            foreach ($deliverablePayloads as $deliverablePayload) {
-                $stageKey = $deliverablePayload['stage_key'];
-                unset($deliverablePayload['stage_key'], $deliverablePayload['template_deliverable_id']);
-
-                SuchakPackageTemplateDeliverable::query()->create(array_merge($deliverablePayload, [
-                    'package_template_id' => $template->id,
-                    'template_stage_id' => $stageKey === null ? null : $stageIdsByKey[$stageKey],
-                ]));
-            }
-
-            $auditLog = $this->writeAdminAuditLog(
-                $admin,
-                'suchak_package_template_created',
-                'SuchakPackageTemplate',
-                $template->id,
-                $reason.' | stages='.count($stagePayloads).' | deliverables='.count($deliverablePayloads),
-            );
-
-            $this->activityLogger->record([
-                'actor_user_id' => $admin->id,
-                'actor_type' => SuchakActivityLog::ACTOR_ADMIN,
-                'action_type' => SuchakActivityLog::ACTION_PACKAGE_TEMPLATE_CREATED,
-                'target_type' => 'suchak_package_template',
-                'target_id' => $template->id,
-                'admin_audit_log_id' => $auditLog->id,
-                'metadata_json' => [
-                    'context' => 'package_template_created',
-                    'template_status' => $template->template_status,
-                    'stage_count' => count($stagePayloads),
-                    'deliverable_count' => count($deliverablePayloads),
-                ],
-            ]);
-
-            return $template->fresh(['stages', 'deliverables']);
-        });
-    }
-
-    /**
-     * @param  array<string, mixed>  $overrides
-     */
-    public function cloneTemplateForSuchak(
-        SuchakAccount $account,
-        User $actor,
-        SuchakPackageTemplate $template,
-        array $overrides = [],
-        ?SuchakCustomerContext $customerContext = null,
-        ?string $ipAddress = null,
-        ?string $userAgent = null,
-    ): SuchakServicePackage {
-        $this->assertSuchakActor($account, $actor);
-        $this->assertCustomerContext($customerContext, $account);
-
-        $template->refresh()->loadMissing(['stages', 'deliverables.templateStage']);
-        if (! $template->isApproved()) {
-            throw new InvalidArgumentException('Only approved Suchak package templates can be cloned.');
-        }
-
-        $packageAttributes = $this->normalizedServicePackageAttributes(
-            $account,
-            $actor,
-            [
-                'package_name' => $overrides['package_name'] ?? $overrides['name'] ?? $template->template_name,
-                'package_name_mr' => $overrides['package_name_mr'] ?? $overrides['name_mr'] ?? $template->template_name_mr,
-                'package_description' => $overrides['package_description'] ?? $overrides['description'] ?? $template->template_description,
-                'package_description_mr' => $overrides['package_description_mr'] ?? $overrides['description_mr'] ?? $template->template_description_mr,
-                'price_amount' => $overrides['price_amount'] ?? $template->base_price_amount,
-                'currency' => $overrides['currency'] ?? $template->currency,
-            ],
-            $customerContext,
-            $template,
-        );
-
-        $stagePayloads = $template->stages->map(fn (SuchakPackageTemplateStage $stage): array => [
-            'template_stage_id' => $stage->id,
-            'stage_key' => $stage->stage_key,
-            'stage_name' => $stage->stage_name,
-            'stage_name_mr' => $stage->stage_name_mr,
-            'stage_description' => $stage->stage_description,
-            'stage_description_mr' => $stage->stage_description_mr,
-            'sort_order' => $stage->sort_order,
-            'is_required' => $stage->is_required,
-            'expected_days' => $stage->expected_days,
-        ])->all();
-
-        $deliverablePayloads = $template->deliverables->map(fn (SuchakPackageTemplateDeliverable $deliverable): array => [
-            'template_deliverable_id' => $deliverable->id,
-            'stage_key' => $deliverable->templateStage?->stage_key,
-            'deliverable_key' => $deliverable->deliverable_key,
-            'deliverable_name' => $deliverable->deliverable_name,
-            'deliverable_name_mr' => $deliverable->deliverable_name_mr,
-            'deliverable_description' => $deliverable->deliverable_description,
-            'deliverable_description_mr' => $deliverable->deliverable_description_mr,
-            'sort_order' => $deliverable->sort_order,
-            'is_required' => $deliverable->is_required,
-        ])->all();
-
-        return $this->persistServicePackage(
-            $account,
-            $actor,
-            $packageAttributes,
-            $stagePayloads,
-            $deliverablePayloads,
-            'template_clone',
-            $ipAddress,
-            $userAgent,
-        );
-    }
-
-    /**
-     * @param  array<string, mixed>  $attributes
-     * @param  array<int, array<string, mixed>>  $stages
-     * @param  array<int, array<string, mixed>>  $deliverables
-     */
     public function createCustomPackage(
         SuchakAccount $account,
         User $actor,
@@ -186,7 +45,7 @@ class SuchakPackageCatalogService
 
         $stagePayloads = $this->normalizedStages($stages);
         $deliverablePayloads = $this->normalizedDeliverables($deliverables, array_column($stagePayloads, 'stage_key'));
-        $packageAttributes = $this->normalizedServicePackageAttributes($account, $actor, $attributes, $customerContext, null, $autoPublish);
+        $packageAttributes = $this->normalizedServicePackageAttributes($account, $actor, $attributes, $customerContext, $autoPublish);
 
         return $this->persistServicePackage(
             $account,
@@ -254,12 +113,11 @@ class SuchakPackageCatalogService
                     'context' => 'service_package_approved',
                     'package_status' => SuchakServicePackage::STATUS_PUBLISHED,
                     'approval_policy_mode' => $locked->approval_policy_mode,
-                    'source_template_id' => $locked->source_template_id,
                     'customer_context_id' => $locked->customer_context_id,
                 ],
             ]);
 
-            return $locked->fresh(['suchakAccount', 'customerContext', 'sourceTemplate', 'stages', 'deliverables']);
+            return $locked->fresh(['suchakAccount', 'customerContext', 'stages', 'deliverables']);
         });
     }
 
@@ -301,46 +159,11 @@ class SuchakPackageCatalogService
      * @param  array<string, mixed>  $attributes
      * @return array<string, mixed>
      */
-    private function normalizedTemplateAttributes(User $admin, array $attributes): array
-    {
-        $templateName = $this->requiredText($attributes['template_name'] ?? $attributes['name'] ?? null, 'Suchak package template name is required.', 160);
-        $templateNameMr = $this->limitedText($attributes['template_name_mr'] ?? $attributes['name_mr'] ?? null, 160);
-        $templateDescription = $this->limitedText($attributes['template_description'] ?? $attributes['description'] ?? null, 3000);
-        $templateDescriptionMr = $this->limitedText($attributes['template_description_mr'] ?? $attributes['description_mr'] ?? null, 3000);
-        [$basePriceAmount, $currency] = $this->normalizedPrice($attributes['base_price_amount'] ?? $attributes['price_amount'] ?? null, $attributes['currency'] ?? null);
-        $status = $this->allowedValue(
-            $attributes['template_status'] ?? SuchakPackageTemplate::STATUS_APPROVED,
-            SuchakPackageTemplate::STATUSES,
-            'Suchak package template status is invalid.',
-        );
-
-        $this->assertNoMisleadingClaims([$templateName, $templateDescription]);
-
-        return [
-            'template_name' => $templateName,
-            'template_name_mr' => $templateNameMr,
-            'template_description' => $templateDescription,
-            'template_description_mr' => $templateDescriptionMr,
-            'base_price_amount' => $basePriceAmount,
-            'currency' => $currency,
-            'template_status' => $status,
-            'created_by_admin_user_id' => $admin->id,
-            'approved_by_admin_user_id' => $status === SuchakPackageTemplate::STATUS_APPROVED ? $admin->id : null,
-            'approved_at' => $status === SuchakPackageTemplate::STATUS_APPROVED ? now() : null,
-            'archived_at' => $status === SuchakPackageTemplate::STATUS_ARCHIVED ? now() : null,
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $attributes
-     * @return array<string, mixed>
-     */
     private function normalizedServicePackageAttributes(
         SuchakAccount $account,
         User $actor,
         array $attributes,
         ?SuchakCustomerContext $customerContext,
-        ?SuchakPackageTemplate $template,
         bool $forceAutoPublish = false,
     ): array {
         $packageName = $this->requiredText($attributes['package_name'] ?? $attributes['name'] ?? null, 'Suchak package name is required.', 160);
@@ -355,7 +178,6 @@ class SuchakPackageCatalogService
         return array_merge($approval, [
             'suchak_account_id' => $account->id,
             'customer_context_id' => $customerContext?->id,
-            'source_template_id' => $template?->id,
             'package_name' => $packageName,
             'package_name_mr' => $packageNameMr,
             'package_description' => $packageDescription,
@@ -387,7 +209,6 @@ class SuchakPackageCatalogService
             $this->assertNoMisleadingClaims([$stageName, $stageDescription]);
 
             $payloads[$stageKey] = [
-                'template_stage_id' => $stage['template_stage_id'] ?? null,
                 'stage_key' => $stageKey,
                 'stage_name' => $stageName,
                 'stage_name_mr' => $stageNameMr,
@@ -437,7 +258,6 @@ class SuchakPackageCatalogService
             $this->assertNoMisleadingClaims([$deliverableName, $deliverableDescription]);
 
             $payloads[$deliverableKey] = [
-                'template_deliverable_id' => $deliverable['template_deliverable_id'] ?? null,
                 'stage_key' => $stageKey,
                 'deliverable_key' => $deliverableKey,
                 'deliverable_name' => $deliverableName,
@@ -506,14 +326,13 @@ class SuchakPackageCatalogService
                     'package_status' => $package->package_status,
                     'approval_policy_mode' => $package->approval_policy_mode,
                     'requires_admin_approval' => $package->requires_admin_approval,
-                    'source_template_id' => $package->source_template_id,
                     'customer_context_id' => $package->customer_context_id,
                     'stage_count' => count($stagePayloads),
                     'deliverable_count' => count($deliverablePayloads),
                 ],
             ]);
 
-            return $package->fresh(['suchakAccount', 'customerContext', 'sourceTemplate', 'stages', 'deliverables']);
+            return $package->fresh(['suchakAccount', 'customerContext', 'stages', 'deliverables']);
         });
     }
 

@@ -427,7 +427,6 @@ class SuchakAgreementService
                 'price_amount' => $package->price_amount === null ? null : number_format((float) $package->price_amount, 2, '.', ''),
                 'currency' => $package->currency,
                 'status' => $package->package_status,
-                'source_template_id' => $package->source_template_id,
             ],
             'stages' => $package->stages->map(fn (SuchakServicePackageStage $stage): array => [
                 'id' => (int) $stage->id,

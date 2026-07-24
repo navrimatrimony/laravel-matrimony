@@ -16,7 +16,6 @@ class SuchakServicePackageStage extends Model
 
     protected $fillable = [
         'service_package_id',
-        'template_stage_id',
         'stage_key',
         'stage_name',
         'stage_name_mr',
@@ -36,11 +35,6 @@ class SuchakServicePackageStage extends Model
     public function servicePackage(): BelongsTo
     {
         return $this->belongsTo(SuchakServicePackage::class, 'service_package_id');
-    }
-
-    public function templateStage(): BelongsTo
-    {
-        return $this->belongsTo(SuchakPackageTemplateStage::class, 'template_stage_id');
     }
 
     public function deliverables(): HasMany

@@ -16,7 +16,6 @@ class SuchakServicePackageDeliverable extends Model
     protected $fillable = [
         'service_package_id',
         'service_package_stage_id',
-        'template_deliverable_id',
         'deliverable_key',
         'deliverable_name',
         'deliverable_name_mr',
@@ -39,11 +38,6 @@ class SuchakServicePackageDeliverable extends Model
     public function servicePackageStage(): BelongsTo
     {
         return $this->belongsTo(SuchakServicePackageStage::class, 'service_package_stage_id');
-    }
-
-    public function templateDeliverable(): BelongsTo
-    {
-        return $this->belongsTo(SuchakPackageTemplateDeliverable::class, 'template_deliverable_id');
     }
 
     public function delete(): ?bool

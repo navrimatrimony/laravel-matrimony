@@ -5,7 +5,6 @@ namespace Tests\Feature\Suchak;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakCustomerAgreement;
-use App\Models\SuchakPackageTemplate;
 use App\Models\SuchakPolicy;
 use App\Models\SuchakServicePackage;
 use App\Models\User;
@@ -275,7 +274,6 @@ class SuchakAgreementSnapshotFoundationTest extends TestCase
      */
     private function publishedPackageFixture(string $packageName = 'Premium Match Coordination'): array
     {
-        $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         [$suchakUser, $account] = $this->verifiedSuchakActor();
 
         SuchakPolicy::query()->updateOrCreate(
@@ -288,27 +286,20 @@ class SuchakAgreementSnapshotFoundationTest extends TestCase
             ],
         );
 
-        $template = app(SuchakPackageCatalogService::class)->createTemplate(
-            $admin,
-            [
-                'template_name' => 'Agreement Fixture Template',
-                'base_price_amount' => '15000',
-                'currency' => 'INR',
-            ],
-            $this->stagePayload(),
-            $this->deliverablePayload(),
-            'Create agreement fixture template.',
-        );
-
-        $package = app(SuchakPackageCatalogService::class)->cloneTemplateForSuchak(
+        $package = app(SuchakPackageCatalogService::class)->createCustomPackage(
             $account,
             $suchakUser,
-            $template,
             [
                 'package_name' => $packageName,
                 'price_amount' => '15000',
                 'currency' => 'INR',
             ],
+            $this->stagePayload(),
+            $this->deliverablePayload(),
+            null,
+            null,
+            null,
+            true,
         );
 
         return [$suchakUser, $account, $package->fresh(['suchakAccount.user', 'stages', 'deliverables.servicePackageStage'])];
