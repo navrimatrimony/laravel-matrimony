@@ -252,7 +252,9 @@ class MobileProfileDisplayPresenter
         return [
             'enabled' => true,
             'title' => $this->comparisonLabel($profile),
-            'summary' => $matchedCount > 0 ? $matchedCount.' जुळणारे मुद्दे' : null,
+            'summary' => $matchedCount > 0
+                ? $matchedCount.(LocalizedText::isMarathi() ? ' जुळणारे मुद्दे' : ' matching points')
+                : null,
             'viewer' => [
                 'name' => $this->tr('You'),
                 'photo_url' => $viewerPhotoUrl,
@@ -858,9 +860,10 @@ class MobileProfileDisplayPresenter
         string $status,
         bool $isCounted
     ): ?array {
-        $viewerValue = $this->cleanComparisonString($viewerValue) ?? 'माहिती नाही';
-        $targetValue = $this->cleanComparisonString($targetValue) ?? 'माहिती नाही';
-        if ($viewerValue === 'माहिती नाही' && $targetValue === 'माहिती नाही') {
+        $notSpecified = LocalizedText::isMarathi() ? 'माहिती नाही' : 'Not specified';
+        $viewerValue = $this->cleanComparisonString($viewerValue) ?? $notSpecified;
+        $targetValue = $this->cleanComparisonString($targetValue) ?? $notSpecified;
+        if ($viewerValue === $notSpecified && $targetValue === $notSpecified) {
             return null;
         }
 
