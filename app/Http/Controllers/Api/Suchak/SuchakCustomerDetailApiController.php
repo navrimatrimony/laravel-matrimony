@@ -64,6 +64,7 @@ class SuchakCustomerDetailApiController extends Controller
                             'default_consent_giver_name' => $row['default_consent_giver_name'] ?? null,
                             'lifecycle_label' => $row['lifecycle_label'] ?? null,
                             'paid' => $row['paid'] ?? null,
+                            'consent_history' => $this->consentHistory($account, $representation),
                             'view_url' => $row['view_url'] ?? null,
                             'edit_url' => $row['edit_url'] ?? null,
                             'manage_url' => $row['manage_url'] ?? null,
@@ -78,6 +79,40 @@ class SuchakCustomerDetailApiController extends Controller
         }
 
         return response()->json(['success' => false, 'message' => 'Customer not found for this Suchak account.'], 404);
+    }
+
+    /**
+     * Read-only consent audit trail for a representation — every number the
+     * Suchak sent a consent request to, with its status and time. There is no
+     * app path to edit or delete it: consents are only cancelled (a status
+     * change), never removed, so the record stays transparent and tamper-proof.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function consentHistory(SuchakAccount $account, int $representation): array
+    {
+        $rep = $account->profileRepresentations()
+            ->with(['consents'])
+            ->find($representation);
+
+        if ($rep === null) {
+            return [];
+        }
+
+        return $rep->consents
+            ->sortByDesc('created_at')
+            ->take(20)
+            ->map(static fn ($consent): array => [
+                'mobile' => $consent->intended_mobile ?: $consent->consent_mobile_number,
+                'giver_name' => $consent->consent_given_by_name,
+                'status' => $consent->consent_status,
+                'status_label' => ucfirst(str_replace('_', ' ', (string) $consent->consent_status)),
+                'requested_at' => $consent->created_at instanceof \Illuminate\Support\Carbon
+                    ? $consent->created_at->toIso8601String()
+                    : null,
+            ])
+            ->values()
+            ->all();
     }
 }
 
