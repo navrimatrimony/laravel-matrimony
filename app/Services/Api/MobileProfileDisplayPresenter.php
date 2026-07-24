@@ -1227,7 +1227,9 @@ class MobileProfileDisplayPresenter
         $name = $this->cleanString($profile->full_name);
 
         return [
-            'title' => $name !== null ? 'About '.$name : null,
+            'title' => $name !== null
+                ? (LocalizedText::isMarathi() ? $name.' बद्दल' : 'About '.$name)
+                : null,
             'body' => $body,
         ];
     }
@@ -1933,11 +1935,30 @@ class MobileProfileDisplayPresenter
         ];
     }
 
+    /**
+     * Marathi titles for the fixed sections. The English literal at each call
+     * site stays the base/fallback (always present); when the request locale is
+     * Marathi and the section key is listed here, the Marathi title is used. A
+     * key absent here — e.g. `partner_match`, whose title is already localized
+     * upstream in comparisonLabel() — keeps whatever title the caller passed.
+     */
+    private const SECTION_TITLES_MR = [
+        'basic' => 'मूलभूत माहिती',
+        'family' => 'कौटुंबिक माहिती',
+        'career_education' => 'करिअर आणि शिक्षण',
+        'astro' => 'ज्योतिष / गुणमिलन',
+        'partner_preferences' => 'जोडीदाराच्या अपेक्षा',
+    ];
+
     private function section(string $key, string $title, array $items): ?array
     {
         $items = array_values(array_filter($items));
         if ($items === []) {
             return null;
+        }
+
+        if (LocalizedText::isMarathi() && isset(self::SECTION_TITLES_MR[$key])) {
+            $title = self::SECTION_TITLES_MR[$key];
         }
 
         return [
@@ -2571,15 +2592,16 @@ class MobileProfileDisplayPresenter
     private function comparisonLabel(MatrimonyProfile $profile): string
     {
         $gender = mb_strtolower(trim((string) ($this->labelFrom($profile->gender) ?? '')));
+        $marathi = LocalizedText::isMarathi();
 
         if (str_contains($gender, 'female') || str_contains($gender, 'स्त्री') || str_contains($gender, 'महिला')) {
-            return 'You & Her';
+            return $marathi ? 'तुम्ही आणि ती' : 'You & Her';
         }
         if (str_contains($gender, 'male') || str_contains($gender, 'पुरुष')) {
-            return 'You & Him';
+            return $marathi ? 'तुम्ही आणि तो' : 'You & Him';
         }
 
-        return 'You & Profile';
+        return $marathi ? 'तुम्ही आणि प्रोफाइल' : 'You & Profile';
     }
 
     private function collectionLabels(mixed $collection): ?string
