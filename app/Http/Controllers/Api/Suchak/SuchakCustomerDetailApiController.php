@@ -63,6 +63,7 @@ class SuchakCustomerDetailApiController extends Controller
                             'default_consent_mobile' => $row['default_consent_mobile'] ?? null,
                             'default_consent_giver_name' => $row['default_consent_giver_name'] ?? null,
                             'lifecycle_label' => $row['lifecycle_label'] ?? null,
+                            'paid' => $row['paid'] ?? null,
                             'view_url' => $row['view_url'] ?? null,
                             'edit_url' => $row['edit_url'] ?? null,
                             'manage_url' => $row['manage_url'] ?? null,

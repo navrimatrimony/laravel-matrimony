@@ -64,6 +64,7 @@ class SuchakCustomersApiController extends Controller
                 'default_consent_mobile' => $row['default_consent_mobile'] ?? null,
                 'default_consent_giver_name' => $row['default_consent_giver_name'] ?? null,
                 'lifecycle_label' => $row['lifecycle_label'] ?? null,
+                'paid' => $row['paid'] ?? null,
                 // Lets the app flag a half-finished profile in the list and
                 // resume onboarding at the section it stopped at.
                 'completion_percent' => (int) ($row['completion_percent'] ?? 0),

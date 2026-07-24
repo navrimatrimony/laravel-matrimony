@@ -6,8 +6,11 @@ use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\SuchakBiodataIntakeLink;
 use App\Models\SuchakConsent;
+use App\Models\SuchakCustomerContext;
+use App\Models\SuchakPaymentRequest;
 use App\Models\SuchakProfileRepresentation;
 use App\Services\ProfileCompletionService;
+use App\Support\LocalizedText;
 use Illuminate\Support\Carbon;
 
 class SuchakCustomerListService
@@ -65,8 +68,10 @@ class SuchakCustomerListService
             ->latest()
             ->get();
 
+        $paidRepIdSet = $this->paidRepresentationIdSet($account);
+
         $rows = $representations
-            ->map(fn (SuchakProfileRepresentation $representation): array => $this->rowFromRepresentation($representation, $canPrepareCustomers))
+            ->map(fn (SuchakProfileRepresentation $representation): array => $this->rowFromRepresentation($representation, $canPrepareCustomers, $paidRepIdSet))
             ->values();
 
         $representedProfileIds = $representations
@@ -96,7 +101,62 @@ class SuchakCustomerListService
     /**
      * @return array<string, mixed>
      */
-    private function rowFromRepresentation(SuchakProfileRepresentation $representation, bool $canPrepareCustomers): array
+    /**
+     * Representation IDs the customer has paid the Suchak for (Track A). This is
+     * only the Suchak's own earnings marker (Paid/Free) — it is NOT platform
+     * billing and does not touch the core payment model.
+     *
+     * @return array<int, true>
+     */
+    private function paidRepresentationIdSet(SuchakAccount $account): array
+    {
+        $paidContextIds = SuchakPaymentRequest::query()
+            ->where('suchak_account_id', $account->id)
+            ->where('payment_status', SuchakPaymentRequest::STATUS_PAID)
+            ->pluck('customer_context_id')
+            ->filter()
+            ->all();
+
+        if ($paidContextIds === []) {
+            return [];
+        }
+
+        $repIds = SuchakCustomerContext::query()
+            ->whereIn('id', $paidContextIds)
+            ->pluck('representation_id')
+            ->filter()
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+
+        return array_fill_keys($repIds, true);
+    }
+
+    /**
+     * Genders have only an English `label` column, so localize the display value
+     * with a small map (same approach as the profile presenter's child gender).
+     */
+    private function genderLabel(?MatrimonyProfile $profile): ?string
+    {
+        $label = $profile?->gender?->label;
+        if ($label === null || $label === '') {
+            return null;
+        }
+        if (! LocalizedText::isMarathi()) {
+            return $label;
+        }
+
+        return match (mb_strtolower(trim($label))) {
+            'male' => 'पुरुष',
+            'female' => 'स्त्री',
+            'other' => 'इतर',
+            default => $label,
+        };
+    }
+
+    /**
+     * @param  array<int, true>  $paidRepIdSet
+     */
+    private function rowFromRepresentation(SuchakProfileRepresentation $representation, bool $canPrepareCustomers, array $paidRepIdSet): array
     {
         /** @var MatrimonyProfile|null $profile */
         $profile = $representation->matrimonyProfile;
@@ -132,7 +192,7 @@ class SuchakCustomerListService
             'photo_url' => $profile ? (string) $profile->profile_photo_url : asset('images/placeholders/default-profile.svg'),
             'name' => trim((string) ($profile?->full_name ?? '')) ?: 'Name pending',
             'age' => $this->exactAge($profile?->date_of_birth),
-            'gender' => $profile?->gender?->label,
+            'gender' => $this->genderLabel($profile),
             'address' => $profile?->residenceLocationDisplayLine() ?: '—',
             'status_label' => ucfirst(str_replace('_', ' ', (string) $representation->representation_status)),
             'consent_label' => ucfirst(str_replace('_', ' ', (string) $representation->consent_status)),
@@ -148,6 +208,9 @@ class SuchakCustomerListService
             'pending_consent_id' => $pendingConsent?->id,
             'has_active_consent' => $acceptedConsent !== null && $representation->hasValidConsent(),
             'lifecycle_label' => $profile ? ucfirst((string) ($profile->lifecycle_state ?? 'unknown')) : null,
+            // Suchak-only Track A earnings marker (Paid = customer paid the
+            // Suchak; unrelated to platform billing / the core payment model).
+            'paid' => isset($paidRepIdSet[(int) $representation->id]),
             // So the app can mark a half-finished profile in the list and send the
             // Suchak back into onboarding at the section they stopped at, rather
             // than opening the edit hub. Same ProfileCompletionService the detail
