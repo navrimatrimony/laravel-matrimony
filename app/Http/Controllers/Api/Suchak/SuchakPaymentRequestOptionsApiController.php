@@ -10,6 +10,8 @@ use App\Models\SuchakPaymentContext;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakServicePackage;
 use App\Models\User;
+use App\Modules\Suchak\Support\SuchakDefaultPlans;
+use App\Support\LocalizedText;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -51,6 +53,7 @@ class SuchakPaymentRequestOptionsApiController extends Controller
                 'data' => [
                     'representation_id' => $representation,
                     'customer_context_id' => null,
+                    'default_plans' => $this->defaultPlansPayload(),
                     'service_packages' => [],
                     'customer_agreements' => [],
                     'payment_contexts' => [],
@@ -63,13 +66,22 @@ class SuchakPaymentRequestOptionsApiController extends Controller
             ->where('suchak_account_id', $account->id)
             ->where('customer_context_id', $customerContext->id)
             ->where('package_status', SuchakServicePackage::STATUS_PUBLISHED)
+            ->with(['deliverables:id,service_package_id,deliverable_name,deliverable_name_mr,deliverable_description,deliverable_description_mr,sort_order'])
             ->orderByDesc('id')
-            ->get(['id', 'package_name', 'price_amount', 'currency', 'package_status'])
+            ->get(['id', 'package_name', 'package_name_mr', 'package_description', 'package_description_mr', 'price_amount', 'currency', 'package_status'])
             ->map(static fn (SuchakServicePackage $package): array => [
                 'id' => $package->id,
-                'label' => $package->package_name,
+                'label' => LocalizedText::pick($package->package_name_mr, $package->package_name),
+                'description' => LocalizedText::pick($package->package_description_mr, $package->package_description),
                 'price_amount' => $package->price_amount,
                 'currency' => $package->currency,
+                'deliverables' => $package->deliverables
+                    ->map(static fn ($deliverable): array => [
+                        'name' => LocalizedText::pick($deliverable->deliverable_name_mr, $deliverable->deliverable_name),
+                        'description' => LocalizedText::pick($deliverable->deliverable_description_mr, $deliverable->deliverable_description),
+                    ])
+                    ->values()
+                    ->all(),
             ])
             ->values()
             ->all();
@@ -133,11 +145,36 @@ class SuchakPaymentRequestOptionsApiController extends Controller
                 'representation_id' => $representation,
                 'customer_context_id' => $customerContext->id,
                 'track' => 'A',
+                'default_plans' => $this->defaultPlansPayload(),
                 'service_packages' => $packages,
                 'customer_agreements' => $agreements,
                 'payment_contexts' => $paymentContexts,
                 'payment_identity' => $account->trackAPaymentIdentity(),
             ],
         ]);
+    }
+
+    /**
+     * The ready-made plans a Suchak can pick without building one, localized to
+     * the request locale. Shown even before any package exists so the picker can
+     * offer "Basic / Premium" up front. See {@see SuchakDefaultPlans}.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function defaultPlansPayload(): array
+    {
+        return array_map(static function (array $plan): array {
+            return [
+                'plan_key' => $plan['key'],
+                'name' => LocalizedText::pick($plan['name_mr'] ?? null, $plan['name']),
+                'description' => LocalizedText::pick($plan['description_mr'] ?? null, $plan['description'] ?? null),
+                'price_amount' => $plan['price_amount'],
+                'currency' => $plan['currency'],
+                'deliverables' => array_map(static fn (array $deliverable): array => [
+                    'name' => LocalizedText::pick($deliverable['name_mr'] ?? null, $deliverable['name']),
+                    'description' => LocalizedText::pick($deliverable['description_mr'] ?? null, $deliverable['description'] ?? null),
+                ], $plan['deliverables']),
+            ];
+        }, SuchakDefaultPlans::all());
     }
 }

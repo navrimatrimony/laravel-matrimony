@@ -14,9 +14,11 @@ use App\Modules\Suchak\Services\SuchakAgreementService;
 use App\Modules\Suchak\Services\SuchakCustomerLifecycleService;
 use App\Modules\Suchak\Services\SuchakPackageCatalogService;
 use App\Modules\Suchak\Services\SuchakPaymentCollectorResolver;
+use App\Modules\Suchak\Support\SuchakDefaultPlans;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use InvalidArgumentException;
 
 /**
@@ -60,6 +62,7 @@ class SuchakPaymentSetupApiController extends Controller
         }
 
         $validated = $request->validate([
+            'plan_key' => ['nullable', 'string', Rule::in([SuchakDefaultPlans::KEY_BASIC, SuchakDefaultPlans::KEY_PREMIUM])],
             'package_name' => ['nullable', 'string', 'max:160'],
             'price_amount' => ['nullable', 'numeric', 'min:0.01'],
             'currency' => ['nullable', 'string', 'size:3'],
@@ -113,21 +116,49 @@ class SuchakPaymentSetupApiController extends Controller
 
                 $createdPackage = false;
                 if ($package === null) {
-                    $package = $packageCatalogService->createCustomPackage(
-                        $account,
-                        $user,
-                        [
-                            'package_name' => $validated['package_name'] ?? 'Matchmaking service',
-                            'package_description' => 'Customer service package prepared from Suchak mobile for Track A collection.',
-                            'price_amount' => (string) ($validated['price_amount'] ?? '5000'),
-                            'currency' => strtoupper((string) ($validated['currency'] ?? 'INR')),
-                        ],
-                        $this->defaultStages(),
-                        $this->defaultDeliverables(),
-                        $customerContext,
-                        $request->ip(),
-                        $request->userAgent(),
-                    );
+                    $plan = SuchakDefaultPlans::find($validated['plan_key'] ?? null);
+
+                    if ($plan !== null) {
+                        // Ready-made platform default plan: fixed name / price / services,
+                        // published immediately so the Suchak can collect without any
+                        // per-package admin review. Auto-publish is scoped to these
+                        // pre-vetted presets only — custom packages still go to review.
+                        $payload = SuchakDefaultPlans::catalogPayload($plan);
+                        $package = $packageCatalogService->createCustomPackage(
+                            $account,
+                            $user,
+                            [
+                                'package_name' => $plan['name'],
+                                'package_name_mr' => $plan['name_mr'] ?? null,
+                                'package_description' => $plan['description'] ?? '',
+                                'package_description_mr' => $plan['description_mr'] ?? null,
+                                'price_amount' => (string) $plan['price_amount'],
+                                'currency' => strtoupper((string) $plan['currency']),
+                            ],
+                            $payload['stages'],
+                            $payload['deliverables'],
+                            $customerContext,
+                            $request->ip(),
+                            $request->userAgent(),
+                            true,
+                        );
+                    } else {
+                        $package = $packageCatalogService->createCustomPackage(
+                            $account,
+                            $user,
+                            [
+                                'package_name' => $validated['package_name'] ?? 'Matchmaking service',
+                                'package_description' => 'Customer service package prepared from Suchak mobile for Track A collection.',
+                                'price_amount' => (string) ($validated['price_amount'] ?? '5000'),
+                                'currency' => strtoupper((string) ($validated['currency'] ?? 'INR')),
+                            ],
+                            $this->defaultStages(),
+                            $this->defaultDeliverables(),
+                            $customerContext,
+                            $request->ip(),
+                            $request->userAgent(),
+                        );
+                    }
                     $createdPackage = true;
 
                     if ($package->package_status !== SuchakServicePackage::STATUS_PUBLISHED) {

@@ -179,13 +179,14 @@ class SuchakPackageCatalogService
         ?SuchakCustomerContext $customerContext = null,
         ?string $ipAddress = null,
         ?string $userAgent = null,
+        bool $autoPublish = false,
     ): SuchakServicePackage {
         $this->assertSuchakActor($account, $actor);
         $this->assertCustomerContext($customerContext, $account);
 
         $stagePayloads = $this->normalizedStages($stages);
         $deliverablePayloads = $this->normalizedDeliverables($deliverables, array_column($stagePayloads, 'stage_key'));
-        $packageAttributes = $this->normalizedServicePackageAttributes($account, $actor, $attributes, $customerContext, null);
+        $packageAttributes = $this->normalizedServicePackageAttributes($account, $actor, $attributes, $customerContext, null, $autoPublish);
 
         return $this->persistServicePackage(
             $account,
@@ -340,13 +341,14 @@ class SuchakPackageCatalogService
         array $attributes,
         ?SuchakCustomerContext $customerContext,
         ?SuchakPackageTemplate $template,
+        bool $forceAutoPublish = false,
     ): array {
         $packageName = $this->requiredText($attributes['package_name'] ?? $attributes['name'] ?? null, 'Suchak package name is required.', 160);
         $packageNameMr = $this->limitedText($attributes['package_name_mr'] ?? $attributes['name_mr'] ?? null, 160);
         $packageDescription = $this->limitedText($attributes['package_description'] ?? $attributes['description'] ?? null, 3000);
         $packageDescriptionMr = $this->limitedText($attributes['package_description_mr'] ?? $attributes['description_mr'] ?? null, 3000);
         [$priceAmount, $currency] = $this->normalizedPrice($attributes['price_amount'] ?? null, $attributes['currency'] ?? null);
-        $approval = $this->approvalAttributes();
+        $approval = $this->approvalAttributes($forceAutoPublish);
 
         $this->assertNoMisleadingClaims([$packageName, $packageDescription]);
 
@@ -518,11 +520,11 @@ class SuchakPackageCatalogService
     /**
      * @return array<string, mixed>
      */
-    private function approvalAttributes(): array
+    private function approvalAttributes(bool $forceAutoPublish = false): array
     {
         $mode = $this->policyService->packagePublishApprovalMode();
 
-        if ($mode === SuchakServicePackage::APPROVAL_MODE_AUTO_PUBLISH) {
+        if ($forceAutoPublish || $mode === SuchakServicePackage::APPROVAL_MODE_AUTO_PUBLISH) {
             return [
                 'package_status' => SuchakServicePackage::STATUS_PUBLISHED,
                 'approval_policy_mode' => SuchakServicePackage::APPROVAL_MODE_AUTO_PUBLISH,
