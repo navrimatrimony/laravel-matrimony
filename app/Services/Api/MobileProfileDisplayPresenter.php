@@ -254,11 +254,11 @@ class MobileProfileDisplayPresenter
             'title' => $this->comparisonLabel($profile),
             'summary' => $matchedCount > 0 ? $matchedCount.' जुळणारे मुद्दे' : null,
             'viewer' => [
-                'name' => 'You',
+                'name' => $this->tr('You'),
                 'photo_url' => $viewerPhotoUrl,
             ],
             'target' => [
-                'name' => $this->cleanString($profile->full_name) ?? 'Profile',
+                'name' => $this->cleanString($profile->full_name) ?? $this->tr('Profile'),
                 'photo_url' => $targetPhotoUrl,
             ],
             'matched_count' => $matchedCount,
@@ -304,9 +304,9 @@ class MobileProfileDisplayPresenter
 
         return $this->comparisonRow(
             'age',
-            'Age',
-            $viewerAge !== null ? $viewerAge.' years' : null,
-            $targetAge !== null ? $targetAge.' years' : null,
+            $this->tr('Age'),
+            $viewerAge !== null ? $viewerAge.(LocalizedText::isMarathi() ? ' वर्षे' : ' years') : null,
+            $targetAge !== null ? $targetAge.(LocalizedText::isMarathi() ? ' वर्षे' : ' years') : null,
             $status,
             $counted
         );
@@ -348,7 +348,7 @@ class MobileProfileDisplayPresenter
             $counted = true;
         }
 
-        return $this->comparisonRow('height', 'Height', $viewerHeight, $targetHeight, $status, $counted);
+        return $this->comparisonRow('height', $this->tr('Height'), $viewerHeight, $targetHeight, $status, $counted);
     }
 
     private function heightPairFits(MatrimonyProfile $viewerProfile, MatrimonyProfile $targetProfile, int $viewerCm, int $targetCm): bool
@@ -381,7 +381,7 @@ class MobileProfileDisplayPresenter
 
         [$status, $isCounted] = $this->locationComparisonStatus($profile, $viewerProfile);
 
-        return $this->comparisonRow('location', 'Location', $viewerLocation, $targetLocation, $status, $isCounted);
+        return $this->comparisonRow('location', $this->tr('Location'), $viewerLocation, $targetLocation, $status, $isCounted);
     }
 
     /**
@@ -472,7 +472,7 @@ class MobileProfileDisplayPresenter
             $counted = true;
         }
 
-        return $this->comparisonRow('community', 'Religion / Caste', $viewerCommunity, $targetCommunity, $status, $counted);
+        return $this->comparisonRow('community', $this->tr('Religion / Caste'), $viewerCommunity, $targetCommunity, $status, $counted);
     }
 
     private function sameSubCasteComparisonRow(MatrimonyProfile $profile, MatrimonyProfile $viewerProfile): ?array
@@ -489,7 +489,7 @@ class MobileProfileDisplayPresenter
             return null;
         }
 
-        return $this->comparisonRow('same_sub_caste', 'Same sub-caste', $viewerSubCaste, $targetSubCaste, 'match', true);
+        return $this->comparisonRow('same_sub_caste', $this->tr('Same sub-caste'), $viewerSubCaste, $targetSubCaste, 'match', true);
     }
 
     private function educationComparisonRow(MatrimonyProfile $profile, MatrimonyProfile $viewerProfile): ?array
@@ -506,17 +506,17 @@ class MobileProfileDisplayPresenter
         $targetLabel = $this->educationDegreeLabel($targetDegree);
 
         if ($viewerDegree !== null && $targetDegree !== null && $viewerLabel !== null && $targetLabel !== null && (int) $viewerDegree->id === (int) $targetDegree->id) {
-            return $this->comparisonRow('education', 'Education', $viewerLabel, $targetLabel, 'match', true);
+            return $this->comparisonRow('education', $this->tr('Education'), $viewerLabel, $targetLabel, 'match', true);
         }
 
         $viewerSort = $viewerDegree !== null ? $this->positiveInt($viewerDegree->sort_order ?? null) : null;
         $targetSort = $targetDegree !== null ? $this->positiveInt($targetDegree->sort_order ?? null) : null;
         if ($viewerSort !== null && $targetSort !== null && abs($viewerSort - $targetSort) <= 1) {
-            return $this->comparisonRow('education', 'Education', $viewerLabel, $targetLabel, 'near', true);
+            return $this->comparisonRow('education', $this->tr('Education'), $viewerLabel, $targetLabel, 'near', true);
         }
 
         if ($this->normalizeEducationText($viewerEducation) === $this->normalizeEducationText($targetEducation)) {
-            return $this->comparisonRow('education', 'Education', $viewerEducation, $targetEducation, 'match', true);
+            return $this->comparisonRow('education', $this->tr('Education'), $viewerEducation, $targetEducation, 'match', true);
         }
 
         return null;
@@ -555,7 +555,7 @@ class MobileProfileDisplayPresenter
             return null;
         }
 
-        return $this->comparisonRow('income', 'Income', $viewerValue, $targetValue, 'match', true);
+        return $this->comparisonRow('income', $this->tr('Income'), $viewerValue, $targetValue, 'match', true);
     }
 
     private function gunamilanComparisonRow(MatrimonyProfile $profile, MatrimonyProfile $viewerProfile): ?array
@@ -578,7 +578,7 @@ class MobileProfileDisplayPresenter
         $max = is_numeric($result['max_points'] ?? null) ? (float) $result['max_points'] : 36.0;
         $score = $this->formatGunamilanScore((float) $points, $max);
 
-        return $this->comparisonRow('gunamilan', 'Gunamilan', $score, 'Compatible', 'match', true);
+        return $this->comparisonRow('gunamilan', $this->tr('Gunamilan'), $score, $this->tr('Compatible'), 'match', true);
     }
 
     /**
@@ -589,26 +589,26 @@ class MobileProfileDisplayPresenter
         $base = [
             'available' => false,
             'status' => 'unavailable',
-            'title' => 'Gunamilan / Horoscope Match',
+            'title' => $this->tr('Gunamilan / Horoscope Match'),
             'score' => null,
             'total_score' => null,
             'max_score' => 36.0,
             'summary_label' => null,
-            'message' => 'Horoscope data is incomplete.',
+            'message' => $this->tr('Horoscope data is incomplete.'),
             'rows' => [],
             'missing_fields' => [],
-            'disclaimer' => 'Gunamilan is only a compatibility reference. Families should make the final decision after discussion.',
+            'disclaimer' => $this->tr('Gunamilan is only a compatibility reference. Families should make the final decision after discussion.'),
         ];
 
         if ($viewerProfile === null) {
             return array_merge($base, [
-                'message' => 'Create your profile to view horoscope compatibility.',
+                'message' => $this->tr('Create your profile to view horoscope compatibility.'),
             ]);
         }
 
         if ((int) $viewerProfile->id === (int) $profile->id) {
             return array_merge($base, [
-                'message' => 'Gunamilan is shown for another matched profile.',
+                'message' => $this->tr('Gunamilan is shown for another matched profile.'),
             ]);
         }
 
@@ -657,11 +657,11 @@ class MobileProfileDisplayPresenter
 
     private function gunamilanUnavailableMessage(string $status): string
     {
-        return match ($status) {
+        return $this->tr(match ($status) {
             'missing_viewer_horoscope' => 'Your horoscope data is incomplete.',
             'missing_target_horoscope' => 'This profile has incomplete horoscope data.',
             default => 'Horoscope data is incomplete.',
-        };
+        });
     }
 
     /**
@@ -714,11 +714,11 @@ class MobileProfileDisplayPresenter
     {
         $status = $this->cleanString($section['status'] ?? null);
 
-        return match ($status) {
+        return $this->tr(match ($status) {
             'full' => 'Full match',
             'missing' => 'Missing data',
             default => 'Partial match',
-        };
+        });
     }
 
     /**
@@ -815,10 +815,10 @@ class MobileProfileDisplayPresenter
             return $minLabel.' - '.$maxLabel;
         }
         if ($minLabel !== null) {
-            return $minLabel.' and above';
+            return $minLabel.(LocalizedText::isMarathi() ? ' व त्याहून अधिक' : ' and above');
         }
         if ($maxLabel !== null) {
-            return 'Up to '.$maxLabel;
+            return LocalizedText::isMarathi() ? $maxLabel.' पर्यंत' : 'Up to '.$maxLabel;
         }
 
         return null;
@@ -835,7 +835,7 @@ class MobileProfileDisplayPresenter
             ? (string) (int) round($lakh)
             : rtrim(rtrim(number_format($lakh, 1, '.', ''), '0'), '.');
 
-        return '₹'.$label.' L';
+        return '₹'.$label.(LocalizedText::isMarathi() ? ' लाख' : ' L');
     }
 
     private function formatGunamilanScore(float $points, float $max): string
@@ -880,12 +880,12 @@ class MobileProfileDisplayPresenter
 
     private function comparisonStatusLabel(string $status): string
     {
-        return match ($status) {
+        return $this->tr(match ($status) {
             'strong' => 'Strong',
             'match' => 'Match',
             'near' => 'Near',
             default => 'Basic',
-        };
+        });
     }
 
     private function profileGenderKey(MatrimonyProfile $profile): ?string
@@ -1002,10 +1002,10 @@ class MobileProfileDisplayPresenter
     {
         if ($key === 'age') {
             if (preg_match('/^\d+$/', $value) === 1) {
-                return $value.' years';
+                return $value.(LocalizedText::isMarathi() ? ' वर्षे' : ' years');
             }
 
-            return str_replace(' – ', ' to ', $value).(str_contains($value, 'year') ? '' : ' years');
+            return str_replace(' – ', ' to ', $value).(str_contains($value, 'year') ? '' : (LocalizedText::isMarathi() ? ' वर्षे' : ' years'));
         }
 
         return $value;
@@ -1036,7 +1036,7 @@ class MobileProfileDisplayPresenter
             $status = $this->cleanString($row['status_label'] ?? null);
             if ($status === null && array_key_exists('matched', $row)) {
                 $matched = $row['matched'] ?? null;
-                $status = $matched === true ? 'Match' : ($matched === false ? 'Not matched' : 'Review');
+                $status = $matched === true ? $this->tr('Match') : ($matched === false ? $this->tr('Not matched') : $this->tr('Review'));
             }
             $items[] = $this->item(
                 $label,
@@ -1045,7 +1045,7 @@ class MobileProfileDisplayPresenter
             );
         }
 
-        return $this->section('partner_match', (string) ($comparison['title'] ?? 'You & Profile'), $items);
+        return $this->section('partner_match', (string) ($comparison['title'] ?? $this->tr('You & Profile')), $items);
     }
 
     private function comparisonIcon(?string $key): string
@@ -1076,7 +1076,7 @@ class MobileProfileDisplayPresenter
             $siteName = 'Navri Mile Navryala';
         }
 
-        $name = $this->cleanString($profile->full_name) ?? 'Profile';
+        $name = $this->cleanString($profile->full_name) ?? $this->tr('Profile');
         $title = $age !== null
             ? $name.', '.$age.' - '.$siteName
             : $name.' - '.$siteName;
@@ -1084,7 +1084,7 @@ class MobileProfileDisplayPresenter
             $communityLabel,
             $occupationLabel,
             $locationLabel,
-        ], ' • ') ?? 'View this profile on '.$siteName.'.';
+        ], ' • ') ?? (LocalizedText::isMarathi() ? 'हे प्रोफाइल '.$siteName.' वर पहा.' : 'View this profile on '.$siteName.'.');
         $url = route('profile.share.public', ['id' => $profile->id]);
 
         return [
@@ -1106,7 +1106,7 @@ class MobileProfileDisplayPresenter
             $this->item('Profile ID', (string) $profile->id, 'id'),
             $this->item('Age', $ageLabel, 'age'),
             $this->item('Height', $heightLabel, 'height'),
-            $this->item('Weight', $profile->weight_kg !== null ? $profile->weight_kg.' kg' : null, 'height'),
+            $this->item('Weight', $profile->weight_kg !== null ? $profile->weight_kg.(LocalizedText::isMarathi() ? ' किलो' : ' kg') : null, 'height'),
             $isOwnProfile ? $this->item('Birth Date', $this->dateLabel($profile->date_of_birth), 'calendar') : null,
             $this->item('Marital Status', $this->labelFrom($profile->maritalStatus), 'heart'),
             $this->item('Lives in', $locationLabel, 'location'),
@@ -1181,7 +1181,7 @@ class MobileProfileDisplayPresenter
         $criteria = $profile->preferenceCriteria;
         $preferredMaritalStatusLabels = $this->partnerPreferencePivotLabels($profile, 'profile_preferred_marital_statuses', 'marital_status_id', 'master_marital_statuses');
         $preferredDietLabels = $this->partnerPreferencePivotLabels($profile, 'profile_preferred_diets', 'diet_id', 'master_diets');
-        $intercasteLabel = ProfilePartnerCommunityFlagService::interestedInIntercaste((int) $profile->id) ? 'Open to intercaste' : null;
+        $intercasteLabel = ProfilePartnerCommunityFlagService::interestedInIntercaste((int) $profile->id) ? $this->tr('Open to intercaste') : null;
         $expectations = $this->extendedNarrativeExpectations($profile);
         if ($criteria === null) {
             $items = [
@@ -1199,7 +1199,7 @@ class MobileProfileDisplayPresenter
         }
 
         $items = [
-            $this->item('Age Preference', $this->rangeLabel($criteria->preferred_age_min, $criteria->preferred_age_max, ' years'), 'age'),
+            $this->item('Age Preference', $this->rangeLabel($criteria->preferred_age_min, $criteria->preferred_age_max, LocalizedText::isMarathi() ? ' वर्षे' : ' years'), 'age'),
             $this->item('Height Preference', $this->heightRangeLabel($criteria->preferred_height_min_cm, $criteria->preferred_height_max_cm), 'height'),
             $this->item('Preferred Religions', $this->collectionLabels($profile->preferredReligions), 'community'),
             $this->item('Preferred Castes', $this->collectionLabels($profile->preferredCastes), 'community'),
@@ -1209,7 +1209,7 @@ class MobileProfileDisplayPresenter
             $this->item('Preferred City', $this->labelFrom($criteria->settledCity), 'location'),
             $this->item('Preferred Marital Status', $preferredMaritalStatusLabels ?? $this->labelFrom($criteria->preferredMaritalStatus), 'heart'),
             $this->item('Marriage Type Preference', $this->labelFrom($criteria->marriageTypePreference), 'heart'),
-            $this->item('Willing to Relocate', $criteria->willing_to_relocate === null ? null : ($criteria->willing_to_relocate ? 'Yes' : 'No'), 'location'),
+            $this->item('Willing to Relocate', $criteria->willing_to_relocate === null ? null : $this->tr($criteria->willing_to_relocate ? 'Yes' : 'No'), 'location'),
             $this->item('Profile Managed By', $this->managedByLabel($criteria->preferred_profile_managed_by), 'profile'),
             $this->item('Partner with Children', $this->withChildrenLabel($criteria->partner_profile_with_children), 'family'),
             $this->item('Preferred Diet', $preferredDietLabels, 'lifestyle'),
@@ -1266,7 +1266,7 @@ class MobileProfileDisplayPresenter
             return $this->contactPayloadState(
                 enabled: false,
                 state: 'unavailable',
-                message: 'Login and profile are required to view contact options.'
+                message: $this->tr('Login and profile are required to view contact options.')
             );
         }
 
@@ -1274,7 +1274,7 @@ class MobileProfileDisplayPresenter
             return $this->contactPayloadState(
                 enabled: false,
                 state: 'unavailable',
-                message: 'Contact unlock is not available on your own profile.'
+                message: $this->tr('Contact unlock is not available on your own profile.')
             );
         }
 
@@ -1285,7 +1285,7 @@ class MobileProfileDisplayPresenter
                 return $this->contactPayloadState(
                     enabled: true,
                     state: 'unavailable',
-                    message: 'Contact for this profile is handled outside the mobile contact request flow.'
+                    message: $this->tr('Contact for this profile is handled outside the mobile contact request flow.')
                 );
             }
 
@@ -1300,7 +1300,7 @@ class MobileProfileDisplayPresenter
             return $this->contactPayloadState(
                 enabled: false,
                 state: 'unavailable',
-                message: 'Contact information is not available right now.',
+                message: $this->tr('Contact information is not available right now.'),
                 maskedPhone: $this->maskedPhoneForDisplay($profile->primary_contact_number),
             );
         }
@@ -1324,7 +1324,7 @@ class MobileProfileDisplayPresenter
             return $this->contactPayloadState(
                 enabled: true,
                 state: 'revealed',
-                message: 'Contact information is available.',
+                message: $this->tr('Contact information is available.'),
                 phone: $phone,
                 email: $email,
                 whatsappVisible: $showMediator,
@@ -1335,11 +1335,11 @@ class MobileProfileDisplayPresenter
             return $this->contactPayloadState(
                 enabled: true,
                 state: 'upgrade_required',
-                message: 'Upgrade is required to view contact information.',
+                message: $this->tr('Upgrade is required to view contact information.'),
                 maskedPhone: $maskedPhone,
-                primaryCta: $this->contactPrimaryCta('Upgrade to View Contact', 'primary', 'upgrade', false),
+                primaryCta: $this->contactPrimaryCta($this->tr('Upgrade to View Contact'), 'primary', 'upgrade', false),
                 whatsappVisible: $showMediator,
-                whatsappMessage: $showMediator ? 'WhatsApp Response can be shown after eligible access.' : null,
+                whatsappMessage: $showMediator ? $this->tr('WhatsApp Response can be shown after eligible access.') : null,
             );
         }
 
@@ -1349,7 +1349,7 @@ class MobileProfileDisplayPresenter
                 state: 'unlock_available',
                 message: LocalizedText::isMarathi() ? 'या प्रोफाइलसाठी संपर्क माहिती पाहणे उपलब्ध आहे.' : 'Contact unlock is available for this profile.',
                 maskedPhone: $maskedPhone,
-                primaryCta: $this->contactPrimaryCta('View Contact', 'primary', 'view_contact', true),
+                primaryCta: $this->contactPrimaryCta($this->tr('View Contact'), 'primary', 'view_contact', true),
                 whatsappVisible: $showMediator,
             );
         }
@@ -1368,7 +1368,7 @@ class MobileProfileDisplayPresenter
                 message: LocalizedText::isMarathi() ? 'या प्रोफाइलसाठी व्हॉट्सॲप प्रतिसाद उपलब्ध आहे.' : 'WhatsApp Response is available for this profile.',
                 maskedPhone: $maskedPhone,
                 whatsappVisible: true,
-                whatsappMessage: 'You can request a WhatsApp Response when the mobile action is available.',
+                whatsappMessage: $this->tr('You can request a WhatsApp Response when the mobile action is available.'),
                 whatsappEnabled: false,
             );
         }
@@ -1379,7 +1379,7 @@ class MobileProfileDisplayPresenter
             return $this->contactPayloadState(
                 enabled: true,
                 state: 'locked',
-                message: 'Contact information is currently locked.',
+                message: $this->tr('Contact information is currently locked.'),
                 maskedPhone: $maskedPhone,
             );
         }
@@ -1387,7 +1387,7 @@ class MobileProfileDisplayPresenter
         return $this->contactPayloadState(
             enabled: true,
             state: 'unavailable',
-            message: 'Contact information is not available for this profile.',
+            message: $this->tr('Contact information is not available for this profile.'),
             maskedPhone: $maskedPhone,
         );
     }
@@ -1567,9 +1567,9 @@ class MobileProfileDisplayPresenter
             return $this->contactPayloadState(
                 enabled: true,
                 state: 'contact_request_available',
-                message: 'You can send a contact request for this profile.',
+                message: $this->tr('You can send a contact request for this profile.'),
                 maskedPhone: $maskedPhone,
-                primaryCta: $this->contactPrimaryCta('Request Contact', 'primary', 'send_contact_request', true),
+                primaryCta: $this->contactPrimaryCta($this->tr('Request Contact'), 'primary', 'send_contact_request', true),
                 contactRequest: $requestMeta,
                 requestOptions: $requestOptions,
             );
@@ -1579,17 +1579,19 @@ class MobileProfileDisplayPresenter
             return $this->contactPayloadState(
                 enabled: true,
                 state: 'contact_request_pending',
-                message: 'Your contact request is pending.',
+                message: $this->tr('Your contact request is pending.'),
                 maskedPhone: $maskedPhone,
-                primaryCta: $this->contactPrimaryCta('Request Sent', 'disabled', 'none', false),
+                primaryCta: $this->contactPrimaryCta($this->tr('Request Sent'), 'disabled', 'none', false),
                 contactRequest: $requestMeta,
             );
         }
 
         if ($state === 'rejected') {
-            $message = 'Your contact request was rejected.';
+            $message = $this->tr('Your contact request was rejected.');
             if ($cooldownEndsAt instanceof \DateTimeInterface) {
-                $message .= ' Cooling period ends on '.$cooldownEndsAt->format('M j, Y').'.';
+                $message .= LocalizedText::isMarathi()
+                    ? ' प्रतीक्षा कालावधी '.$cooldownEndsAt->format('M j, Y').' रोजी संपेल.'
+                    : ' Cooling period ends on '.$cooldownEndsAt->format('M j, Y').'.';
             }
 
             return $this->contactPayloadState(
@@ -1605,7 +1607,7 @@ class MobileProfileDisplayPresenter
             return $this->contactPayloadState(
                 enabled: true,
                 state: 'contact_request_unavailable',
-                message: 'Contact request is not available for this profile.',
+                message: $this->tr('Contact request is not available for this profile.'),
                 maskedPhone: $maskedPhone,
                 contactRequest: $requestMeta,
             );
@@ -1614,7 +1616,7 @@ class MobileProfileDisplayPresenter
         return $this->contactPayloadState(
             enabled: true,
             state: 'contact_request_unavailable',
-            message: 'Contact request is available only after accepted interest.',
+            message: $this->tr('Contact request is available only after accepted interest.'),
             maskedPhone: $maskedPhone,
             contactRequest: $requestMeta,
         );
@@ -1667,12 +1669,12 @@ class MobileProfileDisplayPresenter
         return collect($scopes)
             ->map(fn (string $key): array => [
                 'key' => $key,
-                'label' => match ($key) {
+                'label' => $this->tr(match ($key) {
                     'email' => 'Email',
                     'phone' => 'Phone',
                     'whatsapp' => 'WhatsApp',
                     default => Str::headline($key),
-                },
+                }),
             ])
             ->values()
             ->all();
@@ -1813,7 +1815,7 @@ class MobileProfileDisplayPresenter
             return $this->chatPayloadState(
                 enabled: false,
                 state: 'unavailable',
-                message: 'Login and profile are required to use chat.'
+                message: $this->tr('Login and profile are required to use chat.')
             );
         }
 
@@ -1821,7 +1823,7 @@ class MobileProfileDisplayPresenter
             return $this->chatPayloadState(
                 enabled: false,
                 state: 'unavailable',
-                message: 'Chat is not available on your own profile.',
+                message: $this->tr('Chat is not available on your own profile.'),
                 reason: 'same_profile'
             );
         }
@@ -1840,7 +1842,7 @@ class MobileProfileDisplayPresenter
                 return $this->chatPayloadState(
                     enabled: true,
                     state: 'available',
-                    message: 'Chat is available.',
+                    message: $this->tr('Chat is available.'),
                     action: [
                         'label' => LocalizedText::isMarathi() ? 'चॅट' : 'Chat',
                         'action' => 'open_chat',
@@ -1859,7 +1861,7 @@ class MobileProfileDisplayPresenter
             return $this->chatPayloadState(
                 enabled: true,
                 state: 'available',
-                message: 'Chat is available.',
+                message: $this->tr('Chat is available.'),
                 action: [
                     'label' => LocalizedText::isMarathi() ? 'चॅट' : 'Chat',
                     'action' => 'start_chat',
@@ -1871,7 +1873,7 @@ class MobileProfileDisplayPresenter
             return $this->chatPayloadState(
                 enabled: false,
                 state: 'unavailable',
-                message: 'Chat is not available right now.'
+                message: $this->tr('Chat is not available right now.')
             );
         }
     }
@@ -1881,7 +1883,7 @@ class MobileProfileDisplayPresenter
         return $this->chatPayloadState(
             enabled: true,
             state: 'locked',
-            message: $decision->humanMessage !== '' ? $decision->humanMessage : 'Chat is not available.',
+            message: $decision->humanMessage !== '' ? $decision->humanMessage : $this->tr('Chat is not available.'),
             action: [
                 'label' => LocalizedText::isMarathi() ? 'चॅट' : 'Chat',
                 'action' => 'chat_locked',
@@ -2036,6 +2038,121 @@ class MobileProfileDisplayPresenter
         'Work Location' => 'कामाचे ठिकाण',
     ];
 
+    /**
+     * Marathi for every fixed, full-string user-visible display token the detail
+     * response emits outside the label/section maps — comparison row labels and
+     * values, gunamilan/contact/chat messages, CTA labels, status badges, and
+     * match/relation/gender/managed-by enum labels. The English literal at each
+     * emission site stays the base/fallback; tr() swaps in the Marathi only when
+     * the request locale is Marathi and the exact string is listed here. Keys are
+     * the exact English display strings, never internal enum/array keys.
+     */
+    private const TR_MR = [
+        // Comparison row labels
+        'Age' => 'वय',
+        'Height' => 'उंची',
+        'Location' => 'ठिकाण',
+        'Religion / Caste' => 'धर्म / जात',
+        'Same sub-caste' => 'समान पोटजात',
+        'Education' => 'शिक्षण',
+        'Income' => 'उत्पन्न',
+        'Gunamilan' => 'गुणमिलन',
+        'Compatible' => 'सुसंगत',
+        // Comparison names & titles
+        'You' => 'तुम्ही',
+        'Profile' => 'प्रोफाइल',
+        'You & Profile' => 'तुम्ही आणि प्रोफाइल',
+        // Comparison status badges
+        'Strong' => 'भक्कम',
+        'Match' => 'जुळते',
+        'Near' => 'जवळपास',
+        'Basic' => 'मूलभूत',
+        'Not matched' => 'जुळत नाही',
+        'Review' => 'तपासा',
+        // Gunamilan block
+        'Gunamilan / Horoscope Match' => 'गुणमिलन / कुंडली जुळणी',
+        'Horoscope data is incomplete.' => 'कुंडली माहिती अपूर्ण आहे.',
+        'Gunamilan is only a compatibility reference. Families should make the final decision after discussion.' => 'गुणमिलन हा केवळ सुसंगततेचा संदर्भ आहे. कुटुंबांनी चर्चेनंतर अंतिम निर्णय घ्यावा.',
+        'Create your profile to view horoscope compatibility.' => 'कुंडली सुसंगतता पाहण्यासाठी तुमचे प्रोफाइल तयार करा.',
+        'Gunamilan is shown for another matched profile.' => 'गुणमिलन दुसऱ्या जुळलेल्या प्रोफाइलसाठी दाखवले जाते.',
+        'Your horoscope data is incomplete.' => 'तुमची कुंडली माहिती अपूर्ण आहे.',
+        'This profile has incomplete horoscope data.' => 'या प्रोफाइलची कुंडली माहिती अपूर्ण आहे.',
+        'Full match' => 'पूर्ण जुळणी',
+        'Missing data' => 'माहिती उपलब्ध नाही',
+        'Partial match' => 'अर्धवट जुळणी',
+        // Contact block
+        'Login and profile are required to view contact options.' => 'संपर्क पर्याय पाहण्यासाठी लॉगिन व प्रोफाइल आवश्यक आहे.',
+        'Contact unlock is not available on your own profile.' => 'स्वतःच्या प्रोफाइलवर संपर्क अनलॉक उपलब्ध नाही.',
+        'Contact for this profile is handled outside the mobile contact request flow.' => 'या प्रोफाइलचा संपर्क मोबाईल संपर्क विनंती प्रक्रियेबाहेर हाताळला जातो.',
+        'Contact information is not available right now.' => 'संपर्क माहिती सध्या उपलब्ध नाही.',
+        'Contact information is available.' => 'संपर्क माहिती उपलब्ध आहे.',
+        'Upgrade is required to view contact information.' => 'संपर्क माहिती पाहण्यासाठी अपग्रेड आवश्यक आहे.',
+        'Upgrade to View Contact' => 'संपर्क पाहण्यासाठी अपग्रेड करा',
+        'WhatsApp Response can be shown after eligible access.' => 'पात्र प्रवेशानंतर व्हॉट्सॲप प्रतिसाद दाखवता येईल.',
+        'View Contact' => 'संपर्क पाहा',
+        'You can request a WhatsApp Response when the mobile action is available.' => 'मोबाईल क्रिया उपलब्ध असल्यास तुम्ही व्हॉट्सॲप प्रतिसादाची विनंती करू शकता.',
+        'Contact information is currently locked.' => 'संपर्क माहिती सध्या लॉक केलेली आहे.',
+        'Contact information is not available for this profile.' => 'या प्रोफाइलसाठी संपर्क माहिती उपलब्ध नाही.',
+        'You can send a contact request for this profile.' => 'तुम्ही या प्रोफाइलसाठी संपर्क विनंती पाठवू शकता.',
+        'Request Contact' => 'संपर्काची विनंती करा',
+        'Your contact request is pending.' => 'तुमची संपर्क विनंती प्रलंबित आहे.',
+        'Request Sent' => 'विनंती पाठवली',
+        'Your contact request was rejected.' => 'तुमची संपर्क विनंती नाकारली गेली.',
+        'Contact request is not available for this profile.' => 'या प्रोफाइलसाठी संपर्क विनंती उपलब्ध नाही.',
+        'Contact request is available only after accepted interest.' => 'स्वीकृत स्वारस्यानंतरच संपर्क विनंती उपलब्ध होते.',
+        'Email' => 'ईमेल',
+        'Phone' => 'फोन',
+        // Chat block
+        'Login and profile are required to use chat.' => 'चॅट वापरण्यासाठी लॉगिन व प्रोफाइल आवश्यक आहे.',
+        'Chat is not available on your own profile.' => 'स्वतःच्या प्रोफाइलवर चॅट उपलब्ध नाही.',
+        'Chat is available.' => 'चॅट उपलब्ध आहे.',
+        'Chat is not available right now.' => 'चॅट सध्या उपलब्ध नाही.',
+        'Chat is not available.' => 'चॅट उपलब्ध नाही.',
+        // Item values
+        'Open to intercaste' => 'आंतरजातीय विवाहास तयार',
+        'Hidden' => 'लपवलेले',
+        'Yes' => 'होय',
+        'No' => 'नाही',
+        // Relative relation labels
+        'Paternal Grandfather' => 'आजोबा (वडिलांचे वडील)',
+        'Paternal Grandmother' => 'आजी (वडिलांची आई)',
+        'Paternal Uncle' => 'काका',
+        'Wife of Paternal Uncle' => 'काकू',
+        'Paternal Aunt' => 'आत्या',
+        'Husband of Paternal Aunt' => 'आत्याचे पती',
+        'Cousin' => 'चुलत/मामे भावंड',
+        'Maternal address (Ajol)' => 'आजोळ',
+        'Maternal Grandfather' => 'आजोबा (आईचे वडील)',
+        'Maternal Grandmother' => 'आजी (आईची आई)',
+        'Maternal Uncle' => 'मामा',
+        "Maternal Uncle's wife" => 'मामी',
+        'Maternal Aunt' => 'मावशी',
+        'Husband of Maternal Aunt' => 'मावशीचे पती',
+        // Marriage / divorce status labels
+        'Pending' => 'प्रलंबित',
+        'Finalized' => 'अंतिम',
+        'Mutual' => 'परस्पर संमतीने',
+        'Contested' => 'विवादित',
+        // Child gender labels
+        'Male' => 'पुरुष',
+        'Female' => 'स्त्री',
+        'Other' => 'इतर',
+        'Prefer not to say' => 'सांगू इच्छित नाही',
+        // Managed-by labels
+        'Self' => 'स्वतः',
+        'Parent / Guardian' => 'पालक',
+        'Sibling' => 'भावंड',
+        'Relative' => 'नातेवाईक',
+        'Friend' => 'मित्र',
+        // With-children labels
+        'Yes, if living separately' => 'होय, वेगळे राहत असल्यास',
+    ];
+
+    private function tr(?string $en): ?string
+    {
+        return ($en !== null && LocalizedText::isMarathi() && isset(self::TR_MR[$en])) ? self::TR_MR[$en] : $en;
+    }
+
     private function item(string $label, mixed $value, ?string $icon = null, bool $locked = false): ?array
     {
         $displayValue = $locked ? $this->cleanString($value) : $this->cleanDisplayValue($value);
@@ -2107,7 +2224,7 @@ class MobileProfileDisplayPresenter
             return $this->labelFrom($value);
         }
         if (is_bool($value)) {
-            return $value ? 'Yes' : 'No';
+            return $this->tr($value ? 'Yes' : 'No');
         }
         if (is_int($value) || is_float($value)) {
             return null;
@@ -2125,7 +2242,7 @@ class MobileProfileDisplayPresenter
             return null;
         }
         if (is_bool($value)) {
-            return $value ? 'Yes' : 'No';
+            return $this->tr($value ? 'Yes' : 'No');
         }
         $text = trim((string) $value);
         if ($text === '') {
@@ -2234,8 +2351,8 @@ class MobileProfileDisplayPresenter
         ]);
 
         return $this->joinLabels([
-            $father !== null ? 'Father: '.$father : null,
-            $mother !== null ? 'Mother: '.$mother : null,
+            $father !== null ? (LocalizedText::isMarathi() ? 'वडील: ' : 'Father: ').$father : null,
+            $mother !== null ? (LocalizedText::isMarathi() ? 'आई: ' : 'Mother: ').$mother : null,
         ], '. ');
     }
 
@@ -2251,9 +2368,9 @@ class MobileProfileDisplayPresenter
         $others = max(0, $siblings->count() - $brothers - $sisters);
 
         return $this->joinLabels([
-            $brothers > 0 ? $brothers.' Brother'.($brothers === 1 ? '' : 's') : null,
-            $sisters > 0 ? $sisters.' Sister'.($sisters === 1 ? '' : 's') : null,
-            $others > 0 ? $others.' Sibling'.($others === 1 ? '' : 's') : null,
+            $brothers > 0 ? (LocalizedText::isMarathi() ? $brothers.' भाऊ' : $brothers.' Brother'.($brothers === 1 ? '' : 's')) : null,
+            $sisters > 0 ? (LocalizedText::isMarathi() ? $sisters.' बहीण' : $sisters.' Sister'.($sisters === 1 ? '' : 's')) : null,
+            $others > 0 ? (LocalizedText::isMarathi() ? $others.' भावंड' : $others.' Sibling'.($others === 1 ? '' : 's')) : null,
         ]);
     }
 
@@ -2267,10 +2384,10 @@ class MobileProfileDisplayPresenter
         $rows = [];
         foreach ($marriages->sortByDesc('id')->take(1) as $marriage) {
             $row = $this->joinLabels([
-                $marriage->marriage_year !== null ? 'Marriage '.$marriage->marriage_year : null,
-                $statusKey === 'separated' && $marriage->separation_year !== null ? 'Separated '.$marriage->separation_year : null,
-                in_array($statusKey, ['divorced', 'annulled'], true) && $marriage->divorce_year !== null ? ($statusKey === 'annulled' ? 'Annulment ' : 'Divorce ').$marriage->divorce_year : null,
-                $statusKey === 'widowed' && $marriage->spouse_death_year !== null ? 'Spouse death '.$marriage->spouse_death_year : null,
+                $marriage->marriage_year !== null ? (LocalizedText::isMarathi() ? 'विवाह ' : 'Marriage ').$marriage->marriage_year : null,
+                $statusKey === 'separated' && $marriage->separation_year !== null ? (LocalizedText::isMarathi() ? 'विभक्त ' : 'Separated ').$marriage->separation_year : null,
+                in_array($statusKey, ['divorced', 'annulled'], true) && $marriage->divorce_year !== null ? (LocalizedText::isMarathi() ? ($statusKey === 'annulled' ? 'विवाह रद्द ' : 'घटस्फोट ') : ($statusKey === 'annulled' ? 'Annulment ' : 'Divorce ')).$marriage->divorce_year : null,
+                $statusKey === 'widowed' && $marriage->spouse_death_year !== null ? (LocalizedText::isMarathi() ? 'जोडीदाराचे निधन ' : 'Spouse death ').$marriage->spouse_death_year : null,
                 in_array($statusKey, ['divorced', 'annulled', 'separated'], true) ? $this->marriageDivorceStatusLabel($marriage->divorce_status) : null,
             ], ' - ');
             if ($row !== null) {
@@ -2291,8 +2408,8 @@ class MobileProfileDisplayPresenter
         $rows = [];
         foreach ($children->take(3) as $index => $child) {
             $row = $this->joinLabels([
-                $this->cleanString($child->child_name) ?? 'Child '.($index + 1),
-                $child->age !== null ? $child->age.' years' : null,
+                $this->cleanString($child->child_name) ?? (LocalizedText::isMarathi() ? 'अपत्य ' : 'Child ').($index + 1),
+                $child->age !== null ? $child->age.(LocalizedText::isMarathi() ? ' वर्षे' : ' years') : null,
                 $this->childGenderLabel($child->gender),
                 $this->labelFrom($child->childLivingWith),
             ], ' - ');
@@ -2303,7 +2420,7 @@ class MobileProfileDisplayPresenter
 
         $remaining = $children->count() - count($rows);
         if ($remaining > 0) {
-            $rows[] = '+'.$remaining.' more';
+            $rows[] = LocalizedText::isMarathi() ? 'आणखी '.$remaining : '+'.$remaining.' more';
         }
 
         return $rows !== [] ? implode('; ', $rows) : null;
@@ -2332,7 +2449,7 @@ class MobileProfileDisplayPresenter
 
         $remaining = $relatives->count() - count($rows);
         if ($remaining > 0) {
-            $rows[] = '+'.$remaining.' more';
+            $rows[] = LocalizedText::isMarathi() ? 'आणखी '.$remaining : '+'.$remaining.' more';
         }
 
         return $rows !== [] ? implode('; ', $rows) : null;
@@ -2365,7 +2482,7 @@ class MobileProfileDisplayPresenter
 
         $remaining = $allianceNetworks->count() - count($rows);
         if ($remaining > 0) {
-            $rows[] = '+'.$remaining.' more';
+            $rows[] = LocalizedText::isMarathi() ? 'आणखी '.$remaining : '+'.$remaining.' more';
         }
 
         return $rows !== [] ? implode('; ', $rows) : null;
@@ -2373,7 +2490,7 @@ class MobileProfileDisplayPresenter
 
     private function relativeRelationTypeLabel(?string $value): ?string
     {
-        return match ($value) {
+        return $this->tr(match ($value) {
             'paternal_grandfather' => 'Paternal Grandfather',
             'paternal_grandmother' => 'Paternal Grandmother',
             'paternal_uncle' => 'Paternal Uncle',
@@ -2390,35 +2507,35 @@ class MobileProfileDisplayPresenter
             'husband_maternal_aunt' => 'Husband of Maternal Aunt',
             'maternal_cousin' => 'Cousin',
             default => null,
-        };
+        });
     }
 
     private function marriageDivorceStatusLabel(?string $value): ?string
     {
-        return match ($value) {
+        return $this->tr(match ($value) {
             'pending' => 'Pending',
             'finalized' => 'Finalized',
             'mutual' => 'Mutual',
             'contested' => 'Contested',
             default => null,
-        };
+        });
     }
 
     private function childGenderLabel(?string $value): ?string
     {
-        return match ($value) {
+        return $this->tr(match ($value) {
             'male' => 'Male',
             'female' => 'Female',
             'other' => 'Other',
             'prefer_not_say' => 'Prefer not to say',
             default => null,
-        };
+        });
     }
 
     private function incomeItem(MatrimonyProfile $profile): ?array
     {
         if ((bool) ($profile->income_private ?? false)) {
-            return $this->item('Annual Income', 'Hidden', 'income', true);
+            return $this->item('Annual Income', $this->tr('Hidden'), 'income', true);
         }
 
         $display = app(IncomeEngineService::class)->formatForDisplay(
@@ -2433,7 +2550,7 @@ class MobileProfileDisplayPresenter
     private function familyIncomeItem(MatrimonyProfile $profile): ?array
     {
         if ((bool) ($profile->family_income_private ?? false)) {
-            return $this->item('Family Income', 'Hidden', 'income', true);
+            return $this->item('Family Income', $this->tr('Hidden'), 'income', true);
         }
 
         $display = app(IncomeEngineService::class)->formatForDisplay(
@@ -2773,10 +2890,10 @@ class MobileProfileDisplayPresenter
             return $min.' - '.$max.$suffix;
         }
         if ($min !== null) {
-            return $min.$suffix.' and above';
+            return $min.$suffix.(LocalizedText::isMarathi() ? ' व त्याहून अधिक' : ' and above');
         }
 
-        return 'Up to '.$max.$suffix;
+        return LocalizedText::isMarathi() ? $max.$suffix.' पर्यंत' : 'Up to '.$max.$suffix;
     }
 
     private function heightRangeLabel(mixed $minCm, mixed $maxCm): ?string
@@ -2790,10 +2907,12 @@ class MobileProfileDisplayPresenter
             return HeightDisplay::formatFeetInchesRange($min, $max);
         }
         if ($min !== null) {
-            return HeightDisplay::formatFeetInches($min).' and above';
+            return HeightDisplay::formatFeetInches($min).(LocalizedText::isMarathi() ? ' व त्याहून अधिक' : ' and above');
         }
 
-        return 'Up to '.HeightDisplay::formatFeetInches((int) $max);
+        return LocalizedText::isMarathi()
+            ? HeightDisplay::formatFeetInches((int) $max).' पर्यंत'
+            : 'Up to '.HeightDisplay::formatFeetInches((int) $max);
     }
 
     private function numericDisplay(mixed $value): ?string
@@ -2807,7 +2926,7 @@ class MobileProfileDisplayPresenter
 
     private function managedByLabel(?string $value): ?string
     {
-        return match ($value) {
+        return $this->tr(match ($value) {
             'self' => 'Self',
             'parent_guardian' => 'Parent / Guardian',
             'sibling' => 'Sibling',
@@ -2815,16 +2934,16 @@ class MobileProfileDisplayPresenter
             'friend' => 'Friend',
             'other' => 'Other',
             default => $this->cleanString($value),
-        };
+        });
     }
 
     private function withChildrenLabel(?string $value): ?string
     {
-        return match ($value) {
+        return $this->tr(match ($value) {
             'no' => 'No',
             'yes_if_live_separate' => 'Yes, if living separately',
             'yes' => 'Yes',
             default => $this->cleanString($value),
-        };
+        });
     }
 }
