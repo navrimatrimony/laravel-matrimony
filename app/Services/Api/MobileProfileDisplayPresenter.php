@@ -133,7 +133,7 @@ class MobileProfileDisplayPresenter
         $viewerProfile = $viewer?->matrimonyProfile;
         $isOwnProfile = $viewerProfile !== null && (int) $viewerProfile->id === (int) $profile->id;
         $age = $this->age($profile);
-        $ageLabel = $age !== null ? $age.' years' : null;
+        $ageLabel = $age !== null ? $age.(LocalizedText::isMarathi() ? ' वर्षे' : ' years') : null;
         $heightLabel = $this->heightLabel($profile);
         $communityLabel = $this->communityLabel($profile);
         $occupationLabel = $this->occupationLabel($profile);
@@ -207,7 +207,7 @@ class MobileProfileDisplayPresenter
             'card' => [
                 'name' => $this->cleanString($profile->full_name),
                 'age' => $age,
-                'age_label' => $age !== null ? $age.' years' : null,
+                'age_label' => $age !== null ? $age.(LocalizedText::isMarathi() ? ' वर्षे' : ' years') : null,
                 'height_label' => $this->heightLabel($profile),
                 'community_label' => $this->communityLabel($profile),
                 'education_label' => $this->cleanDisplayValue($profile->highest_education),
@@ -1347,7 +1347,7 @@ class MobileProfileDisplayPresenter
             return $this->contactPayloadState(
                 enabled: true,
                 state: 'unlock_available',
-                message: 'Contact unlock is available for this profile.',
+                message: LocalizedText::isMarathi() ? 'या प्रोफाइलसाठी संपर्क माहिती पाहणे उपलब्ध आहे.' : 'Contact unlock is available for this profile.',
                 maskedPhone: $maskedPhone,
                 primaryCta: $this->contactPrimaryCta('View Contact', 'primary', 'view_contact', true),
                 whatsappVisible: $showMediator,
@@ -1365,7 +1365,7 @@ class MobileProfileDisplayPresenter
             return $this->contactPayloadState(
                 enabled: true,
                 state: 'whatsapp_response_available',
-                message: 'WhatsApp Response is available for this profile.',
+                message: LocalizedText::isMarathi() ? 'या प्रोफाइलसाठी व्हॉट्सॲप प्रतिसाद उपलब्ध आहे.' : 'WhatsApp Response is available for this profile.',
                 maskedPhone: $maskedPhone,
                 whatsappVisible: true,
                 whatsappMessage: 'You can request a WhatsApp Response when the mobile action is available.',
