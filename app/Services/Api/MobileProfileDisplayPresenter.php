@@ -37,6 +37,7 @@ use App\Services\ViewTrackingService;
 use App\Support\HeightDisplay;
 use App\Support\ProfileDisplayCopy;
 use Carbon\Carbon;
+use App\Support\LocalizedText;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -61,6 +62,27 @@ class MobileProfileDisplayPresenter
         'raw_name',
         'key',
     ];
+
+    /**
+     * Label keys in the order this locale should prefer them.
+     *
+     * The fixed LABEL_KEYS list always put label_mr first, so English viewers
+     * saw Marathi and the detail endpoint disagreed with the list endpoint —
+     * the "profile shows Marathi then mixes" report. Marathi keeps the _mr
+     * columns first; every other locale skips them and reads the base column,
+     * matching App\Support\LocalizedText.
+     */
+    private function orderedLabelKeys(): array
+    {
+        if (LocalizedText::isMarathi()) {
+            return self::LABEL_KEYS;
+        }
+
+        return array_values(array_filter(
+            self::LABEL_KEYS,
+            static fn (string $key): bool => ! str_ends_with($key, '_mr'),
+        ));
+    }
 
     public function forProfile(MatrimonyProfile $profile, ?User $viewer = null): array
     {
@@ -1943,7 +1965,7 @@ class MobileProfileDisplayPresenter
     private function labelFrom(mixed $value): ?string
     {
         if ($value instanceof Model) {
-            foreach (self::LABEL_KEYS as $key) {
+            foreach ($this->orderedLabelKeys() as $key) {
                 $label = $this->cleanString($value->getAttribute($key));
                 if ($label !== null) {
                     return $label;
@@ -1954,7 +1976,7 @@ class MobileProfileDisplayPresenter
         }
 
         if (is_array($value)) {
-            foreach (self::LABEL_KEYS as $key) {
+            foreach ($this->orderedLabelKeys() as $key) {
                 if (! array_key_exists($key, $value)) {
                     continue;
                 }
@@ -2605,7 +2627,7 @@ class MobileProfileDisplayPresenter
             if ($row === null) {
                 continue;
             }
-            foreach (self::LABEL_KEYS as $key) {
+            foreach ($this->orderedLabelKeys() as $key) {
                 if (property_exists($row, $key)) {
                     $value = $this->cleanString($row->{$key} ?? null);
                     if ($value !== null) {
