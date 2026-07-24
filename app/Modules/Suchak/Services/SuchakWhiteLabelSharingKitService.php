@@ -134,13 +134,7 @@ class SuchakWhiteLabelSharingKitService
         $summary = $profile instanceof MatrimonyProfile
             ? $this->maskingService->maskedSummary($profile, $representation)
             : [];
-        $candidateReference = (string) ($summary['candidate_reference'] ?? 'masked-candidate');
-        $lines = [
-            'Candidate: '.$candidateReference,
-            'Age: '.($summary['basic']['age_range'] ?? 'Not available'),
-            'Community: '.$this->joinSafe([$summary['community']['religion'] ?? null, $summary['community']['caste'] ?? null], ' / '),
-            'Location: '.$this->joinSafe([$summary['location']['city'] ?? null, $summary['location']['district'] ?? null], ', '),
-        ];
+        $lines = $this->profileCardLines($summary);
 
         return $this->asset(
             $account,
@@ -154,6 +148,63 @@ class SuchakWhiteLabelSharingKitService
             $lines,
             $this->shareText($this->displayName($account), $lines, $publicUrl),
         );
+    }
+
+    /**
+     * The masked candidate lines on the WhatsApp profile card — reused by both
+     * the web sharing kit and the mobile per-candidate share so the message
+     * format never diverges.
+     *
+     * @param  array<string, mixed>  $summary
+     * @return array<int, string>
+     */
+    private function profileCardLines(array $summary): array
+    {
+        $candidateReference = (string) ($summary['candidate_reference'] ?? 'masked-candidate');
+
+        return [
+            'Candidate: '.$candidateReference,
+            'Age: '.($summary['basic']['age_range'] ?? 'Not available'),
+            'Community: '.$this->joinSafe([$summary['community']['religion'] ?? null, $summary['community']['caste'] ?? null], ' / '),
+            'Location: '.$this->joinSafe([$summary['location']['city'] ?? null, $summary['location']['district'] ?? null], ', '),
+        ];
+    }
+
+    /**
+     * One candidate's masked share card (photo + text) for the Suchak app to
+     * send a customer over WhatsApp. Same masking + line format as the web
+     * whatsappProfileCard; adds the shareable photo URL (null when the candidate
+     * hides their photo, so the app falls back to a text-only share).
+     *
+     * @return array{title: string, lines: array<int, string>, photo_url: ?string, has_photo: bool, share_text: string, public_url: ?string}
+     */
+    public function profileShareCard(SuchakAccount $account, SuchakProfileRepresentation $representation): array
+    {
+        $account->loadMissing(['cityLocation', 'talukaLocation', 'districtLocation', 'stateLocation']);
+
+        $profile = $representation->matrimonyProfile;
+        $summary = $profile instanceof MatrimonyProfile
+            ? $this->maskingService->maskedSummary($profile, $representation)
+            : [];
+
+        $title = $this->displayName($account);
+        $lines = $this->profileCardLines($summary);
+        $publicUrl = $this->accessService->canPubliclyRoute($account)
+            ? route('suchak.marketplace.show', $account, true)
+            : null;
+        $photoUrl = $summary['photo']['url'] ?? null;
+        $photoUrl = is_string($photoUrl) && $photoUrl !== '' ? $photoUrl : null;
+
+        return [
+            'title' => $title,
+            'lines' => $lines,
+            'photo_url' => $photoUrl,
+            'has_photo' => $photoUrl !== null,
+            'share_text' => $publicUrl !== null
+                ? $this->shareText($title, $lines, $publicUrl)
+                : collect([$title])->merge($lines)->push(self::POWERED_BY_FOOTER)->implode("\n"),
+            'public_url' => $publicUrl,
+        ];
     }
 
     /**

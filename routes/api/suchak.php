@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Suchak\SuchakCollaborationsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCollaborationsMutationsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakConsentsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomerDetailApiController;
+use App\Http\Controllers\Api\Suchak\SuchakCustomerShareCardApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomersApiController;
 use App\Http\Controllers\Api\Suchak\SuchakDashboardApiController;
 use App\Http\Controllers\Api\Suchak\SuchakIntakeApiController;
@@ -61,6 +62,7 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::get('/dashboard', SuchakDashboardApiController::class);
     Route::get('/customers', SuchakCustomersApiController::class);
     Route::get('/customers/{representation}', [SuchakCustomerDetailApiController::class, 'show']);
+    Route::get('/customers/{representation}/share-card', SuchakCustomerShareCardApiController::class);
     Route::post('/customers/{representation}/consents', [SuchakConsentsApiController::class, 'store']);
     Route::post('/customers/{representation}/consents/renew', [SuchakConsentsApiController::class, 'renew']);
     Route::get('/customers/{representation}/payment-request-options', SuchakPaymentRequestOptionsApiController::class);
