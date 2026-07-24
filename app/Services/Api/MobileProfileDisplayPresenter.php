@@ -1237,20 +1237,21 @@ class MobileProfileDisplayPresenter
     private function chips(MatrimonyProfile $profile, ?MatrimonyProfile $viewerProfile, int $photoCount): array
     {
         $chips = [];
+        $marathi = LocalizedText::isMarathi();
         if ($this->isVerified($profile)) {
-            $chips[] = ['label' => 'Verified', 'icon' => 'verified', 'tone' => 'trust'];
+            $chips[] = ['label' => $marathi ? 'पडताळणी झालेली' : 'Verified', 'icon' => 'verified', 'tone' => 'trust'];
         }
         if ($this->isPremium($profile)) {
-            $chips[] = ['label' => 'Premium', 'icon' => 'premium', 'tone' => 'premium'];
+            $chips[] = ['label' => $marathi ? 'प्रीमियम' : 'Premium', 'icon' => 'premium', 'tone' => 'premium'];
         }
         if ($photoCount > 0) {
-            $chips[] = ['label' => $photoCount.' photo'.($photoCount === 1 ? '' : 's'), 'icon' => 'photo', 'tone' => 'neutral'];
+            $chips[] = ['label' => $marathi ? $photoCount.' फोटो' : $photoCount.' photo'.($photoCount === 1 ? '' : 's'), 'icon' => 'photo', 'tone' => 'neutral'];
         }
         if ($viewerProfile !== null && (int) $viewerProfile->id !== (int) $profile->id) {
             $chips[] = ['label' => $this->comparisonLabel($profile), 'icon' => 'compare', 'tone' => 'dark'];
         }
         if ($profile->horoscope !== null) {
-            $chips[] = ['label' => 'Astro', 'icon' => 'astro', 'tone' => 'warm'];
+            $chips[] = ['label' => $marathi ? 'ज्योतिष' : 'Astro', 'icon' => 'astro', 'tone' => 'warm'];
         }
 
         return $chips;
@@ -1423,7 +1424,7 @@ class MobileProfileDisplayPresenter
 
         return [
             'enabled' => $enabled,
-            'title' => 'Contact Information',
+            'title' => LocalizedText::isMarathi() ? 'संपर्क माहिती' : 'Contact Information',
             'state' => $state,
             'message' => $message,
             'phone' => $phone,
@@ -1434,7 +1435,7 @@ class MobileProfileDisplayPresenter
             'request_options' => $requestOptions,
             'whatsapp_response' => [
                 'visible' => $whatsappVisible,
-                'label' => 'WhatsApp Response',
+                'label' => LocalizedText::isMarathi() ? 'व्हॉट्सॲप प्रतिसाद' : 'WhatsApp Response',
                 'message' => $whatsappMessage,
                 'enabled' => $whatsappEnabled,
             ],
@@ -1841,7 +1842,7 @@ class MobileProfileDisplayPresenter
                     state: 'available',
                     message: 'Chat is available.',
                     action: [
-                        'label' => 'Chat',
+                        'label' => LocalizedText::isMarathi() ? 'चॅट' : 'Chat',
                         'action' => 'open_chat',
                         'enabled' => true,
                     ],
@@ -1860,7 +1861,7 @@ class MobileProfileDisplayPresenter
                 state: 'available',
                 message: 'Chat is available.',
                 action: [
-                    'label' => 'Chat',
+                    'label' => LocalizedText::isMarathi() ? 'चॅट' : 'Chat',
                     'action' => 'start_chat',
                     'enabled' => true,
                 ],
@@ -1882,7 +1883,7 @@ class MobileProfileDisplayPresenter
             state: 'locked',
             message: $decision->humanMessage !== '' ? $decision->humanMessage : 'Chat is not available.',
             action: [
-                'label' => 'Chat',
+                'label' => LocalizedText::isMarathi() ? 'चॅट' : 'Chat',
                 'action' => 'chat_locked',
                 'enabled' => false,
             ],
@@ -1968,11 +1969,82 @@ class MobileProfileDisplayPresenter
         ];
     }
 
+    /**
+     * Marathi for every fixed field label the detail response carries. The
+     * English literal passed at each ->item() call site stays the base/fallback
+     * (always present); when the request locale is Marathi and the label is
+     * listed here, the Marathi label is used. A label absent here falls back to
+     * its English — no blank, no crash — which is exactly the agreed rule.
+     */
+    private const ITEM_LABELS_MR = [
+        'Address Line' => 'पत्ता',
+        'Age' => 'वय',
+        'Age Preference' => 'वयाची अपेक्षा',
+        'Alliance Network' => 'सोयरिक नेटवर्क',
+        'Annual Income' => 'वार्षिक उत्पन्न',
+        'Birth Date' => 'जन्मतारीख',
+        'Birth Place' => 'जन्मस्थान',
+        'Birth Time' => 'जन्मवेळ',
+        'Blood Group' => 'रक्तगट',
+        'Children' => 'अपत्ये',
+        'Community' => 'समाज',
+        'Company Name' => 'कंपनीचे नाव',
+        'Complexion' => 'वर्ण',
+        'Devak' => 'देवक',
+        'Diet' => 'आहार',
+        'Drinking' => 'मद्यपान',
+        'Expectations' => 'अपेक्षा',
+        'Family Income' => 'कौटुंबिक उत्पन्न',
+        'Family Type' => 'कुटुंब प्रकार',
+        'Gotra' => 'गोत्र',
+        'Height' => 'उंची',
+        'Height Preference' => 'उंचीची अपेक्षा',
+        'Highest Education' => 'सर्वोच्च शिक्षण',
+        'Income Preference' => 'उत्पन्नाची अपेक्षा',
+        'Intercaste' => 'आंतरजातीय',
+        'Lives in' => 'राहण्याचे ठिकाण',
+        'Mangal Dosh' => 'मंगळ दोष',
+        'Marital Status' => 'वैवाहिक स्थिती',
+        'Marriage History' => 'विवाह इतिहास',
+        'Marriage Type Preference' => 'विवाह प्रकाराची अपेक्षा',
+        'Mother Tongue' => 'मातृभाषा',
+        'Nakshatra' => 'नक्षत्र',
+        'Occupation' => 'व्यवसाय',
+        'Other Relatives' => 'इतर नातेवाईक',
+        'Parents Details' => 'पालकांची माहिती',
+        'Partner with Children' => 'अपत्य असलेला जोडीदार',
+        'Physical Build' => 'शरीरयष्टी',
+        'Physical Condition' => 'शारीरिक स्थिती',
+        'Preferred Castes' => 'पसंतीच्या जाती',
+        'Preferred City' => 'पसंतीचे शहर',
+        'Preferred Diet' => 'पसंतीचा आहार',
+        'Preferred Education' => 'पसंतीचे शिक्षण',
+        'Preferred Marital Status' => 'पसंतीची वैवाहिक स्थिती',
+        'Preferred Occupation' => 'पसंतीचा व्यवसाय',
+        'Preferred Religions' => 'पसंतीचे धर्म',
+        'Profile ID' => 'प्रोफाइल आयडी',
+        'Profile Managed By' => 'प्रोफाइल व्यवस्थापक',
+        'Property Details' => 'मालमत्तेची माहिती',
+        'Rashi' => 'राशी',
+        'Relatives' => 'नातेवाईक',
+        'Religion' => 'धर्म',
+        'Siblings' => 'भावंडे',
+        'Smoking' => 'धूम्रपान',
+        'Spectacles / Lens' => 'चष्मा / लेन्स',
+        'Weight' => 'वजन',
+        'Willing to Relocate' => 'स्थलांतरास तयार',
+        'Work Location' => 'कामाचे ठिकाण',
+    ];
+
     private function item(string $label, mixed $value, ?string $icon = null, bool $locked = false): ?array
     {
         $displayValue = $locked ? $this->cleanString($value) : $this->cleanDisplayValue($value);
         if ($displayValue === null) {
             return null;
+        }
+
+        if (LocalizedText::isMarathi() && isset(self::ITEM_LABELS_MR[$label])) {
+            $label = self::ITEM_LABELS_MR[$label];
         }
 
         return [
