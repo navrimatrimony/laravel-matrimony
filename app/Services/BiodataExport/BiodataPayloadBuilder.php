@@ -7,6 +7,7 @@ use App\Models\MatrimonyProfile;
 use App\Services\ExtendedFieldService;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\ProfileShowSnapshotService;
+use App\Support\LocalizedText;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -176,7 +177,7 @@ final class BiodataPayloadBuilder
         }
 
         $single = $children->count() === 1;
-        $baseLabel = app()->getLocale() === 'mr' ? 'मूल' : __('Child');
+        $baseLabel = __('profile.biodata_child');
 
         return $children->values()->map(function ($child, int $index) use ($single, $baseLabel): array {
             $fallbackLabel = $single ? $baseLabel : $baseLabel.' '.($index + 1);
@@ -325,8 +326,7 @@ final class BiodataPayloadBuilder
             return '';
         }
 
-        $locale = app()->getLocale();
-        $preferred = $locale === 'mr'
+        $preferred = LocalizedText::isMarathi()
             ? ['display_label', 'label_mr', 'name_mr', 'display_label_mr', 'label', 'name']
             : ['display_label', 'label_en', 'name_en', 'label', 'name'];
 
@@ -350,19 +350,12 @@ final class BiodataPayloadBuilder
             return '';
         }
 
-        if (app()->getLocale() !== 'mr') {
-            $b = $brothers > 0 ? $brothers.' brother'.($brothers !== 1 ? 's' : '') : '';
-            $s = $sisters > 0 ? $sisters.' sister'.($sisters !== 1 ? 's' : '') : '';
-
-            return trim($b.($b && $s ? ', ' : '').$s);
-        }
-
         $parts = [];
         if ($brothers > 0) {
-            $parts[] = $brothers.' भाऊ';
+            $parts[] = trans_choice('profile.biodata_siblings_brothers', $brothers, ['count' => $brothers]);
         }
         if ($sisters > 0) {
-            $parts[] = $sisters.' बहीण';
+            $parts[] = trans_choice('profile.biodata_siblings_sisters', $sisters, ['count' => $sisters]);
         }
 
         return implode(', ', $parts);
@@ -371,17 +364,10 @@ final class BiodataPayloadBuilder
     private function childGenderLabel(string $gender): string
     {
         $gender = mb_strtolower(trim($gender));
-        if (app()->getLocale() !== 'mr') {
-            return match ($gender) {
-                'male' => 'Male',
-                'female' => 'Female',
-                default => $gender,
-            };
-        }
 
         return match ($gender) {
-            'male' => 'मुलगा',
-            'female' => 'मुलगी',
+            'male' => __('profile.biodata_child_male'),
+            'female' => __('profile.biodata_child_female'),
             default => $gender,
         };
     }
@@ -389,7 +375,7 @@ final class BiodataPayloadBuilder
     private function localizeExportLabel(string $label): string
     {
         $label = trim($label);
-        if (app()->getLocale() !== 'mr') {
+        if (! LocalizedText::isMarathi()) {
             return $label;
         }
 
@@ -409,7 +395,7 @@ final class BiodataPayloadBuilder
 
     private function localizeInlineText(string $text): string
     {
-        if (app()->getLocale() !== 'mr' || $text === '') {
+        if (! LocalizedText::isMarathi() || $text === '') {
             return $this->localizeDateText($text);
         }
 
@@ -435,7 +421,7 @@ final class BiodataPayloadBuilder
 
     private function weekdayLabel(string $value): string
     {
-        if (app()->getLocale() !== 'mr') {
+        if (! LocalizedText::isMarathi()) {
             return $value;
         }
 
@@ -449,7 +435,7 @@ final class BiodataPayloadBuilder
 
     private function localizeDateText(string $text): string
     {
-        if (app()->getLocale() !== 'mr') {
+        if (! LocalizedText::isMarathi()) {
             return $text;
         }
 

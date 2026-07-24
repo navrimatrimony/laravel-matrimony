@@ -16,7 +16,6 @@
 
     $hasEducationEngine = Schema::hasColumn('matrimony_profiles', 'highest_education');
     $educationService = app(EducationService::class);
-    $localeMr = app()->getLocale() === 'mr';
 
     $initialEducationChips = [];
     $legacyHe = trim((string) old($oldKey('highest_education'), $profile->highest_education ?? ''));
@@ -28,10 +27,10 @@
             $match = $educationService->findDegreeMatch($part);
             if ($match !== null) {
                 $d = $match;
-                $label = ($localeMr && filled($d->code_mr)) ? (string) $d->code_mr : (string) ($d->code ?? '');
                 $initialEducationChips[] = [
                     'id' => (int) $d->id,
-                    'name' => $label !== '' ? $label : (string) ($d->code ?? ''),
+                    // shortDisplayLabel() already falls back to `code`, so no second fallback here.
+                    'name' => $d->shortDisplayLabel(),
                     'custom' => false,
                 ];
             } else {

@@ -16,7 +16,7 @@
             $heroImage = $customHeroImagePath !== ''
                 ? \Illuminate\Support\Facades\Storage::disk('public')->url($customHeroImagePath)
                 : $fallbackHeroImage;
-            $isMarathiLocale = str_starts_with((string) app()->getLocale(), 'mr');
+            $isMarathiLocale = \App\Support\LocalizedText::isMarathiLoose();
             $fontClass = $isMarathiLocale ? 'font-devanagari' : '';
             $homepageCopyDefaults = \App\Modules\Suchak\Services\SuchakPolicyService::DEFAULT_SUCHAK_HOMEPAGE_COPY;
             $homepageStyleDefaults = \App\Modules\Suchak\Services\SuchakPolicyService::DEFAULT_SUCHAK_HOMEPAGE_STYLE;

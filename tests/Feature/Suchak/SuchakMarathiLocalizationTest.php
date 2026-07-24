@@ -6,6 +6,7 @@ use App\Models\SuchakAccount;
 use App\Models\SuchakPlan;
 use App\Models\SuchakSubscription;
 use App\Models\User;
+use App\Support\LocalizedText;
 use App\Support\Suchak\SuchakLocalizedText;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
@@ -36,10 +37,10 @@ class SuchakMarathiLocalizationTest extends TestCase
         ]);
 
         app()->setLocale('en');
-        $this->assertSame('Suchak Operator', SuchakLocalizedText::column($plan, 'name'));
+        $this->assertSame('Suchak Operator', LocalizedText::column($plan, 'name'));
 
         app()->setLocale('mr');
-        $this->assertSame('सूचक operator', SuchakLocalizedText::column($plan, 'name'));
+        $this->assertSame('सूचक operator', LocalizedText::column($plan, 'name'));
         $this->assertSame('सक्रिय', SuchakLocalizedText::label('active'));
     }
 

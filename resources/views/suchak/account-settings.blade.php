@@ -2,6 +2,7 @@
 
 @php
     $suchakText = \App\Support\Suchak\SuchakLocalizedText::class;
+    $localizedText = \App\Support\LocalizedText::class;
 @endphp
 
 @section('content')
@@ -94,7 +95,7 @@
                     @forelse ($contactNumbers as $number)
                         <tr>
                             <td class="px-3 py-2 text-gray-900 dark:text-gray-100">{{ $number->phone_number }}</td>
-                            <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ $suchakText::column($number, 'label') ?: '-' }}</td>
+                            <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ $localizedText::column($number, 'label') ?: '-' }}</td>
                             <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ $number->is_whatsapp ? $suchakText::label('yes') : $suchakText::label('no') }}</td>
                             <td class="px-3 py-2">
                                 <form method="POST" action="{{ route('suchak.account-settings.contact-numbers.destroy', $number) }}">

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Api\Concerns\SetsApiLocaleFromRequest;
 use App\Http\Controllers\Controller;
 use App\Models\Location;
 use App\Services\Location\LocationService;
@@ -12,12 +11,8 @@ use Illuminate\Validation\Rule;
 
 class LocationController extends Controller
 {
-    use SetsApiLocaleFromRequest;
-
     public function search(Request $request, LocationService $locationService): JsonResponse
     {
-        $this->applyLocaleFromApiRequest($request);
-
         $q = trim((string) $request->input('q', ''));
         if (mb_strlen($q, 'UTF-8') < 2) {
             return response()->json([]);
@@ -56,8 +51,6 @@ class LocationController extends Controller
 
     public function nearby(Request $request, LocationService $locationService): JsonResponse
     {
-        $this->applyLocaleFromApiRequest($request);
-
         $validated = $request->validate([
             'location_id' => ['required', 'integer', 'exists:'.Location::geoTable().',id'],
             'radius' => ['nullable', 'integer', 'min:1', 'max:200'],

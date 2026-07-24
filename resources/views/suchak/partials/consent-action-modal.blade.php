@@ -5,7 +5,7 @@
     $defaultConsentMobile = (string) ($defaultConsentMobile ?? '');
     $defaultConsentGiverName = (string) ($defaultConsentGiverName ?? '');
     $defaultConsentRelation = (string) ($defaultConsentRelation ?? 'candidate_self');
-    $isMr = str_starts_with((string) app()->getLocale(), 'mr');
+    $isMr = \App\Support\LocalizedText::isMarathiLoose();
     $text = $isMr ? [
         'trigger' => 'संमती घ्या',
         'eyebrow' => 'संमती',

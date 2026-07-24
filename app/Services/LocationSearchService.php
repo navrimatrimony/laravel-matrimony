@@ -11,6 +11,7 @@ use App\Models\Village;
 use App\Services\Location\AddressHierarchySearch;
 use App\Services\Location\LocationCompoundAddressParser;
 use App\Services\Location\LocationDisplayFormatter;
+use App\Support\LocalizedText;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -208,7 +209,7 @@ class LocationSearchService
         }
 
         $this->appendCityLocalizedNameMatches($rows, $seen, $queryTrimmed, $q, $maxResults);
-        if (app()->getLocale() === 'mr' || preg_match('/\p{M}/u', $queryTrimmed) === 1) {
+        if (LocalizedText::isMarathi() || preg_match('/\p{M}/u', $queryTrimmed) === 1) {
             $this->appendVillageLocaleMatches($rows, $seen, $q, $maxResults, $queryTrimmed);
         }
 
@@ -408,7 +409,7 @@ class LocationSearchService
 
             $rows[] = [
                 'city_id' => (int) $city->id,
-                'city_name' => $village->name_mr ?: ($city->name ?? ''),
+                'city_name' => LocalizedText::pick($village->name_mr, $city->name ?? ''),
                 'taluka_id' => $taluka ? (int) $taluka->id : 0,
                 'taluka_name' => $taluka->name ?? '',
                 'district_id' => $district ? (int) $district->id : 0,
@@ -897,9 +898,8 @@ class LocationSearchService
         $district = $taluka?->district;
         $state = $district?->state;
 
-        $locale = app()->getLocale();
         $cityName = $city->name ?? '';
-        if ($locale === 'mr') {
+        if (LocalizedText::isMarathi()) {
             static $villageCache = [];
             $cacheKey = $city->parent_id.'|'.strtolower(trim((string) $city->name));
             if (array_key_exists($cacheKey, $villageCache)) {
@@ -912,9 +912,10 @@ class LocationSearchService
                     ->where('parent_id', $city->parent_id)
                     ->whereRaw('LOWER(name_en) = ?', [strtolower(trim((string) $city->name))])
                     ->first();
-                $villageCache[$cacheKey] = $match && $match->name_mr ? $match->name_mr : null;
-                if ($match && $match->name_mr) {
-                    $cityName = $match->name_mr;
+                $marathi = LocalizedText::value($match, 'name_mr');
+                $villageCache[$cacheKey] = $marathi;
+                if ($marathi !== null) {
+                    $cityName = $marathi;
                 }
             }
         }
@@ -927,11 +928,11 @@ class LocationSearchService
             'name' => $cityName,
             'city_name' => $cityName,
             'taluka_id' => $taluka ? (int) $taluka->id : 0,
-            'taluka_name' => $locale === 'mr' && $taluka && $taluka->name_mr ? $taluka->name_mr : ($taluka->name ?? ''),
+            'taluka_name' => LocalizedText::column($taluka, 'name'),
             'district_id' => $district ? (int) $district->id : 0,
-            'district_name' => $locale === 'mr' && $district && $district->name_mr ? $district->name_mr : ($district->name ?? ''),
+            'district_name' => LocalizedText::column($district, 'name'),
             'state_id' => $state ? (int) $state->id : 0,
-            'state_name' => $locale === 'mr' && $state && $state->name_mr ? $state->name_mr : ($state->name ?? ''),
+            'state_name' => LocalizedText::column($state, 'name'),
             'country_id' => $state ? (int) $state->country_id : 0,
             'display_label' => $displayLabel,
         ];

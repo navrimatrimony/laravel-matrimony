@@ -417,7 +417,7 @@ class ControlledOptionNormalizer
         $en = App::getLocale() === 'en'
             ? __($baseKey)
             : trans($baseKey, [], 'en');
-        $mr = App::getLocale() === 'mr'
+        $mr = \App\Support\LocalizedText::isMarathi()
             ? __($baseKey)
             : trans($baseKey, [], 'mr');
 

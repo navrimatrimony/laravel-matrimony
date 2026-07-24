@@ -43,7 +43,7 @@
                 <option value="">{{ __('components.family.select_family_type') }}</option>
                 @foreach($familyTypes as $ft)
                     <option value="{{ $ft->id }}" {{ (string) $currentFamilyTypeId === (string) $ft->id ? 'selected' : '' }}>
-                        {{ app()->getLocale() === 'mr' && filled($ft->label_mr ?? null) ? $ft->label_mr : $ft->label }}
+                        {{ $ft->localizedLabel() }}
                     </option>
                 @endforeach
             </select>

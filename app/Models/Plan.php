@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Exceptions\QuotaPolicySourceViolation;
+use App\Models\Concerns\ResolvesLocalizedText;
 use App\Services\FeatureUsageService;
 use App\Services\PlanQuotaPolicyMirror;
 use App\Services\PlanQuotaUiSource;
@@ -17,6 +18,8 @@ use Illuminate\Support\Facades\Cache;
 
 class Plan extends Model
 {
+    use ResolvesLocalizedText;
+
     /**
      * Public pricing (/plans): suppress these mirrored or legacy {@see PlanFeature} keys (UI projection only).
      *
@@ -68,6 +71,11 @@ class Plan extends Model
         'highlight' => 'boolean',
         'tier' => 'integer',
     ];
+
+    public function localizedName(): string
+    {
+        return $this->localizedText('name');
+    }
 
     public function features(): HasMany
     {

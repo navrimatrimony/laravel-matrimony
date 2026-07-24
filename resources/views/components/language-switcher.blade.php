@@ -1,7 +1,7 @@
 @props(['onRed' => false])
 
 @php
-    $isMr = str_starts_with((string) app()->getLocale(), 'mr');
+    $isMr = \App\Support\LocalizedText::isMarathiLoose();
 @endphp
 
 <x-partials.language-toggle-core

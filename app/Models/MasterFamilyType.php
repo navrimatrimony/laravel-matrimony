@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ResolvesLocalizedText;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -9,6 +10,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class MasterFamilyType extends Model
 {
+    use ResolvesLocalizedText;
+
     protected $table = 'master_family_types';
 
     protected $fillable = ['key', 'label', 'is_active'];
@@ -16,4 +19,9 @@ class MasterFamilyType extends Model
     protected $casts = [
         'is_active' => 'boolean',
     ];
+
+    public function localizedLabel(): string
+    {
+        return $this->localizedText('label');
+    }
 }

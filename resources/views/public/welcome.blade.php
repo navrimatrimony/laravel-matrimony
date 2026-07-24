@@ -756,7 +756,7 @@
             $sectionEnabled = fn (string $key): bool => (bool) data_get($homepageSettings, "sections.$key.enabled", true);
             $sectionOrder = collect($homepageSettings['sections'] ?? [])->map(fn ($section, $key) => ['key' => $key, 'sort_order' => (int) ($section['sort_order'] ?? 50)])->sortBy('sort_order')->pluck('key')->all();
             $searchEnabled = fn (string $key): bool => (bool) data_get($homepageSettings, "search_fields.$key", true);
-            $isMarathiLocale = str_starts_with((string) app()->getLocale(), 'mr');
+            $isMarathiLocale = \App\Support\LocalizedText::isMarathiLoose();
             $devanagariClass = $isMarathiLocale ? 'font-devanagari' : '';
             $localized = fn (string $key, string $fallbackMr, string $fallbackEn): string => (string) (
                 $isMarathiLocale
@@ -1191,7 +1191,7 @@
                                         @if ($plan->highlight)
                                             <span class="rounded-full bg-red-100 px-2 py-1 text-[11px] font-bold text-[var(--brand-red)]">{{ __('homepage.popular') }}</span>
                                         @endif
-                                        <h3 class="{{ $devanagariClass }} mt-3 text-lg font-extrabold text-zinc-950 dark:text-white">{{ $isMarathiLocale && $plan->name_mr ? $plan->name_mr : $plan->name }}</h3>
+                                        <h3 class="{{ $devanagariClass }} mt-3 text-lg font-extrabold text-zinc-950 dark:text-white">{{ $plan->localizedName() }}</h3>
                                         <p class="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{{ $plan->description }}</p>
                                         <p class="mt-4 text-2xl font-extrabold text-[var(--brand-red)]">₹{{ number_format((float) $plan->price, 0) }}</p>
                                     </div>
@@ -1217,7 +1217,7 @@
                                             <a href="{{ $appAndroidUrl }}" target="_blank" rel="noopener noreferrer" class="nmn-app-store-badge">
                                                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.6 1.8 13.2 12 3.6 22.2a1.4 1.4 0 0 1-.2-.8V2.6c0-.3.1-.6.2-.8Zm1.5.9 10.9 6.3-2.5 2.5L5.1 2.7Zm12.4 7.4-3.1-1.8-2.8 2.8 2.8 2.8 3.1-1.8a1.5 1.5 0 0 0 0-2.6l-.1-.4Zm-5.9 3.4 2.5 2.5-10.9 6.3 8.4-8.8Z"/></svg>
                                                 <span>
-                                                    <span>{{ $isMarathiLocale ? 'Android साठी' : 'Android app on' }}</span>
+                                                    <span>{{ __('homepage.app_android_prefix') }}</span>
                                                     <strong>{{ __('homepage.app_android_cta') }}</strong>
                                                 </span>
                                             </a>
@@ -1226,7 +1226,7 @@
                                             <a href="{{ $appIosUrl }}" target="_blank" rel="noopener noreferrer" class="nmn-app-store-badge">
                                                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.36 12.74c.03-2.97 2.43-4.4 2.54-4.47-1.38-2.02-3.53-2.3-4.29-2.33-1.83-.19-3.57 1.08-4.49 1.08-.93 0-2.35-1.05-3.86-1.02-1.99.03-3.82 1.16-4.84 2.94-2.07 3.58-.53 8.88 1.48 11.78 1 1.45 2.19 3.08 3.75 3.02 1.51-.06 2.08-.98 3.91-.98 1.83 0 2.35.98 3.95.95 1.63-.03 2.66-1.48 3.64-2.93 1.15-1.68 1.62-3.31 1.65-3.39-.04-.02-3.17-1.22-3.2-4.83l-.01-.04ZM13.3 4.22c.83-1.01 1.39-2.41 1.24-3.8-1.2.05-2.65.8-3.51 1.8-.77.89-1.44 2.32-1.26 3.69 1.33.1 2.69-.68 3.53-1.69Z"/></svg>
                                                 <span>
-                                                    <span>{{ $isMarathiLocale ? 'iOS साठी' : 'Download on the' }}</span>
+                                                    <span>{{ __('homepage.app_ios_prefix') }}</span>
                                                     <strong>{{ __('homepage.app_ios_cta') }}</strong>
                                                 </span>
                                             </a>

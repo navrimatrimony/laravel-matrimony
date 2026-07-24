@@ -2,7 +2,7 @@
 
 namespace App\Services\Onboarding;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Support\LocalizedText;
 
 class OnboardingLookupOptionFormatter
 {
@@ -13,59 +13,44 @@ class OnboardingLookupOptionFormatter
      */
     public function label(object|array $row, string $locale, array $localeColumns, array $englishColumns): array
     {
-        $localized = $locale === 'mr' ? $this->firstFilled($row, $localeColumns) : null;
-        if ($localized !== null) {
-            return [
-                'label' => $localized,
-                'translation_missing' => false,
-            ];
+        $isMarathi = LocalizedText::isMarathi($locale);
+
+        if ($isMarathi) {
+            foreach ($localeColumns as $column) {
+                $localized = LocalizedText::value($row, $column);
+                if ($localized !== null) {
+                    return [
+                        'label' => $localized,
+                        'translation_missing' => false,
+                    ];
+                }
+            }
         }
 
-        $english = $this->firstFilled($row, $englishColumns);
-        if ($english !== null) {
-            return [
-                'label' => $english,
-                'translation_missing' => $locale === 'mr',
-            ];
+        foreach ($englishColumns as $column) {
+            $english = LocalizedText::value($row, $column);
+            if ($english !== null) {
+                return [
+                    'label' => $english,
+                    'translation_missing' => $isMarathi,
+                ];
+            }
         }
 
-        $fallback = $this->firstFilled($row, array_values(array_unique(array_merge($localeColumns, $englishColumns))));
+        $fallbackColumns = array_values(array_unique(array_merge($localeColumns, $englishColumns)));
+        foreach ($fallbackColumns as $column) {
+            $fallback = LocalizedText::value($row, $column);
+            if ($fallback !== null) {
+                return [
+                    'label' => $fallback,
+                    'translation_missing' => $isMarathi,
+                ];
+            }
+        }
 
         return [
-            'label' => $fallback ?? 'Option',
-            'translation_missing' => $locale === 'mr',
+            'label' => 'Option',
+            'translation_missing' => $isMarathi,
         ];
-    }
-
-    /**
-     * @param  array<int, string>  $columns
-     */
-    private function firstFilled(object|array $row, array $columns): ?string
-    {
-        foreach ($columns as $column) {
-            $value = $this->value($row, $column);
-            if ($value === null) {
-                continue;
-            }
-            $text = trim((string) $value);
-            if ($text !== '') {
-                return $text;
-            }
-        }
-
-        return null;
-    }
-
-    private function value(object|array $row, string $key): mixed
-    {
-        if (is_array($row)) {
-            return $row[$key] ?? null;
-        }
-
-        if ($row instanceof Model) {
-            return $row->getAttribute($key);
-        }
-
-        return $row->{$key} ?? null;
     }
 }

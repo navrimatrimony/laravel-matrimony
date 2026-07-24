@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Suchak;
 use App\Http\Controllers\Controller;
 use App\Models\SuchakConsent;
 use App\Modules\Suchak\Services\SuchakConsentService;
+use App\Support\LocalizedText;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\View\View;
@@ -114,17 +115,9 @@ class PublicConsentController extends Controller
 
     private function displayText(?string $preferred, ?string $fallback = null, ?string $default = null): ?string
     {
-        $preferred = trim((string) $preferred);
-        if ($preferred !== '') {
-            return $preferred;
-        }
+        $resolved = LocalizedText::pick($preferred, $fallback);
 
-        $fallback = trim((string) $fallback);
-        if ($fallback !== '') {
-            return $fallback;
-        }
-
-        return $default;
+        return $resolved !== '' ? $resolved : $default;
     }
 
     private function suchakAddress(mixed $account): ?string

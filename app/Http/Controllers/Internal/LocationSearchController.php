@@ -24,10 +24,6 @@ class LocationSearchController extends Controller
         ]);
 
         $query = trim($request->input('q'));
-        $localeOverride = $request->input('locale');
-        if (is_string($localeOverride) && in_array($localeOverride, ['en', 'mr'], true)) {
-            app()->setLocale($localeOverride);
-        }
         $preferredStateIds = [];
         $preferredDistrictIds = [];
 

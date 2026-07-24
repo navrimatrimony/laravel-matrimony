@@ -5,6 +5,7 @@ namespace App\Services\Gunamilan;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileHoroscopeData;
 use App\Services\HoroscopeRuleService;
+use App\Support\LocalizedText;
 
 class GunamilanService
 {
@@ -482,18 +483,7 @@ class GunamilanService
 
     private function valueLabel(?object $value): string
     {
-        if ($value === null) {
-            return '-';
-        }
-
-        if (app()->getLocale() === 'mr') {
-            $labelMr = trim((string) ($value->label_mr ?? ''));
-            if ($labelMr !== '') {
-                return $labelMr;
-            }
-        }
-
-        return trim((string) ($value->label ?? $value->name ?? $value->key ?? '-')) ?: '-';
+        return LocalizedText::column($value, 'label', ['label', 'name', 'key']) ?: '-';
     }
 
     private function uniqueMissing(array $missing): array

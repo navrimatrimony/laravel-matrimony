@@ -8,18 +8,16 @@
 @php
     use App\Models\EducationCategory;
 
-    $localeMr = app()->getLocale() === 'mr';
-
     $categories = EducationCategory::where('is_active', true)
         ->with(['degrees' => fn ($q) => $q->orderBy('sort_order')])
         ->orderBy('sort_order')
         ->get();
 
-    $degreesPayload = $categories->flatMap(function ($cat) use ($localeMr) {
-        return $cat->degrees->map(function ($d) use ($cat, $localeMr) {
-            $title = ($localeMr && filled($d->code_mr)) ? $d->code_mr : $d->code;
+    $degreesPayload = $categories->flatMap(function ($cat) {
+        return $cat->degrees->map(function ($d) use ($cat) {
+            $title = $d->shortDisplayLabel();
             $fullForm = (string) ($d->full_form ?? '');
-            $category = ($localeMr && filled($cat->name_mr)) ? $cat->name_mr : $cat->name;
+            $category = $cat->localizedName();
 
             return [
                 'code' => $d->code,

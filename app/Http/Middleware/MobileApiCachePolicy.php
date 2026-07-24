@@ -95,7 +95,13 @@ class MobileApiCachePolicy
         return [
             'Cache-Control' => $cacheControl,
             'ETag' => $etag,
-            'Vary' => $visibility === 'private' ? 'Accept, Authorization' : 'Accept',
+            // Accept-Language belongs here because SetApiLocale can pick the
+            // response language from that header alone. Without it a shared
+            // cache would hand the first caller's language to everyone behind
+            // it for the whole TTL — publicly cached lookups run 12 hours.
+            'Vary' => $visibility === 'private'
+                ? 'Accept, Accept-Language, Authorization'
+                : 'Accept, Accept-Language',
             'X-Mobile-Cache-Policy' => $visibility,
             'X-Mobile-Cache-TTL' => (string) $maxAge,
             'X-Mobile-Cache-Stale-While-Revalidate' => (string) $staleWhileRevalidate,

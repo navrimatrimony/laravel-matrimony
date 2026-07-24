@@ -20,7 +20,6 @@
 
     {{-- 1) Qualification — SSOT: education_degrees (+ categories), same catalogue as onboarding education engine --}}
     @php
-        $eduPrefLocaleMr = str_starts_with(strtolower((string) app()->getLocale()), 'mr');
         $selectedPreferredEducationDegreeIds = $selectedPreferredEducationDegreeIds ?? [];
     @endphp
     <div id="partner-pref-ec-qual" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 p-3 space-y-2 scroll-mt-4">
@@ -38,7 +37,7 @@
                         @continue
                     @endif
                     @php
-                        $catLabel = $eduPrefLocaleMr && filled($cat->name_mr ?? null) ? $cat->name_mr : $cat->name;
+                        $catLabel = $cat->localizedName();
                         $catSelectAllTitle = __('wizard.partner_pref_education_category_select_all');
                     @endphp
                     <div class="partner-ec-edu-category space-y-1.5" data-chip-label="{{ $catLabel }}">
@@ -58,7 +57,7 @@
                         <div class="flex flex-wrap gap-2 content-start partner-ec-edu-category-degrees">
                             @foreach($cat->degrees as $deg)
                                 @php
-                                    $degLabel = $eduPrefLocaleMr && filled($deg->code_mr ?? null) ? $deg->code_mr : $deg->code;
+                                    $degLabel = $deg->shortDisplayLabel();
                                 @endphp
                                 <label class="partner-ec-edu-chip inline-flex items-center gap-1.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-0.5 text-xs cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500" data-chip-label="{{ $degLabel }}">
                                     <input type="checkbox" name="preferred_education_degree_ids[]" value="{{ $deg->id }}" class="partner-ec-edu-cb rounded border-gray-300 dark:border-gray-600 text-indigo-600"
@@ -75,7 +74,6 @@
 
     {{-- 2) Occupation — SSOT: master_occupations + master_occupation_categories (same engine as onboarding `<x-occupation-search-engine>` / wizard career) --}}
     @php
-        $occPrefLocaleMr = str_starts_with(strtolower((string) app()->getLocale()), 'mr');
         $selectedPreferredOccupationMasterIds = $selectedPreferredOccupationMasterIds ?? [];
     @endphp
     <div id="partner-pref-ec-occupation" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 p-3 space-y-2 scroll-mt-4">
@@ -93,7 +91,7 @@
                         @continue
                     @endif
                     @php
-                        $occCatLabel = $occPrefLocaleMr && filled($occCat->name_mr ?? null) ? $occCat->name_mr : $occCat->name;
+                        $occCatLabel = $occCat->localizedName();
                         $occCatSelectAllTitle = __('wizard.partner_pref_occupation_category_select_all');
                         $partnerEcOccCatAllId = 'partner-ec-occ-cat-all-'.(int) $occCat->id;
                     @endphp
@@ -111,7 +109,7 @@
                         <div class="flex flex-wrap gap-2 content-start">
                             @foreach($occCat->occupations as $occ)
                                 @php
-                                    $occLabel = $occPrefLocaleMr && filled($occ->name_mr ?? null) ? $occ->name_mr : $occ->name;
+                                    $occLabel = $occ->localizedName();
                                 @endphp
                                 <label class="partner-ec-occ-chip inline-flex items-center gap-1.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-0.5 text-xs cursor-pointer hover:border-teal-400 dark:hover:border-teal-500" data-chip-label="{{ $occLabel }}">
                                     <input type="checkbox" name="preferred_occupation_master_ids[]" value="{{ $occ->id }}" class="partner-ec-occ-cb rounded border-gray-300 dark:border-gray-600 text-teal-600"

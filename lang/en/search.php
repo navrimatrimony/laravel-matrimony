@@ -13,6 +13,9 @@ return [
     'state' => 'State',
     'district' => 'District',
     'taluka' => 'Taluka',
+    // Group headings in the location picker. 'taluka' above doubles as that group's heading.
+    'location_group_urban' => 'City / Suburban',
+    'location_group_rural' => 'Rural',
     'any' => 'Any',
     'age_from' => 'Age From',
     'age_to' => 'Age To',

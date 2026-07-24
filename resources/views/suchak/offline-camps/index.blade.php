@@ -2,6 +2,7 @@
 
 @php
     $suchakText = \App\Support\Suchak\SuchakLocalizedText::class;
+    $localizedText = \App\Support\LocalizedText::class;
     $label = fn (string $value) => $suchakText::label($value);
 @endphp
 
@@ -59,7 +60,7 @@
                     <a href="{{ route('suchak.offline-camps.index', ['camp' => $camp->id]) }}" class="rounded-lg border border-gray-200 bg-gray-50 p-4 hover:border-indigo-300 hover:bg-indigo-50 dark:border-gray-700 dark:bg-gray-900 dark:hover:border-indigo-500">
                         <div class="flex items-start justify-between gap-3">
                             <div>
-                                <h3 class="font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::column($camp, 'camp_name') }}</h3>
+                                <h3 class="font-semibold text-gray-900 dark:text-gray-100">{{ $localizedText::column($camp, 'camp_name') }}</h3>
                                 <p class="mt-1 text-xs text-gray-500">{{ $camp->source_tag }} / {{ $label($camp->camp_type) }}</p>
                             </div>
                             <span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300">{{ $label($camp->camp_status) }}</span>
@@ -81,7 +82,7 @@
         <section class="mt-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
-                    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::column($selectedCamp, 'camp_name') }}</h2>
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ $localizedText::column($selectedCamp, 'camp_name') }}</h2>
                     <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Source tag: {{ $selectedCamp->source_tag }}</p>
                 </div>
                 <form method="POST" action="{{ route('suchak.offline-camps.conversion-reports.generate', $selectedCamp) }}" class="flex flex-col gap-2 sm:flex-row">
@@ -149,7 +150,7 @@
                                         @csrf
                                         <select name="service_package_id" class="rounded-md border-gray-300 text-xs dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
                                             @foreach ($summary['packages'] as $package)
-                                                <option value="{{ $package->id }}">{{ $suchakText::column($package, 'package_name') }} #{{ $package->id }}</option>
+                                                <option value="{{ $package->id }}">{{ $localizedText::column($package, 'package_name') }} #{{ $package->id }}</option>
                                             @endforeach
                                         </select>
                                         <input name="assignment_note" placeholder="Assignment note" class="rounded-md border-gray-300 text-xs dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
@@ -158,7 +159,7 @@
                                     @if ($campLink->packageAssignments->isNotEmpty())
                                         <div class="mt-2 space-y-1 text-xs text-gray-500">
                                             @foreach ($campLink->packageAssignments as $assignment)
-                                                <div>{{ $suchakText::column($assignment->servicePackage, 'package_name') }} / {{ $label($assignment->assignment_status) }}</div>
+                                                <div>{{ $localizedText::column($assignment->servicePackage, 'package_name') }} / {{ $label($assignment->assignment_status) }}</div>
                                             @endforeach
                                         </div>
                                     @endif

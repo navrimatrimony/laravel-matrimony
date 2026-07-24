@@ -27,6 +27,7 @@ use App\Models\OccupationCustom;
 use App\Models\OccupationMaster;
 use App\Models\Religion;
 use App\Services\HoroscopeRuleService;
+use App\Support\LocalizedText;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -232,7 +233,7 @@ class ProfileSetupLookupController extends Controller
                 'key' => $religion->key,
                 'label' => $religion->label,
                 'label_en' => $hasLabelEn ? ($religion->label_en ?: $religion->label) : $religion->label,
-                'label_mr' => $hasLabelMr ? ($religion->label_mr ?: null) : null,
+                'label_mr' => $hasLabelMr ? LocalizedText::value($religion, 'label_mr') : null,
             ])
             ->values()
             ->all();
@@ -268,7 +269,7 @@ class ProfileSetupLookupController extends Controller
                 'key' => $caste->key,
                 'label' => $caste->label,
                 'label_en' => $hasLabelEn ? ($caste->label_en ?: $caste->label) : $caste->label,
-                'label_mr' => $hasLabelMr ? ($caste->label_mr ?: null) : null,
+                'label_mr' => $hasLabelMr ? LocalizedText::value($caste, 'label_mr') : null,
             ])
             ->values()
             ->all();
@@ -293,7 +294,7 @@ class ProfileSetupLookupController extends Controller
                 'label_en' => $hasLabelEn
                     ? ($row->getAttribute('label_en') ?: $row->getAttribute('label'))
                     : $row->getAttribute('label'),
-                'label_mr' => $hasLabelMr ? ($row->getAttribute('label_mr') ?: null) : null,
+                'label_mr' => $hasLabelMr ? LocalizedText::value($row, 'label_mr') : null,
             ])
             ->values()
             ->all();
@@ -339,7 +340,7 @@ class ProfileSetupLookupController extends Controller
                 'key' => $hasKey ? ($row->key ?? null) : null,
                 'label' => $hasLabel ? ($row->label ?? null) : null,
                 'label_en' => $hasLabelEn ? (($row->label_en ?? null) ?: ($row->label ?? null)) : ($row->label ?? null),
-                'label_mr' => $hasLabelMr ? (($row->label_mr ?? null) ?: null) : null,
+                'label_mr' => $hasLabelMr ? LocalizedText::value($row, 'label_mr') : null,
             ])
             ->values()
             ->all();
@@ -520,12 +521,12 @@ class ProfileSetupLookupController extends Controller
                 'code' => $degree->code,
                 'label' => $degree->code,
                 'label_en' => $degree->code,
-                'label_mr' => Schema::hasColumn('master_education', 'code_mr') ? ($degree->code_mr ?: null) : null,
+                'label_mr' => Schema::hasColumn('master_education', 'code_mr') ? LocalizedText::value($degree, 'code_mr') : null,
                 'full_form' => Schema::hasColumn('master_education', 'full_form') ? ($degree->full_form ?: null) : null,
                 'category_id' => $degree->category_id ? (int) $degree->category_id : null,
                 'category_label' => $degree->category?->name,
                 'category_label_mr' => Schema::hasColumn('master_education_categories', 'name_mr')
-                    ? ($degree->category?->name_mr ?: null)
+                    ? LocalizedText::value($degree->category, 'name_mr')
                     : null,
             ])
             ->values()
@@ -549,7 +550,7 @@ class ProfileSetupLookupController extends Controller
                 'id' => (int) $category->id,
                 'label' => $category->name,
                 'label_en' => $category->name,
-                'label_mr' => Schema::hasColumn('master_occupation_categories', 'name_mr') ? ($category->name_mr ?: null) : null,
+                'label_mr' => Schema::hasColumn('master_occupation_categories', 'name_mr') ? LocalizedText::value($category, 'name_mr') : null,
                 'legacy_working_with_type_id' => $category->legacy_working_with_type_id
                     ? (int) $category->legacy_working_with_type_id
                     : null,
@@ -576,11 +577,11 @@ class ProfileSetupLookupController extends Controller
                 'id' => (int) $occupation->id,
                 'label' => $occupation->name,
                 'label_en' => $occupation->name,
-                'label_mr' => Schema::hasColumn('master_occupations', 'name_mr') ? ($occupation->name_mr ?: null) : null,
+                'label_mr' => Schema::hasColumn('master_occupations', 'name_mr') ? LocalizedText::value($occupation, 'name_mr') : null,
                 'category_id' => $occupation->category_id ? (int) $occupation->category_id : null,
                 'category_label' => $occupation->category?->name,
                 'category_label_mr' => Schema::hasColumn('master_occupation_categories', 'name_mr')
-                    ? ($occupation->category?->name_mr ?: null)
+                    ? LocalizedText::value($occupation->category, 'name_mr')
                     : null,
             ])
             ->values()

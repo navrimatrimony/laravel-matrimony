@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ResolvesLocalizedText;
 use App\Services\Location\LocationFormatterService;
 use App\Services\Location\LocationHierarchyValidator;
 use InvalidArgumentException;
@@ -22,6 +23,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  */
 class Location extends Model
 {
+    use ResolvesLocalizedText;
+
     /**
      * SSOT table for geo hierarchy (not the legacy country/state/district/taluka/village master tables).
      */
@@ -123,11 +126,7 @@ class Location extends Model
      */
     public function localizedName(): string
     {
-        if (app()->getLocale() === 'mr' && filled($this->name_mr)) {
-            return trim((string) $this->name_mr);
-        }
-
-        return trim((string) $this->name);
+        return $this->localizedText('name');
     }
 
     /**

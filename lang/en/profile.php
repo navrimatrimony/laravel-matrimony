@@ -392,4 +392,9 @@ return [
     'suchak_request_status_closed' => 'Closed',
     'suchak_request_status_expired' => 'Expired',
     'suchak_request_status_cancelled' => 'Cancelled',
+    'biodata_child' => 'Child',
+    'biodata_child_male' => 'Male',
+    'biodata_child_female' => 'Female',
+    'biodata_siblings_brothers' => '{1}:count brother|[2,*]:count brothers',
+    'biodata_siblings_sisters' => '{1}:count sister|[2,*]:count sisters',
 ];

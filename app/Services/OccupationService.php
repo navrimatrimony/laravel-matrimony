@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Support\LocalizedText;
+
 use App\Models\OccupationCategory;
 use App\Models\OccupationCustom;
 use App\Models\OccupationMaster;
@@ -144,8 +146,10 @@ class OccupationService
     {
         $occupation->loadMissing('category');
 
+        $hasMarathiColumn = Schema::hasColumn('master_occupation_categories', 'name_mr');
+
         $catCols = ['id', 'name'];
-        if (Schema::hasColumn('master_occupation_categories', 'name_mr')) {
+        if ($hasMarathiColumn) {
             $catCols[] = 'name_mr';
         }
 
@@ -156,17 +160,18 @@ class OccupationService
 
         $cat = $occupation->category;
 
+
         return [
             'category' => $cat ? [
                 'id' => $cat->id,
                 'name' => $cat->name,
-                'name_mr' => Schema::hasColumn('master_occupation_categories', 'name_mr') ? ($cat->name_mr ?? null) : null,
+                'name_mr' => LocalizedText::value($cat, 'name_mr'),
                 'icon' => $this->categoryDisplayIcon($cat->name),
             ] : null,
             'categories' => $categories->map(fn ($c) => [
                 'id' => $c->id,
                 'name' => $c->name,
-                'name_mr' => Schema::hasColumn('master_occupation_categories', 'name_mr') ? ($c->name_mr ?? null) : null,
+                'name_mr' => LocalizedText::value($c, 'name_mr'),
                 'icon' => $this->categoryDisplayIcon($c->name),
             ])->values()->all(),
         ];

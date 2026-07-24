@@ -62,7 +62,7 @@ final class LocationDisplayFormatter
         $country = $state?->country;
 
         if ($taluka === null || $district === null || $state === null) {
-            return [['type' => 'locality', 'label' => $this->cityLabel($city)]];
+            return [['type' => 'locality', 'label' => $city->localizedName()]];
         }
 
         if ($meta && $meta->is_district_hq === true) {
@@ -104,11 +104,11 @@ final class LocationDisplayFormatter
     private function segmentsCityStateCountry(City $city, State $state, ?Country $country): array
     {
         $out = [
-            ['type' => 'locality', 'label' => $this->cityLabel($city)],
-            ['type' => 'state', 'label' => $this->stateLabel($state)],
+            ['type' => 'locality', 'label' => $city->localizedName()],
+            ['type' => 'state', 'label' => $state->localizedName()],
         ];
         if ($country instanceof Country) {
-            $out[] = ['type' => 'country', 'label' => $this->countryLabel($country)];
+            $out[] = ['type' => 'country', 'label' => $country->localizedName()];
         }
 
         return $out;
@@ -121,16 +121,16 @@ final class LocationDisplayFormatter
     {
         $parent = $city->parentCity;
         if ($parent === null) {
-            return [['type' => 'locality', 'label' => $this->cityLabel($city)]];
+            return [['type' => 'locality', 'label' => $city->localizedName()]];
         }
 
         $out = [
-            ['type' => 'locality', 'label' => $this->cityLabel($city)],
-            ['type' => 'parent_city', 'label' => $this->cityLabel($parent)],
-            ['type' => 'state', 'label' => $this->stateLabel($state)],
+            ['type' => 'locality', 'label' => $city->localizedName()],
+            ['type' => 'parent_city', 'label' => $parent->localizedName()],
+            ['type' => 'state', 'label' => $state->localizedName()],
         ];
         if ($country instanceof Country) {
-            $out[] = ['type' => 'country', 'label' => $this->countryLabel($country)];
+            $out[] = ['type' => 'country', 'label' => $country->localizedName()];
         }
 
         return $out;
@@ -142,11 +142,11 @@ final class LocationDisplayFormatter
     private function segmentsTalukaDistrictCountry(Taluka $taluka, District $district, ?Country $country): array
     {
         $out = [
-            ['type' => 'taluka', 'label' => $this->talukaLabel($taluka)],
-            ['type' => 'district', 'label' => $this->districtLabel($district)],
+            ['type' => 'taluka', 'label' => $taluka->localizedName()],
+            ['type' => 'district', 'label' => $district->localizedName()],
         ];
         if ($country instanceof Country) {
-            $out[] = ['type' => 'country', 'label' => $this->countryLabel($country)];
+            $out[] = ['type' => 'country', 'label' => $country->localizedName()];
         }
 
         return $out;
@@ -158,13 +158,13 @@ final class LocationDisplayFormatter
     private function segmentsVillageChain(City $city, Taluka $taluka, District $district, State $state, ?Country $country): array
     {
         $out = [
-            ['type' => 'locality', 'label' => $this->cityLabel($city)],
-            ['type' => 'taluka', 'label' => $this->talukaLabel($taluka)],
-            ['type' => 'district', 'label' => $this->districtLabel($district)],
-            ['type' => 'state', 'label' => $this->stateLabel($state)],
+            ['type' => 'locality', 'label' => $city->localizedName()],
+            ['type' => 'taluka', 'label' => $taluka->localizedName()],
+            ['type' => 'district', 'label' => $district->localizedName()],
+            ['type' => 'state', 'label' => $state->localizedName()],
         ];
         if ($country instanceof Country) {
-            $out[] = ['type' => 'country', 'label' => $this->countryLabel($country)];
+            $out[] = ['type' => 'country', 'label' => $country->localizedName()];
         }
 
         return $out;
@@ -231,45 +231,5 @@ final class LocationDisplayFormatter
         $s = trim(preg_replace('/\s+City$/iu', '', $s) ?? $s);
 
         return mb_strtolower($s);
-    }
-
-    private function cityLabel(City $city): string
-    {
-        $en = trim((string) $city->name);
-
-        return $this->useMr() && filled($city->name_mr) ? trim((string) $city->name_mr) : $en;
-    }
-
-    private function talukaLabel(Taluka $t): string
-    {
-        $en = trim((string) $t->name);
-
-        return $this->useMr() && filled($t->name_mr) ? trim((string) $t->name_mr) : $en;
-    }
-
-    private function districtLabel(District $d): string
-    {
-        $en = trim((string) $d->name);
-
-        return $this->useMr() && filled($d->name_mr) ? trim((string) $d->name_mr) : $en;
-    }
-
-    private function stateLabel(State $s): string
-    {
-        $en = trim((string) $s->name);
-
-        return $this->useMr() && filled($s->name_mr) ? trim((string) $s->name_mr) : $en;
-    }
-
-    private function countryLabel(Country $c): string
-    {
-        $en = trim((string) $c->name);
-
-        return $this->useMr() && filled($c->name_mr) ? trim((string) $c->name_mr) : $en;
-    }
-
-    private function useMr(): bool
-    {
-        return app()->getLocale() === 'mr';
     }
 }

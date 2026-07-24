@@ -2,6 +2,7 @@
 
 @php
     $suchakText = \App\Support\Suchak\SuchakLocalizedText::class;
+    $localizedText = \App\Support\LocalizedText::class;
 @endphp
 
 @section('content')
@@ -35,11 +36,11 @@
             </div>
             <div>
                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Suchak</div>
-                <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ $suchakText::column($payment->suchakAccount, 'office_name') ?: $suchakText::column($payment->suchakAccount, 'suchak_name') }}</div>
+                <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ $localizedText::column($payment->suchakAccount, 'office_name') ?: $localizedText::column($payment->suchakAccount, 'suchak_name') }}</div>
             </div>
             <div>
                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Package</div>
-                <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ $suchakText::column($payment->customerAgreement, 'package_name') }}</div>
+                <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ $localizedText::column($payment->customerAgreement, 'package_name') }}</div>
             </div>
             </div>
             <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center dark:border-gray-700 dark:bg-gray-900">

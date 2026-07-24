@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ResolvesLocalizedText;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class OccupationMaster extends Model
 {
+    use ResolvesLocalizedText;
+
     protected $table = 'master_occupations';
 
     protected $fillable = [
@@ -20,5 +23,10 @@ class OccupationMaster extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(OccupationCategory::class, 'category_id');
+    }
+
+    public function localizedName(): string
+    {
+        return $this->localizedText('name');
     }
 }

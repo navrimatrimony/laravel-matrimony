@@ -2,31 +2,16 @@
 
 namespace App\Support\Suchak;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
+/**
+ * Humanises a Suchak enum/key into a display label.
+ *
+ * Column localisation is not this class's job — {@see \App\Support\LocalizedText::column()}
+ * owns the "Marathi column with English fallback" rule for every table, Suchak's included.
+ */
 final class SuchakLocalizedText
 {
-    public static function column(Model|array|null $source, string $baseColumn, ?string $locale = null): string
-    {
-        if ($source === null) {
-            return '';
-        }
-
-        $locale ??= app()->getLocale();
-        $baseValue = self::rawValue($source, $baseColumn);
-
-        if ($locale === 'mr') {
-            $marathiValue = self::rawValue($source, $baseColumn.'_mr');
-
-            if ($marathiValue !== '') {
-                return $marathiValue;
-            }
-        }
-
-        return $baseValue;
-    }
-
     public static function label(?string $value, string $group = 'common'): string
     {
         $value = trim((string) $value);
@@ -42,14 +27,5 @@ final class SuchakLocalizedText
         }
 
         return Str::of($value)->replace('_', ' ')->title()->toString();
-    }
-
-    private static function rawValue(Model|array $source, string $column): string
-    {
-        $value = $source instanceof Model
-            ? ($source->getAttribute($column) ?? '')
-            : ($source[$column] ?? '');
-
-        return trim((string) $value);
     }
 }

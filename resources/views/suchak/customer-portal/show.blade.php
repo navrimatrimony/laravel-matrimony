@@ -3,6 +3,7 @@
 @section('content')
 @php
     $suchakText = \App\Support\Suchak\SuchakLocalizedText::class;
+    $localizedText = \App\Support\LocalizedText::class;
     $package = $paymentRequest?->servicePackage;
     $agreement = $paymentRequest?->customerAgreement;
     $payments = $paymentRequest?->customerPayments ?? collect();
@@ -15,7 +16,7 @@
     <div class="mb-6">
         <p class="text-sm font-semibold text-gray-500 dark:text-gray-400">Suchak Customer Portal</p>
         <h1 class="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {{ $suchakText::column($package, 'package_name') ?: $suchakText::column($paymentRequest, 'request_title') ?: 'Customer service context' }}
+            {{ $localizedText::column($package, 'package_name') ?: $localizedText::column($paymentRequest, 'request_title') ?: 'Customer service context' }}
         </h1>
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
             Verify package, terms, payment, invoice, and receipt status for this Suchak customer context.
@@ -59,7 +60,7 @@
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Package And Terms</h2>
-                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $suchakText::column($agreement, 'agreement_title') ?: 'Agreement not available' }}</p>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $localizedText::column($agreement, 'agreement_title') ?: 'Agreement not available' }}</p>
             </div>
             <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
                 @if ($agreement)
@@ -83,12 +84,12 @@
             </div>
             <div>
                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Collector</div>
-                <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ $suchakText::column($paymentRequest, 'collector_disclosure') ?: 'Not available' }}</div>
+                <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ $localizedText::column($paymentRequest, 'collector_disclosure') ?: 'Not available' }}</div>
             </div>
         </div>
 
-        @if ($suchakText::column($agreement, 'agreement_body') !== '')
-            <p class="mt-5 whitespace-pre-line border-t border-gray-200 pt-4 text-sm leading-6 text-gray-700 dark:border-gray-700 dark:text-gray-200">{{ $suchakText::column($agreement, 'agreement_body') }}</p>
+        @if ($localizedText::column($agreement, 'agreement_body') !== '')
+            <p class="mt-5 whitespace-pre-line border-t border-gray-200 pt-4 text-sm leading-6 text-gray-700 dark:border-gray-700 dark:text-gray-200">{{ $localizedText::column($agreement, 'agreement_body') }}</p>
         @endif
     </section>
 

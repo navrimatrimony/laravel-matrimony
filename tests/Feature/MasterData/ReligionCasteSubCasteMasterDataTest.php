@@ -109,16 +109,19 @@ test('GET api v1 castes returns locale label plus label_en and label_mr', functi
         'is_active' => true,
     ]);
 
-    app()->setLocale('mr');
-    $res = $this->getJson('/api/v1/castes?religion_id='.$rel->id);
+    // The api group resolves the request locale from the request itself now
+    // (SetApiLocale), not from a controller-side app()->setLocale(). A client
+    // asks for a language with ?locale= or Accept-Language, exactly as the two
+    // Flutter apps do — so the test drives it that way instead of poking the
+    // global locale, which the middleware would immediately overwrite.
+    $res = $this->getJson('/api/v1/castes?religion_id='.$rel->id.'&locale=mr');
     $res->assertOk();
     $row = collect($res->json())->first();
     expect($row['label'])->toBe('ब्राह्मण');
     expect($row['label_en'])->toBe('Brahmin');
     expect($row['label_mr'])->toBe('ब्राह्मण');
 
-    app()->setLocale('en');
-    $res2 = $this->getJson('/api/v1/castes?religion_id='.$rel->id);
+    $res2 = $this->getJson('/api/v1/castes?religion_id='.$rel->id.'&locale=en');
     $row2 = collect($res2->json())->first();
     expect($row2['label'])->toBe('Brahmin');
 });

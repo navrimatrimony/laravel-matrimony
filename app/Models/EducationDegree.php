@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ResolvesLocalizedText;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -10,6 +11,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class EducationDegree extends Model
 {
+    use ResolvesLocalizedText;
+
     protected $table = 'master_education';
 
     protected $fillable = ['category_id', 'code', 'code_mr', 'full_form', 'sort_order'];
@@ -22,10 +25,7 @@ class EducationDegree extends Model
     /** Short label for lists / preference rows: Marathi code when locale MR and set, else English {@code code}. */
     public function shortDisplayLabel(): string
     {
-        if (app()->getLocale() === 'mr' && filled($this->code_mr)) {
-            return trim((string) $this->code_mr);
-        }
-
-        return trim((string) ($this->code ?? ''));
+        // Only `code` was translated on master_education; title_mr / full_form_mr were dropped.
+        return $this->localizedText('code');
     }
 }

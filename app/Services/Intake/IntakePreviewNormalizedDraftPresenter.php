@@ -8,6 +8,7 @@ use App\Models\MasterRelative;
 use App\Services\Ocr\OcrNormalize;
 use App\Services\Parsing\IntakeNormalizedBiodataDraftBuilder;
 use App\Services\Parsing\WizardRelationSchema;
+use App\Support\LocalizedText;
 use Throwable;
 
 /**
@@ -417,10 +418,7 @@ final class IntakePreviewNormalizedDraftPresenter
                 2 => 'core.primary_contact_number_3',
                 default => 'contacts.'.($index + 1).'.phone_number',
             };
-            $label = match (app()->getLocale()) {
-                'mr' => 'स्वतःचा संपर्क '.($index + 1),
-                default => 'User contact '.($index + 1),
-            };
+            $label = __('intake.normalized_draft_user_contact', ['n' => $index + 1]);
             $rows[] = $this->displayRow($label, $phone, $field, $reviewMap);
         }
 
@@ -482,7 +480,7 @@ final class IntakePreviewNormalizedDraftPresenter
         $fatherName = $this->stringify($core['father_name'] ?? null);
         if ($fatherName !== '') {
             $rows[] = $this->groupHeadingRow(
-                app()->getLocale() === 'mr' ? 'वडील' : 'Father',
+                __('intake.normalized_draft_father'),
                 $fatherName,
                 false,
                 null,
@@ -513,7 +511,7 @@ final class IntakePreviewNormalizedDraftPresenter
         $motherName = $this->stringify($core['mother_name'] ?? null);
         if ($motherName !== '') {
             $rows[] = $this->groupHeadingRow(
-                app()->getLocale() === 'mr' ? 'आई' : 'Mother',
+                __('intake.normalized_draft_mother'),
                 $motherName,
                 $rows !== [],
                 null,
@@ -3231,16 +3229,17 @@ final class IntakePreviewNormalizedDraftPresenter
             return $value;
         }
 
+        if (! LocalizedText::isMarathi()) {
+            return $value;
+        }
+
         $normalized = mb_strtolower(trim($value));
 
-        return match (app()->getLocale()) {
-            'mr' => match ($normalized) {
-                'married' => 'विवाहित',
-                'unmarried', 'single', 'never_married' => 'अविवाहित',
-                'divorced' => 'घटस्फोट',
-                'widowed' => 'विधुर/विधवा',
-                default => $value,
-            },
+        return match ($normalized) {
+            'married' => __('intake.normalized_draft_sibling_marital_married'),
+            'unmarried', 'single', 'never_married' => __('intake.normalized_draft_sibling_marital_unmarried'),
+            'divorced' => __('intake.normalized_draft_sibling_marital_divorced'),
+            'widowed' => __('intake.normalized_draft_sibling_marital_widowed'),
             default => $value,
         };
     }
@@ -3268,14 +3267,16 @@ final class IntakePreviewNormalizedDraftPresenter
         $canonical = $this->canonicalSiblingRelation($relationType);
         $normalizedPrefix = trim($prefix);
 
-        if (app()->getLocale() === 'mr') {
+        if (LocalizedText::isMarathi()) {
+            $numbered = preg_match('/\s+\d+$/u', $normalizedPrefix) === 1;
+
             return match ($canonical) {
-                'brother' => preg_match('/\s+\d+$/u', $normalizedPrefix) === 1
-                    ? $normalizedPrefix.' ची विवाह माहिती'
-                    : 'भावाची विवाह माहिती',
-                'sister' => preg_match('/\s+\d+$/u', $normalizedPrefix) === 1
-                    ? $normalizedPrefix.' ची विवाह माहिती'
-                    : 'बहिणीची विवाह माहिती',
+                'brother' => $numbered
+                    ? __('intake.normalized_draft_marriage_info_numbered', ['prefix' => $normalizedPrefix])
+                    : __('intake.normalized_draft_brother_marriage_info'),
+                'sister' => $numbered
+                    ? __('intake.normalized_draft_marriage_info_numbered', ['prefix' => $normalizedPrefix])
+                    : __('intake.normalized_draft_sister_marriage_info'),
                 default => $normalizedPrefix.' '.__('components.relation.spouse_details'),
             };
         }
@@ -3343,7 +3344,7 @@ final class IntakePreviewNormalizedDraftPresenter
 
     private function shouldPreferTranslatedRelationLabel(string $label): bool
     {
-        return app()->getLocale() === 'mr' && preg_match('/^[\p{Latin}\p{Common}\p{Zs}()\'".,&\-0-9]+$/u', $label) === 1;
+        return LocalizedText::isMarathi() && preg_match('/^[\p{Latin}\p{Common}\p{Zs}()\'".,&\-0-9]+$/u', $label) === 1;
     }
 
     private function localizedAddressType(string $type): string
@@ -3511,9 +3512,7 @@ final class IntakePreviewNormalizedDraftPresenter
 
     private function compactMaritalLabel(string $relationType): string
     {
-        return app()->getLocale() === 'mr'
-            ? 'वैवाहिक'
-            : 'Married';
+        return __('intake.normalized_draft_married_compact');
     }
 
     private function compactSpouseHeading(string $relationType): string
@@ -3525,40 +3524,27 @@ final class IntakePreviewNormalizedDraftPresenter
 
     private function familyHeading(string $type, string $name): string
     {
-        $label = match (app()->getLocale()) {
-            'mr' => $type === 'father' ? 'वडील' : 'आई',
-            default => $type === 'father' ? 'Father' : 'Mother',
-        };
+        $label = $type === 'father'
+            ? __('intake.normalized_draft_father')
+            : __('intake.normalized_draft_mother');
 
         return $label.' - '.$name;
     }
 
     private function familyAddressHeading(): string
     {
-        return app()->getLocale() === 'mr'
-            ? 'पालकांचा पत्ता'
-            : 'Parents address';
+        return __('intake.normalized_draft_parents_address_heading');
     }
 
     private function familyDetailLabel(string $key): string
     {
-        return match (app()->getLocale()) {
-            'mr' => match ($key) {
-                'occupation' => 'व्यवसाय',
-                'extra' => 'अतिरिक्त',
-                'contact_1' => 'संपर्क 1',
-                'contact_2' => 'संपर्क 2',
-                'contact_3' => 'संपर्क 3',
-                default => $key,
-            },
-            default => match ($key) {
-                'occupation' => 'Occupation',
-                'extra' => 'Additional',
-                'contact_1' => 'Contact 1',
-                'contact_2' => 'Contact 2',
-                'contact_3' => 'Contact 3',
-                default => $key,
-            },
+        return match ($key) {
+            'occupation' => __('intake.normalized_draft_family_detail_occupation'),
+            'extra' => __('intake.normalized_draft_family_detail_extra'),
+            'contact_1' => __('intake.normalized_draft_family_detail_contact', ['n' => 1]),
+            'contact_2' => __('intake.normalized_draft_family_detail_contact', ['n' => 2]),
+            'contact_3' => __('intake.normalized_draft_family_detail_contact', ['n' => 3]),
+            default => $key,
         };
     }
 
@@ -3569,19 +3555,11 @@ final class IntakePreviewNormalizedDraftPresenter
     {
         $type = mb_strtolower(trim($this->stringify($address['type'] ?? null)));
 
-        return match (app()->getLocale()) {
-            'mr' => match ($type) {
-                'permanent' => 'कायम',
-                'current' => 'सध्याचा',
-                'parents' => __('intake.normalized_draft_parents_address_row', ['n' => $index + 1]),
-                default => $type !== '' ? $this->localizedAddressType($type) : __('intake.normalized_draft_parents_address_row', ['n' => $index + 1]),
-            },
-            default => match ($type) {
-                'permanent' => 'Permanent',
-                'current' => 'Current',
-                'parents' => __('intake.normalized_draft_parents_address_row', ['n' => $index + 1]),
-                default => $type !== '' ? $this->localizedAddressType($type) : __('intake.normalized_draft_parents_address_row', ['n' => $index + 1]),
-            },
+        return match ($type) {
+            'permanent' => __('intake.normalized_draft_parents_address_permanent'),
+            'current' => __('intake.normalized_draft_parents_address_current'),
+            'parents' => __('intake.normalized_draft_parents_address_row', ['n' => $index + 1]),
+            default => $type !== '' ? $this->localizedAddressType($type) : __('intake.normalized_draft_parents_address_row', ['n' => $index + 1]),
         };
     }
 

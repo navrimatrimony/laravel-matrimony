@@ -30,17 +30,7 @@
         return fmod($rounded, 1.0) === 0.0 ? (string) (int) $rounded : number_format($rounded, 1);
     };
     $label = static function ($value): string {
-        if (! $value) {
-            return '';
-        }
-        if (app()->getLocale() === 'mr') {
-            $mr = trim((string) ($value->label_mr ?? ''));
-            if ($mr !== '') {
-                return $mr;
-            }
-        }
-
-        return trim((string) ($value->label ?? $value->name ?? $value->key ?? ''));
+        return \App\Support\LocalizedText::column($value, 'label', ['label', 'name', 'key']);
     };
     $dateValue = static function ($candidate): string {
         $raw = trim((string) ($candidate?->date_of_birth ?? ''));

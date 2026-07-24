@@ -149,10 +149,6 @@ class LocationHierarchyController extends Controller
             'filter' => ['nullable', 'string', Rule::in(['all', 'taluka', 'urban', 'rural'])],
         ]);
 
-        if (! empty($validated['locale'])) {
-            app()->setLocale((string) $validated['locale']);
-        }
-
         $page = max(1, (int) ($validated['page'] ?? 1));
         $limit = min(200, max(1, (int) ($validated['limit'] ?? 80)));
 
@@ -357,7 +353,7 @@ class LocationHierarchyController extends Controller
     {
         $hierarchy = trim((string) ($location->hierarchy ?? ''));
         if ($hierarchy === 'taluka') {
-            return ['taluka', $this->groupLabel('Taluka', 'तालुका')];
+            return ['taluka', (string) __('search.taluka')];
         }
         if ($hierarchy !== 'village') {
             return [null, null];
@@ -366,15 +362,10 @@ class LocationHierarchyController extends Controller
         $tag = trim((string) ($location->tag ?? ''));
 
         return match ($tag) {
-            'city', 'suburban' => ['urban', $this->groupLabel('City / Suburban', 'शहर / उपनगर')],
-            'rural', '' => ['rural', $this->groupLabel('Rural', 'ग्रामीण')],
+            'city', 'suburban' => ['urban', (string) __('search.location_group_urban')],
+            'rural', '' => ['rural', (string) __('search.location_group_rural')],
             default => [null, null],
         };
-    }
-
-    private function groupLabel(string $en, string $mr): string
-    {
-        return app()->getLocale() === 'mr' ? $mr : $en;
     }
 
     private function mobileLocationType(Location $location): string

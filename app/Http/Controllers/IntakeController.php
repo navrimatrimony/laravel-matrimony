@@ -516,9 +516,8 @@ class IntakeController extends Controller
             $rawText = $reviewTextIsBiodata ? $rawOcrTextForPreview : '';
             if ($rawText !== '') {
                 // If app locale is Marathi OR there's at least one Devanagari char, assume Marathi.
-                $locale = app()->getLocale();
                 $hasDevanagari = preg_match('/[\x{0900}-\x{097F}]/u', $rawText) === 1;
-                if ($locale === 'mr' || $hasDevanagari) {
+                if (\App\Support\LocalizedText::isMarathi() || $hasDevanagari) {
                     $mt = \App\Models\MasterMotherTongue::where('is_active', true)
                         ->where('key', 'marathi')
                         ->first();

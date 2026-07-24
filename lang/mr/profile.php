@@ -369,4 +369,9 @@ return [
     'suchak_request_status_expired' => 'मुदत संपली',
     'suchak_request_status_cancelled' => 'रद्द',
     'lock_section_content_locked' => 'या section मधील माहिती लॉक आहे.',
+    'biodata_child' => 'मूल',
+    'biodata_child_male' => 'मुलगा',
+    'biodata_child_female' => 'मुलगी',
+    'biodata_siblings_brothers' => ':count भाऊ',
+    'biodata_siblings_sisters' => ':count बहीण',
 ];

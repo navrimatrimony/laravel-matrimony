@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ResolvesLocalizedText;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -9,6 +10,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class FieldRegistry extends Model
 {
+    use ResolvesLocalizedText;
+
     protected $table = 'field_registry';
 
     protected $fillable = [
@@ -44,4 +47,9 @@ class FieldRegistry extends Model
         'is_archived' => 'boolean',
         'dependency_condition' => 'array',
     ];
+
+    public function localizedLabel(): string
+    {
+        return $this->localizedText('display_label');
+    }
 }

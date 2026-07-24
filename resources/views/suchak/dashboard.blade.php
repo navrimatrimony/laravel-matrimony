@@ -2,6 +2,7 @@
 
 @php
     $suchakText = \App\Support\Suchak\SuchakLocalizedText::class;
+    $localizedText = \App\Support\LocalizedText::class;
     $visibleDashboardTabs = \App\Support\Suchak\SuchakMvpFeatures::visibleDashboardTabs();
     $showWorkflowWhatsappTemplates = \App\Support\Suchak\SuchakMvpFeatures::dashboardPanelVisible('workflow_whatsapp_templates');
     $showWhiteLabelKit = \App\Support\Suchak\SuchakMvpFeatures::dashboardPanelVisible('white_label_kit');
@@ -114,9 +115,9 @@
     $cardPhotoUrl = $suchakAccount->profile_photo_path
         ? \Illuminate\Support\Facades\Storage::disk('public')->url($suchakAccount->profile_photo_path)
         : null;
-    $cardName = $suchakAccount->suchak_name_mr ?: $suchakAccount->suchak_name;
-    $cardOffice = $suchakAccount->office_name_mr ?: ($suchakAccount->office_name ?: $suchakText::label($suchakAccount->business_type));
-    $cardAddress = $suchakAccount->address_line_mr ?: $suchakAccount->address_line;
+    $cardName = \App\Support\LocalizedText::column($suchakAccount, 'suchak_name');
+    $cardOffice = \App\Support\LocalizedText::column($suchakAccount, 'office_name') ?: $suchakText::label($suchakAccount->business_type);
+    $cardAddress = \App\Support\LocalizedText::column($suchakAccount, 'address_line');
     $cardShareText = trim($cardName."\n".$cardOffice."\nWhatsApp: ".($suchakAccount->whatsapp_number ?: $suchakAccount->mobile_number)."\n".($cardAddress ?: '')."\n\nलग्न जुळवण्यासाठी विश्वासार्ह सूचक सेवा. अधिक माहितीसाठी संपर्क करा.");
     $cardWhatsappUrl = 'https://wa.me/?text='.rawurlencode($cardShareText);
     $profileRequestReplyTemplates = [
@@ -660,8 +661,8 @@
                 <div class="mt-3 space-y-3">
                     @forelse ($workflowTimeline as $event)
                         <article class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
-                            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::column($event, 'event_title') }}</p>
-                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $suchakText::column($event, 'event_summary') }}</p>
+                            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $localizedText::column($event, 'event_title') }}</p>
+                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $localizedText::column($event, 'event_summary') }}</p>
                             <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
                                 {{ $event->occurred_at->format('Y-m-d H:i') }} · {{ $event->event_type }}
                             </p>
@@ -1435,7 +1436,7 @@
 
                 @if ($activeSubscription?->suchakPlan)
                     <div class="mt-4">
-                        <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::column($activeSubscription->suchakPlan, 'name') }}</p>
+                        <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $localizedText::column($activeSubscription->suchakPlan, 'name') }}</p>
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                             {{ $activeSubscription->suchakPlan->hasConfiguredPrice() ? $activeSubscription->suchakPlan->currency.' '.$activeSubscription->suchakPlan->price_amount : $suchakText::label('manual_assignment_price_not_configured') }}
                         </p>
@@ -1495,9 +1496,9 @@
                         <div class="mt-3 space-y-2">
                             @foreach ($catalogPlans as $plan)
                                 <div class="rounded-md bg-gray-50 px-3 py-2 text-sm dark:bg-gray-900">
-                                    <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::column($plan, 'name') }}</div>
-                                    @if ($suchakText::column($plan, 'description') !== '')
-                                        <div class="mt-1 text-xs text-gray-600 dark:text-gray-300">{{ $suchakText::column($plan, 'description') }}</div>
+                                    <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $localizedText::column($plan, 'name') }}</div>
+                                    @if ($localizedText::column($plan, 'description') !== '')
+                                        <div class="mt-1 text-xs text-gray-600 dark:text-gray-300">{{ $localizedText::column($plan, 'description') }}</div>
                                     @endif
                                     <div class="text-xs text-gray-500 dark:text-gray-400">
                                         {{ $plan->hasConfiguredPrice() ? $plan->currency.' '.$plan->price_amount : $suchakText::label('manual_assignment') }}
@@ -1540,7 +1541,7 @@
                                 <div class="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-gray-900 dark:text-gray-300">
                                     <div class="flex items-start justify-between gap-3">
                                         <div>
-                                            <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::column($payment, 'plan_name') }}</div>
+                                            <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $localizedText::column($payment, 'plan_name') }}</div>
                                             <div>{{ $payment->currency }} {{ $payment->amount }} · {{ $suchakText::label($payment->payment_status) }}</div>
                                             <div>Txn {{ $payment->txnid }}</div>
                                         </div>

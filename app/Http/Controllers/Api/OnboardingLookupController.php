@@ -30,6 +30,7 @@ use App\Services\Location\LocationOpenPlaceSuggestionService;
 use App\Services\Location\LocationService;
 use App\Services\Onboarding\MobileOnboardingDraftService;
 use App\Services\Onboarding\OnboardingLookupOptionFormatter;
+use App\Support\LocalizedText;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
@@ -62,14 +63,13 @@ class OnboardingLookupController extends Controller
     public function bootstrap(Request $request): JsonResponse
     {
         $locale = $this->locale($request);
-        app()->setLocale($locale);
 
         return response()->json([
             'success' => true,
             'locale' => $locale,
             'profile_for_whom' => array_map(fn (array $row): array => [
                 'key' => $row['key'],
-                'label' => $locale === 'mr' ? $row['label_mr'] : $row['label_en'],
+                'label' => LocalizedText::pick($row['label_mr'], $row['label_en'], $locale),
                 'gender_mode' => $row['gender_mode'],
                 'translation_missing' => false,
             ], self::PROFILE_FOR_WHOM),
@@ -164,7 +164,6 @@ class OnboardingLookupController extends Controller
             'type' => ['nullable', 'string', Rule::in(['country', 'state', 'district', 'taluka', 'village', 'city', 'suburb'])],
         ]);
         $params = $this->listParams($request);
-        app()->setLocale($params['locale']);
         $type = $request->input('type');
         $allowsEmptyQuery = in_array($type, ['country', 'state', 'district', 'taluka'], true);
 
@@ -471,16 +470,14 @@ class OnboardingLookupController extends Controller
         ];
     }
 
+    /** The api group already resolved this (see {@see \App\Http\Middleware\SetApiLocale}). */
     private function locale(Request $request): string
     {
-        $candidate = trim((string) $request->input('locale', $request->user()?->preferred_locale ?: 'en'));
-
-        return str_starts_with(strtolower($candidate), 'mr') ? 'mr' : 'en';
+        return app()->getLocale();
     }
 
     private function listResponse(Builder $query, array $params, callable $map, array $popular): JsonResponse
     {
-        app()->setLocale($params['locale']);
         $rows = (clone $query)
             ->offset(($params['page'] - 1) * $params['limit'])
             ->limit($params['limit'] + 1)
@@ -616,7 +613,6 @@ class OnboardingLookupController extends Controller
 
     private function locationItem(Location $row, string $locale, LocationService $locationService): array
     {
-        app()->setLocale($locale);
         $row->loadMissing('parent');
         $locationService->ensureAncestorsLoaded($row);
         $h = $locationService->fillHierarchyGaps($row, $locationService->getFullHierarchy($row));
@@ -749,7 +745,7 @@ class OnboardingLookupController extends Controller
     {
         return [
             'key' => $key,
-            'label' => $locale === 'mr' ? $mr : $en,
+            'label' => LocalizedText::pick($mr, $en, $locale),
             'translation_missing' => false,
         ];
     }

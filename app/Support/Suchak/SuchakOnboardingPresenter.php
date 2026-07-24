@@ -4,6 +4,7 @@ namespace App\Support\Suchak;
 
 use App\Models\SuchakAccount;
 use App\Models\SuchakVerificationRecord;
+use App\Support\LocalizedText;
 use Illuminate\Support\Collection;
 
 class SuchakOnboardingPresenter
@@ -114,7 +115,7 @@ class SuchakOnboardingPresenter
             'profile_photo_approved' => $profilePhotoApproved,
             'profile_photo_rejected' => $profilePhotoRejected,
             'profile_photo_review_status' => $profilePhotoRecord?->admin_status,
-            'profile_photo_review_remarks' => $profilePhotoRecord?->remarks_mr ?: $profilePhotoRecord?->remarks,
+            'profile_photo_review_remarks' => LocalizedText::column($profilePhotoRecord, 'remarks') ?: null,
             'required_documents_uploaded' => $requiredDocumentsUploaded,
             'required_documents_approved' => $requiredDocumentsApproved,
             'manual_admin_review_complete' => $hasManualAdminApproval,
@@ -177,7 +178,7 @@ class SuchakOnboardingPresenter
                 'uploaded' => (bool) ($record?->document_path),
                 'status' => $status,
                 'status_label' => __('suchak.labels.common.'.$statusLabelKey),
-                'remarks' => $record?->remarks_mr ?: $record?->remarks,
+                'remarks' => LocalizedText::column($record, 'remarks') ?: null,
             ];
         })->values();
     }

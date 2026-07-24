@@ -214,7 +214,7 @@ class MobilePlanApiController extends Controller
             'slug' => (string) ($plan->slug ?? ''),
             'name' => (string) ($plan->name ?? ''),
             'name_mr' => $plan->name_mr,
-            'display_name' => $this->displayName($plan),
+            'display_name' => $plan->localizedName(),
             'description' => $plan->description,
             'currency' => 'INR',
             'price' => round($basePrice, 2),
@@ -371,16 +371,6 @@ class MobilePlanApiController extends Controller
             'reset_at' => $this->dateValue($state['reset_at'] ?? null),
             'reason' => $state['reason'] ?? null,
         ];
-    }
-
-    private function displayName(Plan $plan): string
-    {
-        $nameMr = trim((string) ($plan->name_mr ?? ''));
-        if ($nameMr !== '') {
-            return $nameMr;
-        }
-
-        return (string) ($plan->name ?? '');
     }
 
     private function durationLabel(int $days): string

@@ -2,14 +2,15 @@
 
 @php
     $suchakText = \App\Support\Suchak\SuchakLocalizedText::class;
+    $localizedText = \App\Support\LocalizedText::class;
 @endphp
 
 @section('content')
 <div class="mx-auto max-w-4xl px-4 py-8">
     <div class="mb-6">
         <p class="text-sm font-semibold text-gray-500 dark:text-gray-400">Suchak Payment Request</p>
-        <h1 class="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ $suchakText::column($paymentRequest, 'request_title') }}</h1>
-        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{{ $suchakText::column($paymentRequest, 'collector_disclosure') }}</p>
+        <h1 class="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">{{ $localizedText::column($paymentRequest, 'request_title') }}</h1>
+        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{{ $localizedText::column($paymentRequest, 'collector_disclosure') }}</p>
     </div>
 
     <section class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -37,15 +38,15 @@
                 <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ optional($paymentRequest->expires_at)->format('d M Y, h:i A') ?? 'No expiry set' }}</div>
             </div>
         </div>
-        @if ($suchakText::column($paymentRequest, 'request_note') !== '')
-            <p class="mt-4 border-t border-gray-200 pt-4 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-200">{{ $suchakText::column($paymentRequest, 'request_note') }}</p>
+        @if ($localizedText::column($paymentRequest, 'request_note') !== '')
+            <p class="mt-4 border-t border-gray-200 pt-4 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-200">{{ $localizedText::column($paymentRequest, 'request_note') }}</p>
         @endif
     </section>
 
     <section class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::column($agreement, 'agreement_title') }}</h2>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ $localizedText::column($agreement, 'agreement_title') }}</h2>
                 <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Terms: {{ $suchakText::label($agreement->terms_status) }}</p>
             </div>
             <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -53,8 +54,8 @@
             </div>
         </div>
 
-        @if ($suchakText::column($agreement, 'agreement_body') !== '')
-            <p class="mt-4 whitespace-pre-line text-sm leading-6 text-gray-700 dark:text-gray-200">{{ $suchakText::column($agreement, 'agreement_body') }}</p>
+        @if ($localizedText::column($agreement, 'agreement_body') !== '')
+            <p class="mt-4 whitespace-pre-line text-sm leading-6 text-gray-700 dark:text-gray-200">{{ $localizedText::column($agreement, 'agreement_body') }}</p>
         @endif
 
         <div class="mt-5 grid gap-5 md:grid-cols-2">
@@ -63,9 +64,9 @@
                 <div class="mt-3 space-y-3">
                     @foreach ($agreement->stages as $stage)
                         <div class="rounded-md bg-gray-50 p-3 text-sm dark:bg-gray-900">
-                            <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::column($stage, 'stage_name') }}</div>
-                            @if ($suchakText::column($stage, 'stage_description') !== '')
-                                <div class="mt-1 text-gray-600 dark:text-gray-300">{{ $suchakText::column($stage, 'stage_description') }}</div>
+                            <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $localizedText::column($stage, 'stage_name') }}</div>
+                            @if ($localizedText::column($stage, 'stage_description') !== '')
+                                <div class="mt-1 text-gray-600 dark:text-gray-300">{{ $localizedText::column($stage, 'stage_description') }}</div>
                             @endif
                         </div>
                     @endforeach
@@ -76,9 +77,9 @@
                 <div class="mt-3 space-y-3">
                     @foreach ($agreement->deliverables as $deliverable)
                         <div class="rounded-md bg-gray-50 p-3 text-sm dark:bg-gray-900">
-                            <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::column($deliverable, 'deliverable_name') }}</div>
-                            @if ($suchakText::column($deliverable, 'deliverable_description') !== '')
-                                <div class="mt-1 text-gray-600 dark:text-gray-300">{{ $suchakText::column($deliverable, 'deliverable_description') }}</div>
+                            <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $localizedText::column($deliverable, 'deliverable_name') }}</div>
+                            @if ($localizedText::column($deliverable, 'deliverable_description') !== '')
+                                <div class="mt-1 text-gray-600 dark:text-gray-300">{{ $localizedText::column($deliverable, 'deliverable_description') }}</div>
                             @endif
                         </div>
                     @endforeach

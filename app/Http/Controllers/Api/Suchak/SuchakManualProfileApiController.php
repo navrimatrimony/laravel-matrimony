@@ -49,13 +49,9 @@ class SuchakManualProfileApiController extends Controller
             ], 403);
         }
 
-        // Both languages already exist in the master tables and the translation
-        // files; the app just has to ask for one. Without this every label came
-        // back English and appeared mid-sentence in a Marathi screen.
-        $locale = in_array($request->query('locale'), ['en', 'mr'], true)
-            ? (string) $request->query('locale')
-            : 'en';
-        app()->setLocale($locale);
+        // Resolved for the whole api group by SetApiLocale; still read here
+        // because the response echoes it back as `data.locale`.
+        $locale = app()->getLocale();
 
         return response()->json([
             'success' => true,
@@ -65,7 +61,7 @@ class SuchakManualProfileApiController extends Controller
                 'genders' => $this->activeGenders()->map(static fn (MasterGender $g): array => [
                     'id' => $g->id,
                     'key' => $g->key,
-                    'label' => $locale === 'mr' && filled($g->label_mr) ? $g->label_mr : $g->label,
+                    'label' => $g->localizedLabel(),
                 ])->values()->all(),
                 'registering_for_options' => $this->registeringForOptions(),
                 'consent_relation_label' => __('suchak.manual_profile.consent_relation'),

@@ -188,8 +188,7 @@
                             <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{{ __('wizard.address_type') }}</label>
                             <select name="{{ $ppfx }}[address_type_key]" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-2 text-sm h-[42px]">
                                 @foreach($addrTypes as $at)
-                                    @php $addrTypeLabel = app()->getLocale() === 'mr' && filled($at->label_mr ?? null) ? $at->label_mr : $at->label; @endphp
-                                    <option value="{{ $at->key }}" {{ (string) $ptype === (string) $at->key ? 'selected' : '' }}>{{ $addrTypeLabel }}</option>
+                                    <option value="{{ $at->key }}" {{ (string) $ptype === (string) $at->key ? 'selected' : '' }}>{{ $at->localizedLabel() }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -230,8 +229,7 @@
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{{ __('wizard.address_type') }}</label>
                     <select name="{{ $ppfx }}[address_type_key]" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-2 text-sm h-[42px]">
                             @foreach($addrTypes as $at)
-                                @php $addrTypeLabel = app()->getLocale() === 'mr' && filled($at->label_mr ?? null) ? $at->label_mr : $at->label; @endphp
-                                <option value="{{ $at->key }}" {{ $at->key === 'permanent' ? 'selected' : '' }}>{{ $addrTypeLabel }}</option>
+                                <option value="{{ $at->key }}" {{ $at->key === 'permanent' ? 'selected' : '' }}>{{ $at->localizedLabel() }}</option>
                             @endforeach
                     </select>
                 </div>

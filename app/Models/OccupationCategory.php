@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ResolvesLocalizedText;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class OccupationCategory extends Model
 {
+    use ResolvesLocalizedText;
+
     protected $table = 'master_occupation_categories';
 
     protected $fillable = [
@@ -32,5 +35,10 @@ class OccupationCategory extends Model
     public function occupations(): HasMany
     {
         return $this->hasMany(OccupationMaster::class, 'category_id');
+    }
+
+    public function localizedName(): string
+    {
+        return $this->localizedText('name');
     }
 }

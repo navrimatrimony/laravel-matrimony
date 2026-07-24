@@ -1,6 +1,6 @@
 @php
     /** @var \App\Models\HomepageSuccessStory $story */
-    $isMarathiLocale = str_starts_with((string) app()->getLocale(), 'mr');
+    $isMarathiLocale = \App\Support\LocalizedText::isMarathiLoose();
     $devanagariClass = $isMarathiLocale ? 'font-devanagari' : '';
     $storyText = $isMarathiLocale
         ? ($story->story_mr ?: $story->story_en)

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\LocalizedText;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
 
@@ -32,8 +33,6 @@ class MasterRelative extends Model
             return self::fallbackOptionsForGroup($group);
         }
 
-        $useMarathi = app()->getLocale() === 'mr';
-
         $rows = self::query()
             ->where('relation_group', $group)
             ->where('is_active', true)
@@ -46,12 +45,10 @@ class MasterRelative extends Model
         }
 
         return $rows
-            ->map(static function (self $relative) use ($useMarathi): array {
-                $labelMr = trim((string) ($relative->label_mr ?? ''));
-
+            ->map(static function (self $relative): array {
                 return [
                     'value' => (string) $relative->key,
-                    'label' => $useMarathi && $labelMr !== '' ? $labelMr : (string) $relative->label,
+                    'label' => LocalizedText::column($relative, 'label'),
                 ];
             })
             ->values()

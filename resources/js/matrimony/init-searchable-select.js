@@ -85,9 +85,14 @@ export function initSearchableSingleSelect(opts) {
             .replace(/"/g, '&quot;');
     }
 
+    // The one Marathi test on the browser side. It reads <html lang>, which the
+    // server stamps from the same locale App\Support\LocalizedText resolves — so
+    // this must match LocalizedText::isMarathiLoose() exactly: 'mr' or an 'mr-'
+    // regional tag. It exists only because this combobox renders labels client
+    // side; the PHP resolver is not reachable here.
     function occLangMr() {
         const lang = (document.documentElement.lang || '').toLowerCase();
-        return lang === 'mr' || lang.indexOf('mr-') === 0;
+        return lang === 'mr' || lang.startsWith('mr-');
     }
 
     function occCategoryLabel(c) {

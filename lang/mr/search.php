@@ -13,6 +13,9 @@ return [
     'state' => 'राज्य',
     'district' => 'जिल्हा',
     'taluka' => 'तालुका',
+    // Group headings in the location picker. 'taluka' above doubles as that group's heading.
+    'location_group_urban' => 'शहर / उपनगर',
+    'location_group_rural' => 'ग्रामीण',
     'any' => 'कोणतेही',
     'age_from' => 'वय (पासून)',
     'age_to' => 'वय (पर्यंत)',

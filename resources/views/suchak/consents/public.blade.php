@@ -2,7 +2,7 @@
     $siteIdentityLayout = app(\App\Services\SiteIdentityService::class);
     $guestBackgroundImageUrl = $siteIdentityLayout->assetUrl('auth_background_image');
     $faviconUrl = $siteIdentityLayout->assetUrl('favicon');
-    $isMr = str_starts_with((string) app()->getLocale(), 'mr');
+    $isMr = \App\Support\LocalizedText::isMarathiLoose();
     $suchakSummary = $summary['suchak'] ?? [];
     $profileSummary = $summary['profile'] ?? [];
     $suchakDisplayName = trim((string) ($suchakSummary['name'] ?? 'सूचक'));

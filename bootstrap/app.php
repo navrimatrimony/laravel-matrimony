@@ -30,6 +30,12 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\SetLocaleFromQuery::class,
             \App\Http\Middleware\UpdateUserLastSeen::class,
         ]);
+        // The web group has resolved its own locale for a long time; the api
+        // group had nothing, so individual controllers each called setLocale()
+        // with their own precedence. One middleware replaces all of them.
+        $middleware->appendToGroup('api', [
+            \App\Http\Middleware\SetApiLocale::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->renderable(function (RuleResultException $e, Request $request) {

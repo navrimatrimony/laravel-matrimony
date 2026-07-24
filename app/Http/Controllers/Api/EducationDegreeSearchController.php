@@ -18,20 +18,13 @@ class EducationDegreeSearchController extends Controller
     {
         $q = (string) $request->query('q', '');
         $result = $educationService->searchDegreesWithSuggestion($q, 60);
-        $mr = app()->getLocale() === 'mr';
 
         return response()->json([
-            'results' => $result['degrees']->map(function ($d) use ($mr) {
-                $cat = $d->category;
-                $name = ($mr && filled($d->code_mr)) ? $d->code_mr : $d->code;
-                $category = $mr && $cat && filled($cat->name_mr) ? $cat->name_mr : optional($cat)->name;
-
-                return [
-                    'id' => $d->id,
-                    'name' => $name,
-                    'category' => $category,
-                ];
-            })->values()->all(),
+            'results' => $result['degrees']->map(fn ($d): array => [
+                'id' => $d->id,
+                'name' => $d->shortDisplayLabel(),
+                'category' => $d->category?->localizedName(),
+            ])->values()->all(),
             'suggestion' => $result['suggestion'],
         ]);
     }

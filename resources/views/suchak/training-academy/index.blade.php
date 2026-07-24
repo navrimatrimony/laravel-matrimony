@@ -2,6 +2,7 @@
 
 @php
     $suchakText = \App\Support\Suchak\SuchakLocalizedText::class;
+    $localizedText = \App\Support\LocalizedText::class;
     $label = fn (string $value) => $suchakText::label($value);
     $certificate = $academy['latest_certificate'];
 @endphp
@@ -57,15 +58,15 @@
                     <article class="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
                         <div class="flex flex-wrap items-start justify-between gap-2">
                             <div>
-                                <h3 class="font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::column($module, 'module_title') }}</h3>
+                                <h3 class="font-semibold text-gray-900 dark:text-gray-100">{{ $localizedText::column($module, 'module_title') }}</h3>
                                 <p class="mt-1 text-xs text-gray-500">{{ $label($module->module_category) }}</p>
                             </div>
                             <span class="rounded-full px-2 py-1 text-xs font-semibold {{ $completion ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-100' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300' }}">
                                 {{ $completion ? 'Completed' : 'Pending' }}
                             </span>
                         </div>
-                        <p class="mt-3 text-sm text-gray-600 dark:text-gray-300">{{ $suchakText::column($module, 'summary') }}</p>
-                        <p class="mt-3 text-sm text-gray-700 dark:text-gray-200">{{ $suchakText::column($module, 'content_outline') }}</p>
+                        <p class="mt-3 text-sm text-gray-600 dark:text-gray-300">{{ $localizedText::column($module, 'summary') }}</p>
+                        <p class="mt-3 text-sm text-gray-700 dark:text-gray-200">{{ $localizedText::column($module, 'content_outline') }}</p>
                     </article>
                 @empty
                     <p class="text-sm text-gray-500">No active training modules are available yet.</p>
@@ -80,7 +81,7 @@
                     <article class="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
                         <div class="flex flex-wrap items-start justify-between gap-2">
                             <div>
-                                <h3 class="font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::column($template, 'template_title') }}</h3>
+                                <h3 class="font-semibold text-gray-900 dark:text-gray-100">{{ $localizedText::column($template, 'template_title') }}</h3>
                                 <p class="mt-1 text-xs text-gray-500">{{ $label($template->template_category) }} / {{ $label($template->template_channel) }}</p>
                             </div>
                             <span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-100">Policy safe</span>
@@ -92,9 +93,9 @@
                                     <option value="{{ $context }}">{{ $label($context) }}</option>
                                 @endforeach
                             </select>
-                            <textarea name="rendered_body" rows="5" class="w-full rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">{{ old('rendered_body', $suchakText::column($template, 'body_text')) }}</textarea>
-                            @if ($suchakText::column($template, 'usage_guidance') !== '')
-                                <p class="text-xs text-gray-500">{{ $suchakText::column($template, 'usage_guidance') }}</p>
+                            <textarea name="rendered_body" rows="5" class="w-full rounded-md border-gray-300 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">{{ old('rendered_body', $localizedText::column($template, 'body_text')) }}</textarea>
+                            @if ($localizedText::column($template, 'usage_guidance') !== '')
+                                <p class="text-xs text-gray-500">{{ $localizedText::column($template, 'usage_guidance') }}</p>
                             @endif
                             <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Record template use</button>
                         </form>
@@ -111,7 +112,7 @@
         <div class="mt-4 space-y-3">
             @forelse ($academy['recent_template_usages'] as $usage)
                 <article class="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-700 dark:bg-gray-900">
-                    <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $suchakText::column($usage->messageTemplate, 'template_title') }}</div>
+                    <div class="font-semibold text-gray-900 dark:text-gray-100">{{ $localizedText::column($usage->messageTemplate, 'template_title') }}</div>
                     <div class="mt-1 text-gray-600 dark:text-gray-300">{{ $label($usage->usage_context) }} - {{ $usage->used_at?->format('Y-m-d H:i') }}</div>
                     <p class="mt-2 text-gray-700 dark:text-gray-200">{{ $usage->rendered_body }}</p>
                 </article>
