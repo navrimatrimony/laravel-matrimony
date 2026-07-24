@@ -95,4 +95,27 @@ class SetApiLocaleTest extends TestCase
         // neither param nor a matching Accept-Language stays Marathi.
         $this->assertSame('ब्राह्मण', $this->firstLabel('', ['Accept-Language' => '']));
     }
+
+    public function test_the_apps_live_accept_language_beats_a_stale_saved_preference(): void
+    {
+        // The exact bug this ordering prevents: a member whose account was
+        // created with preferred_locale 'en' switches the app to Marathi. The
+        // app sends Accept-Language: mr on every call; the stale saved 'en' must
+        // not override it, or the member's live in-app choice never takes effect
+        // (profile detail flips back to English a second after it opens).
+        Sanctum::actingAs(User::factory()->create(['preferred_locale' => 'en']));
+        $this->assertSame('ब्राह्मण', $this->firstLabel('', ['Accept-Language' => 'mr']));
+
+        // The mirror: a Marathi-saved member who switches the app to English.
+        Sanctum::actingAs(User::factory()->create(['preferred_locale' => 'mr']));
+        $this->assertSame('Brahmin', $this->firstLabel('', ['Accept-Language' => 'en']));
+    }
+
+    public function test_saved_preference_still_decides_when_no_usable_header_is_sent(): void
+    {
+        // preferred_locale is not dead — it is the fallback for a request that
+        // sends no usable Accept-Language (an older build predating the header).
+        Sanctum::actingAs(User::factory()->create(['preferred_locale' => 'en']));
+        $this->assertSame('Brahmin', $this->firstLabel('', ['Accept-Language' => '']));
+    }
 }

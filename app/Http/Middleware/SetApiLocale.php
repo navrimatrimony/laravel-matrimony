@@ -43,16 +43,31 @@ class SetApiLocale
 
     private function resolve(Request $request): string
     {
-        // Covers both `?locale=` and a `locale` field in the body.
+        // 1. An explicit override on the request itself — `?locale=` or a
+        //    `locale` field in the body. Wins over everything.
         if ($language = $this->supported($request->input('locale'))) {
             return $language;
         }
 
+        // 2. The app's live choice. Both Flutter apps send Accept-Language from
+        //    the language the member picked in-app, so on the API that header is
+        //    the authoritative choice and must beat a possibly-stale saved
+        //    preference — otherwise a member who switches to Marathi keeps being
+        //    served English from a preferred_locale written at registration.
+        foreach ($request->getLanguages() as $tag) {
+            if ($language = $this->supported($tag)) {
+                return $language;
+            }
+        }
+
+        // 3. The signed-in user's saved preference — only when the client sent
+        //    no usable Accept-Language at all (older builds, or a bare request).
         if ($language = $this->supported($this->savedPreference($request))) {
             return $language;
         }
 
-        return \App\Support\LocalizedText::isMarathi($request->getPreferredLanguage(self::SUPPORTED)) ? 'mr' : 'en';
+        // 4. Marathi-first product default.
+        return 'mr';
     }
 
     /**
@@ -83,7 +98,7 @@ class SetApiLocale
             return null;
         }
 
-        $primary = strtolower(explode('-', $value, 2)[0]);
+        $primary = strtolower(preg_split('/[-_]/', $value, 2)[0]);
 
         return in_array($primary, self::SUPPORTED, true) ? $primary : null;
     }
