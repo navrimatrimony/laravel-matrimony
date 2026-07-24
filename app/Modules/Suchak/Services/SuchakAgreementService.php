@@ -260,7 +260,14 @@ class SuchakAgreementService
         ?int $supersedesAgreementId,
         array $attributes,
     ): SuchakCustomerAgreement {
-        $policyMode = $this->policyService->termsPolicyMode();
+        // The caller may pin the terms mode for this agreement (e.g. the Suchak's
+        // per-request choice on the payment screen); otherwise fall back to the
+        // platform policy. A valid override wins so one request's decision never
+        // leaks into the global setting.
+        $policyModeOverride = $attributes['terms_policy_mode'] ?? null;
+        $policyMode = in_array($policyModeOverride, SuchakCustomerAgreement::POLICY_MODES, true)
+            ? $policyModeOverride
+            : $this->policyService->termsPolicyMode();
         $termsStatus = $policyMode === SuchakCustomerAgreement::POLICY_OPTIONAL
             ? SuchakCustomerAgreement::TERMS_NOT_REQUIRED
             : SuchakCustomerAgreement::TERMS_PENDING;

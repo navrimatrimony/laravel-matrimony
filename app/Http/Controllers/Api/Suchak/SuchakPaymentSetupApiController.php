@@ -67,7 +67,7 @@ class SuchakPaymentSetupApiController extends Controller
             'price_amount' => ['nullable', 'numeric', 'min:0.01'],
             'currency' => ['nullable', 'string', 'size:3'],
             'agreement_title' => ['nullable', 'string', 'max:160'],
-            'bypass_reason' => ['nullable', 'string', 'max:1000'],
+            'customer_accepted_terms' => ['nullable', 'boolean'],
         ]);
 
         try {
@@ -180,6 +180,12 @@ class SuchakPaymentSetupApiController extends Controller
                     ->orderByDesc('id')
                     ->first();
 
+                // Per-request choice from the payment screen: has the customer
+                // accepted the service terms? Default true (the Suchak confirms
+                // acceptance and the request goes straight out). When false, the
+                // request records that terms are not required for this one.
+                $customerAccepted = (bool) ($validated['customer_accepted_terms'] ?? true);
+
                 $createdAgreement = false;
                 if ($agreement === null) {
                     $pending = SuchakCustomerAgreement::query()
@@ -194,6 +200,9 @@ class SuchakPaymentSetupApiController extends Controller
                             [
                                 'agreement_title' => $validated['agreement_title'] ?? 'Service agreement',
                                 'agreement_body' => 'Customer confirms package scope before payment request.',
+                                'terms_policy_mode' => $customerAccepted
+                                    ? SuchakCustomerAgreement::POLICY_STRICT
+                                    : SuchakCustomerAgreement::POLICY_OPTIONAL,
                             ],
                             $request->ip(),
                             $request->userAgent(),
@@ -201,10 +210,12 @@ class SuchakPaymentSetupApiController extends Controller
                     }
 
                     if (! $pending->isTermsSatisfied()) {
-                        $pending = $agreementService->bypassTerms(
+                        // The owning Suchak records the customer's acceptance —
+                        // no admin bypass needed (acceptTerms permits the Suchak
+                        // owner, unlike the strict-only bypass path).
+                        $pending = $agreementService->acceptTerms(
                             $pending,
                             $user,
-                            $validated['bypass_reason'] ?? 'Suchak prepared Track A collection agreement on mobile for direct customer payment.',
                             $request->ip(),
                             $request->userAgent(),
                         );
