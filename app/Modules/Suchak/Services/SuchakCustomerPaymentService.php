@@ -82,7 +82,10 @@ class SuchakCustomerPaymentService
 
         $paymentReceivedAt = $this->paymentReceivedAt($attributes['payment_received_at'] ?? null, $amountReceived);
         $paymentStatus = $this->paymentStatus($amountDue, $amountReceived);
-        $proofStatus = $this->proofStatus($mode, $amountReceived, $paymentReference, $proofDocumentPath, $collectionNote);
+        // Track A Suchak self-confirmation (mark-paid tracking screen) may omit proof;
+        // every other caller keeps proof reference/document mandatory for non-cash modes.
+        $proofOptional = (bool) ($attributes['proof_optional'] ?? false);
+        $proofStatus = $this->proofStatus($mode, $amountReceived, $paymentReference, $proofDocumentPath, $collectionNote, $proofOptional);
         $balanceAmount = number_format(max(0, (float) $amountDue - (float) $amountReceived), 2, '.', '');
 
         return DB::transaction(function () use (
@@ -365,6 +368,7 @@ class SuchakCustomerPaymentService
         ?string $paymentReference,
         ?string $proofDocumentPath,
         ?string $collectionNote,
+        bool $proofOptional = false,
     ): string {
         if ((float) $amountReceived <= 0.0) {
             return SuchakCustomerPayment::PROOF_NOT_REQUIRED;
@@ -379,6 +383,15 @@ class SuchakCustomerPaymentService
         }
 
         if ($paymentReference === null && $proofDocumentPath === null) {
+            // Track A self-confirmation (the Suchak ticks "पैसे मिळाले" for money
+            // received on their OWN UPI): the payment is still recorded and the
+            // request flips to PAID, but proof stays outstanding (PROOF_REQUIRED)
+            // so the risk/compliance review queue keeps surfacing it. Audit is
+            // deferred, never dropped. Every other caller keeps proof mandatory.
+            if ($proofOptional) {
+                return SuchakCustomerPayment::PROOF_REQUIRED;
+            }
+
             throw new InvalidArgumentException('UPI, bank transfer, and cheque Suchak customer payments require proof reference or proof document path.');
         }
 

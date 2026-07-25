@@ -153,12 +153,20 @@ class SuchakPaymentRequestsApiController extends Controller
         // `amount` is the amount actually received (drives the SENT/OPENED → PAID
         // flip), `note` is the optional note-when-marking, persisted as the
         // payment's collection note; `reference` and `paid_at` map through too.
+        //
+        // This is Track A self-confirmation: the customer paid the Suchak's OWN
+        // UPI/QR and the Suchak is simply ticking "received". Proof is therefore
+        // OPTIONAL here (`proof_optional`) — a missing reference does not block the
+        // tick; the payment is still recorded (invoice/receipt/ledger + event and
+        // activity-log audit) and proof stays outstanding for later review. The
+        // strict proof rule remains intact for every other recordManualPayment caller.
         $attributes = [
             'payment_mode' => $validated['payment_mode'],
             'amount_received' => $validated['amount'],
             'payment_received_at' => $validated['paid_at'] ?? null,
             'payment_reference' => $validated['reference'] ?? null,
             'collection_note' => $validated['note'] ?? null,
+            'proof_optional' => true,
         ];
 
         try {

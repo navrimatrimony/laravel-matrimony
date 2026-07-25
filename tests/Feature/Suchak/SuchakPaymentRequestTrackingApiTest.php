@@ -198,6 +198,47 @@ class SuchakPaymentRequestTrackingApiTest extends TestCase
         $reopened->assertJsonPath('data.summary.total_amount_due', '15000.00');
     }
 
+    public function test_mark_paid_upi_without_reference_succeeds_and_leaves_pending(): void
+    {
+        [$suchakUser, $account] = $this->verifiedSuchakActor();
+        $request = $this->buildPaymentRequest($suchakUser, $account, 'Isha Kulkarni', '9876500055', '8000', open: true);
+
+        Sanctum::actingAs($suchakUser);
+
+        // Track A self-confirmation: money hit the Suchak's own UPI, so they tick
+        // "पैसे मिळाले" with only a mode + optional note — NO proof reference.
+        $markPaid = $this->postJson("/api/v1/suchak/payment-requests/{$request->id}/mark-paid", [
+            'amount' => 8000,
+            'payment_mode' => SuchakCustomerPayment::MODE_UPI,
+            'note' => 'Received on my GPay, confirmed the screenshot.',
+        ])->assertOk();
+
+        $this->assertTrue($markPaid->json('success'));
+
+        // The request is now PAID.
+        $this->assertSame(SuchakPaymentRequest::STATUS_PAID, $request->fresh()->payment_status);
+
+        // A formal payment record still exists: note persisted, marked paid, and
+        // proof stays OUTSTANDING (required) so audit is deferred, never dropped.
+        $payment = SuchakCustomerPayment::query()
+            ->where('payment_request_id', $request->id)
+            ->firstOrFail();
+        $this->assertSame('Received on my GPay, confirmed the screenshot.', $payment->collection_note);
+        $this->assertSame(SuchakCustomerPayment::STATUS_PAID, $payment->payment_status);
+        $this->assertNull($payment->payment_reference);
+        $this->assertSame(SuchakCustomerPayment::PROOF_REQUIRED, $payment->proof_status);
+
+        // It leaves the pending set: it now shows under filter=paid and the
+        // outstanding summary drops to zero.
+        $paidFeed = $this->getJson('/api/v1/suchak/payment-requests?filter=paid')->assertOk();
+        $this->assertCount(1, $paidFeed->json('data.payment_requests'));
+        $this->assertTrue($paidFeed->json('data.payment_requests.0.paid'));
+        $paidFeed->assertJsonPath('data.summary.pending_count', 0);
+        $paidFeed->assertJsonPath('data.summary.total_amount_due', '0.00');
+
+        $this->assertCount(0, $this->getJson('/api/v1/suchak/payment-requests?filter=pending')->json('data.payment_requests'));
+    }
+
     public function test_reverse_paid_is_scoped_to_the_owning_account(): void
     {
         [$ownerUser, $ownerAccount] = $this->verifiedSuchakActor();
