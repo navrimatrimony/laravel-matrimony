@@ -2,13 +2,16 @@
 
 namespace Tests\Feature\Suchak;
 
+use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\SuchakCustomerPlan;
+use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakCustomerPlanService;
 use App\Modules\Suchak\Support\SuchakDefaultPlans;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class SuchakCustomerPlanTest extends TestCase
@@ -145,6 +148,73 @@ class SuchakCustomerPlanTest extends TestCase
         } catch (InvalidArgumentException $exception) {
             $this->assertStringContainsString('cannot be deleted', $exception->getMessage());
         }
+    }
+
+    public function test_payment_request_options_carousel_merges_presets_and_customs(): void
+    {
+        $user = User::factory()->create();
+        $account = SuchakAccount::factory()->create([
+            'user_id' => $user->id,
+            'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+            'public_status' => SuchakAccount::PUBLIC_ACTIVE,
+            'verified_at' => now(),
+            'registration_completed_at' => now(),
+        ]);
+
+        $service = app(SuchakCustomerPlanService::class);
+        $custom = $service->create($account, [
+            'name' => 'Deluxe matchmaking',
+            'name_mr' => 'डिलक्स जुळवणी',
+            'price_amount' => '7500',
+            'duration' => SuchakCustomerPlan::DURATION_ONE_YEAR,
+            'services' => [['name' => 'Dedicated counselor']],
+            'private_note' => 'internal only',
+        ]);
+
+        $profile = MatrimonyProfile::factory()->create();
+        $rep = SuchakProfileRepresentation::factory()->create([
+            'suchak_account_id' => $account->id,
+            'matrimony_profile_id' => $profile->id,
+            'representation_status' => SuchakProfileRepresentation::STATUS_ACTIVE,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson("/api/v1/suchak/customers/{$rep->id}/payment-request-options");
+        $response->assertOk();
+
+        $plans = $response->json('data.default_plans');
+        $keys = array_column($plans, 'plan_key');
+
+        // Both code presets AND the custom plan are present, custom keyed by id.
+        $this->assertContains(SuchakDefaultPlans::KEY_BASIC, $keys);
+        $this->assertContains(SuchakDefaultPlans::KEY_PREMIUM, $keys);
+        $this->assertContains('custom_'.$custom->id, $keys);
+
+        $customPayload = collect($plans)->firstWhere('plan_key', 'custom_'.$custom->id);
+        $this->assertNotNull($customPayload);
+        $this->assertSame('Deluxe matchmaking', $customPayload['name']);
+        // The carousel never leaks the Suchak-only private note.
+        $this->assertArrayNotHasKey('private_note', $customPayload);
+        // services_json is mapped into deliverables the app already consumes.
+        $this->assertContains('Dedicated counselor', array_column($customPayload['deliverables'], 'name'));
+
+        // Every mapped item keeps the shape the app consumes today.
+        foreach ($plans as $plan) {
+            $this->assertArrayHasKey('plan_key', $plan);
+            $this->assertArrayHasKey('name', $plan);
+            $this->assertArrayHasKey('price_amount', $plan);
+            $this->assertArrayHasKey('currency', $plan);
+            $this->assertArrayHasKey('deliverables', $plan);
+        }
+
+        // Hiding the custom plan drops it from the carousel payload.
+        $service->toggleVisibility($custom, false);
+        $hiddenResponse = $this->getJson("/api/v1/suchak/customers/{$rep->id}/payment-request-options");
+        $hiddenResponse->assertOk();
+        $hiddenKeys = array_column($hiddenResponse->json('data.default_plans'), 'plan_key');
+        $this->assertNotContains('custom_'.$custom->id, $hiddenKeys);
+        $this->assertContains(SuchakDefaultPlans::KEY_BASIC, $hiddenKeys);
     }
 
     /**

@@ -10,6 +10,7 @@ use App\Models\SuchakPaymentContext;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakServicePackage;
 use App\Models\User;
+use App\Modules\Suchak\Services\SuchakCustomerPlanService;
 use App\Modules\Suchak\Support\SuchakDefaultPlans;
 use App\Support\LocalizedText;
 use Illuminate\Http\JsonResponse;
@@ -21,6 +22,10 @@ use Illuminate\Http\Request;
  */
 class SuchakPaymentRequestOptionsApiController extends Controller
 {
+    public function __construct(private readonly SuchakCustomerPlanService $customerPlans)
+    {
+    }
+
     public function __invoke(Request $request, int $representation): JsonResponse
     {
         $user = $request->user();
@@ -53,7 +58,7 @@ class SuchakPaymentRequestOptionsApiController extends Controller
                 'data' => [
                     'representation_id' => $representation,
                     'customer_context_id' => null,
-                    'default_plans' => $this->defaultPlansPayload(),
+                    'default_plans' => $this->carouselPlansPayload($account),
                     'service_packages' => [],
                     'customer_agreements' => [],
                     'payment_contexts' => [],
@@ -145,7 +150,7 @@ class SuchakPaymentRequestOptionsApiController extends Controller
                 'representation_id' => $representation,
                 'customer_context_id' => $customerContext->id,
                 'track' => 'A',
-                'default_plans' => $this->defaultPlansPayload(),
+                'default_plans' => $this->carouselPlansPayload($account),
                 'service_packages' => $packages,
                 'customer_agreements' => $agreements,
                 'payment_contexts' => $paymentContexts,
@@ -155,26 +160,54 @@ class SuchakPaymentRequestOptionsApiController extends Controller
     }
 
     /**
-     * The ready-made plans a Suchak can pick without building one, localized to
-     * the request locale. Shown even before any package exists so the picker can
-     * offer "Basic / Premium" up front. See {@see SuchakDefaultPlans}.
+     * The plans shown in the app's payment carousel, localized to the request
+     * locale: the two code presets (with any per-Suchak price / name / hidden
+     * override applied) PLUS this Suchak's visible custom plans, all ordered.
+     * Shown even before any package exists so the picker can offer plans up
+     * front. See {@see SuchakCustomerPlanService::resolveCarousel()}.
+     *
+     * Every item — preset AND custom — is mapped into the SAME shape the app
+     * already consumes (plan_key, name, description, price_amount, currency,
+     * deliverables[{name, description}]). A custom plan carries a stable
+     * `custom_{id}` key so the app can select it; its services become the
+     * deliverables. Presets keep their code key ('basic' / 'premium').
      *
      * @return array<int, array<string, mixed>>
      */
-    private function defaultPlansPayload(): array
+    private function carouselPlansPayload(SuchakAccount $account): array
     {
-        return array_map(static function (array $plan): array {
+        return array_map(static function (array $entry): array {
+            $isPreset = (bool) ($entry['is_preset'] ?? false);
+            $planKey = $isPreset
+                ? (string) $entry['preset_key']
+                : 'custom_'.$entry['id'];
+
+            // Plan-level description: presets keep their code-defined blurb;
+            // custom plans carry none, so the card simply omits the line.
+            $description = null;
+            if ($isPreset) {
+                $preset = SuchakDefaultPlans::find($entry['preset_key']);
+                if ($preset !== null) {
+                    $description = LocalizedText::pick(
+                        $preset['description_mr'] ?? null,
+                        $preset['description'] ?? null,
+                    );
+                }
+            }
+
+            $deliverables = array_map(static fn (array $service): array => [
+                'name' => LocalizedText::pick($service['name_mr'] ?? null, $service['name'] ?? null),
+                'description' => null,
+            ], $entry['services'] ?? []);
+
             return [
-                'plan_key' => $plan['key'],
-                'name' => LocalizedText::pick($plan['name_mr'] ?? null, $plan['name']),
-                'description' => LocalizedText::pick($plan['description_mr'] ?? null, $plan['description'] ?? null),
-                'price_amount' => $plan['price_amount'],
-                'currency' => $plan['currency'],
-                'deliverables' => array_map(static fn (array $deliverable): array => [
-                    'name' => LocalizedText::pick($deliverable['name_mr'] ?? null, $deliverable['name']),
-                    'description' => LocalizedText::pick($deliverable['description_mr'] ?? null, $deliverable['description'] ?? null),
-                ], $plan['deliverables']),
+                'plan_key' => $planKey,
+                'name' => LocalizedText::pick($entry['name_mr'] ?? null, $entry['name'] ?? null),
+                'description' => $description,
+                'price_amount' => $entry['price_amount'],
+                'currency' => $entry['currency'],
+                'deliverables' => $deliverables,
             ];
-        }, SuchakDefaultPlans::all());
+        }, $this->customerPlans->resolveCarousel($account));
     }
 }
