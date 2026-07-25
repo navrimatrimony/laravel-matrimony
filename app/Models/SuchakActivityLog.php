@@ -133,6 +133,8 @@ class SuchakActivityLog extends Model
 
     public const ACTION_PAYMENT_REQUEST_EXPIRED = 'payment_request_expired';
 
+    public const ACTION_PAYMENT_REQUEST_PAID_REVERSED = 'payment_request_paid_reversed';
+
     public const ACTION_CUSTOMER_PAYMENT_RECORDED = 'customer_payment_recorded';
 
     public const ACTION_CUSTOMER_PAYMENT_DOCUMENT_ISSUED = 'customer_payment_document_issued';

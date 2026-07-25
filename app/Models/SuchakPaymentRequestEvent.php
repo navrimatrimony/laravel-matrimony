@@ -18,6 +18,7 @@ class SuchakPaymentRequestEvent extends Model
     public const EVENT_OPENED = 'payment_request_opened';
     public const EVENT_CANCELLED = 'payment_request_cancelled';
     public const EVENT_EXPIRED = 'payment_request_expired';
+    public const EVENT_PAID_REVERSED = 'payment_request_paid_reversed';
 
     public const EVENTS = [
         self::EVENT_CREATED,
@@ -25,6 +26,7 @@ class SuchakPaymentRequestEvent extends Model
         self::EVENT_OPENED,
         self::EVENT_CANCELLED,
         self::EVENT_EXPIRED,
+        self::EVENT_PAID_REVERSED,
     ];
 
     protected $table = 'suchak_payment_request_events';

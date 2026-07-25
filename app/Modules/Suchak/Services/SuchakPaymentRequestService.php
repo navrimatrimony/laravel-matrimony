@@ -347,6 +347,91 @@ class SuchakPaymentRequestService
         });
     }
 
+    /**
+     * Deliberately reverse a "paid" mark on a payment request back to an active,
+     * still-collectable state and record the mandatory reason for audit.
+     *
+     * This is a tracking-level correction on the request lifecycle (SENT → OPENED
+     * → PAID → back to OPENED/SENT), not a financial ledger reversal. The
+     * accounting-grade reversal of a recorded customer payment (which rewrites the
+     * ledger) is a separate concern handled by
+     * {@see \App\Modules\Suchak\Services\SuchakCustomerPaymentCorrectionService::postReversal()}.
+     * The reason is written to the immutable payment-request event trail and the
+     * SuchakActivityLog audit log — no new column or table is introduced.
+     */
+    public function reversePaidMark(
+        SuchakPaymentRequest $paymentRequest,
+        User $actor,
+        string $reason,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): SuchakPaymentRequest {
+        $paymentRequest->refresh()->loadMissing($this->requestRelations());
+        $reason = $this->requiredText($reason, 'Suchak payment request paid-reversal reason is required.', 1000);
+
+        $this->accessService->assertOwnerCanOperate(
+            $paymentRequest->suchakAccount,
+            $actor,
+            'Only the owning Suchak account can reverse a paid mark.',
+            'Only verified Suchak accounts can reverse a paid mark.',
+        );
+
+        return DB::transaction(function () use ($paymentRequest, $actor, $reason, $ipAddress, $userAgent): SuchakPaymentRequest {
+            /** @var SuchakPaymentRequest $locked */
+            $locked = SuchakPaymentRequest::query()
+                ->whereKey($paymentRequest->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($locked->payment_status !== SuchakPaymentRequest::STATUS_PAID) {
+                throw new InvalidArgumentException('Only a paid Suchak payment request can have its paid mark reversed.');
+            }
+
+            $fromStatus = $locked->payment_status;
+            $toStatus = $locked->opened_at !== null
+                ? SuchakPaymentRequest::STATUS_OPENED
+                : SuchakPaymentRequest::STATUS_SENT;
+
+            $locked->forceFill(['payment_status' => $toStatus])->save();
+
+            $fresh = $locked->fresh($this->requestRelations());
+            $this->recordEvent(
+                $fresh,
+                SuchakPaymentRequestEvent::EVENT_PAID_REVERSED,
+                SuchakActivityLog::ACTOR_SUCHAK,
+                $actor,
+                $fromStatus,
+                $toStatus,
+                $reason,
+            );
+            $this->activityLogger->record([
+                'suchak_account_id' => $fresh->suchak_account_id,
+                'actor_user_id' => $actor->id,
+                'actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
+                'action_type' => SuchakActivityLog::ACTION_PAYMENT_REQUEST_PAID_REVERSED,
+                'target_type' => 'suchak_payment_request',
+                'target_id' => $fresh->id,
+                'matrimony_profile_id' => $fresh->paymentContext?->matrimony_profile_id,
+                'ip_address' => $ipAddress,
+                'user_agent' => $userAgent === null ? null : Str::limit($userAgent, 512, ''),
+                'metadata_json' => [
+                    'context' => 'payment_request_paid_reversed',
+                    'customer_context_id' => $fresh->customer_context_id,
+                    'service_package_id' => $fresh->service_package_id,
+                    'customer_agreement_id' => $fresh->customer_agreement_id,
+                    'payment_context_id' => $fresh->payment_context_id,
+                    'from_status' => $fromStatus,
+                    'to_status' => $toStatus,
+                    'reason' => $reason,
+                    'amount_due' => $fresh->amount_due,
+                    'currency' => $fresh->currency,
+                ],
+            ]);
+
+            return $fresh;
+        });
+    }
+
     public function publicUrl(string $plainToken): string
     {
         return route('suchak.payment-requests.show', ['token' => $plainToken], true);

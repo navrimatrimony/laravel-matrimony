@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Modules\Suchak\Services\SuchakBillingCatalogService;
 use App\Modules\Suchak\Services\SuchakCustomerPaymentService;
 use App\Modules\Suchak\Services\SuchakPaymentRequestService;
+use App\Modules\Suchak\Services\SuchakPaymentRequestTrackingService;
 use App\Modules\Suchak\Services\SuchakPaymentStatusService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,6 +25,39 @@ use InvalidArgumentException;
  */
 class SuchakPaymentRequestsApiController extends Controller
 {
+    /**
+     * Payment-received tracking feed: every request the authenticated Suchak has
+     * sent, with search / filter / pagination and an outstanding-totals summary.
+     * Reuses SuchakPaymentRequest data (no tracking table).
+     */
+    public function index(
+        Request $request,
+        SuchakPaymentRequestTrackingService $trackingService,
+    ): JsonResponse {
+        $user = $request->user();
+        if (! $user instanceof User || $user->suchakAccount === null) {
+            return response()->json(['success' => false, 'message' => 'Suchak account is required.'], 403);
+        }
+
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:191'],
+            'filter' => ['nullable', 'string', 'in:all,pending,paid'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        /** @var SuchakAccount $account */
+        $account = $user->suchakAccount;
+
+        $feed = $trackingService->trackingFeed($account, $validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Suchak payment requests loaded.',
+            'data' => array_merge(['account_id' => $account->id], $feed),
+        ]);
+    }
+
     public function store(
         Request $request,
         SuchakPaymentRequestService $paymentRequestService,
@@ -115,11 +149,23 @@ class SuchakPaymentRequestsApiController extends Controller
             'reference' => ['nullable', 'string', 'max:191'],
         ]);
 
+        // Map the mark-paid adapter fields onto what recordManualPayment expects:
+        // `amount` is the amount actually received (drives the SENT/OPENED → PAID
+        // flip), `note` is the optional note-when-marking, persisted as the
+        // payment's collection note; `reference` and `paid_at` map through too.
+        $attributes = [
+            'payment_mode' => $validated['payment_mode'],
+            'amount_received' => $validated['amount'],
+            'payment_received_at' => $validated['paid_at'] ?? null,
+            'payment_reference' => $validated['reference'] ?? null,
+            'collection_note' => $validated['note'] ?? null,
+        ];
+
         try {
             $result = $customerPaymentService->recordManualPayment(
                 $paymentRequest,
                 $user,
-                $validated,
+                $attributes,
                 $request->ip(),
                 $request->userAgent(),
             );
@@ -135,6 +181,52 @@ class SuchakPaymentRequestsApiController extends Controller
                 'invoice_number' => $result['invoice']->document_number ?? null,
                 'receipt_number' => $result['receipt']->document_number ?? null,
                 'receipt_verification_url' => $result['receipt_verification_url'] ?? null,
+            ],
+        ]);
+    }
+
+    /**
+     * Deliberately reverse a paid mark on a payment request. This is an
+     * auditable correction — NOT a one-tap undo — so a non-empty reason is
+     * mandatory and is stored on the immutable event trail + activity log.
+     */
+    public function reversePaid(
+        Request $request,
+        SuchakPaymentRequest $paymentRequest,
+        SuchakPaymentRequestService $paymentRequestService,
+    ): JsonResponse {
+        $user = $request->user();
+        if (! $user instanceof User || $user->suchakAccount === null) {
+            return response()->json(['success' => false, 'message' => 'Suchak account is required.'], 403);
+        }
+
+        if ((int) $paymentRequest->suchak_account_id !== (int) $user->suchakAccount->id) {
+            return response()->json(['success' => false, 'message' => 'Payment request not found for this account.'], 404);
+        }
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:1', 'max:1000'],
+        ]);
+
+        try {
+            $reversed = $paymentRequestService->reversePaidMark(
+                $paymentRequest,
+                $user,
+                $validated['reason'],
+                $request->ip(),
+                $request->userAgent(),
+            );
+        } catch (InvalidArgumentException $exception) {
+            return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payment request paid mark reversed.',
+            'data' => [
+                'payment_request_id' => $reversed->id,
+                'payment_status' => $reversed->payment_status,
+                'paid' => false,
             ],
         ]);
     }

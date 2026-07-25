@@ -80,8 +80,10 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::get('/payments', SuchakPaymentsApiController::class);
     Route::get('/payment-identity', [SuchakPaymentIdentityApiController::class, 'show']);
     Route::post('/payment-identity', [SuchakPaymentIdentityApiController::class, 'update']);
+    Route::get('/payment-requests', [SuchakPaymentRequestsApiController::class, 'index']);
     Route::post('/payment-requests', [SuchakPaymentRequestsApiController::class, 'store']);
     Route::post('/payment-requests/{paymentRequest}/mark-paid', [SuchakPaymentRequestsApiController::class, 'markPaid']);
+    Route::post('/payment-requests/{paymentRequest}/reverse-paid', [SuchakPaymentRequestsApiController::class, 'reversePaid']);
     Route::get('/plans', [SuchakBillingApiController::class, 'plans']);
     Route::get('/billing', [SuchakBillingApiController::class, 'status']);
     Route::post('/plans/{plan}/payu/start', [SuchakPayuCheckoutApiController::class, 'start']);
