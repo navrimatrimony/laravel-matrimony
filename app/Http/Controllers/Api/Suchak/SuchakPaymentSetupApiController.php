@@ -271,17 +271,20 @@ class SuchakPaymentSetupApiController extends Controller
                         );
                     }
 
-                    if (! $pending->isTermsSatisfied()) {
-                        // The owning Suchak records the customer's acceptance —
-                        // no admin bypass needed (acceptTerms permits the Suchak
-                        // owner, unlike the strict-only bypass path).
-                        $pending = $agreementService->acceptTerms(
-                            $pending,
-                            $user,
-                            $request->ip(),
-                            $request->userAgent(),
-                        );
-                    }
+                    // The owning Suchak records the customer's acceptance — no
+                    // admin bypass needed (acceptOrReviseTerms permits the Suchak
+                    // owner, unlike the strict-only bypass path). Using the
+                    // revise-aware variant means a reused package whose latest
+                    // agreement is PENDING with a STALE snapshot is superseded by
+                    // a fresh revision and accepted, instead of failing with
+                    // "Suchak package changed." An already-satisfied agreement is
+                    // returned unchanged.
+                    $pending = $agreementService->acceptOrReviseTerms(
+                        $pending,
+                        $user,
+                        $request->ip(),
+                        $request->userAgent(),
+                    );
 
                     $agreement = $pending;
                     $createdAgreement = true;

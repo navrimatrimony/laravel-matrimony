@@ -142,6 +142,60 @@ class SuchakAgreementService
         });
     }
 
+    /**
+     * Bring a package's latest agreement into a terms-satisfied state so a
+     * payment request can go out, creating a fresh revision first when the
+     * pending snapshot is stale.
+     *
+     * This is the robust variant of {@see acceptTerms}: it never throws
+     * "Suchak package changed." If the latest (pending) revision no longer
+     * matches the current package, it is superseded by a new revision — reusing
+     * {@see createRevisionForPackageChange}, which recomputes the snapshot from
+     * the current package — and that fresh revision is accepted instead. An
+     * already-satisfied agreement (accepted / bypassed / not_required) is
+     * returned unchanged. The passed agreement must be the latest revision for
+     * its package (the createRevisionForPackageChange contract).
+     */
+    public function acceptOrReviseTerms(
+        SuchakCustomerAgreement $agreement,
+        User $actor,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): SuchakCustomerAgreement {
+        $agreement->refresh()->loadMissing(['suchakAccount', 'customerContext', 'servicePackage']);
+
+        // Nothing to do when terms are already satisfied for this revision.
+        if ($agreement->isTermsSatisfied()) {
+            return $agreement;
+        }
+
+        // A stale pending snapshot is exactly what acceptTerms would reject.
+        // Do what that rejection asks: supersede it with a new revision built
+        // from the current package, then accept THAT instead of throwing.
+        if (! $this->isPackageSnapshotCurrent($agreement)) {
+            $agreement = $this->createRevisionForPackageChange(
+                $agreement,
+                $actor,
+                [
+                    'terms_policy_mode' => $agreement->terms_policy_mode,
+                    'agreement_title' => $agreement->agreement_title,
+                    'agreement_body' => $agreement->agreement_body,
+                    'revision_reason' => 'Suchak package changed after pending agreement; superseded before payment request.',
+                ],
+                $ipAddress,
+                $userAgent,
+            );
+
+            // Under an optional terms policy the fresh revision is already
+            // TERMS_NOT_REQUIRED — no acceptance step needed.
+            if ($agreement->isTermsSatisfied()) {
+                return $agreement;
+            }
+        }
+
+        return $this->acceptTerms($agreement, $actor, $ipAddress, $userAgent);
+    }
+
     public function acceptTerms(
         SuchakCustomerAgreement $agreement,
         User $actor,
@@ -392,7 +446,12 @@ class SuchakAgreementService
         }
     }
 
-    private function assertPackageSnapshotCurrent(SuchakCustomerAgreement $agreement): void
+    /**
+     * Whether the agreement's stored snapshot still matches its (current)
+     * package. Reused by {@see acceptOrReviseTerms} to decide when a fresh
+     * revision is needed instead of throwing.
+     */
+    public function isPackageSnapshotCurrent(SuchakCustomerAgreement $agreement): bool
     {
         $agreement->loadMissing('servicePackage');
         $package = $agreement->servicePackage;
@@ -405,7 +464,12 @@ class SuchakAgreementService
             $agreement->agreement_body,
         );
 
-        if (! hash_equals($agreement->agreement_snapshot_hash, $currentHash)) {
+        return hash_equals($agreement->agreement_snapshot_hash, $currentHash);
+    }
+
+    private function assertPackageSnapshotCurrent(SuchakCustomerAgreement $agreement): void
+    {
+        if (! $this->isPackageSnapshotCurrent($agreement)) {
             throw new InvalidArgumentException('Suchak package changed. Create a new agreement revision before accepting terms.');
         }
     }
