@@ -78,6 +78,62 @@ class SuchakPaymentRequestTrackingApiTest extends TestCase
         $this->assertCount(0, $this->getJson('/api/v1/suchak/payment-requests?filter=paid')->json('data.payment_requests'));
     }
 
+    public function test_tracking_feed_dedupes_repeated_requests_to_one_row_per_customer(): void
+    {
+        [$suchakUser, $account] = $this->verifiedSuchakActor();
+
+        // One customer reminded repeatedly: THREE payment requests, same context.
+        $first = $this->buildPaymentRequest($suchakUser, $account, 'Sana Shaikh', '9876511111', '4000', open: false);
+        $this->sendAnotherRequestForSameCustomer($suchakUser, $first, '4000');
+        // Latest reminder carries a different amount so we can prove the row/summary
+        // use the LATEST request's amount, never a running total.
+        $latest = $this->sendAnotherRequestForSameCustomer($suchakUser, $first, '7000');
+
+        // A second, distinct customer with a single request.
+        $this->buildPaymentRequest($suchakUser, $account, 'Vivek Rao', '9876522222', '3000', open: false);
+
+        Sanctum::actingAs($suchakUser);
+
+        // ---- Deduped list: one row per customer, represented by the latest request.
+        $response = $this->getJson('/api/v1/suchak/payment-requests')->assertOk();
+        $items = collect($response->json('data.payment_requests'));
+
+        $this->assertSame(4, SuchakPaymentRequest::query()->count(), 'All four requests still persist.');
+        $this->assertCount(2, $items, 'Each customer appears once, however many reminders were sent.');
+        $response->assertJsonPath('data.pagination.total', 2);
+
+        $sana = $items->firstWhere('customer_name', 'Sana Shaikh');
+        $this->assertNotNull($sana, 'The reminded customer must still be present, once.');
+        $this->assertSame($latest->id, $sana['id'], 'The row is the customer\'s latest request (highest id).');
+        $this->assertSame('7000.00', $sana['amount'], 'The row carries the latest amount, not a sum of reminders.');
+        $this->assertSame('9876511111', $sana['customer_mobile']);
+
+        // ---- Summary counts the reminded customer ONCE, amount ONCE (latest): 7000 + 3000.
+        $response->assertJsonPath('data.summary.pending_count', 2);
+        $response->assertJsonPath('data.summary.total_amount_due', '10000.00');
+
+        // ---- Latest request paid => the whole customer is paid. The older, still-sent
+        //      reminders must NOT keep the customer in the pending set (the over-count bug).
+        $this->postJson("/api/v1/suchak/payment-requests/{$latest->id}/mark-paid", [
+            'amount' => 7000,
+            'payment_mode' => SuchakCustomerPayment::MODE_CASH,
+            'note' => 'Cash collected at the office counter.',
+        ])->assertOk();
+
+        $afterPaid = $this->getJson('/api/v1/suchak/payment-requests')->assertOk();
+        $this->assertCount(2, $afterPaid->json('data.payment_requests'), 'Still one row per customer.');
+        $afterPaid->assertJsonPath('data.summary.pending_count', 1);
+        $afterPaid->assertJsonPath('data.summary.total_amount_due', '3000.00');
+
+        $paidOnly = $this->getJson('/api/v1/suchak/payment-requests?filter=paid')->assertOk();
+        $this->assertCount(1, $paidOnly->json('data.payment_requests'));
+        $this->assertSame('Sana Shaikh', $paidOnly->json('data.payment_requests.0.customer_name'));
+
+        $pendingOnly = $this->getJson('/api/v1/suchak/payment-requests?filter=pending')->assertOk();
+        $this->assertCount(1, $pendingOnly->json('data.payment_requests'));
+        $this->assertSame('Vivek Rao', $pendingOnly->json('data.payment_requests.0.customer_name'));
+    }
+
     public function test_mark_paid_with_note_then_reverse_paid_with_reason_reflects_and_audits(): void
     {
         [$suchakUser, $account] = $this->verifiedSuchakActor();
@@ -247,6 +303,30 @@ class SuchakPaymentRequestTrackingApiTest extends TestCase
         if ($open) {
             $service->openPublicRequest($result['plain_token'], '127.0.0.1', 'tracking-test');
         }
+
+        return $result['payment_request']->fresh();
+    }
+
+    /**
+     * Send another payment request against the SAME customer (same package,
+     * agreement, and payment context as an existing request) — i.e. a repeat
+     * reminder to a customer who already has an open request. Returns the newly
+     * created, SENT SuchakPaymentRequest.
+     */
+    private function sendAnotherRequestForSameCustomer(
+        User $suchakUser,
+        SuchakPaymentRequest $existing,
+        string $amount,
+    ): SuchakPaymentRequest {
+        $existing->loadMissing(['servicePackage', 'customerAgreement', 'paymentContext']);
+
+        $result = app(SuchakPaymentRequestService::class)->createAndSend(
+            $existing->servicePackage,
+            $existing->customerAgreement,
+            $existing->paymentContext,
+            $suchakUser,
+            ['amount_due' => $amount],
+        );
 
         return $result['payment_request']->fresh();
     }

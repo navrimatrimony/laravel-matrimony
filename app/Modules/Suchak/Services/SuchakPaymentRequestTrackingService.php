@@ -15,6 +15,10 @@ use Illuminate\Support\Facades\DB;
  * sent date, status, opened signal, paid signal — is reachable through the
  * request and its existing relations. All queries are strictly scoped to the
  * authenticated Suchak account; a client-supplied account id is never trusted.
+ *
+ * The feed is deduped to ONE entry per customer — each customer's latest
+ * payment request represents them — so repeatedly reminding the same customer
+ * neither multiplies their rows nor inflates the outstanding-amount summary.
  */
 class SuchakPaymentRequestTrackingService
 {
@@ -57,6 +61,7 @@ class SuchakPaymentRequestTrackingService
         $perPage = $this->normalizePerPage($params['per_page'] ?? null);
 
         $paginator = $this->baseQuery($account)
+            ->whereIn('suchak_payment_requests.id', $this->latestRequestIdsPerCustomer($account))
             ->when($search !== null, fn (Builder $query) => $this->applySearch($query, $search))
             ->when($filter === self::FILTER_PAID, fn (Builder $query) => $query->where('payment_status', SuchakPaymentRequest::STATUS_PAID))
             ->when($filter === self::FILTER_PENDING, fn (Builder $query) => $query->whereIn('payment_status', self::PENDING_STATUSES))
@@ -83,11 +88,18 @@ class SuchakPaymentRequestTrackingService
      * independent of the paid/pending tab so the header always shows what is
      * still owed.
      *
+     * Deduped exactly like the list: one entry per customer (their LATEST
+     * request), so a customer reminded ten times is counted once and their
+     * amount is added once. `pending_count` is the number of distinct customers
+     * whose latest request is still pending; `total_amount_due` sums those
+     * customers' latest-request amounts.
+     *
      * @return array{pending_count: int, total_amount_due: string, currency: string}
      */
     private function summary(SuchakAccount $account, ?string $search): array
     {
         $pendingQuery = $this->baseQuery($account)
+            ->whereIn('suchak_payment_requests.id', $this->latestRequestIdsPerCustomer($account))
             ->when($search !== null, fn (Builder $query) => $this->applySearch($query, $search))
             ->whereIn('payment_status', self::PENDING_STATUSES);
 
@@ -99,6 +111,33 @@ class SuchakPaymentRequestTrackingService
             'total_amount_due' => number_format($totalDue, 2, '.', ''),
             'currency' => 'INR',
         ];
+    }
+
+    /**
+     * One row per customer: a subquery yielding the id of each customer's LATEST
+     * payment request (most recent by `sent_at`, tie-broken by `id`), strictly
+     * scoped to the account. This is the dedupe key for both the list and the
+     * summary — if a Suchak sends ten reminders to the same customer, only the
+     * latest request survives here, so the customer (and their amount) is
+     * represented exactly once. Uses a window function (ROW_NUMBER) so the whole
+     * table is never loaded into PHP; MySQL 8 and SQLite 3.25+ both support it.
+     *
+     * Customer identity is `customer_context_id` (the structured customer /
+     * candidate). NULLs are not expected — every sent request carries a context.
+     */
+    private function latestRequestIdsPerCustomer(SuchakAccount $account): \Illuminate\Database\Query\Builder
+    {
+        $ranked = DB::table('suchak_payment_requests')
+            ->where('suchak_account_id', $account->id)
+            ->select('id')
+            ->selectRaw(
+                'ROW_NUMBER() OVER (PARTITION BY customer_context_id ORDER BY sent_at DESC, id DESC) as row_rank'
+            );
+
+        return DB::query()
+            ->fromSub($ranked, 'ranked_requests')
+            ->where('row_rank', 1)
+            ->select('id');
     }
 
     private function baseQuery(SuchakAccount $account): Builder
