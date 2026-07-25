@@ -93,17 +93,18 @@ class SuchakMeApiController extends Controller
 
     private function profilePhotoUrl(SuchakAccount $account): ?string
     {
-        $approved = $this->publicStorageUrl($account->profile_photo_path);
-        if ($approved !== null) {
-            return $approved;
-        }
-
+        // Show the most recent upload so an in-app photo edit reflects
+        // immediately — even while a re-upload is still pending review. The
+        // latest record carries a fresh path (so Flutter can't serve a stale
+        // cached image), and we fall back to the approved path if none exists.
+        // Mirrors organizationLogoUrl(), which is already latest-record-first.
         $record = $account->verificationRecords()
             ->where('verification_type', SuchakVerificationRecord::TYPE_PROFILE_PHOTO)
             ->latest('id')
             ->first();
 
-        return $this->verificationPreviewUrl($account, $record);
+        return $this->verificationPreviewUrl($account, $record)
+            ?? $this->publicStorageUrl($account->profile_photo_path);
     }
 
     private function organizationLogoUrl(SuchakAccount $account): ?string
