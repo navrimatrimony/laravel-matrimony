@@ -73,6 +73,14 @@ class SuchakCustomerPlanTest extends TestCase
         $premium = collect($carousel)->firstWhere('preset_key', SuchakDefaultPlans::KEY_PREMIUM);
         $this->assertSame('5000.00', $premium['price_amount']);
 
+        // The management list must reflect the SAME override — the reported bug
+        // was an edited preset price "not showing", so lock BOTH resolve paths in.
+        $management = $service->resolveForManagement($account);
+        $basicManage = collect($management)->firstWhere('preset_key', SuchakDefaultPlans::KEY_BASIC);
+        $this->assertSame('2500.00', $basicManage['price_amount']);
+        $premiumManage = collect($management)->firstWhere('preset_key', SuchakDefaultPlans::KEY_PREMIUM);
+        $this->assertSame('5000.00', $premiumManage['price_amount']);
+
         // hide the custom plan -> drops from carousel, stays in management
         $service->toggleVisibility($custom, false);
         $carousel = $service->resolveCarousel($account);
@@ -215,6 +223,44 @@ class SuchakCustomerPlanTest extends TestCase
         $hiddenKeys = array_column($hiddenResponse->json('data.default_plans'), 'plan_key');
         $this->assertNotContains('custom_'.$custom->id, $hiddenKeys);
         $this->assertContains(SuchakDefaultPlans::KEY_BASIC, $hiddenKeys);
+    }
+
+    public function test_editing_a_preset_price_over_http_reflects_in_management_and_carousel(): void
+    {
+        $user = User::factory()->create();
+        $account = SuchakAccount::factory()->create([
+            'user_id' => $user->id,
+            'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
+            'public_status' => SuchakAccount::PUBLIC_ACTIVE,
+            'verified_at' => now(),
+        ]);
+
+        Sanctum::actingAs($user);
+
+        // The app sends the PRESET KEY (not a numeric id) plus the new price —
+        // exactly what PlanEditorScreen._buildBody() posts for a preset.
+        $response = $this->putJson(
+            '/api/v1/suchak/customer-plans/'.SuchakDefaultPlans::KEY_BASIC,
+            ['name' => 'Basic matchmaking', 'price_amount' => '1500'],
+        );
+        $response->assertOk();
+
+        // Both lists in the returned snapshot must show Basic at the new ₹1500:
+        // the management list (resolveForManagement) AND the carousel
+        // (resolveCarousel, which the payment options endpoint reuses).
+        $planPrice = collect($response->json('data.plans'))
+            ->firstWhere('preset_key', SuchakDefaultPlans::KEY_BASIC)['price_amount'];
+        $carouselPrice = collect($response->json('data.carousel'))
+            ->firstWhere('preset_key', SuchakDefaultPlans::KEY_BASIC)['price_amount'];
+        $this->assertSame('1500.00', $planPrice);
+        $this->assertSame('1500.00', $carouselPrice);
+
+        // A fresh GET (what the management screen re-fetches on return) still shows it.
+        $reload = $this->getJson('/api/v1/suchak/customer-plans');
+        $reload->assertOk();
+        $reloaded = collect($reload->json('data.plans'))
+            ->firstWhere('preset_key', SuchakDefaultPlans::KEY_BASIC)['price_amount'];
+        $this->assertSame('1500.00', $reloaded);
     }
 
     /**
