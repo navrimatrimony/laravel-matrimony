@@ -209,6 +209,11 @@ class SuchakAccount extends Model
         return $this->hasMany(SuchakServicePackage::class);
     }
 
+    public function customerPlans(): HasMany
+    {
+        return $this->hasMany(SuchakCustomerPlan::class);
+    }
+
     public function customerAgreements(): HasMany
     {
         return $this->hasMany(SuchakCustomerAgreement::class);

@@ -40,6 +40,7 @@ must be fixed.
 | Suchak signup progress | `suchak_accounts.onboarding_step` + `registration_completed_at` | `SuchakRegistrationService` | — | Steps: `otp → identity → location → complete`. Distinguishes "abandoned signup" from "waiting on admin". |
 | Suchak account state | `suchak_accounts.verification_status` (+ `public_status`) | `SuchakAccountLifecycleService` | — | The two co-vary in the normal case — show as **one** signal; call out `public_status` only when it diverges. |
 | Bilingual labels | `*_mr` sibling columns | — | — | Use `BilingualMasterLabel`; do not invent a second translation path. |
+| Per-Suchak reusable customer plan preset | `suchak_customer_plans` (`SuchakCustomerPlan`) | Suchak via `SuchakCustomerPlanService` | mgmt `GET/POST/PUT/DELETE /suchak/customer-plans`; carousel via `resolveCarousel()` | **Materialized into `suchak_service_packages` at SEND** through `SuchakPackageCatalogService::createCustomPackage` — **never FK-linked** back. `preset_key` NULL = full custom plan; `basic`/`premium` = OVERRIDE row for a code preset (price/visibility/order only). Presets stay code-defined in `SuchakDefaultPlans`; DB rows only override/add. NOT the platform `suchak_plans` catalog. `private_note` is Suchak-only, never in the customer carousel. |
 
 ---
 
@@ -62,6 +63,7 @@ Before writing a service that does any of these, **use the existing one**.
 | Mobile onboarding step snapshots | `MobileProfileStepSnapshotService` | Rejects unknown keys and `*_option`; rejects `marriages`. |
 | Photo URL resolution | `ProfilePhotoUrlService` | |
 | Profile display payload | `MobileProfileDisplayPresenter` | |
+| Ready-made Suchak service presets (Basic / Premium) | `App\Modules\Suchak\Support\SuchakDefaultPlans` | **Code-defined, never seeded as DB rows.** `suchak_customer_plans` rows only OVERRIDE a preset (price/visibility/order) or ADD custom plans on top; the preset name/price/services stay in this class. `SuchakCustomerPlanService::resolveCarousel()` merges code presets + overrides + visible customs. Do not duplicate the presets into the DB. |
 
 Full lists: `app/Support/*.php`, `app/Modules/Suchak/Services/*.php`.
 
@@ -85,6 +87,20 @@ Each of these was a real defect, not a hypothetical:
 6. **Suspected-but-innocent:** `income_amount` vs `annual_income` looked like a
    duplicate and is not — one is derived from the other. *Check before
    "fixing".*
+7. **`suchak_plans` vs `suchak_customer_plans` — same word "plan", different
+   meaning.** `suchak_plans` is the PLATFORM subscription catalog a Suchak *buys*
+   (route `GET /suchak/plans`, `SuchakBillingApiController`, consumed live by
+   Suchak-apk). `suchak_customer_plans` is the per-Suchak reusable presets a
+   Suchak *sells* to their customers (route `/suchak/customer-plans`,
+   `SuchakCustomerPlanService`). Never mount one on the other's route (the new
+   resource is deliberately at `/customer-plans`, not `/plans`, to avoid
+   shadowing the platform endpoint), and never reuse one model for the other.
+8. **Never re-add `source_template_id` / `template_*` FKs or `*_json` stage
+   columns to `suchak_service_package*`.** The reusable-plan "template" now lives
+   in the separate, mutable `suchak_customer_plans` table and is materialized at
+   send with NO back-FK. `SuchakServicePackage` stays immutable / admin-approved /
+   per-customer. `SuchakPackageRateCardFoundationTest` guards those send-time
+   tables — do not "link" the two models.
 
 ---
 

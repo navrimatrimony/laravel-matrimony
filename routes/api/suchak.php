@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Suchak\SuchakCollaborationsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCollaborationsMutationsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakConsentsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomerDetailApiController;
+use App\Http\Controllers\Api\Suchak\SuchakCustomerPlanApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomerShareCardApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomersApiController;
 use App\Http\Controllers\Api\Suchak\SuchakDashboardApiController;
@@ -84,6 +85,13 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::get('/plans', [SuchakBillingApiController::class, 'plans']);
     Route::get('/billing', [SuchakBillingApiController::class, 'status']);
     Route::post('/plans/{plan}/payu/start', [SuchakPayuCheckoutApiController::class, 'start']);
+    // Per-Suchak REUSABLE customer plan presets (management + carousel).
+    // Distinct from /plans above, which is the platform subscription catalog.
+    Route::get('/customer-plans', [SuchakCustomerPlanApiController::class, 'index']);
+    Route::post('/customer-plans', [SuchakCustomerPlanApiController::class, 'store']);
+    Route::post('/customer-plans/reorder', [SuchakCustomerPlanApiController::class, 'reorder']);
+    Route::put('/customer-plans/{id}', [SuchakCustomerPlanApiController::class, 'update']);
+    Route::delete('/customer-plans/{id}', [SuchakCustomerPlanApiController::class, 'destroy']);
     Route::get('/meetings', SuchakMeetingsApiController::class);
     Route::post('/meetings', [SuchakMeetingsMutationsApiController::class, 'schedule']);
     Route::post('/meetings/{visit}/complete', [SuchakMeetingsMutationsApiController::class, 'complete']);
