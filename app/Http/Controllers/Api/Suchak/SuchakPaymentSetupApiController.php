@@ -68,6 +68,11 @@ class SuchakPaymentSetupApiController extends Controller
             'currency' => ['nullable', 'string', 'size:3'],
             'agreement_title' => ['nullable', 'string', 'max:160'],
             'customer_accepted_terms' => ['nullable', 'boolean'],
+            // Custom-plan builder (no plan_key): free-form services plus an
+            // optional "fold in all Basic services" toggle.
+            'services' => ['nullable', 'array'],
+            'services.*' => ['string', 'max:160'],
+            'include_basic' => ['nullable', 'boolean'],
         ]);
 
         try {
@@ -107,28 +112,40 @@ class SuchakPaymentSetupApiController extends Controller
                     );
                 }
 
+                // Resolve the SELECTED plan up front so the existing-package
+                // lookup is scoped to it. A preset's package_name is its fixed
+                // plan name; a custom plan's is the submitted name. This makes
+                // selecting Basic always yield the Basic package — a different
+                // plan's package is never silently reused for this customer.
+                $plan = SuchakDefaultPlans::find($validated['plan_key'] ?? null);
+                $selectedPackageName = $plan !== null
+                    ? (string) $plan['name']
+                    : trim((string) ($validated['package_name'] ?? 'Matchmaking service'));
+                if ($selectedPackageName === '') {
+                    $selectedPackageName = 'Matchmaking service';
+                }
+
                 $package = SuchakServicePackage::query()
                     ->where('suchak_account_id', $account->id)
                     ->where('customer_context_id', $customerContext->id)
                     ->where('package_status', SuchakServicePackage::STATUS_PUBLISHED)
+                    ->where('package_name', $selectedPackageName)
                     ->orderByDesc('id')
                     ->first();
 
                 $createdPackage = false;
                 if ($package === null) {
-                    $plan = SuchakDefaultPlans::find($validated['plan_key'] ?? null);
-
                     if ($plan !== null) {
                         // Ready-made platform default plan: fixed name / price / services,
                         // published immediately so the Suchak can collect without any
                         // per-package admin review. Auto-publish is scoped to these
-                        // pre-vetted presets only — custom packages still go to review.
+                        // pre-vetted presets only.
                         $payload = SuchakDefaultPlans::catalogPayload($plan);
                         $package = $packageCatalogService->createCustomPackage(
                             $account,
                             $user,
                             [
-                                'package_name' => $plan['name'],
+                                'package_name' => $selectedPackageName,
                                 'package_name_mr' => $plan['name_mr'] ?? null,
                                 'package_description' => $plan['description'] ?? '',
                                 'package_description_mr' => $plan['description_mr'] ?? null,
@@ -143,20 +160,65 @@ class SuchakPaymentSetupApiController extends Controller
                             true,
                         );
                     } else {
+                        // Custom plan builder: one stage holding the composed
+                        // deliverables — the Basic services folded in (optional)
+                        // plus each free-form service the Suchak typed. Published
+                        // immediately, same as the presets, so it can collect
+                        // without hitting the per-package admin-review block.
+                        $stageKey = 'custom_plan';
+                        $includeBasic = (bool) ($validated['include_basic'] ?? false);
+                        $services = array_values(array_filter(
+                            array_map(
+                                static fn ($service): string => trim((string) $service),
+                                $validated['services'] ?? [],
+                            ),
+                            static fn (string $service): bool => $service !== '',
+                        ));
+
+                        $deliverables = $includeBasic
+                            ? SuchakDefaultPlans::deliverablesForStage(SuchakDefaultPlans::KEY_BASIC, $stageKey)
+                            : [];
+
+                        $sort = (count($deliverables) + 1) * 10;
+                        foreach ($services as $service) {
+                            $deliverables[] = [
+                                'stage_key' => $stageKey,
+                                'deliverable_key' => $stageKey.'_'.$sort,
+                                'deliverable_name' => $service,
+                                'sort_order' => $sort,
+                            ];
+                            $sort += 10;
+                        }
+
+                        if ($deliverables === []) {
+                            throw new InvalidArgumentException(
+                                'Add at least one service, or include the Basic services, before preparing the custom plan.'
+                            );
+                        }
+
                         $package = $packageCatalogService->createCustomPackage(
                             $account,
                             $user,
                             [
-                                'package_name' => $validated['package_name'] ?? 'Matchmaking service',
+                                'package_name' => $selectedPackageName,
                                 'package_description' => 'Customer service package prepared from Suchak mobile for Track A collection.',
                                 'price_amount' => (string) ($validated['price_amount'] ?? '5000'),
                                 'currency' => strtoupper((string) ($validated['currency'] ?? 'INR')),
                             ],
-                            $this->defaultStages(),
-                            $this->defaultDeliverables(),
+                            [
+                                [
+                                    'stage_key' => $stageKey,
+                                    'stage_name' => $selectedPackageName,
+                                    'stage_description' => 'Custom service scope prepared from Suchak mobile.',
+                                    'sort_order' => 10,
+                                    'expected_days' => 30,
+                                ],
+                            ],
+                            $deliverables,
                             $customerContext,
                             $request->ip(),
                             $request->userAgent(),
+                            true,
                         );
                     }
                     $createdPackage = true;
@@ -281,51 +343,5 @@ class SuchakPaymentSetupApiController extends Controller
                 'payment_identity' => $account->fresh()->trackAPaymentIdentity(),
             ]),
         ], 201);
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function defaultStages(): array
-    {
-        return [
-            [
-                'stage_key' => 'intake_and_shortlist',
-                'stage_name' => 'Intake and shortlist',
-                'stage_description' => 'Collect requirements and prepare shortlist.',
-                'sort_order' => 10,
-                'expected_days' => 7,
-            ],
-            [
-                'stage_key' => 'family_coordination',
-                'stage_name' => 'Family coordination',
-                'stage_description' => 'Coordinate discussion and next steps.',
-                'sort_order' => 20,
-                'expected_days' => 14,
-            ],
-        ];
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function defaultDeliverables(): array
-    {
-        return [
-            [
-                'stage_key' => 'intake_and_shortlist',
-                'deliverable_key' => 'shortlist_pack',
-                'deliverable_name' => 'Shortlist pack',
-                'deliverable_description' => 'Prepared candidate shortlist for family review.',
-                'sort_order' => 10,
-            ],
-            [
-                'stage_key' => 'family_coordination',
-                'deliverable_key' => 'coordination_update',
-                'deliverable_name' => 'Coordination update',
-                'deliverable_description' => 'Status update after family coordination.',
-                'sort_order' => 20,
-            ],
-        ];
     }
 }

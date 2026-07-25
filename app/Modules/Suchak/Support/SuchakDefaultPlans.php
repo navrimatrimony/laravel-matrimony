@@ -140,4 +140,38 @@ final class SuchakDefaultPlans
             'deliverables' => $deliverables,
         ];
     }
+
+    /**
+     * A preset's deliverables re-expressed in catalog shape, bound to an
+     * arbitrary $stageKey and starting at $startSort. Lets a custom package fold
+     * a preset's services (e.g. Basic) into its OWN single stage, reusing the
+     * same deliverable shape as {@see catalogPayload} without duplicating it.
+     * Sort orders step by 10 so callers can append more deliverables after these.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function deliverablesForStage(string $key, string $stageKey, int $startSort = 10): array
+    {
+        $plan = self::find($key);
+        if ($plan === null) {
+            return [];
+        }
+
+        $deliverables = [];
+        $sort = $startSort;
+        foreach ($plan['deliverables'] as $d) {
+            $deliverables[] = [
+                'stage_key' => $stageKey,
+                'deliverable_key' => $stageKey.'_'.$sort,
+                'deliverable_name' => $d['name'],
+                'deliverable_name_mr' => $d['name_mr'] ?? null,
+                'deliverable_description' => $d['description'] ?? '',
+                'deliverable_description_mr' => $d['description_mr'] ?? null,
+                'sort_order' => $sort,
+            ];
+            $sort += 10;
+        }
+
+        return $deliverables;
+    }
 }
