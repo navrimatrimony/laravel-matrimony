@@ -41,7 +41,25 @@
     $upiVpa = $paymentIdentity['upi_vpa'] ?? null;
     $qrUrl = $paymentIdentity['payment_qr_url'] ?? null;
     $identityConfigured = (bool) ($paymentIdentity['is_configured'] ?? false);
+
+    // Share-preview (Open Graph) values — override the site-wide default so a
+    // WhatsApp link unfurl shows THIS request's scannable UPI QR plus who/how
+    // much, instead of the generic homepage image.
+    $ogTitle = trim((!empty($candidateName) ? $candidateName.' साठी ' : '').'पेमेंट विनंती'
+        .($amountDisplay !== null ? ' — '.$currencySymbol.$amountDisplay : ''));
+    $ogDescription = trim(($planName !== '' ? $planName.' — ' : '').'UPI ने भरा');
+    // Only Track A requests with a configured VPA have a per-request QR to show;
+    // otherwise fall back to the site default image (no section defined).
+    $ogQrImage = (!empty($showTrackAIdentity) && !empty($upiVpa) && !empty($token))
+        ? route('suchak.payment-requests.qr', ['token' => $token])
+        : null;
 @endphp
+
+@section('og_title', e($ogTitle))
+@section('og_description', e($ogDescription))
+@if ($ogQrImage)
+    @section('og_image', e($ogQrImage))
+@endif
 
 @section('content')
 <div class="mx-auto max-w-xl px-4 py-6 sm:py-8">

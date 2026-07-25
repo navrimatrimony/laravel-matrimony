@@ -352,6 +352,23 @@ class SuchakPaymentRequestService
         return route('suchak.payment-requests.show', ['token' => $plainToken], true);
     }
 
+    /**
+     * Read-only lookup by public token for serving a page asset (e.g. the
+     * share-preview QR image). Unlike {@see openPublicRequest()} this never
+     * mutates status or records an "opened" event, so a link-preview crawler
+     * fetching the asset cannot flip the request to OPENED. Returns null when
+     * the token matches nothing.
+     */
+    public function findPublicRequestForAsset(string $plainToken): ?SuchakPaymentRequest
+    {
+        $tokenHash = hash('sha256', $plainToken);
+
+        return SuchakPaymentRequest::query()
+            ->where('request_token_hash', $tokenHash)
+            ->with($this->requestRelations())
+            ->first();
+    }
+
     private function assertRequestScope(
         SuchakServicePackage $package,
         SuchakCustomerAgreement $agreement,

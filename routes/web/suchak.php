@@ -64,6 +64,10 @@ Route::prefix('suchak')
             ->where('token', '[A-Za-z0-9]{64}')
             ->middleware('throttle:30,1')
             ->name('payment-requests.show');
+        Route::get('/payment-requests/{token}/qr.png', [PaymentRequestPublicController::class, 'qr'])
+            ->where('token', '[A-Za-z0-9]{64}')
+            ->middleware('throttle:60,1')
+            ->name('payment-requests.qr');
         Route::get('/customer-portal/{token}', [CustomerPortalController::class, 'show'])
             ->where('token', '[A-Za-z0-9]{64}')
             ->middleware('throttle:30,1')
