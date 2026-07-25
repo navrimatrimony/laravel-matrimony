@@ -48,17 +48,28 @@
     $ogTitle = trim((!empty($candidateName) ? $candidateName.' साठी ' : '').'पेमेंट विनंती'
         .($amountDisplay !== null ? ' — '.$currencySymbol.$amountDisplay : ''));
     $ogDescription = trim(($planName !== '' ? $planName.' — ' : '').'UPI ने भरा');
-    // Only Track A requests with a configured VPA have a per-request QR to show;
-    // otherwise fall back to the site default image (no section defined).
-    $ogQrImage = (!empty($showTrackAIdentity) && !empty($upiVpa) && !empty($token))
-        ? route('suchak.payment-requests.qr', ['token' => $token])
-        : null;
+    // Share-preview image: prefer THIS request's scannable UPI-intent QR — the
+    // qr.png route renders it live from the Suchak's CURRENT UPI VPA, so it works
+    // the moment the Suchak configures UPI. If there is no VPA but the Suchak did
+    // upload a payment-QR image, use that image URL directly. When neither exists
+    // there is genuinely no QR, so emit NO og:image at all (og_image_none) instead
+    // of letting the WhatsApp unfurl fall back to the site homepage image.
+    $ogImage = null;
+    if (!empty($showTrackAIdentity) && !empty($token)) {
+        if (!empty($upiVpa)) {
+            $ogImage = route('suchak.payment-requests.qr', ['token' => $token]);
+        } elseif (!empty($qrUrl)) {
+            $ogImage = $qrUrl;
+        }
+    }
 @endphp
 
 @section('og_title', e($ogTitle))
 @section('og_description', e($ogDescription))
-@if ($ogQrImage)
-    @section('og_image', e($ogQrImage))
+@if ($ogImage)
+    @section('og_image', e($ogImage))
+@else
+    @section('og_image_none')@endsection
 @endif
 
 @section('content')

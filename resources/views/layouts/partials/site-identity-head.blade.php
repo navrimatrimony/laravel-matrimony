@@ -36,7 +36,11 @@
     <meta property="og:image" content="@yield('og_image')">
     <meta name="twitter:image" content="@yield('og_image')">
     <meta name="twitter:card" content="summary_large_image">
-@elseif ($seoImageHead)
+@elseif ($seoImageHead && ! $__env->hasSection('og_image_none'))
+    {{-- A page may define the (empty) `og_image_none` section to opt OUT of the
+         site-wide default SEO image — e.g. a payment page that genuinely has no
+         per-request QR must emit NO og:image so a WhatsApp unfurl does not fall
+         back to the homepage image. --}}
     <meta property="og:image" content="{{ $seoImageHead }}">
     <meta name="twitter:card" content="summary_large_image">
 @endif
