@@ -20,6 +20,9 @@ class UpdateVillageCoordinatesCommand extends Command
     /** @var list<string> */
     private const REQUIRED_HEADERS = ['lgd_code', 'lat', 'lng'];
 
+    /** Value written to `addresses.geo_source` for rows this command overwrites. */
+    private const GEO_SOURCE = 'lgd_csv_override';
+
     public function handle(): int
     {
         $path = (string) $this->argument('path');
@@ -277,6 +280,16 @@ class UpdateVillageCoordinatesCommand extends Command
 
         $bindings[] = now()->toDateTimeString();
 
+        // `addresses.geo_source` records where the row's CURRENT coordinate came from
+        // ({@see \App\Console\Commands\RepairVillageCoordinatesCommand}). This command overwrites that
+        // coordinate from an operator-supplied CSV, so it must restamp the provenance too — otherwise a
+        // row keeps claiming an India Post origin for a point that no longer comes from India Post.
+        $geoSource = null;
+        if (Schema::hasColumn(Location::geoTable(), 'geo_source')) {
+            $geoSource = $grammar->wrap('geo_source');
+            $bindings[] = self::GEO_SOURCE;
+        }
+
         $placeholders = implode(',', array_fill(0, count($rows), '?'));
         foreach ($rows as $row) {
             $bindings[] = $row['lgd_code'];
@@ -285,7 +298,7 @@ class UpdateVillageCoordinatesCommand extends Command
         $sql = "UPDATE {$table}
             SET {$lat} = CASE {$lgd} ".implode(' ', $latCases)." ELSE {$lat} END,
                 {$lng} = CASE {$lgd} ".implode(' ', $lngCases)." ELSE {$lng} END,
-                {$updatedAt} = ?
+                {$updatedAt} = ?".($geoSource === null ? '' : ",\n                {$geoSource} = ?")."
             WHERE {$hierarchy} = 'village'
               AND {$lgd} IN ({$placeholders})";
 
