@@ -3,6 +3,7 @@
 namespace App\Modules\Suchak\Services;
 
 use App\Models\AdminSetting;
+use App\Models\MatrimonyProfile;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakConsent;
 use App\Models\SuchakConsentEvent;
@@ -280,6 +281,7 @@ class SuchakConsentService
         if ($consentMethod !== '' && ! in_array($consentMethod, SuchakConsent::METHODS, true)) {
             throw new InvalidArgumentException('Consent method is not allowed.');
         }
+        $this->assertIntendedMobileBelongsToProfile($representation, $attributes, $consentMethod);
 
         return DB::transaction(function () use ($representation, $actor, $attributes, $consentType, $consentChannel, $consentMethod, $ipAddress, $userAgent, $isRenewal): array {
             $openConsent = SuchakConsent::query()
@@ -1051,6 +1053,50 @@ class SuchakConsentService
     {
         if (! in_array($value, $allowed, true)) {
             throw new InvalidArgumentException($message);
+        }
+    }
+
+    /**
+     * Product rule: a consent request may only be sent to a number ALREADY
+     * stored against that person's profile. Otherwise a Suchak can type their
+     * own number, receive the consent link themselves, tick it, and hold a
+     * consent the person never gave — the request was validated as a string
+     * only ('required|string|max:20'), so nothing stopped this.
+     *
+     * Offline signed proof is deliberately exempt: nothing is DELIVERED to the
+     * number there, the uploaded signed document is the evidence, and the
+     * number is recorded metadata. Blocking it would reject legitimate paper
+     * consents without closing any hole.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function assertIntendedMobileBelongsToProfile(
+        SuchakProfileRepresentation $representation,
+        array $attributes,
+        string $consentMethod,
+    ): void {
+        if ($consentMethod === SuchakConsent::METHOD_OFFLINE_SIGNED_PROOF) {
+            return;
+        }
+
+        $mobile = MobileNumber::normalize((string) (
+            $attributes['intended_mobile'] ?? $attributes['consent_mobile_number'] ?? ''
+        ));
+        if ($mobile === null || $mobile === '') {
+            throw new InvalidArgumentException(__('suchak.consent.mobile_required'));
+        }
+
+        $profile = $representation->matrimonyProfile()->first();
+        if (! $profile instanceof MatrimonyProfile) {
+            throw new InvalidArgumentException(__('suchak.consent.profile_missing'));
+        }
+
+        $allowed = app(SuchakConsentContactSuggestionService::class)->allowedMobiles($profile);
+
+        // A profile with no stored number at all cannot be consented to yet —
+        // failing open here would reopen the exact hole this closes.
+        if ($allowed === [] || ! in_array($mobile, $allowed, true)) {
+            throw new InvalidArgumentException(__('suchak.consent.mobile_not_on_profile'));
         }
     }
 

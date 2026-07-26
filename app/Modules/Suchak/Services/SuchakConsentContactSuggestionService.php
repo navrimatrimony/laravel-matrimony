@@ -65,6 +65,25 @@ final class SuchakConsentContactSuggestionService
     }
 
     /**
+     * The consent allow-list: every number already recorded against this
+     * profile, normalised for comparison.
+     *
+     * This is the SAME set the app offers as options — exposed so the write
+     * path can enforce what the read path merely suggests. Without it a Suchak
+     * could aim a consent request at any number they typed, including their
+     * own, and end up holding a "valid" consent for a person who never agreed.
+     *
+     * @return array<int, string>
+     */
+    public function allowedMobiles(MatrimonyProfile $profile): array
+    {
+        return array_values(array_unique(array_map(
+            static fn (array $row): string => (string) $row['mobile'],
+            $this->storedContacts($profile),
+        )));
+    }
+
+    /**
      * Every number stored against this profile, ordered by consent priority.
      *
      * @return array<int, array<string, mixed>>
@@ -97,15 +116,38 @@ final class SuchakConsentContactSuggestionService
         $add($ownMobile !== null ? (string) $ownMobile : null, ConsentContactRole::SELF, $profile->full_name);
 
         // 2. profile_contacts (canonical contact store, relation-aware).
+        //    The relation is a FK to master_contact_relations (`contact_relation_id`),
+        //    NOT a `relation_type` string — that column lives on profile_siblings and
+        //    profile_relatives. Selecting the wrong one threw a SQL error that took
+        //    this whole list down, which is why the guard below is explicit.
         if (Schema::hasTable('profile_contacts')) {
+            $hasRelationFk = Schema::hasColumn('profile_contacts', 'contact_relation_id');
+            $columns = ['phone_number', 'contact_name'];
+            if ($hasRelationFk) {
+                $columns[] = 'contact_relation_id';
+            }
+
             $contacts = DB::table('profile_contacts')
                 ->where('profile_id', $profile->id)
                 ->orderByDesc('is_primary')
-                ->get(['phone_number', 'relation_type', 'contact_name']);
+                ->get($columns);
+
+            $relationKeys = [];
+            if ($hasRelationFk && Schema::hasTable('master_contact_relations')) {
+                $ids = $contacts->pluck('contact_relation_id')->filter()->unique()->all();
+                if ($ids !== []) {
+                    $relationKeys = DB::table('master_contact_relations')
+                        ->whereIn('id', $ids)
+                        ->pluck('key', 'id')
+                        ->all();
+                }
+            }
+
             foreach ($contacts as $contact) {
+                $relationId = $hasRelationFk ? ($contact->contact_relation_id ?? null) : null;
                 $add(
                     $contact->phone_number !== null ? (string) $contact->phone_number : null,
-                    $this->roleFromRelation((string) ($contact->relation_type ?? '')),
+                    $this->roleFromRelation((string) ($relationKeys[$relationId] ?? '')),
                     $contact->contact_name !== null ? (string) $contact->contact_name : null,
                 );
             }
@@ -168,8 +210,12 @@ final class SuchakConsentContactSuggestionService
     {
         $relation = strtolower(trim($relation));
 
+        // An unrecorded relation must NOT fall through to SELF: `self` is the
+        // top consent priority, so an unlabelled row would be offered to the
+        // Suchak as "the candidate's own number" on no evidence at all. Unknown
+        // means unknown — it sorts last.
         return match (true) {
-            $relation === '' || str_contains($relation, 'self') || str_contains($relation, 'candidate') => ConsentContactRole::SELF,
+            str_contains($relation, 'self') || str_contains($relation, 'candidate') => ConsentContactRole::SELF,
             str_contains($relation, 'father') => ConsentContactRole::FATHER,
             str_contains($relation, 'mother') => ConsentContactRole::MOTHER,
             str_contains($relation, 'brother') || str_contains($relation, 'sister') || str_contains($relation, 'sibling') => ConsentContactRole::SIBLING,

@@ -315,6 +315,11 @@ return [
         'consent_required_for_edit' => 'You can edit this profile only after consent is granted. This person already exists on the platform, so their approval is required first.',
     ],
 
+    'consent' => [
+        'mobile_required' => 'A mobile number is required to request consent.',
+        'profile_missing' => 'The profile for this customer could not be found.',
+        'mobile_not_on_profile' => 'Consent can only be requested on a number already recorded on that person\'s profile. Add the number to the profile first, then request consent.',
+    ],
     'match_suggestions' => [
         'loaded' => 'Match suggestions loaded.',
         'decision_saved' => 'Your decision has been saved.',
