@@ -208,13 +208,14 @@ class RepairVillageCoordinatesCommand extends Command
             return self::FAILURE;
         }
 
-        $csvPath = (string) ($this->option('csv')
-            ?: 'E:/laravel backup/country,state,district,taluka,village,pincode/all india pincode/all india.csv');
-        if (! is_file($csvPath)) {
-            $this->error("CSV not found: {$csvPath}");
+        $csvPath = $this->resolveCsv($stateSlug);
+        if ($csvPath === null) {
+            $this->error('No postal directory CSV found. Pass --csv=<path>, or ship '
+                .'database/data/india-post-offices-'.$stateSlug.'.csv');
 
             return self::FAILURE;
         }
+        $this->line('  source CSV: '.$csvPath);
 
         $apply = (bool) $this->option('apply');
         $force = (bool) $this->option('force');
@@ -268,6 +269,28 @@ class RepairVillageCoordinatesCommand extends Command
     }
 
     // ------------------------------------------------------------------------ loading
+
+    /**
+     * `--csv`, then the per-state extract committed to the repo, then the full all-India dump on the
+     * dev workstation. The repo copy is what makes this runnable on the server: the 23 MB all-India
+     * file lives outside the project, and a repair whose source is not versioned cannot be reproduced.
+     */
+    private function resolveCsv(string $stateSlug): ?string
+    {
+        $candidates = array_filter([
+            (string) $this->option('csv'),
+            database_path("data/india-post-offices-{$stateSlug}.csv"),
+            'E:/laravel backup/country,state,district,taluka,village,pincode/all india pincode/all india.csv',
+        ]);
+
+        foreach ($candidates as $path) {
+            if (is_file($path)) {
+                return $path;
+            }
+        }
+
+        return null;
+    }
 
     private function schemaReady(): bool
     {
