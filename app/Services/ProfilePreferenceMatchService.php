@@ -48,11 +48,31 @@ class ProfilePreferenceMatchService
     private static array $residenceGeoCache = [];
 
     /**
+     * Per-run memo for the residence display line. {@see build()} renders it for the VIEWER on every
+     * call, and a run builds both directions for every candidate — so the uncached line meant one
+     * `LocationFormatterService::formatLocation()` (leaf lookup + full ancestor chain hydration) per
+     * pair instead of one per profile.
+     *
+     * @var array<int, string>
+     */
+    private static array $residenceDisplayCache = [];
+
+    /**
+     * Per-run memo for "which degree does this profile hold". Resolving it walks the alias table and
+     * can fall back to a LIKE scan over `master_education`; it too was being asked once per pair.
+     *
+     * @var array<int, int|null>
+     */
+    private static array $viewerDegreeIdCache = [];
+
+    /**
      * Drops every per-run memo owned by this service (and the shared geography resolver).
      */
     public static function flushRuntimeCaches(): void
     {
         self::$residenceGeoCache = [];
+        self::$residenceDisplayCache = [];
+        self::$viewerDegreeIdCache = [];
         NearbyGeographyResolver::flush();
     }
 
@@ -495,7 +515,7 @@ class ProfilePreferenceMatchService
             $their = __('preference_match.open_to_all');
         }
 
-        $yours = MatrimonyProfile::residenceLocationDisplayLineFor($viewer);
+        $yours = self::residenceDisplayLine($viewer);
         if ($yours === '') {
             $yours = __('preference_match.value_unknown');
         }
@@ -612,6 +632,23 @@ class ProfilePreferenceMatchService
      *
      * @return array{district_id: int, state_id: int, country_id: int, taluka_id: int}
      */
+    /**
+     * Same string {@see MatrimonyProfile::residenceLocationDisplayLineFor()} returns, resolved once per
+     * profile per run instead of once per compared pair.
+     */
+    private static function residenceDisplayLine(MatrimonyProfile $viewer): string
+    {
+        $pid = (int) $viewer->getKey();
+        if ($pid <= 0) {
+            return MatrimonyProfile::residenceLocationDisplayLineFor($viewer);
+        }
+        if (isset(self::$residenceDisplayCache[$pid])) {
+            return self::$residenceDisplayCache[$pid];
+        }
+
+        return self::$residenceDisplayCache[$pid] = MatrimonyProfile::residenceLocationDisplayLineFor($viewer);
+    }
+
     private static function residenceGeoWithTaluka(MatrimonyProfile $viewer): array
     {
         $pid = (int) $viewer->getKey();
@@ -696,7 +733,15 @@ class ProfilePreferenceMatchService
      */
     private static function resolveViewerPrimaryDegreeId(MatrimonyProfile $viewer): ?int
     {
-        return PartnerPreferenceSuggestionService::resolveProfileEducationDegreeId($viewer);
+        $pid = (int) $viewer->getKey();
+        if ($pid <= 0) {
+            return PartnerPreferenceSuggestionService::resolveProfileEducationDegreeId($viewer);
+        }
+        if (array_key_exists($pid, self::$viewerDegreeIdCache)) {
+            return self::$viewerDegreeIdCache[$pid];
+        }
+
+        return self::$viewerDegreeIdCache[$pid] = PartnerPreferenceSuggestionService::resolveProfileEducationDegreeId($viewer);
     }
 
     /**

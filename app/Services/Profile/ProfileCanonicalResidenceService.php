@@ -16,14 +16,41 @@ final class ProfileCanonicalResidenceService
 
     private const CACHE_TTL_SECONDS = 3600;
 
+    /**
+     * Per-process schema memos. `matrimony_profiles.location_id` is a virtual attribute that resolves
+     * through this class, so a single match request reads it hundreds of times — and each read was
+     * paying three `information_schema` round trips before it got to the actual row. Table/column
+     * presence cannot change inside a process.
+     */
+    private static ?bool $hasAddressTypesTable = null;
+
+    private static ?bool $hasProfileAddressesTable = null;
+
+    private static ?string $locationColumn = null;
+
     public static function forgetCachedMasters(): void
     {
         Cache::forget(self::CACHE_KEY_CURRENT_TYPE_ID);
     }
 
+    private static function hasAddressTypesTable(): bool
+    {
+        return self::$hasAddressTypesTable ??= Schema::hasTable('master_address_types');
+    }
+
+    private static function hasProfileAddressesTable(): bool
+    {
+        return self::$hasProfileAddressesTable ??= Schema::hasTable('profile_addresses');
+    }
+
+    private static function locationColumn(): string
+    {
+        return self::$locationColumn ??= (Schema::hasColumn('profile_addresses', 'location_id') ? 'location_id' : 'city_id');
+    }
+
     public static function currentAddressTypeId(): ?int
     {
-        if (! Schema::hasTable('master_address_types')) {
+        if (! self::hasAddressTypesTable()) {
             return null;
         }
 
@@ -37,10 +64,10 @@ final class ProfileCanonicalResidenceService
     public static function locationLeafId(int $profileId): ?int
     {
         $tid = self::currentAddressTypeId();
-        if ($tid === null || ! Schema::hasTable('profile_addresses')) {
+        if ($tid === null || ! self::hasProfileAddressesTable()) {
             return null;
         }
-        $col = Schema::hasColumn('profile_addresses', 'location_id') ? 'location_id' : 'city_id';
+        $col = self::locationColumn();
         $cid = DB::table('profile_addresses')
             ->where('profile_id', $profileId)
             ->where('address_scope', 'self')
@@ -53,7 +80,7 @@ final class ProfileCanonicalResidenceService
     public static function addressLineRaw(int $profileId): ?string
     {
         $tid = self::currentAddressTypeId();
-        if ($tid === null || ! Schema::hasTable('profile_addresses')) {
+        if ($tid === null || ! self::hasProfileAddressesTable()) {
             return null;
         }
         $line = DB::table('profile_addresses')
@@ -81,7 +108,7 @@ final class ProfileCanonicalResidenceService
         bool $touchCity,
         bool $touchLine,
     ): void {
-        if (! Schema::hasTable('profile_addresses')) {
+        if (! self::hasProfileAddressesTable()) {
             return;
         }
         $tid = self::currentAddressTypeId();
@@ -111,7 +138,7 @@ final class ProfileCanonicalResidenceService
             $cityNormalized = ($cityId !== null && (int) $cityId > 0) ? (int) $cityId : null;
         }
 
-        $locCol = Schema::hasColumn('profile_addresses', 'location_id') ? 'location_id' : 'city_id';
+        $locCol = self::locationColumn();
 
         if ($row) {
             $upd = ['updated_at' => $now];

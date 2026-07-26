@@ -96,6 +96,51 @@ class MatchingService
     private array $communityLockCache = [];
 
     /**
+     * Candidate pools already fetched during this run, keyed by the SQL-shape signature returned by
+     * {@see self::candidatePoolSignature()}. The relaxation ladder walks up to four tiers, but the
+     * only tier input the candidate SQL reads is the caste lock — so at most two distinct queries
+     * exist per run, and usually one. Re-running the pool per tier was pure repetition.
+     *
+     * @var array<string, Collection<int, MatrimonyProfile>>
+     */
+    private array $tierPoolCache = [];
+
+    /**
+     * Tier-INDEPENDENT half of a candidate row (score, base score, reasons, assumed fields, explain),
+     * keyed by candidate profile id. Everything in here is a pure function of the seeker/candidate
+     * pair, so a candidate re-admitted at a higher tier must reuse it rather than recompute it — that
+     * repetition was the dominant cost of the ladder. The tier-DEPENDENT half (`warnings`) is still
+     * computed per tier, but only from already-cached preference builds, so it costs no queries.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    private array $candidateEvalCache = [];
+
+    /** @var array<int, list<int>> */
+    private array $skipExcludedCache = [];
+
+    /**
+     * Residence district/state/country per profile id. {@see MatrimonyProfile::residenceGeoAddressIds()}
+     * walks the address hierarchy on every call and was being asked once per PAIR from both
+     * {@see self::locationProximityTier()} and {@see self::scoreLocationPart()}.
+     *
+     * @var array<int, array{district_id: int|null, state_id: int|null, country_id: int|null}>
+     */
+    private array $residenceGeoCache = [];
+
+    /**
+     * Per-run memos for the education component. Both were resolved per PAIR: the degree id walks the
+     * alias table (and can fall back to a LIKE scan), and the sort order was a `value()` per profile
+     * per comparison. Both are properties of one profile / one degree, not of the pair.
+     *
+     * @var array<int, int|null>
+     */
+    private array $educationDegreeIdCache = [];
+
+    /** @var array<int, int> */
+    private array $educationSortOrderCache = [];
+
+    /**
      * Tier currently being evaluated by the relaxation ladder. Read by
      * {@see self::applyBaseCandidateFilters()} and {@see self::mutuallyPreferenceCompatible()} so the
      * five tab-specific candidate builders keep their signatures.
@@ -186,21 +231,20 @@ class MatchingService
             return false;
         }
 
-        $savedPref = $this->prefMap;
-        $savedDir = $this->directionalBuildCache;
         $savedTier = $this->activeTier;
 
         try {
-            $this->directionalBuildCache = [];
             // A standalone eligibility question is always asked at the strict tier.
             $this->activeTier = MatchRelaxationLadder::TIER_STRICT;
-            ProfilePreferenceMatchService::flushRuntimeCaches();
-            $this->prefMap = $this->bulkLoadTargetPreferences([(int) $seeker->getKey(), (int) $candidate->getKey()]);
+            // Top up rather than replace. The preference payload and the directional builds are keyed
+            // by profile id / profile pair and contain nothing tier-specific, so an entry already
+            // resolved by the feed run is the same entry this call would have re-fetched. Wiping the
+            // caches here (and flushing the shared geography memo) made the Suchak fit loop re-read the
+            // whole seeker context once per candidate.
+            $this->ensureTargetPreferencesLoaded([(int) $seeker->getKey(), (int) $candidate->getKey()]);
 
             return $this->mutuallyPreferenceCompatible($seeker, $candidate);
         } finally {
-            $this->prefMap = $savedPref;
-            $this->directionalBuildCache = $savedDir;
             $this->activeTier = $savedTier;
         }
     }
@@ -229,6 +273,12 @@ class MatchingService
         $this->directionalBuildCache = [];
         $this->componentsCache = [];
         $this->communityLockCache = [];
+        $this->tierPoolCache = [];
+        $this->candidateEvalCache = [];
+        $this->skipExcludedCache = [];
+        $this->residenceGeoCache = [];
+        $this->educationDegreeIdCache = [];
+        $this->educationSortOrderCache = [];
         $this->activeTier = MatchRelaxationLadder::TIER_STRICT;
         ProfilePreferenceMatchService::flushRuntimeCaches();
 
@@ -311,8 +361,14 @@ class MatchingService
     }
 
     /**
-     * One pass of the ladder at {@see self::$activeTier}. Identical to the historical single-pass body;
-     * only the tolerated-mismatch set differs per tier.
+     * One pass of the ladder at {@see self::$activeTier}. Produces exactly the rows the historical
+     * single-pass body produced; the difference is that everything tier-independent is computed once
+     * for the whole run and reused, instead of being recomputed from scratch on every tier.
+     *
+     * Per tier, only three things can actually change: which candidates the SQL returns (caste lock),
+     * which of them survive {@see self::mutuallyPreferenceCompatible()}, and the tolerated-mismatch
+     * warnings. The first is memoised by SQL shape, the other two are pure PHP over preference builds
+     * that are already cached.
      *
      * @return Collection<int, array<string, mixed>>
      */
@@ -323,8 +379,51 @@ class MatchingService
         int $poolLimit,
         bool $withExplain,
     ): Collection {
-        $this->directionalBuildCache = [];
-        $this->componentsCache = [];
+        $candidates = $this->tierCandidatePool($profile, $tab, $oppositeKey, $poolLimit);
+
+        // NEVER RELAXED at any tier: an explicitly rejected pair stays rejected.
+        $skipExcluded = $this->candidateIdsExcludedBySkips((int) $profile->id);
+
+        $out = collect();
+        foreach ($candidates as $candidate) {
+            if (in_array((int) $candidate->id, $skipExcluded, true)) {
+                continue;
+            }
+            if (! $this->mutuallyPreferenceCompatible($profile, $candidate)) {
+                continue;
+            }
+
+            $row = $this->evaluateCandidate($profile, $candidate, $withExplain);
+            // Tolerated near-misses: shown to the seeker instead of silently deleting the candidate.
+            // This is the one part of the row that genuinely depends on the tier the candidate was
+            // admitted at, so it is recomputed here — from cached builds, at no query cost.
+            $row['warnings'] = $this->toleratedMismatchWarnings($profile, $candidate);
+            $out->push($row);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Candidate pool for the current tier, memoised by SQL shape.
+     *
+     * The tier reaches the candidate query through exactly one door — {@see self::applyCommunityLock()}
+     * drops the caste `whereIn` once caste is relaxed. Every other filter is tier-invariant. So a run
+     * needs at most two pool queries (locked / relaxed), and a seeker with no caste lock needs one,
+     * instead of one full query + eager-load + bulk preference load per tier.
+     *
+     * @return Collection<int, MatrimonyProfile>
+     */
+    private function tierCandidatePool(
+        MatrimonyProfile $profile,
+        string $tab,
+        string $oppositeKey,
+        int $poolLimit,
+    ): Collection {
+        $signature = $this->candidatePoolSignature($profile, $tab, $poolLimit);
+        if (isset($this->tierPoolCache[$signature])) {
+            return $this->tierPoolCache[$signature];
+        }
 
         $candidates = match ($tab) {
             self::TAB_VIEWED => $this->candidatesWhoViewedMe($profile, $oppositeKey),
@@ -350,58 +449,81 @@ class MatchingService
 
         $this->eagerLoadMatchingRelations($candidates);
 
-        // NEVER RELAXED at any tier: an explicitly rejected pair stays rejected.
-        $skipExcluded = $this->candidateIdsExcludedBySkips((int) $profile->id);
-
         $ids = $candidates->pluck('id')->push($profile->id)->unique()->values()->all();
-        $this->prefMap = $this->bulkLoadTargetPreferences($ids);
+        $this->ensureTargetPreferencesLoaded($ids);
 
-        $out = collect();
-        foreach ($candidates as $candidate) {
-            if (in_array((int) $candidate->id, $skipExcluded, true)) {
-                continue;
-            }
-            if (! $this->mutuallyPreferenceCompatible($profile, $candidate)) {
-                continue;
-            }
+        return $this->tierPoolCache[$signature] = $candidates;
+    }
 
-            $baseScore = $this->calculateScore($profile, $candidate);
-            $seekerUser = $profile->user;
-            $candidateUser = $candidate->user;
-            $withActorAdjustments = $this->pool()->appliesActorAdjustments();
-            if ($withActorAdjustments) {
-                $score = ($seekerUser && $candidateUser)
-                    ? $this->matchBoost->applyBoost($seekerUser, $candidateUser, $baseScore)
-                    : $baseScore;
-                if ($seekerUser && $candidateUser) {
-                    $score = max(0, min(100, $score + $this->behaviorScoring->scoreAdjustment($seekerUser, $candidate)));
-                }
-            } else {
-                // The ACTOR layer (pair boost + behaviour) stays off — see
-                // {@see CandidatePoolStrategy::appliesActorAdjustments()}. Candidate QUALITY is a
-                // different thing entirely: verification, photo, completeness and recency belong to the
-                // candidate alone and say nothing about who is looking. Dropping them made a Suchak
-                // rank an empty, unverified card level with a complete, KYC-verified one.
-                $score = max(0, min(100, $baseScore + $this->matchBoost->candidateQualityDelta($candidate, $candidateUser)));
-            }
-            $reasons = $this->explainScore($profile, $candidate);
+    /**
+     * Identity of the candidate SQL at the active tier. Two tiers that would build the same query share
+     * one fetch — deliberately keyed on whether the caste lock ACTUALLY applies, not merely on whether
+     * the tier relaxes caste, so the common "seeker has no lock" case runs a single query for all tiers.
+     */
+    private function candidatePoolSignature(MatrimonyProfile $profile, string $tab, int $poolLimit): string
+    {
+        $lock = $this->seekerCommunityLock($profile);
+        $casteRelaxed = in_array('caste', MatchRelaxationLadder::relaxedFieldsUpTo($this->activeTier), true);
+        $casteLockApplies = ! $casteRelaxed
+            && ($lock['caste_locked'] ?? false) === true
+            && ($lock['allowed_caste_ids'] ?? []) !== [];
 
-            $row = [
-                'profile' => $candidate,
-                'score' => $score,
-                'base_score' => $baseScore,
-                'reasons' => $reasons,
-                // Tolerated near-misses: shown to the seeker instead of silently deleting the candidate.
-                'warnings' => $this->toleratedMismatchWarnings($profile, $candidate),
-                'assumed_fields' => $this->assumedPreferenceFields($profile, $candidate),
-            ];
-            if ($withExplain) {
-                $row['explain'] = app(MatchingExplainService::class)->explainPair($profile, $candidate);
-            }
-            $out->push($row);
+        return $tab.'|'.$poolLimit.'|'.($casteLockApplies ? 'caste_locked' : 'caste_open');
+    }
+
+    /**
+     * The tier-independent half of a match row, computed at most once per candidate per run.
+     *
+     * Score, base score, reasons, assumed fields and the optional explain payload are all pure
+     * functions of the (seeker, candidate) pair — none of them reads {@see self::$activeTier}. Under
+     * the ladder the same candidate is re-admitted at every tier it survives, so recomputing these was
+     * straight duplicate work: a full preference build in both directions, nine scoring components, a
+     * boost/quality lookup and an explain pass, multiplied by the number of tiers walked.
+     *
+     * @return array<string, mixed>
+     */
+    private function evaluateCandidate(MatrimonyProfile $profile, MatrimonyProfile $candidate, bool $withExplain): array
+    {
+        $cid = (int) $candidate->getKey();
+        if (isset($this->candidateEvalCache[$cid])) {
+            return $this->candidateEvalCache[$cid];
         }
 
-        return $out;
+        $baseScore = $this->calculateScore($profile, $candidate);
+        $seekerUser = $profile->user;
+        $candidateUser = $candidate->user;
+        $withActorAdjustments = $this->pool()->appliesActorAdjustments();
+        if ($withActorAdjustments) {
+            $score = ($seekerUser && $candidateUser)
+                ? $this->matchBoost->applyBoost($seekerUser, $candidateUser, $baseScore)
+                : $baseScore;
+            if ($seekerUser && $candidateUser) {
+                $score = max(0, min(100, $score + $this->behaviorScoring->scoreAdjustment($seekerUser, $candidate)));
+            }
+        } else {
+            // The ACTOR layer (pair boost + behaviour) stays off — see
+            // {@see CandidatePoolStrategy::appliesActorAdjustments()}. Candidate QUALITY is a
+            // different thing entirely: verification, photo, completeness and recency belong to the
+            // candidate alone and say nothing about who is looking. Dropping them made a Suchak
+            // rank an empty, unverified card level with a complete, KYC-verified one.
+            $score = max(0, min(100, $baseScore + $this->matchBoost->candidateQualityDelta($candidate, $candidateUser)));
+        }
+        $reasons = $this->explainScore($profile, $candidate);
+
+        $row = [
+            'profile' => $candidate,
+            'score' => $score,
+            'base_score' => $baseScore,
+            'reasons' => $reasons,
+            // Overwritten per tier by the caller — kept here so the key order of the row is unchanged.
+            'warnings' => [],
+            'assumed_fields' => $this->assumedPreferenceFields($profile, $candidate),
+        ];
+        if ($withExplain) {
+            $row['explain'] = app(MatchingExplainService::class)->explainPair($profile, $candidate);
+        }
+
+        return $this->candidateEvalCache[$cid] = $row;
     }
 
     /**
@@ -831,8 +953,8 @@ class MatchingService
         if ($lidS > 0 && $lidS === $lidC) {
             return 3;
         }
-        $geoS = $seeker->residenceGeoAddressIds();
-        $geoC = $candidate->residenceGeoAddressIds();
+        $geoS = $this->residenceGeoFor($seeker);
+        $geoC = $this->residenceGeoFor($candidate);
         $sidS = (int) ($geoS['state_id'] ?? 0);
         $sidC = (int) ($geoC['state_id'] ?? 0);
         if ($sidS > 0 && $sidS === $sidC) {
@@ -852,11 +974,15 @@ class MatchingService
      */
     private function candidateIdsExcludedBySkips(int $observerProfileId): array
     {
-        if (! Schema::hasTable('profile_match_tab_skips')) {
-            return [];
+        if (isset($this->skipExcludedCache[$observerProfileId])) {
+            return $this->skipExcludedCache[$observerProfileId];
         }
 
-        return DB::table('profile_match_tab_skips')
+        if (! Schema::hasTable('profile_match_tab_skips')) {
+            return $this->skipExcludedCache[$observerProfileId] = [];
+        }
+
+        return $this->skipExcludedCache[$observerProfileId] = DB::table('profile_match_tab_skips')
             ->select('candidate_profile_id')
             ->selectRaw('COUNT(*) as skip_count')
             ->where('observer_profile_id', $observerProfileId)
@@ -1136,6 +1262,57 @@ class MatchingService
             'photos',
             'user',
         ]);
+    }
+
+    /**
+     * Tops {@see self::$prefMap} up with any profile ids it does not already hold, and returns it.
+     *
+     * {@see self::bulkLoadTargetPreferences()} decomposes strictly per profile (so does
+     * {@see CommunityLockResolver::resolveMany()}), which makes a partial load byte-identical to a full
+     * one for the ids it covers. Loading only what is missing is what lets a tier re-run, an
+     * {@see self::isEligiblePair()} call and a {@see self::computeMatchBreakdown()} call share one load
+     * instead of each paying ~14 queries for a set they already have.
+     *
+     * @param  list<int>  $profileIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function ensureTargetPreferencesLoaded(array $profileIds): array
+    {
+        $missing = [];
+        foreach ($profileIds as $id) {
+            $id = (int) $id;
+            if ($id > 0 && ! isset($this->prefMap[$id])) {
+                $missing[] = $id;
+            }
+        }
+
+        if ($missing !== []) {
+            $this->prefMap += $this->bulkLoadTargetPreferences(array_values(array_unique($missing)));
+        }
+
+        return $this->prefMap;
+    }
+
+    /**
+     * Residence geography for one profile, resolved once per run.
+     *
+     * {@see MatrimonyProfile::residenceGeoAddressIds()} re-walks the address hierarchy on every call
+     * (leaf lookup + ancestor chain), and the scorer asks for it twice per pair — once in
+     * {@see self::locationProximityTier()} and once in {@see self::scoreLocationPart()}.
+     *
+     * @return array{district_id: int|null, state_id: int|null, country_id: int|null}
+     */
+    private function residenceGeoFor(MatrimonyProfile $profile): array
+    {
+        $pid = (int) $profile->getKey();
+        if ($pid <= 0) {
+            return $profile->residenceGeoAddressIds();
+        }
+        if (isset($this->residenceGeoCache[$pid])) {
+            return $this->residenceGeoCache[$pid];
+        }
+
+        return $this->residenceGeoCache[$pid] = $profile->residenceGeoAddressIds();
     }
 
     /**
@@ -1496,8 +1673,8 @@ class MatchingService
             return ['points' => $this->weight('location', self::WEIGHT_LOCATION), 'reasons' => [__('matching.reason_same_city')]];
         }
 
-        $geoA = $a->residenceGeoAddressIds();
-        $geoB = $b->residenceGeoAddressIds();
+        $geoA = $this->residenceGeoFor($a);
+        $geoB = $this->residenceGeoFor($b);
         $sidA = (int) ($geoA['state_id'] ?? 0);
         $sidB = (int) ($geoB['state_id'] ?? 0);
         if ($sidA > 0 && $sidA === $sidB) {
@@ -1527,8 +1704,8 @@ class MatchingService
             return ['points' => $this->weight('education', self::WEIGHT_EDUCATION), 'reasons' => [__('matching.reason_education_match')]];
         }
 
-        $sortA = (int) (EducationDegree::query()->whereKey($idA)->value('sort_order') ?? 0);
-        $sortB = (int) (EducationDegree::query()->whereKey($idB)->value('sort_order') ?? 0);
+        $sortA = $this->educationSortOrder($idA);
+        $sortB = $this->educationSortOrder($idB);
         $diff = abs($sortA - $sortB);
         if ($diff <= 1) {
             return ['points' => (int) round($this->weight('education', self::WEIGHT_EDUCATION) * 0.8), 'reasons' => [__('matching.reason_education_close')]];
@@ -1540,7 +1717,31 @@ class MatchingService
         return ['points' => (int) round($this->weight('education', self::WEIGHT_EDUCATION) * 0.25), 'reasons' => []];
     }
 
+    private function educationSortOrder(int $degreeId): int
+    {
+        if (isset($this->educationSortOrderCache[$degreeId])) {
+            return $this->educationSortOrderCache[$degreeId];
+        }
+
+        return $this->educationSortOrderCache[$degreeId] = (int) (EducationDegree::query()->whereKey($degreeId)->value('sort_order') ?? 0);
+    }
+
     private function resolveEducationDegreeId(MatrimonyProfile $profile): ?int
+    {
+        $pid = (int) $profile->getKey();
+        if ($pid > 0 && array_key_exists($pid, $this->educationDegreeIdCache)) {
+            return $this->educationDegreeIdCache[$pid];
+        }
+
+        $resolved = $this->computeEducationDegreeId($profile);
+        if ($pid > 0) {
+            $this->educationDegreeIdCache[$pid] = $resolved;
+        }
+
+        return $resolved;
+    }
+
+    private function computeEducationDegreeId(MatrimonyProfile $profile): ?int
     {
         $fk = (int) ($profile->education_degree_id ?? 0);
         if ($fk > 0) {
@@ -1777,89 +1978,81 @@ class MatchingService
         MatrimonyProfile $candidate,
         bool $withActorAdjustments = true,
     ): array {
-        $savedPref = $this->prefMap;
-        $savedDir = $this->directionalBuildCache;
-        $savedComp = $this->componentsCache;
-        try {
-            $this->directionalBuildCache = [];
-            $this->componentsCache = [];
-            ProfilePreferenceMatchService::flushRuntimeCaches();
-            $this->prefMap = $this->bulkLoadTargetPreferences([(int) $seeker->id, (int) $candidate->id]);
+        // Same reasoning as {@see self::isEligiblePair()}: scoreParts() and the preference builds it
+        // rests on are pure functions of the pair, so this reuses whatever the current run already
+        // resolved and only fetches what is genuinely missing. Nothing below mutates the run caches,
+        // so there is no longer a save/restore pair around this body.
+        $this->ensureTargetPreferencesLoaded([(int) $seeker->id, (int) $candidate->id]);
 
-            $parts = $this->scoreParts($seeker, $candidate);
-            $fieldParts = [];
-            $sumBase = 0;
-            $fieldPoints = [
-                'age' => 0,
-                'location' => 0,
-                'education' => 0,
-                'occupation' => 0,
-                'community' => 0,
-                'preferences' => 0,
-                'marital_status' => 0,
-                'height' => 0,
-                'diet' => 0,
+        $parts = $this->scoreParts($seeker, $candidate);
+        $fieldParts = [];
+        $sumBase = 0;
+        $fieldPoints = [
+            'age' => 0,
+            'location' => 0,
+            'education' => 0,
+            'occupation' => 0,
+            'community' => 0,
+            'preferences' => 0,
+            'marital_status' => 0,
+            'height' => 0,
+            'diet' => 0,
+        ];
+        $keys = array_keys($fieldPoints);
+        foreach ($parts as $p) {
+            $pts = (int) ($p['points'] ?? 0);
+            $sumBase += $pts;
+            $fieldParts[] = [
+                'points' => $pts,
+                'reasons' => $p['reasons'] ?? [],
             ];
-            $keys = array_keys($fieldPoints);
-            foreach ($parts as $p) {
-                $pts = (int) ($p['points'] ?? 0);
-                $sumBase += $pts;
-                $fieldParts[] = [
-                    'points' => $pts,
-                    'reasons' => $p['reasons'] ?? [],
-                ];
-                $k = array_shift($keys);
-                if ($k !== null) {
-                    $fieldPoints[$k] = $pts;
-                }
+            $k = array_shift($keys);
+            if ($k !== null) {
+                $fieldPoints[$k] = $pts;
             }
-            $baseScore = min(100, max(0, $sumBase));
-
-            $seeker->loadMissing('user');
-            $candidate->loadMissing('user');
-            // Keep in sync with {@see collectTierRows}: field score then boost only (no behavior layer).
-            // $withActorAdjustments = false is the Suchak-initiated case — the represented candidate's
-            // dormant account has no activity of its own, so the ACTOR-keyed layer is skipped.
-            $applyActor = $withActorAdjustments && $seeker->user && $candidate->user;
-            $finalScore = $applyActor
-                ? $this->matchBoost->applyBoost($seeker->user, $candidate->user, $baseScore)
-                : $baseScore;
-            $behaviorDelta = $applyActor
-                ? $this->behaviorScoring->scoreAdjustment($seeker->user, $candidate)
-                : 0;
-
-            // ...but candidate-intrinsic QUALITY (KYC, photo, completeness, mobile, recency) is not an
-            // actor signal at all, so it still applies when the actor layer is deliberately off. Without
-            // it a Suchak saw an empty card tied with a verified, complete, recently-touched one.
-            // When the actor layer IS on, applyBoost() already contains these signals — adding them here
-            // would double-count them, hence the strict either/or.
-            $qualitySignals = $withActorAdjustments
-                ? []
-                : $this->matchBoost->explainCandidateQuality($candidate, $candidate->user);
-            $qualityDelta = 0;
-            foreach ($qualitySignals as $signal) {
-                $qualityDelta += (int) ($signal['points'] ?? 0);
-            }
-
-            $finalScore = max(0, min(100, $finalScore + $behaviorDelta + $qualityDelta));
-
-            return [
-                'field_parts' => $fieldParts,
-                'field_points' => $fieldPoints,
-                'preferred_penalties' => [],
-                'behavior_delta' => $behaviorDelta,
-                'quality_delta' => $qualityDelta,
-                // list<array{key: string, points: int, reason: string}> — already trimmed to the
-                // aggregate cap, so the reasons always add up to `quality_delta`.
-                'quality_signals' => $qualitySignals,
-                'before_boost' => $baseScore,
-                'final_score' => $finalScore,
-            ];
-        } finally {
-            $this->prefMap = $savedPref;
-            $this->directionalBuildCache = $savedDir;
-            $this->componentsCache = $savedComp;
         }
+        $baseScore = min(100, max(0, $sumBase));
+
+        $seeker->loadMissing('user');
+        $candidate->loadMissing('user');
+        // Keep in sync with {@see collectTierRows}: field score then boost only (no behavior layer).
+        // $withActorAdjustments = false is the Suchak-initiated case — the represented candidate's
+        // dormant account has no activity of its own, so the ACTOR-keyed layer is skipped.
+        $applyActor = $withActorAdjustments && $seeker->user && $candidate->user;
+        $finalScore = $applyActor
+            ? $this->matchBoost->applyBoost($seeker->user, $candidate->user, $baseScore)
+            : $baseScore;
+        $behaviorDelta = $applyActor
+            ? $this->behaviorScoring->scoreAdjustment($seeker->user, $candidate)
+            : 0;
+
+        // ...but candidate-intrinsic QUALITY (KYC, photo, completeness, mobile, recency) is not an
+        // actor signal at all, so it still applies when the actor layer is deliberately off. Without
+        // it a Suchak saw an empty card tied with a verified, complete, recently-touched one.
+        // When the actor layer IS on, applyBoost() already contains these signals — adding them here
+        // would double-count them, hence the strict either/or.
+        $qualitySignals = $withActorAdjustments
+            ? []
+            : $this->matchBoost->explainCandidateQuality($candidate, $candidate->user);
+        $qualityDelta = 0;
+        foreach ($qualitySignals as $signal) {
+            $qualityDelta += (int) ($signal['points'] ?? 0);
+        }
+
+        $finalScore = max(0, min(100, $finalScore + $behaviorDelta + $qualityDelta));
+
+        return [
+            'field_parts' => $fieldParts,
+            'field_points' => $fieldPoints,
+            'preferred_penalties' => [],
+            'behavior_delta' => $behaviorDelta,
+            'quality_delta' => $qualityDelta,
+            // list<array{key: string, points: int, reason: string}> — already trimmed to the
+            // aggregate cap, so the reasons always add up to `quality_delta`.
+            'quality_signals' => $qualitySignals,
+            'before_boost' => $baseScore,
+            'final_score' => $finalScore,
+        ];
     }
 
     /**

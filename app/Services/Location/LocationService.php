@@ -82,7 +82,12 @@ class LocationService
     {
         $pid = $leaf->parent_id !== null ? (int) $leaf->parent_id : 0;
         if ($pid > 0) {
-            $immediate = Location::query()->whereKey($pid)->first();
+            // Same row either way — but when the caller already hydrated the chain, re-selecting it
+            // here threw that work away and re-walked the whole lineage from a fresh instance.
+            $loaded = $leaf->relationLoaded('parent') ? $leaf->getRelation('parent') : null;
+            $immediate = $loaded instanceof Location && (int) $loaded->id === $pid
+                ? $loaded
+                : Location::query()->whereKey($pid)->first();
             if ($immediate !== null) {
                 $this->ensureAncestorsLoaded($immediate);
                 $pt = strtolower((string) ($immediate->hierarchy ?? ''));
@@ -853,6 +858,20 @@ class LocationService
         $known = [];
         foreach ($locations as $location) {
             $known[(int) $location->id] = $location;
+
+            // Absorb ancestors this instance ALREADY carries. Without this the method re-fetched the
+            // whole parent chain even when it was sitting in memory: callers routinely hydrate a batch
+            // and then ask again per row (nearby-taluka labelling does exactly that), so a chain that
+            // cost one round trip was being re-read once per row, per level.
+            $node = $location;
+            while ($node->relationLoaded('parent')) {
+                $parent = $node->getRelation('parent');
+                if (! $parent instanceof Location || isset($known[(int) $parent->id])) {
+                    break;
+                }
+                $known[(int) $parent->id] = $parent;
+                $node = $parent;
+            }
         }
 
         $pendingParentIds = [];

@@ -87,6 +87,25 @@ class MatchBoostService
 
     private static ?bool $hasMobileVerifiedColumn = null;
 
+    /**
+     * Per-instance memo in front of the shared cache.
+     *
+     * `Cache::remember()` is not free: the production store is `database`, so every candidate cost a
+     * `cache` table SELECT, and the key itself needs {@see self::configVersion()} — another cache read.
+     * A single match request asks for the same candidate's signals repeatedly (ladder tiers, then the
+     * Suchak fit pass), so the store was being asked hundreds of times for values that cannot change
+     * mid-request. Same values, same cache semantics — just not re-fetched within one request.
+     *
+     * @var array<string, array<string, int>>
+     */
+    private array $qualityPointsMemo = [];
+
+    /** @var array<string, array<string, int>> */
+    private array $pairPointsMemo = [];
+
+    /** @var array{version: string, ai_enabled: bool, rules: array<string, array{value: int, max_cap: int, is_active: bool, meta: array<string, mixed>}>}|null */
+    private ?array $configMemo = null;
+
     public function __construct(
         protected AiBoostService $aiBoost,
         protected SubscriptionService $subscriptions,
@@ -97,6 +116,9 @@ class MatchBoostService
     public function forgetCache(): void
     {
         Cache::forget(self::CONFIG_CACHE_KEY);
+        $this->configMemo = null;
+        $this->qualityPointsMemo = [];
+        $this->pairPointsMemo = [];
     }
 
     /**
@@ -187,6 +209,10 @@ class MatchBoostService
             .':'.$this->configVersion()
             .':'.(int) ($profileB->updated_at?->timestamp ?? 0);
 
+        if (isset($this->qualityPointsMemo[$key])) {
+            return $this->qualityPointsMemo[$key];
+        }
+
         /** @var array<string, int> $cached */
         $cached = Cache::remember(
             $key,
@@ -194,7 +220,7 @@ class MatchBoostService
             fn (): array => $this->computeCandidateQualityPoints($profileB, $userB),
         );
 
-        return $cached;
+        return $this->qualityPointsMemo[$key] = $cached;
     }
 
     /**
@@ -223,7 +249,7 @@ class MatchBoostService
         $key = 'match_boost_pair:'.$id1.':'.$id2.':'.$this->configVersion();
 
         /** @var array<string, int> $cached */
-        $cached = Cache::remember(
+        $cached = $this->pairPointsMemo[$key] ??= Cache::remember(
             $key,
             self::PAIR_CACHE_TTL_SECONDS,
             fn (): array => [
@@ -466,6 +492,10 @@ class MatchBoostService
      */
     private function config(): array
     {
+        if ($this->configMemo !== null) {
+            return $this->configMemo;
+        }
+
         /** @var array{version: string, ai_enabled: bool, rules: array<string, array{value: int, max_cap: int, is_active: bool, meta: array<string, mixed>}>} $cfg */
         $cfg = Cache::remember(self::CONFIG_CACHE_KEY, self::CONFIG_CACHE_TTL_SECONDS, function (): array {
             $rules = [];
@@ -501,7 +531,7 @@ class MatchBoostService
             ];
         });
 
-        return $cfg;
+        return $this->configMemo = $cfg;
     }
 
     private function legacySettings(): ?MatchBoostSetting

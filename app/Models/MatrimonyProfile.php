@@ -535,7 +535,7 @@ class MatrimonyProfile extends Model
     public function residenceGeoAddressIds(): array
     {
         $empty = ['district_id' => null, 'state_id' => null, 'country_id' => null];
-        if (! $this->location_id || ! Schema::hasTable(Location::geoTable())) {
+        if (! $this->location_id || ! self::hasGeoTableCached()) {
             return $empty;
         }
         $leaf = Location::query()->find((int) $this->location_id);
@@ -573,7 +573,7 @@ class MatrimonyProfile extends Model
     public function residenceLocationHierarchyHints(): array
     {
         $empty = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
-        if (! $this->location_id || ! Schema::hasTable(Location::geoTable())) {
+        if (! $this->location_id || ! self::hasGeoTableCached()) {
             return $empty;
         }
         $leaf = Location::query()->find((int) $this->location_id);
@@ -601,7 +601,7 @@ class MatrimonyProfile extends Model
     public function birthCityHierarchyHints(): array
     {
         $empty = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
-        if (! $this->birth_city_id || ! Schema::hasTable(Location::geoTable())) {
+        if (! $this->birth_city_id || ! self::hasGeoTableCached()) {
             return $empty;
         }
         $leaf = Location::query()->find((int) $this->birth_city_id);
@@ -669,7 +669,7 @@ class MatrimonyProfile extends Model
             return ($value !== null && $value !== '') ? (int) $value : null;
         }
         $leaf = $this->workCityLeafStorageId();
-        if ($leaf === null || ! Schema::hasTable(Location::geoTable())) {
+        if ($leaf === null || ! self::hasGeoTableCached()) {
             return null;
         }
         $row = Location::query()->find($leaf);
@@ -695,7 +695,7 @@ class MatrimonyProfile extends Model
     {
         $empty = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
         $leafId = $this->nativePlaceLeafStorageId();
-        if (! $leafId || ! Schema::hasTable(Location::geoTable())) {
+        if (! $leafId || ! self::hasGeoTableCached()) {
             return $empty;
         }
         $leaf = Location::query()->find($leafId);
@@ -724,7 +724,7 @@ class MatrimonyProfile extends Model
     {
         $empty = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
         $leafId = $this->workCityLeafStorageId();
-        if (! $leafId || ! Schema::hasTable(Location::geoTable())) {
+        if (! $leafId || ! self::hasGeoTableCached()) {
             return $empty;
         }
         $leaf = Location::query()->find($leafId);
@@ -909,7 +909,7 @@ class MatrimonyProfile extends Model
             return '';
         }
         $lid = $profileOrRow->location_id ?? null;
-        if (! $lid || ! Schema::hasTable(Location::geoTable())) {
+        if (! $lid || ! self::hasGeoTableCached()) {
             return '';
         }
 
@@ -921,7 +921,7 @@ class MatrimonyProfile extends Model
      */
     public function residenceLocationDisplayLine(): string
     {
-        if (! $this->location_id || ! Schema::hasTable(Location::geoTable())) {
+        if (! $this->location_id || ! self::hasGeoTableCached()) {
             return '';
         }
 
@@ -965,7 +965,7 @@ class MatrimonyProfile extends Model
      */
     public function birthLocationDisplayLine(): string
     {
-        if ($this->birth_city_id && Schema::hasTable(Location::geoTable())) {
+        if ($this->birth_city_id && self::hasGeoTableCached()) {
             $line = app(LocationFormatterService::class)->formatLocation((int) $this->birth_city_id);
             if ($line !== '') {
                 return $line;
@@ -981,7 +981,7 @@ class MatrimonyProfile extends Model
     public function nativeLocationDisplayLine(): string
     {
         $leaf = $this->nativePlaceLeafStorageId();
-        if ($leaf && Schema::hasTable(Location::geoTable())) {
+        if ($leaf && self::hasGeoTableCached()) {
             return app(LocationFormatterService::class)->formatLocation((int) $leaf);
         }
 
@@ -994,7 +994,7 @@ class MatrimonyProfile extends Model
     public function workLocationDisplayLine(): string
     {
         $leaf = $this->workCityLeafStorageId();
-        if ($leaf && Schema::hasTable(Location::geoTable())) {
+        if ($leaf && self::hasGeoTableCached()) {
             $line = app(LocationFormatterService::class)->formatLocation((int) $leaf);
             if ($line !== '') {
                 return $line;
@@ -1347,6 +1347,20 @@ class MatrimonyProfile extends Model
         }
 
         return $attrs;
+    }
+
+    /**
+     * Sibling of {@see self::hasColumnCached()} for the geography table.
+     *
+     * Every residence/birth/work location helper on this model guards on it, and matching asks those
+     * helpers once per profile per pair — so the uncached check alone was hundreds of
+     * `information_schema` round trips per match request. Table presence is process-constant.
+     */
+    private static ?bool $geoTablePresence = null;
+
+    private static function hasGeoTableCached(): bool
+    {
+        return self::$geoTablePresence ??= Schema::hasTable(Location::geoTable());
     }
 
     private static function hasColumnCached(string $table, string $column): bool

@@ -248,8 +248,11 @@ final class NearbyGeographyResolver
         return self::$coordinateCache[$locationId] = null;
     }
 
+    /** Per-process memo — table presence cannot change inside a process, but this is asked per taluka. */
+    private static ?bool $geoTableExists = null;
+
     private static function geoTableExists(): bool
     {
-        return Schema::hasTable(Location::geoTable());
+        return self::$geoTableExists ??= Schema::hasTable(Location::geoTable());
     }
 }

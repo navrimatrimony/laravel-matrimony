@@ -19,14 +19,36 @@ class MatchingConfigService
 
     private static bool $defaultsEnsured = false;
 
+    /**
+     * Per-process memo. Every weight/filter lookup calls this, and the scorer asks for nine weights per
+     * candidate pair — so an uncached `Schema::hasTable()` here meant hundreds of `information_schema`
+     * round trips per match request. Table presence cannot change inside a process.
+     */
+    private static ?bool $tablesExist = null;
+
+    /**
+     * Per-instance memo in front of the shared cache. The scorer asks for nine weights plus a field
+     * enable check per candidate pair, and each of those was a `Cache::get` — a real `cache` table
+     * SELECT on the production store. The values cannot change inside one request; {@see forgetCache()}
+     * still drops them so an admin write is picked up immediately.
+     *
+     * @var array<string, array{label: string, type: string, category: string, is_active: bool, weight: int, max_weight: int}>|null
+     */
+    private ?array $activeFieldsMemo = null;
+
+    /** @var array<string, mixed> */
+    private array $runtimeValueMemo = [];
+
     public function forgetCache(): void
     {
         Cache::forget(self::CACHE_KEY);
+        $this->activeFieldsMemo = null;
+        $this->runtimeValueMemo = [];
     }
 
     public function tablesExist(): bool
     {
-        return Schema::hasTable('matching_fields');
+        return self::$tablesExist ??= Schema::hasTable('matching_fields');
     }
 
     public function ensureDefaults(): void
@@ -104,9 +126,12 @@ class MatchingConfigService
         if (! $this->tablesExist()) {
             return $this->legacyFields();
         }
+        if ($this->activeFieldsMemo !== null) {
+            return $this->activeFieldsMemo;
+        }
         $this->ensureDefaults();
 
-        return Cache::remember(self::CACHE_KEY, 120, function () {
+        return $this->activeFieldsMemo = Cache::remember(self::CACHE_KEY, 120, function () {
             $out = [];
             foreach (MatchingField::query()->orderBy('id')->get() as $f) {
                 $out[$f->field_key] = [
@@ -320,15 +345,18 @@ class MatchingConfigService
 
     private function runtimeValue(string $key): mixed
     {
+        if (array_key_exists($key, $this->runtimeValueMemo)) {
+            return $this->runtimeValueMemo[$key];
+        }
         if (! Schema::hasTable('matching_engine_configs')) {
-            return null;
+            return $this->runtimeValueMemo[$key] = null;
         }
         $row = MatchingEngineConfig::query()->where('config_key', 'runtime')->where('is_active', true)->first();
         if (! $row || ! is_array($row->config_value)) {
-            return null;
+            return $this->runtimeValueMemo[$key] = null;
         }
 
-        return $row->config_value[$key] ?? null;
+        return $this->runtimeValueMemo[$key] = ($row->config_value[$key] ?? null);
     }
 
     /**
