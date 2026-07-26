@@ -283,6 +283,22 @@ class SuchakProfileRepresentation extends Model
         });
     }
 
+    /**
+     * The exact complement of scopeExcludingPendingConsentClaims(): ONLY the
+     * un-consented claims. Written as the negation of the same predicate pair
+     * so the two can never disagree about what a "claim" is — a claim that is
+     * invisible to the customer list must be visible here, or the Suchak has no
+     * way to resend the consent and the flow dead-ends.
+     */
+    public function scopeOnlyPendingConsentClaims(Builder $query): Builder
+    {
+        return $query
+            ->whereIn('representation_mode', self::CONSENT_GATED_EDIT_MODES)
+            ->whereNot(function (Builder $query): void {
+                $query->withValidConsent();
+            });
+    }
+
     public function scopePubliclyRoutable(Builder $query): Builder
     {
         return $query

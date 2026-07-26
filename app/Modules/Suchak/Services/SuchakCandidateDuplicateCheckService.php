@@ -5,6 +5,7 @@ namespace App\Modules\Suchak\Services;
 use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\SuchakProfileRepresentation;
+use App\Support\CandidateNameMask;
 use App\Support\NameMatcher;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -682,21 +683,14 @@ final class SuchakCandidateDuplicateCheckService
         return null;
     }
 
-    /** "Shriram Kadam" → "Shriram K." — enough to recognise, not to harvest. */
+    /**
+     * "Shriram Kadam" → "Shriram K." — enough to recognise, not to harvest.
+     * The rule itself lives in App\Support\CandidateNameMask because the
+     * pending-consent-claims listing shows the same masked name.
+     */
     private function maskName(string $fullName): string
     {
-        $tokens = preg_split('/\s+/u', trim($fullName)) ?: [];
-        if ($tokens === [] || $tokens[0] === '') {
-            return '—';
-        }
-        $masked = [mb_convert_case($tokens[0], MB_CASE_TITLE, 'UTF-8')];
-        foreach (array_slice($tokens, 1) as $token) {
-            if ($token !== '') {
-                $masked[] = mb_strtoupper(mb_substr($token, 0, 1)).'.';
-            }
-        }
-
-        return implode(' ', $masked);
+        return CandidateNameMask::mask($fullName);
     }
 
     private function ageYears(mixed $dateOfBirth): ?int

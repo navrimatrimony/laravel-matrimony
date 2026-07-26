@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\Suchak\SuchakAppConfigApiController;
 use App\Http\Controllers\Api\Suchak\SuchakBillingApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCollaborationsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCollaborationsMutationsApiController;
+use App\Http\Controllers\Api\Suchak\SuchakConsentRequestsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakConsentsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomerDetailApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomerPlanApiController;
@@ -70,6 +71,10 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::post('/customers/{representation}/payment-setup', SuchakPaymentSetupApiController::class);
     Route::post('/customers/{representation}/notes', [SuchakCustomerOpsApiController::class, 'storeNote']);
     Route::post('/customers/{representation}/exports', [SuchakCustomerOpsApiController::class, 'exportBiodata']);
+    // Read-only feed of THIS Suchak's un-consented claims. Consent-first
+    // linking hides a claim everywhere else, so this is the only way back to
+    // the resend endpoint below.
+    Route::get('/consent-requests', SuchakConsentRequestsApiController::class);
     Route::post('/consents/{consent}/resend', [SuchakConsentsApiController::class, 'resend']);
     Route::post('/consents/{consent}/cancel-pending', [SuchakConsentsApiController::class, 'cancelPending']);
     Route::get('/search', SuchakSearchApiController::class);
