@@ -4,12 +4,14 @@ namespace App\Services\Matching;
 
 use App\Models\EducationDegree;
 use App\Models\Interest;
+use App\Models\MatchingHardFilter;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileMatch;
 use App\Models\ProfileView;
 use App\Services\EducationService;
 use App\Services\MatchBoostService;
 use App\Services\ProfilePreferenceMatchService;
+use App\Support\MarriageAgePolicy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
@@ -90,6 +92,47 @@ class MatchingService
     /** @var array<int, list<int>> */
     private array $seekerViewedIdsCache = [];
 
+    /** @var array<int, array<string, mixed>> */
+    private array $communityLockCache = [];
+
+    /**
+     * Tier currently being evaluated by the relaxation ladder. Read by
+     * {@see self::applyBaseCandidateFilters()} and {@see self::mutuallyPreferenceCompatible()} so the
+     * five tab-specific candidate builders keep their signatures.
+     */
+    private int $activeTier = MatchRelaxationLadder::TIER_STRICT;
+
+    /**
+     * Outcome of the last {@see self::findMatchesForTab()} run — see {@see self::lastRelaxationSummary()}.
+     *
+     * @var array<string, mixed>
+     */
+    private array $lastRelaxation = [
+        'tier' => MatchRelaxationLadder::TIER_STRICT,
+        'relaxed_fields' => [],
+        'floor' => 0,
+        'matched' => 0,
+        'floor_reached' => true,
+    ];
+
+    /**
+     * What the last run had to loosen before it found enough candidates.
+     *
+     * `tier` is the highest tier reached, `relaxed_fields` the preference fields that stopped
+     * excluding, `floor` the configured minimum and `floor_reached` whether the ladder actually got
+     * there (false means even the top tier came up short). Every returned match row also carries the
+     * `tier` it was admitted at, so a strict match is still distinguishable inside a relaxed run.
+     *
+     * @return array{tier: int, relaxed_fields: list<string>, floor: int, matched: int, floor_reached: bool}
+     */
+    public function lastRelaxationSummary(): array
+    {
+        /** @var array{tier: int, relaxed_fields: list<string>, floor: int, matched: int, floor_reached: bool} $summary */
+        $summary = $this->lastRelaxation;
+
+        return $summary;
+    }
+
     /**
      * Active candidate universe. Null means the historical member-only pool; it is only ever set for
      * the duration of a {@see self::findMatchesForPool()} call, so member surfaces are unaffected.
@@ -145,15 +188,20 @@ class MatchingService
 
         $savedPref = $this->prefMap;
         $savedDir = $this->directionalBuildCache;
+        $savedTier = $this->activeTier;
 
         try {
             $this->directionalBuildCache = [];
+            // A standalone eligibility question is always asked at the strict tier.
+            $this->activeTier = MatchRelaxationLadder::TIER_STRICT;
+            ProfilePreferenceMatchService::flushRuntimeCaches();
             $this->prefMap = $this->bulkLoadTargetPreferences([(int) $seeker->getKey(), (int) $candidate->getKey()]);
 
             return $this->mutuallyPreferenceCompatible($seeker, $candidate);
         } finally {
             $this->prefMap = $savedPref;
             $this->directionalBuildCache = $savedDir;
+            $this->activeTier = $savedTier;
         }
     }
 
@@ -180,6 +228,9 @@ class MatchingService
         $this->prefMap = [];
         $this->directionalBuildCache = [];
         $this->componentsCache = [];
+        $this->communityLockCache = [];
+        $this->activeTier = MatchRelaxationLadder::TIER_STRICT;
+        ProfilePreferenceMatchService::flushRuntimeCaches();
 
         $profile->loadMissing([
             'gender', 'preferenceCriteria',
@@ -189,12 +240,91 @@ class MatchingService
             'user',
         ]);
 
+        $floor = MatchRelaxationLadder::floor();
+        $this->lastRelaxation = [
+            'tier' => MatchRelaxationLadder::TIER_STRICT,
+            'relaxed_fields' => [],
+            'floor' => $floor,
+            'matched' => 0,
+            'floor_reached' => false,
+        ];
+
         $oppositeKey = $this->oppositeGenderKey($profile);
         if ($oppositeKey === null) {
             return collect();
         }
 
         $poolLimit = max(1, (int) config('matching.candidate_pool_limit', 200));
+
+        // Tiered relaxation ladder (PO-approved 2026-07-26). Run the tiers in order; stop at the FIRST
+        // tier whose surviving count reaches the floor. Rows keep the tier they were admitted at, so a
+        // strict match stays identifiable inside a relaxed run.
+        $out = collect();
+        $seen = [];
+        $highestTier = MatchRelaxationLadder::TIER_STRICT;
+
+        foreach (MatchRelaxationLadder::tiers() as $tier) {
+            $highestTier = $tier;
+            $this->activeTier = $tier;
+
+            foreach ($this->collectTierRows($profile, $tab, $oppositeKey, $poolLimit, $withExplain) as $row) {
+                $pid = (int) $row['profile']->getKey();
+                if (isset($seen[$pid])) {
+                    continue;
+                }
+                $seen[$pid] = true;
+                $row['tier'] = $tier;
+                $out->push($row);
+            }
+
+            if ($out->count() >= $floor) {
+                break;
+            }
+        }
+
+        $this->activeTier = MatchRelaxationLadder::TIER_STRICT;
+        $this->lastRelaxation = [
+            'tier' => $highestTier,
+            'relaxed_fields' => MatchRelaxationLadder::relaxedFieldsUpTo($highestTier),
+            'floor' => $floor,
+            'matched' => $out->count(),
+            'floor_reached' => $out->count() >= $floor,
+        ];
+
+        if ($tab === self::TAB_CURATED && $out->isNotEmpty()) {
+            $boosted = $out->filter(static fn (array $r): bool => (int) ($r['score'] ?? 0) > (int) ($r['base_score'] ?? 0));
+            if ($boosted->count() >= min(8, max(1, (int) ceil($limit / 2)))) {
+                $out = $boosted->values();
+            }
+        }
+
+        $sorted = $this->applyTabOrdering($out, $tab, $profile)->values();
+        $sorted = $this->dedupeMatchRowsByPerson($sorted)->take($limit)->values();
+        $this->lastRelaxation['matched'] = $sorted->count();
+
+        // Only the member pool owns the persisted cache; a Suchak-scoped run must never overwrite it.
+        if ($tab === self::TAB_PERFECT && $this->pool()->isMembers() && config('matching.persist_cache', false) && Schema::hasTable('profile_matches')) {
+            $this->replacePersistedMatches($profile, $sorted);
+        }
+
+        return $sorted;
+    }
+
+    /**
+     * One pass of the ladder at {@see self::$activeTier}. Identical to the historical single-pass body;
+     * only the tolerated-mismatch set differs per tier.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function collectTierRows(
+        MatrimonyProfile $profile,
+        string $tab,
+        string $oppositeKey,
+        int $poolLimit,
+        bool $withExplain,
+    ): Collection {
+        $this->directionalBuildCache = [];
+        $this->componentsCache = [];
 
         $candidates = match ($tab) {
             self::TAB_VIEWED => $this->candidatesWhoViewedMe($profile, $oppositeKey),
@@ -220,6 +350,7 @@ class MatchingService
 
         $this->eagerLoadMatchingRelations($candidates);
 
+        // NEVER RELAXED at any tier: an explicitly rejected pair stays rejected.
         $skipExcluded = $this->candidateIdsExcludedBySkips((int) $profile->id);
 
         $ids = $candidates->pluck('id')->push($profile->id)->unique()->values()->all();
@@ -251,6 +382,9 @@ class MatchingService
                 'score' => $score,
                 'base_score' => $baseScore,
                 'reasons' => $reasons,
+                // Tolerated near-misses: shown to the seeker instead of silently deleting the candidate.
+                'warnings' => $this->toleratedMismatchWarnings($profile, $candidate),
+                'assumed_fields' => $this->assumedPreferenceFields($profile, $candidate),
             ];
             if ($withExplain) {
                 $row['explain'] = app(MatchingExplainService::class)->explainPair($profile, $candidate);
@@ -258,22 +392,7 @@ class MatchingService
             $out->push($row);
         }
 
-        if ($tab === self::TAB_CURATED && $out->isNotEmpty()) {
-            $boosted = $out->filter(static fn (array $r): bool => (int) ($r['score'] ?? 0) > (int) ($r['base_score'] ?? 0));
-            if ($boosted->count() >= min(8, max(1, (int) ceil($limit / 2)))) {
-                $out = $boosted->values();
-            }
-        }
-
-        $sorted = $this->applyTabOrdering($out, $tab, $profile)->values();
-        $sorted = $this->dedupeMatchRowsByPerson($sorted)->take($limit)->values();
-
-        // Only the member pool owns the persisted cache; a Suchak-scoped run must never overwrite it.
-        if ($tab === self::TAB_PERFECT && $this->pool()->isMembers() && config('matching.persist_cache', false) && Schema::hasTable('profile_matches')) {
-            $this->replacePersistedMatches($profile, $sorted);
-        }
-
-        return $sorted;
+        return $out;
     }
 
     /**
@@ -765,38 +884,50 @@ class MatchingService
             $this->applySuchakUniverseAvailability($q, $pool);
         }
 
-        $pc = $profile->preferenceCriteria;
-        if ($pc !== null) {
-            if ($pc->preferred_age_min !== null && $pc->preferred_age_max !== null) {
-                $minAge = (int) $pc->preferred_age_min;
-                $maxAge = (int) $pc->preferred_age_max;
-                $q->whereNotNull('date_of_birth')
-                    ->where('date_of_birth', '<=', now()->subYears($minAge))
-                    ->where('date_of_birth', '>=', now()->subYears($maxAge));
-            }
+        // NEVER RELAXED, and never conditional on the seeker having a preference row: a candidate
+        // below the legal marriage age for their own gender is not a candidate. Profiles written
+        // before MarriageAgePolicy existed (or imported / admin-created) can still hold an under-age
+        // DOB, and matching was the only surface that never checked. A null DOB is unknown, not
+        // proven under-age, so it survives here and is graded `unknown` by the preference rows.
+        $candidateFloorAge = MarriageAgePolicy::minimumAgeForGenderKey($oppositeGenderKey);
+        $q->where(function (Builder $legal) use ($candidateFloorAge): void {
+            $legal->whereNull('date_of_birth')
+                ->orWhere('date_of_birth', '<=', now()->subYears($candidateFloorAge)->toDateString());
+        });
 
+        // Hoisted above the preference-row guard. These used to sit INSIDE `if ($pc !== null)`, so for
+        // every seeker without a `profile_preference_criteria` row `$hard` was undefined and
+        // `($hard[...] ?? 'off')` silently evaluated to "off" — hard filtering was dead for exactly the
+        // sparse profiles that need it most. The `?? 'off'` fallbacks are gone so a missing variable
+        // would now be loud instead of silently disabling the filter.
         $this->matchingConfig->ensureDefaults();
         $hard = $this->matchingConfig->getHardFilters();
 
-        if (($hard['marital_status']['mode'] ?? 'off') === 'strict') {
+        $pc = $profile->preferenceCriteria;
+        if ($pc !== null) {
+            $this->applyPreferredAgeBounds($q, $pc);
+        }
+
+        if ($this->hardFilterMode($hard, 'marital_status') === MatchingHardFilter::MODE_STRICT) {
             $maritalIds = [];
             if (Schema::hasTable('profile_preferred_marital_statuses')) {
                 $maritalIds = DB::table('profile_preferred_marital_statuses')
-                        ->where('profile_id', $profile->id)
-                        ->pluck('marital_status_id')
-                        ->map(fn ($id) => (int) $id)
-                        ->all();
-                }
-                if ($maritalIds === [] && $pc->preferred_marital_status_id) {
-                    $maritalIds = [(int) $pc->preferred_marital_status_id];
-                }
-                if ($maritalIds !== []) {
-                    $q->whereIn('marital_status_id', $maritalIds);
-                }
+                    ->where('profile_id', $profile->id)
+                    ->pluck('marital_status_id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+            }
+            // The pivot is the real source; the singular column is only a legacy fallback, so it is
+            // the ONLY part of this block that depends on a preference-criteria row existing.
+            if ($maritalIds === [] && $pc !== null && $pc->preferred_marital_status_id) {
+                $maritalIds = [(int) $pc->preferred_marital_status_id];
+            }
+            if ($maritalIds !== []) {
+                $q->whereIn('marital_status_id', $maritalIds);
             }
         }
 
-        if (($hard['religion']['mode'] ?? 'off') === 'strict') {
+        if ($this->hardFilterMode($hard, 'religion') === MatchingHardFilter::MODE_STRICT) {
             $relIds = DB::table('profile_preferred_religions')
                 ->where('profile_id', $profile->id)
                 ->pluck('religion_id')
@@ -806,7 +937,9 @@ class MatchingService
                 $q->whereIn('religion_id', $relIds);
             }
         }
-        if (($hard['caste']['mode'] ?? 'off') === 'strict') {
+        // Global admin caste row: unchanged. It stays a ceiling that can only LOOSEN — the per-seeker
+        // lock below never makes this row stricter, and this row never locks a seeker who did not ask.
+        if ($this->hardFilterMode($hard, 'caste') === MatchingHardFilter::MODE_STRICT) {
             $casteIds = [];
             if (Schema::hasTable('profile_preferred_castes')) {
                 $casteIds = DB::table('profile_preferred_castes')
@@ -819,6 +952,105 @@ class MatchingService
                 $q->whereIn('caste_id', $casteIds);
             }
         }
+
+        $this->applyCommunityLock($q, $profile);
+    }
+
+    /**
+     * Mode of one admin hard-filter row.
+     *
+     * The array parameter is deliberately typed and required: the old code read `$hard[...] ?? 'off'`
+     * with `$hard` assigned INSIDE a conditional, so a seeker with no preference row silently got
+     * "off" for every filter. Passing an undefined `$hard` here is now a TypeError instead. A missing
+     * KEY still falls back to off — an admin may legitimately delete a filter row, and the legacy
+     * fallback map does not carry every key.
+     *
+     * @param  array<string, array{mode: string, preferred_penalty_points: int}>  $hardFilters
+     */
+    private function hardFilterMode(array $hardFilters, string $filterKey): string
+    {
+        return (string) ($hardFilters[$filterKey]['mode'] ?? MatchingHardFilter::MODE_OFF);
+    }
+
+    /**
+     * Preferred age bounds, applied INDEPENDENTLY so a one-sided preference still filters.
+     *
+     * Three defects lived here:
+     *  - the block required BOTH bounds, so "at least 25" was ignored entirely;
+     *  - `date_of_birth >= now()->subYears($maxAge)` excluded the whole max-age cohort — asking for
+     *    25–30 never showed a 30-year-old, and it contradicted the inclusive
+     *    {@see \App\Services\ProfilePreferenceMatchService} age row;
+     *  - `whereNotNull('date_of_birth')` deleted every DOB-less profile in SQL before any degradation
+     *    logic could grade it.
+     *
+     * @param  Builder<MatrimonyProfile>  $q
+     */
+    private function applyPreferredAgeBounds(Builder $q, object $pc): void
+    {
+        if (($pc->preferred_age_min ?? null) !== null) {
+            $minAge = (int) $pc->preferred_age_min;
+            // age >= minAge  ⟺  dob <= today − minAge years (inclusive).
+            $cutoff = now()->subYears($minAge)->toDateString();
+            $q->where(function (Builder $w) use ($cutoff): void {
+                $w->whereNull('date_of_birth')->orWhere('date_of_birth', '<=', $cutoff);
+            });
+        }
+
+        if (($pc->preferred_age_max ?? null) !== null) {
+            $maxAge = (int) $pc->preferred_age_max;
+            // age <= maxAge  ⟺  dob >= today − (maxAge + 1) years + 1 day. Keeps the whole max-age
+            // cohort in, matching the inclusive comparison the preference row already used.
+            $cutoff = now()->subYears($maxAge + 1)->addDay()->toDateString();
+            $q->where(function (Builder $w) use ($cutoff): void {
+                $w->whereNull('date_of_birth')->orWhere('date_of_birth', '>=', $cutoff);
+            });
+        }
+    }
+
+    /**
+     * Per-seeker community lock (PO ruling 2026-07-26). Applies only on an explicit signal — see
+     * {@see CommunityLockResolver} for why an absent/false-by-default flag row must never lock.
+     * Caste relaxes at {@see MatchRelaxationLadder::TIER_RELAXED_CASTE}; religion never does.
+     *
+     * @param  Builder<MatrimonyProfile>  $q
+     */
+    private function applyCommunityLock(Builder $q, MatrimonyProfile $profile): void
+    {
+        $lock = $this->seekerCommunityLock($profile);
+
+        if (($lock['religion_locked'] ?? false) === true && ($lock['allowed_religion_ids'] ?? []) !== []) {
+            $q->whereIn('religion_id', $lock['allowed_religion_ids']);
+        }
+
+        $casteRelaxed = in_array('caste', MatchRelaxationLadder::relaxedFieldsUpTo($this->activeTier), true);
+        if (! $casteRelaxed && ($lock['caste_locked'] ?? false) === true && ($lock['allowed_caste_ids'] ?? []) !== []) {
+            $q->whereIn('caste_id', $lock['allowed_caste_ids']);
+        }
+    }
+
+    /**
+     * Resolved once per seeker per run — never per candidate.
+     *
+     * @return array{caste_locked: bool, religion_locked: bool, allowed_caste_ids: list<int>, allowed_religion_ids: list<int>, signals: list<string>}
+     */
+    private function seekerCommunityLock(MatrimonyProfile $profile): array
+    {
+        $pid = (int) $profile->getKey();
+        if ($pid <= 0) {
+            return CommunityLockResolver::open();
+        }
+        if (isset($this->communityLockCache[$pid])) {
+            return $this->communityLockCache[$pid];
+        }
+
+        $casteIds = Schema::hasTable('profile_preferred_castes')
+            ? DB::table('profile_preferred_castes')->where('profile_id', $pid)->pluck('caste_id')->map(fn ($id) => (int) $id)->all()
+            : [];
+        $religionIds = Schema::hasTable('profile_preferred_religions')
+            ? DB::table('profile_preferred_religions')->where('profile_id', $pid)->pluck('religion_id')->map(fn ($id) => (int) $id)->all()
+            : [];
+
+        return $this->communityLockCache[$pid] = CommunityLockResolver::resolveOne($pid, $casteIds, $religionIds);
     }
 
     /**
@@ -945,6 +1177,22 @@ class MatchingService
             $this->mergePivotIds($map, 'profile_preferred_marital_statuses', $profileIds, 'marital_status_id', 'marital_status_ids');
         }
 
+        // Community intent + declared strictness ride along in the SAME bulk load — resolving them
+        // per candidate would put two extra queries on every pair in the pool.
+        $casteIdsByProfile = [];
+        $religionIdsByProfile = [];
+        foreach ($map as $pid => $payload) {
+            $casteIdsByProfile[$pid] = $payload['caste_ids'] ?? [];
+            $religionIdsByProfile[$pid] = $payload['religion_ids'] ?? [];
+        }
+
+        $locks = CommunityLockResolver::resolveMany($profileIds, $casteIdsByProfile, $religionIdsByProfile);
+        $strictness = CommunityLockResolver::strictnessMapFor($profileIds);
+        foreach ($map as $pid => $payload) {
+            $map[$pid]['community_lock'] = $locks[$pid] ?? CommunityLockResolver::open();
+            $map[$pid]['strictness'] = $strictness[$pid] ?? [];
+        }
+
         return $map;
     }
 
@@ -984,16 +1232,124 @@ class MatchingService
             'occupation_master_ids' => [],
             'diet_ids' => [],
             'marital_status_ids' => [],
+            'community_lock' => CommunityLockResolver::open(),
+            'strictness' => [],
         ];
     }
 
+    /**
+     * Mutual eligibility gate. Historically ANY `not_matched` in either direction was fatal, which
+     * turned income and height — fields that emit `not_matched` for a ₹1 shortfall or a 4 cm miss —
+     * into silent hard filters and was a major cause of empty feeds on sparse data.
+     *
+     * A mismatch is now fatal only when it is not tolerated at the active tier:
+     *  - income / height are SOFT (scored + warned) unless the seeker explicitly declared must-match,
+     *    and even then they become soft at {@see MatchRelaxationLadder::TIER_SOFT_INCOME_HEIGHT};
+     *  - location relaxes at {@see MatchRelaxationLadder::TIER_WIDER_GEOGRAPHY};
+     *  - caste relaxes at {@see MatchRelaxationLadder::TIER_RELAXED_CASTE}; religion never relaxes.
+     */
     private function mutuallyPreferenceCompatible(MatrimonyProfile $a, MatrimonyProfile $b): bool
     {
         $ab = $this->directionalPreferenceBuild($a, $b);
         $ba = $this->directionalPreferenceBuild($b, $a);
 
-        return ($ab['counts']['not_matched'] ?? 0) === 0
-            && ($ba['counts']['not_matched'] ?? 0) === 0;
+        return ! $this->hasFatalMismatch($ab) && ! $this->hasFatalMismatch($ba);
+    }
+
+    /**
+     * @param  array<string, mixed>  $build
+     */
+    private function hasFatalMismatch(array $build): bool
+    {
+        return $this->fatalMismatchRows($build) !== [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $build
+     * @return list<array<string, mixed>>
+     */
+    private function fatalMismatchRows(array $build): array
+    {
+        $relaxed = MatchRelaxationLadder::relaxedFieldsUpTo($this->activeTier);
+        $out = [];
+
+        foreach ($build['rows'] ?? [] as $row) {
+            if (($row['status'] ?? '') !== ProfilePreferenceMatchService::STATUS_NOT_MATCHED) {
+                continue;
+            }
+            if ($this->mismatchIsTolerated($row, $relaxed)) {
+                continue;
+            }
+            $out[] = $row;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  list<string>  $relaxedFields
+     */
+    private function mismatchIsTolerated(array $row, array $relaxedFields): bool
+    {
+        $id = (string) ($row['id'] ?? '');
+
+        if (in_array($id, $relaxedFields, true)) {
+            return true;
+        }
+
+        // Income and height only exclude at the strict tier, and only for a seeker who said so.
+        if (in_array($id, ['income', 'height'], true)) {
+            return ($row['declared_must_match'] ?? false) !== true;
+        }
+
+        // A derived preference is the engine's guess, never the seeker's requirement.
+        return ($row['derived'] ?? false) === true;
+    }
+
+    /**
+     * Near-misses that were admitted rather than excluded, so the UI can say what was overlooked.
+     *
+     * @return list<string>
+     */
+    private function toleratedMismatchWarnings(MatrimonyProfile $seeker, MatrimonyProfile $candidate): array
+    {
+        $relaxed = MatchRelaxationLadder::relaxedFieldsUpTo($this->activeTier);
+        $warnings = [];
+
+        foreach ([$this->directionalPreferenceBuild($seeker, $candidate), $this->directionalPreferenceBuild($candidate, $seeker)] as $build) {
+            foreach ($build['rows'] ?? [] as $row) {
+                if (($row['status'] ?? '') !== ProfilePreferenceMatchService::STATUS_NOT_MATCHED) {
+                    continue;
+                }
+                if (! $this->mismatchIsTolerated($row, $relaxed)) {
+                    continue;
+                }
+                $reason = (string) ($row['reason'] ?? '');
+                if ($reason !== '') {
+                    $warnings[$reason] = true;
+                }
+            }
+        }
+
+        return array_keys($warnings);
+    }
+
+    /**
+     * Preference fields neither side actually stated — the engine assumed them from the profile.
+     *
+     * @return list<string>
+     */
+    private function assumedPreferenceFields(MatrimonyProfile $seeker, MatrimonyProfile $candidate): array
+    {
+        $fields = [];
+        foreach ([$this->directionalPreferenceBuild($seeker, $candidate), $this->directionalPreferenceBuild($candidate, $seeker)] as $build) {
+            foreach ($build['assumed_fields'] ?? [] as $field) {
+                $fields[(string) $field] = true;
+            }
+        }
+
+        return array_keys($fields);
     }
 
     /**
@@ -1271,8 +1627,15 @@ class MatchingService
         $m = (int) ($ab['counts']['match'] ?? 0) + (int) ($ba['counts']['match'] ?? 0);
         $f = (int) ($ab['counts']['flexible'] ?? 0) + (int) ($ba['counts']['flexible'] ?? 0);
         $den = $m + $f;
+        // Income / height / geography mismatches that reached scoring were TOLERATED — the fatal ones
+        // never get here. Tolerating them must still cost the pair something, otherwise "soft filter"
+        // would mean "no filter at all".
+        $penalty = $this->softMismatchPenalty($ab) + $this->softMismatchPenalty($ba);
+
         if ($den <= 0) {
-            return ['points' => (int) round($this->weight('preferences', self::WEIGHT_PREFERENCES) * 0.5), 'reasons' => [__('matching.reason_prefs_open')]];
+            $open = (int) round($this->weight('preferences', self::WEIGHT_PREFERENCES) * 0.5);
+
+            return ['points' => $open - $penalty, 'reasons' => [__('matching.reason_prefs_open')]];
         }
 
         $points = (int) round($this->weight('preferences', self::WEIGHT_PREFERENCES) * ($m / $den));
@@ -1283,7 +1646,31 @@ class MatchingService
             $reasons[] = __('matching.reason_good_pref_alignment');
         }
 
-        return ['points' => min($this->weight('preferences', self::WEIGHT_PREFERENCES), $points), 'reasons' => $reasons];
+        return ['points' => min($this->weight('preferences', self::WEIGHT_PREFERENCES), $points) - $penalty, 'reasons' => $reasons];
+    }
+
+    /**
+     * @param  array<string, mixed>  $build
+     */
+    private function softMismatchPenalty(array $build): int
+    {
+        $perMiss = max(0, (int) config('matching.relaxation.soft_penalty_points', 6));
+        if ($perMiss === 0) {
+            return 0;
+        }
+
+        $misses = 0;
+        foreach ($build['rows'] ?? [] as $row) {
+            if (($row['status'] ?? '') !== ProfilePreferenceMatchService::STATUS_NOT_MATCHED) {
+                continue;
+            }
+            if (($row['derived'] ?? false) === true) {
+                continue;
+            }
+            $misses++;
+        }
+
+        return $misses * $perMiss;
     }
 
     /**
@@ -1379,6 +1766,7 @@ class MatchingService
         try {
             $this->directionalBuildCache = [];
             $this->componentsCache = [];
+            ProfilePreferenceMatchService::flushRuntimeCaches();
             $this->prefMap = $this->bulkLoadTargetPreferences([(int) $seeker->id, (int) $candidate->id]);
 
             $parts = $this->scoreParts($seeker, $candidate);

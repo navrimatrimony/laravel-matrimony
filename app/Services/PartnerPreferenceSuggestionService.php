@@ -3,10 +3,13 @@
 namespace App\Services;
 
 use App\Models\District;
+use App\Models\EducationDegree;
 use App\Models\Location;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
 use App\Services\Location\LocationService;
+use App\Services\Matching\NearbyGeographyResolver;
+use App\Support\MarriageAgePolicy;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -102,8 +105,12 @@ class PartnerPreferenceSuggestionService
     }
 
     /**
-     * Default partner age range from member gender + age (slider domain 18–80).
+     * Default partner age range from member gender + age (slider domain: legal minimum – 80).
      * Male: min = user age − 5, max = user age. Female: min = user age, max = user age + 5.
+     *
+     * The floor is the CANDIDATE's legal minimum ({@see MarriageAgePolicy}), not a flat 18: a female
+     * member's partner is male, so the suggestion may never dip below 21. A flat 18 floor produced
+     * suggestions that were illegal on their face for half the base.
      *
      * @return array{min: int, max: int}|null
      */
@@ -122,13 +129,241 @@ class PartnerPreferenceSuggestionService
             $min = $age - 5;
             $max = $age;
         }
-        $min = max(18, min(80, $min));
-        $max = max(18, min(80, $max));
+
+        return self::clampPartnerAgeRange($profile, $min, $max);
+    }
+
+    /**
+     * Gender key of the partner this profile is being matched with.
+     */
+    public static function partnerGenderKey(MatrimonyProfile $profile): ?string
+    {
+        $profile->loadMissing('gender');
+
+        return match ($profile->gender?->key ?? null) {
+            'male' => 'female',
+            'female' => 'male',
+            default => null,
+        };
+    }
+
+    /**
+     * Legal minimum age of the partner this profile would marry — the floor every suggested or
+     * derived age range is clamped to.
+     */
+    public static function partnerMinimumLegalAge(MatrimonyProfile $profile): int
+    {
+        $partnerGenderKey = self::partnerGenderKey($profile);
+        if ($partnerGenderKey === null) {
+            // Gender unknown: take the stricter of the two so a suggestion can never be illegal.
+            return max(MarriageAgePolicy::FEMALE_MIN_AGE, MarriageAgePolicy::MALE_MIN_AGE);
+        }
+
+        return MarriageAgePolicy::minimumAgeForGenderKey($partnerGenderKey);
+    }
+
+    /**
+     * @return array{min: int, max: int}
+     */
+    private static function clampPartnerAgeRange(MatrimonyProfile $profile, int $min, int $max): array
+    {
+        $floor = self::partnerMinimumLegalAge($profile);
+        $min = max($floor, min(80, $min));
+        $max = max($floor, min(80, $max));
         if ($min > $max) {
             [$min, $max] = [$max, $min];
         }
 
         return ['min' => $min, 'max' => $max];
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Auto-derived partner preferences (PO-approved 2026-07-26).
+    //
+    // These fire ONLY when the seeker left the corresponding preference EMPTY. They are a guess, so
+    // {@see \App\Services\ProfilePreferenceMatchService} treats them as SOFT: they can raise or lower
+    // a score and are flagged `derived` for the app, but they can never exclude a candidate. Any
+    // explicitly stated value always wins and is never overwritten.
+    //
+    // The ladder lives in config/matching.derived_preferences so it is tunable without a deploy.
+    // ---------------------------------------------------------------------------------------------
+
+    public static function derivedPreferencesEnabled(): bool
+    {
+        return (bool) config('matching.derived_preferences.enabled', true);
+    }
+
+    /**
+     * Single resolver for "which degree does this profile hold" — FK first, then the free-text
+     * {@see MatrimonyProfile::$highest_education} line, then its first comma-separated segment.
+     * {@see \App\Services\ProfilePreferenceMatchService} delegates here so the two surfaces cannot
+     * drift apart.
+     */
+    public static function resolveProfileEducationDegreeId(MatrimonyProfile $profile): ?int
+    {
+        $fk = (int) ($profile->education_degree_id ?? 0);
+        if ($fk > 0) {
+            return $fk;
+        }
+
+        $line = trim((string) ($profile->highest_education ?? ''));
+        if ($line === '') {
+            return null;
+        }
+
+        $service = app(EducationService::class);
+        $match = $service->findDegreeMatch($line);
+        if ($match !== null) {
+            return (int) $match->id;
+        }
+
+        $first = trim(explode(',', $line)[0]);
+        if ($first === '' || $first === $line) {
+            return null;
+        }
+        $match = $service->findDegreeMatch($first);
+
+        return $match !== null ? (int) $match->id : null;
+    }
+
+    /**
+     * Assumed partner age range when the seeker stated none: for a male seeker a female from
+     * `younger` years below through `older` years above his own age (mirrored for a female seeker).
+     * Clamped by the partner's legal minimum, which is never relaxed.
+     *
+     * @return array{min: int, max: int}|null
+     */
+    public static function derivedPartnerAgeRange(MatrimonyProfile $profile): ?array
+    {
+        if (! self::derivedPreferencesEnabled()) {
+            return null;
+        }
+        $profile->loadMissing('gender');
+        $age = self::profileAge($profile);
+        if ($age === null) {
+            return null;
+        }
+        $genderKey = $profile->gender?->key ?? null;
+        if ($genderKey !== 'male' && $genderKey !== 'female') {
+            return null;
+        }
+
+        $ladder = (array) config('matching.derived_preferences.age.'.$genderKey, []);
+        $younger = (int) ($ladder['younger'] ?? 0);
+        $older = (int) ($ladder['older'] ?? 0);
+
+        return self::clampPartnerAgeRange($profile, $age - $younger, $age + $older);
+    }
+
+    /**
+     * Assumed partner height range when the seeker stated none: a male seeker is assumed to accept a
+     * partner from `shorter` cm below his own height through equal (mirrored for a female seeker).
+     *
+     * @return array{min: int, max: int}|null
+     */
+    public static function derivedPartnerHeightRangeCm(MatrimonyProfile $profile): ?array
+    {
+        if (! self::derivedPreferencesEnabled()) {
+            return null;
+        }
+        $profile->loadMissing('gender');
+        $h = $profile->height_cm;
+        if ($h === null || $h === '' || (int) $h < 1) {
+            return null;
+        }
+        $h = (int) $h;
+        $genderKey = $profile->gender?->key ?? null;
+        if ($genderKey !== 'male' && $genderKey !== 'female') {
+            return null;
+        }
+
+        $ladder = (array) config('matching.derived_preferences.height.'.$genderKey, []);
+        $min = $h - max(0, (int) ($ladder['shorter'] ?? 0));
+        $max = $h + max(0, (int) ($ladder['taller'] ?? 0));
+        $min = max(1, $min);
+        $max = max(1, $max);
+        if ($min > $max) {
+            [$min, $max] = [$max, $min];
+        }
+
+        return ['min' => $min, 'max' => $max];
+    }
+
+    /**
+     * Assumed partner education when the seeker stated none: one step either side of their own degree
+     * on {@code master_education.sort_order}.
+     *
+     * @return list<int>
+     */
+    public static function derivedPartnerEducationDegreeIds(MatrimonyProfile $profile): array
+    {
+        if (! self::derivedPreferencesEnabled()) {
+            return [];
+        }
+        $degreeId = self::resolveProfileEducationDegreeId($profile);
+        $degree = $degreeId !== null ? EducationDegree::query()->find($degreeId) : null;
+        if (! $degree instanceof EducationDegree) {
+            return [];
+        }
+        $sort = (int) ($degree->sort_order ?? 0);
+        if ($sort <= 0) {
+            return [(int) $degree->id];
+        }
+        $steps = max(0, (int) config('matching.derived_preferences.education.steps', 1));
+
+        return EducationDegree::query()
+            ->whereBetween('sort_order', [$sort - $steps, $sort + $steps])
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Assumed partner marital status when the seeker stated none: like-for-like with their own.
+     *
+     * @return list<int>
+     */
+    public static function derivedPartnerMaritalStatusIds(MatrimonyProfile $profile): array
+    {
+        if (! self::derivedPreferencesEnabled()) {
+            return [];
+        }
+        if (config('matching.derived_preferences.marital_status', 'like_for_like') !== 'like_for_like') {
+            return [];
+        }
+        $ownId = (int) ($profile->marital_status_id ?? 0);
+
+        return $ownId > 0 ? [$ownId] : [];
+    }
+
+    /**
+     * Assumed partner districts when the seeker stated no location at all: their own district, then
+     * geographically nearby districts. Proximity comes from the single existing geography helper via
+     * {@see \App\Services\Matching\NearbyGeographyResolver} — no second distance implementation.
+     *
+     * @return array{own: list<int>, nearby: list<int>}
+     */
+    public static function derivedPartnerDistrictIds(MatrimonyProfile $profile): array
+    {
+        $empty = ['own' => [], 'nearby' => []];
+        if (! self::derivedPreferencesEnabled()) {
+            return $empty;
+        }
+        if (config('matching.derived_preferences.district', 'same_then_nearby') === null) {
+            return $empty;
+        }
+        $districtId = self::resolveProfileDistrictId($profile);
+        if ($districtId === null) {
+            return $empty;
+        }
+
+        $nearby = config('matching.derived_preferences.district', 'same_then_nearby') === 'same_then_nearby'
+            ? array_values(array_diff(NearbyGeographyResolver::nearbyDistrictIds($districtId), [$districtId]))
+            : [];
+
+        return ['own' => [$districtId], 'nearby' => $nearby];
     }
 
     /**

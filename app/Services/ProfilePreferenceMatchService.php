@@ -10,6 +10,8 @@ use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
 use App\Models\OccupationMaster;
 use App\Models\Religion;
+use App\Services\Matching\CommunityLockResolver;
+use App\Services\Matching\NearbyGeographyResolver;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +38,25 @@ class ProfilePreferenceMatchService
     public const STRICT_MUST_MATCH = 'must_match';
 
     /**
+     * Per-run memo for residence geography. A matching run compares up to 200 candidates in BOTH
+     * directions, and resolving a profile's district/state/country/taluka walks the address hierarchy
+     * — without this the same walk ran 400+ times. Flushed by
+     * {@see \App\Services\Matching\MatchingService::findMatchesForTab()} at the start of every run.
+     *
+     * @var array<int, array{district_id: int, state_id: int, country_id: int, taluka_id: int}>
+     */
+    private static array $residenceGeoCache = [];
+
+    /**
+     * Drops every per-run memo owned by this service (and the shared geography resolver).
+     */
+    public static function flushRuntimeCaches(): void
+    {
+        self::$residenceGeoCache = [];
+        NearbyGeographyResolver::flush();
+    }
+
+    /**
      * @param  array<string, mixed>|null  $targetPreferencesOverride  Same shape as loadTargetPreferences(); skips DB when provided (batch matching).
      * @return array<string, mixed>
      */
@@ -46,8 +67,12 @@ class ProfilePreferenceMatchService
             'location',
         ]);
 
+        $targetProfile->loadMissing(['gender', 'maritalStatus', 'religion', 'caste']);
+
         $pref = $targetPreferencesOverride ?? self::loadTargetPreferences($targetProfile->id);
         $criteria = $pref['criteria'];
+        $lock = is_array($pref['community_lock'] ?? null) ? $pref['community_lock'] : CommunityLockResolver::open();
+        $strictness = is_array($pref['strictness'] ?? null) ? $pref['strictness'] : [];
 
         $groups = [
             'basic' => [],
@@ -57,18 +82,18 @@ class ProfilePreferenceMatchService
             'lifestyle' => [],
         ];
 
-        $groups['basic'][] = self::rowAge($viewerProfile, $criteria);
-        $groups['basic'][] = self::rowHeight($viewerProfile, $criteria);
-        $groups['basic'][] = self::rowMaritalStatus($viewerProfile, $criteria, $pref['marital_status_ids'] ?? []);
+        $groups['basic'][] = self::rowAge($viewerProfile, $criteria, $targetProfile);
+        $groups['basic'][] = self::rowHeight($viewerProfile, $criteria, $targetProfile, $strictness);
+        $groups['basic'][] = self::rowMaritalStatus($viewerProfile, $criteria, $pref['marital_status_ids'] ?? [], $targetProfile);
 
-        $groups['community'][] = self::rowReligion($viewerProfile, $pref['religion_ids']);
-        $groups['community'][] = self::rowCaste($viewerProfile, $pref['caste_ids']);
+        $groups['community'][] = self::rowReligion($viewerProfile, $pref['religion_ids'], $lock);
+        $groups['community'][] = self::rowCaste($viewerProfile, $pref['caste_ids'], $lock);
 
-        $groups['location'][] = self::rowLocation($viewerProfile, $pref);
+        $groups['location'][] = self::rowLocation($viewerProfile, $pref, $targetProfile);
 
-        $groups['education_career'][] = self::rowEducation($viewerProfile, $pref);
+        $groups['education_career'][] = self::rowEducation($viewerProfile, $pref, $targetProfile);
         $groups['education_career'][] = self::rowProfession($viewerProfile, $pref);
-        $groups['education_career'][] = self::rowIncome($viewerProfile, $criteria);
+        $groups['education_career'][] = self::rowIncome($viewerProfile, $criteria, $strictness);
 
         $groups['lifestyle'][] = self::rowDiet($viewerProfile, $pref['diet_ids']);
 
@@ -95,6 +120,13 @@ class ProfilePreferenceMatchService
 
         $targetHasPreference = self::targetHasAnyPreference($pref, $criteria);
 
+        $assumedFields = [];
+        foreach ($flat as $r) {
+            if (($r['derived'] ?? false) === true) {
+                $assumedFields[] = (string) ($r['id'] ?? '');
+            }
+        }
+
         return [
             'groups' => $groups,
             'rows' => $flat,
@@ -104,6 +136,10 @@ class ProfilePreferenceMatchService
             'helper_text' => $helper,
             'target_has_preferences' => $targetHasPreference,
             'viewer_profile_incomplete' => in_array(self::STATUS_UNKNOWN, array_column($flat, 'status'), true),
+            // Fields the target never stated: the engine assumed a sensible default from their own
+            // profile (PO-approved 2026-07-26). The app can label these "assumed", not "requested".
+            'assumed_fields' => array_values(array_filter(array_unique($assumedFields))),
+            'community_lock' => $lock,
         ];
     }
 
@@ -154,6 +190,11 @@ class ProfilePreferenceMatchService
             'occupation_master_ids' => $occupationMasterIds,
             'diet_ids' => $dietIds,
             'marital_status_ids' => $maritalStatusIds,
+            // Community intent + declared strictness. The batch path
+            // ({@see \App\Services\Matching\MatchingService::bulkLoadTargetPreferences()}) fills these
+            // in bulk; this single-profile path is only used by non-feed callers.
+            'community_lock' => CommunityLockResolver::resolveOne($targetProfileId, $casteIds, $religionIds),
+            'strictness' => CommunityLockResolver::strictnessMapFor([$targetProfileId])[$targetProfileId] ?? [],
         ];
     }
 
@@ -181,32 +222,66 @@ class ProfilePreferenceMatchService
     /**
      * @return array<string, mixed>
      */
-    private static function rowAge(MatrimonyProfile $viewer, ?object $criteria): array
+    private static function rowAge(MatrimonyProfile $viewer, ?object $criteria, ?MatrimonyProfile $target = null): array
     {
         $min = $criteria?->preferred_age_min ?? null;
         $max = $criteria?->preferred_age_max ?? null;
-        $their = ($min !== null && $max !== null)
-            ? (string) $min.' – '.$max
-            : __('preference_match.no_preference_set');
+        $label = __('preference_match.field_age');
 
         $age = self::viewerAge($viewer);
         $yours = $age !== null ? (string) $age : __('preference_match.value_unknown');
 
         if ($age === null) {
-            return self::row('age', __('preference_match.field_age'), $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_dob'));
-        }
-        if ($min === null || $max === null) {
-            return self::row('age', __('preference_match.field_age'), $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_no_age_range'));
+            $their = ($min !== null || $max !== null)
+                ? self::formatRangePair($min, $max)
+                : __('preference_match.no_preference_set');
+
+            return self::row('age', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_dob'));
         }
 
-        if ($age >= (int) $min && $age <= (int) $max) {
-            return self::row('age', __('preference_match.field_age'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_MATCH, null);
-        }
-        if ($age >= (int) $min - 2 && $age <= (int) $max + 2) {
-            return self::row('age', __('preference_match.field_age'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_age_near_range'));
+        // A one-sided bound is a real, stated preference — it must filter on its own. Requiring BOTH
+        // ends meant a "at least 25" preference was silently ignored.
+        if ($min !== null || $max !== null) {
+            $their = self::formatRangePair($min, $max);
+            $lo = $min !== null ? (int) $min : null;
+            $hi = $max !== null ? (int) $max : null;
+
+            $inside = ($lo === null || $age >= $lo) && ($hi === null || $age <= $hi);
+            if ($inside) {
+                return self::row('age', $label, $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_MATCH, null);
+            }
+            $near = ($lo === null || $age >= $lo - 2) && ($hi === null || $age <= $hi + 2);
+            if ($near) {
+                return self::row('age', $label, $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_age_near_range'));
+            }
+
+            return self::row('age', $label, $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_NOT_MATCHED, __('preference_match.reason_age_outside'));
         }
 
-        return self::row('age', __('preference_match.field_age'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_NOT_MATCHED, __('preference_match.reason_age_outside'));
+        // Nothing stated — assume a sensible range from the target's own profile. Derived values are
+        // a guess, so they may never produce not_matched.
+        $derived = $target !== null ? PartnerPreferenceSuggestionService::derivedPartnerAgeRange($target) : null;
+        if ($derived === null) {
+            return self::row('age', $label, __('preference_match.no_preference_set'), $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_no_age_range'));
+        }
+
+        $their = self::formatRangePair($derived['min'], $derived['max']);
+        if ($age >= $derived['min'] && $age <= $derived['max']) {
+            return self::row('age', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_MATCH, __('preference_match.reason_age_within_assumed'), true);
+        }
+        if ($age >= $derived['min'] - 2 && $age <= $derived['max'] + 2) {
+            return self::row('age', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_age_near_assumed'), true);
+        }
+
+        return self::row('age', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_age_outside_assumed'), true);
+    }
+
+    private static function formatRangePair(mixed $min, mixed $max, string $suffix = ''): string
+    {
+        $a = ($min !== null && $min !== '') ? (string) (int) $min : '—';
+        $b = ($max !== null && $max !== '') ? (string) (int) $max : '—';
+
+        return $a.' – '.$b.$suffix;
     }
 
     private static function viewerAge(MatrimonyProfile $viewer): ?int
@@ -232,44 +307,81 @@ class ProfilePreferenceMatchService
     /**
      * @return array<string, mixed>
      */
-    private static function rowHeight(MatrimonyProfile $viewer, ?object $criteria): array
+    /**
+     * @param  array<string, mixed>  $strictness  Target's declared strictness (partner_preference_metadata).
+     * @return array<string, mixed>
+     */
+    private static function rowHeight(MatrimonyProfile $viewer, ?object $criteria, ?MatrimonyProfile $target = null, array $strictness = []): array
     {
         $min = $criteria?->preferred_height_min_cm ?? null;
         $max = $criteria?->preferred_height_max_cm ?? null;
-        $their = ($min !== null && $max !== null)
-            ? (string) $min.' – '.$max.' cm'
-            : __('preference_match.no_preference_set');
+        $label = __('preference_match.field_height');
 
         $h = $viewer->height_cm;
         $yours = ($h !== null && $h !== '') ? (string) (int) $h.' cm' : __('preference_match.value_unknown');
 
         if ($h === null || $h === '') {
-            return self::row('height', __('preference_match.field_height'), $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_height'));
+            $their = ($min !== null || $max !== null)
+                ? self::formatRangePair($min, $max, ' cm')
+                : __('preference_match.no_preference_set');
+
+            return self::row('height', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_height'));
         }
         $hc = (int) $h;
-        if ($min === null || $max === null) {
-            return self::row('height', __('preference_match.field_height'), $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_no_height_range'));
-        }
-        $mn = (int) $min;
-        $mx = (int) $max;
-        if ($hc >= $mn && $hc <= $mx) {
-            return self::row('height', __('preference_match.field_height'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_MATCH, null);
-        }
-        if ($hc >= $mn - 3 && $hc <= $mx + 3) {
-            return self::row('height', __('preference_match.field_height'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_height_near_range'));
+
+        if ($min !== null || $max !== null) {
+            $their = self::formatRangePair($min, $max, ' cm');
+            $mn = $min !== null ? (int) $min : null;
+            $mx = $max !== null ? (int) $max : null;
+            // Height is SOFT by default: a 4 cm miss must not delete the candidate. It stays
+            // excludable only when the seeker explicitly declared it must-match — the tolerance
+            // decision itself lives in {@see \App\Services\Matching\MatchingService}.
+            $mustMatch = CommunityLockResolver::declaredMustMatch($strictness, 'height');
+            $strict = $mustMatch ? self::STRICT_MUST_MATCH : self::STRICT_PREFERRED;
+
+            $inside = ($mn === null || $hc >= $mn) && ($mx === null || $hc <= $mx);
+            if ($inside) {
+                return self::row('height', $label, $their, $yours, $strict, self::STATUS_MATCH, null, false, $mustMatch);
+            }
+            $near = ($mn === null || $hc >= $mn - 3) && ($mx === null || $hc <= $mx + 3);
+            if ($near) {
+                return self::row('height', $label, $their, $yours, $strict, self::STATUS_FLEXIBLE, __('preference_match.reason_height_near_range'), false, $mustMatch);
+            }
+
+            return self::row('height', $label, $their, $yours, $strict, self::STATUS_NOT_MATCHED, __('preference_match.reason_height_outside'), false, $mustMatch);
         }
 
-        return self::row('height', __('preference_match.field_height'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_NOT_MATCHED, __('preference_match.reason_height_outside'));
+        $derived = $target !== null ? PartnerPreferenceSuggestionService::derivedPartnerHeightRangeCm($target) : null;
+        if ($derived === null) {
+            return self::row('height', $label, __('preference_match.no_preference_set'), $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_no_height_range'));
+        }
+
+        $their = self::formatRangePair($derived['min'], $derived['max'], ' cm');
+        if ($hc >= $derived['min'] && $hc <= $derived['max']) {
+            return self::row('height', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_MATCH, __('preference_match.reason_height_within_assumed'), true);
+        }
+
+        return self::row('height', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_height_outside_assumed'), true);
     }
 
     /**
      * @return array<string, mixed>
      */
-    private static function rowMaritalStatus(MatrimonyProfile $viewer, ?object $criteria, array $pivotMaritalIds = []): array
+    private static function rowMaritalStatus(MatrimonyProfile $viewer, ?object $criteria, array $pivotMaritalIds = [], ?MatrimonyProfile $target = null): array
     {
+        $label = __('preference_match.field_marital');
         $allowed = array_values(array_unique(array_map('intval', $pivotMaritalIds)));
         if ($allowed === [] && ($criteria?->preferred_marital_status_id ?? null) !== null) {
             $allowed = [(int) $criteria->preferred_marital_status_id];
+        }
+
+        $derived = false;
+        if ($allowed === [] && $target !== null) {
+            $assumed = PartnerPreferenceSuggestionService::derivedPartnerMaritalStatusIds($target);
+            if ($assumed !== []) {
+                $allowed = $assumed;
+                $derived = true;
+            }
         }
 
         $their = $allowed === []
@@ -278,81 +390,106 @@ class ProfilePreferenceMatchService
 
         $yours = $viewer->maritalStatus?->label ?? __('preference_match.value_unknown');
         if (! $viewer->marital_status_id) {
-            return self::row('marital_status', __('preference_match.field_marital'), $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_marital'));
+            return self::row('marital_status', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_marital'));
         }
         if ($allowed === []) {
-            return self::row('marital_status', __('preference_match.field_marital'), $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_marital_open'));
-        }
-        if (in_array((int) $viewer->marital_status_id, $allowed, true)) {
-            return self::row('marital_status', __('preference_match.field_marital'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_MATCH, null);
+            return self::row('marital_status', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_marital_open'));
         }
 
-        return self::row('marital_status', __('preference_match.field_marital'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_FLEXIBLE, __('preference_match.reason_marital_differs'));
+        $strict = $derived ? self::STRICT_OPEN : self::STRICT_PREFERRED;
+        if (in_array((int) $viewer->marital_status_id, $allowed, true)) {
+            return self::row('marital_status', $label, $their, $yours, $strict, self::STATUS_MATCH, $derived ? __('preference_match.reason_marital_matches_assumed') : null, $derived);
+        }
+
+        return self::row('marital_status', $label, $their, $yours, $strict, self::STATUS_FLEXIBLE, $derived ? __('preference_match.reason_marital_differs_assumed') : __('preference_match.reason_marital_differs'), $derived);
     }
 
     /**
      * @param  array<int, int>  $religionIds
      * @return array<string, mixed>
      */
-    private static function rowReligion(MatrimonyProfile $viewer, array $religionIds): array
+    private static function rowReligion(MatrimonyProfile $viewer, array $religionIds, array $lock = []): array
     {
-        $their = $religionIds === []
+        $label = __('preference_match.field_religion');
+        $locked = ($lock['religion_locked'] ?? false) === true;
+        $allowed = $locked && ($lock['allowed_religion_ids'] ?? []) !== []
+            ? array_map('intval', $lock['allowed_religion_ids'])
+            : $religionIds;
+
+        $their = $allowed === []
             ? ''
-            : Religion::query()->whereIn('id', $religionIds)->get()->map(fn ($r) => $r->display_label)->implode(', ');
+            : Religion::query()->whereIn('id', $allowed)->get()->map(fn ($r) => $r->display_label)->implode(', ');
         if ($their === '') {
             $their = __('preference_match.open_to_all');
         }
         $yours = $viewer->religion?->label ?? __('preference_match.value_unknown');
         if (! $viewer->religion_id) {
-            return self::row('religion', __('preference_match.field_religion'), $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_religion'));
+            return self::row('religion', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_religion'));
         }
-        if ($religionIds === []) {
-            return self::row('religion', __('preference_match.field_religion'), $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_pref_open'));
+        if ($allowed === []) {
+            return self::row('religion', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_pref_open'));
         }
-        if (in_array((int) $viewer->religion_id, $religionIds, true)) {
-            return self::row('religion', __('preference_match.field_religion'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_MATCH, null);
+        if (in_array((int) $viewer->religion_id, $allowed, true)) {
+            return self::row('religion', $label, $their, $yours, $locked ? self::STRICT_MUST_MATCH : self::STRICT_PREFERRED, self::STATUS_MATCH, null);
         }
 
-        return self::row('religion', __('preference_match.field_religion'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_FLEXIBLE, __('preference_match.reason_religion_not_listed'));
+        // Owner ruling 2026-07-26: an explicitly stated community requirement is a real requirement.
+        // Without an explicit signal the row stays flexible exactly as before.
+        if ($locked) {
+            return self::row('religion', $label, $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_NOT_MATCHED, __('preference_match.reason_religion_locked'));
+        }
+
+        return self::row('religion', $label, $their, $yours, self::STRICT_PREFERRED, self::STATUS_FLEXIBLE, __('preference_match.reason_religion_not_listed'));
     }
 
     /**
      * @param  array<int, int>  $casteIds
      * @return array<string, mixed>
      */
-    private static function rowCaste(MatrimonyProfile $viewer, array $casteIds): array
+    private static function rowCaste(MatrimonyProfile $viewer, array $casteIds, array $lock = []): array
     {
-        $their = $casteIds === []
+        $label = __('preference_match.field_caste');
+        $locked = ($lock['caste_locked'] ?? false) === true;
+        $allowed = $locked && ($lock['allowed_caste_ids'] ?? []) !== []
+            ? array_map('intval', $lock['allowed_caste_ids'])
+            : $casteIds;
+
+        $their = $allowed === []
             ? ''
-            : Caste::query()->whereIn('id', $casteIds)->get()->map(fn ($c) => $c->display_label)->implode(', ');
+            : Caste::query()->whereIn('id', $allowed)->get()->map(fn ($c) => $c->display_label)->implode(', ');
         if ($their === '') {
             $their = __('preference_match.open_to_all');
         }
         $yours = $viewer->caste?->display_label ?? $viewer->caste?->label ?? __('preference_match.value_unknown');
         if (! $viewer->caste_id) {
-            return self::row('caste', __('preference_match.field_caste'), $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_caste'));
+            return self::row('caste', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_caste'));
         }
-        if ($casteIds === []) {
-            return self::row('caste', __('preference_match.field_caste'), $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_pref_open'));
+        if ($allowed === []) {
+            return self::row('caste', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_pref_open'));
         }
-        if (in_array((int) $viewer->caste_id, $casteIds, true)) {
-            return self::row('caste', __('preference_match.field_caste'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_MATCH, null);
+        if (in_array((int) $viewer->caste_id, $allowed, true)) {
+            return self::row('caste', $label, $their, $yours, $locked ? self::STRICT_MUST_MATCH : self::STRICT_PREFERRED, self::STATUS_MATCH, null);
         }
 
-        return self::row('caste', __('preference_match.field_caste'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_FLEXIBLE, __('preference_match.reason_caste_not_listed'));
+        if ($locked) {
+            return self::row('caste', $label, $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_NOT_MATCHED, __('preference_match.reason_caste_locked'));
+        }
+
+        return self::row('caste', $label, $their, $yours, self::STRICT_PREFERRED, self::STATUS_FLEXIBLE, __('preference_match.reason_caste_not_listed'));
     }
 
     /**
      * @param  array<string, mixed>  $pref
      * @return array<string, mixed>
      */
-    private static function rowLocation(MatrimonyProfile $viewer, array $pref): array
+    private static function rowLocation(MatrimonyProfile $viewer, array $pref, ?MatrimonyProfile $target = null): array
     {
         $dIds = $pref['district_ids'];
         $sIds = $pref['state_ids'];
         $cIds = $pref['country_ids'];
-        $tIds = $pref['taluka_ids'];
+        $tIds = array_values(array_filter(array_map('intval', $pref['taluka_ids'] ?? [])));
 
+        $label = __('preference_match.field_location');
         $their = self::describeLocationPreference($pref);
         if ($their === '') {
             $their = __('preference_match.open_to_all');
@@ -365,32 +502,55 @@ class ProfilePreferenceMatchService
 
         $hasAny = $dIds !== [] || $sIds !== [] || $cIds !== [] || $tIds !== [];
         if (! $viewer->location_id) {
-            return self::row('location', __('preference_match.field_location'), $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_location'));
-        }
-        if (! $hasAny) {
-            return self::row('location', __('preference_match.field_location'), $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_pref_open'));
+            return self::row('location', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_location'));
         }
 
-        $g = $viewer->residenceGeoAddressIds();
+        $g = self::residenceGeoWithTaluka($viewer);
         $vd = (int) ($g['district_id'] ?? 0);
-        if ($vd > 0 && $dIds !== [] && in_array($vd, $dIds, true)) {
-            return self::row('location', __('preference_match.field_location'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_MATCH, null);
+        $vs = (int) ($g['state_id'] ?? 0);
+        $vc = (int) ($g['country_id'] ?? 0);
+        $vt = (int) ($g['taluka_id'] ?? 0);
+
+        if (! $hasAny) {
+            return self::derivedLocationRow($viewer, $target, $label, $yours, $vd);
         }
 
-        $vs = (int) ($g['state_id'] ?? 0);
+        if ($vd > 0 && $dIds !== [] && in_array($vd, $dIds, true)) {
+            return self::row('location', $label, $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_MATCH, null);
+        }
+
+        // A taluka-only preference used to fall through every branch to not_matched, which the mutual
+        // gate then turned into an EMPTY feed for that seeker. Exact taluka is the tightest possible
+        // location match, so it ranks with an exact district.
+        if ($vt > 0 && $tIds !== [] && in_array($vt, $tIds, true)) {
+            return self::row('location', $label, $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_MATCH, null);
+        }
+
+        // Owner's rule: district proximity matters, and a nearby taluka is even better — so the
+        // nearby-taluka verdict is reported ahead of the plain same-district fallback.
+        if ($vt > 0 && $tIds !== [] && array_intersect([$vt], NearbyGeographyResolver::nearbyTalukaIdsForAny($tIds)) !== []) {
+            return self::row('location', $label, $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_location_nearby_taluka'));
+        }
+        if ($vd > 0 && $tIds !== [] && in_array($vd, NearbyGeographyResolver::districtIdsForTalukas($tIds), true)) {
+            return self::row('location', $label, $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_location_same_district'));
+        }
+
         if ($vs > 0 && $sIds !== [] && in_array($vs, $sIds, true)) {
-            return self::row('location', __('preference_match.field_location'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_location_state_aligns'));
+            return self::row('location', $label, $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_location_state_aligns'));
         }
         if ($vd > 0 && $dIds !== []) {
+            if (array_intersect(NearbyGeographyResolver::nearbyDistrictIds($vd), $dIds) !== []) {
+                return self::row('location', $label, $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_location_nearby_district'));
+            }
+
             $dStateIds = District::query()->whereIn('id', $dIds)->pluck('parent_id')->unique()->filter()->all();
             if ($vs > 0 && in_array($vs, array_map('intval', $dStateIds), true)) {
-                return self::row('location', __('preference_match.field_location'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_location_same_state'));
+                return self::row('location', $label, $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_location_same_state'));
             }
         }
 
-        $vc = (int) ($g['country_id'] ?? 0);
         if ($vc > 0 && $cIds !== [] && in_array($vc, $cIds, true)) {
-            return self::row('location', __('preference_match.field_location'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_location_country_aligns'));
+            return self::row('location', $label, $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_location_country_aligns'));
         }
 
         if ($vd > 0 && $dIds !== []) {
@@ -407,11 +567,83 @@ class ProfilePreferenceMatchService
                 ->map(fn ($id) => (int) $id)
                 ->all();
             if ($vc > 0 && $prefCountries !== [] && in_array($vc, $prefCountries, true)) {
-                return self::row('location', __('preference_match.field_location'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_location_same_country'));
+                return self::row('location', $label, $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_location_same_country'));
             }
         }
 
-        return self::row('location', __('preference_match.field_location'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_NOT_MATCHED, __('preference_match.reason_location_mismatch'));
+        return self::row('location', $label, $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_NOT_MATCHED, __('preference_match.reason_location_mismatch'));
+    }
+
+    /**
+     * No location preference stated at all: assume the target's own district, then nearby districts.
+     * Derived, therefore never not_matched.
+     *
+     * @return array<string, mixed>
+     */
+    private static function derivedLocationRow(MatrimonyProfile $viewer, ?MatrimonyProfile $target, string $label, string $yours, int $viewerDistrictId): array
+    {
+        $derived = $target !== null
+            ? PartnerPreferenceSuggestionService::derivedPartnerDistrictIds($target)
+            : ['own' => [], 'nearby' => []];
+
+        if ($derived['own'] === []) {
+            return self::row('location', $label, __('preference_match.open_to_all'), $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_pref_open'));
+        }
+
+        $geo = Location::geoTable();
+        $their = (string) DB::table($geo)->whereIn('id', $derived['own'])->pluck('name')->filter()->implode(', ');
+        if ($their === '') {
+            $their = __('preference_match.open_to_all');
+        }
+
+        if ($viewerDistrictId > 0 && in_array($viewerDistrictId, $derived['own'], true)) {
+            return self::row('location', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_MATCH, __('preference_match.reason_location_same_district_assumed'), true);
+        }
+        if ($viewerDistrictId > 0 && in_array($viewerDistrictId, $derived['nearby'], true)) {
+            return self::row('location', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_location_nearby_district_assumed'), true);
+        }
+
+        return self::row('location', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_location_far_assumed'), true);
+    }
+
+    /**
+     * Residence district/state/country (unchanged source: {@see MatrimonyProfile::residenceGeoAddressIds()})
+     * plus the taluka the district-level helper never returned, memoised per profile for the run.
+     *
+     * @return array{district_id: int, state_id: int, country_id: int, taluka_id: int}
+     */
+    private static function residenceGeoWithTaluka(MatrimonyProfile $viewer): array
+    {
+        $pid = (int) $viewer->getKey();
+        if ($pid > 0 && isset(self::$residenceGeoCache[$pid])) {
+            return self::$residenceGeoCache[$pid];
+        }
+
+        $g = $viewer->residenceGeoAddressIds();
+        $out = [
+            'district_id' => (int) ($g['district_id'] ?? 0),
+            'state_id' => (int) ($g['state_id'] ?? 0),
+            'country_id' => (int) ($g['country_id'] ?? 0),
+            'taluka_id' => 0,
+        ];
+
+        if ($viewer->location_id && Schema::hasTable(Location::geoTable())) {
+            $hints = $viewer->residenceLocationHierarchyHints();
+            $out['taluka_id'] = (int) ($hints['taluka_id'] !== '' ? $hints['taluka_id'] : 0);
+            if ($out['taluka_id'] <= 0) {
+                // The residence leaf may itself be the taluka.
+                $leafHierarchy = DB::table(Location::geoTable())->where('id', (int) $viewer->location_id)->value('hierarchy');
+                if ($leafHierarchy === 'taluka') {
+                    $out['taluka_id'] = (int) $viewer->location_id;
+                }
+            }
+        }
+
+        if ($pid > 0) {
+            self::$residenceGeoCache[$pid] = $out;
+        }
+
+        return $out;
     }
 
     /**
@@ -441,36 +673,37 @@ class ProfilePreferenceMatchService
      * @param  array<string, mixed>  $pref
      * @return array<string, mixed>
      */
-    private static function rowEducation(MatrimonyProfile $viewer, array $pref): array
+    private static function rowEducation(MatrimonyProfile $viewer, array $pref, ?MatrimonyProfile $target = null): array
     {
-        $degreeIds = array_map('intval', $pref['education_degree_ids'] ?? []);
+        $degreeIds = array_values(array_filter(array_map('intval', $pref['education_degree_ids'] ?? [])));
+        if ($degreeIds !== []) {
+            return self::rowEducationDegrees($viewer, $degreeIds);
+        }
 
-        return self::rowEducationDegrees($viewer, $degreeIds);
+        $assumed = $target !== null
+            ? PartnerPreferenceSuggestionService::derivedPartnerEducationDegreeIds($target)
+            : [];
+        if ($assumed === []) {
+            return self::rowEducationDegrees($viewer, []);
+        }
+
+        return self::rowEducationDegrees($viewer, $assumed, true);
     }
 
     /**
-     * Best-effort primary degree id from {@see MatrimonyProfile::highest_education} text (first comma-separated segment).
+     * Best-effort primary degree id. Delegates to the single shared resolver so this surface and the
+     * preference-suggestion surface cannot drift apart.
      */
     private static function resolveViewerPrimaryDegreeId(MatrimonyProfile $viewer): ?int
     {
-        $line = trim((string) ($viewer->highest_education ?? ''));
-        if ($line === '') {
-            return null;
-        }
-        $first = trim(explode(',', $line)[0]);
-        if ($first === '') {
-            return null;
-        }
-        $match = app(EducationService::class)->findDegreeMatch($first);
-
-        return $match ? (int) $match->id : null;
+        return PartnerPreferenceSuggestionService::resolveProfileEducationDegreeId($viewer);
     }
 
     /**
      * @param  array<int, int>  $degreeIds
      * @return array<string, mixed>
      */
-    private static function rowEducationDegrees(MatrimonyProfile $viewer, array $degreeIds): array
+    private static function rowEducationDegrees(MatrimonyProfile $viewer, array $degreeIds, bool $derived = false): array
     {
         $degreeIds = array_values(array_unique(array_filter($degreeIds, fn ($id) => (int) $id > 0)));
         if ($degreeIds === []) {
@@ -508,20 +741,23 @@ class ProfilePreferenceMatchService
             return self::row('education', __('preference_match.field_education'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_UNKNOWN, __('preference_match.reason_education_not_mapped'));
         }
 
+        $strict = $derived ? self::STRICT_OPEN : self::STRICT_PREFERRED;
+
         if (in_array($viewerDegreeId, $degreeIds, true)) {
-            return self::row('education', __('preference_match.field_education'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_MATCH, null);
+            return self::row('education', __('preference_match.field_education'), $their, $yours, $strict, self::STATUS_MATCH, $derived ? __('preference_match.reason_education_within_assumed') : null, $derived);
         }
 
         $vSort = (int) ($viewerDegree->sort_order ?? 0);
         $minPrefSort = (int) EducationDegree::query()->whereIn('id', $degreeIds)->min('sort_order');
         if ($vSort > 0 && $minPrefSort > 0 && $vSort >= $minPrefSort - 1) {
-            return self::row('education', __('preference_match.field_education'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_FLEXIBLE, __('preference_match.reason_education_close'));
+            return self::row('education', __('preference_match.field_education'), $their, $yours, $strict, self::STATUS_FLEXIBLE, __('preference_match.reason_education_close'), $derived);
         }
-        if ($vSort > 0 && $minPrefSort > 0 && $vSort < $minPrefSort - 2) {
+        // A derived education band is a guess, so it may never exclude — it only softens the score.
+        if (! $derived && $vSort > 0 && $minPrefSort > 0 && $vSort < $minPrefSort - 2) {
             return self::row('education', __('preference_match.field_education'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_NOT_MATCHED, __('preference_match.reason_education_below'));
         }
 
-        return self::row('education', __('preference_match.field_education'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_FLEXIBLE, __('preference_match.reason_education_not_listed'));
+        return self::row('education', __('preference_match.field_education'), $their, $yours, $strict, self::STATUS_FLEXIBLE, $derived ? __('preference_match.reason_education_outside_assumed') : __('preference_match.reason_education_not_listed'), $derived);
     }
 
     /**
@@ -572,8 +808,13 @@ class ProfilePreferenceMatchService
     /**
      * @return array<string, mixed>
      */
-    private static function rowIncome(MatrimonyProfile $viewer, ?object $criteria): array
+    /**
+     * @param  array<string, mixed>  $strictness  Target's declared strictness (partner_preference_metadata).
+     * @return array<string, mixed>
+     */
+    private static function rowIncome(MatrimonyProfile $viewer, ?object $criteria, array $strictness = []): array
     {
+        $label = __('preference_match.field_income');
         $minR = $criteria?->preferred_income_min ?? null;
         $maxR = $criteria?->preferred_income_max ?? null;
         $their = ($minR !== null || $maxR !== null)
@@ -584,25 +825,31 @@ class ProfilePreferenceMatchService
         $yours = $annual !== null ? self::formatRupeesLakh($annual) : __('preference_match.value_unknown');
 
         if ($annual === null) {
-            return self::row('income', __('preference_match.field_income'), $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_income'));
+            return self::row('income', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_income'));
         }
         if ($minR === null && $maxR === null) {
-            return self::row('income', __('preference_match.field_income'), $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_pref_open'));
+            return self::row('income', $label, $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_pref_open'));
         }
+
+        // Income is SOFT by default: a candidate ₹1 short must not be deleted from the feed. It stays
+        // excludable only when the seeker explicitly declared income must-match.
+        $mustMatch = CommunityLockResolver::declaredMustMatch($strictness, 'income');
+        $strict = $mustMatch ? self::STRICT_MUST_MATCH : self::STRICT_PREFERRED;
+
         $mn = $minR !== null ? (float) $minR : null;
         $mx = $maxR !== null ? (float) $maxR : null;
         if ($mn !== null && $annual < $mn) {
             if ($annual >= $mn * 0.85) {
-                return self::row('income', __('preference_match.field_income'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_income_slightly_low'));
+                return self::row('income', $label, $their, $yours, $strict, self::STATUS_FLEXIBLE, __('preference_match.reason_income_slightly_low'), false, $mustMatch);
             }
 
-            return self::row('income', __('preference_match.field_income'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_NOT_MATCHED, __('preference_match.reason_income_low'));
+            return self::row('income', $label, $their, $yours, $strict, self::STATUS_NOT_MATCHED, __('preference_match.reason_income_low'), false, $mustMatch);
         }
         if ($mx !== null && $annual > $mx) {
-            return self::row('income', __('preference_match.field_income'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_FLEXIBLE, __('preference_match.reason_income_above_range'));
+            return self::row('income', $label, $their, $yours, self::STRICT_PREFERRED, self::STATUS_FLEXIBLE, __('preference_match.reason_income_above_range'), false, $mustMatch);
         }
 
-        return self::row('income', __('preference_match.field_income'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_MATCH, null);
+        return self::row('income', $label, $their, $yours, $strict, self::STATUS_MATCH, null, false, $mustMatch);
     }
 
     private static function viewerAnnualIncomeRupees(MatrimonyProfile $viewer): ?float
@@ -659,6 +906,13 @@ class ProfilePreferenceMatchService
     /**
      * @return array<string, mixed>
      */
+    /**
+     * @param  bool  $derived  The preference was never stated — the engine assumed it from the
+     *                         target's own profile. Derived rows are advisory: they influence the
+     *                         score and are labelled for the app, but never exclude a candidate.
+     * @param  bool  $declaredMustMatch  The seeker explicitly declared this field must-match. Only
+     *                                   these keep income/height excludable at the strict tier.
+     */
     private static function row(
         string $id,
         string $label,
@@ -666,7 +920,9 @@ class ProfilePreferenceMatchService
         string $yourValue,
         string $strictness,
         string $status,
-        ?string $reason
+        ?string $reason,
+        bool $derived = false,
+        bool $declaredMustMatch = false
     ): array {
         return [
             'id' => $id,
@@ -676,6 +932,8 @@ class ProfilePreferenceMatchService
             'strictness' => $strictness,
             'status' => $status,
             'reason' => $reason,
+            'derived' => $derived,
+            'declared_must_match' => $declaredMustMatch,
         ];
     }
 
