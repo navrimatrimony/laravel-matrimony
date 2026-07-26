@@ -289,6 +289,8 @@ return [
     'gunamilan_bride' => 'वधू',
     'gunamilan_groom' => 'वर',
     'gunamilan_not_available' => 'उपलब्ध नाही',
+    'gunamilan_required_label' => 'गुणमिलन जुळणे आवश्यक',
+    'gunamilan_required_help' => 'हे चालू केल्यास 36 पैकी किमान 18 गुण जुळणारी स्थळेच दाखवली जातील. दोघांपैकी कोणाचीही पत्रिका माहिती भरलेली नसेल, तर स्थळ वगळले जात नाही — फक्त गुणमिलन तपासता येत नाही एवढेच.',
     'gunamilan_missing_title' => 'काही पत्रिका माहिती भरलेली नाही',
     'gunamilan_missing_body' => 'तरीही सर्व कूट विभाग दाखवले आहेत. जिथे माहिती अपुरी आहे तिथे स्पष्ट चिन्ह दाखवले आहे, म्हणजे profile wizard मधून fields सुधारता येतील.',
     'gunamilan_own_profile_unavailable' => 'गुणमिलनासाठी दोन वेगवेगळ्या प्रोफाइल आवश्यक आहेत.',

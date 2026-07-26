@@ -313,6 +313,8 @@ return [
     'gunamilan_bride' => 'Bride',
     'gunamilan_groom' => 'Groom',
     'gunamilan_not_available' => 'Not available',
+    'gunamilan_required_label' => 'Gunamilan match required',
+    'gunamilan_required_help' => 'When on, only matches scoring at least 18 of 36 are shown. If either side has no patrika details filled in, the match is not excluded — gunamilan simply cannot be checked.',
     'gunamilan_missing_title' => 'Some horoscope information is missing',
     'gunamilan_missing_body' => 'The page still shows every Koota section. Sections with incomplete data are marked so the missing profile fields can be corrected from the profile wizard.',
     'gunamilan_own_profile_unavailable' => 'Gunmilan needs two different profiles.',

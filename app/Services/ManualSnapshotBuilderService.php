@@ -258,6 +258,18 @@ class ManualSnapshotBuilderService
             $preferences = [\App\Services\PartnerPreferenceSnapshotBuilder::validateAndBuildRow($request)];
         }
 
+        // `gunamilan_required` is asked in the horoscope section but stored on
+        // profile_preference_criteria, so the full form has to carry it whichever
+        // preference shape (nested, flat, or none) was posted above.
+        if ($request->has('gunamilan_required')) {
+            $gunamilanRequired = $request->boolean('gunamilan_required');
+            if ($preferences === []) {
+                $preferences = [['gunamilan_required' => $gunamilanRequired]];
+            } else {
+                $preferences[0]['gunamilan_required'] = $gunamilanRequired;
+            }
+        }
+
         $extended_narrative = [];
         if ($request->has('extended_narrative')) {
             $en = $request->input('extended_narrative');

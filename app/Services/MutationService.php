@@ -2255,7 +2255,11 @@ class MutationService
         $profileId = $profile->id;
 
         if (Schema::hasTable('profile_preference_criteria')) {
-            $allowed = ['preferred_age_min', 'preferred_age_max', 'preferred_height_min_cm', 'preferred_height_max_cm', 'preferred_income_min', 'preferred_income_max', 'preferred_city_id', 'willing_to_relocate', 'settled_city_preference_id', 'marriage_type_preference_id', 'preferred_marital_status_id', 'partner_profile_with_children', 'preferred_profile_managed_by'];
+            // NOTE: this is an allow-list — a column absent here is silently
+            // dropped no matter what the section posted. `gunamilan_required`
+            // is posted from the horoscope section, not the preference one,
+            // because that is where the user thinks about patrika matching.
+            $allowed = ['preferred_age_min', 'preferred_age_max', 'preferred_height_min_cm', 'preferred_height_max_cm', 'preferred_income_min', 'preferred_income_max', 'preferred_city_id', 'willing_to_relocate', 'settled_city_preference_id', 'marriage_type_preference_id', 'preferred_marital_status_id', 'partner_profile_with_children', 'preferred_profile_managed_by', 'gunamilan_required'];
             $data = [];
             foreach ($allowed as $col) {
                 if (array_key_exists($col, $proposed)) {

@@ -648,6 +648,12 @@ class ProfileWizardController extends Controller
                 $data['nadis'] = $data['nadis'] ?? collect();
                 $data['yonis'] = $data['yonis'] ?? collect();
                 $data['mangalDoshTypes'] = $data['mangalDoshTypes'] ?? collect();
+                // Lives on profile_preference_criteria (it is a statement about the
+                // partner) but is asked here, where the user is already looking at
+                // their own patrika. Default OFF.
+                $data['gunamilanRequired'] = (bool) DB::table('profile_preference_criteria')
+                    ->where('profile_id', $profile->id)
+                    ->value('gunamilan_required');
                 $hRow = $data['profile_horoscope_data'] ? (array) $data['profile_horoscope_data'] : [];
                 $horoscopeRuleService = app(\App\Services\HoroscopeRuleService::class);
                 $data['dependencyWarnings'] = $horoscopeRuleService->getValidationWarningsForUI($hRow)['warnings'];
@@ -1967,10 +1973,23 @@ class ProfileWizardController extends Controller
             ]];
         }
 
-        return [
+        $snapshot = [
             'core' => [],
             'horoscope' => $horoscope,
         ];
+
+        // "गुणमिलन जुळणे आवश्यक" is asked here because this is the screen where a
+        // user is already thinking about their patrika, but it is a statement
+        // about the PARTNER, so it is stored on profile_preference_criteria —
+        // one fact, one input, one destination. Only sent when the form posted
+        // it, so a section that omits the field never silently clears it.
+        if ($request->has('gunamilan_required')) {
+            $snapshot['preferences'] = [
+                'gunamilan_required' => $request->boolean('gunamilan_required'),
+            ];
+        }
+
+        return $snapshot;
     }
 
     /** Validate horoscope payload for structural issues only (invalid FK, charan). Does not block on dependency mismatch. */
