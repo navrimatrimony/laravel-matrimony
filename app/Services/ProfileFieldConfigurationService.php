@@ -19,15 +19,50 @@ use App\Models\ProfileFieldConfig;
 class ProfileFieldConfigurationService
 {
     /**
+     * Per-process memo, keyed by flag column.
+     *
+     * `profile_field_configs` is a small admin-owned config table (one row per profile field) whose
+     * contents cannot change while a request is being served — but completeness asks for the mandatory
+     * AND enabled lists once per profile, and matching computes completeness for the seeker plus every
+     * candidate in the pool. That was two identical `pluck()`s per candidate for a list of ~30 strings.
+     *
+     * Invalidated by {@see \App\Models\ProfileFieldConfig} save/delete events, so an admin edit on the
+     * field-configuration screen is visible immediately, in the same request that saved it.
+     *
+     * @var array<string, array<string>>
+     */
+    private static array $keyMemo = [];
+
+    /**
+     * Drop the memo — wired to {@see \App\Models\ProfileFieldConfig} write events.
+     */
+    public static function flushRuntimeCache(): void
+    {
+        self::$keyMemo = [];
+    }
+
+    /**
+     * @return array<string> Array of field_key values
+     */
+    private static function keysWhere(string $flag): array
+    {
+        if (isset(self::$keyMemo[$flag])) {
+            return self::$keyMemo[$flag];
+        }
+
+        return self::$keyMemo[$flag] = ProfileFieldConfig::where($flag, true)
+            ->pluck('field_key')
+            ->toArray();
+    }
+
+    /**
      * Get all field keys marked as mandatory.
      *
      * @return array<string> Array of field_key values
      */
     public static function getMandatoryFieldKeys(): array
     {
-        return ProfileFieldConfig::where('is_mandatory', true)
-            ->pluck('field_key')
-            ->toArray();
+        return self::keysWhere('is_mandatory');
     }
 
     /**
@@ -37,9 +72,7 @@ class ProfileFieldConfigurationService
      */
     public static function getVisibleFieldKeys(): array
     {
-        return ProfileFieldConfig::where('is_visible', true)
-            ->pluck('field_key')
-            ->toArray();
+        return self::keysWhere('is_visible');
     }
 
     /**
@@ -50,11 +83,9 @@ class ProfileFieldConfigurationService
      */
     public static function getEnabledFieldKeys(): array
     {
-        $keys = ProfileFieldConfig::where('is_enabled', true)
-            ->pluck('field_key')
-            ->toArray();
+        $keys = self::keysWhere('is_enabled');
 
-        if (!in_array('height_cm', $keys, true)) {
+        if (! in_array('height_cm', $keys, true)) {
             $keys[] = 'height_cm';
         }
 
@@ -68,8 +99,6 @@ class ProfileFieldConfigurationService
      */
     public static function getSearchableFieldKeys(): array
     {
-        return ProfileFieldConfig::where('is_searchable', true)
-            ->pluck('field_key')
-            ->toArray();
+        return self::keysWhere('is_searchable');
     }
 }

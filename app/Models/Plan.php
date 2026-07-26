@@ -135,6 +135,9 @@ class Plan extends Model
     public static function forgetCachedPlanFeaturesByPlanId(int $planId): void
     {
         Cache::forget("plan_features_{$planId}");
+        // The memoised default-free plan holds an instance with `features` / `quotaPolicies` already
+        // loaded, so a feature write has to drop it too or that instance keeps serving the old rows.
+        self::flushDefaultFreeMemo();
     }
 
     /**
@@ -270,6 +273,35 @@ class Plan extends Model
             $genderKey = strtolower(trim((string) ($user->matrimonyProfile?->gender?->key ?? '')));
         }
 
+        if (array_key_exists($genderKey, self::$defaultFreeMemo)) {
+            return self::$defaultFreeMemo[$genderKey];
+        }
+
+        return self::$defaultFreeMemo[$genderKey] = self::resolveDefaultFree($genderKey);
+    }
+
+    /**
+     * Per-process memo for {@see defaultFree()}, keyed by the resolving gender key ('', 'male', 'female').
+     *
+     * The answer is catalog data, not member state — the free plan for a gender is the same row for
+     * every member on the platform. It was being re-queried (and its `features` / `quotaPolicies`
+     * relations re-loaded, because each call returned a fresh model) once per candidate in the matching
+     * feed, where {@see \App\Services\MatchBoostService} asks for every candidate's effective plan.
+     *
+     * Invalidated by any {@see Plan} / {@see PlanFeature} / {@see PlanQuotaPolicy} write and by
+     * migrations, so an admin catalog edit is visible in the same request that made it.
+     *
+     * @var array<string, self|null>
+     */
+    private static array $defaultFreeMemo = [];
+
+    public static function flushDefaultFreeMemo(): void
+    {
+        self::$defaultFreeMemo = [];
+    }
+
+    private static function resolveDefaultFree(string $genderKey): ?self
+    {
         if ($genderKey === 'male') {
             $hit = static::query()->where('slug', 'free_male')->where('is_active', true)->first();
             if ($hit) {
@@ -288,6 +320,12 @@ class Plan extends Model
             ->orderBy('sort_order')
             ->orderBy('id')
             ->first();
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(static fn () => self::flushDefaultFreeMemo());
+        static::deleted(static fn () => self::flushDefaultFreeMemo());
     }
 
     /**

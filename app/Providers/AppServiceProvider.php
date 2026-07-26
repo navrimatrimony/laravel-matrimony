@@ -5,11 +5,13 @@ namespace App\Providers;
 use App\Contracts\Intake\BulkIntakeWhatsAppConsentSender;
 use App\Contracts\WhatsApp\WhatsAppMessageProvider;
 use App\Models\MatrimonyProfile;
+use App\Models\Plan;
 use App\Models\SystemRule;
 use App\Observers\MatrimonyProfileObserver;
 use App\Observers\SystemRuleObserver;
 use App\Services\Intake\LogBulkIntakeWhatsAppConsentSender;
 use App\Services\Intake\MetaBulkIntakeWhatsAppConsentSender;
+use App\Services\ProfileFieldConfigurationService;
 use App\Services\WhatsApp\MetaWhatsAppMessageProvider;
 use App\Services\WhatsApp\NullWhatsAppMessageProvider;
 use App\Support\Admin\AdminNavigationAccess;
@@ -94,6 +96,15 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(MigrationsStarted::class, static fn () => SchemaPresence::flush());
         Event::listen(MigrationsEnded::class, static fn () => SchemaPresence::flush());
         Event::listen(MigrationEnded::class, static fn () => SchemaPresence::flush());
+
+        // Same deal for the `profile_field_configs` flag lists: memoised for the process, but a test
+        // run re-seeds that table between cases, so the memo must not survive a migration batch.
+        Event::listen(MigrationsStarted::class, static fn () => ProfileFieldConfigurationService::flushRuntimeCache());
+        Event::listen(MigrationsEnded::class, static fn () => ProfileFieldConfigurationService::flushRuntimeCache());
+
+        // …and for the memoised default-free plan row, which migrations/seeders create and rewrite.
+        Event::listen(MigrationsStarted::class, static fn () => Plan::flushDefaultFreeMemo());
+        Event::listen(MigrationsEnded::class, static fn () => Plan::flushDefaultFreeMemo());
         // Guard against misconfiguration: Sarvam structured parser must use Sarvam M only.
 
         $envSarvamStructured = strtolower(trim((string) env('INTAKE_SARVAM_STRUCTURED_MODEL', '')));

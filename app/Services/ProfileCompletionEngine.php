@@ -20,11 +20,21 @@ class ProfileCompletionEngine
     protected array $requestCache = [];
 
     /**
-     * Drop memoized {@see for()} result for a user (e.g. after profile save — see {@see \App\Observers\MatrimonyProfileObserver}).
+     * Drop memoized {@see for()} / {@see forProfile()} results for a user (e.g. after profile save —
+     * see {@see \App\Observers\MatrimonyProfileObserver}).
      */
     public function forgetRequestCacheForUser(int $userId): void
     {
-        unset($this->requestCache[$userId]);
+        unset($this->requestCache[$userId], $this->requestCache['profile_completion_'.$userId]);
+    }
+
+    /**
+     * Same, for the user-less key {@see forProfile()} falls back to (Suchak-created profiles with no
+     * account). Paired with the observer's `Cache::forget('profile_completion_profile_…')`.
+     */
+    public function forgetRequestCacheForProfile(int $profileId): void
+    {
+        unset($this->requestCache['profile_completion_profile_'.$profileId]);
     }
 
     /**
@@ -52,11 +62,7 @@ class ProfileCompletionEngine
             return $empty;
         }
 
-        $cacheKey = 'profile_completion_'.$user->id;
-        $result = Cache::remember($cacheKey, self::CACHE_TTL_SECONDS, fn () => $this->computeForProfile($profile));
-        $this->requestCache[$key] = $result;
-
-        return $result;
+        return $this->requestCache[$key] = $this->remember('profile_completion_'.$user->id, $profile);
     }
 
     /**
@@ -72,9 +78,34 @@ class ProfileCompletionEngine
     public function forProfile(MatrimonyProfile $profile): array
     {
         $uid = (int) ($profile->user_id ?? 0);
-        $key = $uid > 0 ? 'profile_completion_'.$uid : 'profile_completion_profile_'.$profile->id;
 
-        return Cache::remember($key, self::CACHE_TTL_SECONDS, fn () => $this->computeForProfile($profile));
+        return $this->remember(
+            $uid > 0 ? 'profile_completion_'.$uid : 'profile_completion_profile_'.$profile->id,
+            $profile
+        );
+    }
+
+    /**
+     * Shared read path: in-request memo in front of the shared cache.
+     *
+     * `Cache::remember()` is not free — the production store is `database`, so every call was a
+     * `cache` table SELECT. The matching feed asks for the same profile's completion repeatedly
+     * (once per relaxation-ladder tier, plus the boost layer), for values that cannot change
+     * mid-request. Same value, same cache semantics, just not re-fetched within one request.
+     *
+     * @return array<string, mixed>
+     */
+    private function remember(string $cacheKey, MatrimonyProfile $profile): array
+    {
+        if (array_key_exists($cacheKey, $this->requestCache)) {
+            return $this->requestCache[$cacheKey];
+        }
+
+        return $this->requestCache[$cacheKey] = Cache::remember(
+            $cacheKey,
+            self::CACHE_TTL_SECONDS,
+            fn () => $this->computeForProfile($profile)
+        );
     }
 
     /**
@@ -91,7 +122,6 @@ class ProfileCompletionEngine
     {
         $mandatory = ProfileCompletenessService::percentage($profile);
         $detailed = ProfileCompletenessService::detailedPercentage($profile);
-        $breakdown = ProfileCompletenessService::breakdown($profile);
 
         return [
             'mandatory_core' => $mandatory,
@@ -99,7 +129,11 @@ class ProfileCompletionEngine
             'score' => $this->calculateScore($mandatory, $detailed),
             'is_mandatory_complete' => $mandatory >= 100,
             'is_detailed_complete' => $detailed >= 100,
-            'breakdown' => $breakdown,
+            // {@see ProfileCompletenessService::breakdown()} is literally
+            // `['core' => percentage(), 'detailed' => detailedPercentage()]`, so calling it here ran
+            // the whole section sweep a second time — every field-config read, every section COUNT and
+            // the education/address lookups behind them, twice per profile. Same two numbers, reused.
+            'breakdown' => ['core' => $mandatory, 'detailed' => $detailed],
         ];
     }
 

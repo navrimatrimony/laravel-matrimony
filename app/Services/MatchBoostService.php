@@ -103,6 +103,36 @@ class MatchBoostService
     /** @var array<string, array<string, int>> */
     private array $pairPointsMemo = [];
 
+    /**
+     * Commercial-tier points per candidate account.
+     *
+     * {@see tierPoints()} is deliberately kept OUT of the day-long pair cache because a plan can be
+     * bought at any moment — but it is asked for the same candidate several times inside one request
+     * (once per relaxation-ladder tier), and each ask cost a full {@see SubscriptionService::getEffectivePlan()}
+     * resolution: the single-active-row invariant sweep, the authoritative subscription read, the
+     * default-free plan lookup and two relation loads. A plan cannot change between two ladder tiers of
+     * the same request, so this memo is the same value with the same freshness guarantee.
+     *
+     * @var array<int, array<string, int>>
+     */
+    private array $tierPointsMemo = [];
+
+    /**
+     * `$user->matrimonyProfile` per user id — the seeker's profile alone was lazily re-loaded once per
+     * candidate, and each candidate's own profile once per ladder tier.
+     *
+     * @var array<int, MatrimonyProfile|null>
+     */
+    private array $profileForUserMemo = [];
+
+    /**
+     * Legacy profession id per profile, for installs where `matrimony_profiles.profession_id` does not
+     * exist and {@see MatrimonyProfile::resolvedProfession()} has to name-match the occupation master.
+     *
+     * @var array<int, int>
+     */
+    private array $professionIdMemo = [];
+
     /** @var array{version: string, ai_enabled: bool, rules: array<string, array{value: int, max_cap: int, is_active: bool, meta: array<string, mixed>}>}|null */
     private ?array $configMemo = null;
 
@@ -119,6 +149,9 @@ class MatchBoostService
         $this->configMemo = null;
         $this->qualityPointsMemo = [];
         $this->pairPointsMemo = [];
+        $this->tierPointsMemo = [];
+        $this->profileForUserMemo = [];
+        $this->professionIdMemo = [];
     }
 
     /**
@@ -156,8 +189,8 @@ class MatchBoostService
      */
     public function explainBoost(User $userA, User $userB): array
     {
-        $profileA = $userA->matrimonyProfile;
-        $profileB = $userB->matrimonyProfile;
+        $profileA = $this->profileForUser($userA);
+        $profileB = $this->profileForUser($userB);
         if (! $profileA instanceof MatrimonyProfile || ! $profileB instanceof MatrimonyProfile) {
             return [];
         }
@@ -382,9 +415,49 @@ class MatchBoostService
     }
 
     /**
+     * Same relation read every caller used to do inline, but resolved once per user per request.
+     */
+    private function profileForUser(User $user): ?MatrimonyProfile
+    {
+        $id = (int) $user->getKey();
+        if ($id <= 0) {
+            $profile = $user->matrimonyProfile;
+
+            return $profile instanceof MatrimonyProfile ? $profile : null;
+        }
+
+        if (array_key_exists($id, $this->profileForUserMemo)) {
+            return $this->profileForUserMemo[$id];
+        }
+
+        $profile = $user->matrimonyProfile;
+
+        return $this->profileForUserMemo[$id] = $profile instanceof MatrimonyProfile ? $profile : null;
+    }
+
+    /**
      * @return array<string, int>
      */
     private function tierPoints(User $userB): array
+    {
+        $id = (int) $userB->getKey();
+        if ($id > 0 && isset($this->tierPointsMemo[$id])) {
+            return $this->tierPointsMemo[$id];
+        }
+
+        $out = $this->computeTierPoints($userB);
+
+        if ($id > 0) {
+            $this->tierPointsMemo[$id] = $out;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function computeTierPoints(User $userB): array
     {
         $empty = [self::RULE_PREMIUM => 0, self::RULE_GOLD_EXTRA => 0, self::RULE_SILVER_EXTRA => 0];
 
@@ -662,8 +735,8 @@ class MatchBoostService
             return true;
         }
 
-        $pA = $hasProfFk ? (int) ($a->getAttribute('profession_id') ?: 0) : (int) ($a->resolvedProfession()?->id ?? 0);
-        $pB = $hasProfFk ? (int) ($b->getAttribute('profession_id') ?: 0) : (int) ($b->resolvedProfession()?->id ?? 0);
+        $pA = $this->professionIdFor($a, $hasProfFk);
+        $pB = $this->professionIdFor($b, $hasProfFk);
         if ($pA > 0 && $pA === $pB) {
             return true;
         }
@@ -678,5 +751,27 @@ class MatchBoostService
         $sB = (int) ($b->state_id ?? 0);
 
         return $sA > 0 && $sA === $sB;
+    }
+
+    /**
+     * Identical resolution to the inline expression it replaced; memoised per profile because the
+     * fallback branch runs a `professions` lookup and the seeker is re-resolved for every candidate.
+     */
+    private function professionIdFor(MatrimonyProfile $profile, bool $hasProfFk): int
+    {
+        if ($hasProfFk) {
+            return (int) ($profile->getAttribute('profession_id') ?: 0);
+        }
+
+        $id = (int) $profile->getKey();
+        if ($id <= 0) {
+            return (int) ($profile->resolvedProfession()?->id ?? 0);
+        }
+
+        if (array_key_exists($id, $this->professionIdMemo)) {
+            return $this->professionIdMemo[$id];
+        }
+
+        return $this->professionIdMemo[$id] = (int) ($profile->resolvedProfession()?->id ?? 0);
     }
 }

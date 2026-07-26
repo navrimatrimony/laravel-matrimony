@@ -33,6 +33,16 @@ class PlanQuotaPolicy extends Model
 
     protected $table = 'plan_quota_policies';
 
+    /**
+     * {@see Plan::defaultFree()} memoises a plan instance with `quotaPolicies` already loaded — a
+     * policy write must drop that memo or the instance keeps serving the pre-edit rows.
+     */
+    protected static function booted(): void
+    {
+        static::saved(static fn () => Plan::flushDefaultFreeMemo());
+        static::deleted(static fn () => Plan::flushDefaultFreeMemo());
+    }
+
     protected $fillable = [
         'plan_id',
         'feature_key',

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\ProfileFieldConfigurationService;
 use Illuminate\Database\Eloquent\Model;
 
 /*
@@ -31,4 +32,15 @@ class ProfileFieldConfig extends Model
         'is_searchable' => 'boolean',
         'is_mandatory' => 'boolean',
     ];
+
+    /**
+     * The read side ({@see ProfileFieldConfigurationService}) memoises the flag lists for the life of
+     * the process; any write here must invalidate that memo so the admin field-configuration screen
+     * shows its own edit immediately.
+     */
+    protected static function booted(): void
+    {
+        static::saved(static fn () => ProfileFieldConfigurationService::flushRuntimeCache());
+        static::deleted(static fn () => ProfileFieldConfigurationService::flushRuntimeCache());
+    }
 }

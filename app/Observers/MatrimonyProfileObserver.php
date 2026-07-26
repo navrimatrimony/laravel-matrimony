@@ -87,6 +87,7 @@ class MatrimonyProfileObserver
             app(ProfileCompletionEngine::class)->forgetRequestCacheForUser((int) $profile->user_id);
         }
         Cache::forget('profile_completion_profile_'.$profile->id);
+        app(ProfileCompletionEngine::class)->forgetRequestCacheForProfile((int) $profile->id);
 
         if ($profile->user_id && $profile->wasChanged(['lifecycle_state', 'photo_approved', 'is_suspended'])) {
             $user = User::query()->find((int) $profile->user_id);
@@ -121,6 +122,7 @@ class MatrimonyProfileObserver
             app(ProfileCompletionEngine::class)->forgetRequestCacheForUser((int) $profile->user_id);
         }
         Cache::forget('profile_completion_profile_'.$profile->id);
+        app(ProfileCompletionEngine::class)->forgetRequestCacheForProfile((int) $profile->id);
     }
 
     public function deleting(MatrimonyProfile $profile): void
