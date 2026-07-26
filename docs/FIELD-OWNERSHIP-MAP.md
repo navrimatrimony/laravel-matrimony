@@ -41,6 +41,7 @@ must be fixed.
 | Suchak account state | `suchak_accounts.verification_status` (+ `public_status`) | `SuchakAccountLifecycleService` | — | The two co-vary in the normal case — show as **one** signal; call out `public_status` only when it diverges. |
 | Bilingual labels | `*_mr` sibling columns | — | — | Use `BilingualMasterLabel`; do not invent a second translation path. |
 | Per-Suchak reusable customer plan preset | `suchak_customer_plans` (`SuchakCustomerPlan`) | Suchak via `SuchakCustomerPlanService` | mgmt `GET/POST/PUT/DELETE /suchak/customer-plans`; carousel via `resolveCarousel()` | **Materialized into `suchak_service_packages` at SEND** through `SuchakPackageCatalogService::createCustomPackage` — **never FK-linked** back. `preset_key` NULL = full custom plan; `basic`/`premium` = OVERRIDE row for a code preset (price/visibility/order only). Presets stay code-defined in `SuchakDefaultPlans`; DB rows only override/add. NOT the platform `suchak_plans` catalog. `private_note` is Suchak-only, never in the customer carousel. |
+| "This candidate was SHOWN to a Suchak for this seeker" + what the Suchak decided | `suchak_match_suggestions` (`SuchakMatchSuggestion`) | `SuchakMatchSuggestionLogService` | none yet — recording only, no route/controller in this phase | **Append-only impression+decision log.** NOT `profile_matches` (that is a replace-on-write cache of *current* top matches — `MatchingService::replacePersistedMatches()` deletes every row for a profile then re-inserts, so it has no history and no decision). NOT `user_match_behaviors` (member-actor actions, no Suchak actor, no impression record), NOT `profile_match_tab_skips` / `interests` / `shortlists` (single outcome signals, nothing about what was offered). Idempotency key `(seeker_profile_id, candidate_profile_id, run_key)`; a later `run_key` deliberately creates a NEW row — that is how a candidate re-surfaces after the ~30-day cooling period. Rows are never deleted or bulk-replaced; a decision only updates its own row's `decision` / `rejection_reason_code` / `rejection_note` / `decided_at`. `score` + `reasons_json` are a FROZEN suggestion-time snapshot — never recompute them in place. |
 
 ---
 
@@ -68,6 +69,7 @@ Before writing a service that does any of these, **use the existing one**.
 | Ready-made Suchak service presets (Basic / Premium) | `App\Modules\Suchak\Support\SuchakDefaultPlans` | **Code-defined, never seeded as DB rows.** `suchak_customer_plans` rows only OVERRIDE a preset (price/visibility/order) or ADD custom plans on top; the preset name/price/services stay in this class. `SuchakCustomerPlanService::resolveCarousel()` merges code presets + overrides + visible customs. Do not duplicate the presets into the DB. |
 | Suchak payment-received tracking feed | `App\Modules\Suchak\Services\SuchakPaymentRequestTrackingService` | **Read model over existing `suchak_payment_requests` — NO tracking table.** `GET /suchak/payment-requests` (search / filter=pending\|paid\|all / pagination / outstanding-totals summary). Customer name+mobile come from `customerContext.candidateProfile` (`full_name`, `primary_contact_number` accessor), plan name from `customerAgreement.package_name`. Always scoped to the authed `suchak_account_id`. Do not build a second list. |
 | Suchak paid-mark reversal (request level) | `SuchakPaymentRequestService::reversePaidMark()` → `POST /suchak/payment-requests/{id}/reverse-paid` | Flips a PAID request back to OPENED/SENT; mandatory `reason` audited on the immutable `suchak_payment_request_events` trail + `SuchakActivityLog` (`payment_request_paid_reversed`). **Distinct from** the ledger-grade `SuchakCustomerPaymentCorrectionService::postReversal()` (rewrites the ledger on a recorded `SuchakCustomerPayment`). Mark-paid stays `SuchakCustomerPaymentService::recordManualPayment` via `POST .../mark-paid` (optional `note` → `collection_note`). |
+| Suchak match suggestion log (impression + decision) | `App\Modules\Suchak\Services\SuchakMatchSuggestionLogService` | **The only writer of `suchak_match_suggestions`.** `recordSuggestions()` (bulk upsert, idempotent per seeker+candidate+run_key, refreshes only `score`/`reasons_json` so a decision is never erased), `recordDecision()` / `recordDecisionForPair()` (chosen / rejected+reason code / ignored), `alreadySuggestedCandidateIds()` (exclusion set), `suggestedRecently($seeker, $days)` (still-too-soon set) and `cooledOffCandidateIds()` (re-surfacable). Decision + rejection-reason vocabularies are PHP consts on `SuchakMatchSuggestion` (varchar columns, no DB enums). It **records only** — it does not rank, filter or change any existing matching behaviour; the ranking engine stays `App\Services\Matching\MatchingService`. Do not write a second suggestion-history table. |
 
 Full lists: `app/Support/*.php`, `app/Modules/Suchak/Services/*.php`.
 
@@ -105,6 +107,16 @@ Each of these was a real defect, not a hypothetical:
    send with NO back-FK. `SuchakServicePackage` stays immutable / admin-approved /
    per-customer. `SuchakPackageRateCardFoundationTest` guards those send-time
    tables — do not "link" the two models.
+9. **`profile_matches` vs `suchak_match_suggestions` — both hold (profile,
+   matched profile, score, reasons), and they are NOT interchangeable.**
+   `profile_matches` is a *cache of the current answer*:
+   `MatchingService::replacePersistedMatches()` wipes every row for a profile and
+   re-inserts, so asking it "what did we already show this seeker last month" is
+   always wrong — the evidence was deleted. `suchak_match_suggestions` is the
+   *append-only history*: what was shown, when, with the frozen score/reason
+   snapshot, plus the Suchak's decision. Never read history out of
+   `profile_matches`, never bulk-delete `suchak_match_suggestions`, and never add
+   decision columns to `profile_matches` (2026-07-26).
 
 ---
 
