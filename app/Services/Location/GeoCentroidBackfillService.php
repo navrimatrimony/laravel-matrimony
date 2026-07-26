@@ -116,8 +116,12 @@ final class GeoCentroidBackfillService
      */
     public const SOURCE_MANUAL = 'owner_manual';
 
-    /** `addresses.geo_source` value stamped on the centres this service derives from village medians. */
-    public const SOURCE_VILLAGE_MEDIAN = 'taluka_village_median';
+    /**
+     * `addresses.geo_source` value stamped on the centres this service derives. Level-neutral on
+     * purpose — it lands on district rows as well as taluka rows, and both are the marginal median of
+     * the villages beneath them.
+     */
+    public const SOURCE_VILLAGE_MEDIAN = 'village_median';
 
     /** Rows per write batch. Keeps a few-hundred-row backfill off one giant statement. */
     private const BATCH = 250;
