@@ -392,10 +392,18 @@ final class SuchakCandidateDuplicateCheckService
         }
 
         if (Schema::hasTable('profile_contacts')) {
+            // The relation is a FK to the contact-relation master, not a string
+            // column; guard it so a schema without it still yields the hit.
+            $hasRelation = Schema::hasColumn('profile_contacts', 'contact_relation_id');
+            $columns = $hasRelation ? ['profile_id', 'contact_relation_id'] : ['profile_id'];
+
             foreach (DB::table('profile_contacts')
                 ->where('phone_number', $mobile)
-                ->get(['profile_id', 'relation_type']) as $contact) {
-                $push((int) $contact->profile_id, 'contact:'.(string) ($contact->relation_type ?: 'unknown'));
+                ->get($columns) as $contact) {
+                $relation = $hasRelation && $contact->contact_relation_id !== null
+                    ? 'relation_'.(int) $contact->contact_relation_id
+                    : 'unknown';
+                $push((int) $contact->profile_id, 'contact:'.$relation);
             }
         }
 
