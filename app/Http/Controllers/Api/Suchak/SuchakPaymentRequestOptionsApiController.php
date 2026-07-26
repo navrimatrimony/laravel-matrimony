@@ -172,6 +172,17 @@ class SuchakPaymentRequestOptionsApiController extends Controller
      * `custom_{id}` key so the app can select it; its services become the
      * deliverables. Presets keep their code key ('basic' / 'premium').
      *
+     * ADDITIVE since 2026-07-26 — the plan's own SAVED TERMS travel with it:
+     * `duration`, `per_meeting_fee_amount`, `post_marriage_fee_mode` and
+     * `post_marriage_fee_amount`. A Suchak fixes these ONCE while creating the
+     * plan; without them on the wire the send screen fell back to hardcoded
+     * client defaults (1 year / unchecked / ₹999 / "as wished") and the Suchak
+     * had to retype them on every request. Null means "this plan did not fix
+     * one" — the app then keeps its own default, and an absent/zero meeting fee
+     * or a `none` post-marriage mode still means the fee is NOT opted in (the
+     * fee blocks stay opt-in, exactly as the plan editor writes them back).
+     * No key is renamed or retyped, so shipped app builds are unaffected.
+     *
      * @return array<int, array<string, mixed>>
      */
     private function carouselPlansPayload(SuchakAccount $account): array
@@ -206,6 +217,14 @@ class SuchakPaymentRequestOptionsApiController extends Controller
                 'description' => $description,
                 'price_amount' => $entry['price_amount'],
                 'currency' => $entry['currency'],
+                // The plan's saved terms — already resolved in the carousel
+                // entry (custom row values, or a preset's override row). The
+                // send screen seeds its duration chip and its two opt-in fee
+                // rows from these instead of from hardcoded defaults.
+                'duration' => $entry['duration'] ?? null,
+                'per_meeting_fee_amount' => $entry['per_meeting_fee_amount'] ?? null,
+                'post_marriage_fee_mode' => $entry['post_marriage_fee_mode'] ?? null,
+                'post_marriage_fee_amount' => $entry['post_marriage_fee_amount'] ?? null,
                 'deliverables' => $deliverables,
             ];
         }, $this->customerPlans->resolveCarousel($account));
