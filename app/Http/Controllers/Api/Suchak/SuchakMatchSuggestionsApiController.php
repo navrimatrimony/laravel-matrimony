@@ -295,6 +295,9 @@ class SuchakMatchSuggestionsApiController extends Controller
             'source' => $row['source'] ?? null,
             'target_suchak_label' => $row['target_suchak_label'] ?? null,
             'acting_actor' => $row['acting_actor'] ?? null,
+            // Nullable by contract: the app renders a distinct "no patrika data"
+            // chip, so a missing key must never be confused with "not compatible".
+            'gunamilan' => is_array($row['gunamilan'] ?? null) ? $row['gunamilan'] : null,
             'decision' => $decisions[$candidateId] ?? SuchakMatchSuggestion::DECISION_PENDING,
         ];
     }

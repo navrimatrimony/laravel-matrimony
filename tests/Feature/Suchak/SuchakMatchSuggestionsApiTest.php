@@ -80,6 +80,17 @@ class SuchakMatchSuggestionsApiTest extends TestCase
             $this->assertContains($row['acting_actor'], ['member', 'suchak']);
             $this->assertSame(SuchakMatchSuggestion::DECISION_PENDING, $row['decision']);
 
+            // presentSuggestion() is an allow-list, so a payload the engine
+            // computes is invisible to the app unless it is named here. The key
+            // must always be present; null means "no patrika data", which the
+            // app renders differently from "not compatible".
+            $this->assertArrayHasKey('gunamilan', $row);
+            if ($row['gunamilan'] !== null) {
+                $this->assertIsArray($row['gunamilan']);
+                $this->assertArrayHasKey('state', $row['gunamilan']);
+                $this->assertContains($row['gunamilan']['state'], ['compatible', 'not_compatible', 'unknown']);
+            }
+
             // The masked contact block must never be flattened into the contract.
             $this->assertArrayNotHasKey('contact', $row);
             $this->assertArrayNotHasKey('phone', $row);
