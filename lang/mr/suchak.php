@@ -304,6 +304,11 @@ return [
         'consent_relation' => 'हा मोबाइल कोणाचा?',
         'consent_relation_hint' => 'वधू / वराशी त्यांचे नाते — याच व्यक्तीकडून संमती मागितली जाईल.',
         'consent_relation_self' => 'उमेदवार स्वतः',
+        // Consent-first linking (2026-07-26).
+        'existing_profile_consent_required' => 'ही व्यक्ती आधीच प्लॅटफॉर्मवर आहे. संमती मागण्यासाठी पुष्टी करा — त्यांनी संमती दिल्यावरच ते तुमच्या ग्राहकांमध्ये जोडले जातील.',
+        'consent_requested' => 'संमती विनंती तयार आहे. त्यांनी संमती दिल्यावरच हा ग्राहक तुमच्या यादीत दिसेल.',
+        'represented_by_other_suchak' => 'हा ग्राहक आधीच दुसऱ्या सूचकांकडे आहे.',
+        'represented_by_other_suchak_named' => 'हा ग्राहक आधीच :suchak यांच्याकडे आहे.',
     ],
 
     'represented_profile' => [

@@ -19,6 +19,7 @@ use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakVerificationRecord;
 use App\Models\Taluka;
 use App\Models\User;
+use App\Modules\Suchak\Services\SuchakConsentService;
 use App\Modules\Suchak\Services\SuchakPolicyService;
 use App\Modules\Suchak\Services\SuchakWorkAreaService;
 use App\Services\Location\CurrentLocationResolverService;
@@ -1039,6 +1040,11 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
             'mobile_number' => '9876543221',
             'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
             'public_status' => SuchakAccount::PUBLIC_ACTIVE,
+            'verified_at' => now(),
+            // Without this the account cannot prepare customers, so the
+            // controller bailed to the dashboard and the whole test asserted
+            // nothing (pre-existing setup gap, fixed 2026-07-26).
+            'registration_completed_at' => now(),
         ]);
         $existingMember = User::factory()->create([
             'name' => 'Existing Registered Candidate',
@@ -1115,6 +1121,20 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
         $this->assertSame(SuchakConsent::CHANNEL_SUCHAK_RELAYED_LINK, $consent->consent_channel);
         $this->assertSame('9876543220', $consent->consent_mobile_number);
 
+        // CONSENT-FIRST LINKING (2026-07-26): asking for consent creates only the
+        // pending claim above — this person is NOT a customer yet, so no customer
+        // context exists and the claim stays out of the dashboard list.
+        $this->assertTrue($representation->isPendingConsentClaim());
+        $this->assertDatabaseMissing('suchak_customer_contexts', [
+            'representation_id' => $representation->id,
+        ]);
+
+        // Acceptance is what promotes the claim into a real customer.
+        app(SuchakConsentService::class)->recordPublicConsentDecision($consent, SuchakConsent::STATUS_ACCEPTED);
+
+        $representation->refresh();
+        $this->assertSame(SuchakProfileRepresentation::STATUS_ACTIVE, $representation->representation_status);
+        $this->assertFalse($representation->isPendingConsentClaim());
         $this->assertDatabaseHas('suchak_customer_contexts', [
             'suchak_account_id' => $account->id,
             'candidate_matrimony_profile_id' => $existingProfile->id,
@@ -1122,7 +1142,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
             'consent_id' => $consent->id,
             'source_owner' => SuchakCustomerContext::SOURCE_OWNER_SUCHAK,
             'source_type' => SuchakCustomerContext::SOURCE_TYPE_EXISTING_PROFILE_MATCH,
-            'customer_lifecycle_status' => SuchakCustomerContext::STATUS_CONSENT_PENDING,
+            'customer_lifecycle_status' => SuchakCustomerContext::STATUS_ACTIVE_SERVICE,
         ]);
     }
 

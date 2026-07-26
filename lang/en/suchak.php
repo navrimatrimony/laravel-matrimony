@@ -304,6 +304,11 @@ return [
         'consent_relation' => 'Whose mobile is this?',
         'consent_relation_hint' => 'Their relation to the candidate — this is who consent will be requested from.',
         'consent_relation_self' => 'Candidate themselves',
+        // Consent-first linking (2026-07-26).
+        'existing_profile_consent_required' => 'This person already has a profile. Confirm to ask for their consent — they will be added to your customers only after they accept.',
+        'consent_requested' => 'Consent request is ready. This person joins your customer list only after they accept.',
+        'represented_by_other_suchak' => 'This customer is already with another Suchak.',
+        'represented_by_other_suchak_named' => 'This customer is already with :suchak.',
     ],
 
     'represented_profile' => [

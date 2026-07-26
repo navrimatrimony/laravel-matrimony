@@ -303,9 +303,10 @@ class SuchakRepresentedProfileApiController extends Controller
     }
 
     /**
-     * @param  bool  $forWrite  Write endpoints additionally pass the consent gate:
-     *                          a linked pre-existing person's profile stays read-only
-     *                          for the Suchak until that person's consent is valid.
+     * @param  bool  $forWrite  Kept for call-site readability. Since consent-first
+     *                          linking (2026-07-26) the gate is identical for reads
+     *                          and writes — an un-consented claim on a pre-existing
+     *                          person exposes nothing at all.
      * @return array{0: SuchakAccount, 1: MatrimonyProfile, 2: User}|JsonResponse
      */
     private function authorizedContext(
@@ -351,7 +352,7 @@ class SuchakRepresentedProfileApiController extends Controller
             ], 404);
         }
 
-        if ($forWrite && ! $representation->suchakMayEditProfile()) {
+        if ($forWrite ? ! $representation->suchakMayEditProfile() : ! $representation->suchakMayReadProfile()) {
             return $this->consentRequiredResponse($representation);
         }
 
@@ -362,7 +363,11 @@ class SuchakRepresentedProfileApiController extends Controller
      * SECURITY (2026-07-26): ownership alone used to authorise writes, so a
      * Suchak could edit a self-registered member's profile the moment they
      * linked it — before that member consented. The gate lives here because
-     * every write endpoint in this controller funnels through authorizedContext.
+     * every endpoint in this controller funnels through authorizedContext.
+     *
+     * Extended the same day to READS: under consent-first linking the pending
+     * claim must not disclose the person's profile or stored contact numbers
+     * either, so both directions share one predicate.
      */
     private function consentRequiredResponse(SuchakProfileRepresentation $representation): JsonResponse
     {

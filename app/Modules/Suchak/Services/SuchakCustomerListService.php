@@ -58,7 +58,12 @@ class SuchakCustomerListService
     {
         $canPrepareCustomers = $this->accessService->canPrepareCustomers($account);
 
+        // Consent-first linking (2026-07-26): a matched_existing_profile claim
+        // with no valid consent is NOT a customer yet — it must not surface in
+        // any feed until that person accepts. Single source for the customer
+        // list, the customer detail endpoint and the share card.
         $representations = $account->profileRepresentations()
+            ->excludingPendingConsentClaims()
             ->with([
                 'consents',
                 'matrimonyProfile.gender',

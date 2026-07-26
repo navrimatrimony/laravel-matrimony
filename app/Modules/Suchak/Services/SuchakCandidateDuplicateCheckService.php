@@ -180,9 +180,16 @@ final class SuchakCandidateDuplicateCheckService
                 'owner_suchak_name' => $owner['owner_suchak_name'],
                 'already_represented_by_me' => $owner['already_represented_by_me'],
                 'representation_id' => $owner['representation_id'],
-                // The 409 use_existing_profile link flow only applies when the
-                // typed mobile is the candidate's own account mobile.
-                'can_link_existing' => in_array('self_mobile', $row['mobile_sources'], true),
+                // CONSENT-FIRST (2026-07-26): this now means "the app may offer
+                // the REQUEST-CONSENT action", not "link this person now" —
+                // nothing links until they accept. Requires the typed mobile to
+                // be the candidate's own account mobile (consent is delivered
+                // there), is never true for a customer another Suchak actively
+                // holds, and is pointless once this Suchak already holds a live
+                // consented link.
+                'can_link_existing' => in_array('self_mobile', $row['mobile_sources'], true)
+                    && $owner['owner_type'] !== self::OWNER_OTHER_SUCHAK
+                    && $owner['mine_has_valid_consent'] !== true,
             ];
         }
 
@@ -286,6 +293,9 @@ final class SuchakCandidateDuplicateCheckService
                     'owner_suchak_name' => null,
                     'owner_is_public' => null,
                     'already_represented_by_me' => true,
+                    // A row of mine WITHOUT valid consent is only a pending
+                    // claim, not a link — the app may still ask for consent.
+                    'mine_has_valid_consent' => $myRepresentation->hasValidConsent(),
                     'representation_id' => (int) $myRepresentation->id,
                 ];
 
@@ -303,6 +313,7 @@ final class SuchakCandidateDuplicateCheckService
                         : null,
                     'owner_is_public' => $isPublic,
                     'already_represented_by_me' => false,
+                    'mine_has_valid_consent' => false,
                     'representation_id' => null,
                 ];
 
@@ -322,6 +333,7 @@ final class SuchakCandidateDuplicateCheckService
                 'owner_suchak_name' => null,
                 'owner_is_public' => null,
                 'already_represented_by_me' => false,
+                'mine_has_valid_consent' => false,
                 'representation_id' => null,
             ];
         }
@@ -368,6 +380,7 @@ final class SuchakCandidateDuplicateCheckService
             'owner_suchak_name' => null,
             'owner_is_public' => null,
             'already_represented_by_me' => false,
+            'mine_has_valid_consent' => false,
             'representation_id' => null,
         ];
     }

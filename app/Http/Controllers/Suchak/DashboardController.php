@@ -60,6 +60,9 @@ class DashboardController extends Controller
         $accountCanPrepareCustomers = $accessService->canPrepareCustomers($account);
 
         $representations = $account->profileRepresentations()
+            // Consent-first linking (2026-07-26): un-consented claims on
+            // pre-existing people are not customers and must not be listed.
+            ->excludingPendingConsentClaims()
             ->with([
                 'matrimonyProfile.gender',
                 'matrimonyProfile.maritalStatus',

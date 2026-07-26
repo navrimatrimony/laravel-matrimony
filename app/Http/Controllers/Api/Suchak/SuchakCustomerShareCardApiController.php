@@ -35,8 +35,11 @@ class SuchakCustomerShareCardApiController extends Controller
         }
 
         // find() on the account's own representations enforces ownership.
+        // excludingPendingConsentClaims() enforces consent: a person whose
+        // consent is still pending is not shareable by this Suchak at all.
         /** @var SuchakProfileRepresentation|null $rep */
         $rep = $account->profileRepresentations()
+            ->excludingPendingConsentClaims()
             ->with(['matrimonyProfile'])
             ->find($representation);
 

@@ -204,13 +204,41 @@ class SuchakProfileRepresentation extends Model
     }
 
     /**
+     * CONSENT-FIRST LINKING (PO rule 2026-07-26): a matched_existing_profile row
+     * without valid consent is NOT a link — it is only a pending CLAIM, kept
+     * solely so the consent decision can be routed back to the right Suchak.
+     *
+     * While this is true the row must behave as if it did not exist: no customer
+     * list entry, no profile read, no profile write, no active representation.
+     * The moment consent is accepted the same row becomes the real link.
+     *
+     * Deliberately built on the two predicates that already exist
+     * (requiresConsentBeforeSuchakEdit + hasValidConsent) so there is exactly one
+     * definition of "consent is good right now" in the codebase.
+     */
+    public function isPendingConsentClaim(): bool
+    {
+        return $this->requiresConsentBeforeSuchakEdit() && ! $this->hasValidConsent();
+    }
+
+    /**
+     * Read gate for the Suchak-side represented-profile surfaces. A pending
+     * claim exposes nothing about the person — not even their stored contact
+     * numbers — until they have agreed.
+     */
+    public function suchakMayReadProfile(): bool
+    {
+        return ! $this->isPendingConsentClaim();
+    }
+
+    /**
      * Write gate for every Suchak-side profile mutation.
-     * Reuses hasValidConsent() — the single existing "consent is good right now"
-     * predicate — instead of re-deriving consent state.
+     * Same predicate as the read gate — a pending claim is neither readable nor
+     * writable.
      */
     public function suchakMayEditProfile(): bool
     {
-        return ! $this->requiresConsentBeforeSuchakEdit() || $this->hasValidConsent();
+        return ! $this->isPendingConsentClaim();
     }
 
     public function isPubliclyVisible(): bool
@@ -236,6 +264,23 @@ class SuchakProfileRepresentation extends Model
                     ->whereNull('consent_valid_until')
                     ->orWhere('consent_valid_until', '>=', now());
             });
+    }
+
+    /**
+     * Query-side twin of isPendingConsentClaim(): keeps un-consented claims out
+     * of every Suchak customer feed. Consent-gated modes survive only while the
+     * same withValidConsent() predicate holds; every other mode passes through
+     * untouched (a Suchak's own manual profiles are never claims).
+     */
+    public function scopeExcludingPendingConsentClaims(Builder $query): Builder
+    {
+        return $query->where(function (Builder $query): void {
+            $query
+                ->whereNotIn('representation_mode', self::CONSENT_GATED_EDIT_MODES)
+                ->orWhere(function (Builder $query): void {
+                    $query->withValidConsent();
+                });
+        });
     }
 
     public function scopePubliclyRoutable(Builder $query): Builder

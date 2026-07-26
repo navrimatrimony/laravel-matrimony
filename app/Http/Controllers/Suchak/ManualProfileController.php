@@ -98,7 +98,6 @@ class ManualProfileController extends Controller
                 $existingMember,
                 $account,
                 $representationService,
-                $customerLifecycleService,
                 $consentService,
             );
         }
@@ -229,7 +228,6 @@ class ManualProfileController extends Controller
         User $existingMember,
         SuchakAccount $account,
         SuchakRepresentationService $representationService,
-        SuchakCustomerLifecycleService $customerLifecycleService,
         SuchakConsentService $consentService,
     ): RedirectResponse {
         /** @var MatrimonyProfile|null $existingProfile */
@@ -240,6 +238,33 @@ class ManualProfileController extends Controller
                 ->withInput($this->manualProfileInput($validated, $mobile))
                 ->withErrors([
                     'candidate_mobile' => 'This mobile number belongs to an existing account, but no candidate profile is available to link. Use another number or contact admin for duplicate review.',
+                ]);
+        }
+
+        // Same consent-first refusal as the API: a person another Suchak
+        // actively represents may not be claimed, so no rival consent request
+        // is ever created. Reuses scopeWithValidConsent() / scopePubliclyRoutable().
+        $blockingRepresentation = SuchakProfileRepresentation::query()
+            ->withValidConsent()
+            ->where('matrimony_profile_id', $existingProfile->id)
+            ->where('suchak_account_id', '!=', $account->id)
+            ->with('suchakAccount')
+            ->first();
+
+        if ($blockingRepresentation !== null) {
+            $ownerName = SuchakProfileRepresentation::query()
+                ->publiclyRoutable()
+                ->whereKey($blockingRepresentation->id)
+                ->exists()
+                ? (trim((string) ($blockingRepresentation->suchakAccount?->suchak_name ?: '')) ?: null)
+                : null;
+
+            return back()
+                ->withInput($this->manualProfileInput($validated, $mobile))
+                ->withErrors([
+                    'candidate_mobile' => $ownerName !== null
+                        ? __('suchak.manual_profile.represented_by_other_suchak_named', ['suchak' => $ownerName])
+                        : __('suchak.manual_profile.represented_by_other_suchak'),
                 ]);
         }
 
@@ -256,10 +281,8 @@ class ManualProfileController extends Controller
                 $account,
                 $request,
                 $existingProfile,
-                $validated,
                 $mobile,
                 $representationService,
-                $customerLifecycleService,
                 $consentService
             ): array {
                 $representation = $this->existingOrNewMatchedRepresentation(
@@ -271,22 +294,14 @@ class ManualProfileController extends Controller
                     $request->userAgent(),
                 );
 
-                $consent = $this->existingOrNewConsentRequest(
+                // CONSENT-FIRST (2026-07-26): no customer context here. The row
+                // above is only a pending CLAIM — invisible in every feed and
+                // unreadable — until SuchakConsentService promotes it on accept.
+                $this->existingOrNewConsentRequest(
                     $representation,
                     $request->user(),
                     $mobile,
                     $consentService,
-                    $request->ip(),
-                    $request->userAgent(),
-                );
-
-                $this->existingOrNewCustomerContext(
-                    $account,
-                    $request->user(),
-                    $representation,
-                    $consent,
-                    (string) $validated['candidate_name'],
-                    $customerLifecycleService,
                     $request->ip(),
                     $request->userAgent(),
                 );
@@ -307,7 +322,7 @@ class ManualProfileController extends Controller
 
         return redirect()
             ->route('suchak.dashboard', ['dashboard_tab' => 'profiles'])
-            ->with('success', 'Existing profile found. A Suchak representation and consent request are ready; continue from your profile list without creating a duplicate profile.');
+            ->with('success', __('suchak.manual_profile.consent_requested'));
     }
 
     private function existingOrNewMatchedRepresentation(
@@ -366,39 +381,6 @@ class ManualProfileController extends Controller
         );
 
         return $result['consent'];
-    }
-
-    private function existingOrNewCustomerContext(
-        SuchakAccount $account,
-        User $actor,
-        SuchakProfileRepresentation $representation,
-        SuchakConsent $consent,
-        string $payerName,
-        SuchakCustomerLifecycleService $customerLifecycleService,
-        ?string $ipAddress,
-        ?string $userAgent,
-    ): SuchakCustomerContext {
-        $existing = SuchakCustomerContext::query()
-            ->where('representation_id', $representation->id)
-            ->first();
-
-        if ($existing !== null) {
-            return $existing;
-        }
-
-        return $customerLifecycleService->createForRepresentation(
-            $account,
-            $actor,
-            $representation,
-            [
-                'source_type' => SuchakCustomerContext::SOURCE_TYPE_EXISTING_PROFILE_MATCH,
-                'customer_lifecycle_status' => SuchakCustomerContext::STATUS_CONSENT_PENDING,
-                'payer_name' => $payerName,
-                'consent_id' => $consent->id,
-            ],
-            $ipAddress,
-            $userAgent,
-        );
     }
 
     /**

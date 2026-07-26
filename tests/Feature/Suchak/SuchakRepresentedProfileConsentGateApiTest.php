@@ -15,24 +15,27 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * SECURITY (2026-07-26): the represented-profile write endpoints authorised on
+ * SECURITY (2026-07-26): the represented-profile endpoints authorised on
  * OWNERSHIP alone (suchak_account_id), never on consent. A Suchak could link a
  * self-registered member through the duplicate → "use existing profile" branch
- * and immediately start editing that person's profile, before they had agreed
- * to anything.
+ * and immediately start reading/editing that person's profile, before they had
+ * agreed to anything.
  *
- * The gate: representations in a CONSENT_GATED_EDIT_MODE (matched_existing_
- * profile — a person who already existed) are READ-ONLY for the Suchak until
- * hasValidConsent() is true. Suchak-created manual profiles are unaffected.
+ * CONSENT-FIRST LINKING (PO rule, same day): the fix is not just a gate — the
+ * LINK itself must not exist before consent. Asking to represent an existing
+ * person now creates only a pending CLAIM (matched_existing_profile + no valid
+ * consent) plus the consent request. That claim:
+ *   - never appears in the customer list or customer detail,
+ *   - is not readable or writable,
+ *   - becomes a real representation ONLY when consent is accepted.
  *
- * This test also pins the consent hand-off the link response must carry, since
- * the Suchak app deep-links into the existing consent sheet from it.
+ * A Suchak's own manual profiles are unaffected — they link immediately.
  */
 class SuchakRepresentedProfileConsentGateApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_link_existing_profile_response_carries_the_consent_handoff(): void
+    public function test_request_consent_response_carries_the_consent_handoff_but_links_nothing(): void
     {
         $this->actingAsVerifiedSuchak('9876507001');
         $this->existingMember('9876507002', 'Linked Candidate');
@@ -43,7 +46,10 @@ class SuchakRepresentedProfileConsentGateApiTest extends TestCase
             'candidate_gender' => 'female',
             'registering_for' => 'self',
             'use_existing_profile' => true,
-        ])->assertOk()->assertJsonPath('data.outcome', 'linked_existing');
+        ])->assertOk()
+            ->assertJsonPath('data.outcome', 'consent_requested')
+            ->assertJsonPath('data.linked', false)
+            ->assertJsonPath('data.pending_claim', true);
 
         $consentId = $response->json('data.consent_id');
         $this->assertIsInt($consentId, 'The app cannot open a consent sheet without an id.');
@@ -59,6 +65,187 @@ class SuchakRepresentedProfileConsentGateApiTest extends TestCase
             'id' => $consentId,
             'representation_id' => $response->json('data.representation_id'),
         ]);
+    }
+
+    public function test_requesting_consent_creates_no_usable_customer(): void
+    {
+        $this->actingAsVerifiedSuchak('9876507011');
+        $this->existingMember('9876507012', 'Not A Customer Yet');
+
+        $link = $this->postJson('/api/v1/suchak/manual-profiles', [
+            'candidate_name' => 'Not A Customer Yet',
+            'candidate_mobile' => '9876507012',
+            'candidate_gender' => 'female',
+            'registering_for' => 'self',
+            'use_existing_profile' => true,
+        ])->assertOk();
+
+        $representationId = (int) $link->json('data.representation_id');
+
+        // Not in the customer list.
+        $this->getJson('/api/v1/suchak/customers')
+            ->assertOk()
+            ->assertJsonPath('data.customers', []);
+
+        // Not reachable as a customer.
+        $this->getJson("/api/v1/suchak/customers/{$representationId}")->assertStatus(404);
+        $this->getJson("/api/v1/suchak/customers/{$representationId}/share-card")->assertStatus(404);
+
+        // Not readable — the gate now covers reads, not only writes.
+        $this->getJson("/api/v1/suchak/nxt/{$representationId}/profile")
+            ->assertStatus(403)
+            ->assertJsonPath('error_code', 'consent_required');
+        $this->getJson("/api/v1/suchak/nxt/{$representationId}/consent-contacts")
+            ->assertStatus(403)
+            ->assertJsonPath('error_code', 'consent_required');
+
+        // Not writable.
+        $this->postJson("/api/v1/suchak/nxt/{$representationId}/preferences/auto-draft")
+            ->assertStatus(403)
+            ->assertJsonPath('error_code', 'consent_required');
+
+        // No customer record exists at all yet.
+        $this->assertDatabaseMissing('suchak_customer_contexts', [
+            'representation_id' => $representationId,
+        ]);
+        $this->assertTrue(
+            SuchakProfileRepresentation::query()->findOrFail($representationId)->isPendingConsentClaim(),
+        );
+    }
+
+    public function test_accepted_consent_promotes_the_claim_into_a_real_customer(): void
+    {
+        $this->actingAsVerifiedSuchak('9876507013');
+        $this->existingMember('9876507014', 'Accepting Candidate');
+
+        $link = $this->postJson('/api/v1/suchak/manual-profiles', [
+            'candidate_name' => 'Accepting Candidate',
+            'candidate_mobile' => '9876507014',
+            'candidate_gender' => 'female',
+            'registering_for' => 'self',
+            'use_existing_profile' => true,
+        ])->assertOk();
+        $representationId = (int) $link->json('data.representation_id');
+
+        $this->acceptConsentFor($representationId);
+
+        $representation = SuchakProfileRepresentation::query()->findOrFail($representationId);
+        $this->assertSame(SuchakProfileRepresentation::STATUS_ACTIVE, $representation->representation_status);
+        $this->assertTrue($representation->hasValidConsent());
+        $this->assertFalse($representation->isPendingConsentClaim());
+
+        // The customer appears the moment consent is accepted — not before.
+        $this->getJson('/api/v1/suchak/customers')
+            ->assertOk()
+            ->assertJsonPath('data.customers.0.representation_id', $representationId);
+        $this->getJson("/api/v1/suchak/customers/{$representationId}")->assertOk();
+        $this->getJson("/api/v1/suchak/nxt/{$representationId}/profile")->assertOk();
+        $this->postJson("/api/v1/suchak/nxt/{$representationId}/preferences/auto-draft")->assertOk();
+
+        $this->assertDatabaseHas('suchak_customer_contexts', [
+            'representation_id' => $representationId,
+        ]);
+    }
+
+    public function test_rejected_consent_leaves_no_link_at_all(): void
+    {
+        $this->actingAsVerifiedSuchak('9876507015');
+        $this->existingMember('9876507016', 'Refusing Candidate');
+
+        $link = $this->postJson('/api/v1/suchak/manual-profiles', [
+            'candidate_name' => 'Refusing Candidate',
+            'candidate_mobile' => '9876507016',
+            'candidate_gender' => 'female',
+            'registering_for' => 'self',
+            'use_existing_profile' => true,
+        ])->assertOk();
+        $representationId = (int) $link->json('data.representation_id');
+
+        /** @var SuchakConsent $consent */
+        $consent = SuchakConsent::query()->where('representation_id', $representationId)->latest('id')->firstOrFail();
+        app(SuchakConsentService::class)->recordPublicConsentDecision($consent, SuchakConsent::STATUS_REJECTED);
+
+        $representation = SuchakProfileRepresentation::query()->findOrFail($representationId);
+        $this->assertSame(SuchakProfileRepresentation::STATUS_REJECTED, $representation->representation_status);
+        $this->assertTrue($representation->isPendingConsentClaim());
+
+        $this->getJson('/api/v1/suchak/customers')
+            ->assertOk()
+            ->assertJsonPath('data.customers', []);
+        $this->getJson("/api/v1/suchak/customers/{$representationId}")->assertStatus(404);
+        $this->getJson("/api/v1/suchak/nxt/{$representationId}/profile")
+            ->assertStatus(403)
+            ->assertJsonPath('error_code', 'consent_required');
+        $this->assertDatabaseMissing('suchak_customer_contexts', [
+            'representation_id' => $representationId,
+        ]);
+    }
+
+    public function test_consent_cannot_be_requested_for_someone_another_suchak_already_holds(): void
+    {
+        $profileId = $this->existingMember('9876507018', 'Taken Candidate');
+        $otherAccount = $this->verifiedSuchakAccount('9876507017', 'Rival Suchak Office');
+        SuchakProfileRepresentation::factory()->create([
+            'suchak_account_id' => $otherAccount->id,
+            'matrimony_profile_id' => $profileId,
+            'representation_status' => SuchakProfileRepresentation::STATUS_ACTIVE,
+            'representation_mode' => SuchakProfileRepresentation::MODE_MATCHED_EXISTING_PROFILE,
+            'consent_status' => SuchakProfileRepresentation::CONSENT_ACCEPTED,
+            'consent_verified_at' => now(),
+            'consent_valid_until' => now()->addYear(),
+        ]);
+
+        $this->actingAsVerifiedSuchak('9876507019');
+
+        $response = $this->postJson('/api/v1/suchak/manual-profiles', [
+            'candidate_name' => 'Taken Candidate',
+            'candidate_mobile' => '9876507018',
+            'candidate_gender' => 'female',
+            'registering_for' => 'self',
+            'use_existing_profile' => true,
+        ])->assertStatus(409)
+            ->assertJsonPath('error_code', 'represented_by_other_suchak')
+            ->assertJsonPath('data.owner_type', 'other_suchak')
+            ->assertJsonPath('data.can_link_existing', false);
+
+        // The other Suchak is publicly routable, so naming them is allowed.
+        $this->assertSame('Rival Suchak Office', $response->json('data.owner_suchak_name'));
+        $this->assertStringContainsString('Rival Suchak Office', (string) $response->json('message'));
+
+        // No competing claim and no rival consent request were created.
+        $this->assertSame(
+            0,
+            SuchakProfileRepresentation::query()
+                ->where('matrimony_profile_id', $profileId)
+                ->where('suchak_account_id', '!=', $otherAccount->id)
+                ->count(),
+        );
+        $this->assertDatabaseCount('suchak_consents', 0);
+    }
+
+    public function test_duplicate_check_refuses_to_offer_consent_for_another_suchaks_customer(): void
+    {
+        $profileId = $this->existingMember('9876507020', 'Duplicate Owned');
+        $otherAccount = $this->verifiedSuchakAccount('9876507021', 'Other Office');
+        SuchakProfileRepresentation::factory()->create([
+            'suchak_account_id' => $otherAccount->id,
+            'matrimony_profile_id' => $profileId,
+            'representation_status' => SuchakProfileRepresentation::STATUS_ACTIVE,
+            'representation_mode' => SuchakProfileRepresentation::MODE_MATCHED_EXISTING_PROFILE,
+            'consent_status' => SuchakProfileRepresentation::CONSENT_ACCEPTED,
+            'consent_verified_at' => now(),
+            'consent_valid_until' => now()->addYear(),
+        ]);
+
+        $this->actingAsVerifiedSuchak('9876507022');
+
+        $this->postJson('/api/v1/suchak/manual-profiles/duplicate-check', [
+            'candidate_name' => 'Duplicate Owned',
+            'candidate_mobile' => '9876507020',
+            'candidate_gender' => 'female',
+        ])->assertOk()
+            ->assertJsonPath('data.matches.0.owner_type', 'other_suchak')
+            ->assertJsonPath('data.matches.0.can_link_existing', false);
     }
 
     public function test_relinking_reuses_the_open_consent_instead_of_creating_a_second_one(): void
@@ -105,9 +292,6 @@ class SuchakRepresentedProfileConsentGateApiTest extends TestCase
 
         $representationId = (int) $link->json('data.representation_id');
 
-        // Reads stay open — the Suchak still needs to see who they linked.
-        $this->getJson("/api/v1/suchak/nxt/{$representationId}/profile")->assertOk();
-
         // Every write surface is closed.
         $this->postJson("/api/v1/suchak/nxt/{$representationId}/preferences/auto-draft")
             ->assertStatus(403)
@@ -125,15 +309,11 @@ class SuchakRepresentedProfileConsentGateApiTest extends TestCase
         ])->assertStatus(403)->assertJsonPath('error_code', 'consent_required');
 
         // The candidate accepts through the real consent engine.
-        $representation = SuchakProfileRepresentation::query()->findOrFail($representationId);
-        /** @var SuchakConsent $consent */
-        $consent = SuchakConsent::query()
-            ->where('representation_id', $representationId)
-            ->latest('id')
-            ->firstOrFail();
-        app(SuchakConsentService::class)->recordPublicConsentDecision($consent, SuchakConsent::STATUS_ACCEPTED);
+        $this->acceptConsentFor($representationId);
 
-        $this->assertTrue($representation->fresh()->hasValidConsent());
+        $this->assertTrue(
+            SuchakProfileRepresentation::query()->findOrFail($representationId)->hasValidConsent(),
+        );
 
         $this->postJson("/api/v1/suchak/nxt/{$representationId}/preferences/auto-draft")->assertOk();
     }
@@ -157,9 +337,12 @@ class SuchakRepresentedProfileConsentGateApiTest extends TestCase
 
         // No consent yet, and none needed — nobody else's data is involved.
         $this->postJson("/api/v1/suchak/nxt/{$representationId}/preferences/auto-draft")->assertOk();
+        $this->getJson('/api/v1/suchak/customers')
+            ->assertOk()
+            ->assertJsonPath('data.customers.0.representation_id', $representationId);
     }
 
-    public function test_revoked_consent_closes_the_gate_again(): void
+    public function test_revoked_consent_closes_the_gate_and_delists_the_customer_again(): void
     {
         $this->actingAsVerifiedSuchak('9876507009');
         $this->existingMember('9876507010', 'Revoked Candidate');
@@ -173,9 +356,7 @@ class SuchakRepresentedProfileConsentGateApiTest extends TestCase
         ])->assertOk();
         $representationId = (int) $link->json('data.representation_id');
 
-        /** @var SuchakConsent $consent */
-        $consent = SuchakConsent::query()->where('representation_id', $representationId)->latest('id')->firstOrFail();
-        app(SuchakConsentService::class)->recordPublicConsentDecision($consent, SuchakConsent::STATUS_ACCEPTED);
+        $this->acceptConsentFor($representationId);
         $this->postJson("/api/v1/suchak/nxt/{$representationId}/preferences/auto-draft")->assertOk();
 
         SuchakProfileRepresentation::query()->whereKey($representationId)->update(['revoked_at' => now()]);
@@ -183,25 +364,46 @@ class SuchakRepresentedProfileConsentGateApiTest extends TestCase
         $this->postJson("/api/v1/suchak/nxt/{$representationId}/preferences/auto-draft")
             ->assertStatus(403)
             ->assertJsonPath('error_code', 'consent_required');
+        $this->getJson('/api/v1/suchak/customers')
+            ->assertOk()
+            ->assertJsonPath('data.customers', []);
+    }
+
+    private function acceptConsentFor(int $representationId): void
+    {
+        /** @var SuchakConsent $consent */
+        $consent = SuchakConsent::query()
+            ->where('representation_id', $representationId)
+            ->latest('id')
+            ->firstOrFail();
+
+        app(SuchakConsentService::class)->recordPublicConsentDecision($consent, SuchakConsent::STATUS_ACCEPTED);
     }
 
     private function actingAsVerifiedSuchak(string $mobile): SuchakAccount
+    {
+        $account = $this->verifiedSuchakAccount($mobile);
+        Sanctum::actingAs($account->user);
+
+        return $account;
+    }
+
+    private function verifiedSuchakAccount(string $mobile, ?string $suchakName = null): SuchakAccount
     {
         foreach (['male' => 'Male', 'female' => 'Female'] as $key => $label) {
             MasterGender::query()->firstOrCreate(['key' => $key], ['label' => $label, 'is_active' => true]);
         }
 
         $user = User::factory()->create(['mobile' => $mobile, 'mobile_verified_at' => now()]);
-        $account = SuchakAccount::factory()->create([
+
+        return SuchakAccount::factory()->create(array_filter([
             'user_id' => $user->id,
+            'suchak_name' => $suchakName,
             'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
             'public_status' => SuchakAccount::PUBLIC_ACTIVE,
             'verified_at' => now(),
             'registration_completed_at' => now(),
-        ]);
-        Sanctum::actingAs($user);
-
-        return $account;
+        ], static fn ($value): bool => $value !== null));
     }
 
     private function existingMember(string $mobile, string $fullName): int

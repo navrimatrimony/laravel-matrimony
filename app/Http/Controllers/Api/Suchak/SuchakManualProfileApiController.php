@@ -172,6 +172,9 @@ class SuchakManualProfileApiController extends Controller
                 'required',
                 Rule::in(array_keys($this->registeringForOptions())),
             ],
+            // CONSENT-FIRST (2026-07-26): this flag no longer means "link them
+            // now". It means "ask this existing person for consent to represent
+            // them". Nothing is linked until they accept.
             'use_existing_profile' => ['nullable', 'boolean'],
         ]);
 
@@ -192,12 +195,10 @@ class SuchakManualProfileApiController extends Controller
         if ($existingMember !== null) {
             return $this->handleExistingMobileProfile(
                 $request,
-                $validated,
                 $mobile,
                 $existingMember,
                 $account,
                 $representationService,
-                $customerLifecycleService,
                 $consentService,
             );
         }
@@ -286,16 +287,32 @@ class SuchakManualProfileApiController extends Controller
     }
 
     /**
-     * @param  array<string, mixed>  $validated
+     * CONSENT-FIRST LINKING (PO rule 2026-07-26).
+     *
+     * Nobody's profile may be attached to a Suchak before that person agrees.
+     * So this endpoint NEVER links. It creates:
+     *   1. the consent request, and
+     *   2. the minimum pending record needed to route the decision back — the
+     *      SuchakProfileRepresentation row in its CLAIM state
+     *      (matched_existing_profile + no valid consent).
+     *
+     * That claim row is invisible and inert: excluded from every customer feed
+     * (scopeExcludingPendingConsentClaims), unreadable and unwritable
+     * (suchakMayReadProfile / suchakMayEditProfile), and never counted as an
+     * active representation. It becomes a real link only inside
+     * SuchakConsentService::recordPublicConsentDecision() on ACCEPTED.
+     *
+     * No customer context is created here — a person who has not consented is
+     * not a customer. It is created at acceptance time (and, as before, lazily
+     * by SuchakPaymentSetupApiController), never twice.
+     *
      */
     private function handleExistingMobileProfile(
         Request $request,
-        array $validated,
         string $mobile,
         User $existingMember,
         SuchakAccount $account,
         SuchakRepresentationService $representationService,
-        SuchakCustomerLifecycleService $customerLifecycleService,
         SuchakConsentService $consentService,
     ): JsonResponse {
         /** @var MatrimonyProfile|null $existingProfile */
@@ -313,14 +330,23 @@ class SuchakManualProfileApiController extends Controller
             ], 422);
         }
 
+        // A person actively represented by ANOTHER Suchak may not be claimed at
+        // all — no competing consent request is ever created for them.
+        $blocked = $this->otherSuchakRefusal($existingProfile, $account);
+        if ($blocked !== null) {
+            return $blocked;
+        }
+
         if (! $request->boolean('use_existing_profile')) {
             return response()->json([
                 'success' => false,
-                'message' => 'Existing profile found for this mobile. Confirm to link without creating a duplicate.',
+                'message' => __('suchak.manual_profile.existing_profile_consent_required'),
                 'data' => [
                     'outcome' => 'existing_profile_confirmation_required',
                     'mobile_mask' => $this->maskMobile($mobile),
                     'profile_id' => $existingProfile->id,
+                    // Confirming does NOT link — it only asks for consent.
+                    'requires_consent_first' => true,
                 ],
             ], 409);
         }
@@ -330,10 +356,8 @@ class SuchakManualProfileApiController extends Controller
                 $account,
                 $request,
                 $existingProfile,
-                $validated,
                 $mobile,
                 $representationService,
-                $customerLifecycleService,
                 $consentService
             ): array {
                 $actor = $request->user();
@@ -357,17 +381,6 @@ class SuchakManualProfileApiController extends Controller
                     $request->userAgent(),
                 );
 
-                $this->existingOrNewCustomerContext(
-                    $account,
-                    $actor,
-                    $representation,
-                    $consentResult['consent'],
-                    (string) $validated['candidate_name'],
-                    $customerLifecycleService,
-                    $request->ip(),
-                    $request->userAgent(),
-                );
-
                 return [$representation, $consentResult];
             });
         } catch (InvalidArgumentException $exception) {
@@ -384,11 +397,17 @@ class SuchakManualProfileApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Existing profile linked. Representation and consent request are ready.',
+            'message' => __('suchak.manual_profile.consent_requested'),
             'data' => [
-                'outcome' => 'linked_existing',
+                // Was 'linked_existing' before consent-first linking. Nothing is
+                // linked here any more — the app must show "consent requested".
+                'outcome' => 'consent_requested',
+                'linked' => false,
                 'profile_id' => $existingProfile->id,
+                // The pending CLAIM, not a customer. It is not listed, readable
+                // or writable; keep it only to resend/track this consent.
                 'representation_id' => $representation->id,
+                'pending_claim' => true,
                 // Consent hand-off (2026-07-26): the app must be able to deep-link
                 // straight into the SAME consent sheet the customer detail screen
                 // uses, so these mirror SuchakConsentsApiController::store() field
@@ -483,37 +502,56 @@ class SuchakManualProfileApiController extends Controller
         ];
     }
 
-    private function existingOrNewCustomerContext(
-        SuchakAccount $account,
-        User $actor,
-        SuchakProfileRepresentation $representation,
-        SuchakConsent $consent,
-        string $payerName,
-        SuchakCustomerLifecycleService $customerLifecycleService,
-        ?string $ipAddress,
-        ?string $userAgent,
-    ): SuchakCustomerContext {
-        $existing = SuchakCustomerContext::query()
-            ->where('representation_id', $representation->id)
+    /**
+     * One customer, one Suchak. If a DIFFERENT Suchak already holds an active,
+     * consented representation on this profile, refuse outright — never create a
+     * competing claim, never send a rival consent request.
+     *
+     * "Actively represented" reuses scopeWithValidConsent() and the name is
+     * revealed only through scopePubliclyRoutable(), exactly the two predicates
+     * SuchakCandidateDuplicateCheckService uses for owner_type / owner_suchak_name.
+     * A Suchak who is not publicly discoverable stays anonymous here too.
+     */
+    private function otherSuchakRefusal(MatrimonyProfile $profile, SuchakAccount $account): ?JsonResponse
+    {
+        /** @var SuchakProfileRepresentation|null $other */
+        $other = SuchakProfileRepresentation::query()
+            ->withValidConsent()
+            ->where('matrimony_profile_id', $profile->id)
+            ->where('suchak_account_id', '!=', $account->id)
+            ->with('suchakAccount')
             ->first();
 
-        if ($existing !== null) {
-            return $existing;
+        if ($other === null) {
+            return null;
         }
 
-        return $customerLifecycleService->createForRepresentation(
-            $account,
-            $actor,
-            $representation,
-            [
-                'source_type' => SuchakCustomerContext::SOURCE_TYPE_EXISTING_PROFILE_MATCH,
-                'customer_lifecycle_status' => SuchakCustomerContext::STATUS_CONSENT_PENDING,
-                'payer_name' => $payerName,
-                'consent_id' => $consent->id,
+        $isPublic = SuchakProfileRepresentation::query()
+            ->publiclyRoutable()
+            ->whereKey($other->id)
+            ->exists();
+
+        $ownerName = $isPublic
+            ? (trim((string) ($other->suchakAccount?->suchak_name ?: '')) ?: null)
+            : null;
+
+        $message = $ownerName !== null
+            ? __('suchak.manual_profile.represented_by_other_suchak_named', ['suchak' => $ownerName])
+            : __('suchak.manual_profile.represented_by_other_suchak');
+
+        return response()->json([
+            'success' => false,
+            'error_code' => 'represented_by_other_suchak',
+            'message' => $message,
+            'errors' => ['candidate_mobile' => [$message]],
+            'data' => [
+                'outcome' => 'represented_by_other_suchak',
+                'profile_id' => (int) $profile->id,
+                'owner_type' => SuchakCandidateDuplicateCheckService::OWNER_OTHER_SUCHAK,
+                'owner_suchak_name' => $ownerName,
+                'can_link_existing' => false,
             ],
-            $ipAddress,
-            $userAgent,
-        );
+        ], 409);
     }
 
     private function maskMobile(string $mobile): string

@@ -6,6 +6,7 @@ use App\Models\AdminSetting;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakConsent;
 use App\Models\SuchakConsentEvent;
+use App\Models\SuchakCustomerContext;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Services\Messaging\MetaWhatsAppCloudService;
@@ -25,6 +26,7 @@ class SuchakConsentService
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakAccessService $accessService,
         private readonly SuchakPolicyService $policyService,
+        private readonly SuchakCustomerLifecycleService $customerLifecycleService,
     ) {
     }
 
@@ -208,6 +210,10 @@ class SuchakConsentService
                         'consent_valid_until' => $validUntil,
                         'revoked_at' => null,
                     ]);
+
+                // CONSENT-FIRST LINKING (2026-07-26): this is the exact moment a
+                // pending claim on a pre-existing person becomes a real link.
+                $this->promoteConsentedClaimToCustomer($consent);
             } else {
                 SuchakConsent::query()
                     ->whereKey($consent->id)
@@ -215,6 +221,10 @@ class SuchakConsentService
                         'rejected_at' => $decidedAt,
                     ]);
 
+                // REJECTED leaves no link: the row keeps its claim shape
+                // (matched_existing_profile + no valid consent), so it stays out
+                // of every customer feed and out of read/write reach. No customer
+                // record was ever created, so there is nothing to undo.
                 SuchakProfileRepresentation::query()
                     ->whereKey($consent->representation_id)
                     ->update([
@@ -556,6 +566,8 @@ class SuchakConsentService
                     'revoked_at' => null,
                 ]);
 
+            $this->promoteConsentedClaimToCustomer($consent);
+
             $updated = $consent->fresh(['representation']);
             $this->recordEvent($updated, SuchakConsentEvent::EVENT_OTP_VERIFIED, SuchakConsentEvent::ACTOR_CANDIDATE, null);
             $this->recordEvent($updated, SuchakConsentEvent::EVENT_CONSENT_ACCEPTED, SuchakConsentEvent::ACTOR_CANDIDATE, null);
@@ -635,6 +647,8 @@ class SuchakConsentService
                     'consent_valid_until' => $validUntil,
                     'revoked_at' => null,
                 ]);
+
+            $this->promoteConsentedClaimToCustomer($consent);
 
             $updated = $consent->fresh(['representation']);
             $this->recordEvent($updated, SuchakConsentEvent::EVENT_CONSENT_ACCEPTED, SuchakConsentEvent::ACTOR_SUCHAK, $actor->id, $proofNote);
@@ -726,6 +740,63 @@ class SuchakConsentService
 
             return $updated;
         });
+    }
+
+    /**
+     * CONSENT-FIRST LINKING (PO rule 2026-07-26) — the promote-on-accept hook.
+     *
+     * Requesting consent to represent a pre-existing person creates only a
+     * pending CLAIM: a matched_existing_profile representation with no valid
+     * consent, which is invisible in every customer feed and unreadable /
+     * unwritable by the Suchak. Acceptance is the moment it becomes a real link,
+     * and the moment the person becomes a customer — so the customer context is
+     * created here, not at request time.
+     *
+     * Called from all three acceptance paths (public link decision, OTP verify,
+     * offline signed proof) so there is one promotion rule, not three.
+     *
+     * Idempotent (one context per representation, ever) and always invoked
+     * inside the caller's transaction.
+     */
+    private function promoteConsentedClaimToCustomer(SuchakConsent $consent): void
+    {
+        /** @var SuchakProfileRepresentation|null $representation */
+        $representation = SuchakProfileRepresentation::query()
+            ->with(['suchakAccount.user', 'matrimonyProfile'])
+            ->find($consent->representation_id);
+
+        // Only claims on people who already existed are promoted here. A
+        // Suchak's own manual profile already got its customer context at
+        // creation time and must not get a second one.
+        if ($representation === null || ! $representation->requiresConsentBeforeSuchakEdit()) {
+            return;
+        }
+
+        if (SuchakCustomerContext::query()->where('representation_id', $representation->id)->exists()) {
+            return;
+        }
+
+        $account = $representation->suchakAccount;
+        $owner = $account?->user;
+        if ($account === null || ! $owner instanceof User || ! $this->accessService->canPrepareCustomers($account)) {
+            // Suspended/unverified Suchak: the consent itself still stands and
+            // the representation is active, but the customer record waits. The
+            // existing lazy creation in SuchakPaymentSetupApiController picks it
+            // up once the account may operate again — no parallel mechanism.
+            return;
+        }
+
+        $this->customerLifecycleService->createForRepresentation(
+            $account,
+            $owner,
+            $representation,
+            [
+                'source_type' => SuchakCustomerContext::SOURCE_TYPE_EXISTING_PROFILE_MATCH,
+                'customer_lifecycle_status' => SuchakCustomerContext::STATUS_ACTIVE_SERVICE,
+                'payer_name' => $representation->matrimonyProfile?->full_name,
+                'consent_id' => $consent->id,
+            ],
+        );
     }
 
     /**
