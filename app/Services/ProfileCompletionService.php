@@ -3,8 +3,8 @@
 namespace App\Services;
 
 use App\Models\MatrimonyProfile;
+use App\Support\SchemaPresence;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Phase-5B: Section-based completion percentage for profile wizard.
@@ -99,7 +99,7 @@ class ProfileCompletionService
         if (($profile->location_id ?? null)) {
             return true;
         }
-        $leafCol = Schema::hasColumn('profile_addresses', 'location_id') ? 'location_id' : 'city_id';
+        $leafCol = SchemaPresence::hasColumn('profile_addresses', 'location_id') ? 'location_id' : 'city_id';
         $geo = (new \App\Models\Location)->getTable();
 
         return DB::table('profile_addresses as pa')
@@ -120,11 +120,11 @@ class ProfileCompletionService
         )) {
             return true;
         }
-        if (Schema::hasTable('profile_preferred_education_degrees')
+        if (SchemaPresence::hasTable('profile_preferred_education_degrees')
             && DB::table('profile_preferred_education_degrees')->where('profile_id', $profile->id)->exists()) {
             return true;
         }
-        if (Schema::hasTable('profile_preferred_occupation_master')
+        if (SchemaPresence::hasTable('profile_preferred_occupation_master')
             && DB::table('profile_preferred_occupation_master')->where('profile_id', $profile->id)->exists()) {
             return true;
         }
@@ -137,7 +137,7 @@ class ProfileCompletionService
         if (DB::table('profile_preferred_districts')->where('profile_id', $profile->id)->exists()) {
             return true;
         }
-        if (Schema::hasTable('profile_preferred_marital_statuses')
+        if (SchemaPresence::hasTable('profile_preferred_marital_statuses')
             && DB::table('profile_preferred_marital_statuses')->where('profile_id', $profile->id)->exists()) {
             return true;
         }

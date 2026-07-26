@@ -9,6 +9,7 @@ use App\Services\Location\LocationService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use App\Services\Profile\ProfileTypedSelfAddressService;
 use App\Services\ProfileFieldLockService;
+use App\Support\SchemaPresence;
 use App\Support\Utf8MojibakeRepair;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -17,7 +18,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 /*
@@ -40,9 +40,6 @@ use Illuminate\Validation\ValidationException;
  */
 class MatrimonyProfile extends Model
 {
-    /** @var array<string, bool> */
-    private static array $columnPresenceCache = [];
-
     use HasFactory, SoftDeletes;
 
     /*
@@ -422,7 +419,7 @@ class MatrimonyProfile extends Model
                     return true;
                 }
             }
-        } elseif (Schema::hasTable('profile_photos')) {
+        } elseif (SchemaPresence::hasTable('profile_photos')) {
             foreach (ProfilePhoto::query()
                 ->where('profile_id', $this->id)
                 ->effectivelyApproved()
@@ -1000,7 +997,7 @@ class MatrimonyProfile extends Model
                 return $line;
             }
         }
-        if ($this->exists && Schema::hasTable('profile_addresses')) {
+        if ($this->exists && SchemaPresence::hasTable('profile_addresses')) {
             $fallback = ProfileTypedSelfAddressService::addressLineForSelfType((int) $this->id, 'work');
             if ($fallback !== null && $fallback !== '') {
                 return $fallback;
@@ -1019,7 +1016,7 @@ class MatrimonyProfile extends Model
 
             return (new MojibakeSafeUtf8String)->get($this, 'work_location_text', $stored, $this->attributes);
         }
-        if (! $this->exists || ! Schema::hasTable('profile_addresses')) {
+        if (! $this->exists || ! SchemaPresence::hasTable('profile_addresses')) {
             return null;
         }
 
@@ -1356,21 +1353,14 @@ class MatrimonyProfile extends Model
      * helpers once per profile per pair — so the uncached check alone was hundreds of
      * `information_schema` round trips per match request. Table presence is process-constant.
      */
-    private static ?bool $geoTablePresence = null;
-
     private static function hasGeoTableCached(): bool
     {
-        return self::$geoTablePresence ??= Schema::hasTable(Location::geoTable());
+        return SchemaPresence::hasTable(Location::geoTable());
     }
 
     private static function hasColumnCached(string $table, string $column): bool
     {
-        $key = $table.'|'.$column;
-        if (! array_key_exists($key, self::$columnPresenceCache)) {
-            self::$columnPresenceCache[$key] = Schema::hasColumn($table, $column);
-        }
-
-        return self::$columnPresenceCache[$key];
+        return SchemaPresence::hasColumn($table, $column);
     }
 
     /**

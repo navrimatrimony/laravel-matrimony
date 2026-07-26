@@ -3,10 +3,10 @@
 namespace App\Models;
 
 use App\Services\Admin\UserModerationStatsService;
+use App\Support\SchemaPresence;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Schema;
 
 class ProfilePhoto extends Model
 {
@@ -37,7 +37,7 @@ class ProfilePhoto extends Model
     protected static function booted(): void
     {
         static::created(function (ProfilePhoto $photo): void {
-            if (! Schema::hasTable('user_moderation_stats')) {
+            if (! SchemaPresence::hasTable('user_moderation_stats')) {
                 return;
             }
             $profile = MatrimonyProfile::query()->find($photo->profile_id);
@@ -60,7 +60,7 @@ class ProfilePhoto extends Model
             $base = 'pending';
         }
 
-        if (! Schema::hasColumn($this->getTable(), 'admin_override_status')) {
+        if (! SchemaPresence::hasColumn($this->getTable(), 'admin_override_status')) {
             return in_array($base, ['approved', 'pending', 'rejected'], true) ? $base : 'pending';
         }
 
@@ -82,7 +82,7 @@ class ProfilePhoto extends Model
      */
     public function scopeEffectivelyApproved(Builder $query): Builder
     {
-        if (! Schema::hasColumn('profile_photos', 'admin_override_status')) {
+        if (! SchemaPresence::hasColumn('profile_photos', 'admin_override_status')) {
             return $query->where('approved_status', 'approved');
         }
 
@@ -105,7 +105,7 @@ class ProfilePhoto extends Model
      */
     public function scopeWhereNotEffectivelyApproved(Builder $query): Builder
     {
-        if (! Schema::hasColumn('profile_photos', 'admin_override_status')) {
+        if (! SchemaPresence::hasColumn('profile_photos', 'admin_override_status')) {
             return $query->where('approved_status', '!=', 'approved');
         }
 
@@ -131,7 +131,7 @@ class ProfilePhoto extends Model
     {
         $outcome = in_array($outcome, ['approved', 'pending', 'rejected'], true) ? $outcome : 'pending';
 
-        if (! Schema::hasColumn($this->getTable(), 'admin_override_status')) {
+        if (! SchemaPresence::hasColumn($this->getTable(), 'admin_override_status')) {
             return $query->where('approved_status', $outcome);
         }
 

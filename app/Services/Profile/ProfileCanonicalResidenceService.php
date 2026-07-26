@@ -2,9 +2,9 @@
 
 namespace App\Services\Profile;
 
+use App\Support\SchemaPresence;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Canonical self residence (current address type) lives only in {@code profile_addresses}.
@@ -17,52 +17,97 @@ final class ProfileCanonicalResidenceService
     private const CACHE_TTL_SECONDS = 3600;
 
     /**
-     * Per-process schema memos. `matrimony_profiles.location_id` is a virtual attribute that resolves
-     * through this class, so a single match request reads it hundreds of times — and each read was
-     * paying three `information_schema` round trips before it got to the actual row. Table/column
-     * presence cannot change inside a process.
+     * Per-process memo in front of the CACHE lookup, not only in front of the DB.
+     *
+     * The production cache store is `database`, so every `Cache::remember()` here is itself a
+     * `select * from cache where key in (?)` — a measured 950 of them in one suggestions request, all
+     * asking for the same immutable master id. The cache still owns cross-process sharing; this owns
+     * the "do not ask 950 times inside one process" part.
+     *
+     * `false` means "resolved, and the answer is null" — distinct from "not resolved yet".
      */
-    private static ?bool $hasAddressTypesTable = null;
+    private static int|false|null $currentTypeIdMemo = null;
 
-    private static ?bool $hasProfileAddressesTable = null;
+    /**
+     * Per-process memo for the canonical residence leaf, keyed by profile id.
+     *
+     * `matrimony_profiles.location_id` is a virtual attribute that resolves through this class, and a
+     * matching run reads it for the seeker and every candidate in both directions — 897 identical
+     * single-row lookups in one production request. The row can only change through
+     * {@see upsertSelfCurrent()}, which drops the memo for that profile.
+     *
+     * @var array<int, int|null>
+     */
+    private static array $locationLeafMemo = [];
 
-    private static ?string $locationColumn = null;
+    /** @var array<int, string|null> */
+    private static array $addressLineMemo = [];
 
     public static function forgetCachedMasters(): void
     {
         Cache::forget(self::CACHE_KEY_CURRENT_TYPE_ID);
+        self::$currentTypeIdMemo = null;
+    }
+
+    /**
+     * Drop the per-process row memos. Only needed when `profile_addresses` is written to behind this
+     * service's back (bulk import, raw SQL, a test fixture); ordinary writes go through
+     * {@see upsertSelfCurrent()}, which invalidates the touched profile itself.
+     */
+    public static function flushRuntimeCaches(): void
+    {
+        self::$locationLeafMemo = [];
+        self::$addressLineMemo = [];
+    }
+
+    public static function forgetProfile(int $profileId): void
+    {
+        unset(self::$locationLeafMemo[$profileId], self::$addressLineMemo[$profileId]);
     }
 
     private static function hasAddressTypesTable(): bool
     {
-        return self::$hasAddressTypesTable ??= Schema::hasTable('master_address_types');
+        return SchemaPresence::hasTable('master_address_types');
     }
 
     private static function hasProfileAddressesTable(): bool
     {
-        return self::$hasProfileAddressesTable ??= Schema::hasTable('profile_addresses');
+        return SchemaPresence::hasTable('profile_addresses');
     }
 
     private static function locationColumn(): string
     {
-        return self::$locationColumn ??= (Schema::hasColumn('profile_addresses', 'location_id') ? 'location_id' : 'city_id');
+        return SchemaPresence::hasColumn('profile_addresses', 'location_id') ? 'location_id' : 'city_id';
     }
 
     public static function currentAddressTypeId(): ?int
     {
+        if (self::$currentTypeIdMemo !== null) {
+            return self::$currentTypeIdMemo === false ? null : self::$currentTypeIdMemo;
+        }
+
         if (! self::hasAddressTypesTable()) {
             return null;
         }
 
-        return Cache::remember(self::CACHE_KEY_CURRENT_TYPE_ID, self::CACHE_TTL_SECONDS, static function (): ?int {
+        $resolved = Cache::remember(self::CACHE_KEY_CURRENT_TYPE_ID, self::CACHE_TTL_SECONDS, static function (): ?int {
             $id = DB::table('master_address_types')->where('key', 'current')->value('id');
 
             return $id !== null ? (int) $id : null;
         });
+
+        $resolved = $resolved !== null ? (int) $resolved : null;
+        self::$currentTypeIdMemo = $resolved ?? false;
+
+        return $resolved;
     }
 
     public static function locationLeafId(int $profileId): ?int
     {
+        if (array_key_exists($profileId, self::$locationLeafMemo)) {
+            return self::$locationLeafMemo[$profileId];
+        }
+
         $tid = self::currentAddressTypeId();
         if ($tid === null || ! self::hasProfileAddressesTable()) {
             return null;
@@ -74,11 +119,15 @@ final class ProfileCanonicalResidenceService
             ->where('address_type_id', $tid)
             ->value($col);
 
-        return $cid !== null && (int) $cid > 0 ? (int) $cid : null;
+        return self::$locationLeafMemo[$profileId] = ($cid !== null && (int) $cid > 0) ? (int) $cid : null;
     }
 
     public static function addressLineRaw(int $profileId): ?string
     {
+        if (array_key_exists($profileId, self::$addressLineMemo)) {
+            return self::$addressLineMemo[$profileId];
+        }
+
         $tid = self::currentAddressTypeId();
         if ($tid === null || ! self::hasProfileAddressesTable()) {
             return null;
@@ -89,11 +138,11 @@ final class ProfileCanonicalResidenceService
             ->where('address_type_id', $tid)
             ->value('address_line');
         if ($line === null) {
-            return null;
+            return self::$addressLineMemo[$profileId] = null;
         }
         $t = trim((string) $line);
 
-        return $t !== '' ? $t : null;
+        return self::$addressLineMemo[$profileId] = ($t !== '' ? $t : null);
     }
 
     /**
@@ -115,6 +164,10 @@ final class ProfileCanonicalResidenceService
         if ($tid === null) {
             return;
         }
+
+        // This is the only writer of the row the read memos describe — invalidate before writing so an
+        // exception mid-write cannot leave a stale value behind.
+        self::forgetProfile($profileId);
 
         $row = DB::table('profile_addresses')
             ->where('profile_id', $profileId)

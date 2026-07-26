@@ -7,8 +7,8 @@ use App\Models\MatchingBoostRule;
 use App\Models\MatchingEngineConfig;
 use App\Models\MatchingField;
 use App\Models\MatchingHardFilter;
+use App\Support\SchemaPresence;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * DB-backed matching engine configuration with cache and safe fallbacks when tables are empty.
@@ -21,7 +21,7 @@ class MatchingConfigService
 
     /**
      * Per-process memo. Every weight/filter lookup calls this, and the scorer asks for nine weights per
-     * candidate pair — so an uncached `Schema::hasTable()` here meant hundreds of `information_schema`
+     * candidate pair — so an uncached `SchemaPresence::hasTable()` here meant hundreds of `information_schema`
      * round trips per match request. Table presence cannot change inside a process.
      */
     private static ?bool $tablesExist = null;
@@ -48,7 +48,7 @@ class MatchingConfigService
 
     public function tablesExist(): bool
     {
-        return self::$tablesExist ??= Schema::hasTable('matching_fields');
+        return self::$tablesExist ??= SchemaPresence::hasTable('matching_fields');
     }
 
     public function ensureDefaults(): void
@@ -252,7 +252,7 @@ class MatchingConfigService
      */
     public function getHardFilters(): array
     {
-        if (! Schema::hasTable('matching_hard_filters')) {
+        if (! SchemaPresence::hasTable('matching_hard_filters')) {
             return $this->legacyHardFilters();
         }
         $this->ensureDefaults();
@@ -286,7 +286,7 @@ class MatchingConfigService
      */
     public function getBehaviorWeights(): array
     {
-        if (! Schema::hasTable('matching_behavior_weights')) {
+        if (! SchemaPresence::hasTable('matching_behavior_weights')) {
             return [];
         }
         $this->ensureDefaults();
@@ -307,7 +307,7 @@ class MatchingConfigService
      */
     public function getBoostRules(): array
     {
-        if (! Schema::hasTable('matching_boost_rules')) {
+        if (! SchemaPresence::hasTable('matching_boost_rules')) {
             return [];
         }
         $this->ensureDefaults();
@@ -348,7 +348,7 @@ class MatchingConfigService
         if (array_key_exists($key, $this->runtimeValueMemo)) {
             return $this->runtimeValueMemo[$key];
         }
-        if (! Schema::hasTable('matching_engine_configs')) {
+        if (! SchemaPresence::hasTable('matching_engine_configs')) {
             return $this->runtimeValueMemo[$key] = null;
         }
         $row = MatchingEngineConfig::query()->where('config_key', 'runtime')->where('is_active', true)->first();

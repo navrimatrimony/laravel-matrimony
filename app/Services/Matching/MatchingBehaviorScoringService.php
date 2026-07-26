@@ -5,7 +5,7 @@ namespace App\Services\Matching;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
 use App\Models\UserMatchBehavior;
-use Illuminate\Support\Facades\Schema;
+use App\Support\SchemaPresence;
 
 class MatchingBehaviorScoringService
 {
@@ -18,7 +18,7 @@ class MatchingBehaviorScoringService
      */
     public function scoreAdjustment(User $seeker, MatrimonyProfile $candidate): int
     {
-        if (! Schema::hasTable('user_match_behaviors')) {
+        if (! SchemaPresence::hasTable('user_match_behaviors')) {
             return 0;
         }
 

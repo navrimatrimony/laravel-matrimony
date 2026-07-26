@@ -8,6 +8,7 @@ use App\Models\LocationOpenPlaceSuggestion;
 use App\Models\LocationSuggestionApprovalPattern;
 use App\Models\LocationUsageStat;
 use App\Models\MatrimonyProfile;
+use App\Services\Profile\ProfileCanonicalResidenceService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -72,8 +73,12 @@ class LocationMergeService
         if (Schema::hasTable('profile_addresses')) {
             $locCol = Schema::hasColumn('profile_addresses', 'location_id') ? 'location_id' : 'city_id';
             DB::table('profile_addresses')->where($locCol, $sourceId)->update([$locCol => $targetId]);
-        }
 
+            // The only bulk write to `profile_addresses` that does NOT go through
+            // ProfileCanonicalResidenceService (which invalidates per profile). It rewrites rows for an
+            // unbounded set of profiles, so the whole residence memo has to go.
+            ProfileCanonicalResidenceService::flushRuntimeCaches();
+        }
     }
 
     private function rewritePinCodes(int $sourceId, int $targetId): void

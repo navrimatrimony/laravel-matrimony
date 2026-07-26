@@ -12,11 +12,11 @@ use App\Services\EducationService;
 use App\Services\MatchBoostService;
 use App\Services\ProfilePreferenceMatchService;
 use App\Support\MarriageAgePolicy;
+use App\Support\SchemaPresence;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Scores compatible profiles for a seeker. Uses partner-preference rules from ProfilePreferenceMatchService
@@ -353,7 +353,7 @@ class MatchingService
         $this->lastRelaxation['matched'] = $sorted->count();
 
         // Only the member pool owns the persisted cache; a Suchak-scoped run must never overwrite it.
-        if ($tab === self::TAB_PERFECT && $this->pool()->isMembers() && config('matching.persist_cache', false) && Schema::hasTable('profile_matches')) {
+        if ($tab === self::TAB_PERFECT && $this->pool()->isMembers() && config('matching.persist_cache', false) && SchemaPresence::hasTable('profile_matches')) {
             $this->replacePersistedMatches($profile, $sorted);
         }
 
@@ -607,7 +607,7 @@ class MatchingService
      */
     private function candidatesWhoViewedMe(MatrimonyProfile $profile, string $oppositeGenderKey): Collection
     {
-        if (! Schema::hasTable('profile_views')) {
+        if (! SchemaPresence::hasTable('profile_views')) {
             return collect();
         }
 
@@ -646,7 +646,7 @@ class MatchingService
      */
     private function candidatesInterestedInMe(MatrimonyProfile $profile, string $oppositeGenderKey): Collection
     {
-        if (! Schema::hasTable('interests')) {
+        if (! SchemaPresence::hasTable('interests')) {
             return collect();
         }
 
@@ -687,7 +687,7 @@ class MatchingService
      */
     private function secondChanceCandidateIds(MatrimonyProfile $profile): array
     {
-        if (! Schema::hasTable('profile_views')) {
+        if (! SchemaPresence::hasTable('profile_views')) {
             return [];
         }
 
@@ -705,7 +705,7 @@ class MatchingService
             return [];
         }
 
-        if (! Schema::hasTable('interests')) {
+        if (! SchemaPresence::hasTable('interests')) {
             return $viewedIds;
         }
 
@@ -786,7 +786,7 @@ class MatchingService
             return $this->seekerViewedIdsCache[$seekerProfileId];
         }
 
-        if (! Schema::hasTable('profile_views')) {
+        if (! SchemaPresence::hasTable('profile_views')) {
             return $this->seekerViewedIdsCache[$seekerProfileId] = [];
         }
 
@@ -978,7 +978,7 @@ class MatchingService
             return $this->skipExcludedCache[$observerProfileId];
         }
 
-        if (! Schema::hasTable('profile_match_tab_skips')) {
+        if (! SchemaPresence::hasTable('profile_match_tab_skips')) {
             return $this->skipExcludedCache[$observerProfileId] = [];
         }
 
@@ -1045,7 +1045,7 @@ class MatchingService
 
         if ($this->hardFilterMode($hard, 'marital_status') === MatchingHardFilter::MODE_STRICT) {
             $maritalIds = [];
-            if (Schema::hasTable('profile_preferred_marital_statuses')) {
+            if (SchemaPresence::hasTable('profile_preferred_marital_statuses')) {
                 $maritalIds = DB::table('profile_preferred_marital_statuses')
                     ->where('profile_id', $profile->id)
                     ->pluck('marital_status_id')
@@ -1076,7 +1076,7 @@ class MatchingService
         // lock below never makes this row stricter, and this row never locks a seeker who did not ask.
         if ($this->hardFilterMode($hard, 'caste') === MatchingHardFilter::MODE_STRICT) {
             $casteIds = [];
-            if (Schema::hasTable('profile_preferred_castes')) {
+            if (SchemaPresence::hasTable('profile_preferred_castes')) {
                 $casteIds = DB::table('profile_preferred_castes')
                     ->where('profile_id', $profile->id)
                     ->pluck('caste_id')
@@ -1178,10 +1178,10 @@ class MatchingService
             return $this->communityLockCache[$pid];
         }
 
-        $casteIds = Schema::hasTable('profile_preferred_castes')
+        $casteIds = SchemaPresence::hasTable('profile_preferred_castes')
             ? DB::table('profile_preferred_castes')->where('profile_id', $pid)->pluck('caste_id')->map(fn ($id) => (int) $id)->all()
             : [];
-        $religionIds = Schema::hasTable('profile_preferred_religions')
+        $religionIds = SchemaPresence::hasTable('profile_preferred_religions')
             ? DB::table('profile_preferred_religions')->where('profile_id', $pid)->pluck('religion_id')->map(fn ($id) => (int) $id)->all()
             : [];
 
@@ -1341,25 +1341,25 @@ class MatchingService
         $this->mergePivotIds($map, 'profile_preferred_castes', $profileIds, 'caste_id', 'caste_ids');
         $this->mergePivotIds($map, 'profile_preferred_districts', $profileIds, 'district_id', 'district_ids');
 
-        if (Schema::hasTable('profile_preferred_countries')) {
+        if (SchemaPresence::hasTable('profile_preferred_countries')) {
             $this->mergePivotIds($map, 'profile_preferred_countries', $profileIds, 'country_id', 'country_ids');
         }
-        if (Schema::hasTable('profile_preferred_states')) {
+        if (SchemaPresence::hasTable('profile_preferred_states')) {
             $this->mergePivotIds($map, 'profile_preferred_states', $profileIds, 'state_id', 'state_ids');
         }
-        if (Schema::hasTable('profile_preferred_talukas')) {
+        if (SchemaPresence::hasTable('profile_preferred_talukas')) {
             $this->mergePivotIds($map, 'profile_preferred_talukas', $profileIds, 'taluka_id', 'taluka_ids');
         }
-        if (Schema::hasTable('profile_preferred_education_degrees')) {
+        if (SchemaPresence::hasTable('profile_preferred_education_degrees')) {
             $this->mergePivotIds($map, 'profile_preferred_education_degrees', $profileIds, 'education_degree_id', 'education_degree_ids');
         }
-        if (Schema::hasTable('profile_preferred_occupation_master')) {
+        if (SchemaPresence::hasTable('profile_preferred_occupation_master')) {
             $this->mergePivotIds($map, 'profile_preferred_occupation_master', $profileIds, 'occupation_master_id', 'occupation_master_ids');
         }
-        if (Schema::hasTable('profile_preferred_diets')) {
+        if (SchemaPresence::hasTable('profile_preferred_diets')) {
             $this->mergePivotIds($map, 'profile_preferred_diets', $profileIds, 'diet_id', 'diet_ids');
         }
-        if (Schema::hasTable('profile_preferred_marital_statuses')) {
+        if (SchemaPresence::hasTable('profile_preferred_marital_statuses')) {
             $this->mergePivotIds($map, 'profile_preferred_marital_statuses', $profileIds, 'marital_status_id', 'marital_status_ids');
         }
 
@@ -1388,7 +1388,7 @@ class MatchingService
      */
     private function mergePivotIds(array &$map, string $table, array $profileIds, string $column, string $mapKey): void
     {
-        if (! Schema::hasTable($table)) {
+        if (! SchemaPresence::hasTable($table)) {
             return;
         }
         $rows = DB::table($table)->whereIn('profile_id', $profileIds)->get();
@@ -1762,7 +1762,7 @@ class MatchingService
     private function scoreOccupationPart(MatrimonyProfile $a, MatrimonyProfile $b): array
     {
         $tbl = $a->getTable();
-        $hasProfFk = Schema::hasColumn($tbl, 'profession_id');
+        $hasProfFk = SchemaPresence::hasColumn($tbl, 'profession_id');
 
         $midA = (int) ($a->occupation_master_id ?? 0);
         $midB = (int) ($b->occupation_master_id ?? 0);

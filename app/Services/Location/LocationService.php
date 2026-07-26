@@ -5,9 +5,8 @@ namespace App\Services\Location;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Services\Profile\ProfileCanonicalResidenceService;
-use Illuminate\Support\Facades\DB;
+use App\Support\SchemaPresence;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 class LocationService
 {
@@ -197,17 +196,17 @@ class LocationService
             ->where(function ($q) use ($normalized, $like, $geo, $digitsOnly) {
                 $q->where('name', 'like', $like)
                     ->orWhere('slug', 'like', $like);
-                if (Schema::hasColumn($geo, 'name_mr')) {
+                if (SchemaPresence::hasColumn($geo, 'name_mr')) {
                     $q->orWhere('name_mr', 'like', $like);
                 }
-                if (Schema::hasColumn($geo, 'pincode') && strlen($digitsOnly) >= 3 && strlen($digitsOnly) <= 8) {
+                if (SchemaPresence::hasColumn($geo, 'pincode') && strlen($digitsOnly) >= 3 && strlen($digitsOnly) <= 8) {
                     if (strlen($digitsOnly) === 6) {
                         $q->orWhere('pincode', $digitsOnly);
                     } else {
                         $q->orWhere('pincode', 'like', $digitsOnly.'%');
                     }
                 }
-                if (Schema::hasTable('location_aliases')) {
+                if (SchemaPresence::hasTable('location_aliases')) {
                     $q->orWhereExists(function ($sub) use ($normalized, $like, $geo) {
                         $sub->selectRaw('1')
                             ->from('location_aliases')
@@ -220,7 +219,7 @@ class LocationService
                 }
             })
             ->when(
-                strlen($digitsOnly) === 6 && Schema::hasColumn($geo, 'pincode'),
+                strlen($digitsOnly) === 6 && SchemaPresence::hasColumn($geo, 'pincode'),
                 static function ($q) use ($digitsOnly): void {
                     $q->orderByRaw('CASE WHEN pincode = ? THEN 0 ELSE 1 END', [$digitsOnly]);
                 }
@@ -270,10 +269,10 @@ class LocationService
             ->where(function ($q) use ($primary, $primaryLike, $geo): void {
                 $q->where('name', 'like', $primaryLike)
                     ->orWhere('slug', 'like', $primaryLike);
-                if (Schema::hasColumn($geo, 'name_mr')) {
+                if (SchemaPresence::hasColumn($geo, 'name_mr')) {
                     $q->orWhere('name_mr', 'like', $primaryLike);
                 }
-                if (Schema::hasTable('location_aliases')) {
+                if (SchemaPresence::hasTable('location_aliases')) {
                     $q->orWhereExists(function ($sub) use ($primary, $primaryLike, $geo): void {
                         $sub->selectRaw('1')
                             ->from('location_aliases')
@@ -297,7 +296,7 @@ class LocationService
                         $q->orWhere(function ($inner) use ($tl, $geo): void {
                             $inner->where('name', 'like', $tl)
                                 ->orWhere('slug', 'like', $tl);
-                            if (Schema::hasColumn($geo, 'name_mr')) {
+                            if (SchemaPresence::hasColumn($geo, 'name_mr')) {
                                 $inner->orWhere('name_mr', 'like', $tl);
                             }
                         });
@@ -359,10 +358,10 @@ class LocationService
             ->where(function ($q) use ($normalized, $slug, $geo): void {
                 $q->whereRaw('LOWER(TRIM(name)) = ?', [$normalized])
                     ->orWhereRaw('LOWER(TRIM(slug)) = ?', [$slug]);
-                if (Schema::hasColumn($geo, 'name_en')) {
+                if (SchemaPresence::hasColumn($geo, 'name_en')) {
                     $q->orWhereRaw('LOWER(TRIM(name_en)) = ?', [$normalized]);
                 }
-                if (Schema::hasColumn($geo, 'name_mr')) {
+                if (SchemaPresence::hasColumn($geo, 'name_mr')) {
                     $q->orWhereRaw('LOWER(TRIM(name_mr)) = ?', [$normalized]);
                 }
             });
@@ -627,6 +626,19 @@ class LocationService
      * {@see getNearbyLocations()} so profile preference defaults do not scan every
      * geocoded address row in PHP.
      *
+     * Reads `addresses.lat` / `addresses.lng` on the taluka row directly, through the
+     * `(hierarchy, is_active, lat, lng)` bounding-box index. It used to ALSO run a second pass — an
+     * `AVG(village.lat) … GROUP BY taluka.id` over the 663k village rows — because no taluka row had
+     * ever been geocoded, so the position had to be re-derived from the villages on every call. That
+     * aggregate was 73% of a production suggestions request (16,081 ms across 63 calls).
+     *
+     * The taluka and district rows now carry that centroid in their own `lat`/`lng`
+     * ({@see \App\Services\Location\GeoCentroidBackfillService}, filled by migration
+     * 2026_07_26_170100 and refreshed by `locations:backfill-geo-centroids`), so the aggregate is gone
+     * from the request path entirely. A taluka with no geocoded villages keeps a NULL coordinate and is
+     * simply not a proximity candidate — exactly as before, when it produced no centroid row either;
+     * the caller then degrades to the district/state hierarchy rule rather than failing.
+     *
      * @return array<int, array{id:int,name:string,hierarchy:string,label:string,district_id:int|null,state_id:int|null,country_id:int|null,distance_km:float}>
      */
     public function nearbyTalukasByCoordinate(float $lat, float $lng, int $radiusKm = 75, int $limit = 12): array
@@ -669,43 +681,6 @@ class LocationService
             $candidateLocationId = (int) $candidate->id;
             if (! isset($distanceByLocation[$candidateLocationId]) || $distance < $distanceByLocation[$candidateLocationId]) {
                 $distanceByLocation[$candidateLocationId] = $distance;
-            }
-        }
-
-        $geo = Location::geoTable();
-        $centroidRows = DB::table($geo.' as village')
-            ->join($geo.' as taluka', 'taluka.id', '=', 'village.parent_id')
-            ->selectRaw('taluka.id as id, AVG(village.lat) as lat, AVG(village.lng) as lng')
-            ->where('village.hierarchy', 'village')
-            ->where('village.is_active', true)
-            ->where('taluka.hierarchy', 'taluka')
-            ->where('taluka.is_active', true)
-            ->whereNotNull('village.lat')
-            ->whereNotNull('village.lng')
-            ->whereBetween('village.lat', [$minLat, $maxLat])
-            ->whereBetween('village.lng', [$minLng, $maxLng])
-            ->groupBy('taluka.id')
-            ->get();
-
-        foreach ($centroidRows as $row) {
-            $talukaId = (int) ($row->id ?? 0);
-            if ($talukaId <= 0 || $row->lat === null || $row->lng === null) {
-                continue;
-            }
-
-            $distance = $this->haversineDistanceKm(
-                $lat,
-                $lng,
-                (float) $row->lat,
-                (float) $row->lng
-            );
-
-            if ($distance > $radiusKm) {
-                continue;
-            }
-
-            if (! isset($distanceByLocation[$talukaId]) || $distance < $distanceByLocation[$talukaId]) {
-                $distanceByLocation[$talukaId] = $distance;
             }
         }
 
@@ -777,7 +752,7 @@ class LocationService
         }
 
         $locationIds = array_keys($locationById);
-        if (Schema::hasColumn((new MatrimonyProfile)->getTable(), 'location_id')) {
+        if (SchemaPresence::hasColumn((new MatrimonyProfile)->getTable(), 'location_id')) {
             $profiles = MatrimonyProfile::query()
                 ->select(['id', 'full_name', 'location_id'])
                 ->whereIn('location_id', $locationIds)
@@ -787,7 +762,7 @@ class LocationService
             if ($typeId === null) {
                 return [];
             }
-            $leaf = Schema::hasColumn('profile_addresses', 'location_id') ? 'pa.location_id' : 'pa.city_id';
+            $leaf = SchemaPresence::hasColumn('profile_addresses', 'location_id') ? 'pa.location_id' : 'pa.city_id';
             $profiles = MatrimonyProfile::query()
                 ->select('matrimony_profiles.id', 'matrimony_profiles.full_name')
                 ->selectRaw("{$leaf} as location_id")

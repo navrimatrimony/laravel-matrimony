@@ -4,21 +4,26 @@ namespace App\Services\Matching;
 
 use App\Models\Location;
 use App\Services\Location\LocationService;
+use App\Support\SchemaPresence;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Memoised geography proximity for the matching engine.
  *
  * This deliberately owns NO distance maths of its own — the haversine implementation and the
- * bounding-box + village-centroid strategy already live in
- * {@see LocationService::nearbyTalukasByCoordinate()} (which
+ * bounding-box strategy already live in {@see LocationService::nearbyTalukasByCoordinate()} (which
  * {@see \App\Services\PartnerPreferenceSuggestionService::defaultLocationPivotsFromNearbyTalukas()}
  * also consumes). Writing a second one would violate the frozen no-duplicate rule, so this class is a
  * per-run cache in front of that single helper: matching compares up to 200 candidates in both
  * directions and must not re-run the geo scan per pair.
  *
  * {@see flush()} is called once at the start of each matching run so the cache never outlives it.
+ *
+ * The expensive half of this used to be {@see coordinateFor()} falling through to an AVG over the
+ * child/grandchild rows, because taluka and district rows had never been geocoded. They now carry
+ * their derived centroid in their own `addresses.lat` / `addresses.lng`
+ * ({@see \App\Services\Location\GeoCentroidBackfillService}), so step 1 answers immediately and the
+ * aggregates below are a fallback for un-backfilled rows only — not the normal path.
  */
 final class NearbyGeographyResolver
 {
@@ -138,6 +143,13 @@ final class NearbyGeographyResolver
             self::limit(),
         );
 
+        // One batched parent lookup for the whole row set instead of one query per row. Same answers,
+        // same order — only the number of round trips changes.
+        self::warmTalukaDistrictMemo(array_map(
+            static fn (array $row): int => (int) ($row['id'] ?? 0),
+            $rows
+        ));
+
         $ids = [$districtId => true];
         foreach ($rows as $row) {
             $parent = self::districtIdForTaluka((int) ($row['id'] ?? 0));
@@ -192,6 +204,9 @@ final class NearbyGeographyResolver
      */
     public static function districtIdsForTalukas(iterable $talukaIds): array
     {
+        $talukaIds = is_array($talukaIds) ? $talukaIds : iterator_to_array($talukaIds, false);
+        self::warmTalukaDistrictMemo(array_map('intval', $talukaIds));
+
         $out = [];
         foreach ($talukaIds as $talukaId) {
             $districtId = self::districtIdForTaluka((int) $talukaId);
@@ -204,7 +219,48 @@ final class NearbyGeographyResolver
     }
 
     /**
-     * Own coordinate when geocoded, else the centroid of the row's geocoded direct children.
+     * Resolve a batch of taluka → district parents in ONE query and seed the per-run memo with them.
+     * Purely a round-trip saving: {@see districtIdForTaluka()} produces the identical value per id.
+     *
+     * @param  list<int>  $talukaIds
+     */
+    private static function warmTalukaDistrictMemo(array $talukaIds): void
+    {
+        $missing = [];
+        foreach ($talukaIds as $talukaId) {
+            $talukaId = (int) $talukaId;
+            if ($talukaId > 0 && ! array_key_exists($talukaId, self::$talukaDistrictCache)) {
+                $missing[$talukaId] = true;
+            }
+        }
+
+        if (count($missing) < 2 || ! self::geoTableExists()) {
+            return;
+        }
+
+        $rows = DB::table(Location::geoTable())
+            ->whereIn('id', array_keys($missing))
+            ->get(['id', 'parent_id']);
+
+        foreach ($rows as $row) {
+            $parentId = $row->parent_id !== null ? (int) $row->parent_id : 0;
+            self::$talukaDistrictCache[(int) $row->id] = $parentId > 0 ? $parentId : null;
+        }
+
+        // Ids with no row at all must still be remembered as "no district", otherwise every caller
+        // re-asks one by one and the batch buys nothing.
+        foreach (array_keys($missing) as $talukaId) {
+            self::$talukaDistrictCache[$talukaId] ??= null;
+        }
+    }
+
+    /**
+     * Own coordinate when geocoded, else the centroid of the row's geocoded direct children, else of
+     * its grandchildren.
+     *
+     * Steps 2 and 3 are the formulas {@see \App\Services\Location\GeoCentroidBackfillService} persists
+     * into the row's own `lat`/`lng`, so on a backfilled database step 1 always wins and neither
+     * aggregate runs. They stay as the safety net for a row added after the last backfill run.
      *
      * @return array{lat: float, lng: float}|null
      */
@@ -248,11 +304,9 @@ final class NearbyGeographyResolver
         return self::$coordinateCache[$locationId] = null;
     }
 
-    /** Per-process memo — table presence cannot change inside a process, but this is asked per taluka. */
-    private static ?bool $geoTableExists = null;
-
+    /** Process-level memo — table presence cannot change inside a process, but this is asked per taluka. */
     private static function geoTableExists(): bool
     {
-        return self::$geoTableExists ??= Schema::hasTable(Location::geoTable());
+        return SchemaPresence::hasTable(Location::geoTable());
     }
 }

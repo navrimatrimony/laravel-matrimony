@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\EducationDegree;
 use App\Models\MatrimonyProfile;
 use App\Support\MasterData\MasterDataAliasNormalizer;
+use App\Support\SchemaPresence;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -81,14 +82,47 @@ class EducationService
         return $value;
     }
 
+    /**
+     * Per-run memo for {@see findDegreeMatch()}, keyed by the raw input string.
+     *
+     * The lookup is a pure function of the input plus the education master tables, but it costs an
+     * alias probe per normalisation candidate and, on a miss, a LIKE scan over `master_education` —
+     * and matching asks it for the seeker and every candidate, in both directions. Measured at ~426
+     * queries in one suggestions run for a handful of distinct degree strings.
+     *
+     * Bounded to a matching run rather than to the whole process: {@see flushDegreeMatchCache()} is
+     * called from {@see \App\Services\ProfilePreferenceMatchService::flushRuntimeCaches()}, so an
+     * admin edit to the education masters is visible on the very next run. The memo is static because
+     * callers resolve this service with `app(EducationService::class)` inside per-profile helpers —
+     * an instance memo would be thrown away on every call.
+     *
+     * @var array<string, EducationDegree|null>
+     */
+    private static array $degreeMatchCache = [];
+
+    public static function flushDegreeMatchCache(): void
+    {
+        self::$degreeMatchCache = [];
+    }
+
     public function findDegreeMatch(string $input): ?EducationDegree
+    {
+        $memoKey = trim($input);
+        if (array_key_exists($memoKey, self::$degreeMatchCache)) {
+            return self::$degreeMatchCache[$memoKey];
+        }
+
+        return self::$degreeMatchCache[$memoKey] = $this->resolveDegreeMatch($input);
+    }
+
+    private function resolveDegreeMatch(string $input): ?EducationDegree
     {
         $effective = $this->applyLegacyLabelAlias(trim($input));
         if ($effective === '') {
             return null;
         }
 
-        if (Schema::hasTable('master_education_aliases')) {
+        if (SchemaPresence::hasTable('master_education_aliases')) {
             foreach (MasterDataAliasNormalizer::normalizedLookupCandidates($effective) as $norm) {
                 if ($norm === '') {
                     continue;

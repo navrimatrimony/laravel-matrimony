@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Models\AdminSetting;
 use App\Models\MatrimonyProfile;
 use App\Services\Profile\ProfileCanonicalResidenceService;
-use Illuminate\Support\Facades\Schema;
+use App\Support\SchemaPresence;
 
 /**
  * ⚠️ DEPRECATED FOR DIRECT USE
@@ -81,7 +81,7 @@ class ProfileCompletenessService
                 return false;
 
             case 'location':
-                if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
+                if (SchemaPresence::hasColumn('matrimony_profiles', 'location_id')) {
                     return $profile->location_id !== null;
                 }
 
@@ -218,7 +218,7 @@ class ProfileCompletenessService
                 return "(CASE WHEN COALESCE(TRIM({$table}.highest_education),'') != '' THEN 1 ELSE 0 END)";
 
             case 'location':
-                if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
+                if (SchemaPresence::hasColumn('matrimony_profiles', 'location_id')) {
                     return "(CASE WHEN {$table}.location_id IS NOT NULL THEN 1 ELSE 0 END)";
                 }
                 $tid = ProfileCanonicalResidenceService::currentAddressTypeId();
@@ -226,7 +226,7 @@ class ProfileCompletenessService
                     return '(0)';
                 }
 
-                $leaf = Schema::hasColumn('profile_addresses', 'location_id') ? 'pa.location_id' : 'pa.city_id';
+                $leaf = SchemaPresence::hasColumn('profile_addresses', 'location_id') ? 'pa.location_id' : 'pa.city_id';
 
                 return '(CASE WHEN EXISTS (SELECT 1 FROM profile_addresses pa WHERE pa.profile_id = '.$table.'.id AND pa.address_scope = \'self\' AND pa.address_type_id = '.(int) $tid.' AND '.$leaf.' IS NOT NULL) THEN 1 ELSE 0 END)';
 

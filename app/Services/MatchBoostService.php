@@ -10,10 +10,10 @@ use App\Models\ProfileKycSubmission;
 use App\Models\User;
 use App\Services\Matching\MatchBoostSettingDefaults;
 use App\Services\Matching\MatchingConfigService;
+use App\Support\SchemaPresence;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Lang;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Applies the admin-configured ranking adjustment layer on top of the base 0-100 compatibility score.
@@ -303,7 +303,7 @@ class MatchBoostService
             return 0;
         }
 
-        self::$hasMobileVerifiedColumn ??= Schema::hasColumn('users', 'mobile_verified_at');
+        self::$hasMobileVerifiedColumn ??= SchemaPresence::hasColumn('users', 'mobile_verified_at');
         if (self::$hasMobileVerifiedColumn !== true) {
             return 0;
         }
@@ -314,7 +314,7 @@ class MatchBoostService
     private function kycPoints(MatrimonyProfile $profileB): int
     {
         $value = $this->ruleValue(self::RULE_VERIFIED_KYC);
-        self::$hasKycTable ??= Schema::hasTable('profile_kyc_submissions');
+        self::$hasKycTable ??= SchemaPresence::hasTable('profile_kyc_submissions');
         if ($value <= 0 || self::$hasKycTable !== true) {
             return 0;
         }
@@ -536,7 +536,7 @@ class MatchBoostService
 
     private function legacySettings(): ?MatchBoostSetting
     {
-        if (! Schema::hasTable('match_boost_settings')) {
+        if (! SchemaPresence::hasTable('match_boost_settings')) {
             return null;
         }
 
@@ -580,7 +580,7 @@ class MatchBoostService
     {
         $parts = [(string) ($legacy?->updated_at?->timestamp ?? '0')];
 
-        if (Schema::hasTable('matching_boost_rules')) {
+        if (SchemaPresence::hasTable('matching_boost_rules')) {
             $parts[] = (string) (MatchingBoostRule::query()->max('updated_at') ?? '0');
             $parts[] = (string) MatchingBoostRule::query()->count();
         }
@@ -647,7 +647,7 @@ class MatchBoostService
     private function profilesSimilarityHit(MatrimonyProfile $a, MatrimonyProfile $b): bool
     {
         $tbl = $a->getTable();
-        $hasProfFk = Schema::hasColumn($tbl, 'profession_id');
+        $hasProfFk = SchemaPresence::hasColumn($tbl, 'profession_id');
         $a->loadMissing(['occupationMaster', 'occupationCustom', 'occupationMaster.category.workingWithType']);
         $b->loadMissing(['occupationMaster', 'occupationCustom', 'occupationMaster.category.workingWithType']);
 

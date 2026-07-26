@@ -2,8 +2,8 @@
 
 namespace App\Services\Matching;
 
+use App\Support\SchemaPresence;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Resolves a seeker's community intent — caste-locked / religion-locked / open (PO ruling 2026-07-26).
@@ -192,7 +192,7 @@ final class CommunityLockResolver
     private static function ownCommunityByProfile(array $profileIds): array
     {
         $out = [];
-        if (! Schema::hasTable('matrimony_profiles')) {
+        if (! SchemaPresence::hasTable('matrimony_profiles')) {
             return $out;
         }
         $rows = DB::table('matrimony_profiles')
@@ -219,7 +219,7 @@ final class CommunityLockResolver
     private static function intercasteFlagByProfile(array $profileIds): array
     {
         $out = [];
-        if (! Schema::hasTable('profile_partner_community_flags')) {
+        if (! SchemaPresence::hasTable('profile_partner_community_flags')) {
             return $out;
         }
         $rows = DB::table('profile_partner_community_flags')
@@ -273,7 +273,7 @@ final class CommunityLockResolver
     private static function strictnessByProfile(array $profileIds): array
     {
         $out = [];
-        if (! Schema::hasTable('partner_preference_metadata')) {
+        if (! SchemaPresence::hasTable('partner_preference_metadata')) {
             return $out;
         }
         $rows = DB::table('partner_preference_metadata')

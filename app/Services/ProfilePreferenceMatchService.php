@@ -12,10 +12,11 @@ use App\Models\OccupationMaster;
 use App\Models\Religion;
 use App\Services\Matching\CommunityLockResolver;
 use App\Services\Matching\NearbyGeographyResolver;
+use App\Services\Profile\ProfileCanonicalResidenceService;
+use App\Support\SchemaPresence;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Read-only comparison: how well the viewer's profile fits the target profile's partner preferences.
@@ -74,6 +75,8 @@ class ProfilePreferenceMatchService
         self::$residenceDisplayCache = [];
         self::$viewerDegreeIdCache = [];
         NearbyGeographyResolver::flush();
+        EducationService::flushDegreeMatchCache();
+        ProfileCanonicalResidenceService::flushRuntimeCaches();
     }
 
     /**
@@ -174,27 +177,27 @@ class ProfilePreferenceMatchService
         $casteIds = DB::table('profile_preferred_castes')->where('profile_id', $targetProfileId)->pluck('caste_id')->map(fn ($id) => (int) $id)->all();
         $districtIds = DB::table('profile_preferred_districts')->where('profile_id', $targetProfileId)->pluck('district_id')->map(fn ($id) => (int) $id)->all();
 
-        $countryIds = Schema::hasTable('profile_preferred_countries')
+        $countryIds = SchemaPresence::hasTable('profile_preferred_countries')
             ? DB::table('profile_preferred_countries')->where('profile_id', $targetProfileId)->pluck('country_id')->map(fn ($id) => (int) $id)->all()
             : [];
-        $stateIds = Schema::hasTable('profile_preferred_states')
+        $stateIds = SchemaPresence::hasTable('profile_preferred_states')
             ? DB::table('profile_preferred_states')->where('profile_id', $targetProfileId)->pluck('state_id')->map(fn ($id) => (int) $id)->all()
             : [];
-        $talukaIds = Schema::hasTable('profile_preferred_talukas')
+        $talukaIds = SchemaPresence::hasTable('profile_preferred_talukas')
             ? DB::table('profile_preferred_talukas')->where('profile_id', $targetProfileId)->pluck('taluka_id')->map(fn ($id) => (int) $id)->all()
             : [];
 
-        $educationDegreeIds = Schema::hasTable('profile_preferred_education_degrees')
+        $educationDegreeIds = SchemaPresence::hasTable('profile_preferred_education_degrees')
             ? DB::table('profile_preferred_education_degrees')->where('profile_id', $targetProfileId)->pluck('education_degree_id')->map(fn ($id) => (int) $id)->all()
             : [];
-        $occupationMasterIds = Schema::hasTable('profile_preferred_occupation_master')
+        $occupationMasterIds = SchemaPresence::hasTable('profile_preferred_occupation_master')
             ? DB::table('profile_preferred_occupation_master')->where('profile_id', $targetProfileId)->pluck('occupation_master_id')->map(fn ($id) => (int) $id)->all()
             : [];
-        $dietIds = Schema::hasTable('profile_preferred_diets')
+        $dietIds = SchemaPresence::hasTable('profile_preferred_diets')
             ? DB::table('profile_preferred_diets')->where('profile_id', $targetProfileId)->pluck('diet_id')->map(fn ($id) => (int) $id)->all()
             : [];
 
-        $maritalStatusIds = Schema::hasTable('profile_preferred_marital_statuses')
+        $maritalStatusIds = SchemaPresence::hasTable('profile_preferred_marital_statuses')
             ? DB::table('profile_preferred_marital_statuses')->where('profile_id', $targetProfileId)->pluck('marital_status_id')->map(fn ($id) => (int) $id)->all()
             : [];
 
@@ -664,7 +667,7 @@ class ProfilePreferenceMatchService
             'taluka_id' => 0,
         ];
 
-        if ($viewer->location_id && Schema::hasTable(Location::geoTable())) {
+        if ($viewer->location_id && SchemaPresence::hasTable(Location::geoTable())) {
             $hints = $viewer->residenceLocationHierarchyHints();
             $out['taluka_id'] = (int) ($hints['taluka_id'] !== '' ? $hints['taluka_id'] : 0);
             if ($out['taluka_id'] <= 0) {

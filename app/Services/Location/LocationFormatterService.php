@@ -3,7 +3,7 @@
 namespace App\Services\Location;
 
 use App\Models\Location;
-use Illuminate\Support\Facades\Schema;
+use App\Support\SchemaPresence;
 
 /**
  * Single SSOT formatter for {@see Location} rows in {@code addresses}.
@@ -22,7 +22,7 @@ final class LocationFormatterService
      */
     public function formatLocation(?int $locationId): string
     {
-        if ($locationId === null || $locationId < 1 || ! Schema::hasTable(Location::geoTable())) {
+        if ($locationId === null || $locationId < 1 || ! SchemaPresence::hasTable(Location::geoTable())) {
             return '';
         }
 
@@ -39,7 +39,7 @@ final class LocationFormatterService
      */
     public function formatForLocation(Location $location): string
     {
-        if (! Schema::hasTable(Location::geoTable())) {
+        if (! SchemaPresence::hasTable(Location::geoTable())) {
             return '';
         }
 

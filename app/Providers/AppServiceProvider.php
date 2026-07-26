@@ -14,9 +14,14 @@ use App\Services\WhatsApp\MetaWhatsAppMessageProvider;
 use App\Services\WhatsApp\NullWhatsAppMessageProvider;
 use App\Support\Admin\AdminNavigationAccess;
 use App\Support\Admin\AdminNavigationCatalog;
+use App\Support\SchemaPresence;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Events\MigrationEnded;
+use Illuminate\Database\Events\MigrationsEnded;
+use Illuminate\Database\Events\MigrationsStarted;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
@@ -81,6 +86,14 @@ class AppServiceProvider extends ServiceProvider
     {
         MatrimonyProfile::observe(MatrimonyProfileObserver::class);
         SystemRule::observe(SystemRuleObserver::class);
+
+        // `SchemaPresence` memoises "does this table/column exist?" for the life of the process, which
+        // is safe everywhere EXCEPT across a migration — and the test suite migrates between cases in
+        // one process. Dropping the memo at both ends of a migration batch keeps it honest without
+        // giving back the 1,600 `information_schema` round trips a matching request used to pay.
+        Event::listen(MigrationsStarted::class, static fn () => SchemaPresence::flush());
+        Event::listen(MigrationsEnded::class, static fn () => SchemaPresence::flush());
+        Event::listen(MigrationEnded::class, static fn () => SchemaPresence::flush());
         // Guard against misconfiguration: Sarvam structured parser must use Sarvam M only.
 
         $envSarvamStructured = strtolower(trim((string) env('INTAKE_SARVAM_STRUCTURED_MODEL', '')));

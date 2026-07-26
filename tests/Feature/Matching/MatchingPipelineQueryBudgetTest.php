@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\Matching\CandidatePoolStrategy;
 use App\Services\Matching\MatchingService;
 use App\Services\Matching\MatchRelaxationLadder;
+use App\Services\Matching\NearbyGeographyResolver;
 use App\Services\ProfilePreferenceMatchService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -163,6 +164,80 @@ class MatchingPipelineQueryBudgetTest extends TestCase
         );
     }
 
+    /**
+     * The taluka-centroid aggregate must never run in a request again.
+     *
+     * It was 73% of a production suggestions request: 63 calls x ~255 ms = 16,081 ms, all of it
+     * recomputing a geographic constant because no taluka row had ever been geocoded. The coordinate
+     * now lives on the taluka/district row itself
+     * ({@see \App\Services\Location\GeoCentroidBackfillService}), so the aggregate has no reason to
+     * exist at request time — not once, not on a cold cache, not after `cache:clear`. Zero is the only
+     * number that cannot silently regress into 63.
+     */
+    public function test_the_taluka_centroid_aggregate_never_runs_during_a_request(): void
+    {
+        config(['matching.relaxation.floor' => 500]);
+
+        $seeker = $this->buildPool();
+        $service = app(MatchingService::class);
+
+        // Two consecutive runs: the first is the "cold" one (every per-run memo starts empty), the
+        // second proves the first did not merely populate a cache that hides the aggregate.
+        foreach (['cold', 'warm'] as $phase) {
+            $queries = $this->captureQueries(static fn () => $service->findMatches($seeker, 12));
+
+            $this->assertSame(
+                0,
+                $this->countVillageCentroidAggregates($queries),
+                "The village-centroid AVG aggregate ran during the {$phase} request. Taluka and district "
+                .'coordinates are stored on the address row; nothing in a request may re-derive them.'
+            );
+        }
+    }
+
+    /**
+     * A taluka with no stored coordinate (out of the backfilled state, or refused by the coordinate
+     * quality gate) must degrade to "the anchor itself" — never error, and never shrink the pool.
+     *
+     * This is the fallback 118 of Maharashtra's 358 talukas rely on, plus every taluka in every other
+     * state, so it carries far more traffic than the happy path.
+     */
+    public function test_a_taluka_without_a_stored_coordinate_falls_back_instead_of_failing(): void
+    {
+        config(['matching.relaxation.floor' => 500]);
+
+        $seeker = $this->buildPool();
+
+        // Strip every derived coordinate: this is exactly the state of an out-of-state taluka.
+        Location::query()->whereIn('hierarchy', ['taluka', 'district'])->update(['lat' => null, 'lng' => null]);
+        NearbyGeographyResolver::flush();
+
+        $talukaId = (int) $this->village->parent_id;
+
+        $nearbyTalukas = NearbyGeographyResolver::nearbyTalukaIds($talukaId);
+        $this->assertSame(
+            [$talukaId],
+            $nearbyTalukas,
+            'An un-geocoded taluka must resolve to itself, so the seeker still matches inside their own '
+            .'taluka. Anything else (especially an empty list) would silently drop candidates.'
+        );
+
+        $districtId = (int) Location::query()->whereKey($talukaId)->value('parent_id');
+        $this->assertSame(
+            [$districtId],
+            NearbyGeographyResolver::nearbyDistrictIds($districtId),
+            'An un-geocoded district must resolve to itself for the same reason.'
+        );
+
+        // And the engine as a whole must still return the pool rather than throwing or emptying out.
+        $rows = app(MatchingService::class)->findMatches($seeker, 12);
+        $this->assertGreaterThan(
+            0,
+            $rows->count(),
+            'Matching must survive a geography table with no derived coordinates at all.'
+        );
+    }
+
     // -------------------------------------------------------------------------------------------
     // Fixture
     // -------------------------------------------------------------------------------------------
@@ -285,6 +360,31 @@ class MatchingPipelineQueryBudgetTest extends TestCase
                 continue;
             }
             if (str_contains($normalised, 'limit '.$poolLimit)) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * Any `AVG()` over the geography table grouped per parent — the shape that used to derive a
+     * taluka's position from its villages on every request. Matched loosely on purpose: the point is
+     * that NO variant of it comes back, not that one particular SQL string is absent.
+     *
+     * @param  list<string>  $queries
+     */
+    private function countVillageCentroidAggregates(array $queries): int
+    {
+        $geo = (new Location)->getTable();
+        $count = 0;
+
+        foreach ($queries as $sql) {
+            $normalised = strtolower(preg_replace('/\s+/', ' ', $sql));
+            if (! str_contains($normalised, strtolower($geo))) {
+                continue;
+            }
+            if (str_contains($normalised, 'avg(') && str_contains($normalised, 'lat')) {
                 $count++;
             }
         }
