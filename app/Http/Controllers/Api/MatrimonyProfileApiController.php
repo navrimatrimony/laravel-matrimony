@@ -239,6 +239,25 @@ class MatrimonyProfileApiController extends Controller
             $snapshot['preferences'] = [$this->mobilePartnerPreferenceSnapshotFromApi($request)];
         }
 
+        // "गुणमिलन जुळणे आवश्यक" is asked on the kundali/horoscope screen, because
+        // that is where the user is already looking at their patrika, but it is a
+        // requirement about the PARTNER — so it is stored on
+        // profile_preference_criteria like every other partner criterion. One
+        // fact, one input, one destination (same rule the web wizard follows).
+        //
+        // It rides the `preferences` fragment whichever way that fragment was
+        // built above (present, or not built at all), and is only carried when
+        // the request actually posted the key — a screen that omits it can never
+        // silently clear a saved `true`.
+        if ($this->requestInputKeyExists($request, 'gunamilan_required')) {
+            $gunamilanRequired = $request->boolean('gunamilan_required');
+            if (! isset($snapshot['preferences'][0]) || ! is_array($snapshot['preferences'][0])) {
+                $snapshot['preferences'] = [['gunamilan_required' => $gunamilanRequired]];
+            } else {
+                $snapshot['preferences'][0]['gunamilan_required'] = $gunamilanRequired;
+            }
+        }
+
         if ($request->has('siblings')) {
             $snapshot['siblings'] = $this->mobileSiblingsSnapshotFromApi($request);
         }
@@ -1276,6 +1295,8 @@ class MatrimonyProfileApiController extends Controller
             'gotra' => ['nullable', 'string', 'max:255'],
             'navras_name' => ['nullable', 'string', 'max:255'],
             'birth_weekday' => ['nullable', 'string', Rule::in($this->birthWeekdayValues())],
+            // Asked on the kundali screen, stored on profile_preference_criteria.
+            'gunamilan_required' => ['nullable', 'boolean'],
             'narrative_about_me' => ['nullable', 'string', 'max:5000'],
             'narrative_expectations' => ['nullable', 'string', 'max:5000'],
             'preferred_intercaste' => ['nullable', 'boolean'],
@@ -2745,6 +2766,12 @@ class MatrimonyProfileApiController extends Controller
             'preferred_profile_managed_by' => $criteria?->preferred_profile_managed_by,
             'preferred_profile_managed_by_label' => $this->preferredProfileManagedByLabel($criteria?->preferred_profile_managed_by),
             'willing_to_relocate' => $criteria?->willing_to_relocate,
+            // Flattened beside the other criteria columns (they are all mirrored
+            // here as well as inside `partner_preferences`) so the apps can bind
+            // it without a null-check on the whole criteria row. Default OFF when
+            // no criteria row exists yet — never null, so the toggle has a
+            // definite state on a brand-new profile.
+            'gunamilan_required' => (bool) ($criteria?->gunamilan_required ?? false),
             'preferred_marital_status_id' => $criteria?->preferred_marital_status_id,
             'preferred_marital_status_label' => $this->masterLookupLabel($criteria?->preferredMaritalStatus),
             'preferred_marital_status_ids' => $preferredMaritalStatusIds,
