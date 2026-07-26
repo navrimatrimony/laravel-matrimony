@@ -46,9 +46,10 @@ class SuchakSuggestionService
      * Every row is a {@see SuchakCandidateMaskingService::maskedSummary()} payload, so `contact.phone`
      * is always null — the mobile number is never returned regardless of who owns the candidate.
      *
-     * @return Collection<int, array<string, mixed>>  Each row adds: `source`, `acting_actor`,
-     *         `representation_id`, `target_suchak_label`, `match_score`, `match_base_score`,
-     *         `match_field_points`, `reasons`, `warnings`, `fit_label`, `fit_summary`, `reason`.
+     * @return Collection<int, array<string, mixed>>  Each row adds: `candidate_profile_id`, `source`,
+     *         `acting_actor`, `representation_id`, `target_suchak_label`, `match_score`,
+     *         `match_base_score`, `match_field_points`, `reasons`, `warnings`, `fit_label`,
+     *         `fit_summary`, `reason`.
      */
     public function suggestionsForRepresentation(
         SuchakAccount $account,
@@ -105,6 +106,11 @@ class SuchakSuggestionService
 
                 $summary = $this->maskingService->maskedSummary($candidate, $candidateRepresentation);
                 $summary['basic']['display_name'] = $this->displayName($candidate);
+                // Identity of the row. Needed by every consumer that must act on a
+                // suggestion — the impression/decision log keys on it, and the API
+                // decision endpoint addresses a candidate by it. Contact details
+                // stay masked; only the identifier is exposed.
+                $summary['candidate_profile_id'] = (int) $candidate->getKey();
                 $summary['source'] = $source;
                 // Decision C: a Suchak-initiated action on any of these is attributed to the Suchak,
                 // except for a self-registered platform member, who acts as themselves.

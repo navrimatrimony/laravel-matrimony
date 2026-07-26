@@ -315,6 +315,24 @@ return [
         'consent_required_for_edit' => 'You can edit this profile only after consent is granted. This person already exists on the platform, so their approval is required first.',
     ],
 
+    'match_suggestions' => [
+        'loaded' => 'Match suggestions loaded.',
+        'decision_saved' => 'Your decision has been saved.',
+        'not_suggested' => 'This candidate was never suggested for this customer.',
+        'representation_not_found' => 'Representation not found for this Suchak account.',
+        'account_not_allowed' => 'Only active Suchak accounts can see match suggestions.',
+        'consent_required' => 'Match suggestions open only after consent is granted. This person already exists on the platform, so their approval is required first.',
+        'validation' => [
+            'limit_invalid' => 'Choose how many suggestions to load between 1 and 50.',
+            'include_seen_invalid' => 'Invalid value for showing already seen suggestions.',
+            'decision_required' => 'Select what you decided about this candidate.',
+            'decision_invalid' => 'This decision is not allowed. Choose chosen, rejected or ignored.',
+            'rejection_reason_required' => 'Select a reason for the rejection.',
+            'rejection_reason_invalid' => 'This rejection reason is not allowed.',
+            'note_too_long' => 'The note can be at most 500 characters.',
+        ],
+    ],
+
     'labels' => [
         'common' => [
             'active' => 'Active',

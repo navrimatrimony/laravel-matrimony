@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\Suchak\SuchakDashboardApiController;
 use App\Http\Controllers\Api\Suchak\SuchakIntakeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakLoginApiController;
 use App\Http\Controllers\Api\Suchak\SuchakManualProfileApiController;
+use App\Http\Controllers\Api\Suchak\SuchakMatchSuggestionsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeetingsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeetingsMutationsApiController;
@@ -112,5 +113,13 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::post('/nxt/{representation}/profile/photo', [SuchakRepresentedProfileApiController::class, 'uploadPhoto']);
     Route::get('/nxt/{representation}/consent-contacts', [SuchakRepresentedProfileApiController::class, 'consentContacts']);
     Route::post('/nxt/{representation}/preferences/auto-draft', [SuchakRepresentedProfileApiController::class, 'autoDraftPreferences']);
+
+    // Ranked, masked match suggestions for one represented candidate + the
+    // learning log behind them (impression on read, decision on write).
+    Route::get('/representations/{representation}/suggestions', [SuchakMatchSuggestionsApiController::class, 'index']);
+    Route::post(
+        '/representations/{representation}/suggestions/{candidateProfile}/decision',
+        [SuchakMatchSuggestionsApiController::class, 'decide'],
+    );
 });
 
