@@ -503,17 +503,17 @@ class SuchakManualProfileApiController extends Controller
     }
 
     /**
-     * One customer, one Suchak. If a DIFFERENT Suchak already MANAGES this
-     * profile, refuse outright — never create a competing claim, never send a
-     * rival consent request.
+     * One customer, one Suchak. If a DIFFERENT Suchak already holds a CONSENTED
+     * representation on this profile, refuse outright — never create a competing
+     * claim, never send a rival consent request.
      *
-     * "Manages" is the same line the customer list draws: anything that is not
-     * a pending consent claim (excludingPendingConsentClaims). That covers both
-     * a consented representation AND a Suchak's own manually-created customer,
-     * which shows in their list and is editable by them even before consent —
-     * checking withValidConsent() alone let a rival request through for exactly
-     * that case (PO report, 2026-07-26). A rival's *pending claim* deliberately
-     * does NOT block: an unanswered request must not let anyone squat a number.
+     * PO ruling (2026-07-26): CONSENT is what establishes management. Until the
+     * person has agreed, someone merely having them in their own list — even a
+     * Suchak who typed that profile in themselves — is NOT managing them and
+     * must not block anyone else from asking that person for permission.
+     * Permission from the customer is the whole point. So this stays
+     * scopeWithValidConsent() and nothing looser; an earlier attempt to widen it
+     * to excludingPendingConsentClaims was reverted for exactly this reason.
      *
      * The name is revealed only through scopePubliclyRoutable(), the predicate
      * SuchakCandidateDuplicateCheckService uses for owner_suchak_name, so a
@@ -523,7 +523,7 @@ class SuchakManualProfileApiController extends Controller
     {
         /** @var SuchakProfileRepresentation|null $other */
         $other = SuchakProfileRepresentation::query()
-            ->excludingPendingConsentClaims()
+            ->withValidConsent()
             ->where('matrimony_profile_id', $profile->id)
             ->where('suchak_account_id', '!=', $account->id)
             ->with('suchakAccount')
