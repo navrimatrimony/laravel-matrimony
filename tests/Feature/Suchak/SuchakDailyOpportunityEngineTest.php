@@ -39,8 +39,10 @@ class SuchakDailyOpportunityEngineTest extends TestCase
 
         [$religion, $caste] = $this->community();
         $account = $this->suchakAccount();
+        // The real matching engine requires an opposite-gender pair, so the fixture must state genders.
         $ownProfile = $this->activeProfile([
             'full_name' => 'Private Candidate Day48',
+            'gender_id' => $this->genderId('male'),
             'religion_id' => $religion->id,
             'caste_id' => $caste->id,
         ]);
@@ -74,6 +76,7 @@ class SuchakDailyOpportunityEngineTest extends TestCase
         $otherAccount = $this->suchakAccount();
         $otherProfile = $this->activeProfile([
             'full_name' => 'Outside Private Candidate Day48',
+            'gender_id' => $this->genderId('female'),
             'religion_id' => $religion->id,
             'caste_id' => $caste->id,
         ]);
@@ -180,6 +183,14 @@ class SuchakDailyOpportunityEngineTest extends TestCase
             'public_status' => SuchakAccount::PUBLIC_ACTIVE,
             'verified_at' => now(),
         ], $attributes));
+    }
+
+    private function genderId(string $key): int
+    {
+        return (int) \App\Models\MasterGender::query()->firstOrCreate(
+            ['key' => $key],
+            ['label' => ucfirst($key), 'is_active' => true],
+        )->id;
     }
 
     /**

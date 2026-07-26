@@ -48,8 +48,14 @@ class SuchakCollaborationMarketplaceAdvancedTest extends TestCase
         $firstSuggestion = $suggestions->first();
         $this->assertSame($requestingRepresentation->id, $firstSuggestion['requesting_representation_id']);
         $this->assertSame($targetRepresentation->id, $firstSuggestion['target_representation_id']);
-        $this->assertContains('Same caste.', $firstSuggestion['reasons']);
-        $this->assertSame('Strong preliminary fit', $firstSuggestion['fit_label']);
+        // Reasons/labels now come from the shared matching engine, not a local caste/district heuristic.
+        $this->assertContains(__('matching.reason_same_caste'), $firstSuggestion['reasons']);
+        $this->assertContains($firstSuggestion['fit_label'], [
+            __('matching.suchak_fit_strong'),
+            __('matching.suchak_fit_possible'),
+            __('matching.suchak_fit_review'),
+        ]);
+        $this->assertGreaterThan(0, $firstSuggestion['match_score']);
         $this->assertArrayHasKey('warnings', $firstSuggestion);
 
         $this->actingAs($requestingUser)
@@ -59,7 +65,7 @@ class SuchakCollaborationMarketplaceAdvancedTest extends TestCase
             ->assertSee('Target candidate', false)
             ->assertSee('29 years', false)
             ->assertSee('5 ft 5 in', false)
-            ->assertSee('Same caste.', false)
+            ->assertSee(__('matching.reason_same_caste'), false)
             ->assertSee('Request will go to: #'.$targetAccount->id.' Day51 Target Suchak', false)
             ->assertSee('Candidate contact and identity remain masked', false)
             ->assertSee('Send collaboration request to this Suchak', false)
@@ -354,13 +360,16 @@ class SuchakCollaborationMarketplaceAdvancedTest extends TestCase
             'suchak_name' => 'Day51 Target Suchak',
         ]);
 
+        // The real matching engine requires an opposite-gender pair, so the fixture must state genders.
         $requestingProfile = $this->activeProfile([
             'full_name' => 'Day51 Sensitive Requesting Candidate',
+            'gender_id' => $this->genderId('male'),
             'religion_id' => $religion->id,
             'caste_id' => $caste->id,
         ]);
         $targetProfile = $this->activeProfile([
             'full_name' => 'Day51 Sensitive Target Candidate',
+            'gender_id' => $this->genderId('female'),
             'religion_id' => $religion->id,
             'caste_id' => $caste->id,
             'address_line' => 'Day51 Secret Lane',
@@ -417,6 +426,7 @@ class SuchakCollaborationMarketplaceAdvancedTest extends TestCase
             'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
             'public_status' => SuchakAccount::PUBLIC_ACTIVE,
             'verified_at' => now(),
+            'registration_completed_at' => now(),
         ], $attributes));
     }
 

@@ -503,20 +503,27 @@ class SuchakManualProfileApiController extends Controller
     }
 
     /**
-     * One customer, one Suchak. If a DIFFERENT Suchak already holds an active,
-     * consented representation on this profile, refuse outright — never create a
-     * competing claim, never send a rival consent request.
+     * One customer, one Suchak. If a DIFFERENT Suchak already MANAGES this
+     * profile, refuse outright — never create a competing claim, never send a
+     * rival consent request.
      *
-     * "Actively represented" reuses scopeWithValidConsent() and the name is
-     * revealed only through scopePubliclyRoutable(), exactly the two predicates
-     * SuchakCandidateDuplicateCheckService uses for owner_type / owner_suchak_name.
-     * A Suchak who is not publicly discoverable stays anonymous here too.
+     * "Manages" is the same line the customer list draws: anything that is not
+     * a pending consent claim (excludingPendingConsentClaims). That covers both
+     * a consented representation AND a Suchak's own manually-created customer,
+     * which shows in their list and is editable by them even before consent —
+     * checking withValidConsent() alone let a rival request through for exactly
+     * that case (PO report, 2026-07-26). A rival's *pending claim* deliberately
+     * does NOT block: an unanswered request must not let anyone squat a number.
+     *
+     * The name is revealed only through scopePubliclyRoutable(), the predicate
+     * SuchakCandidateDuplicateCheckService uses for owner_suchak_name, so a
+     * Suchak who is not publicly discoverable stays anonymous here too.
      */
     private function otherSuchakRefusal(MatrimonyProfile $profile, SuchakAccount $account): ?JsonResponse
     {
         /** @var SuchakProfileRepresentation|null $other */
         $other = SuchakProfileRepresentation::query()
-            ->withValidConsent()
+            ->excludingPendingConsentClaims()
             ->where('matrimony_profile_id', $profile->id)
             ->where('suchak_account_id', '!=', $account->id)
             ->with('suchakAccount')

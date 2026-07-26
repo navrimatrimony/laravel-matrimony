@@ -16,6 +16,7 @@ class SuchakCrossSearchService
     public function __construct(
         private readonly SuchakCandidateMaskingService $maskingService,
         private readonly SuchakAccessService $accessService,
+        private readonly SuchakMatchFitService $matchFitService,
     ) {
     }
 
@@ -191,6 +192,10 @@ class SuchakCrossSearchService
     }
 
     /**
+     * Delegates entirely to {@see SuchakMatchFitService} — i.e. to the real matching engine. The key
+     * set is unchanged so the existing search UI keeps rendering; the values are now the same weighted
+     * score, field breakdown and explain reasons that members get.
+     *
      * @return array{reasons: array<int, string>, warnings: array<int, string>, fit_label: string, fit_summary: string}
      */
     private function fitSummary(
@@ -211,117 +216,30 @@ class SuchakCrossSearchService
         if (! $ownProfile instanceof MatrimonyProfile || ! $candidateProfile instanceof MatrimonyProfile) {
             return [
                 'reasons' => [],
-                'warnings' => ['Profile summary unavailable for deterministic comparison.'],
+                'warnings' => ['Profile summary unavailable for comparison.'],
                 'fit_label' => 'Review manually',
-                'fit_summary' => 'Deterministic fit signals could not be calculated.',
+                'fit_summary' => 'Fit signals could not be calculated.',
             ];
         }
 
-        $details = $this->deterministicMatchDetails($ownProfile, $candidateProfile);
-        if ($details === null) {
+        $fit = $this->matchFitService->fit($ownProfile, $candidateProfile);
+        if ($fit === null) {
             return [
                 'reasons' => [],
-                'warnings' => ['No deterministic shared signal found.'],
+                'warnings' => ['No compatible match signal found.'],
                 'fit_label' => 'Review manually',
-                'fit_summary' => 'No deterministic fit signal matched for the selected profile.',
+                'fit_summary' => 'The matching engine found no compatible fit for the selected profile.',
             ];
         }
 
         return [
-            'reasons' => $details['reasons'],
-            'warnings' => $details['warnings'],
-            'fit_label' => $details['fit_label'],
-            'fit_summary' => $details['fit_summary'],
-        ];
-    }
-
-    /**
-     * @return array{reasons: array<int, string>, warnings: array<int, string>, fit_label: string, fit_summary: string}|null
-     */
-    private function deterministicMatchDetails(MatrimonyProfile $ownProfile, MatrimonyProfile $candidateProfile): ?array
-    {
-        $reasons = [];
-        $warnings = [];
-        $anchorMatches = 0;
-        $hasStrongAnchor = false;
-
-        $ownGender = $this->profileGenderKey($ownProfile);
-        $candidateGender = $this->profileGenderKey($candidateProfile);
-        if ($ownGender !== null && $candidateGender !== null) {
-            if ($ownGender === $candidateGender) {
-                return null;
-            }
-
-            $reasons[] = 'Opposite gender candidate.';
-        }
-
-        $ownAge = $this->ageInYears($ownProfile->date_of_birth);
-        $candidateAge = $this->ageInYears($candidateProfile->date_of_birth);
-        if ($ownAge !== null && $candidateAge !== null) {
-            $ageGap = abs($ownAge - $candidateAge);
-            if ($ageGap <= 8) {
-                if ($ownGender === 'male' && $candidateGender === 'female' && $ownAge < $candidateAge) {
-                    $warnings[] = 'Age order needs review.';
-                } elseif ($ownGender === 'female' && $candidateGender === 'male' && $candidateAge < $ownAge) {
-                    $warnings[] = 'Age order needs review.';
-                } else {
-                    $reasons[] = 'Age gap within 8 years.';
-                }
-            } elseif ($ageGap > 10) {
-                $warnings[] = 'Age gap above 10 years.';
-            }
-        }
-
-        if ($this->sameNonNullInt($ownProfile->caste_id, $candidateProfile->caste_id)) {
-            $reasons[] = 'Same caste.';
-            $anchorMatches++;
-            $hasStrongAnchor = true;
-        }
-
-        if ($this->sameNonNullInt($ownProfile->religion_id, $candidateProfile->religion_id)) {
-            $reasons[] = 'Same religion.';
-            $anchorMatches++;
-        }
-
-        $ownDistrictId = $this->districtId($ownProfile);
-        if ($ownDistrictId !== null && $ownDistrictId === $this->districtId($candidateProfile)) {
-            $reasons[] = 'Same residence district.';
-            $anchorMatches++;
-        }
-
-        $ownEducation = $this->normalizedProfileText($ownProfile->highest_education);
-        if ($ownEducation !== null && $ownEducation === $this->normalizedProfileText($candidateProfile->highest_education)) {
-            $reasons[] = 'Same highest education.';
-            $anchorMatches++;
-        }
-
-        $ownOccupation = $this->normalizedProfileText($ownProfile->occupationMaster?->name);
-        if ($ownOccupation !== null && $ownOccupation === $this->normalizedProfileText($candidateProfile->occupationMaster?->name)) {
-            $reasons[] = 'Same occupation.';
-            $anchorMatches++;
-        }
-
-        $reasons = array_values(array_unique($reasons));
-        $warnings = array_values(array_unique($warnings));
-        if ($reasons === [] || ($anchorMatches === 0 && count($reasons) < 2)) {
-            return null;
-        }
-
-        $fitLabel = match (true) {
-            $hasStrongAnchor && $warnings === [] => 'Strong preliminary fit',
-            count($reasons) >= 2 && count($warnings) <= 1 => 'Possible preliminary fit',
-            default => 'Review carefully',
-        };
-        $fitSummary = $fitLabel.' · '.$this->signalCountLabel(count($reasons), 'matched signal');
-        if ($warnings !== []) {
-            $fitSummary .= ' · '.$this->signalCountLabel(count($warnings), 'review note');
-        }
-
-        return [
-            'reasons' => $reasons,
-            'warnings' => $warnings,
-            'fit_label' => $fitLabel,
-            'fit_summary' => $fitSummary,
+            'reasons' => $fit['reasons'],
+            'warnings' => $fit['warnings'],
+            'fit_label' => $fit['fit_label'],
+            'fit_summary' => $fit['fit_summary'],
+            'match_score' => $fit['match_score'],
+            'match_base_score' => $fit['match_base_score'],
+            'match_field_points' => $fit['match_field_points'],
         ];
     }
 
@@ -332,52 +250,6 @@ class SuchakCrossSearchService
             ->where(function (Builder $query): void {
                 $query->whereNull('is_suspended')->orWhere('is_suspended', false);
             });
-    }
-
-    private function profileGenderKey(MatrimonyProfile $profile): ?string
-    {
-        $key = $profile->gender?->key;
-
-        return is_string($key) && $key !== '' ? $key : null;
-    }
-
-    private function ageInYears(mixed $dateOfBirth): ?int
-    {
-        if ($dateOfBirth === null || $dateOfBirth === '') {
-            return null;
-        }
-
-        try {
-            $age = Carbon::parse($dateOfBirth)->age;
-        } catch (\Throwable) {
-            return null;
-        }
-
-        return $age >= 18 && $age <= 100 ? $age : null;
-    }
-
-    private function sameNonNullInt(mixed $left, mixed $right): bool
-    {
-        return $left !== null && $right !== null && (int) $left === (int) $right;
-    }
-
-    private function normalizedProfileText(mixed $value): ?string
-    {
-        $text = trim((string) ($value ?? ''));
-
-        return $text === '' ? null : mb_strtolower($text);
-    }
-
-    private function signalCountLabel(int $count, string $singular): string
-    {
-        return $count.' '.$singular.($count === 1 ? '' : 's');
-    }
-
-    private function districtId(MatrimonyProfile $profile): ?int
-    {
-        $addressIds = $profile->residenceGeoAddressIds();
-
-        return $addressIds['district_id'] ?? null;
     }
 
     /**

@@ -28,7 +28,7 @@ class SuchakCandidateMaskingService
         ]);
 
         return [
-            'candidate_reference' => $this->maskedCandidateReference($representation),
+            'candidate_reference' => $this->maskedCandidateReference($profile, $representation),
             'basic' => [
                 'gender_id' => $profile->gender_id,
                 'gender' => $this->lookupLabel($profile->gender),
@@ -83,13 +83,20 @@ class SuchakCandidateMaskingService
         ];
     }
 
-    private function maskedCandidateReference(?SuchakProfileRepresentation $representation): string
-    {
+    /**
+     * Stable, non-reversible handle for one candidate. Representation-keyed when there is one; otherwise
+     * profile-keyed, so unrepresented platform members in a Suchak suggestion list stay distinguishable
+     * from one another instead of all collapsing onto a single "unknown" reference.
+     */
+    private function maskedCandidateReference(
+        MatrimonyProfile $profile,
+        ?SuchakProfileRepresentation $representation,
+    ): string {
         $source = $representation?->getKey() !== null
             ? 'representation:'.$representation->getKey()
-            : 'candidate:unknown';
+            : 'profile:'.($profile->getKey() ?? 'unknown');
 
-        return 'masked-'.substr(hash('sha256', $source), 0, 12);
+        return 'masked-'.substr(hash('sha256', (string) $source), 0, 12);
     }
 
     private function ageYears(mixed $dateOfBirth): ?int

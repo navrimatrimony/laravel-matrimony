@@ -24,6 +24,7 @@ class SuchakDailyOpportunityService
 
     public function __construct(
         private readonly SuchakCandidateMaskingService $maskingService,
+        private readonly SuchakMatchFitService $matchFitService,
     ) {
     }
 
@@ -235,7 +236,8 @@ class SuchakDailyOpportunityService
                     return null;
                 }
 
-                $match = $this->firstDeterministicMatch($ownRepresentations, $candidate);
+                // Real engine score (SuchakMatchFitService -> MatchingService), not a caste/district guess.
+                $match = $this->matchFitService->bestFitAmong($ownRepresentations, $candidate);
 
                 if ($match === null) {
                     return null;
@@ -247,59 +249,21 @@ class SuchakDailyOpportunityService
                 return [
                     'type' => 'collaboration_opportunity',
                     'label' => 'Collaboration opportunity',
-                    'reason' => $match['reason'].' Reference: '.$this->maskedCandidateReference($ownRepresentation).'.',
+                    'reason' => $match['fit_summary'].' against your representation. Reference: '.$this->maskedCandidateReference($ownRepresentation).'.',
                     'due_at' => null,
                     'target_type' => 'suchak_profile_representation',
                     'target_id' => $candidate->id,
                     'candidate_reference' => $this->maskedCandidateReference($candidate),
+                    'match_score' => $match['match_score'],
+                    'fit_label' => $match['fit_label'],
                     'action_label' => 'Open marketplace',
                     'action_url' => route('suchak.search.index'),
                 ];
             })
             ->filter()
+            ->sortByDesc(fn (array $item): int => (int) ($item['match_score'] ?? 0))
             ->values()
             ->take(self::PER_BUCKET_LIMIT);
-    }
-
-    private function firstDeterministicMatch(Collection $ownRepresentations, SuchakProfileRepresentation $candidate): ?array
-    {
-        foreach ($ownRepresentations as $ownRepresentation) {
-            if (! $ownRepresentation instanceof SuchakProfileRepresentation) {
-                continue;
-            }
-
-            $ownProfile = $ownRepresentation->matrimonyProfile;
-            $candidateProfile = $candidate->matrimonyProfile;
-
-            if (! $ownProfile instanceof MatrimonyProfile || ! $candidateProfile instanceof MatrimonyProfile) {
-                continue;
-            }
-
-            if ($ownProfile->caste_id !== null && $ownProfile->caste_id === $candidateProfile->caste_id) {
-                return [
-                    'own_representation' => $ownRepresentation,
-                    'reason' => 'Same caste as an active Suchak representation.',
-                ];
-            }
-
-            if ($ownProfile->religion_id !== null && $ownProfile->religion_id === $candidateProfile->religion_id) {
-                return [
-                    'own_representation' => $ownRepresentation,
-                    'reason' => 'Same religion as an active Suchak representation.',
-                ];
-            }
-
-            $ownDistrictId = $this->districtId($ownProfile);
-
-            if ($ownDistrictId !== null && $ownDistrictId === $this->districtId($candidateProfile)) {
-                return [
-                    'own_representation' => $ownRepresentation,
-                    'reason' => 'Same residence district as an active Suchak representation.',
-                ];
-            }
-        }
-
-        return null;
     }
 
     private function hasOpenCollaboration(SuchakAccount $account, SuchakProfileRepresentation $candidate): bool
@@ -336,13 +300,6 @@ class SuchakDailyOpportunityService
         $summary = $this->maskingService->maskedSummary($profile, $representation);
 
         return $summary['candidate_reference'] ?? null;
-    }
-
-    private function districtId(MatrimonyProfile $profile): ?int
-    {
-        $addressIds = $profile->residenceGeoAddressIds();
-
-        return $addressIds['district_id'] ?? null;
     }
 
     private function typeOrder(string $type): int

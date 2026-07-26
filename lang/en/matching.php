@@ -59,4 +59,23 @@ return [
     'reason_prefs_open' => 'Open partner preferences',
     'reason_strong_pref_alignment' => 'Strong preference alignment both ways',
     'reason_good_pref_alignment' => 'Good preference alignment',
+
+    // Scored field labels — used when reporting a weak signal back to a Suchak.
+    'field_age' => 'Age alignment',
+    'field_location' => 'Location proximity',
+    'field_education' => 'Education level',
+    'field_occupation' => 'Occupation / sector',
+    'field_community' => 'Community',
+    'field_preferences' => 'Partner preference fit',
+    'field_marital_status' => 'Marital status fit',
+    'field_height' => 'Height fit',
+    'field_diet' => 'Diet fit',
+
+    // Suchak-facing fit presentation (same engine score, operator wording).
+    'suchak_fit_strong' => 'Strong preliminary fit',
+    'suchak_fit_possible' => 'Possible preliminary fit',
+    'suchak_fit_review' => 'Review carefully',
+    'suchak_weak_signal' => ':field needs review',
+    'suchak_fit_signals' => '{1} :n matched signal|[2,*] :n matched signals',
+    'suchak_fit_notes' => '{1} :n review note|[2,*] :n review notes',
 ];

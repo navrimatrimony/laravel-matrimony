@@ -91,6 +91,73 @@ class MatchingService
     private array $seekerViewedIdsCache = [];
 
     /**
+     * Active candidate universe. Null means the historical member-only pool; it is only ever set for
+     * the duration of a {@see self::findMatchesForPool()} call, so member surfaces are unaffected.
+     */
+    private ?CandidatePoolStrategy $candidatePool = null;
+
+    private function pool(): CandidatePoolStrategy
+    {
+        return $this->candidatePool ?? CandidatePoolStrategy::members();
+    }
+
+    /**
+     * Runs the exact same engine against a different candidate universe (see {@see CandidatePoolStrategy}).
+     * Members never reach this method — {@see findMatches()} / {@see findMatchesForTab()} keep the default pool.
+     *
+     * @return Collection<int, array{profile: MatrimonyProfile, score: int, base_score: int, reasons: list<string>, explain?: list<array{reason: string, impact: int}>}>
+     */
+    public function findMatchesForPool(
+        MatrimonyProfile $profile,
+        CandidatePoolStrategy $pool,
+        string $tab = self::TAB_PERFECT,
+        int $limit = 24,
+        bool $withExplain = false,
+    ): Collection {
+        $previous = $this->candidatePool;
+        $this->candidatePool = $pool;
+
+        try {
+            return $this->findMatchesForTab($profile, $tab, $limit, $withExplain);
+        } finally {
+            $this->candidatePool = $previous;
+        }
+    }
+
+    /**
+     * Public twin of the in-pipeline gate: opposite gender plus the mutual partner-preference rule
+     * (no hard `not_matched` in either direction). Lets non-feed callers — the Suchak surfaces — reuse
+     * the engine's eligibility decision instead of re-deriving one.
+     */
+    public function isEligiblePair(MatrimonyProfile $seeker, MatrimonyProfile $candidate): bool
+    {
+        if ((int) $seeker->getKey() === (int) $candidate->getKey()) {
+            return false;
+        }
+
+        $seeker->loadMissing('gender');
+        $candidate->loadMissing('gender');
+
+        $opposite = $this->oppositeGenderKey($seeker);
+        if ($opposite === null || $candidate->gender?->key !== $opposite) {
+            return false;
+        }
+
+        $savedPref = $this->prefMap;
+        $savedDir = $this->directionalBuildCache;
+
+        try {
+            $this->directionalBuildCache = [];
+            $this->prefMap = $this->bulkLoadTargetPreferences([(int) $seeker->getKey(), (int) $candidate->getKey()]);
+
+            return $this->mutuallyPreferenceCompatible($seeker, $candidate);
+        } finally {
+            $this->prefMap = $savedPref;
+            $this->directionalBuildCache = $savedDir;
+        }
+    }
+
+    /**
      * @param  bool  $withExplain  When true, each row includes an `explain` array (admin preview / JSON API).
      * @return Collection<int, array{profile: MatrimonyProfile, score: int, base_score: int, reasons: list<string>, explain?: list<array{reason: string, impact: int}>}>
      */
@@ -170,10 +237,11 @@ class MatchingService
             $baseScore = $this->calculateScore($profile, $candidate);
             $seekerUser = $profile->user;
             $candidateUser = $candidate->user;
-            $score = ($seekerUser && $candidateUser)
+            $withActorAdjustments = $this->pool()->appliesActorAdjustments();
+            $score = ($withActorAdjustments && $seekerUser && $candidateUser)
                 ? $this->matchBoost->applyBoost($seekerUser, $candidateUser, $baseScore)
                 : $baseScore;
-            if ($seekerUser && $candidateUser) {
+            if ($withActorAdjustments && $seekerUser && $candidateUser) {
                 $score = max(0, min(100, $score + $this->behaviorScoring->scoreAdjustment($seekerUser, $candidate)));
             }
             $reasons = $this->explainScore($profile, $candidate);
@@ -200,7 +268,8 @@ class MatchingService
         $sorted = $this->applyTabOrdering($out, $tab, $profile)->values();
         $sorted = $this->dedupeMatchRowsByPerson($sorted)->take($limit)->values();
 
-        if ($tab === self::TAB_PERFECT && config('matching.persist_cache', false) && Schema::hasTable('profile_matches')) {
+        // Only the member pool owns the persisted cache; a Suchak-scoped run must never overwrite it.
+        if ($tab === self::TAB_PERFECT && $this->pool()->isMembers() && config('matching.persist_cache', false) && Schema::hasTable('profile_matches')) {
             $this->replacePersistedMatches($profile, $sorted);
         }
 
@@ -685,10 +754,16 @@ class MatchingService
     {
         $q->whereMemberAccountsOnly()
             ->whereKeyNot($profile->id)
-            ->where('lifecycle_state', 'active')
-            ->where('is_suspended', false)
             ->whereNonShowcase()
             ->whereHas('gender', static fn ($g) => $g->where('key', $oppositeGenderKey));
+
+        $pool = $this->pool();
+        if ($pool->isMembers()) {
+            $q->where('lifecycle_state', 'active')
+                ->where('is_suspended', false);
+        } else {
+            $this->applySuchakUniverseAvailability($q, $pool);
+        }
 
         $pc = $profile->preferenceCriteria;
         if ($pc !== null) {
@@ -744,6 +819,54 @@ class MatchingService
                 $q->whereIn('caste_id', $casteIds);
             }
         }
+    }
+
+    /**
+     * Lifecycle states that leave the Suchak universe regardless of representation: the candidate is
+     * gone, married, or administratively stopped. Everything else (including `draft` /
+     * `awaiting_user_approval`, which is where a freshly Suchak-created candidate sits) stays eligible.
+     */
+    private const SUCHAK_POOL_BLOCKED_LIFECYCLE_STATES = [
+        'suspended',
+        'archived',
+        'archived_due_to_marriage',
+    ];
+
+    /**
+     * Availability predicate for {@see CandidatePoolStrategy::MODE_SUCHAK_UNIVERSE}:
+     * an activated platform member, OR a candidate carrying a representation that is publicly routable,
+     * OR a candidate represented by the acting Suchak itself (its own book, minus pending consent claims).
+     *
+     * Consent remains authoritative — the representation scopes are the single source for that, this
+     * only decides who is a candidate at all. Masking is applied on top by the Suchak service layer.
+     *
+     * @param  Builder<MatrimonyProfile>  $q
+     */
+    private function applySuchakUniverseAvailability(Builder $q, CandidatePoolStrategy $pool): void
+    {
+        $ownAccountId = $pool->suchakAccountId;
+
+        $q->whereNotIn('lifecycle_state', self::SUCHAK_POOL_BLOCKED_LIFECYCLE_STATES)
+            ->where(function (Builder $available) use ($ownAccountId): void {
+                $available
+                    ->where(function (Builder $member): void {
+                        $member->where('lifecycle_state', 'active')->where('is_suspended', false);
+                    })
+                    ->orWhereHas('suchakProfileRepresentations', function (Builder $rep) use ($ownAccountId): void {
+                        $rep->where(function (Builder $routable): void {
+                            $routable->publiclyRoutable();
+                        });
+
+                        if ($ownAccountId !== null) {
+                            $rep->orWhere(function (Builder $own) use ($ownAccountId): void {
+                                $own->where('suchak_account_id', $ownAccountId)
+                                    ->whereNull('revoked_at')
+                                    ->whereNull('candidate_deactivated_at')
+                                    ->excludingPendingConsentClaims();
+                            });
+                        }
+                    });
+            });
     }
 
     private function oppositeGenderKey(MatrimonyProfile $profile): ?string
@@ -1245,8 +1368,11 @@ class MatchingService
      *   final_score: int
      * }
      */
-    public function computeMatchBreakdown(MatrimonyProfile $seeker, MatrimonyProfile $candidate): array
-    {
+    public function computeMatchBreakdown(
+        MatrimonyProfile $seeker,
+        MatrimonyProfile $candidate,
+        bool $withActorAdjustments = true,
+    ): array {
         $savedPref = $this->prefMap;
         $savedDir = $this->directionalBuildCache;
         $savedComp = $this->componentsCache;
@@ -1287,10 +1413,13 @@ class MatchingService
             $seeker->loadMissing('user');
             $candidate->loadMissing('user');
             // Keep in sync with {@see findMatchesForTab}: field score then boost only (no behavior layer).
-            $finalScore = ($seeker->user && $candidate->user)
+            // $withActorAdjustments = false is the Suchak-initiated case — the represented candidate's
+            // dormant account has no activity of its own, so only the field score is meaningful.
+            $applyActor = $withActorAdjustments && $seeker->user && $candidate->user;
+            $finalScore = $applyActor
                 ? $this->matchBoost->applyBoost($seeker->user, $candidate->user, $baseScore)
                 : $baseScore;
-            $behaviorDelta = ($seeker->user && $candidate->user)
+            $behaviorDelta = $applyActor
                 ? $this->behaviorScoring->scoreAdjustment($seeker->user, $candidate)
                 : 0;
             $finalScore = max(0, min(100, $finalScore + $behaviorDelta));

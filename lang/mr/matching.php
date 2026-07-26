@@ -32,4 +32,21 @@ return array_merge(require __DIR__.'/../en/matching.php', [
     'skip_confirm' => 'या प्रोफाइलला लपवायचं? तीन वेळा नको म्हटल्यावर तो दिसणार नाही.',
     'skip_recorded' => 'नोंद झाली. आम्ही अशा सूचना कमी दाखवू.',
     'skip_invalid' => 'स्वतःचं प्रोफाइल स्किप करता येत नाही.',
+
+    'field_age' => 'वयाची जुळणी',
+    'field_location' => 'ठिकाणाची जवळीक',
+    'field_education' => 'शिक्षण पातळी',
+    'field_occupation' => 'व्यवसाय / क्षेत्र',
+    'field_community' => 'समाज',
+    'field_preferences' => 'पार्टनर पसंती जुळणी',
+    'field_marital_status' => 'वैवाहिक स्थिती जुळणी',
+    'field_height' => 'उंची जुळणी',
+    'field_diet' => 'आहार जुळणी',
+
+    'suchak_fit_strong' => 'मजबूत प्राथमिक जुळणी',
+    'suchak_fit_possible' => 'संभाव्य प्राथमिक जुळणी',
+    'suchak_fit_review' => 'काळजीपूर्वक तपासा',
+    'suchak_weak_signal' => ':field तपासणे आवश्यक',
+    'suchak_fit_signals' => '{1} :n जुळलेला सिग्नल|[2,*] :n जुळलेले सिग्नल',
+    'suchak_fit_notes' => '{1} :n तपासणी नोंद|[2,*] :n तपासणी नोंदी',
 ]);

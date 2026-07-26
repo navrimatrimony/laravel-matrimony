@@ -13,7 +13,6 @@ use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -26,6 +25,7 @@ class SuchakCollaborationService
         private readonly SuchakLimitService $limitService,
         private readonly SuchakCandidateMaskingService $maskingService,
         private readonly SuchakQualityControlService $qualityControlService,
+        private readonly SuchakMatchFitService $matchFitService,
     ) {
     }
 
@@ -77,7 +77,8 @@ class SuchakCollaborationService
             ->limit(max($limit * 10, 30))
             ->get()
             ->map(function (SuchakProfileRepresentation $candidate) use ($account, $ownRepresentations): ?array {
-                $match = $this->firstDeterministicMatch($ownRepresentations, $candidate);
+                // Real engine score (SuchakMatchFitService -> MatchingService), not a caste/district guess.
+                $match = $this->matchFitService->bestFitAmong($ownRepresentations, $candidate);
                 if ($match === null) {
                     return null;
                 }
@@ -110,6 +111,9 @@ class SuchakCollaborationService
                     'fit_label' => $match['fit_label'],
                     'fit_summary' => $match['fit_summary'],
                     'reason' => $match['reason'],
+                    'match_score' => $match['match_score'],
+                    'match_base_score' => $match['match_base_score'],
+                    'match_field_points' => $match['match_field_points'],
                     'target_suchak_label' => $targetSuchakLabel,
                     'collector_label' => $targetSuchakLabel,
                     'split_type' => SuchakCommissionAgreement::SPLIT_TO_BE_DISCUSSED,
@@ -117,6 +121,7 @@ class SuchakCollaborationService
                 ];
             })
             ->filter()
+            ->sortByDesc(fn (array $row): int => (int) ($row['match_score'] ?? 0))
             ->values()
             ->take($limit);
     }
@@ -677,162 +682,6 @@ class SuchakCollaborationService
             ->where('is_suspended', false);
     }
 
-    /**
-     * @return array{own_representation: SuchakProfileRepresentation, reasons: array<int, string>, warnings: array<int, string>, fit_label: string, fit_summary: string, reason: string}|null
-     */
-    private function firstDeterministicMatch(Collection $ownRepresentations, SuchakProfileRepresentation $candidate): ?array
-    {
-        foreach ($ownRepresentations as $ownRepresentation) {
-            if (! $ownRepresentation instanceof SuchakProfileRepresentation) {
-                continue;
-            }
-
-            $ownProfile = $ownRepresentation->matrimonyProfile;
-            $candidateProfile = $candidate->matrimonyProfile;
-
-            if (! $ownProfile instanceof MatrimonyProfile || ! $candidateProfile instanceof MatrimonyProfile) {
-                continue;
-            }
-
-            $details = $this->deterministicMatchDetails($ownProfile, $candidateProfile);
-            if ($details !== null) {
-                return array_merge(['own_representation' => $ownRepresentation], $details);
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * @return array{reasons: array<int, string>, warnings: array<int, string>, fit_label: string, fit_summary: string, reason: string}|null
-     */
-    private function deterministicMatchDetails(MatrimonyProfile $ownProfile, MatrimonyProfile $candidateProfile): ?array
-    {
-        $reasons = [];
-        $warnings = [];
-        $anchorMatches = 0;
-        $hasStrongAnchor = false;
-
-        $ownGender = $this->profileGenderKey($ownProfile);
-        $candidateGender = $this->profileGenderKey($candidateProfile);
-        if ($ownGender !== null && $candidateGender !== null) {
-            if ($ownGender === $candidateGender) {
-                return null;
-            }
-
-            $reasons[] = 'Opposite gender candidate.';
-        }
-
-        $ownAge = $this->ageInYears($ownProfile->date_of_birth);
-        $candidateAge = $this->ageInYears($candidateProfile->date_of_birth);
-        if ($ownAge !== null && $candidateAge !== null) {
-            $ageGap = abs($ownAge - $candidateAge);
-            if ($ageGap <= 8) {
-                if ($ownGender === 'male' && $candidateGender === 'female' && $ownAge < $candidateAge) {
-                    $warnings[] = 'Age order needs review.';
-                } elseif ($ownGender === 'female' && $candidateGender === 'male' && $candidateAge < $ownAge) {
-                    $warnings[] = 'Age order needs review.';
-                } else {
-                    $reasons[] = 'Age gap within 8 years.';
-                }
-            } elseif ($ageGap > 10) {
-                $warnings[] = 'Age gap above 10 years.';
-            }
-        }
-
-        if ($this->sameNonNullInt($ownProfile->caste_id, $candidateProfile->caste_id)) {
-            $reasons[] = 'Same caste.';
-            $anchorMatches++;
-            $hasStrongAnchor = true;
-        }
-
-        if ($this->sameNonNullInt($ownProfile->religion_id, $candidateProfile->religion_id)) {
-            $reasons[] = 'Same religion.';
-            $anchorMatches++;
-        }
-
-        $ownDistrictId = $this->districtId($ownProfile);
-        if ($ownDistrictId !== null && $ownDistrictId === $this->districtId($candidateProfile)) {
-            $reasons[] = 'Same residence district.';
-            $anchorMatches++;
-        }
-
-        $ownEducation = $this->normalizedProfileText($ownProfile->highest_education);
-        if ($ownEducation !== null && $ownEducation === $this->normalizedProfileText($candidateProfile->highest_education)) {
-            $reasons[] = 'Same highest education.';
-            $anchorMatches++;
-        }
-
-        $ownOccupation = $this->normalizedProfileText($ownProfile->occupationMaster?->name);
-        if ($ownOccupation !== null && $ownOccupation === $this->normalizedProfileText($candidateProfile->occupationMaster?->name)) {
-            $reasons[] = 'Same occupation.';
-            $anchorMatches++;
-        }
-
-        $reasons = array_values(array_unique($reasons));
-        $warnings = array_values(array_unique($warnings));
-        if ($reasons === [] || ($anchorMatches === 0 && count($reasons) < 2)) {
-            return null;
-        }
-
-        $fitLabel = match (true) {
-            $hasStrongAnchor && $warnings === [] => 'Strong preliminary fit',
-            count($reasons) >= 2 && count($warnings) <= 1 => 'Possible preliminary fit',
-            default => 'Review carefully',
-        };
-        $fitSummary = $fitLabel.' · '.$this->signalCountLabel(count($reasons), 'matched signal');
-        if ($warnings !== []) {
-            $fitSummary .= ' · '.$this->signalCountLabel(count($warnings), 'review note');
-        }
-
-        return [
-            'reasons' => $reasons,
-            'warnings' => $warnings,
-            'fit_label' => $fitLabel,
-            'fit_summary' => $fitSummary,
-            'reason' => $reasons[0] ?? $fitSummary,
-        ];
-    }
-
-    private function profileGenderKey(MatrimonyProfile $profile): ?string
-    {
-        $key = $profile->gender?->key;
-
-        return is_string($key) && $key !== '' ? $key : null;
-    }
-
-    private function ageInYears(mixed $dateOfBirth): ?int
-    {
-        if ($dateOfBirth === null || $dateOfBirth === '') {
-            return null;
-        }
-
-        try {
-            $age = Carbon::parse($dateOfBirth)->age;
-        } catch (\Throwable) {
-            return null;
-        }
-
-        return $age >= 18 && $age <= 100 ? $age : null;
-    }
-
-    private function sameNonNullInt(mixed $left, mixed $right): bool
-    {
-        return $left !== null && $right !== null && (int) $left === (int) $right;
-    }
-
-    private function normalizedProfileText(mixed $value): ?string
-    {
-        $text = trim((string) ($value ?? ''));
-
-        return $text === '' ? null : mb_strtolower($text);
-    }
-
-    private function signalCountLabel(int $count, string $singular): string
-    {
-        return $count.' '.$singular.($count === 1 ? '' : 's');
-    }
-
     private function hasOpenCollaborationPair(
         SuchakAccount $account,
         SuchakProfileRepresentation $ownRepresentation,
@@ -854,13 +703,6 @@ class SuchakCollaborationService
                 });
             })
             ->exists();
-    }
-
-    private function districtId(MatrimonyProfile $profile): ?int
-    {
-        $addressIds = $profile->residenceGeoAddressIds();
-
-        return $addressIds['district_id'] ?? null;
     }
 
     private function collectorAccountId(SuchakCollaborationRequest $collaboration, SuchakCommissionAgreement $agreement): int

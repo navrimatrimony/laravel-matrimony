@@ -172,6 +172,46 @@ class MatchingConfigService
         return (bool) config('matching.persist_cache', false);
     }
 
+    /**
+     * Score at or above which a Suchak-facing pairing is labelled a strong preliminary fit.
+     * Tunable via the versioned `runtime` engine config; never hardcoded at the call site.
+     */
+    public function suchakStrongFitScore(): int
+    {
+        return $this->boundedRuntimeScore('suchak_strong_fit_score', 70);
+    }
+
+    /** Score at or above which a Suchak-facing pairing is labelled a possible preliminary fit. */
+    public function suchakPossibleFitScore(): int
+    {
+        return $this->boundedRuntimeScore('suchak_possible_fit_score', 45);
+    }
+
+    /** Score below which a Suchak-facing pairing is not surfaced as a suggestion at all. */
+    public function suchakMinFitScore(): int
+    {
+        return $this->boundedRuntimeScore('suchak_min_fit_score', 30);
+    }
+
+    /**
+     * A scored field earning less than this percentage of its configured weight is reported to the
+     * Suchak as a review note ("weak signal") rather than silently disappearing from the reasons list.
+     */
+    public function suchakWeakSignalPercent(): int
+    {
+        return $this->boundedRuntimeScore('suchak_weak_signal_percent', 35);
+    }
+
+    private function boundedRuntimeScore(string $key, int $fallback): int
+    {
+        $v = $this->runtimeValue($key);
+        if ($v !== null && $v !== '') {
+            return max(0, min(100, (int) $v));
+        }
+
+        return $fallback;
+    }
+
     public function behaviorMaxPoints(): int
     {
         $v = $this->runtimeValue('behavior_max_points');

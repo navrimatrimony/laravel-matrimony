@@ -258,8 +258,15 @@ final class SuchakCandidateDuplicateCheckService
             ->get()
             ->keyBy('matrimony_profile_id');
 
+        // "Another Suchak manages this person" is the same line the customer
+        // list draws — anything that is NOT a pending consent claim. That
+        // includes a rival's own manually-created customer, which they manage
+        // and can edit before consent; withValidConsent() alone misclassified
+        // those as unrepresented and let the app offer a doomed consent
+        // request (PO report, 2026-07-26). A rival's pending claim still does
+        // not block, so nobody can squat a number with an unanswered request.
         $otherActive = SuchakProfileRepresentation::query()
-            ->withValidConsent()
+            ->excludingPendingConsentClaims()
             ->where('suchak_account_id', '!=', $account->id)
             ->whereIn('matrimony_profile_id', $profileIds)
             ->with('suchakAccount')
