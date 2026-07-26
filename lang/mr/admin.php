@@ -38,7 +38,7 @@ return [
     'kyc_view_document' => 'ओळखपत्र पहा',
     'kyc_approve' => 'KYC मंजूर',
     'kyc_reject' => 'KYC नाकार',
-    'kyc_reject_note_label' => 'नकाराचे कारण (आवश्यक, किमान १० अक्षरे)',
+    'kyc_reject_note_label' => 'नकाराचे कारण (आवश्यक, किमान 10 अक्षरे)',
     'kyc_optional_note' => 'ऐच्छिक नोंद (सबमिशनवर जतन)',
     'kyc_approved' => 'KYC मंजूर म्हणून नोंदवले.',
     'kyc_rejected' => 'KYC नाकारले. सदस्य पुन्हा अपलोड करू शकतो.',
@@ -76,12 +76,12 @@ return [
     'who_viewed_partial_list_order_fifo' => 'FIFO: आधी उघड दर्शक (खिडकीत सर्वात आधीचे पाहणे), मग नवीनतम पाहण्यानुसार टीझर (डीफॉल्ट)',
     'who_viewed_partial_list_order_recent' => 'सर्वात नवीन पाहणी वर (कोण उघड/टीझर हे FIFO स्लॉट्सनुसार; क्रम नवीनतम पाहणीने)',
     'who_viewed_per_page_label' => 'कोणी पाहिलं — प्रति पृष्ठ ओळी',
-    'who_viewed_per_page_help' => 'सदस्य यादी पृष्ठभाग (५–५०). इतिहास प्लॅनच्या खिडकीप्रमाणे (फ्री: कोटा रिफ्रेश; अनलिमिटेड: सर्व काळ, कच्च्या पाहण्या सुरक्षित मर्यादेपर्यंत).',
+    'who_viewed_per_page_help' => 'सदस्य यादी पृष्ठभाग (5–50). इतिहास प्लॅनच्या खिडकीप्रमाणे (फ्री: कोटा रिफ्रेश; अनलिमिटेड: सर्व काळ, कच्च्या पाहण्या सुरक्षित मर्यादेपर्यंत).',
 
     'received_inbox_row_order_label' => 'मिळालेल्या इच्छा — यादी क्रम',
     'received_inbox_row_order_priority' => 'प्राधान्य गुण आधी, मग नवीनतम',
     'received_inbox_row_order_newest' => 'सर्वात नवीन इच्छा वर',
     'received_inbox_row_order_unlocked' => 'आधी उघड (त्यात नवीनतम), मग लॉक (त्यात नवीनतम)',
     'received_inbox_per_page_label' => 'मिळालेल्या / पाठवलेल्या — प्रति पृष्ठ कार्ड',
-    'received_inbox_per_page_help' => 'इंटरेस्ट हब पृष्ठभाग (प्रति टॅब ५–५०).',
+    'received_inbox_per_page_help' => 'इंटरेस्ट हब पृष्ठभाग (प्रति टॅब 5–50).',
 ];

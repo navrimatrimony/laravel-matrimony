@@ -3,7 +3,7 @@
 /**
  * Match explanation section (Marathi).
  */
-return [
+return array_merge(require __DIR__.'/../en/match.php', [
     'viewed_profile' => 'पाहिलेले प्रोफाइल',
     'your_profile' => 'तुमची प्रोफाइल',
     'how_does_your_profile_match' => 'तुमची प्रोफाइल त्यांच्याशी कशी जुळते?',
@@ -18,4 +18,4 @@ return [
     'good_start' => 'चांगली सुरुवात 👍',
     'age' => 'वय',
     'location' => 'ठिकाण',
-];
+]);

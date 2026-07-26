@@ -25,6 +25,19 @@ return [
     'penalty_marital_preferred' => 'Outside your preferred marital statuses (soft penalty)',
     'penalty_caste_preferred' => 'Outside your preferred castes (soft penalty)',
 
+    // Ranking-boost signal reasons. MatchBoostService::reasonFor() looks these up via Lang::has()
+    // and only falls back to a hardcoded English literal when a key is absent — keep them present.
+    'boost_reason_verified_kyc' => 'ID document verified',
+    'boost_reason_photo' => 'Has an approved photo',
+    'boost_reason_completeness' => 'Profile is well filled in',
+    'boost_reason_verified_mobile' => 'Mobile number verified',
+    'boost_reason_active' => 'Recently active',
+    'boost_reason_similarity' => 'Shares work or location',
+    'boost_reason_ai' => 'AI compatibility signal',
+    'boost_reason_premium' => 'Paid plan member',
+    'boost_reason_gold_extra' => 'Gold plan member',
+    'boost_reason_silver_extra' => 'Silver plan member',
+
     'read_only' => 'You have read-only access. Only super admins, legacy admins, or data admins can edit.',
     'strict_warning' => 'Strict mode removes candidates at query time. Pool size may drop sharply.',
 

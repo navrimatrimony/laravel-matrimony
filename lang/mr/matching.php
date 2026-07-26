@@ -2,11 +2,13 @@
 
 return array_merge(require __DIR__.'/../en/matching.php', [
     'nav_matches' => 'जुळण्या',
+    'profile_label' => 'प्रोफाइल',
+    'photo_placeholder' => 'फोटो',
     'title' => 'तुमच्यासाठी जुळणी',
-    'subtitle' => 'एकच जुळणी इंजिन — खाली लेन्स निवडा. गुण व सुरक्षा नियम सारखेच; फक्त कोण दिसतो व क्रम बदलतो.',
+    'subtitle' => 'एकच जुळणी इंजिन — खाली लेन्स निवडा. गुण व सुरक्षा नियम सारखेच; फक्त कोण दिसतो व कोणत्या क्रमाने दिसतो एवढेच बदलते.',
     'lenses_label' => 'लेन्स',
-    'empty' => 'अद्याप जुळणी सापडली नाही. प्रोफाइल व पार्टनर पसंती पूर्ण करा किंवा नंतर तपासा.',
-    'empty_tab' => 'या टॅबमध्ये आत्ता काही नाही. दुसरा टॅब वापरा किंवा पसंती रुंद करा.',
+    'empty' => 'अद्याप जुळणी सापडली नाही. प्रोफाइल व जोडीदार पसंती पूर्ण करा किंवा नंतर तपासा.',
+    'empty_tab' => 'या टॅबमध्ये आत्ता काही नाही. दुसरा टॅब वापरा किंवा जोडीदार पसंती थोडी मोकळी करा.',
     'score' => 'जुळणी गुण',
     'score_percent' => ':n% जुळणी',
     'boost_note' => 'सक्रियता व प्रीमियम सिग्नलमुळे +:n बूस्ट',
@@ -23,7 +25,7 @@ return array_merge(require __DIR__.'/../en/matching.php', [
     'tab_hint_perfect' => 'एकूण पसंतींशी सर्वोत्तम जुळण.',
     'tab_hint_daily' => 'दररोज नवीन मिक्स — नियम सारखे, क्रम वेगळा.',
     'tab_hint_near' => 'समान शहर व राज्य आधी.',
-    'tab_hint_fresh' => 'गेल्या १४ दिवसांत अपडेट झालेले.',
+    'tab_hint_fresh' => 'गेल्या 14 दिवसांत अपडेट झालेले.',
     'tab_hint_viewed' => 'तुमचं प्रोफाइल उघडले (पात्र जुळणीच).',
     'tab_hint_interested' => 'तुम्हाला पाठवलेले प्रलंबित इंटरेस्ट.',
     'tab_hint_second' => 'तुम्ही पाहिले पण अजून इंटरेस्ट नाही.',
@@ -33,20 +35,48 @@ return array_merge(require __DIR__.'/../en/matching.php', [
     'skip_recorded' => 'नोंद झाली. आम्ही अशा सूचना कमी दाखवू.',
     'skip_invalid' => 'स्वतःचं प्रोफाइल स्किप करता येत नाही.',
 
+    // Why-this-match reasons — shown to members and Suchaks on every card.
+    'reason_age_both_in_range' => 'दोघांच्याही वयाच्या अपेक्षेत वय बसते',
+    'reason_age_compatible' => 'वय अपेक्षेप्रमाणे जुळते',
+    'reason_age_flexible' => 'वय थोड्या सवलतीच्या मर्यादेत बसते',
+    'reason_age_partial' => 'वयाची अंशतः जुळणी',
+
+    'reason_same_city' => 'एकच शहर',
+    'reason_same_state' => 'एकच राज्य',
+    'reason_same_country' => 'एकच देश',
+
+    'reason_education_unknown' => 'शिक्षणाचा तपशील अपुरा — अंशतःच गुण दिले',
+    'reason_education_match' => 'शिक्षणाची पातळी जवळपास तंतोतंत जुळते',
+    'reason_education_close' => 'शिक्षणाची पातळी सारखीच',
+    'reason_education_similar' => 'शिक्षण तुलनेने समान',
+
+    'reason_same_occupation' => 'एकच व्यवसाय',
+    'reason_similar_work_sector' => 'कामाचे क्षेत्र सारखे',
+
+    'reason_same_subcaste' => 'एकच पोटजात',
+    'reason_same_caste' => 'एकच जात',
+    'reason_same_religion' => 'एकच धर्म',
+
+    'reason_prefs_open' => 'जोडीदाराच्या अपेक्षा मोकळ्या आहेत',
+    'reason_strong_pref_alignment' => 'दोन्ही बाजूंच्या अपेक्षा उत्तम जुळतात',
+    'reason_good_pref_alignment' => 'अपेक्षा बऱ्यापैकी जुळतात',
+
+    // Scored field labels — used when reporting a weak signal back to a Suchak.
     'field_age' => 'वयाची जुळणी',
     'field_location' => 'ठिकाणाची जवळीक',
     'field_education' => 'शिक्षण पातळी',
     'field_occupation' => 'व्यवसाय / क्षेत्र',
     'field_community' => 'समाज',
-    'field_preferences' => 'पार्टनर पसंती जुळणी',
+    'field_preferences' => 'जोडीदार पसंतीची जुळणी',
     'field_marital_status' => 'वैवाहिक स्थिती जुळणी',
-    'field_height' => 'उंची जुळणी',
-    'field_diet' => 'आहार जुळणी',
+    'field_height' => 'उंचीची जुळणी',
+    'field_diet' => 'आहाराची जुळणी',
 
-    'suchak_fit_strong' => 'मजबूत प्राथमिक जुळणी',
-    'suchak_fit_possible' => 'संभाव्य प्राथमिक जुळणी',
+    // Suchak-facing fit presentation (same engine score, operator wording).
+    'suchak_fit_strong' => 'प्राथमिक जुळणी मजबूत',
+    'suchak_fit_possible' => 'प्राथमिक जुळणी संभाव्य',
     'suchak_fit_review' => 'काळजीपूर्वक तपासा',
     'suchak_weak_signal' => ':field तपासणे आवश्यक',
-    'suchak_fit_signals' => '{1} :n जुळलेला सिग्नल|[2,*] :n जुळलेले सिग्नल',
+    'suchak_fit_signals' => '{1} :n जुळलेला मुद्दा|[2,*] :n जुळलेले मुद्दे',
     'suchak_fit_notes' => '{1} :n तपासणी नोंद|[2,*] :n तपासणी नोंदी',
 ]);

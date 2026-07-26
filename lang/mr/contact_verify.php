@@ -7,7 +7,7 @@ return [
     'badge_verified' => 'सत्यापित',
     'badge_not_verified' => 'सत्यापित नाही',
     'send_code' => 'कोड पाठवा',
-    'otp_placeholder' => '६ अंकी कोड',
+    'otp_placeholder' => '6 अंकी कोड',
     'verify' => 'सत्यापित करा',
     'make_primary' => 'प्राथमिक करा',
     'verify_before_primary' => 'आधी सत्यापित करा, नंतर प्राथमिक करू शकता.',

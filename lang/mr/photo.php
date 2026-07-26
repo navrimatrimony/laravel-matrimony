@@ -12,7 +12,7 @@ return [
     'good_photo_better_matches' => 'चांगला फोटो तुम्हाला उत्तम जुळणारे प्रोफाइल मिळवण्यास मदत करतो',
     'click_to_upload' => 'फोटो अपलोड करण्यासाठी क्लिक करा',
     'preview' => 'पूर्वावलोकन',
-    'adjust_crop_help_html' => 'क्रॉप समायोजित करा: <strong>आयत फ्रेमचे कोपरे/कडा</strong> ओढून आकार बदला; <strong>फ्रेमच्या आत</strong> ओढून हलवा. नंतर <strong>Crop</strong> बटण वापरा. (उभी ३:४.)',
+    'adjust_crop_help_html' => 'क्रॉप समायोजित करा: <strong>आयत फ्रेमचे कोपरे/कडा</strong> ओढून आकार बदला; <strong>फ्रेमच्या आत</strong> ओढून हलवा. नंतर <strong>Crop</strong> बटण वापरा. (उभी 3:4.)',
     'crop' => 'क्रॉप',
     'rotate_left' => 'डावीकडे फिरवा',
     'rotate_right' => 'उजवीकडे फिरवा',
