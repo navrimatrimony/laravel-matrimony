@@ -1753,6 +1753,25 @@ class MatchingService
      * @return array{points: int, reasons: list<string>}
      */
     /**
+     * Whether this profile has a residence the engine can reason about at all.
+     *
+     * Public because the Suchak fit layer needs the SAME test to distinguish
+     * "lives far away" (a real weak signal) from "no village was ever entered"
+     * (a data gap the Suchak can fix). One implementation, two callers — a
+     * second copy of this test would drift.
+     */
+    public function residenceIsKnown(MatrimonyProfile $profile): bool
+    {
+        if ((int) ($profile->location_id ?? 0) > 0) {
+            return true;
+        }
+
+        $geo = $this->residenceGeoFor($profile);
+
+        return ($geo['state_id'] ?? null) !== null || ($geo['district_id'] ?? null) !== null;
+    }
+
+    /**
      * Great-circle distance between two resolved residences, or null when
      * either side has no stored position.
      *
@@ -1792,6 +1811,15 @@ class MatchingService
         $geoA = $this->residenceGeoFor($a);
         $geoB = $this->residenceGeoFor($b);
         $weight = $this->weight('location', self::WEIGHT_LOCATION);
+
+        // A residence that was never filled in scores 0 exactly like a genuine
+        // mismatch. It is not one, and the Suchak was being told "location
+        // proximity needs review" — which reads as "they live far apart" when
+        // the truth is "nobody entered a village". Callers ask
+        // residenceIsKnown() to tell the two apart; see SuchakMatchFitService.
+        if (! $this->residenceIsKnown($a) || ! $this->residenceIsKnown($b)) {
+            return ['points' => 0, 'reasons' => []];
+        }
 
         // Between "same place" and "same state" there used to be nothing: a
         // neighbouring village and someone 600 km away both scored the state

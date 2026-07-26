@@ -226,6 +226,27 @@ class LocationProximityRankingTest extends TestCase
         );
     }
 
+    /**
+     * Found on production: four of six real customers had no village recorded
+     * at all. Location scored 0 for every candidate — indistinguishable from a
+     * genuine mismatch — and the Suchak was told "location proximity needs
+     * review", which sends them looking at the wrong thing entirely.
+     */
+    public function test_an_unrecorded_residence_is_reported_as_missing_not_as_distance(): void
+    {
+        $placed = $this->profileAt($this->geo['wagholi']);
+        $unplaced = $this->profileAt(null);
+
+        $service = app(MatchingService::class);
+        $this->assertTrue($service->residenceIsKnown($placed));
+        $this->assertFalse($service->residenceIsKnown($unplaced));
+
+        // Scoring stays 0 — an absent village earns nothing, but it must also
+        // not invent a distance or a tier.
+        $this->assertSame(0, $this->locationPoints($placed, $unplaced));
+        $this->assertSame([], $this->locationReasons($placed, $unplaced));
+    }
+
     public function test_a_different_district_still_beats_a_different_state(): void
     {
         $otherState = Location::query()->create([

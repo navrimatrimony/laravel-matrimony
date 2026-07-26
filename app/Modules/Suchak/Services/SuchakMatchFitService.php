@@ -70,7 +70,7 @@ class SuchakMatchFitService
         $gunamilan = $this->gunamilanPayload($seeker, $candidate);
 
         $reasons = $this->reasonsFrom($breakdown);
-        $warnings = $this->warningsFrom($fieldPoints);
+        $warnings = $this->warningsFrom($fieldPoints, $seeker, $candidate);
         // The गुणमिलन note is worded by verdict, never derived from "low points" — a Suchak must
         // never read missing patrika data as a rejection, which is exactly what the generic
         // weak-signal rule would have said (see warningsFrom()).
@@ -266,12 +266,32 @@ class SuchakMatchFitService
      * @param  array<string, int>  $fieldPoints
      * @return list<string>
      */
-    private function warningsFrom(array $fieldPoints): array
-    {
+    private function warningsFrom(
+        array $fieldPoints,
+        MatrimonyProfile $seeker,
+        MatrimonyProfile $candidate,
+    ): array {
         $threshold = $this->matchingConfig->suchakWeakSignalPercent();
         $warnings = [];
 
+        // Location, like गुणमिलन, has two very different ways of scoring zero.
+        // "They live far apart" is a real weak signal. "No village was ever
+        // entered" is a data gap — and saying "location proximity needs review"
+        // for it sends the Suchak looking at the wrong thing. Name the gap and
+        // whose it is, so the fix is obvious.
+        $seekerPlaced = $this->matching->residenceIsKnown($seeker);
+        $candidatePlaced = $this->matching->residenceIsKnown($candidate);
+        $locationUnknown = ! $seekerPlaced || ! $candidatePlaced;
+        if ($locationUnknown) {
+            $warnings[] = $seekerPlaced
+                ? __('matching.location_missing_candidate')
+                : __('matching.location_missing_seeker');
+        }
+
         foreach ($fieldPoints as $fieldKey => $points) {
+            if ($locationUnknown && (string) $fieldKey === 'location') {
+                continue;
+            }
             // गुणमिलन is exempt from the generic "earned less than :threshold% of its weight" rule.
             // A pair with no patrika data scores 0 by design and would trip it on ~87% of profiles,
             // telling the Suchak that missing data "needs review" — i.e. reading absent data as a

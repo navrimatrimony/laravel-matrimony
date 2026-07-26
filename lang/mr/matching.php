@@ -76,6 +76,11 @@ return array_merge(require __DIR__.'/../en/matching.php', [
     'field_diet' => 'आहाराची जुळणी',
     'field_gunamilan' => 'गुणमिलन',
 
+    // Location has two ways of scoring zero. "Far apart" is a real weak signal;
+    // "no village entered" is a data gap. Never word the gap as a mismatch.
+    'location_missing_seeker' => 'ग्राहकाचे गाव भरलेले नाही — ठिकाणाची जुळणी तपासता आली नाही',
+    'location_missing_candidate' => 'या स्थळाचे गाव भरलेले नाही — ठिकाणाची जुळणी तपासता आली नाही',
+
     // गुणमिलन — शब्द नेहमी 'गुणमिलन', कधीही 'कुंडली' नाही (मालकाचा निर्णय).
     // तीन निकाल वेगवेगळेच ठेवायचे: जुळते / जुळत नाही / पत्रिकेची माहिती उपलब्ध नाही.
     // "माहिती उपलब्ध नाही" ही बहुतेक प्रोफाइलची सामान्य स्थिती आहे — ती नकार म्हणून लिहायची नाही.

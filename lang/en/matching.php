@@ -75,6 +75,11 @@ return [
     'field_diet' => 'Diet fit',
     'field_gunamilan' => 'Gunamilan',
 
+    // Location has two ways of scoring zero. "Far apart" is a real weak signal;
+    // "no village entered" is a data gap. Never word the gap as a mismatch.
+    'location_missing_seeker' => 'The customer has no village recorded — location could not be compared',
+    'location_missing_candidate' => 'This match has no village recorded — location could not be compared',
+
     // ------------------------------------------------------------------
     // गुणमिलन / Gunamilan. Terminology is always "Gunamilan", never "kundali" (owner decision).
     // The three verdicts must stay three: compatible / not compatible / not available. "Not
