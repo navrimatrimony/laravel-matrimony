@@ -55,6 +55,19 @@ class SuchakProfileRepresentation extends Model
         self::MODE_MANUAL_FORM_BY_SUCHAK,
     ];
 
+    /**
+     * Modes where the represented person ALREADY existed on the platform before
+     * the Suchak linked them (duplicate → consent branch, PRODUCT_MAP §consent).
+     * Their profile is somebody else's data, so the Suchak may not write to it
+     * until that person's consent is accepted and still valid.
+     *
+     * Suchak-CREATED modes are deliberately excluded: those rows have no other
+     * party to consent yet, and blocking them would break normal onboarding.
+     */
+    public const CONSENT_GATED_EDIT_MODES = [
+        self::MODE_MATCHED_EXISTING_PROFILE,
+    ];
+
     public const CONSENT_NOT_REQUESTED = 'not_requested';
     public const CONSENT_REQUESTED = 'requested';
     public const CONSENT_ACCEPTED = 'accepted';
@@ -179,6 +192,25 @@ class SuchakProfileRepresentation extends Model
         }
 
         return true;
+    }
+
+    /**
+     * True when this representation covers a person who already existed on the
+     * platform, so their consent must be in hand before the Suchak edits them.
+     */
+    public function requiresConsentBeforeSuchakEdit(): bool
+    {
+        return in_array($this->representation_mode, self::CONSENT_GATED_EDIT_MODES, true);
+    }
+
+    /**
+     * Write gate for every Suchak-side profile mutation.
+     * Reuses hasValidConsent() — the single existing "consent is good right now"
+     * predicate — instead of re-deriving consent state.
+     */
+    public function suchakMayEditProfile(): bool
+    {
+        return ! $this->requiresConsentBeforeSuchakEdit() || $this->hasValidConsent();
     }
 
     public function isPubliclyVisible(): bool

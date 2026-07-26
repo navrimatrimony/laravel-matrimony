@@ -56,7 +56,9 @@ Before writing a service that does any of these, **use the existing one**.
 | Mobile normalisation | `App\Support\MobileNumber` | |
 | Contact visibility / masking | `ContactVisibilityDecision`, `ContactVisibilityStrictness`, `SuchakCandidateMaskingService` | |
 | Consent contact roles | `App\Support\ConsentContactRole` + `SuchakConsentContactSuggestionService` | |
-| Suchak pre-create duplicate check | `SuchakCandidateDuplicateCheckService` | mobile + name + DOB + gender scoring. Advisory, never blocks. |
+| Suchak pre-create duplicate check | `SuchakCandidateDuplicateCheckService` | mobile + name + DOB(±1y) + gender scoring, plus optional weak village/caste signal. Tiers: `confirmed`/`high` = app may hard-stop, `medium`/`low` = advisory. Server itself never blocks. Also owns `owner_type` (mine / other_suchak / platform_member / unrepresented) — it reuses `SuchakProfileRepresentation::scopeWithValidConsent()` + `scopePubliclyRoutable()` for "actively represented" and "may name the other Suchak"; do not write a second ownership rule. |
+| Suchak write-gate on a represented profile | `SuchakProfileRepresentation::suchakMayEditProfile()` (+ `requiresConsentBeforeSuchakEdit()`, `CONSENT_GATED_EDIT_MODES`) | The ONLY predicate deciding whether a Suchak may write to a represented candidate. Built on the existing `hasValidConsent()`. Enforced once, in `SuchakRepresentedProfileApiController::authorizedContext($forWrite: true)` — every write endpoint funnels through it. Do not re-derive consent state per endpoint. |
+| Consent WhatsApp hand-off link | `SuchakConsentService::whatsappShareUrl()` | Single implementation shared by the consent sheet API and the duplicate→link response. |
 | Suchak account approve/reject/suspend/archive | `SuchakAccountLifecycleService` | **The only approval path.** Single and bulk admin actions both route through it so activity logging and guard rails stay identical. |
 | Suchak permissions / can-operate | `SuchakAccessService` | |
 | Profile writes (all of them) | `App\Services\MutationService` | Owns the income key→column mapping. |

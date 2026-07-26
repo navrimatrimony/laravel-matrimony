@@ -23,10 +23,23 @@ use Illuminate\Support\Facades\Schema;
  *   noise. (The step-4 recheck with village+caste is the planned second net.)
  * - The service only reports; it NEVER blocks — the Suchak decides.
  *
+ * Confidence tiers (contract with the app):
+ * - confirmed / high  → strong enough for the app to HARD-STOP onboarding and
+ *                       offer the consent-on-existing-profile branch.
+ * - medium / low      → advisory only; the app shows the evidence and lets the
+ *                       Suchak continue as a different person.
+ *
+ * Ownership (2026-07-26): every match also reports WHO holds the profile —
+ * mine / other_suchak / platform_member / unrepresented — so the app can pick
+ * the right branch (open my customer, request consent, collaborate).
+ *
  * Reuse notes (one-engine rule): mobile-store lookups mirror
  * DuplicateDetectionService's profile_contacts pattern extended with the
  * parent slots and sibling numbers documented in PRODUCT_MAP §5; name
- * fuzzing lives in the shared App\Support\NameMatcher.
+ * fuzzing lives in the shared App\Support\NameMatcher; "actively represented"
+ * and "may reveal the other Suchak" reuse the model scopes withValidConsent()
+ * and publiclyRoutable() (same predicates as SuchakCrossSearchService), not a
+ * private copy.
  */
 final class SuchakCandidateDuplicateCheckService
 {
@@ -36,12 +49,31 @@ final class SuchakCandidateDuplicateCheckService
 
     public const CONFIDENCE_MEDIUM = 'medium';
 
+    public const CONFIDENCE_LOW = 'low';
+
+    /** Tiers the app may hard-stop onboarding on. */
+    public const HARD_STOP_CONFIDENCES = [
+        self::CONFIDENCE_CONFIRMED,
+        self::CONFIDENCE_HIGH,
+    ];
+
+    public const OWNER_MINE = 'mine';
+
+    public const OWNER_OTHER_SUCHAK = 'other_suchak';
+
+    public const OWNER_PLATFORM_MEMBER = 'platform_member';
+
+    public const OWNER_UNREPRESENTED = 'unrepresented';
+
     private const MAX_MATCHES = 5;
 
     private const IDENTITY_SCAN_LIMIT = 300;
 
     /**
-     * @return array{matches: array<int, array<string, mixed>>, match_count: int}
+     * @param  array{location_id?: int|null, caste_id?: int|null}  $options
+     *                                                                       Weak secondary signals (village/caste). Optional — they only ever
+     *                                                                       upgrade a DOB-less name hit from 'low' to 'medium'.
+     * @return array{matches: array<int, array<string, mixed>>, match_count: int, hard_stop: bool}
      */
     public function check(
         string $normalizedMobile,
@@ -49,37 +81,36 @@ final class SuchakCandidateDuplicateCheckService
         ?string $dateOfBirth,
         ?string $genderKey,
         SuchakAccount $account,
+        array $options = [],
     ): array {
+        // Both are optional columns in this schema — guard, never assume.
+        $locationId = isset($options['location_id']) && Schema::hasColumn('matrimony_profiles', 'location_id')
+            ? (int) $options['location_id']
+            : null;
+        $casteId = isset($options['caste_id']) && Schema::hasColumn('matrimony_profiles', 'caste_id')
+            ? (int) $options['caste_id']
+            : null;
+
         /** @var array<int, array<string, mixed>> $rows profile_id => working row */
         $rows = [];
 
         foreach ($this->mobileHits($normalizedMobile) as $profileId => $sources) {
-            $rows[$profileId] = [
-                'mobile_sources' => $sources,
-                'name_match' => NameMatcher::LEVEL_NONE,
-                'dob_match' => 'none',
-                'gender_match' => null,
-            ];
+            $rows[$profileId] = $this->emptyRow($sources);
         }
 
-        foreach ($this->identityCandidates($dateOfBirth, $genderKey) as $candidate) {
+        foreach ($this->identityCandidates($candidateName, $dateOfBirth, $genderKey, $locationId, $casteId) as $candidate) {
             $level = NameMatcher::matchLevel($candidateName, (string) $candidate->full_name);
             if ($level === NameMatcher::LEVEL_NONE) {
                 continue;
             }
             $profileId = (int) $candidate->id;
-            $rows[$profileId] ??= [
-                'mobile_sources' => [],
-                'name_match' => NameMatcher::LEVEL_NONE,
-                'dob_match' => 'none',
-                'gender_match' => null,
-            ];
+            $rows[$profileId] ??= $this->emptyRow([]);
             $rows[$profileId]['name_match'] = $level;
-            $rows[$profileId]['dob_match'] = $candidate->dob_match;
+            $rows[$profileId]['dob_match'] = (string) $candidate->dob_match;
         }
 
         if ($rows === []) {
-            return ['matches' => [], 'match_count' => 0];
+            return ['matches' => [], 'match_count' => 0, 'hard_stop' => false];
         }
 
         $profiles = MatrimonyProfile::query()
@@ -87,6 +118,8 @@ final class SuchakCandidateDuplicateCheckService
             ->whereIn('id', array_keys($rows))
             ->get()
             ->keyBy('id');
+
+        $ownership = $this->ownershipMap(array_keys($rows), $account);
 
         $genderIdToKey = $this->genderKeyMap();
         $matches = [];
@@ -100,49 +133,53 @@ final class SuchakCandidateDuplicateCheckService
             if ($row['name_match'] === NameMatcher::LEVEL_NONE) {
                 $row['name_match'] = NameMatcher::matchLevel($candidateName, (string) $profile->full_name);
             }
-            if ($row['dob_match'] === 'none' && $dateOfBirth !== null && $profile->date_of_birth !== null) {
-                $storedDob = substr((string) $profile->date_of_birth, 0, 10);
-                if ($storedDob === $dateOfBirth) {
-                    $row['dob_match'] = 'exact';
-                } elseif (substr($storedDob, 0, 7) === substr($dateOfBirth, 0, 7)) {
-                    $row['dob_match'] = 'year_month';
-                }
+            if ($row['dob_match'] === 'none') {
+                $row['dob_match'] = $this->dobMatchLevel($dateOfBirth, $profile->date_of_birth);
             }
             $storedGenderKey = $genderIdToKey[(int) $profile->gender_id] ?? null;
             $row['gender_match'] = ($genderKey !== null && $storedGenderKey !== null)
                 ? ($genderKey === $storedGenderKey)
                 : null;
+            $row['soft_match'] = ($locationId !== null && (int) $profile->location_id === $locationId)
+                || ($casteId !== null && (int) $profile->caste_id === $casteId);
 
             $confidence = $this->confidence($row);
             if ($confidence === null) {
                 continue;
             }
 
-            $representation = SuchakProfileRepresentation::query()
-                ->where('suchak_account_id', $account->id)
-                ->where('matrimony_profile_id', $profileId)
-                ->first();
+            /** @var array<string, mixed> $owner */
+            $owner = $ownership[$profileId] ?? $this->unknownOwner();
 
             $matches[] = [
                 'profile_id' => $profileId,
                 'display_name' => $this->maskName((string) $profile->full_name),
                 'age_years' => $this->ageYears($profile->date_of_birth),
                 'gender' => $storedGenderKey,
-                'location_label' => trim((string) $profile->residenceLocationDisplayLine()) ?: null,
+                // A profile actively held by another Suchak only reveals its
+                // broad location when that representation is publicly routable
+                // (same gate SuchakCrossSearchService uses).
+                'location_label' => $owner['owner_type'] === self::OWNER_OTHER_SUCHAK && $owner['owner_is_public'] !== true
+                    ? null
+                    : (trim((string) $profile->residenceLocationDisplayLine()) ?: null),
                 'confidence' => $confidence,
+                'is_hard_stop' => in_array($confidence, self::HARD_STOP_CONFIDENCES, true),
                 'signals' => [
                     'mobile' => $row['mobile_sources'] !== [],
                     'mobile_sources' => array_values(array_unique($row['mobile_sources'])),
                     'name' => $row['name_match'],
                     'dob' => $row['dob_match'],
                     'gender' => $row['gender_match'],
+                    'soft' => $row['soft_match'],
                 ],
                 // Shared family number warning: the number matched, but not as
                 // the candidate's own login mobile — could be a sibling/parent.
                 'shared_number_possible' => $row['mobile_sources'] !== []
                     && ! in_array('self_mobile', $row['mobile_sources'], true),
-                'already_represented_by_me' => $representation !== null,
-                'representation_id' => $representation?->id,
+                'owner_type' => $owner['owner_type'],
+                'owner_suchak_name' => $owner['owner_suchak_name'],
+                'already_represented_by_me' => $owner['already_represented_by_me'],
+                'representation_id' => $owner['representation_id'],
                 // The 409 use_existing_profile link flow only applies when the
                 // typed mobile is the candidate's own account mobile.
                 'can_link_existing' => in_array('self_mobile', $row['mobile_sources'], true),
@@ -150,13 +187,189 @@ final class SuchakCandidateDuplicateCheckService
         }
 
         usort($matches, static function (array $a, array $b): int {
-            $rank = [self::CONFIDENCE_CONFIRMED => 0, self::CONFIDENCE_HIGH => 1, self::CONFIDENCE_MEDIUM => 2];
+            $rank = [
+                self::CONFIDENCE_CONFIRMED => 0,
+                self::CONFIDENCE_HIGH => 1,
+                self::CONFIDENCE_MEDIUM => 2,
+                self::CONFIDENCE_LOW => 3,
+            ];
 
-            return ($rank[$a['confidence']] ?? 9) <=> ($rank[$b['confidence']] ?? 9);
+            return [$rank[$a['confidence']] ?? 9, -$a['profile_id']]
+                <=> [$rank[$b['confidence']] ?? 9, -$b['profile_id']];
         });
         $matches = array_slice($matches, 0, self::MAX_MATCHES);
 
-        return ['matches' => $matches, 'match_count' => count($matches)];
+        return [
+            'matches' => $matches,
+            'match_count' => count($matches),
+            'hard_stop' => collect($matches)->contains(static fn (array $m): bool => $m['is_hard_stop'] === true),
+        ];
+    }
+
+    /**
+     * @param  array<int, string>  $mobileSources
+     * @return array<string, mixed>
+     */
+    private function emptyRow(array $mobileSources): array
+    {
+        return [
+            'mobile_sources' => $mobileSources,
+            'name_match' => NameMatcher::LEVEL_NONE,
+            'dob_match' => 'none',
+            'gender_match' => null,
+            'soft_match' => false,
+        ];
+    }
+
+    /**
+     * Who holds each matched profile.
+     *
+     * mine             — this Suchak already has a representation on it.
+     * other_suchak     — a DIFFERENT Suchak holds an ACTIVE, consented
+     *                    representation (scopeWithValidConsent — same predicate
+     *                    the rest of the Suchak domain uses). The other Suchak's
+     *                    name is revealed only when that representation is
+     *                    publiclyRoutable(), i.e. already discoverable in cross
+     *                    search; otherwise the app gets the flag alone.
+     * platform_member  — nobody represents the profile and the account behind it
+     *                    verified itself (self-registered member).
+     * unrepresented    — profile exists, nobody represents it, no self signup.
+     *
+     * @param  array<int, int>  $profileIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function ownershipMap(array $profileIds, SuchakAccount $account): array
+    {
+        if ($profileIds === []) {
+            return [];
+        }
+
+        $mine = SuchakProfileRepresentation::query()
+            ->where('suchak_account_id', $account->id)
+            ->whereIn('matrimony_profile_id', $profileIds)
+            ->get()
+            ->keyBy('matrimony_profile_id');
+
+        $otherActive = SuchakProfileRepresentation::query()
+            ->withValidConsent()
+            ->where('suchak_account_id', '!=', $account->id)
+            ->whereIn('matrimony_profile_id', $profileIds)
+            ->with('suchakAccount')
+            ->get()
+            ->keyBy('matrimony_profile_id');
+
+        $otherPublic = SuchakProfileRepresentation::query()
+            ->publiclyRoutable()
+            ->where('suchak_account_id', '!=', $account->id)
+            ->whereIn('matrimony_profile_id', $profileIds)
+            ->pluck('matrimony_profile_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+
+        $anyRepresentation = SuchakProfileRepresentation::query()
+            ->whereIn('matrimony_profile_id', $profileIds)
+            ->pluck('matrimony_profile_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+
+        $selfRegistered = $this->selfRegisteredProfileIds($profileIds);
+
+        $map = [];
+        foreach ($profileIds as $profileId) {
+            $profileId = (int) $profileId;
+
+            /** @var SuchakProfileRepresentation|null $myRepresentation */
+            $myRepresentation = $mine->get($profileId);
+            if ($myRepresentation !== null) {
+                $map[$profileId] = [
+                    'owner_type' => self::OWNER_MINE,
+                    'owner_suchak_name' => null,
+                    'owner_is_public' => null,
+                    'already_represented_by_me' => true,
+                    'representation_id' => (int) $myRepresentation->id,
+                ];
+
+                continue;
+            }
+
+            /** @var SuchakProfileRepresentation|null $other */
+            $other = $otherActive->get($profileId);
+            if ($other !== null) {
+                $isPublic = in_array($profileId, $otherPublic, true);
+                $map[$profileId] = [
+                    'owner_type' => self::OWNER_OTHER_SUCHAK,
+                    'owner_suchak_name' => $isPublic
+                        ? (trim((string) ($other->suchakAccount?->suchak_name ?: '')) ?: 'Public Suchak')
+                        : null,
+                    'owner_is_public' => $isPublic,
+                    'already_represented_by_me' => false,
+                    'representation_id' => null,
+                ];
+
+                continue;
+            }
+
+            $ownerType = in_array($profileId, $anyRepresentation, true)
+                // Represented, but not actively/consented by anyone else — treat
+                // as unclaimed rather than leaking a pending rival claim.
+                ? self::OWNER_UNREPRESENTED
+                : (in_array($profileId, $selfRegistered, true)
+                    ? self::OWNER_PLATFORM_MEMBER
+                    : self::OWNER_UNREPRESENTED);
+
+            $map[$profileId] = [
+                'owner_type' => $ownerType,
+                'owner_suchak_name' => null,
+                'owner_is_public' => null,
+                'already_represented_by_me' => false,
+                'representation_id' => null,
+            ];
+        }
+
+        return $map;
+    }
+
+    /**
+     * Profiles whose account verified itself — the marker that separates a real
+     * self-registered member from a shell user a Suchak created for a manual
+     * profile (those never verify a mobile/email of their own).
+     *
+     * @param  array<int, int>  $profileIds
+     * @return array<int, int>
+     */
+    private function selfRegisteredProfileIds(array $profileIds): array
+    {
+        $columns = array_values(array_filter(
+            ['mobile_verified_at', 'email_verified_at'],
+            static fn (string $column): bool => Schema::hasColumn('users', $column),
+        ));
+
+        if ($columns === []) {
+            return [];
+        }
+
+        return DB::table('matrimony_profiles')
+            ->join('users', 'users.id', '=', 'matrimony_profiles.user_id')
+            ->whereIn('matrimony_profiles.id', $profileIds)
+            ->where(function ($query) use ($columns): void {
+                foreach ($columns as $column) {
+                    $query->orWhereNotNull('users.'.$column);
+                }
+            })
+            ->pluck('matrimony_profiles.id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    private function unknownOwner(): array
+    {
+        return [
+            'owner_type' => self::OWNER_UNREPRESENTED,
+            'owner_suchak_name' => null,
+            'owner_is_public' => null,
+            'already_represented_by_me' => false,
+            'representation_id' => null,
+        ];
     }
 
     /**
@@ -223,64 +436,226 @@ final class SuchakCandidateDuplicateCheckService
     }
 
     /**
-     * DOB(+gender)-bounded candidate scan for fuzzy-name scoring.
+     * Candidate scan for fuzzy-name scoring.
+     *
+     * Ordering matters as much as the window: the scan is capped, so the
+     * strongest signal must be read FIRST or a cap can silently drop the real
+     * duplicate (fixed 2026-07-26). Passes, in order:
+     *   1. exact DOB day (when a DOB was typed)
+     *   2. literal name-token hits — catches a same-person row whose stored DOB
+     *      is different or missing, and is the ONLY pass when no DOB is typed
+     *   3. birth-year ±1 window — Suchak-entered DOBs are approximate, so the
+     *      old same-MONTH window missed real duplicates
+     *   4. village/caste narrowed recency sweep (weak signal, DOB-less only)
+     * Each pass is ordered by id DESC (most recently created first) so the
+     * result is deterministic across runs.
      *
      * @return array<int, object{id: int|string, full_name: ?string, dob_match: string}>
      */
-    private function identityCandidates(?string $dateOfBirth, ?string $genderKey): array
-    {
-        if ($dateOfBirth === null || $dateOfBirth === '') {
-            return [];
-        }
-
-        // Same-month window (biodata DOBs are often approximate). Expressed as a
-        // date RANGE, not DATE_FORMAT — the latter is MySQL-only and blows up on
-        // the SQLite test connection.
-        try {
-            $monthStart = \Illuminate\Support\Carbon::parse($dateOfBirth)->startOfMonth();
-        } catch (\Throwable) {
-            return [];
-        }
-        $monthEnd = (clone $monthStart)->endOfMonth();
-
-        $query = DB::table('matrimony_profiles')
-            ->select(['id', 'full_name', 'date_of_birth'])
-            ->whereNotNull('full_name')
-            ->whereBetween('date_of_birth', [$monthStart->format('Y-m-d'), $monthEnd->format('Y-m-d 23:59:59')]);
-
+    private function identityCandidates(
+        string $candidateName,
+        ?string $dateOfBirth,
+        ?string $genderKey,
+        ?int $locationId,
+        ?int $casteId,
+    ): array {
+        $genderId = null;
         if ($genderKey !== null) {
-            $genderId = array_search($genderKey, $this->genderKeyMap(), true);
-            if ($genderId !== false) {
+            $found = array_search($genderKey, $this->genderKeyMap(), true);
+            $genderId = $found === false ? null : (int) $found;
+        }
+
+        $base = function () use ($genderId) {
+            $query = DB::table('matrimony_profiles')
+                ->select(['id', 'full_name', 'date_of_birth'])
+                ->whereNotNull('full_name');
+            if ($genderId !== null) {
                 $query->where('gender_id', $genderId);
             }
+
+            return $query;
+        };
+
+        /** @var array<int, object> $collected */
+        $collected = [];
+        $remaining = self::IDENTITY_SCAN_LIMIT;
+
+        $absorb = function ($rows) use (&$collected, &$remaining): void {
+            foreach ($rows as $row) {
+                $id = (int) $row->id;
+                if (isset($collected[$id])) {
+                    continue;
+                }
+                $collected[$id] = $row;
+                $remaining--;
+            }
+        };
+
+        $day = $this->parseDate($dateOfBirth);
+
+        // Pass 1 — exact DOB day, never truncated away by the cap.
+        if ($day !== null && $remaining > 0) {
+            $absorb($base()
+                ->whereBetween('date_of_birth', [
+                    $day->copy()->startOfDay()->format('Y-m-d H:i:s'),
+                    $day->copy()->endOfDay()->format('Y-m-d H:i:s'),
+                ])
+                ->orderByDesc('id')
+                ->limit($remaining)
+                ->get());
         }
 
-        return $query->limit(self::IDENTITY_SCAN_LIMIT)->get()->map(static function (object $row) use ($dateOfBirth): object {
-            $storedDob = substr((string) $row->date_of_birth, 0, 10);
-            $row->dob_match = $storedDob === $dateOfBirth ? 'exact' : 'year_month';
+        // Pass 2 — literal name tokens (works with or without a DOB).
+        $tokens = $this->searchableNameTokens($candidateName);
+        if ($tokens !== [] && $remaining > 0) {
+            $absorb($base()
+                ->where(function ($query) use ($tokens): void {
+                    foreach ($tokens as $token) {
+                        $query->orWhere('full_name', 'like', '%'.$token.'%');
+                    }
+                })
+                ->orderByDesc('id')
+                ->limit($remaining)
+                ->get());
+        }
 
-            return $row;
-        })->all();
+        // Pass 3 — birth year ±1 (approximate DOBs are the norm here).
+        if ($day !== null && $remaining > 0) {
+            $absorb($base()
+                ->whereBetween('date_of_birth', [
+                    $day->copy()->subYear()->startOfYear()->format('Y-m-d H:i:s'),
+                    $day->copy()->addYear()->endOfYear()->format('Y-m-d H:i:s'),
+                ])
+                ->orderByDesc('id')
+                ->limit($remaining)
+                ->get());
+        }
+
+        // Pass 4 — DOB-less fallback: village/caste narrowed recency sweep.
+        if ($day === null && $remaining > 0 && ($locationId !== null || $casteId !== null)) {
+            $absorb($base()
+                ->where(function ($query) use ($locationId, $casteId): void {
+                    if ($locationId !== null) {
+                        $query->orWhere('location_id', $locationId);
+                    }
+                    if ($casteId !== null) {
+                        $query->orWhere('caste_id', $casteId);
+                    }
+                })
+                ->orderByDesc('id')
+                ->limit($remaining)
+                ->get());
+        }
+
+        foreach ($collected as $row) {
+            $row->dob_match = $this->dobMatchLevel($dateOfBirth, $row->date_of_birth);
+        }
+
+        return array_values($collected);
+    }
+
+    /**
+     * Literal tokens worth a LIKE pass. Transliteration variants are caught by
+     * NameMatcher afterwards; this only has to narrow the scan cheaply.
+     *
+     * @return array<int, string>
+     */
+    private function searchableNameTokens(string $candidateName): array
+    {
+        $normalized = NameMatcher::normalize($candidateName);
+        if ($normalized === null) {
+            return [];
+        }
+
+        $tokens = array_values(array_filter(
+            explode(' ', $normalized),
+            static fn (string $token): bool => mb_strlen($token) >= 3,
+        ));
+
+        return array_slice(array_unique($tokens), 0, 4);
+    }
+
+    /**
+     * exact      — same calendar day.
+     * year_month — same year and month.
+     * year       — same year.
+     * near_year  — within ±1 year (approximate DOB tolerance).
+     * none       — no DOB on either side, or further apart than that.
+     */
+    private function dobMatchLevel(?string $typedDob, mixed $storedDob): string
+    {
+        if ($typedDob === null || $typedDob === '' || $storedDob === null || $storedDob === '') {
+            return 'none';
+        }
+
+        $stored = substr((string) $storedDob, 0, 10);
+        $typed = substr($typedDob, 0, 10);
+        if ($stored === '' || $typed === '') {
+            return 'none';
+        }
+        if ($stored === $typed) {
+            return 'exact';
+        }
+        if (substr($stored, 0, 7) === substr($typed, 0, 7)) {
+            return 'year_month';
+        }
+        if (substr($stored, 0, 4) === substr($typed, 0, 4)) {
+            return 'year';
+        }
+
+        $storedYear = (int) substr($stored, 0, 4);
+        $typedYear = (int) substr($typed, 0, 4);
+        if ($storedYear > 0 && $typedYear > 0 && abs($storedYear - $typedYear) <= 1) {
+            return 'near_year';
+        }
+
+        return 'none';
+    }
+
+    private function parseDate(?string $value): ?\Illuminate\Support\Carbon
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        try {
+            return \Illuminate\Support\Carbon::parse($value);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function confidence(array $row): ?string
     {
         $hasMobile = $row['mobile_sources'] !== [];
         $nameStrong = in_array($row['name_match'], [NameMatcher::LEVEL_EXACT, NameMatcher::LEVEL_STRONG], true);
-        $dobHit = $row['dob_match'] !== 'none';
+        $dobStrong = in_array($row['dob_match'], ['exact', 'year_month'], true);
+        $dobWeak = in_array($row['dob_match'], ['year', 'near_year'], true);
         $genderOk = $row['gender_match'] !== false; // null (unknown) does not veto
+        $soft = $row['soft_match'] === true;
 
-        if ($hasMobile && $nameStrong && $dobHit && $genderOk) {
+        if ($hasMobile && $nameStrong && $dobStrong && $genderOk) {
             return self::CONFIDENCE_CONFIRMED;
         }
         if ($hasMobile) {
             return self::CONFIDENCE_HIGH;
         }
-        if ($nameStrong && $dobHit && $genderOk) {
+        if ($nameStrong && $dobStrong && $genderOk) {
             return self::CONFIDENCE_HIGH;
+        }
+        // Approximate DOB (±1 year) is deliberately advisory, never a hard stop.
+        if ($nameStrong && $dobWeak && $genderOk) {
+            return self::CONFIDENCE_MEDIUM;
+        }
+        // No DOB anywhere: name(+gender) alone can only ever be a hint. A
+        // matching village/caste lifts it one notch, still advisory.
+        if ($nameStrong && $row['dob_match'] === 'none' && $genderOk) {
+            return $soft ? self::CONFIDENCE_MEDIUM : self::CONFIDENCE_LOW;
         }
         if ($row['name_match'] === NameMatcher::LEVEL_PARTIAL && $row['dob_match'] === 'exact' && $genderOk) {
             return self::CONFIDENCE_MEDIUM;
+        }
+        if ($row['name_match'] === NameMatcher::LEVEL_PARTIAL && $row['dob_match'] === 'none' && $genderOk && $soft) {
+            return self::CONFIDENCE_LOW;
         }
 
         return null;
@@ -317,16 +692,23 @@ final class SuchakCandidateDuplicateCheckService
         return ($age >= 18 && $age <= 100) ? $age : null;
     }
 
+    /**
+     * Per-instance (not static) cache: the service is resolved per request, and
+     * a process-wide static went stale between RefreshDatabase test cases.
+     *
+     * @var array<int, string>|null
+     */
+    private ?array $genderKeyMap = null;
+
     /** @return array<int, string> gender id => key */
     private function genderKeyMap(): array
     {
-        static $map = null;
-        if ($map === null) {
-            $map = DB::table('master_genders')->pluck('key', 'id')
+        if ($this->genderKeyMap === null) {
+            $this->genderKeyMap = DB::table('master_genders')->pluck('key', 'id')
                 ->map(static fn ($key): string => (string) $key)
                 ->all();
         }
 
-        return $map;
+        return $this->genderKeyMap;
     }
 }

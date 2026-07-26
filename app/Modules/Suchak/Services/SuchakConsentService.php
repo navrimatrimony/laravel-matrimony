@@ -864,6 +864,26 @@ class SuchakConsentService
         return $age >= 18 && $age <= 100 ? $age.' वर्षे' : 'उपलब्ध नाही';
     }
 
+    /**
+     * wa.me deep link for handing a consent request to the number it targets.
+     * Lives here (not in a controller) so every surface that hands off a consent
+     * — consent sheet, duplicate→link flow — shares one implementation.
+     */
+    public function whatsappShareUrl(SuchakConsent $consent, string $message): string
+    {
+        $digits = preg_replace('/\D+/', '', (string) ($consent->intended_mobile ?: $consent->consent_mobile_number));
+
+        if (strlen((string) $digits) === 10) {
+            $digits = '91'.$digits;
+        }
+
+        $query = http_build_query(['text' => $message], '', '&', PHP_QUERY_RFC3986);
+
+        return $digits !== ''
+            ? "https://wa.me/{$digits}?{$query}"
+            : "https://wa.me/?{$query}";
+    }
+
     private function suchakDisplayName(SuchakConsent $consent): string
     {
         $account = $consent->suchakAccount;

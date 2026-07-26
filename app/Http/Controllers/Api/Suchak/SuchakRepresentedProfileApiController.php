@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\MatrimonyProfileApiController;
 use App\Http\Controllers\Controller;
 use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
+use App\Models\SuchakConsent;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakAccessService;
@@ -111,7 +112,7 @@ class SuchakRepresentedProfileApiController extends Controller
         SuchakAccessService $accessService,
         RegistrationPartnerPreferenceService $preferences,
     ): JsonResponse {
-        $context = $this->authorizedContext($request, $representation, $accessService);
+        $context = $this->authorizedContext($request, $representation, $accessService, forWrite: true);
         if ($context instanceof JsonResponse) {
             return $context;
         }
@@ -168,7 +169,7 @@ class SuchakRepresentedProfileApiController extends Controller
         SuchakProfileRepresentation $representation,
         SuchakAccessService $accessService,
     ): JsonResponse {
-        $context = $this->authorizedContext($request, $representation, $accessService);
+        $context = $this->authorizedContext($request, $representation, $accessService, forWrite: true);
         if ($context instanceof JsonResponse) {
             return $context;
         }
@@ -196,7 +197,7 @@ class SuchakRepresentedProfileApiController extends Controller
         SuchakAccessService $accessService,
         MutationService $mutationService,
     ): JsonResponse {
-        $context = $this->authorizedContext($request, $representation, $accessService);
+        $context = $this->authorizedContext($request, $representation, $accessService, forWrite: true);
         if ($context instanceof JsonResponse) {
             return $context;
         }
@@ -254,7 +255,7 @@ class SuchakRepresentedProfileApiController extends Controller
         SuchakProfileRepresentation $representation,
         SuchakAccessService $accessService,
     ): JsonResponse {
-        $context = $this->authorizedContext($request, $representation, $accessService);
+        $context = $this->authorizedContext($request, $representation, $accessService, forWrite: true);
         if ($context instanceof JsonResponse) {
             return $context;
         }
@@ -302,12 +303,16 @@ class SuchakRepresentedProfileApiController extends Controller
     }
 
     /**
+     * @param  bool  $forWrite  Write endpoints additionally pass the consent gate:
+     *                          a linked pre-existing person's profile stays read-only
+     *                          for the Suchak until that person's consent is valid.
      * @return array{0: SuchakAccount, 1: MatrimonyProfile, 2: User}|JsonResponse
      */
     private function authorizedContext(
         Request $request,
         SuchakProfileRepresentation $representation,
         SuchakAccessService $accessService,
+        bool $forWrite = false,
     ): array|JsonResponse {
         $user = $request->user();
         if (! $user instanceof User) {
@@ -346,7 +351,38 @@ class SuchakRepresentedProfileApiController extends Controller
             ], 404);
         }
 
+        if ($forWrite && ! $representation->suchakMayEditProfile()) {
+            return $this->consentRequiredResponse($representation);
+        }
+
         return [$account, $profile, $member];
+    }
+
+    /**
+     * SECURITY (2026-07-26): ownership alone used to authorise writes, so a
+     * Suchak could edit a self-registered member's profile the moment they
+     * linked it — before that member consented. The gate lives here because
+     * every write endpoint in this controller funnels through authorizedContext.
+     */
+    private function consentRequiredResponse(SuchakProfileRepresentation $representation): JsonResponse
+    {
+        $consentId = $representation->consents()
+            ->whereIn('consent_status', SuchakConsent::PENDING_ACTION_STATUSES)
+            ->latest('id')
+            ->value('id');
+
+        return response()->json([
+            'success' => false,
+            'error_code' => 'consent_required',
+            'message' => __('suchak.represented_profile.consent_required_for_edit'),
+            'data' => [
+                'representation_id' => (int) $representation->id,
+                'consent_required' => true,
+                'consent_status' => $representation->consent_status,
+                'representation_mode' => $representation->representation_mode,
+                'consent_id' => $consentId !== null ? (int) $consentId : null,
+            ],
+        ], 403);
     }
 
     private function snapshotHasWritableData(array $snapshot): bool

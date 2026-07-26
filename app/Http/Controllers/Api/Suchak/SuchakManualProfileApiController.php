@@ -75,6 +75,11 @@ class SuchakManualProfileApiController extends Controller
      * the app asks whether this person already has a profile, so the Suchak can
      * jump straight to consent-on-existing instead of re-typing a duplicate.
      * Reporting only — never blocks; the Suchak decides.
+     *
+     * Each match reports `confidence` (confirmed|high|medium|low), `is_hard_stop`
+     * (true for confirmed/high — the app may stop the wizard there) and
+     * `owner_type` (mine|other_suchak|platform_member|unrepresented) so the app
+     * can pick the right branch. `data.hard_stop` is the any-match roll-up.
      */
     public function duplicateCheck(
         Request $request,
@@ -100,6 +105,10 @@ class SuchakManualProfileApiController extends Controller
             'candidate_mobile' => ['required', 'string', 'max:32'],
             'date_of_birth' => ['nullable', 'date_format:Y-m-d'],
             'candidate_gender' => ['nullable', Rule::exists('master_genders', 'key')->where('is_active', true)],
+            // Optional weak signals — only used when no DOB was typed, and they
+            // can never raise a match above 'medium' (advisory).
+            'location_id' => ['nullable', 'integer'],
+            'caste_id' => ['nullable', 'integer'],
         ]);
 
         $mobile = MobileNumber::normalize((string) $validated['candidate_mobile']);
@@ -117,6 +126,10 @@ class SuchakManualProfileApiController extends Controller
             $validated['date_of_birth'] ?? null,
             $validated['candidate_gender'] ?? null,
             $account,
+            [
+                'location_id' => $validated['location_id'] ?? null,
+                'caste_id' => $validated['caste_id'] ?? null,
+            ],
         );
 
         return response()->json([
@@ -313,7 +326,7 @@ class SuchakManualProfileApiController extends Controller
         }
 
         try {
-            [$representation] = DB::transaction(function () use (
+            [$representation, $consentResult] = DB::transaction(function () use (
                 $account,
                 $request,
                 $existingProfile,
@@ -335,7 +348,7 @@ class SuchakManualProfileApiController extends Controller
                     $request->userAgent(),
                 );
 
-                $consent = $this->existingOrNewConsentRequest(
+                $consentResult = $this->existingOrNewConsentRequest(
                     $representation,
                     $actor,
                     $mobile,
@@ -348,14 +361,14 @@ class SuchakManualProfileApiController extends Controller
                     $account,
                     $actor,
                     $representation,
-                    $consent,
+                    $consentResult['consent'],
                     (string) $validated['candidate_name'],
                     $customerLifecycleService,
                     $request->ip(),
                     $request->userAgent(),
                 );
 
-                return [$representation];
+                return [$representation, $consentResult];
             });
         } catch (InvalidArgumentException $exception) {
             return response()->json([
@@ -365,6 +378,10 @@ class SuchakManualProfileApiController extends Controller
             ], 422);
         }
 
+        /** @var SuchakConsent $consent */
+        $consent = $consentResult['consent'];
+        $forwardMessage = (string) ($consentResult['message'] ?? '');
+
         return response()->json([
             'success' => true,
             'message' => 'Existing profile linked. Representation and consent request are ready.',
@@ -372,6 +389,23 @@ class SuchakManualProfileApiController extends Controller
                 'outcome' => 'linked_existing',
                 'profile_id' => $existingProfile->id,
                 'representation_id' => $representation->id,
+                // Consent hand-off (2026-07-26): the app must be able to deep-link
+                // straight into the SAME consent sheet the customer detail screen
+                // uses, so these mirror SuchakConsentsApiController::store() field
+                // for field. No second consent mechanism.
+                'consent_id' => (int) $consent->id,
+                'consent_status' => $consent->consent_status,
+                'consent_method' => $consent->consent_method,
+                'consent_url' => $consentResult['consent_url'],
+                'forward_message' => $forwardMessage !== '' ? $forwardMessage : null,
+                'whatsapp_url' => $forwardMessage !== ''
+                    ? $consentService->whatsappShareUrl($consent, $forwardMessage)
+                    : null,
+                // false when an OPEN consent request already existed: its raw
+                // token is unrecoverable by design, so the app must call
+                // POST /suchak/consents/{consent}/resend to get a fresh link.
+                'consent_link_available' => $consentResult['consent_url'] !== null,
+                'consent_reused' => $consentResult['reused'],
             ],
         ]);
     }
@@ -402,6 +436,9 @@ class SuchakManualProfileApiController extends Controller
         );
     }
 
+    /**
+     * @return array{consent: SuchakConsent, consent_url: ?string, message: ?string, reused: bool}
+     */
     private function existingOrNewConsentRequest(
         SuchakProfileRepresentation $representation,
         User $actor,
@@ -409,7 +446,7 @@ class SuchakManualProfileApiController extends Controller
         SuchakConsentService $consentService,
         ?string $ipAddress,
         ?string $userAgent,
-    ): SuchakConsent {
+    ): array {
         $existing = SuchakConsent::query()
             ->where('representation_id', $representation->id)
             ->whereIn('consent_status', SuchakConsent::OPEN_STATUSES)
@@ -417,7 +454,14 @@ class SuchakManualProfileApiController extends Controller
             ->first();
 
         if ($existing !== null) {
-            return $existing;
+            // Raw token is hashed at rest — a reused request cannot hand back a
+            // URL. The app resends instead of minting a parallel consent.
+            return [
+                'consent' => $existing,
+                'consent_url' => null,
+                'message' => null,
+                'reused' => true,
+            ];
         }
 
         $result = $consentService->createSuchakRelayedLinkConsent(
@@ -431,7 +475,12 @@ class SuchakManualProfileApiController extends Controller
             $userAgent,
         );
 
-        return $result['consent'];
+        return [
+            'consent' => $result['consent'],
+            'consent_url' => $result['consent_url'] ?? null,
+            'message' => $result['message'] ?? null,
+            'reused' => false,
+        ];
     }
 
     private function existingOrNewCustomerContext(

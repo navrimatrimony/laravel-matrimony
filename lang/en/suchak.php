@@ -306,6 +306,10 @@ return [
         'consent_relation_self' => 'Candidate themselves',
     ],
 
+    'represented_profile' => [
+        'consent_required_for_edit' => 'You can edit this profile only after consent is granted. This person already exists on the platform, so their approval is required first.',
+    ],
+
     'labels' => [
         'common' => [
             'active' => 'Active',

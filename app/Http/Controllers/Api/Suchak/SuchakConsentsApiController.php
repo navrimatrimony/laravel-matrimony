@@ -280,18 +280,9 @@ class SuchakConsentsApiController extends Controller
         };
     }
 
+    /** Delegates to the one shared implementation (SuchakConsentService). */
     private function whatsappShareUrl(SuchakConsent $consent, string $message): string
     {
-        $digits = preg_replace('/\D+/', '', (string) ($consent->intended_mobile ?: $consent->consent_mobile_number));
-
-        if (strlen((string) $digits) === 10) {
-            $digits = '91'.$digits;
-        }
-
-        $query = http_build_query(['text' => $message], '', '&', PHP_QUERY_RFC3986);
-
-        return $digits !== ''
-            ? "https://wa.me/{$digits}?{$query}"
-            : "https://wa.me/?{$query}";
+        return app(SuchakConsentService::class)->whatsappShareUrl($consent, $message);
     }
 }
