@@ -19,13 +19,33 @@ final class SuchakLocalizedText
             return '-';
         }
 
+        return self::labelOrNull($value, $group)
+            ?? Str::of($value)->replace('_', ' ')->title()->toString();
+    }
+
+    /**
+     * Same lookup as {@see label()} but WITHOUT the titleised-English fallback:
+     * null means "this enum value has no translation yet".
+     *
+     * Screens that must never leak a raw English enum into a Marathi UI use this
+     * and substitute their own neutral wording (see
+     * `suchak.labels.unknown`). Blade surfaces that are happy with a titleised
+     * token keep calling label() — one vocabulary, two fallback policies.
+     */
+    public static function labelOrNull(?string $value, string $group = 'common'): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
         foreach (["suchak.labels.{$group}.{$value}", "suchak.labels.common.{$value}"] as $key) {
             $translated = __($key);
-            if ($translated !== $key) {
-                return (string) $translated;
+            if ($translated !== $key && is_string($translated)) {
+                return $translated;
             }
         }
 
-        return Str::of($value)->replace('_', ' ')->title()->toString();
+        return null;
     }
 }

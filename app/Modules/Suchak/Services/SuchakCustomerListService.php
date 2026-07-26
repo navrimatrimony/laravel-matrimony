@@ -11,6 +11,7 @@ use App\Models\SuchakPaymentRequest;
 use App\Models\SuchakProfileRepresentation;
 use App\Services\ProfileCompletionService;
 use App\Support\LocalizedText;
+use App\Support\Suchak\SuchakLocalizedText;
 use Illuminate\Support\Carbon;
 
 class SuchakCustomerListService
@@ -159,6 +160,27 @@ class SuchakCustomerListService
     }
 
     /**
+     * Every status word this list puts on a Suchak's screen goes through here.
+     *
+     * It binds to the existing Suchak vocabulary
+     * ({@see \App\Support\Suchak\SuchakLocalizedText}, backed by
+     * `suchak.labels.*`) rather than prettifying the raw enum with
+     * ucfirst()/ucwords(), which is what used to leak English words like
+     * "Intake Uploaded" into an otherwise Marathi screen.
+     *
+     * An unmapped or brand-new enum value degrades to the neutral
+     * `suchak.labels.unknown` ("स्थिती अज्ञात" / "Unknown status") — never a
+     * notice, never blank, and deliberately never the raw English token, since
+     * a stray English word in a Marathi list is the exact bug being fixed. The
+     * gap shows up as an honest "unknown" instead of masquerading as a label.
+     */
+    private function statusLabel(?string $value, string $group): string
+    {
+        return SuchakLocalizedText::labelOrNull($value, $group)
+            ?? (string) __('suchak.labels.unknown');
+    }
+
+    /**
      * @param  array<int, true>  $paidRepIdSet
      */
     private function rowFromRepresentation(SuchakProfileRepresentation $representation, bool $canPrepareCustomers, array $paidRepIdSet): array
@@ -201,8 +223,8 @@ class SuchakCustomerListService
             'age' => $this->exactAge($profile?->date_of_birth),
             'gender' => $this->genderLabel($profile),
             'address' => $profile?->residenceLocationDisplayLine() ?: '—',
-            'status_label' => ucfirst(str_replace('_', ' ', (string) $representation->representation_status)),
-            'consent_label' => ucfirst(str_replace('_', ' ', (string) $representation->consent_status)),
+            'status_label' => $this->statusLabel($representation->representation_status, 'representation'),
+            'consent_label' => $this->statusLabel($representation->consent_status, 'consent'),
             'consent_status' => (string) $representation->consent_status,
             'consent_action_url' => $canRenewConsent
                 ? route('suchak.representations.consents.renew', $representation)
@@ -214,7 +236,7 @@ class SuchakCustomerListService
             'has_pending_consent' => $pendingConsent !== null,
             'pending_consent_id' => $pendingConsent?->id,
             'has_active_consent' => $acceptedConsent !== null && $representation->hasValidConsent(),
-            'lifecycle_label' => $profile ? ucfirst((string) ($profile->lifecycle_state ?? 'unknown')) : null,
+            'lifecycle_label' => $profile ? $this->statusLabel($profile->lifecycle_state, 'lifecycle') : null,
             // Suchak-only Track A earnings marker (Paid = customer paid the
             // Suchak; unrelated to platform billing / the core payment model).
             'paid' => isset($paidRepIdSet[(int) $representation->id]),
@@ -281,6 +303,15 @@ class SuchakCustomerListService
      */
     private function onboardingCompletion(?MatrimonyProfile $profile): array
     {
+        // No profile = nothing to score. This stays a non-null 0 rather than
+        // becoming null (considered and rejected 2026-07-26): `completion_percent`
+        // is a shipped, non-nullable contract key, and the installed app reads it
+        // as `(json['completion_percent'] as num?)?.toInt() ?? 100` — sending null
+        // would make every already-installed app render a scanned biodata as
+        // "100% पूर्ण", turning a wrong number into a much more convincing wrong
+        // number. The honest signal for "this is not a customer yet" already
+        // exists in the same row (`kind: 'intake_pending'` / `profile_id: null`),
+        // so the client branches on that and no second signal is invented.
         if ($profile === null) {
             return ['percent' => 0, 'incomplete' => []];
         }
@@ -337,7 +368,7 @@ class SuchakCustomerListService
             'age' => $this->exactAge($core['date_of_birth'] ?? null),
             'gender' => $genderLabel,
             'address' => $addressLine !== '' ? $addressLine : '—',
-            'status_label' => ucwords(str_replace('_', ' ', (string) $link->source_status)),
+            'status_label' => $this->statusLabel($link->source_status, 'intake_source'),
             'consent_label' => null,
             'consent_status' => null,
             'consent_action_url' => null,
@@ -347,7 +378,7 @@ class SuchakCustomerListService
             'default_consent_giver_name' => null,
             'has_pending_consent' => false,
             'has_active_consent' => false,
-            'lifecycle_label' => $intake ? ucwords(str_replace('_', ' ', (string) $intake->parse_status)) : null,
+            'lifecycle_label' => $intake ? $this->statusLabel($intake->parse_status, 'intake_parse') : null,
             'view_url' => null,
             'edit_url' => null,
             'manage_url' => null,

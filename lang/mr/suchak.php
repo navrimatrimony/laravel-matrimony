@@ -396,6 +396,76 @@ return [
             'whatsapp_deep_link' => 'WhatsApp deep link',
             'yes' => 'Yes',
         ],
+
+        /*
+         * Group-specific status wording. SuchakLocalizedText::label() checks the
+         * group first and falls back to `common`, so the same raw token can read
+         * correctly in each domain ("pending" as a representation is not
+         * "pending" as a payment). Shown to Suchaks on the customer list.
+         */
+        'unknown' => 'स्थिती अज्ञात',
+
+        // SuchakProfileRepresentation::STATUSES
+        'representation' => [
+            'pending' => 'प्रतीक्षेत',
+            'consent_pending' => 'संमती बाकी',
+            'active' => 'सक्रिय',
+            'revoked' => 'संमती मागे घेतली',
+            'expired' => 'मुदत संपली',
+            'rejected' => 'नाकारले',
+            'suspended' => 'तात्पुरते बंद',
+            'candidate_deactivated' => 'उमेदवाराने बंद केले',
+        ],
+
+        // SuchakProfileRepresentation::CONSENT_STATUSES plus the extra
+        // SuchakConsent::STATUSES steps of the consent flow itself — one consent
+        // vocabulary shared by the customer list, the customer detail endpoint
+        // and the pending-consent list.
+        'consent' => [
+            'not_requested' => 'संमती मागितलेली नाही',
+            'requested' => 'संमती मागितली',
+            'link_opened' => 'लिंक उघडली',
+            'otp_sent' => 'OTP पाठवला',
+            'otp_verified' => 'OTP तपासला',
+            'accepted' => 'संमती मिळाली',
+            'rejected' => 'संमती नाकारली',
+            'expired' => 'संमतीची मुदत संपली',
+            'cancelled' => 'संमती विनंती रद्द',
+            'revoked' => 'संमती मागे घेतली',
+        ],
+
+        // SuchakBiodataIntakeLink::STATUS_* — a scanned biodata that is not a
+        // customer yet, so the wording says what it is AND what is left to do.
+        'intake_source' => [
+            'intake_uploaded' => 'बायोडाटा आला, प्रोफाइल बाकी',
+            'intake_parsed' => 'माहिती वाचली, तपासणी बाकी',
+            'review_pending' => 'तपासणी बाकी',
+            'linked_to_existing_profile' => 'आधीच्या प्रोफाइलला जोडले',
+            'created_new_profile' => 'नवीन प्रोफाइल तयार झाले',
+            'duplicate_pending_consent' => 'आधीच नोंद आहे, संमती बाकी',
+            'cancelled' => 'रद्द केले',
+        ],
+
+        // MatrimonyProfile::LIFECYCLE_STATES
+        'lifecycle' => [
+            'draft' => 'मसुदा',
+            'intake_uploaded' => 'बायोडाटा आला',
+            'parsed' => 'माहिती वाचली',
+            'awaiting_user_approval' => 'उमेदवाराच्या मंजुरीची वाट',
+            'approved_pending_mutation' => 'मंजूर, बदल लागू व्हायचे आहेत',
+            'conflict_pending' => 'माहितीत तफावत',
+            'active' => 'सक्रिय',
+            'suspended' => 'तात्पुरते बंद',
+            'archived' => 'संग्रहित',
+            'archived_due_to_marriage' => 'लग्न झाले, संग्रहित',
+        ],
+
+        // BiodataIntake::parse_status
+        'intake_parse' => [
+            'pending' => 'वाचन बाकी',
+            'parsed' => 'माहिती वाचली',
+            'error' => 'वाचता आले नाही',
+        ],
     ],
     'dashboard' => [
         'customer_list_title' => 'Customer list',

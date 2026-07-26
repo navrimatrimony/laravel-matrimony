@@ -7,6 +7,7 @@ use App\Models\SuchakConsent;
 use App\Models\SuchakProfileRepresentation;
 use App\Support\CandidateNameMask;
 use App\Support\ConsentContactRole;
+use App\Support\Suchak\SuchakLocalizedText;
 use Illuminate\Support\Carbon;
 
 /**
@@ -83,7 +84,8 @@ class SuchakPendingConsentListService
             'consent_status' => $consent?->consent_status,
             'consent_status_label' => $consent === null
                 ? null
-                : ucfirst(str_replace('_', ' ', (string) $consent->consent_status)),
+                : (SuchakLocalizedText::labelOrNull($consent->consent_status, 'consent')
+                    ?? (string) __('suchak.labels.unknown')),
             'consent_method' => $consent?->consent_method,
             'requested_at' => $consent?->created_at instanceof Carbon
                 ? $consent->created_at->toIso8601String()

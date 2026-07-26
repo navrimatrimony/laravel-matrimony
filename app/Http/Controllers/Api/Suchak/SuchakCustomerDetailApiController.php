@@ -10,6 +10,7 @@ use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakCollaborationService;
 use App\Modules\Suchak\Services\SuchakCustomerListService;
+use App\Support\Suchak\SuchakLocalizedText;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -106,7 +107,8 @@ class SuchakCustomerDetailApiController extends Controller
                 'mobile' => $consent->intended_mobile ?: $consent->consent_mobile_number,
                 'giver_name' => $consent->consent_given_by_name,
                 'status' => $consent->consent_status,
-                'status_label' => ucfirst(str_replace('_', ' ', (string) $consent->consent_status)),
+                'status_label' => SuchakLocalizedText::labelOrNull($consent->consent_status, 'consent')
+                    ?? (string) __('suchak.labels.unknown'),
                 'requested_at' => $consent->created_at instanceof \Illuminate\Support\Carbon
                     ? $consent->created_at->toIso8601String()
                     : null,

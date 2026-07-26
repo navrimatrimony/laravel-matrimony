@@ -396,6 +396,76 @@ return [
             'whatsapp_deep_link' => 'WhatsApp deep link',
             'yes' => 'Yes',
         ],
+
+        /*
+         * Group-specific status wording. SuchakLocalizedText::label() checks the
+         * group first and falls back to `common`, so the same raw token can read
+         * correctly in each domain ("pending" as a representation is not
+         * "pending" as a payment). Shown to Suchaks on the customer list.
+         */
+        'unknown' => 'Unknown status',
+
+        // SuchakProfileRepresentation::STATUSES
+        'representation' => [
+            'pending' => 'Waiting',
+            'consent_pending' => 'Consent pending',
+            'active' => 'Active',
+            'revoked' => 'Consent withdrawn',
+            'expired' => 'Expired',
+            'rejected' => 'Rejected',
+            'suspended' => 'Temporarily stopped',
+            'candidate_deactivated' => 'Stopped by candidate',
+        ],
+
+        // SuchakProfileRepresentation::CONSENT_STATUSES plus the extra
+        // SuchakConsent::STATUSES steps of the consent flow itself — one consent
+        // vocabulary shared by the customer list, the customer detail endpoint
+        // and the pending-consent list.
+        'consent' => [
+            'not_requested' => 'Consent not requested',
+            'requested' => 'Consent requested',
+            'link_opened' => 'Link opened',
+            'otp_sent' => 'OTP sent',
+            'otp_verified' => 'OTP verified',
+            'accepted' => 'Consent given',
+            'rejected' => 'Consent declined',
+            'expired' => 'Consent expired',
+            'cancelled' => 'Consent request cancelled',
+            'revoked' => 'Consent withdrawn',
+        ],
+
+        // SuchakBiodataIntakeLink::STATUS_* — a scanned biodata that is not a
+        // customer yet, so the wording says what it is AND what is left to do.
+        'intake_source' => [
+            'intake_uploaded' => 'Biodata received, profile pending',
+            'intake_parsed' => 'Details read, review pending',
+            'review_pending' => 'Review pending',
+            'linked_to_existing_profile' => 'Linked to existing profile',
+            'created_new_profile' => 'New profile created',
+            'duplicate_pending_consent' => 'Already on record, consent pending',
+            'cancelled' => 'Cancelled',
+        ],
+
+        // MatrimonyProfile::LIFECYCLE_STATES
+        'lifecycle' => [
+            'draft' => 'Draft',
+            'intake_uploaded' => 'Biodata received',
+            'parsed' => 'Details read',
+            'awaiting_user_approval' => 'Awaiting candidate approval',
+            'approved_pending_mutation' => 'Approved, changes pending',
+            'conflict_pending' => 'Details conflict',
+            'active' => 'Active',
+            'suspended' => 'Suspended',
+            'archived' => 'Archived',
+            'archived_due_to_marriage' => 'Archived (married)',
+        ],
+
+        // BiodataIntake::parse_status
+        'intake_parse' => [
+            'pending' => 'Reading pending',
+            'parsed' => 'Details read',
+            'error' => 'Could not read',
+        ],
     ],
     'dashboard' => [
         'customer_list_title' => 'Customer list',
