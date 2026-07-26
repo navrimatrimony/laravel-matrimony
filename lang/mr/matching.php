@@ -42,6 +42,9 @@ return array_merge(require __DIR__.'/../en/matching.php', [
     'reason_age_partial' => 'वयाची अंशतः जुळणी',
 
     'reason_same_city' => 'एकच शहर',
+    'reason_same_taluka' => 'एकच तालुका',
+    'reason_same_district' => 'एकच जिल्हा',
+    'reason_nearby_taluka' => 'जवळचा भाग — साधारण :km किमी',
     'reason_same_state' => 'एकच राज्य',
     'reason_same_country' => 'एकच देश',
 

@@ -531,7 +531,7 @@ class MatrimonyProfile extends Model
      */
     public function residenceGeoAddressIds(): array
     {
-        $empty = ['district_id' => null, 'state_id' => null, 'country_id' => null];
+        $empty = ['district_id' => null, 'state_id' => null, 'country_id' => null, 'taluka_id' => null, 'lat' => null, 'lng' => null];
         if (! $this->location_id || ! self::hasGeoTableCached()) {
             return $empty;
         }
@@ -554,10 +554,33 @@ class MatrimonyProfile extends Model
             $country = $leaf;
         }
 
+        $taluka = $h['taluka'] ?? null;
+        if ($taluka === null && $leaf->hierarchy === 'taluka') {
+            $taluka = $leaf;
+        }
+
+        // Position for distance-based ranking, taken from the most specific
+        // node that actually has one: the place itself, else its taluka, else
+        // its district. No extra query — every node here was already loaded to
+        // resolve the hierarchy. NULL is normal and simply means "cannot rank
+        // this pair by distance", never "far away".
+        $lat = null;
+        $lng = null;
+        foreach ([$leaf, $taluka, $district] as $node) {
+            if ($node !== null && $node->lat !== null && $node->lng !== null) {
+                $lat = (float) $node->lat;
+                $lng = (float) $node->lng;
+                break;
+            }
+        }
+
         return [
             'district_id' => $district !== null ? (int) $district->id : null,
             'state_id' => $state !== null ? (int) $state->id : null,
             'country_id' => $country !== null ? (int) $country->id : null,
+            'taluka_id' => $taluka !== null ? (int) $taluka->id : null,
+            'lat' => $lat,
+            'lng' => $lng,
         ];
     }
 

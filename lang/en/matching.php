@@ -41,6 +41,9 @@ return [
     'reason_age_partial' => 'Partial age alignment',
 
     'reason_same_city' => 'Same city',
+    'reason_same_taluka' => 'Same taluka',
+    'reason_same_district' => 'Same district',
+    'reason_nearby_taluka' => 'Nearby — about :km km',
     'reason_same_state' => 'Same state',
     'reason_same_country' => 'Same country',
 

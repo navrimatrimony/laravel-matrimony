@@ -36,6 +36,25 @@ class MatchingService
 
     public const WEIGHT_LOCATION = 15;
 
+    /**
+     * Distance band used only INSIDE a state, once same-taluka and
+     * same-district have already been ruled out. Chosen against Maharashtra's
+     * geography: a taluka centre sits ~30-40 km from its neighbours, so 80 km
+     * covers the ring of adjacent talukas reachable across a district border.
+     *
+     * Deliberately ONE band, not a gradient. The tiers below are integers
+     * rounded from the location weight, and the weight is admin-tunable: at a
+     * weight of 12 two bands 5 percentage points apart both round to 8, which
+     * silently collapses the ladder back into the cliff this replaced.
+     *
+     * The five tiers (1.00 / 0.90 / 0.80 / 0.72 / 0.65) stay distinct for any
+     * location weight of 11 or more; the shipped default is 15. At 10 or below
+     * `nearby` and `same state` round together and proximity stops mattering,
+     * so do not tune the location weight under 11.
+     * {@see \Tests\Feature\Matching\LocationProximityRankingTest} pins this.
+     */
+    public const NEARBY_KM = 80.0;
+
     public const WEIGHT_EDUCATION = 15;
 
     public const WEIGHT_OCCUPATION = 10;
@@ -1733,6 +1752,35 @@ class MatchingService
     /**
      * @return array{points: int, reasons: list<string>}
      */
+    /**
+     * Great-circle distance between two resolved residences, or null when
+     * either side has no stored position.
+     *
+     * @param  array<string, mixed>  $geoA
+     * @param  array<string, mixed>  $geoB
+     */
+    private function distanceKmBetween(array $geoA, array $geoB): ?float
+    {
+        $latA = $geoA['lat'] ?? null;
+        $lngA = $geoA['lng'] ?? null;
+        $latB = $geoB['lat'] ?? null;
+        $lngB = $geoB['lng'] ?? null;
+        if ($latA === null || $lngA === null || $latB === null || $lngB === null) {
+            return null;
+        }
+
+        $latA = deg2rad((float) $latA);
+        $lngA = deg2rad((float) $lngA);
+        $latB = deg2rad((float) $latB);
+        $lngB = deg2rad((float) $lngB);
+
+        $dLat = $latB - $latA;
+        $dLng = $lngB - $lngA;
+        $h = sin($dLat / 2) ** 2 + cos($latA) * cos($latB) * sin($dLng / 2) ** 2;
+
+        return 6371.0 * 2 * asin(min(1.0, sqrt($h)));
+    }
+
     private function scoreLocationPart(MatrimonyProfile $a, MatrimonyProfile $b): array
     {
         $lidA = (int) ($a->location_id ?? 0);
@@ -1743,10 +1791,43 @@ class MatchingService
 
         $geoA = $this->residenceGeoFor($a);
         $geoB = $this->residenceGeoFor($b);
+        $weight = $this->weight('location', self::WEIGHT_LOCATION);
+
+        // Between "same place" and "same state" there used to be nothing: a
+        // neighbouring village and someone 600 km away both scored the state
+        // tier. Marriage searches are strongly local, so proximity is ranked
+        // explicitly — own taluka, then own district, then by real distance
+        // between taluka centres.
+        $talA = (int) ($geoA['taluka_id'] ?? 0);
+        $talB = (int) ($geoB['taluka_id'] ?? 0);
+        if ($talA > 0 && $talA === $talB) {
+            return ['points' => (int) round($weight * 0.90), 'reasons' => [__('matching.reason_same_taluka')]];
+        }
+
+        $didA = (int) ($geoA['district_id'] ?? 0);
+        $didB = (int) ($geoB['district_id'] ?? 0);
+        if ($didA > 0 && $didA === $didB) {
+            return ['points' => (int) round($weight * 0.80), 'reasons' => [__('matching.reason_same_district')]];
+        }
+
         $sidA = (int) ($geoA['state_id'] ?? 0);
         $sidB = (int) ($geoB['state_id'] ?? 0);
         if ($sidA > 0 && $sidA === $sidB) {
-            return ['points' => (int) round($this->weight('location', self::WEIGHT_LOCATION) * 0.65), 'reasons' => [__('matching.reason_same_state')]];
+            $km = $this->distanceKmBetween($geoA, $geoB);
+
+            // Unknown distance must not be punished — it falls back to exactly
+            // the score this tier always gave.
+            if ($km === null) {
+                return ['points' => (int) round($weight * 0.65), 'reasons' => [__('matching.reason_same_state')]];
+            }
+            if ($km <= self::NEARBY_KM) {
+                return [
+                    'points' => (int) round($weight * 0.72),
+                    'reasons' => [__('matching.reason_nearby_taluka', ['km' => (string) (int) round($km)])],
+                ];
+            }
+
+            return ['points' => (int) round($weight * 0.65), 'reasons' => [__('matching.reason_same_state')]];
         }
 
         $coidA = (int) ($geoA['country_id'] ?? 0);
