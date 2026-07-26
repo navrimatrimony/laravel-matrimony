@@ -187,6 +187,8 @@ class SuchakCustomerListService
             && $representation->representation_status === SuchakProfileRepresentation::STATUS_ACTIVE
             && $representation->hasValidConsent();
 
+        $completion = $this->onboardingCompletion($profile);
+
         return [
             'row_key' => 'rep:'.$representation->id,
             'kind' => 'represented',
@@ -216,14 +218,12 @@ class SuchakCustomerListService
             // Suchak-only Track A earnings marker (Paid = customer paid the
             // Suchak; unrelated to platform billing / the core payment model).
             'paid' => isset($paidRepIdSet[(int) $representation->id]),
-            // So the app can mark a half-finished profile in the list and send the
-            // Suchak back into onboarding at the section they stopped at, rather
-            // than opening the edit hub. Same ProfileCompletionService the detail
-            // endpoint uses — completeness is not recalculated here.
-            'completion_percent' => $profile
-                ? ProfileCompletionService::calculateCompletionPercentage($profile)
-                : 0,
-            'incomplete_sections' => $profile ? $this->incompleteSections($profile) : [],
+            // Both come out of ONE evaluation of ONBOARDING_SECTIONS, so the
+            // number and the section list can never contradict each other:
+            // 100% means exactly "no incomplete sections". See
+            // onboardingCompletion().
+            'completion_percent' => $completion['percent'],
+            'incomplete_sections' => $completion['incomplete'],
             'view_url' => $profile ? route('matrimony.profile.show', $profile) : null,
             'edit_url' => route('suchak.representations.profile-form', $representation),
             'manage_url' => route('suchak.dashboard', [
@@ -236,7 +236,10 @@ class SuchakCustomerListService
     }
 
     /**
-     * The profile sections the Suchak onboarding wizard actually collects.
+     * The profile sections the Suchak onboarding wizard actually collects —
+     * the single definition of "done" for this list. Both `completion_percent`
+     * and `incomplete_sections` are derived from it (see
+     * onboardingCompletion()), so the bar and the section list always agree.
      *
      * Deliberately NOT every section: most of ProfileCompletionService::SECTIONS
      * carry weight 0 (siblings, relatives, alliance, property, horoscope,
@@ -254,13 +257,34 @@ class SuchakCustomerListService
     ];
 
     /**
-     * Onboarding sections still missing, in wizard order, so the app can send
-     * the Suchak back to the first one.
+     * The ONE completeness reading behind this list: the percentage AND the
+     * sections still missing, both derived from the same pass over
+     * ONBOARDING_SECTIONS.
      *
-     * @return list<string>
+     * Why not ProfileCompletionService::calculateCompletionPercentage() (PO
+     * reversal 2026-07-26): it scores a DIFFERENT set — five 20% buckets of
+     * basic-info / personal-family / location / about-preferences / photo. So
+     * `physical` and `education-career` decided "incomplete" while carrying
+     * zero weight (a profile missing only height read 100% and incomplete at
+     * the same time), and `location` carried 20% while never being checked
+     * (80% with nothing flagged). The Suchak saw two numbers disagreeing about
+     * one profile. That shared method is still used by the represented-profile
+     * detail endpoint, which shows the member-side section list and must keep
+     * the member-side meaning, so it is left alone rather than redefined
+     * globally — this list computes its own number from the section list it
+     * already owns, and nothing computes completeness twice.
+     *
+     * The sections come back in wizard order so the app can send the Suchak
+     * back to the first one.
+     *
+     * @return array{percent: int, incomplete: list<string>}
      */
-    private function incompleteSections(MatrimonyProfile $profile): array
+    private function onboardingCompletion(?MatrimonyProfile $profile): array
     {
+        if ($profile === null) {
+            return ['percent' => 0, 'incomplete' => []];
+        }
+
         $statuses = ProfileCompletionService::getSectionStatuses(
             $profile,
             self::ONBOARDING_SECTIONS
@@ -273,7 +297,17 @@ class SuchakCustomerListService
             }
         }
 
-        return $incomplete;
+        $total = count(self::ONBOARDING_SECTIONS);
+        $done = $total - count($incomplete);
+
+        // 100 is reserved for "nothing left", and floor() keeps a single
+        // missing section out of rounding up into it however long the section
+        // list grows. The invariant is structural, not arithmetic luck.
+        $percent = $incomplete === []
+            ? 100
+            : ($total > 0 ? (int) floor($done / $total * 100) : 0);
+
+        return ['percent' => $percent, 'incomplete' => $incomplete];
     }
 
     /**
