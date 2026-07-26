@@ -9,6 +9,8 @@ use App\Models\MatrimonyProfile;
 use App\Models\ProfileMatch;
 use App\Models\ProfileView;
 use App\Services\EducationService;
+use App\Services\Gunamilan\GunamilanPairEvaluator;
+use App\Services\Gunamilan\MangalCompatibility;
 use App\Services\MatchBoostService;
 use App\Services\ProfilePreferenceMatchService;
 use App\Support\MarriageAgePolicy;
@@ -288,6 +290,9 @@ class MatchingService
             'occupationMaster.category.workingWithType', 'occupationCustom',
             'country', 'state', 'district', 'city',
             'user',
+            // गुणमिलन: loaded ONCE for the seeker so {@see GunamilanPairEvaluator} can flatten the
+            // koota key without a query, and every candidate comparison stays query-free.
+            'horoscope',
         ]);
 
         $floor = MatchRelaxationLadder::floor();
@@ -1261,6 +1266,9 @@ class MatchingService
             'preferenceCriteria',
             'photos',
             'user',
+            // गुणमिलन inputs for the whole pool in ONE query. This is the entire query cost of the
+            // Gunamilan layer in a feed run: the per-pair comparison below it is pure array maths.
+            'horoscope',
         ]);
     }
 
@@ -1611,9 +1619,69 @@ class MatchingService
             $this->scoreMaritalStatusPart($a, $b),
             $this->scoreHeightPart($a, $b),
             $this->scoreDietPart($a, $b),
+            // Keep LAST, and keep in the same order as computeMatchBreakdown()'s $fieldPoints map —
+            // that method pairs parts to field keys positionally.
+            $this->scoreGunamilanPart($a, $b),
         ];
 
         return $this->componentsCache[$cacheKey] = $parts;
+    }
+
+    /**
+     * गुणमिलन / Gunamilan score component: `points / 36`, with the separate Mangal verdict blended
+     * in at its own low weight ({@see MangalCompatibility::WEIGHT} = 0.05).
+     *
+     *   computable, Mangal known    → weight * ( total/36 * (1 - 0.05) + mangalScore * 0.05 )
+     *   computable, Mangal unknown  → weight * ( total/36 )        ← Mangal term DROPPED and the
+     *                                                                remainder renormalised to 1.0,
+     *                                                                exactly as MangalCompatibility
+     *                                                                documents. An unknown Mangal
+     *                                                                must not shave 5% off the score.
+     *   not computable              → 0 points, NO reason, NO penalty.
+     *
+     * That last line is the rule the whole layer rests on. Only ~13% of profiles carry nakshatra +
+     * rashi; scoring the other 87% as "0 out of 36" would rank every member without a patrika below
+     * every member with a bad one. 0 here is the ABSENCE of a bonus, never a deduction — the other
+     * nine components are untouched, so a data-less pair scores exactly what it scored before this
+     * component existed (see {@see MatchingConfigService::GUNAMILAN_WEIGHT} for why the weight is
+     * additive rather than carved out of the existing 100).
+     *
+     * @return array{points: int, reasons: list<string>}
+     */
+    private function scoreGunamilanPart(MatrimonyProfile $a, MatrimonyProfile $b): array
+    {
+        if (! $this->matchingConfig->fieldEnabled('gunamilan')) {
+            return ['points' => 0, 'reasons' => []];
+        }
+
+        $verdict = GunamilanPairEvaluator::verdictFor($a, $b);
+        if (($verdict['computable'] ?? false) !== true) {
+            return ['points' => 0, 'reasons' => []];
+        }
+
+        $maxPoints = (float) ($verdict['max_points'] ?? 36.0);
+        $ratio = $maxPoints > 0.0 ? max(0.0, min(1.0, ((float) ($verdict['total_points'] ?? 0.0)) / $maxPoints)) : 0.0;
+
+        $mangal = is_array($verdict['mangal'] ?? null) ? $verdict['mangal'] : [];
+        if (($mangal['computable'] ?? false) === true && ($mangal['score'] ?? null) !== null) {
+            $mangalWeight = (float) ($mangal['weight'] ?? MangalCompatibility::WEIGHT);
+            $ratio = $ratio * (1.0 - $mangalWeight) + ((float) $mangal['score']) * $mangalWeight;
+        }
+
+        $weight = $this->weight('gunamilan', MatchingConfigService::GUNAMILAN_WEIGHT);
+        $points = (int) round($weight * $ratio);
+
+        $reasons = [];
+        // Only the POSITIVE verdict becomes a "why you match" line. A sub-18 result is reported as a
+        // review note on the Suchak payload instead — it does not belong in a reasons-to-match list.
+        if (($verdict['is_compatible'] ?? null) === true) {
+            $reasons[] = __('matching.reason_gunamilan_compatible', [
+                'points' => GunamilanPairEvaluator::formatPoints((float) ($verdict['total_points'] ?? 0.0)),
+                'max' => GunamilanPairEvaluator::formatPoints($maxPoints),
+            ]);
+        }
+
+        return ['points' => $points, 'reasons' => $reasons];
     }
 
     /**
@@ -1997,6 +2065,9 @@ class MatchingService
             'marital_status' => 0,
             'height' => 0,
             'diet' => 0,
+            // Must stay LAST — the loop below pairs $parts to these keys positionally, in the order
+            // {@see self::scoreParts()} builds them.
+            'gunamilan' => 0,
         ];
         $keys = array_keys($fieldPoints);
         foreach ($parts as $p) {

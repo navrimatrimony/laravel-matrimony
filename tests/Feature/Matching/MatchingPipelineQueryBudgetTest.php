@@ -8,6 +8,7 @@ use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
 use App\Models\Religion;
 use App\Models\User;
+use App\Services\Gunamilan\GunamilanPairEvaluator;
 use App\Services\Matching\CandidatePoolStrategy;
 use App\Services\Matching\MatchingService;
 use App\Services\Matching\MatchRelaxationLadder;
@@ -90,7 +91,7 @@ class MatchingPipelineQueryBudgetTest extends TestCase
         $queries = $this->captureQueries(static fn () => $service->findMatches($seeker, 12));
 
         $this->assertSame(
-            MatchRelaxationLadder::TIER_RELAXED_CASTE,
+            MatchRelaxationLadder::maxTier(),
             $service->lastRelaxationSummary()['tier'],
             'Fixture must force the ladder to the top tier, otherwise this budget proves nothing.'
         );
@@ -119,7 +120,46 @@ class MatchingPipelineQueryBudgetTest extends TestCase
             .'candidate. Got '.$bulkLoads.'.'
         );
 
-        // Assertion 3 — a backstop, deliberately loose. The two assertions above are the real contract;
+        // Assertion 3 — गुणमिलन's whole query cost for a run is the pool eager-load, and nothing else.
+        //
+        // The engine has two entry points and only one of them is safe here: calculate() re-flattens
+        // both profiles on every call, while kootaKeyFor() + compare() flattens each profile ONCE and
+        // then compares from keys with pure array maths. So the layer is allowed exactly one BATCHED
+        // read of the horoscope rows per candidate-pool shape; a regression to the per-pair path shows
+        // up as a per-candidate `where profile_id = ?` instead, which this shape cannot absorb.
+        //
+        // Deliberately scoped to the batched shape: the completion/quality layer has always issued its
+        // own single-row `profile_horoscope_data` read per candidate (ProfileCompletionService), and
+        // that predates this layer — counting it here would measure someone else's N+1.
+        // Honest maximum: one per candidate-pool SQL shape (2 — caste-locked / caste-open) plus one
+        // for the seeker's own row. Not one per tier, and never one per candidate.
+        $bulkHoroscopeLoads = $this->countBulkHoroscopeLoads($queries);
+        $this->assertLessThanOrEqual(
+            3,
+            $bulkHoroscopeLoads,
+            'Gunamilan must read profile_horoscope_data once per candidate-pool shape (plus once for '
+            .'the seeker), never per tier and never per candidate. Got '.$bulkHoroscopeLoads
+            .' batched loads across '.count(MatchRelaxationLadder::tiers()).' tiers.'
+        );
+
+        // ...and the comparison itself, over every pair in the pool, must issue nothing at all.
+        $seekerFresh = $seeker->fresh();
+        $pool = MatrimonyProfile::query()->whereKeyNot($seekerFresh->getKey())->get();
+        $this->assertCount(self::POOL_SIZE, $pool);
+
+        $comparisonQueries = $this->captureQueries(static function () use ($seekerFresh, $pool): void {
+            foreach ($pool as $candidate) {
+                GunamilanPairEvaluator::verdictFor($seekerFresh, $candidate);
+            }
+        });
+        $this->assertSame(
+            0,
+            count($comparisonQueries),
+            'A warm Gunamilan pair comparison must be pure array maths: '.self::POOL_SIZE
+            .' comparisons issued '.count($comparisonQueries).' queries.'
+        );
+
+        // Assertion 4 — a backstop, deliberately loose. The assertions above are the real contract;
         // this only catches a broad regression that does not happen to touch either query shape.
         // Measured at the time of writing: ~152 queries per candidate on this fixture.
         $perCandidate = count($queries) / self::POOL_SIZE;
@@ -128,6 +168,39 @@ class MatchingPipelineQueryBudgetTest extends TestCase
             $perCandidate,
             'Query budget blown for a '.self::POOL_SIZE.'-candidate pool: '
             .number_format($perCandidate, 1).' queries per candidate ('.count($queries).' total).'
+        );
+    }
+
+    /**
+     * गुणमिलन adds no per-candidate query cost to the Suchak fit pass either.
+     *
+     * The Suchak layer asks {@see \App\Services\Matching\MatchingService::computeMatchBreakdown()}
+     * once per surviving candidate, and that now scores a Gunamilan component. The koota keys are
+     * memoised per profile for the run, so a second pass over the same candidates must read the
+     * horoscope table zero more times.
+     */
+    public function test_gunamilan_adds_no_queries_to_the_suchak_fit_pass(): void
+    {
+        config(['matching.relaxation.floor' => 500]);
+
+        $seeker = $this->buildPool();
+        $service = app(MatchingService::class);
+
+        $rows = $service->findMatchesForPool($seeker, CandidatePoolStrategy::members(), MatchingService::TAB_PERFECT, 12);
+        $this->assertGreaterThan(0, $rows->count());
+
+        $candidates = $rows->map(static fn (array $r): MatrimonyProfile => $r['profile'])->all();
+
+        $queries = $this->captureQueries(static function () use ($service, $seeker, $candidates): void {
+            foreach ($candidates as $candidate) {
+                $service->computeMatchBreakdown($seeker, $candidate, false);
+            }
+        });
+
+        $this->assertSame(
+            0,
+            $this->countHoroscopeReads($queries),
+            'The Gunamilan koota keys are memoised for the run; a second pass must not re-read them.'
         );
     }
 
@@ -385,6 +458,46 @@ class MatchingPipelineQueryBudgetTest extends TestCase
                 continue;
             }
             if (str_contains($normalised, 'avg(') && str_contains($normalised, 'lat')) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * Every read of the गुणमिलन input table, however it is phrased.
+     *
+     * @param  list<string>  $queries
+     */
+    private function countHoroscopeReads(array $queries): int
+    {
+        $count = 0;
+
+        foreach ($queries as $sql) {
+            $normalised = strtolower(preg_replace('/\s+/', ' ', $sql));
+            if (str_contains($normalised, 'from "profile_horoscope_data"')) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * Only the BATCHED horoscope read — the `horoscope` eager load that hydrates the whole candidate
+     * pool at once. That is the entire query cost the Gunamilan layer is allowed to add to a run.
+     *
+     * @param  list<string>  $queries
+     */
+    private function countBulkHoroscopeLoads(array $queries): int
+    {
+        $count = 0;
+
+        foreach ($queries as $sql) {
+            $normalised = strtolower(preg_replace('/\s+/', ' ', $sql));
+            if (str_contains($normalised, 'from "profile_horoscope_data"')
+                && str_contains($normalised, ' in (')) {
                 $count++;
             }
         }

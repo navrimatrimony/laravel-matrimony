@@ -29,6 +29,7 @@ return [
     'group_location' => 'Location',
     'group_education_career' => 'Education & career',
     'group_lifestyle' => 'Lifestyle',
+    'group_horoscope' => 'Gunamilan',
     'discussion_title' => 'Worth a closer look',
     'strict_open' => 'Open',
     'strict_preferred' => 'Preferred',
@@ -47,6 +48,23 @@ return [
     'field_profession' => 'Profession',
     'field_income' => 'Annual income',
     'field_diet' => 'Diet',
+    'field_gunamilan' => 'Gunamilan (36 guna)',
+
+    // ------------------------------------------------------------------
+    // गुणमिलन / Gunamilan. Three verdicts, and the wording must keep them THREE:
+    // matched, not matched, and "no patrika details on file". Only ~13% of profiles carry
+    // nakshatra + rashi, so a matchmaker who reads missing data as a rejection would wrongly
+    // discard most of the book. Digits are always Latin (26/36, 18) — frozen workspace rule.
+    // ------------------------------------------------------------------
+    'gunamilan_not_required' => 'They did not ask for a Gunamilan check.',
+    'gunamilan_not_compared' => 'Not compared',
+    'gunamilan_required_min' => 'Gunamilan :min of :max or more',
+    'gunamilan_points' => ':points of :max guna',
+    'gunamilan_data_missing' => 'Patrika details not available',
+    'reason_gunamilan_not_required' => 'They did not ask for Gunamilan, so it does not affect this match.',
+    'reason_gunamilan_matched' => 'Gunamilan :points/:max — matches their requirement.',
+    'reason_gunamilan_not_matched' => 'Gunamilan :points/:max — below the :min they asked for.',
+    'reason_gunamilan_unknown' => 'They asked for Gunamilan, but the patrika details (nakshatra / rashi) are not on file for one or both sides, so it could not be checked. This is missing information, not a mismatch.',
     'preferred_status' => 'Preferred status',
     'reason_missing_dob' => 'Add your date of birth to compare age.',
     'reason_no_age_range' => 'They did not set an age range.',

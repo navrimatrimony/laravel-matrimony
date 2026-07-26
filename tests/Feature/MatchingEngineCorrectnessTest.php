@@ -593,7 +593,8 @@ class MatchingEngineCorrectnessTest extends TestCase
         $rows = $service->findMatches($seeker->fresh(), 50);
         $summary = $service->lastRelaxationSummary();
 
-        $this->assertSame(MatchRelaxationLadder::TIER_RELAXED_CASTE, $summary['tier'], 'The ladder must climb to the caste tier when the floor is unreachable below it.');
+        $this->assertSame(MatchRelaxationLadder::maxTier(), $summary['tier'], 'The ladder must climb to the top tier when the floor is unreachable below it.');
+        $this->assertContains('gunamilan', $summary['relaxed_fields'], 'Gunamilan is the last rung (tier 4).');
         $this->assertContains('caste', $summary['relaxed_fields']);
         $this->assertContains('income', $summary['relaxed_fields'], 'Tiers are cumulative.');
         $this->assertContains('height', $summary['relaxed_fields']);
@@ -633,7 +634,7 @@ class MatchingEngineCorrectnessTest extends TestCase
         $service = app(MatchingService::class);
         $names = $service->findMatches($seeker->fresh(), 50)->map(fn (array $r) => (string) $r['profile']->full_name)->all();
 
-        $this->assertSame(MatchRelaxationLadder::TIER_RELAXED_CASTE, $service->lastRelaxationSummary()['tier']);
+        $this->assertSame(MatchRelaxationLadder::maxTier(), $service->lastRelaxationSummary()['tier']);
         $this->assertNotContains('Cross Religion', $names, 'Religion stays locked at every tier.');
     }
 
@@ -649,7 +650,7 @@ class MatchingEngineCorrectnessTest extends TestCase
         $names = $service->findMatches($seeker->fresh(), 50)->map(fn (array $r) => (string) $r['profile']->full_name)->all();
 
         // Floor unreachable, so the ladder ran to the top — and still refused the under-age row.
-        $this->assertSame(MatchRelaxationLadder::TIER_RELAXED_CASTE, $service->lastRelaxationSummary()['tier']);
+        $this->assertSame(MatchRelaxationLadder::maxTier(), $service->lastRelaxationSummary()['tier']);
         $this->assertNotContains('Under Age', $names);
         $this->assertContains('Adult', $names);
     }

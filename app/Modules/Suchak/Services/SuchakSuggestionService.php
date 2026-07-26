@@ -49,7 +49,7 @@ class SuchakSuggestionService
      * @return Collection<int, array<string, mixed>>  Each row adds: `candidate_profile_id`, `source`,
      *         `acting_actor`, `representation_id`, `target_suchak_label`, `match_score`,
      *         `match_base_score`, `match_field_points`, `reasons`, `warnings`, `fit_label`,
-     *         `fit_summary`, `reason`.
+     *         `fit_summary`, `reason`, `gunamilan`.
      */
     public function suggestionsForRepresentation(
         SuchakAccount $account,
@@ -125,6 +125,10 @@ class SuchakSuggestionService
                 $summary['match_score'] = $fit['match_score'];
                 $summary['match_base_score'] = $fit['match_base_score'];
                 $summary['match_field_points'] = $fit['match_field_points'];
+                // गुणमिलन: total/36, the eight kootas, Nadi + Bhakoot dosha and the separate Mangal
+                // verdict, so the app can show the whole table. ADDITIVE — a new key only; both
+                // Flutter apps' existing keys are untouched.
+                $summary['gunamilan'] = $fit['gunamilan'];
 
                 return $summary;
             })

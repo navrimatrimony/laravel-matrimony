@@ -35,6 +35,13 @@ final class MatchRelaxationLadder
     public const TIER_RELAXED_CASTE = 3;
 
     /**
+     * गुणमिलन relaxes last — a stated 36-guna requirement is stricter than caste for the families
+     * that set it. Only a COMPUTED sub-18 score is tolerated here; a pair with missing patrika data
+     * is `unknown`, never `not_matched`, so it was never excluded at any tier to begin with.
+     */
+    public const TIER_RELAXED_GUNAMILAN = 4;
+
+    /**
      * Minimum surviving candidates before the ladder stops widening.
      */
     public static function floor(): int
@@ -103,6 +110,7 @@ final class MatchRelaxationLadder
                 self::TIER_SOFT_INCOME_HEIGHT => ['income', 'height'],
                 self::TIER_WIDER_GEOGRAPHY => ['location'],
                 self::TIER_RELAXED_CASTE => ['caste'],
+                self::TIER_RELAXED_GUNAMILAN => ['gunamilan'],
             ];
         }
 

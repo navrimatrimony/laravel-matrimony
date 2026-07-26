@@ -4,8 +4,11 @@ namespace App\Modules\Suchak\Services;
 
 use App\Models\MatrimonyProfile;
 use App\Models\SuchakProfileRepresentation;
+use App\Services\Gunamilan\GunamilanPairEvaluator;
+use App\Services\Gunamilan\MangalCompatibility;
 use App\Services\Matching\MatchingConfigService;
 use App\Services\Matching\MatchingService;
+use App\Services\ProfilePreferenceMatchService;
 use Illuminate\Support\Collection;
 
 /**
@@ -35,9 +38,13 @@ class SuchakMatchFitService
      *     reason: string,
      *     match_score: int,
      *     match_base_score: int,
-     *     match_field_points: array<string, int>
+     *     match_field_points: array<string, int>,
+     *     gunamilan: array<string, mixed>
      * }|null  Null when the pair is ineligible (same gender, self, hard preference conflict) or scores
      *         below the configured surfacing floor.
+     *
+     * ADDITIVE ONLY — two Flutter apps consume this shape. `gunamilan` and the new `gunamilan` entry
+     * inside `match_field_points` are new keys; nothing existing was renamed, retyped or removed.
      */
     public function fit(MatrimonyProfile $seeker, MatrimonyProfile $candidate): ?array
     {
@@ -60,8 +67,19 @@ class SuchakMatchFitService
         /** @var array<string, int> $fieldPoints */
         $fieldPoints = $breakdown['field_points'] ?? [];
 
+        $gunamilan = $this->gunamilanPayload($seeker, $candidate);
+
         $reasons = $this->reasonsFrom($breakdown);
         $warnings = $this->warningsFrom($fieldPoints);
+        // The गुणमिलन note is worded by verdict, never derived from "low points" — a Suchak must
+        // never read missing patrika data as a rejection, which is exactly what the generic
+        // weak-signal rule would have said (see warningsFrom()).
+        $gunamilanWarning = $this->gunamilanWarning($gunamilan);
+        if ($gunamilanWarning !== null) {
+            $warnings[] = $gunamilanWarning;
+            $warnings = array_values(array_unique($warnings));
+        }
+
         $fitLabel = $this->fitLabel($score);
         $fitSummary = $this->fitSummary($fitLabel, $score, count($reasons), count($warnings));
 
@@ -74,7 +92,105 @@ class SuchakMatchFitService
             'match_score' => $score,
             'match_base_score' => (int) ($breakdown['before_boost'] ?? $score),
             'match_field_points' => $fieldPoints,
+            'gunamilan' => $gunamilan,
         ];
+    }
+
+    /**
+     * The full गुणमिलन breakdown for one pair — everything a family needs so they do not have to
+     * take the patrika to a pandit: the total out of 36, all eight kootas with their own points and
+     * note, the Nadi and Bhakoot dosha flags, and the separate Mangal verdict.
+     *
+     * Three verdicts, and they are deliberately three, not two:
+     *  - `compatible`     — computed, 18 or more of 36 (inclusive).
+     *  - `not_compatible` — computed, under 18.
+     *  - `unknown`        — NOT computed. One or both sides have no patrika data on file. This is the
+     *                       normal state for ~87% of profiles and must never be shown, worded or
+     *                       counted as a rejection.
+     *
+     * `total_points` is only meaningful when `computable` is true; when it is false the number is 0.0
+     * as an artefact and `is_compatible` is null. Consumers branch on `verdict` / `computable`.
+     *
+     * @return array<string, mixed>
+     */
+    private function gunamilanPayload(MatrimonyProfile $seeker, MatrimonyProfile $candidate): array
+    {
+        $verdict = GunamilanPairEvaluator::verdictFor($seeker, $candidate);
+
+        $computable = ($verdict['computable'] ?? false) === true;
+        $isCompatible = $verdict['is_compatible'] ?? null;
+
+        $state = match (true) {
+            ! $computable => 'unknown',
+            $isCompatible === true => 'compatible',
+            default => 'not_compatible',
+        };
+
+        $totalPoints = (float) ($verdict['total_points'] ?? 0.0);
+        $maxPoints = (float) ($verdict['max_points'] ?? 36.0);
+        // Latin digits only (frozen workspace rule): "26/36", "18" — never Devanagari numerals and
+        // never a locale-aware number formatter.
+        $pointsLabel = GunamilanPairEvaluator::formatPoints($totalPoints).'/'.GunamilanPairEvaluator::formatPoints($maxPoints);
+
+        $mangal = is_array($verdict['mangal'] ?? null) ? $verdict['mangal'] : [];
+        $mangalState = match ($mangal['status'] ?? MangalCompatibility::STATUS_NOT_COMPUTABLE) {
+            MangalCompatibility::STATUS_COMPATIBLE => 'compatible',
+            MangalCompatibility::STATUS_NOT_COMPATIBLE => 'not_compatible',
+            default => 'unknown',
+        };
+
+        return [
+            'label' => __('matching.gunamilan_label'),
+            'required_by_seeker' => $this->gunamilanRequiredBy($seeker),
+            'state' => $state,
+            'computable' => $computable,
+            'is_compatible' => $isCompatible,
+            'verdict_label' => __('matching.gunamilan_verdict_'.$state),
+            'total_points' => $totalPoints,
+            'max_points' => $maxPoints,
+            'threshold' => (float) ($verdict['threshold'] ?? 18.0),
+            'points_label' => $computable ? $pointsLabel : null,
+            'summary' => $computable
+                ? __('matching.gunamilan_summary', ['points' => $pointsLabel, 'verdict' => __('matching.gunamilan_verdict_'.$state)])
+                : __('matching.gunamilan_verdict_unknown'),
+            // All eight kootas, each with its own points / max / bride value / groom value / note, so
+            // the app can render the whole table rather than a single number.
+            'sections' => $verdict['sections'] ?? [],
+            'nadi_dosha' => $verdict['nadi_dosha'] ?? null,
+            'bhakoot_dosha' => $verdict['bhakoot_dosha'] ?? null,
+            'mangal' => array_merge($mangal, [
+                'state' => $mangalState,
+                'verdict_label' => __('matching.gunamilan_mangal_verdict_'.$mangalState),
+            ]),
+            'missing_fields' => $verdict['missing_fields'] ?? [],
+        ];
+    }
+
+    /**
+     * Did this seeker actually ask for गुणमिलन? Read straight off the preference row that
+     * {@see ProfilePreferenceMatchService} filters on, so the payload and the filter can never drift.
+     */
+    private function gunamilanRequiredBy(MatrimonyProfile $seeker): bool
+    {
+        $seeker->loadMissing('preferenceCriteria');
+
+        return (bool) ($seeker->preferenceCriteria?->gunamilan_required ?? false);
+    }
+
+    /**
+     * @param  array<string, mixed>  $gunamilan
+     */
+    private function gunamilanWarning(array $gunamilan): ?string
+    {
+        // `unknown` is NOT a warning. Missing patrika data is the normal state, not a defect, and a
+        // review note here would be read as "these two do not match".
+        if (($gunamilan['state'] ?? null) !== 'not_compatible') {
+            return null;
+        }
+
+        return __('matching.gunamilan_review_note', [
+            'points' => (string) ($gunamilan['points_label'] ?? ''),
+        ]);
     }
 
     /**
@@ -156,6 +272,13 @@ class SuchakMatchFitService
         $warnings = [];
 
         foreach ($fieldPoints as $fieldKey => $points) {
+            // गुणमिलन is exempt from the generic "earned less than :threshold% of its weight" rule.
+            // A pair with no patrika data scores 0 by design and would trip it on ~87% of profiles,
+            // telling the Suchak that missing data "needs review" — i.e. reading absent data as a
+            // failed check. Its note is worded from the VERDICT instead, in gunamilanWarning().
+            if ((string) $fieldKey === ProfilePreferenceMatchService::ROW_GUNAMILAN) {
+                continue;
+            }
             if (! $this->matchingConfig->fieldEnabled((string) $fieldKey)) {
                 continue;
             }

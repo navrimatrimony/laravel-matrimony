@@ -38,6 +38,16 @@ return [
             1 => ['income', 'height'],
             2 => ['location'],
             3 => ['caste'],
+            /**
+             * गुणमिलन relaxes LAST — after caste. For a family that asked for it, a failed 36-guna
+             * check is a stricter condition than caste, so it is the final thing the engine is
+             * willing to ease and only ever when nothing below the floor was found.
+             *
+             * This tier can only ever tolerate a COMPUTED sub-18 score. A pair where either side has
+             * no patrika data is graded `unknown`, never `not_matched`, so it was never excluded at
+             * any tier and this tier changes nothing for it.
+             */
+            4 => ['gunamilan'],
         ],
 
         /** Points removed from the aggregate preference score per tolerated soft mismatch. */

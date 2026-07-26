@@ -17,6 +17,31 @@ class MatchingConfigService
 {
     public const CACHE_KEY = 'matching_engine_config_snapshot_v1';
 
+    /**
+     * गुणमिलन weight — deliberately ADDITIVE on top of the nine weights that already sum to 100,
+     * not carved out of them.
+     *
+     * {@see MatchingService::calculateScore()} caps the total at 100, so the nine original fields
+     * plus this one sum to 108 and the cap can bind. That is the accepted trade, and the alternative
+     * was rejected on the owner's own rule:
+     *
+     *  - REBALANCING (shaving 8 points off the nine to keep the sum at 100) would cap every pair with
+     *    no patrika data at 92 instead of 100. Only ~13% of profiles carry nakshatra + rashi, so 87%
+     *    of the corpus would be silently marked down for a fact they were never asked to provide —
+     *    exactly the "no data must never push anyone down" rule this layer exists to honour.
+     *  - ADDITIVE keeps a data-less pair's score byte-identical to what it scores today (the
+     *    गुणमिलन part contributes 0 with no penalty and nothing else shrank), while a pair with a
+     *    real, computed 36-guna result can earn up to 8 more. The cap only binds for pairs already
+     *    scoring 92+, i.e. rows already at the top of the feed where the ordering barely moves.
+     *
+     * 8 is the same tier as `height`, below `community` (16) and `age` (17): a real signal that never
+     * outranks who the person actually is.
+     *
+     * Consequence to know about: the admin field-weight gauge now reads 108 against its "/ 100"
+     * legend. That gauge is advisory only — nothing validates or normalises against it.
+     */
+    public const GUNAMILAN_WEIGHT = 8;
+
     private static bool $defaultsEnsured = false;
 
     /**
@@ -73,6 +98,7 @@ class MatchingConfigService
             ['field_key' => 'marital_status', 'label' => 'Marital status fit', 'type' => 'similarity', 'category' => 'core', 'is_active' => true, 'weight' => 9, 'max_weight' => 25],
             ['field_key' => 'height', 'label' => 'Height fit', 'type' => 'similarity', 'category' => 'core', 'is_active' => true, 'weight' => 8, 'max_weight' => 25],
             ['field_key' => 'diet', 'label' => 'Diet fit', 'type' => 'similarity', 'category' => 'core', 'is_active' => true, 'weight' => 6, 'max_weight' => 25],
+            ['field_key' => 'gunamilan', 'label' => 'Gunamilan (36 guna + Mangal)', 'type' => 'similarity', 'category' => 'secondary', 'is_active' => true, 'weight' => self::GUNAMILAN_WEIGHT, 'max_weight' => 25],
         ];
         foreach ($defaults as $row) {
             MatchingField::query()->create($row);
@@ -374,6 +400,9 @@ class MatchingConfigService
             'marital_status' => ['label' => 'Marital status', 'type' => 'similarity', 'category' => 'core', 'is_active' => true, 'weight' => 9, 'max_weight' => 25],
             'height' => ['label' => 'Height', 'type' => 'similarity', 'category' => 'core', 'is_active' => true, 'weight' => 8, 'max_weight' => 25],
             'diet' => ['label' => 'Diet', 'type' => 'similarity', 'category' => 'core', 'is_active' => true, 'weight' => 6, 'max_weight' => 25],
+            // Also the live fallback for an EXISTING install: `ensureDefaults()` only seeds when the
+            // table is empty, so a database that predates this row resolves the weight from here.
+            'gunamilan' => ['label' => 'Gunamilan', 'type' => 'similarity', 'category' => 'secondary', 'is_active' => true, 'weight' => self::GUNAMILAN_WEIGHT, 'max_weight' => 25],
         ];
     }
 

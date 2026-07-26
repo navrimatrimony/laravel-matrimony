@@ -117,6 +117,7 @@
                 'location' => __('preference_match.group_location'),
                 'education_career' => __('preference_match.group_education_career'),
                 'lifestyle' => __('preference_match.group_lifestyle'),
+                'horoscope' => __('preference_match.group_horoscope'),
             ];
             $strictLabels = [
                 'open' => __('preference_match.strict_open'),

@@ -10,6 +10,8 @@ use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
 use App\Models\OccupationMaster;
 use App\Models\Religion;
+use App\Services\Gunamilan\GunamilanPairEvaluator;
+use App\Services\Gunamilan\GunamilanService;
 use App\Services\Matching\CommunityLockResolver;
 use App\Services\Matching\NearbyGeographyResolver;
 use App\Services\Profile\ProfileCanonicalResidenceService;
@@ -37,6 +39,29 @@ class ProfilePreferenceMatchService
     public const STRICT_PREFERRED = 'preferred';
 
     public const STRICT_MUST_MATCH = 'must_match';
+
+    /** The preference row id गुणमिलन emits; also the relaxation-ladder field name (config tier 4). */
+    public const ROW_GUNAMILAN = 'gunamilan';
+
+    /**
+     * Rows kept OUT of the aggregate `counts` (and therefore out of the fit badge and out of
+     * {@see \App\Services\Matching\MatchingService::scorePreferencesPart()}).
+     *
+     * गुणमिलन has its OWN weighted score component
+     * ({@see \App\Services\Matching\MatchingService::scoreGunamilanPart()}), so letting it also move
+     * the preference aggregate would weight the same fact twice. It matters more than that though:
+     * a seeker who never asked for गुणमिलन still gets the row (status `flexible`), and if that fed
+     * `counts` it would shift `resolveFitBadge()` and the `m / (m + f)` preference ratio on EVERY
+     * pair in the product — a silent global rescore paid by ~87% of profiles that have no horoscope
+     * data at all. "Not required" must change nothing.
+     *
+     * The row is still present in `rows` / `groups`, so the fatal gate
+     * ({@see \App\Services\Matching\MatchingService::evaluatePreferenceBuild()}) and the UI both see
+     * it exactly like any other row.
+     *
+     * @var list<string>
+     */
+    private const AGGREGATE_EXCLUDED_ROW_IDS = [self::ROW_GUNAMILAN];
 
     /**
      * Per-run memo for residence geography. A matching run compares up to 200 candidates in BOTH
@@ -74,6 +99,7 @@ class ProfilePreferenceMatchService
         self::$residenceGeoCache = [];
         self::$residenceDisplayCache = [];
         self::$viewerDegreeIdCache = [];
+        GunamilanPairEvaluator::flush();
         NearbyGeographyResolver::flush();
         EducationService::flushDegreeMatchCache();
         ProfileCanonicalResidenceService::flushRuntimeCaches();
@@ -103,6 +129,9 @@ class ProfilePreferenceMatchService
             'location' => [],
             'education_career' => [],
             'lifestyle' => [],
+            // गुणमिलन lives in its own group: it is the one row whose verdict a family reads
+            // separately from every "profile field vs stated preference" comparison.
+            'horoscope' => [],
         ];
 
         $groups['basic'][] = self::rowAge($viewerProfile, $criteria, $targetProfile);
@@ -120,6 +149,8 @@ class ProfilePreferenceMatchService
 
         $groups['lifestyle'][] = self::rowDiet($viewerProfile, $pref['diet_ids']);
 
+        $groups['horoscope'][] = self::rowGunamilan($viewerProfile, $criteria, $targetProfile);
+
         $groups = array_map(fn ($rows) => array_values(array_filter($rows)), $groups);
 
         $flat = [];
@@ -131,6 +162,9 @@ class ProfilePreferenceMatchService
 
         $counts = ['match' => 0, 'flexible' => 0, 'not_matched' => 0, 'unknown' => 0];
         foreach ($flat as $r) {
+            if (in_array($r['id'] ?? '', self::AGGREGATE_EXCLUDED_ROW_IDS, true)) {
+                continue;
+            }
             $s = $r['status'] ?? self::STATUS_UNKNOWN;
             if (isset($counts[$s])) {
                 $counts[$s]++;
@@ -239,7 +273,9 @@ class ProfilePreferenceMatchService
             || ($c['preferred_height_max_cm'] ?? null) !== null
             || ($c['preferred_marital_status_id'] ?? null) !== null
             || ($c['preferred_income_min'] ?? null) !== null
-            || ($c['preferred_income_max'] ?? null) !== null;
+            || ($c['preferred_income_max'] ?? null) !== null
+            // Asking for गुणमिलन IS a stated preference, even when it is the only one stated.
+            || (bool) ($c['gunamilan_required'] ?? false);
     }
 
     /**
@@ -949,6 +985,97 @@ class ProfilePreferenceMatchService
         }
 
         return self::row('diet', __('preference_match.field_diet'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_FLEXIBLE, __('preference_match.reason_diet_not_listed'));
+    }
+
+    /**
+     * गुणमिलन / Gunamilan — the 36-guna verdict, as a preference row.
+     *
+     * Truth table (owner decisions, 2026-07-26). `$criteria` is the TARGET's
+     * `profile_preference_criteria` row, i.e. the side whose preferences this build is measuring
+     * against, so `gunamilan_required` is read from there:
+     *
+     * | seeker asked? | both sides computable? | total | status        | strictness  | excludes at        |
+     * |---------------|------------------------|-------|---------------|-------------|--------------------|
+     * | no            | —                      | —     | `flexible`    | `open`      | never              |
+     * | yes           | yes                    | >= 18 | `match`       | `must_match`| never              |
+     * | yes           | yes                    | < 18  | `not_matched` | `must_match`| tiers 0-3 only     |
+     * | yes           | NO (either side)       | —     | `unknown`     | `open`      | never              |
+     *
+     * The last line is the one that matters most: only ~13% of profiles carry nakshatra + rashi, so
+     * "no patrika data" must NEVER read as a rejection. `unknown` falls out safely because
+     * {@see \App\Services\Matching\MatchingService::evaluatePreferenceBuild()} treats ONLY
+     * `not_matched` as fatal — and it is deliberately `open`, so nothing downstream can promote it.
+     *
+     * There is intentionally NO SQL pre-filter on nakshatra/rashi anywhere: filtering the candidate
+     * query on horoscope presence would delete ~87% of the pool before this row ever ran.
+     *
+     * @return array<string, mixed>
+     */
+    private static function rowGunamilan(MatrimonyProfile $viewer, ?object $criteria, ?MatrimonyProfile $target): array
+    {
+        $label = __('preference_match.field_gunamilan');
+        $required = (bool) ($criteria?->gunamilan_required ?? false);
+
+        if (! $required) {
+            return self::row(
+                self::ROW_GUNAMILAN,
+                $label,
+                __('preference_match.gunamilan_not_required'),
+                __('preference_match.gunamilan_not_compared'),
+                self::STRICT_OPEN,
+                self::STATUS_FLEXIBLE,
+                __('preference_match.reason_gunamilan_not_required'),
+            );
+        }
+
+        // Latin digits only (frozen rule) — plain string interpolation, never a locale-aware formatter.
+        $threshold = GunamilanPairEvaluator::formatPoints(GunamilanService::COMPATIBLE_THRESHOLD);
+        $max = GunamilanPairEvaluator::formatPoints(36.0);
+        $their = __('preference_match.gunamilan_required_min', ['min' => $threshold, 'max' => $max]);
+
+        $verdict = $target !== null ? GunamilanPairEvaluator::verdictFor($viewer, $target) : null;
+
+        if ($verdict === null || ($verdict['computable'] ?? false) !== true) {
+            // NOT a mismatch — the patrika details simply are not on file on one or both sides.
+            return self::row(
+                self::ROW_GUNAMILAN,
+                $label,
+                $their,
+                __('preference_match.gunamilan_data_missing'),
+                self::STRICT_OPEN,
+                self::STATUS_UNKNOWN,
+                __('preference_match.reason_gunamilan_unknown'),
+            );
+        }
+
+        $points = GunamilanPairEvaluator::formatPoints((float) ($verdict['total_points'] ?? 0.0));
+        $yours = __('preference_match.gunamilan_points', ['points' => $points, 'max' => $max]);
+
+        if (($verdict['is_compatible'] ?? null) === true) {
+            return self::row(
+                self::ROW_GUNAMILAN,
+                $label,
+                $their,
+                $yours,
+                self::STRICT_MUST_MATCH,
+                self::STATUS_MATCH,
+                __('preference_match.reason_gunamilan_matched', ['points' => $points, 'max' => $max]),
+                false,
+                true,
+            );
+        }
+
+        return self::row(
+            self::ROW_GUNAMILAN,
+            $label,
+            $their,
+            $yours,
+            self::STRICT_MUST_MATCH,
+            self::STATUS_NOT_MATCHED,
+            __('preference_match.reason_gunamilan_not_matched', ['points' => $points, 'max' => $max, 'min' => $threshold]),
+            false,
+            true,
+        );
     }
 
     /**

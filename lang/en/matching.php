@@ -70,6 +70,24 @@ return [
     'field_marital_status' => 'Marital status fit',
     'field_height' => 'Height fit',
     'field_diet' => 'Diet fit',
+    'field_gunamilan' => 'Gunamilan',
+
+    // ------------------------------------------------------------------
+    // गुणमिलन / Gunamilan. Terminology is always "Gunamilan", never "kundali" (owner decision).
+    // The three verdicts must stay three: compatible / not compatible / not available. "Not
+    // available" is the normal state for most profiles and must never be worded as a rejection.
+    // Digits are always Latin — `26/36`, `18` — frozen workspace rule.
+    // ------------------------------------------------------------------
+    'gunamilan_label' => 'Gunamilan',
+    'gunamilan_verdict_compatible' => 'Gunamilan matches',
+    'gunamilan_verdict_not_compatible' => 'Gunamilan does not match',
+    'gunamilan_verdict_unknown' => 'Patrika details not available',
+    'gunamilan_summary' => ':points · :verdict',
+    'gunamilan_review_note' => 'Gunamilan :points — below the required 18, worth discussing',
+    'gunamilan_mangal_verdict_compatible' => 'Mangal matches',
+    'gunamilan_mangal_verdict_not_compatible' => 'Mangal does not match',
+    'gunamilan_mangal_verdict_unknown' => 'Mangal status not known',
+    'reason_gunamilan_compatible' => 'Gunamilan :points/:max — compatible',
 
     // Suchak-facing fit presentation (same engine score, operator wording).
     'suchak_fit_strong' => 'Strong preliminary fit',
@@ -89,11 +107,13 @@ return [
     'relaxation_tier_1' => 'Income / height conditions eased.',
     'relaxation_tier_2' => 'Widened to nearby districts.',
     'relaxation_tier_3' => 'Caste eased (religion unchanged).',
+    'relaxation_tier_4' => 'Gunamilan eased — a computed score below 18 was allowed through.',
     'relaxation_notice' => 'To find enough options we eased this: :note',
     'relaxation_field_income' => 'Income',
     'relaxation_field_height' => 'Height',
     'relaxation_field_location' => 'Location',
     'relaxation_field_caste' => 'Caste',
+    'relaxation_field_gunamilan' => 'Gunamilan',
     'relaxation_fields_label' => 'Eased: :fields',
     'relaxation_row_strict' => 'Fits every stated condition',
     'relaxation_row_relaxed' => 'Shown after easing a condition',

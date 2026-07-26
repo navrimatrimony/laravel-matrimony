@@ -71,6 +71,22 @@ return array_merge(require __DIR__.'/../en/matching.php', [
     'field_marital_status' => 'वैवाहिक स्थिती जुळणी',
     'field_height' => 'उंचीची जुळणी',
     'field_diet' => 'आहाराची जुळणी',
+    'field_gunamilan' => 'गुणमिलन',
+
+    // गुणमिलन — शब्द नेहमी 'गुणमिलन', कधीही 'कुंडली' नाही (मालकाचा निर्णय).
+    // तीन निकाल वेगवेगळेच ठेवायचे: जुळते / जुळत नाही / पत्रिकेची माहिती उपलब्ध नाही.
+    // "माहिती उपलब्ध नाही" ही बहुतेक प्रोफाइलची सामान्य स्थिती आहे — ती नकार म्हणून लिहायची नाही.
+    // आकडे नेहमी लॅटिनच — 26/36, 18 — हा नियम गोठवलेला आहे.
+    'gunamilan_label' => 'गुणमिलन',
+    'gunamilan_verdict_compatible' => 'गुणमिलन जुळते',
+    'gunamilan_verdict_not_compatible' => 'गुणमिलन जुळत नाही',
+    'gunamilan_verdict_unknown' => 'पत्रिका माहिती उपलब्ध नाही',
+    'gunamilan_summary' => ':points · :verdict',
+    'gunamilan_review_note' => 'गुणमिलन :points — आवश्यक 18 पेक्षा कमी, चर्चा करणे योग्य',
+    'gunamilan_mangal_verdict_compatible' => 'मंगळ जुळतो',
+    'gunamilan_mangal_verdict_not_compatible' => 'मंगळ जुळत नाही',
+    'gunamilan_mangal_verdict_unknown' => 'मंगळाची स्थिती माहीत नाही',
+    'reason_gunamilan_compatible' => 'गुणमिलन :points/:max — जुळते',
 
     // Suchak-facing fit presentation (same engine score, operator wording).
     'suchak_fit_strong' => 'प्राथमिक जुळणी मजबूत',
@@ -86,11 +102,13 @@ return array_merge(require __DIR__.'/../en/matching.php', [
     'relaxation_tier_1' => 'उत्पन्न/उंचीची अट सैल केली.',
     'relaxation_tier_2' => 'जवळच्या जिल्ह्यांपर्यंत वाढवलं.',
     'relaxation_tier_3' => 'जात सैल केली (धर्म कायम).',
+    'relaxation_tier_4' => 'गुणमिलन सैल केले — मोजलेले 18 पेक्षा कमी गुण असलेली स्थळेही दाखवली.',
     'relaxation_notice' => 'पुरेशी स्थळे मिळावीत म्हणून एवढं सैल केलं: :note',
     'relaxation_field_income' => 'उत्पन्न',
     'relaxation_field_height' => 'उंची',
     'relaxation_field_location' => 'ठिकाण',
     'relaxation_field_caste' => 'जात',
+    'relaxation_field_gunamilan' => 'गुणमिलन',
     'relaxation_fields_label' => 'सैल केलेलं: :fields',
     'relaxation_row_strict' => 'सांगितलेल्या सर्व अटींत बसते',
     'relaxation_row_relaxed' => 'एक अट सैल करून दाखवलेले',
