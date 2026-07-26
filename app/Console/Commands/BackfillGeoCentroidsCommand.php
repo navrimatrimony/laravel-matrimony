@@ -16,8 +16,11 @@ use Illuminate\Console\Command;
  *   - after `locations:update-village-coordinates` → `--force`
  *   - after adding a handful of new talukas         → no flag (fills only the empty ones)
  *
- * Both modes are safe to re-run; without `--force` an already-populated coordinate is never touched,
- * so an operator's manual correction survives.
+ * Both modes are safe to re-run. Without `--force` an already-populated coordinate is never touched;
+ * WITH `--force` a row is still left alone when `addresses.geo_source` says a human set it
+ * ({@see GeoCentroidBackfillService::SOURCE_MANUAL}), because that value was never derived from the
+ * villages and re-deriving it would replace a known-correct point with the median the acceptance gate
+ * already refused.
  *
  * Scope is per state and comes from {@see GeoCentroidBackfillService::STATE_BOUNDS} — enabling another
  * state is one array entry there, no schema change and no flag change here.
@@ -61,7 +64,9 @@ class BackfillGeoCentroidsCommand extends Command
 
         $force = (bool) $this->option('force');
         if ($force) {
-            $this->warn('--force: existing taluka/district coordinates will be recomputed and overwritten.');
+            $this->warn('--force: existing taluka/district coordinates will be recomputed and overwritten, '
+                .'EXCEPT rows stamped addresses.geo_source='.GeoCentroidBackfillService::SOURCE_MANUAL
+                .' — an owner-supplied centre is not derived from the villages and is never recomputed.');
         }
 
         foreach ($states as $stateSlug) {
@@ -84,15 +89,16 @@ class BackfillGeoCentroidsCommand extends Command
     }
 
     /**
-     * @param  array{filled: int, skipped: int, without_source: int, rejected: int, rejections: array<string, int>, state: string}  $result
+     * @param  array{filled: int, skipped: int, manual: int, without_source: int, rejected: int, rejections: array<string, int>, state: string}  $result
      */
     private function report(string $hierarchy, array $result): void
     {
         $this->info(sprintf(
-            '  %-9s written %d, left as-is %d, no usable villages %d, refused %d',
+            '  %-9s written %d, left as-is %d, owner-set (never recomputed) %d, no usable villages %d, refused %d',
             $hierarchy,
             $result['filled'],
             $result['skipped'],
+            $result['manual'],
             $result['without_source'],
             $result['rejected'],
         ));

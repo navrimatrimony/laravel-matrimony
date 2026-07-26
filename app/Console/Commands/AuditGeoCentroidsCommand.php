@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Location;
 use App\Services\Location\GeoCentroidBackfillService;
+use App\Support\SchemaPresence;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -233,19 +234,35 @@ class AuditGeoCentroidsCommand extends Command
         }
 
         // ---- C. drift against whatever is already stored ------------------------------------------
+        $tracksSource = SchemaPresence::hasColumn($table, 'geo_source');
+
         $stored = DB::table("{$table} as t")
             ->join("{$table} as d", 't.parent_id', '=', 'd.id')
             ->where('t.hierarchy', 'taluka')
             ->where('d.parent_id', $state->id)
             ->whereNotNull('t.lat')
             ->whereNotNull('t.lng')
-            ->select('t.id', 't.lat', 't.lng')
+            ->select(array_merge(
+                ['t.id', 't.lat', 't.lng'],
+                $tracksSource ? ['t.geo_source'] : []
+            ))
             ->get();
 
         if ($stored->isNotEmpty()) {
             $drift = 0;
             $orphan = 0;
+            $manual = 0;
             foreach ($stored as $row) {
+                // An owner-supplied centre is deliberately NOT the village median — that median is
+                // exactly what the acceptance gate refused. Measuring it against the median and calling
+                // the difference "stale" would report a permanent false alarm and invite a --force that
+                // (correctly) refuses to change anything.
+                if ($tracksSource && ($row->geo_source ?? null) === GeoCentroidBackfillService::SOURCE_MANUAL) {
+                    $manual++;
+
+                    continue;
+                }
+
                 if (! isset($byTaluka[$row->id])) {
                     $orphan++;
 
@@ -263,6 +280,8 @@ class AuditGeoCentroidsCommand extends Command
             $this->line('');
             $this->info('STORED CENTRES');
             $this->line('  taluka rows with lat/lng   : '.$stored->count());
+            $this->line('  owner-set (geo_source='.GeoCentroidBackfillService::SOURCE_MANUAL.'): '.$manual
+                .'   (excluded from the drift check — not derived from villages, never recomputed)');
             $this->line('  >1 km from recomputed median: '.$drift.'   (stale — re-run the backfill with --force)');
             $this->line('  stored but no usable villages: '.$orphan.'   (must be NULLed, the centre has no evidence)');
         } else {

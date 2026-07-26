@@ -64,6 +64,22 @@ use Illuminate\Support\Facades\DB;
  * Verify with `php artisan locations:audit-geo-centroids --state=maharashtra`
  * ({@see AuditGeoCentroidsCommand}), which applies these same three checks read-only and exits 1 if a
  * WRITTEN centre would fail them. Recompute with `php artisan locations:backfill-geo-centroids --force`.
+ *
+ * ---------------------------------------------------------------------------------------------------
+ * OWNER-SUPPLIED CENTRES ARE NOT DERIVED, AND ARE NEVER RECOMPUTED
+ * ---------------------------------------------------------------------------------------------------
+ * A rejected taluka keeps a NULL centre until somebody who knows the ground supplies one. That value is
+ * NOT evidence from the villages — recomputing it would replace a known-correct point with the very
+ * median the gate already refused, and `--force` would additionally CLEAR it (see the rejection branch
+ * below). So a row whose {@see SOURCE_MANUAL} stamp says "a human put this here" is skipped before
+ * either branch is reached, `--force` included.
+ *
+ * The stamp lives in the EXISTING `addresses.geo_source` column, which already answers "where did this
+ * row's current coordinate come from?" for villages
+ * ({@see \App\Console\Commands\RepairVillageCoordinatesCommand}). Same question, same column, same
+ * vocabulary — no `is_manual` flag, no override table, no second source of truth (frozen no-duplicate
+ * rule). This service simply extends that column upward to taluka / district rows, stamping what it
+ * derives as {@see SOURCE_VILLAGE_MEDIAN} so every populated centre says who set it.
  */
 final class GeoCentroidBackfillService
 {
@@ -94,11 +110,20 @@ final class GeoCentroidBackfillService
     /** A centre needs at least one village behind it. */
     public const MIN_SAMPLE = 1;
 
+    /**
+     * `addresses.geo_source` value meaning "a human supplied this taluka / district centre by hand".
+     * Rows carrying it are never recomputed and never cleared by this service, `--force` included.
+     */
+    public const SOURCE_MANUAL = 'owner_manual';
+
+    /** `addresses.geo_source` value stamped on the centres this service derives from village medians. */
+    public const SOURCE_VILLAGE_MEDIAN = 'taluka_village_median';
+
     /** Rows per write batch. Keeps a few-hundred-row backfill off one giant statement. */
     private const BATCH = 250;
 
     /**
-     * @return array{filled: int, skipped: int, without_source: int, rejected: int, rejections: array<string, int>, state: string}
+     * @return array{filled: int, skipped: int, manual: int, without_source: int, rejected: int, rejections: array<string, int>, state: string}
      */
     public function backfillDistricts(bool $force = false, string $stateSlug = self::DEFAULT_STATE): array
     {
@@ -110,7 +135,7 @@ final class GeoCentroidBackfillService
      * recomputed from the villages here rather than read from the column, so the order cannot change
      * the outcome and a rejected district can never cascade into rejecting its talukas.
      *
-     * @return array{filled: int, skipped: int, without_source: int, rejected: int, rejections: array<string, int>, state: string}
+     * @return array{filled: int, skipped: int, manual: int, without_source: int, rejected: int, rejections: array<string, int>, state: string}
      */
     public function backfillTalukas(bool $force = false, string $stateSlug = self::DEFAULT_STATE): array
     {
@@ -215,12 +240,12 @@ final class GeoCentroidBackfillService
     }
 
     /**
-     * @return array{filled: int, skipped: int, without_source: int, rejected: int, rejections: array<string, int>, state: string}
+     * @return array{filled: int, skipped: int, manual: int, without_source: int, rejected: int, rejections: array<string, int>, state: string}
      */
     private function backfill(string $hierarchy, bool $force, string $stateSlug): array
     {
         $empty = [
-            'filled' => 0, 'skipped' => 0, 'without_source' => 0, 'rejected' => 0,
+            'filled' => 0, 'skipped' => 0, 'manual' => 0, 'without_source' => 0, 'rejected' => 0,
             'rejections' => [], 'state' => $stateSlug,
         ];
 
@@ -259,12 +284,21 @@ final class GeoCentroidBackfillService
 
         $filled = 0;
         $skipped = 0;
+        $manual = 0;
         $withoutSource = 0;
         $rejected = 0;
         $rejections = [];
         $pending = [];
 
         foreach ($targets as $id => $target) {
+            // FIRST, ahead of --force: an owner-supplied centre is not derived from anything here, so
+            // there is nothing to recompute and nothing this service is entitled to clear.
+            if ($target['is_manual']) {
+                $manual++;
+
+                continue;
+            }
+
             // Idempotent by default: a populated coordinate is left exactly as it is, so a re-run (or a
             // replayed migration) can never overwrite a hand-corrected position.
             if ($target['has_coordinate'] && ! $force) {
@@ -297,8 +331,13 @@ final class GeoCentroidBackfillService
 
                 // A refused centre must leave the row alone. With --force that means an existing value
                 // is CLEARED — keeping a value the current checks reject would be the worst of both.
+                // (Manual rows never reach here; they were skipped above.)
                 if ($force && $target['has_coordinate']) {
-                    DB::table($geo)->where('id', $id)->update(['lat' => null, 'lng' => null]);
+                    $cleared = ['lat' => null, 'lng' => null];
+                    if ($this->tracksSource($geo)) {
+                        $cleared['geo_source'] = null;
+                    }
+                    DB::table($geo)->where('id', $id)->update($cleared);
                 }
 
                 continue;
@@ -318,6 +357,7 @@ final class GeoCentroidBackfillService
         return [
             'filled' => $filled,
             'skipped' => $skipped,
+            'manual' => $manual,
             'without_source' => $withoutSource,
             'rejected' => $rejected,
             'rejections' => $rejections,
@@ -326,20 +366,39 @@ final class GeoCentroidBackfillService
     }
 
     /**
-     * @return array<int, array{has_coordinate: bool, district_id: int}>
+     * Whether provenance can be recorded at all. `addresses.geo_source` arrives in the
+     * 2026_07_26_190000 migration; on a database that predates it the service still runs, it just
+     * cannot distinguish a manual centre — so it degrades to the old "never overwrite without --force"
+     * behaviour rather than refusing to work.
+     */
+    private function tracksSource(string $geo): bool
+    {
+        return SchemaPresence::hasColumn($geo, 'geo_source');
+    }
+
+    /**
+     * @return array<int, array{has_coordinate: bool, is_manual: bool, district_id: int}>
      */
     private function targetRows(string $geo, string $hierarchy, int $stateId): array
     {
+        $tracksSource = $this->tracksSource($geo);
+
         if ($hierarchy === 'district') {
+            $columns = ['id', 'lat', 'lng'];
+            if ($tracksSource) {
+                $columns[] = 'geo_source';
+            }
+
             $rows = DB::table($geo)
                 ->where('parent_id', $stateId)
                 ->where('hierarchy', 'district')
-                ->get(['id', 'lat', 'lng']);
+                ->get($columns);
 
             $out = [];
             foreach ($rows as $row) {
                 $out[(int) $row->id] = [
                     'has_coordinate' => $row->lat !== null && $row->lng !== null,
+                    'is_manual' => $tracksSource && ($row->geo_source ?? null) === self::SOURCE_MANUAL,
                     'district_id' => (int) $row->id,
                 ];
             }
@@ -347,16 +406,22 @@ final class GeoCentroidBackfillService
             return $out;
         }
 
+        $columns = ['taluka.id as id', 'taluka.lat as lat', 'taluka.lng as lng', 'district.id as district_id'];
+        if ($tracksSource) {
+            $columns[] = 'taluka.geo_source as geo_source';
+        }
+
         $rows = DB::table($geo.' as taluka')
             ->join($geo.' as district', 'district.id', '=', 'taluka.parent_id')
             ->where('district.parent_id', $stateId)
             ->where('taluka.hierarchy', 'taluka')
-            ->get(['taluka.id as id', 'taluka.lat as lat', 'taluka.lng as lng', 'district.id as district_id']);
+            ->get($columns);
 
         $out = [];
         foreach ($rows as $row) {
             $out[(int) $row->id] = [
                 'has_coordinate' => $row->lat !== null && $row->lng !== null,
+                'is_manual' => $tracksSource && ($row->geo_source ?? null) === self::SOURCE_MANUAL,
                 'district_id' => (int) $row->district_id,
             ];
         }
@@ -429,15 +494,25 @@ final class GeoCentroidBackfillService
     private function flushBatch(string $geo, array $pending): int
     {
         $written = 0;
+        $tracksSource = $this->tracksSource($geo);
 
-        DB::transaction(function () use ($geo, $pending, &$written): void {
+        DB::transaction(function () use ($geo, $pending, $tracksSource, &$written): void {
             foreach ($pending as $id => $centre) {
-                $written += DB::table($geo)->where('id', $id)->update([
+                $values = [
                     // `lat`/`lng` are decimal(10,7); rounding here rather than letting the driver do it
                     // keeps the written value and the checked value the same number.
                     'lat' => number_format($centre['lat'], 7, '.', ''),
                     'lng' => number_format($centre['lng'], 7, '.', ''),
-                ]);
+                ];
+
+                // Stamp what produced this pair, so a later reader (and this service's own next run)
+                // can tell a derived centre from one a human set. Never overwrites SOURCE_MANUAL —
+                // those rows never make it into $pending.
+                if ($tracksSource) {
+                    $values['geo_source'] = self::SOURCE_VILLAGE_MEDIAN;
+                }
+
+                $written += DB::table($geo)->where('id', $id)->update($values);
             }
         });
 
