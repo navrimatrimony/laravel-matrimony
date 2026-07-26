@@ -4502,6 +4502,7 @@ test('MobileProfile comparison shows gunamilan when available points are above t
         {
             return [
                 'available' => true,
+                'computable' => true,
                 'total_points' => 24.0,
                 'max_points' => 36.0,
             ];
@@ -4520,15 +4521,67 @@ test('MobileProfile comparison shows gunamilan when available points are above t
     expect($row['is_counted'])->toBeTrue();
 });
 
-test('MobileProfile comparison hides gunamilan when unavailable or below threshold', function () {
+// 18 of 36 is compatible, INCLUSIVE (owner decision). This case used to be
+// hidden because the presenter tested `<= 18.0`, which silently moved the
+// threshold to 19+.
+test('MobileProfile comparison shows gunamilan at exactly the 18 point threshold', function () {
     $this->app->instance(GunamilanService::class, new class
     {
         public function calculate(): array
         {
             return [
                 'available' => true,
+                'computable' => true,
                 'total_points' => 18.0,
                 'max_points' => 36.0,
+            ];
+        }
+    });
+    [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    $row = mobileApiComparisonRow($response->json('display.comparison'), 'gunamilan');
+    expect($row)->toBeArray();
+    expect($row['viewer_value'])->toBe('18/36');
+    expect($row['status'])->toBe('match');
+});
+
+test('MobileProfile comparison hides gunamilan when below threshold', function () {
+    $this->app->instance(GunamilanService::class, new class
+    {
+        public function calculate(): array
+        {
+            return [
+                'available' => true,
+                'computable' => true,
+                'total_points' => 17.5,
+                'max_points' => 36.0,
+            ];
+        }
+    });
+    [$viewerUser, , , $targetProfile] = mobileApiProfileActionPair();
+    Sanctum::actingAs($viewerUser);
+
+    $response = $this->getJson('/api/v1/matrimony-profiles/'.$targetProfile->id);
+
+    expect(mobileApiComparisonRow($response->json('display.comparison'), 'gunamilan'))->toBeNull();
+});
+
+// A horoscope row full of NULLs scores 0/36 and must read as UNKNOWN, not as a
+// failing score: the comparison row stays hidden rather than shown as a match.
+test('MobileProfile comparison hides gunamilan when the result is not computable', function () {
+    $this->app->instance(GunamilanService::class, new class
+    {
+        public function calculate(): array
+        {
+            return [
+                'available' => true,
+                'computable' => false,
+                'total_points' => 0.0,
+                'max_points' => 36.0,
+                'is_compatible' => null,
             ];
         }
     });

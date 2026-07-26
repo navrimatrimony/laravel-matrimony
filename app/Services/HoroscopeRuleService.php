@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\MasterNakshatraAttribute;
 use App\Models\MasterNakshatraPadaRashiRule;
+use App\Services\Gunamilan\GunamilanMasterData;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -44,6 +45,17 @@ class HoroscopeRuleService
         'jupiter' => ['sun' => 4, 'moon' => 3, 'mars' => 4, 'mercury' => 0, 'venus' => 0, 'jupiter' => 5, 'saturn' => 3],
         'saturn' => ['sun' => 0, 'moon' => 3, 'mars' => 3, 'mercury' => 3, 'venus' => 4, 'jupiter' => 3, 'saturn' => 5],
     ];
+
+    /**
+     * Every Ashta-Koota lookup below reads the in-memory master snapshot rather
+     * than issuing `DB::table()` per call. Before this, one Gunamilan pair cost
+     * 24 queries (`getRashiLord()` alone ran four times), which made the engine
+     * unusable inside the matching feed.
+     */
+    public function __construct(private readonly GunamilanMasterData $masters)
+    {
+    }
+
     /**
      * Exact active rule for nakshatra + charan. Returns null if nakshatra or charan missing.
      */
@@ -398,16 +410,9 @@ class HoroscopeRuleService
      */
     public function getVarnaByRashi(?int $rashiId): ?object
     {
-        if ($rashiId === null) {
-            return null;
-        }
-        $rashi = DB::table('master_rashis')->where('id', $rashiId)->first();
-        if (! $rashi || ! $rashi->varna_id) {
-            return null;
-        }
-        $varna = DB::table('master_varnas')->where('id', $rashi->varna_id)->where('is_active', true)->first();
+        $rashi = $this->masters->rashi($rashiId);
 
-        return $varna ? (object) ['id' => (int) $varna->id, 'key' => $varna->key, 'label' => $varna->label] : null;
+        return $this->activeMasterObject($this->masters->varna($rashi['varna_id'] ?? null));
     }
 
     /**
@@ -417,16 +422,9 @@ class HoroscopeRuleService
      */
     public function getVashyaByRashi(?int $rashiId): ?object
     {
-        if ($rashiId === null) {
-            return null;
-        }
-        $rashi = DB::table('master_rashis')->where('id', $rashiId)->first();
-        if (! $rashi || ! $rashi->vashya_id) {
-            return null;
-        }
-        $vashya = DB::table('master_vashyas')->where('id', $rashi->vashya_id)->where('is_active', true)->first();
+        $rashi = $this->masters->rashi($rashiId);
 
-        return $vashya ? (object) ['id' => (int) $vashya->id, 'key' => $vashya->key, 'label' => $vashya->label] : null;
+        return $this->activeMasterObject($this->masters->vashya($rashi['vashya_id'] ?? null));
     }
 
     /**
@@ -436,16 +434,30 @@ class HoroscopeRuleService
      */
     public function getRashiLord(?int $rashiId): ?object
     {
-        if ($rashiId === null) {
-            return null;
-        }
-        $rashi = DB::table('master_rashis')->where('id', $rashiId)->first();
-        if (! $rashi || ! $rashi->rashi_lord_id) {
-            return null;
-        }
-        $lord = DB::table('master_rashi_lords')->where('id', $rashi->rashi_lord_id)->where('is_active', true)->first();
+        $rashi = $this->masters->rashi($rashiId);
 
-        return $lord ? (object) ['id' => (int) $lord->id, 'key' => $lord->key, 'label' => $lord->label] : null;
+        return $this->activeMasterObject($this->masters->rashiLord($rashi['rashi_lord_id'] ?? null));
+    }
+
+    /**
+     * Shape a cached master row back into the `(id, key, label)` object these
+     * getters have always returned, dropping deactivated rows.
+     *
+     * @param  array<string, mixed>|null  $row
+     * @return object{id: int, key: string, label: string}|null
+     */
+    private function activeMasterObject(?array $row): ?object
+    {
+        if ($row === null || ($row['is_active'] ?? false) !== true) {
+            return null;
+        }
+
+        return (object) [
+            'id' => (int) $row['id'],
+            'key' => (string) $row['key'],
+            'label' => (string) $row['label'],
+            'label_mr' => $row['label_mr'] ?? null,
+        ];
     }
 
     /**
@@ -456,18 +468,31 @@ class HoroscopeRuleService
      */
     public function calculateTara(?int $brideNakshatraId, ?int $groomNakshatraId): array
     {
+        return $this->taraForNumbers(
+            $this->masters->nakshatra($brideNakshatraId)['number'] ?? null,
+            $this->masters->nakshatra($groomNakshatraId)['number'] ?? null,
+        );
+    }
+
+    /**
+     * Tara from the two nakshatra NUMBERS (1-27) directly — the form a
+     * precomputed {@see \App\Services\Gunamilan\GunamilanKootaKey} already
+     * holds, so a pair costs no lookup at all.
+     *
+     * @return array{tara_number: int|null, tara_label: string|null, points: float, bride_number: int|null, groom_number: int|null}
+     */
+    public function taraForNumbers(?int $brideNumber, ?int $groomNumber): array
+    {
         $out = ['tara_number' => null, 'tara_label' => null, 'points' => 0.0, 'bride_number' => null, 'groom_number' => null];
-        if ($brideNakshatraId === null || $groomNakshatraId === null) {
+        if ($brideNumber === null || $groomNumber === null) {
             return $out;
         }
-        $b = DB::table('master_nakshatras')->where('id', $brideNakshatraId)->value('nakshatra_number');
-        $g = DB::table('master_nakshatras')->where('id', $groomNakshatraId)->value('nakshatra_number');
-        if ($b === null || $g === null || $b < 1 || $b > 27 || $g < 1 || $g > 27) {
+        if ($brideNumber < 1 || $brideNumber > 27 || $groomNumber < 1 || $groomNumber > 27) {
             return $out;
         }
-        $out['bride_number'] = (int) $b;
-        $out['groom_number'] = (int) $g;
-        $count = ($g - $b + 27) % 27;
+        $out['bride_number'] = $brideNumber;
+        $out['groom_number'] = $groomNumber;
+        $count = ($groomNumber - $brideNumber + 27) % 27;
         if ($count === 0) {
             $count = 27;
         }
@@ -487,14 +512,25 @@ class HoroscopeRuleService
      */
     public function calculateBhakoot(?int $brideRashiId, ?int $groomRashiId): array
     {
+        return $this->bhakootForPositions(
+            $this->masters->rashi($brideRashiId)['position'] ?? null,
+            $this->masters->rashi($groomRashiId)['position'] ?? null,
+        );
+    }
+
+    /**
+     * Bhakoot from the two zodiac POSITIONS (1-12) directly — the form a
+     * precomputed {@see \App\Services\Gunamilan\GunamilanKootaKey} already holds.
+     *
+     * `is_dosha` is genuine output, not a detail: the caller must be able to
+     * show "Bhakoot dosha" independently of the 7 points, because a family
+     * reviews that flag separately from the total.
+     *
+     * @return array{points: int, is_dosha: bool, bride_position: int|null, groom_position: int|null}
+     */
+    public function bhakootForPositions(?int $p1, ?int $p2): array
+    {
         $out = ['points' => 0, 'is_dosha' => true, 'bride_position' => null, 'groom_position' => null];
-        if ($brideRashiId === null || $groomRashiId === null) {
-            return $out;
-        }
-        $brideKey = DB::table('master_rashis')->where('id', $brideRashiId)->value('key');
-        $groomKey = DB::table('master_rashis')->where('id', $groomRashiId)->value('key');
-        $p1 = self::RASHI_POSITION[$brideKey] ?? null;
-        $p2 = self::RASHI_POSITION[$groomKey] ?? null;
         if ($p1 === null || $p2 === null) {
             return $out;
         }
@@ -531,8 +567,21 @@ class HoroscopeRuleService
         $out['groom_lord_id'] = $groomLord->id;
         $out['bride_lord_key'] = $brideLord->key;
         $out['groom_lord_key'] = $groomLord->key;
-        $out['points'] = (int) (self::GRAHA_MAITRI[$brideLord->key][$groomLord->key] ?? 0);
+        $out['points'] = $this->grahaMaitriPointsForLords($brideLord->key, $groomLord->key);
 
         return $out;
+    }
+
+    /**
+     * Graha Maitri points from the two lord KEYS directly — the form a
+     * precomputed {@see \App\Services\Gunamilan\GunamilanKootaKey} already holds.
+     */
+    public function grahaMaitriPointsForLords(?string $brideLordKey, ?string $groomLordKey): int
+    {
+        if ($brideLordKey === null || $groomLordKey === null) {
+            return 0;
+        }
+
+        return (int) (self::GRAHA_MAITRI[$brideLordKey][$groomLordKey] ?? 0);
     }
 }

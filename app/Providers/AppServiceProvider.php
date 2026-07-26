@@ -33,6 +33,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(\App\Services\ProfileCompletionEngine::class);
         $this->app->singleton(\App\Services\UserEngagementStatsService::class);
         $this->app->singleton(\App\Services\Matching\MatchingPresenter::class);
+        // Gunamilan master tables are tiny and static; one in-memory copy per
+        // process is what keeps a pair comparison at zero queries.
+        $this->app->singleton(\App\Services\Gunamilan\GunamilanMasterData::class);
         $this->app->bind(WhatsAppMessageProvider::class, function ($app) {
             $provider = strtolower(trim((string) config('whatsapp.response_provider', 'null')));
             $liveEnabled = (bool) config('whatsapp.response_live_enabled', false);

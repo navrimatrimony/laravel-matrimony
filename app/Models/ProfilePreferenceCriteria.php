@@ -33,10 +33,18 @@ class ProfilePreferenceCriteria extends Model
         'partner_profile_with_children',
         /** Same enum keys as users.registering_for (self, parent_guardian, …) */
         'preferred_profile_managed_by',
+        /**
+         * "Only show matches whose गुणमिलन / Gunamilan works out."
+         * Default false. Nothing reads it yet — the matching wiring is a
+         * separate task; see the migration for the rule it must follow
+         * (a not-computable gunamilan is UNKNOWN, never a rejection).
+         */
+        'gunamilan_required',
     ];
 
     protected $casts = [
         'willing_to_relocate' => 'boolean',
+        'gunamilan_required' => 'boolean',
     ];
 
     public function profile()

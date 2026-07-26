@@ -55,14 +55,24 @@
         return trim((string) ($candidate->birth_place_text ?? ''));
     };
     $mangal = static fn ($candidate): string => $label($candidate?->horoscope?->mangalDoshType);
+    // Read the engine's explicit `is_dosha` flag rather than re-deriving it
+    // from the points. null means "not computable", which is not the same
+    // answer as "no dosha".
     $doshaText = static function (?array $section): string {
-        if (! $section || ! empty($section['missing'])) {
+        $isDosha = $section['is_dosha'] ?? null;
+        if ($isDosha === null) {
             return __('profile.gunamilan_dosha_unknown');
         }
 
-        return ((float) ($section['points'] ?? 0) <= 0.0)
+        return $isDosha
             ? __('profile.gunamilan_dosha_present')
             : __('profile.gunamilan_dosha_absent');
+    };
+    $mangalVerdict = $result['mangal'] ?? null;
+    $mangalVerdictText = match ($mangalVerdict['status'] ?? null) {
+        \App\Services\Gunamilan\MangalCompatibility::STATUS_COMPATIBLE => __('profile.gunamilan_dosha_absent'),
+        \App\Services\Gunamilan\MangalCompatibility::STATUS_NOT_COMPATIBLE => __('profile.gunamilan_dosha_present'),
+        default => __('profile.gunamilan_dosha_unknown'),
     };
     $sectionByKey = collect($sections)->keyBy('key');
     $nadiDosha = $doshaText($sectionByKey->get('nadi'));
@@ -84,13 +94,15 @@
 
     $hasMangal = $mangalGroom !== '' || $mangalBride !== '';
     $doshaCards = [];
-    if ($hasMangal) {
+    if ($hasMangal || $mangalVerdict !== null) {
         $doshaCards[] = [
             'label' => __('profile.gunamilan_mangal_dosha'),
-            'lines' => [
+            'lines' => array_values(array_filter([
+                $mangalVerdictText,
                 __('profile.gunamilan_groom').': '.($mangalGroom !== '' ? $mangalGroom : '-'),
                 __('profile.gunamilan_bride').': '.($mangalBride !== '' ? $mangalBride : '-'),
-            ],
+                trim((string) ($mangalVerdict['note'] ?? '')) ?: null,
+            ])),
         ];
     }
     $doshaCards[] = [

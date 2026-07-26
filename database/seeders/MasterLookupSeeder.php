@@ -268,24 +268,36 @@ class MasterLookupSeeder extends Seeder
         ]);
     }
 
-    /** Plain yoni names only (profile entry scope). No male/female variants, no duplicates. */
+    /**
+     * The 14 yonis, under their CANONICAL Sanskrit keys.
+     *
+     * These keys are canonical because `master_nakshatra_attributes` — the rule
+     * that derives yoni from nakshatra — already points at them. This list used
+     * to seed a parallel English set (`horse`, `elephant`, …) beside the
+     * Sanskrit rows, so every animal existed twice, both spellings showed in the
+     * dropdown, and Yoni Kuta compared them as different values (4 of the 36
+     * points were wrong). Do not re-add the English keys, and do not add
+     * male/female polarity variants — one canonical key per yoni.
+     * `2026_07_26_100100_normalize_master_yoni_canonical_keys` retires the
+     * duplicates that already exist.
+     */
     private function seedYonis(): void
     {
         $rows = [
-            ['key' => 'horse', 'label' => 'Horse', 'label_mr' => 'घोडा'],
-            ['key' => 'elephant', 'label' => 'Elephant', 'label_mr' => 'हत्ती'],
-            ['key' => 'sheep', 'label' => 'Sheep', 'label_mr' => 'मेंढी'],
-            ['key' => 'serpent', 'label' => 'Serpent', 'label_mr' => 'साप'],
-            ['key' => 'dog', 'label' => 'Dog', 'label_mr' => 'कुत्रा'],
-            ['key' => 'cat', 'label' => 'Cat', 'label_mr' => 'मांजर'],
-            ['key' => 'rat', 'label' => 'Rat', 'label_mr' => 'उंदीर'],
-            ['key' => 'cow', 'label' => 'Cow', 'label_mr' => 'गाय'],
-            ['key' => 'buffalo', 'label' => 'Buffalo', 'label_mr' => 'म्हैस'],
-            ['key' => 'tiger', 'label' => 'Tiger', 'label_mr' => 'वाघ'],
-            ['key' => 'deer', 'label' => 'Deer', 'label_mr' => 'हरीण'],
-            ['key' => 'monkey', 'label' => 'Monkey', 'label_mr' => 'वानर'],
-            ['key' => 'lion', 'label' => 'Lion', 'label_mr' => 'सिंह'],
-            ['key' => 'mongoose', 'label' => 'Mongoose', 'label_mr' => 'नेवाळा'],
+            ['key' => 'ashwa', 'label' => 'Horse (Ashwa)', 'label_mr' => 'घोडा (अश्व)'],
+            ['key' => 'gaja', 'label' => 'Elephant (Gaja)', 'label_mr' => 'हत्ती (गज)'],
+            ['key' => 'mesha', 'label' => 'Sheep (Mesha)', 'label_mr' => 'मेंढी (मेष)'],
+            ['key' => 'sarpa', 'label' => 'Serpent (Sarpa)', 'label_mr' => 'साप (सर्प)'],
+            ['key' => 'shwan', 'label' => 'Dog (Shwan)', 'label_mr' => 'कुत्रा (श्वान)'],
+            ['key' => 'marjar', 'label' => 'Cat (Marjar)', 'label_mr' => 'मांजर (मार्जार)'],
+            ['key' => 'mushak', 'label' => 'Rat (Mushak)', 'label_mr' => 'उंदीर (मूषक)'],
+            ['key' => 'gau', 'label' => 'Cow (Gau)', 'label_mr' => 'गाय (गौ)'],
+            ['key' => 'mahish', 'label' => 'Buffalo (Mahish)', 'label_mr' => 'म्हैस (महिष)'],
+            ['key' => 'vyaghra', 'label' => 'Tiger (Vyaghra)', 'label_mr' => 'वाघ (व्याघ्र)'],
+            ['key' => 'mrga', 'label' => 'Deer (Mriga)', 'label_mr' => 'हरीण (मृग)'],
+            ['key' => 'vanar', 'label' => 'Monkey (Vanar)', 'label_mr' => 'वानर'],
+            ['key' => 'nakul', 'label' => 'Mongoose (Nakul)', 'label_mr' => 'नेवाळा (नकुल)'],
+            ['key' => 'singh', 'label' => 'Lion (Singh)', 'label_mr' => 'सिंह'],
             ['key' => 'other', 'label' => 'Other', 'label_mr' => 'इतर'],
         ];
         $this->seedKeyLabel('master_yonis', $rows);

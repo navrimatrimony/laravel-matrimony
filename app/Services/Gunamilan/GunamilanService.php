@@ -5,11 +5,47 @@ namespace App\Services\Gunamilan;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileHoroscopeData;
 use App\Services\HoroscopeRuleService;
-use App\Support\LocalizedText;
 
+/**
+ * गुणमिलन / Gunamilan — the read-only 36-point Ashta-Koota engine.
+ *
+ * Two entry points:
+ *
+ * - {@see self::calculate()} for a single viewer/target pair (web report, mobile
+ *   profile payload). Resolves bride/groom from gender, flattens both sides and
+ *   compares.
+ * - {@see self::kootaKeyFor()} + {@see self::compare()} for bulk work. Flatten
+ *   each profile ONCE into a {@see GunamilanKootaKey}, then compare pairs — no
+ *   database access at all per pair, which is what makes this safe to call
+ *   inside the matching feed over hundreds of candidates.
+ *
+ * ## Reading the result
+ *
+ * `total_points` is ALWAYS numeric, so it must never be read on its own.
+ * `computable` is the field that says whether that number means anything:
+ *
+ * - `computable === true`  → `total_points` is a real score and `is_compatible`
+ *   is a real boolean (`total_points >= 18.0`, inclusive).
+ * - `computable === false` → the inputs are incomplete. `total_points` is 0.0
+ *   as an artefact, `is_compatible` is **null**, and `missing_fields` says what
+ *   is absent. A profile with an empty horoscope row is UNKNOWN, never
+ *   "incompatible" — treating 0/36 as a rejection would silently exclude every
+ *   member who has not filled the horoscope section.
+ *
+ * `available` keeps its older, weaker meaning (both horoscope rows exist and the
+ * bride/groom direction resolved) because the web report renders all eight
+ * sections with per-section "missing" markers off it. New callers branch on
+ * `computable`.
+ */
 class GunamilanService
 {
     private const MAX_POINTS = 36.0;
+
+    /**
+     * 18 of 36 is compatible (owner decision, 2026-07-26).
+     * INCLUSIVE — exactly 18.0 passes.
+     */
+    public const COMPATIBLE_THRESHOLD = 18.0;
 
     private const VARNA_RANKS = [
         'shudra' => 1,
@@ -18,17 +54,22 @@ class GunamilanService
         'brahmin' => 4,
     ];
 
-    private const VASHYA_COMPATIBLE_PAIRS = [
-        'manav:chatushpada' => 1.0,
-        'chatushpada:manav' => 1.0,
-        'manav:jalachar' => 1.0,
-        'jalachar:manav' => 1.0,
-        'chatushpada:jalachar' => 1.0,
-        'jalachar:chatushpada' => 1.0,
-        'vanchar:chatushpada' => 1.0,
-        'chatushpada:vanchar' => 1.0,
+    /**
+     * Vashya Koota, max 2. Complete 5x5 matrix — every canonical
+     * `master_vashyas` key appears, including `keet`, which the old
+     * compatible-pairs list omitted, so every Vrishchika (Scorpio) pairing fell
+     * through to an undocumented 0.5 fallback. There is no fallback now: an
+     * unrecognised key counts as missing, not as a half score.
+     */
+    private const VASHYA_POINTS = [
+        'chatushpada' => ['chatushpada' => 2.0, 'manav' => 1.0, 'jalachar' => 1.0, 'vanchar' => 1.0, 'keet' => 1.0],
+        'manav' => ['chatushpada' => 1.0, 'manav' => 2.0, 'jalachar' => 1.0, 'vanchar' => 0.5, 'keet' => 1.0],
+        'jalachar' => ['chatushpada' => 1.0, 'manav' => 1.0, 'jalachar' => 2.0, 'vanchar' => 0.5, 'keet' => 1.0],
+        'vanchar' => ['chatushpada' => 1.0, 'manav' => 0.5, 'jalachar' => 0.5, 'vanchar' => 2.0, 'keet' => 1.0],
+        'keet' => ['chatushpada' => 1.0, 'manav' => 1.0, 'jalachar' => 1.0, 'vanchar' => 1.0, 'keet' => 2.0],
     ];
 
+    /** Gana Koota, max 6. bride_gan:groom_gan. */
     private const GANA_POINTS = [
         'deva:deva' => 6.0,
         'deva:manav' => 5.0,
@@ -41,35 +82,67 @@ class GunamilanService
         'rakshasa:rakshasa' => 6.0,
     ];
 
+    /**
+     * The seven Yoni enemy pairs, in CANONICAL Sanskrit keys.
+     *
+     * This list used to be written in the retired English spellings while
+     * `master_nakshatra_attributes` autofilled the Sanskrit ones, so the rule
+     * never fired: an enemy pair scored the neutral 2 instead of 0, and the
+     * same animal stored under two spellings failed the equality test and
+     * scored 2 instead of 4. Four of the 36 points were wrong on every
+     * autofilled profile. Keys arrive here already normalised by
+     * {@see GunamilanMasterData::canonicalYoniKeyFor()}.
+     */
     private const YONI_ENEMY_PAIRS = [
-        'horse:buffalo',
-        'buffalo:horse',
-        'elephant:lion',
-        'lion:elephant',
-        'sheep:monkey',
-        'monkey:sheep',
-        'serpent:mongoose',
-        'mongoose:serpent',
-        'dog:deer',
-        'deer:dog',
-        'cat:rat',
-        'rat:cat',
-        'cow:tiger',
-        'tiger:cow',
+        'ashwa:mahish', 'mahish:ashwa',
+        'gaja:singh', 'singh:gaja',
+        'mesha:vanar', 'vanar:mesha',
+        'sarpa:nakul', 'nakul:sarpa',
+        'shwan:mrga', 'mrga:shwan',
+        'marjar:mushak', 'mushak:marjar',
+        'gau:vyaghra', 'vyaghra:gau',
     ];
 
-    public function __construct(private readonly HoroscopeRuleService $rules)
-    {
+    public function __construct(
+        private readonly HoroscopeRuleService $rules,
+        private readonly GunamilanMasterData $masters,
+        private readonly MangalCompatibility $mangal,
+    ) {
     }
 
     /**
-     * Calculate a read-only Ashta-Koota result from saved horoscope fields.
+     * Flatten one profile into its reusable koota key. Call once per profile
+     * per run; the returned object can then be compared against any number of
+     * other keys without touching the database.
+     */
+    public function kootaKeyFor(MatrimonyProfile $profile): GunamilanKootaKey
+    {
+        $profile->loadMissing(['gender', 'horoscope']);
+
+        return GunamilanKootaKey::fromProfile($profile, $this->masters);
+    }
+
+    /** Flatten a horoscope row directly (bulk paths that already selected the rows). */
+    public function kootaKeyForHoroscope(?ProfileHoroscopeData $horoscope, ?string $genderKey = null): GunamilanKootaKey
+    {
+        return GunamilanKootaKey::fromHoroscope($horoscope, $this->masters, $genderKey);
+    }
+
+    /**
+     * Calculate the read-only Ashta-Koota result for a viewer/target pair.
      *
      * @return array{
      *     available: bool,
+     *     computable: bool,
+     *     state: string,
      *     total_points: float,
      *     max_points: float,
+     *     threshold: float,
+     *     is_compatible: bool|null,
      *     sections: array<int, array<string, mixed>>,
+     *     nadi_dosha: bool|null,
+     *     bhakoot_dosha: bool|null,
+     *     mangal: array<string, mixed>,
      *     missing_fields: array<int, array{side: string, label: string}>,
      *     bride_profile_id: int|null,
      *     groom_profile_id: int|null
@@ -77,85 +150,97 @@ class GunamilanService
      */
     public function calculate(MatrimonyProfile $viewerProfile, MatrimonyProfile $targetProfile): array
     {
-        $viewerProfile->loadMissing([
-            'gender',
-            'horoscope.rashi',
-            'horoscope.nakshatra',
-            'horoscope.gan',
-            'horoscope.nadi',
-            'horoscope.yoni',
-        ]);
-        $targetProfile->loadMissing([
-            'gender',
-            'horoscope.rashi',
-            'horoscope.nakshatra',
-            'horoscope.gan',
-            'horoscope.nadi',
-            'horoscope.yoni',
-        ]);
+        $viewerProfile->loadMissing(['gender', 'horoscope']);
+        $targetProfile->loadMissing(['gender', 'horoscope']);
 
         $pair = $this->resolveBrideGroom($viewerProfile, $targetProfile);
-        $missing = [];
-
-        if ($pair === null) {
-            $missing[] = [
-                'side' => 'pair',
-                'label' => __('profile.gunamilan_missing_bride_direction'),
-            ];
-        }
-
         $bride = $pair['bride'] ?? $viewerProfile;
         $groom = $pair['groom'] ?? $targetProfile;
-        $brideHoroscope = $pair ? $bride->horoscope : null;
-        $groomHoroscope = $pair ? $groom->horoscope : null;
 
-        if (! $brideHoroscope) {
-            $missing[] = [
-                'side' => 'bride',
-                'label' => __('profile.gunamilan_missing_bride_horoscope'),
-            ];
+        $brideKey = $pair !== null
+            ? GunamilanKootaKey::fromProfile($bride, $this->masters)
+            : GunamilanKootaKey::absent();
+        $groomKey = $pair !== null
+            ? GunamilanKootaKey::fromProfile($groom, $this->masters)
+            : GunamilanKootaKey::absent();
+
+        $result = $this->compare($brideKey, $groomKey, $pair !== null);
+
+        return array_merge($result, [
+            'bride_profile_id' => $pair ? (int) $bride->id : null,
+            'groom_profile_id' => $pair ? (int) $groom->id : null,
+        ]);
+    }
+
+    /**
+     * Compare two already-flattened koota keys. Pure array math — zero queries.
+     *
+     * @param  bool  $directionResolved  false when bride/groom could not be told apart from gender.
+     * @return array<string, mixed>
+     */
+    public function compare(GunamilanKootaKey $bride, GunamilanKootaKey $groom, bool $directionResolved = true): array
+    {
+        $missing = [];
+
+        if (! $directionResolved) {
+            $missing[] = ['side' => 'pair', 'label' => __('profile.gunamilan_missing_bride_direction')];
         }
-        if (! $groomHoroscope) {
-            $missing[] = [
-                'side' => 'groom',
-                'label' => __('profile.gunamilan_missing_groom_horoscope'),
-            ];
+        if ($directionResolved && ! $bride->hasHoroscopeRow) {
+            $missing[] = ['side' => 'bride', 'label' => __('profile.gunamilan_missing_bride_horoscope')];
+        }
+        if ($directionResolved && ! $groom->hasHoroscopeRow) {
+            $missing[] = ['side' => 'groom', 'label' => __('profile.gunamilan_missing_groom_horoscope')];
         }
 
         $sections = [
-            $this->varnaSection($brideHoroscope, $groomHoroscope),
-            $this->vashyaSection($brideHoroscope, $groomHoroscope),
-            $this->taraSection($brideHoroscope, $groomHoroscope),
-            $this->yoniSection($brideHoroscope, $groomHoroscope),
-            $this->grahaMaitriSection($brideHoroscope, $groomHoroscope),
-            $this->ganaSection($brideHoroscope, $groomHoroscope),
-            $this->bhakootSection($brideHoroscope, $groomHoroscope),
-            $this->nadiSection($brideHoroscope, $groomHoroscope),
+            $this->varnaSection($bride, $groom),
+            $this->vashyaSection($bride, $groom),
+            $this->taraSection($bride, $groom),
+            $this->yoniSection($bride, $groom),
+            $this->grahaMaitriSection($bride, $groom),
+            $this->ganaSection($bride, $groom),
+            $this->bhakootSection($bride, $groom),
+            $this->nadiSection($bride, $groom),
         ];
 
         foreach ($sections as $section) {
             foreach (($section['missing'] ?? []) as $label) {
-                $missing[] = [
-                    'side' => $section['key'],
-                    'label' => $label,
-                ];
+                $missing[] = ['side' => $section['key'], 'label' => $label];
             }
         }
 
-        $total = array_reduce(
+        $total = round(array_reduce(
             $sections,
             fn (float $carry, array $section): float => $carry + (float) $section['points'],
             0.0
-        );
+        ), 1);
+
+        $missingFields = $this->uniqueMissing($missing);
+        $available = $directionResolved && $bride->hasHoroscopeRow && $groom->hasHoroscopeRow;
+        // A verdict exists only when every required input is actually present.
+        // "0 points" and "unknown" must never collapse into the same answer.
+        $computable = $available && $missingFields === [];
+
+        $sectionsByKey = [];
+        foreach ($sections as $section) {
+            $sectionsByKey[$section['key']] = $section;
+        }
 
         return [
-            'available' => $pair !== null && $brideHoroscope !== null && $groomHoroscope !== null,
-            'total_points' => round($total, 1),
+            'available' => $available,
+            'computable' => $computable,
+            'state' => $computable ? 'computable' : 'not_computable',
+            'total_points' => $total,
             'max_points' => self::MAX_POINTS,
+            'threshold' => self::COMPATIBLE_THRESHOLD,
+            'is_compatible' => $computable ? $total >= self::COMPATIBLE_THRESHOLD : null,
             'sections' => $sections,
-            'missing_fields' => $this->uniqueMissing($missing),
-            'bride_profile_id' => $pair ? (int) $bride->id : null,
-            'groom_profile_id' => $pair ? (int) $groom->id : null,
+            'nadi_dosha' => $sectionsByKey['nadi']['is_dosha'] ?? null,
+            'bhakoot_dosha' => $sectionsByKey['bhakoot']['is_dosha'] ?? null,
+            'mangal' => $this->mangal->compare($bride, $groom),
+            'missing_fields' => $missingFields,
+            'bride_profile_id' => $bride->profileId,
+            'groom_profile_id' => $groom->profileId,
         ];
     }
 
@@ -178,117 +263,93 @@ class GunamilanService
         return null;
     }
 
-    private function varnaSection(?ProfileHoroscopeData $bride, ?ProfileHoroscopeData $groom): array
-    {
-        $missing = $this->missingForRashi($bride, $groom);
-        $brideVarna = $this->rules->getVarnaByRashi($bride?->rashi_id);
-        $groomVarna = $this->rules->getVarnaByRashi($groom?->rashi_id);
+    // ---------- the eight kootas ----------
 
-        if ($brideVarna === null) {
-            $missing[] = __('profile.gunamilan_missing_bride_varna');
-        }
-        if ($groomVarna === null) {
-            $missing[] = __('profile.gunamilan_missing_groom_varna');
-        }
+    private function varnaSection(GunamilanKootaKey $bride, GunamilanKootaKey $groom): array
+    {
+        $missing = array_values(array_filter([
+            $bride->varnaKey === null ? __('profile.gunamilan_missing_bride_varna') : null,
+            $groom->varnaKey === null ? __('profile.gunamilan_missing_groom_varna') : null,
+        ]));
 
         $points = 0.0;
         $note = __('profile.gunamilan_note_missing');
         if ($missing === []) {
-            $brideRank = self::VARNA_RANKS[$brideVarna->key] ?? null;
-            $groomRank = self::VARNA_RANKS[$groomVarna->key] ?? null;
-            if ($brideRank !== null && $groomRank !== null) {
+            $brideRank = self::VARNA_RANKS[$bride->varnaKey] ?? null;
+            $groomRank = self::VARNA_RANKS[$groom->varnaKey] ?? null;
+            if ($brideRank === null || $groomRank === null) {
+                $missing[] = __('profile.gunamilan_missing_bride_varna');
+            } else {
                 $points = $groomRank >= $brideRank ? 1.0 : 0.0;
                 $note = $points > 0 ? __('profile.gunamilan_note_compatible') : __('profile.gunamilan_note_not_compatible');
             }
         }
 
-        return $this->section(
-            'varna',
-            __('profile.gunamilan_section_varna'),
-            $points,
-            1.0,
-            $this->valueLabel($brideVarna),
-            $this->valueLabel($groomVarna),
-            $note,
-            $missing
-        );
+        return $this->section('varna', __('profile.gunamilan_section_varna'), $points, 1.0, $bride->varnaLabel, $groom->varnaLabel, $note, $missing);
     }
 
-    private function vashyaSection(?ProfileHoroscopeData $bride, ?ProfileHoroscopeData $groom): array
+    private function vashyaSection(GunamilanKootaKey $bride, GunamilanKootaKey $groom): array
     {
-        $missing = $this->missingForRashi($bride, $groom);
-        $brideVashya = $this->rules->getVashyaByRashi($bride?->rashi_id);
-        $groomVashya = $this->rules->getVashyaByRashi($groom?->rashi_id);
-
-        if ($brideVashya === null) {
-            $missing[] = __('profile.gunamilan_missing_bride_vashya');
-        }
-        if ($groomVashya === null) {
-            $missing[] = __('profile.gunamilan_missing_groom_vashya');
-        }
+        $missing = array_values(array_filter([
+            $bride->vashyaKey === null ? __('profile.gunamilan_missing_bride_vashya') : null,
+            $groom->vashyaKey === null ? __('profile.gunamilan_missing_groom_vashya') : null,
+        ]));
 
         $points = 0.0;
         $note = __('profile.gunamilan_note_missing');
         if ($missing === []) {
-            if ($brideVashya->key === $groomVashya->key) {
-                $points = 2.0;
-                $note = __('profile.gunamilan_note_same_group');
+            $value = self::VASHYA_POINTS[$bride->vashyaKey][$groom->vashyaKey] ?? null;
+            if ($value === null) {
+                $missing[] = __('profile.gunamilan_missing_bride_vashya');
             } else {
-                $pair = $brideVashya->key.':'.$groomVashya->key;
-                $points = self::VASHYA_COMPATIBLE_PAIRS[$pair] ?? 0.5;
-                $note = $points >= 1.0 ? __('profile.gunamilan_note_compatible') : __('profile.gunamilan_note_partial');
+                $points = $value;
+                $note = match (true) {
+                    $bride->vashyaKey === $groom->vashyaKey => __('profile.gunamilan_note_same_group'),
+                    $points >= 1.0 => __('profile.gunamilan_note_compatible'),
+                    default => __('profile.gunamilan_note_partial'),
+                };
             }
         }
 
-        return $this->section(
-            'vashya',
-            __('profile.gunamilan_section_vashya'),
-            $points,
-            2.0,
-            $this->valueLabel($brideVashya),
-            $this->valueLabel($groomVashya),
-            $note,
-            $missing
-        );
+        return $this->section('vashya', __('profile.gunamilan_section_vashya'), $points, 2.0, $bride->vashyaLabel, $groom->vashyaLabel, $note, $missing);
     }
 
-    private function taraSection(?ProfileHoroscopeData $bride, ?ProfileHoroscopeData $groom): array
+    private function taraSection(GunamilanKootaKey $bride, GunamilanKootaKey $groom): array
     {
-        $missing = $this->missingForNakshatra($bride, $groom);
-        $forward = $this->rules->calculateTara($bride?->nakshatra_id, $groom?->nakshatra_id);
-        $reverse = $this->rules->calculateTara($groom?->nakshatra_id, $bride?->nakshatra_id);
-        $points = $missing === [] ? (float) $forward['points'] + (float) $reverse['points'] : 0.0;
+        $missing = array_values(array_filter([
+            $bride->nakshatraNumber === null ? __('profile.gunamilan_missing_bride_nakshatra') : null,
+            $groom->nakshatraNumber === null ? __('profile.gunamilan_missing_groom_nakshatra') : null,
+        ]));
 
-        return $this->section(
-            'tara',
-            __('profile.gunamilan_section_tara'),
-            $points,
-            3.0,
-            $this->valueLabel($bride?->nakshatra),
-            $this->valueLabel($groom?->nakshatra),
-            $missing === []
-                ? __('profile.gunamilan_note_tara', [
-                    'bride' => $forward['tara_label'] ?? '-',
-                    'groom' => $reverse['tara_label'] ?? '-',
-                ])
-                : __('profile.gunamilan_note_missing'),
-            $missing
-        );
-    }
-
-    private function yoniSection(?ProfileHoroscopeData $bride, ?ProfileHoroscopeData $groom): array
-    {
-        [$brideYoni, $brideMissing] = $this->resolveYoni($bride, __('profile.gunamilan_missing_bride_yoni'));
-        [$groomYoni, $groomMissing] = $this->resolveYoni($groom, __('profile.gunamilan_missing_groom_yoni'));
-        $missing = array_filter([$brideMissing, $groomMissing]);
         $points = 0.0;
         $note = __('profile.gunamilan_note_missing');
-
         if ($missing === []) {
-            if ($brideYoni->key === $groomYoni->key) {
+            $forward = $this->rules->taraForNumbers($bride->nakshatraNumber, $groom->nakshatraNumber);
+            $reverse = $this->rules->taraForNumbers($groom->nakshatraNumber, $bride->nakshatraNumber);
+            $points = (float) $forward['points'] + (float) $reverse['points'];
+            $note = __('profile.gunamilan_note_tara', [
+                'bride' => $forward['tara_label'] ?? '-',
+                'groom' => $reverse['tara_label'] ?? '-',
+            ]);
+        }
+
+        return $this->section('tara', __('profile.gunamilan_section_tara'), $points, 3.0, $bride->nakshatraLabel, $groom->nakshatraLabel, $note, $missing);
+    }
+
+    private function yoniSection(GunamilanKootaKey $bride, GunamilanKootaKey $groom): array
+    {
+        $missing = array_values(array_filter([
+            $bride->yoniKey === null ? __('profile.gunamilan_missing_bride_yoni') : null,
+            $groom->yoniKey === null ? __('profile.gunamilan_missing_groom_yoni') : null,
+        ]));
+
+        $points = 0.0;
+        $note = __('profile.gunamilan_note_missing');
+        if ($missing === []) {
+            if ($bride->yoniKey === $groom->yoniKey) {
                 $points = 4.0;
                 $note = __('profile.gunamilan_note_same_group');
-            } elseif (in_array($brideYoni->key.':'.$groomYoni->key, self::YONI_ENEMY_PAIRS, true)) {
+            } elseif (in_array($bride->yoniKey.':'.$groom->yoniKey, self::YONI_ENEMY_PAIRS, true)) {
                 $points = 0.0;
                 $note = __('profile.gunamilan_note_not_compatible');
             } else {
@@ -297,195 +358,126 @@ class GunamilanService
             }
         }
 
-        return $this->section(
-            'yoni',
-            __('profile.gunamilan_section_yoni'),
-            $points,
-            4.0,
-            $this->valueLabel($brideYoni),
-            $this->valueLabel($groomYoni),
-            $note,
-            $missing
-        );
+        return $this->section('yoni', __('profile.gunamilan_section_yoni'), $points, 4.0, $bride->yoniLabel, $groom->yoniLabel, $note, $missing);
     }
 
-    private function grahaMaitriSection(?ProfileHoroscopeData $bride, ?ProfileHoroscopeData $groom): array
+    private function grahaMaitriSection(GunamilanKootaKey $bride, GunamilanKootaKey $groom): array
     {
-        $missing = $this->missingForRashi($bride, $groom);
-        $result = $this->rules->calculateGrahaMaitri($bride?->rashi_id, $groom?->rashi_id);
-        $brideLord = $this->rules->getRashiLord($bride?->rashi_id);
-        $groomLord = $this->rules->getRashiLord($groom?->rashi_id);
+        $missing = array_values(array_filter([
+            $bride->lordKey === null ? __('profile.gunamilan_missing_bride_lord') : null,
+            $groom->lordKey === null ? __('profile.gunamilan_missing_groom_lord') : null,
+        ]));
 
-        if ($brideLord === null) {
-            $missing[] = __('profile.gunamilan_missing_bride_lord');
-        }
-        if ($groomLord === null) {
-            $missing[] = __('profile.gunamilan_missing_groom_lord');
-        }
-
-        return $this->section(
-            'graha_maitri',
-            __('profile.gunamilan_section_graha_maitri'),
-            $missing === [] ? (float) $result['points'] : 0.0,
-            5.0,
-            $this->valueLabel($brideLord),
-            $this->valueLabel($groomLord),
-            $missing === [] ? __('profile.gunamilan_note_calculated') : __('profile.gunamilan_note_missing'),
-            $missing
-        );
-    }
-
-    private function ganaSection(?ProfileHoroscopeData $bride, ?ProfileHoroscopeData $groom): array
-    {
-        [$brideGan, $brideMissing] = $this->resolveGan($bride, __('profile.gunamilan_missing_bride_gan'));
-        [$groomGan, $groomMissing] = $this->resolveGan($groom, __('profile.gunamilan_missing_groom_gan'));
-        $missing = array_filter([$brideMissing, $groomMissing]);
-        $points = 0.0;
-
-        if ($missing === []) {
-            $points = self::GANA_POINTS[$brideGan->key.':'.$groomGan->key] ?? 0.0;
-        }
-
-        return $this->section(
-            'gana',
-            __('profile.gunamilan_section_gana'),
-            $points,
-            6.0,
-            $this->valueLabel($brideGan),
-            $this->valueLabel($groomGan),
-            $missing === []
-                ? ($points >= 5.0 ? __('profile.gunamilan_note_compatible') : __('profile.gunamilan_note_partial'))
-                : __('profile.gunamilan_note_missing'),
-            $missing
-        );
-    }
-
-    private function bhakootSection(?ProfileHoroscopeData $bride, ?ProfileHoroscopeData $groom): array
-    {
-        $missing = $this->missingForRashi($bride, $groom);
-        $result = $this->rules->calculateBhakoot($bride?->rashi_id, $groom?->rashi_id);
-
-        return $this->section(
-            'bhakoot',
-            __('profile.gunamilan_section_bhakoot'),
-            $missing === [] ? (float) $result['points'] : 0.0,
-            7.0,
-            $this->valueLabel($bride?->rashi),
-            $this->valueLabel($groom?->rashi),
-            $missing === []
-                ? (($result['is_dosha'] ?? true) ? __('profile.gunamilan_note_dosha') : __('profile.gunamilan_note_compatible'))
-                : __('profile.gunamilan_note_missing'),
-            $missing
-        );
-    }
-
-    private function nadiSection(?ProfileHoroscopeData $bride, ?ProfileHoroscopeData $groom): array
-    {
-        [$brideNadi, $brideMissing] = $this->resolveNadi($bride, __('profile.gunamilan_missing_bride_nadi'));
-        [$groomNadi, $groomMissing] = $this->resolveNadi($groom, __('profile.gunamilan_missing_groom_nadi'));
-        $missing = array_filter([$brideMissing, $groomMissing]);
         $points = 0.0;
         $note = __('profile.gunamilan_note_missing');
-
         if ($missing === []) {
-            $points = $brideNadi->key !== $groomNadi->key ? 8.0 : 0.0;
-            $note = $points > 0 ? __('profile.gunamilan_note_compatible') : __('profile.gunamilan_note_dosha');
+            $points = (float) $this->rules->grahaMaitriPointsForLords($bride->lordKey, $groom->lordKey);
+            $note = __('profile.gunamilan_note_calculated');
         }
 
-        return $this->section(
-            'nadi',
-            __('profile.gunamilan_section_nadi'),
-            $points,
-            8.0,
-            $this->valueLabel($brideNadi),
-            $this->valueLabel($groomNadi),
-            $note,
-            $missing
-        );
+        return $this->section('graha_maitri', __('profile.gunamilan_section_graha_maitri'), $points, 5.0, $bride->lordLabel, $groom->lordLabel, $note, $missing);
     }
 
-    private function resolveGan(?ProfileHoroscopeData $horoscope, string $missingLabel): array
+    private function ganaSection(GunamilanKootaKey $bride, GunamilanKootaKey $groom): array
     {
-        if ($horoscope?->gan) {
-            return [$horoscope->gan, null];
-        }
-
-        $attrs = $this->rules->findNakshatraAttributes($horoscope?->nakshatra_id);
-        $attrs?->loadMissing('gan');
-
-        return $attrs?->gan ? [$attrs->gan, null] : [null, $missingLabel];
-    }
-
-    private function resolveNadi(?ProfileHoroscopeData $horoscope, string $missingLabel): array
-    {
-        if ($horoscope?->nadi) {
-            return [$horoscope->nadi, null];
-        }
-
-        $attrs = $this->rules->findNakshatraAttributes($horoscope?->nakshatra_id);
-        $attrs?->loadMissing('nadi');
-
-        return $attrs?->nadi ? [$attrs->nadi, null] : [null, $missingLabel];
-    }
-
-    private function resolveYoni(?ProfileHoroscopeData $horoscope, string $missingLabel): array
-    {
-        if ($horoscope?->yoni) {
-            return [$horoscope->yoni, null];
-        }
-
-        $attrs = $this->rules->findNakshatraAttributes($horoscope?->nakshatra_id);
-        $attrs?->loadMissing('yoni');
-
-        return $attrs?->yoni ? [$attrs->yoni, null] : [null, $missingLabel];
-    }
-
-    private function missingForRashi(?ProfileHoroscopeData $bride, ?ProfileHoroscopeData $groom): array
-    {
-        return array_values(array_filter([
-            $bride?->rashi_id ? null : __('profile.gunamilan_missing_bride_rashi'),
-            $groom?->rashi_id ? null : __('profile.gunamilan_missing_groom_rashi'),
+        $missing = array_values(array_filter([
+            $bride->ganKey === null ? __('profile.gunamilan_missing_bride_gan') : null,
+            $groom->ganKey === null ? __('profile.gunamilan_missing_groom_gan') : null,
         ]));
+
+        $points = 0.0;
+        $note = __('profile.gunamilan_note_missing');
+        if ($missing === []) {
+            $value = self::GANA_POINTS[$bride->ganKey.':'.$groom->ganKey] ?? null;
+            if ($value === null) {
+                $missing[] = __('profile.gunamilan_missing_bride_gan');
+            } else {
+                $points = $value;
+                $note = $points >= 5.0 ? __('profile.gunamilan_note_compatible') : __('profile.gunamilan_note_partial');
+            }
+        }
+
+        return $this->section('gana', __('profile.gunamilan_section_gana'), $points, 6.0, $bride->ganLabel, $groom->ganLabel, $note, $missing);
     }
 
-    private function missingForNakshatra(?ProfileHoroscopeData $bride, ?ProfileHoroscopeData $groom): array
+    private function bhakootSection(GunamilanKootaKey $bride, GunamilanKootaKey $groom): array
     {
-        return array_values(array_filter([
-            $bride?->nakshatra_id ? null : __('profile.gunamilan_missing_bride_nakshatra'),
-            $groom?->nakshatra_id ? null : __('profile.gunamilan_missing_groom_nakshatra'),
+        $missing = array_values(array_filter([
+            $bride->rashiPosition === null ? __('profile.gunamilan_missing_bride_rashi') : null,
+            $groom->rashiPosition === null ? __('profile.gunamilan_missing_groom_rashi') : null,
         ]));
+
+        $points = 0.0;
+        $note = __('profile.gunamilan_note_missing');
+        $isDosha = null;
+        if ($missing === []) {
+            $result = $this->rules->bhakootForPositions($bride->rashiPosition, $groom->rashiPosition);
+            $points = (float) $result['points'];
+            $isDosha = (bool) $result['is_dosha'];
+            $note = $isDosha ? __('profile.gunamilan_note_dosha') : __('profile.gunamilan_note_compatible');
+        }
+
+        return $this->section('bhakoot', __('profile.gunamilan_section_bhakoot'), $points, 7.0, $bride->rashiLabel, $groom->rashiLabel, $note, $missing, $isDosha);
     }
 
+    private function nadiSection(GunamilanKootaKey $bride, GunamilanKootaKey $groom): array
+    {
+        $missing = array_values(array_filter([
+            $bride->nadiKey === null ? __('profile.gunamilan_missing_bride_nadi') : null,
+            $groom->nadiKey === null ? __('profile.gunamilan_missing_groom_nadi') : null,
+        ]));
+
+        $points = 0.0;
+        $note = __('profile.gunamilan_note_missing');
+        $isDosha = null;
+        if ($missing === []) {
+            // Same Nadi on both sides IS the Nadi dosha; different Nadi scores full.
+            $isDosha = $bride->nadiKey === $groom->nadiKey;
+            $points = $isDosha ? 0.0 : 8.0;
+            $note = $isDosha ? __('profile.gunamilan_note_dosha') : __('profile.gunamilan_note_compatible');
+        }
+
+        return $this->section('nadi', __('profile.gunamilan_section_nadi'), $points, 8.0, $bride->nadiLabel, $groom->nadiLabel, $note, $missing, $isDosha);
+    }
+
+    /**
+     * @param  array<int, string>  $missing
+     * @param  bool|null  $isDosha  null = not computable for this koota.
+     * @return array<string, mixed>
+     */
     private function section(
         string $key,
         string $label,
         float $points,
         float $maxPoints,
-        string $brideValue,
-        string $groomValue,
+        ?string $brideValue,
+        ?string $groomValue,
         string $note,
-        array $missing
+        array $missing,
+        ?bool $isDosha = null,
     ): array {
         $points = round($points, 1);
+        $missing = array_values(array_unique(array_filter($missing)));
 
         return [
             'key' => $key,
             'label' => $label,
             'points' => $points,
             'max_points' => $maxPoints,
+            'computable' => $missing === [],
             'status' => $missing !== [] ? 'missing' : ($points >= $maxPoints ? 'full' : 'partial'),
-            'bride_value' => $brideValue,
-            'groom_value' => $groomValue,
+            'bride_value' => $brideValue !== null && $brideValue !== '' ? $brideValue : '-',
+            'groom_value' => $groomValue !== null && $groomValue !== '' ? $groomValue : '-',
             'note' => $note,
-            'missing' => array_values($missing),
+            'is_dosha' => $missing === [] ? $isDosha : null,
+            'missing' => $missing,
         ];
     }
 
-    private function valueLabel(?object $value): string
-    {
-        return LocalizedText::column($value, 'label', ['label', 'name', 'key']) ?: '-';
-    }
-
+    /**
+     * @param  array<int, array{side: string, label: string}>  $missing
+     * @return array<int, array{side: string, label: string}>
+     */
     private function uniqueMissing(array $missing): array
     {
         $seen = [];

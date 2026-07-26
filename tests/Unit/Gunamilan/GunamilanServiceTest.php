@@ -45,16 +45,18 @@ class GunamilanServiceTest extends TestCase
             'rashi_id' => DB::table('master_rashis')->where('key', 'mesha')->value('id'),
             'nakshatra_id' => DB::table('master_nakshatras')->where('key', 'ashwini')->value('id'),
             'gan_id' => DB::table('master_gans')->where('key', 'deva')->value('id'),
-            'nadi_id' => DB::table('master_nadis')->where('key', 'adya')->value('id'),
-            'yoni_id' => DB::table('master_yonis')->where('key', 'horse')->value('id'),
+            'nadi_id' => DB::table('master_nadis')->where('key', 'adi')->value('id'),
+            // Canonical Sanskrit yoni key; the English duplicates are retired.
+            'yoni_id' => DB::table('master_yonis')->where('key', 'ashwa')->value('id'),
         ]);
         ProfileHoroscopeData::create([
             'profile_id' => $female->id,
             'rashi_id' => DB::table('master_rashis')->where('key', 'mesha')->value('id'),
             'nakshatra_id' => DB::table('master_nakshatras')->where('key', 'ashwini')->value('id'),
             'gan_id' => DB::table('master_gans')->where('key', 'deva')->value('id'),
-            'nadi_id' => DB::table('master_nadis')->where('key', 'adya')->value('id'),
-            'yoni_id' => DB::table('master_yonis')->where('key', 'horse')->value('id'),
+            'nadi_id' => DB::table('master_nadis')->where('key', 'adi')->value('id'),
+            // Canonical Sanskrit yoni key; the English duplicates are retired.
+            'yoni_id' => DB::table('master_yonis')->where('key', 'ashwa')->value('id'),
         ]);
 
         $result = app(GunamilanService::class)->calculate($male, $female);

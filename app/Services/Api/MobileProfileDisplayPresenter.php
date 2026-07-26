@@ -568,12 +568,17 @@ class MobileProfileDisplayPresenter
             return null;
         }
 
-        if (($result['available'] ?? false) !== true) {
+        // `available` only says both horoscope rows exist; `computable` is the
+        // one that says every required input is present. Without it a row full
+        // of NULLs scores 0/36 and would be shown as a real (failing) score.
+        if (($result['computable'] ?? false) !== true) {
             return null;
         }
 
+        // 18 of 36 is compatible, INCLUSIVE. This read `<= 18.0`, which quietly
+        // moved the owner's threshold to 19+.
         $points = $result['total_points'] ?? null;
-        if (! is_numeric($points) || (float) $points <= 18.0) {
+        if (! is_numeric($points) || (float) $points < GunamilanService::COMPATIBLE_THRESHOLD) {
             return null;
         }
 
@@ -590,14 +595,23 @@ class MobileProfileDisplayPresenter
     {
         $base = [
             'available' => false,
+            // `computable` is the field a client must branch on before reading a
+            // score: false means UNKNOWN, never "incompatible".
+            'computable' => false,
+            'state' => 'not_computable',
             'status' => 'unavailable',
             'title' => $this->tr('Gunamilan / Horoscope Match'),
             'score' => null,
             'total_score' => null,
             'max_score' => 36.0,
+            'threshold' => GunamilanService::COMPATIBLE_THRESHOLD,
+            'is_compatible' => null,
             'summary_label' => null,
             'message' => $this->tr('Horoscope data is incomplete.'),
             'rows' => [],
+            'nadi_dosha' => null,
+            'bhakoot_dosha' => null,
+            'mangal' => null,
             'missing_fields' => [],
             'disclaimer' => $this->tr('Gunamilan is only a compatibility reference. Families should make the final decision after discussion.'),
         ];
@@ -639,21 +653,29 @@ class MobileProfileDisplayPresenter
                 'max_score' => $maxScore,
                 'message' => $this->gunamilanUnavailableMessage($status),
                 'missing_fields' => $missingFields,
+                'mangal' => $result['mangal'] ?? null,
             ]);
         }
 
         $totalScore = is_numeric($result['total_points'] ?? null) ? (float) $result['total_points'] : 0.0;
+        $computable = ($result['computable'] ?? false) === true;
 
         return array_merge($base, [
             'available' => true,
+            'computable' => $computable,
+            'state' => $computable ? 'computable' : 'not_computable',
             'status' => 'available',
             'score' => $totalScore,
             'total_score' => $totalScore,
             'max_score' => $maxScore,
+            'is_compatible' => $result['is_compatible'] ?? null,
             'summary_label' => $this->formatGunamilanScore($totalScore, $maxScore),
-            'message' => null,
+            'message' => $computable ? null : $this->gunamilanUnavailableMessage('unavailable'),
             'rows' => $this->gunamilanRows($result['sections'] ?? []),
-            'missing_fields' => [],
+            'nadi_dosha' => $result['nadi_dosha'] ?? null,
+            'bhakoot_dosha' => $result['bhakoot_dosha'] ?? null,
+            'mangal' => $result['mangal'] ?? null,
+            'missing_fields' => $missingFields,
         ]);
     }
 
@@ -699,6 +721,8 @@ class MobileProfileDisplayPresenter
                 'max' => $maxPoints,
                 'max_points' => $maxPoints,
                 'status' => $this->cleanString($section['status'] ?? null) ?? 'partial',
+                'computable' => ($section['computable'] ?? null) === true,
+                'is_dosha' => $section['is_dosha'] ?? null,
                 'match_label' => $this->gunamilanRowMatchLabel($section),
                 'note' => $this->cleanString($section['note'] ?? null),
                 'bride_value' => $this->cleanString($section['bride_value'] ?? null),
