@@ -133,17 +133,29 @@ class MobileMoreMatchesSectionService
             if (($fit['target_has_preferences'] ?? false) !== true) {
                 continue;
             }
-            $counts = is_array($fit['counts'] ?? null) ? $fit['counts'] : [];
-            if ((int) ($counts[ProfilePreferenceMatchService::STATUS_NOT_MATCHED] ?? 0) > 0) {
+
+            // The section still means "you are inside what they actually asked for" — so it is judged
+            // at the STRICT tier and never climbs the relaxation ladder. What changed is WHICH
+            // `not_matched` rows are fatal: counting them raw made income and height silent hard
+            // filters here exactly as it did in the main feed, so a ₹1 shortfall or a 4 cm miss deleted
+            // a genuinely interested family. Tolerated near-misses now surface with a warning; a real
+            // requirement (declared must-match income/height, religion, caste, age, location) still
+            // excludes.
+            $verdict = $this->matchingService->evaluatePreferenceBuild($fit);
+            if ($verdict['fatal']) {
                 continue;
             }
 
+            $counts = is_array($fit['counts'] ?? null) ? $fit['counts'] : [];
             $score = ((int) ($counts[ProfilePreferenceMatchService::STATUS_MATCH] ?? 0) * 3)
                 + ((int) ($counts[ProfilePreferenceMatchService::STATUS_FLEXIBLE] ?? 0));
 
             $rows->push([
                 'profile' => $candidate,
+                // A tolerated near-miss row scores nothing, so it already ranks below a clean fit —
+                // penalised, not deleted.
                 'section_score' => $score,
+                'match_warnings' => $verdict['warnings'],
             ]);
         }
 
@@ -524,8 +536,10 @@ class MobileMoreMatchesSectionService
             ->map(function (MatrimonyProfile $profile) use ($viewer, $metaById): array {
                 $row = $this->profileRowPayload($profile, $viewer);
                 $meta = $metaById->get((int) $profile->id, []);
-                foreach (['section_score', 'viewed_at', 'viewed_at_human'] as $key) {
-                    if (array_key_exists($key, $meta) && $meta[$key] !== null) {
+                // `match_warnings` is additive and optional: the near-miss reasons a row was admitted
+                // with, already localised, so the card can say what was overlooked.
+                foreach (['section_score', 'viewed_at', 'viewed_at_human', 'match_warnings'] as $key) {
+                    if (array_key_exists($key, $meta) && $meta[$key] !== null && $meta[$key] !== []) {
                         $row[$key] = $meta[$key];
                     }
                 }

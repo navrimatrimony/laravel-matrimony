@@ -79,4 +79,21 @@ return array_merge(require __DIR__.'/../en/matching.php', [
     'suchak_weak_signal' => ':field तपासणे आवश्यक',
     'suchak_fit_signals' => '{1} :n जुळलेला मुद्दा|[2,*] :n जुळलेले मुद्दे',
     'suchak_fit_notes' => '{1} :n तपासणी नोंद|[2,*] :n तपासणी नोंदी',
+
+    // Tiered relaxation ladder — यादी भरण्यासाठी कोणती अट सैल केली हे सुचकाला/सदस्याला स्पष्ट सांगते.
+    'relaxation_heading' => 'ही यादी कशी वाढवली',
+    'relaxation_tier_0' => 'काटेकोर जुळणी — कोणतीही अट सैल केलेली नाही.',
+    'relaxation_tier_1' => 'उत्पन्न/उंचीची अट सैल केली.',
+    'relaxation_tier_2' => 'जवळच्या जिल्ह्यांपर्यंत वाढवलं.',
+    'relaxation_tier_3' => 'जात सैल केली (धर्म कायम).',
+    'relaxation_notice' => 'पुरेशी स्थळे मिळावीत म्हणून एवढं सैल केलं: :note',
+    'relaxation_field_income' => 'उत्पन्न',
+    'relaxation_field_height' => 'उंची',
+    'relaxation_field_location' => 'ठिकाण',
+    'relaxation_field_caste' => 'जात',
+    'relaxation_fields_label' => 'सैल केलेलं: :fields',
+    'relaxation_row_strict' => 'सांगितलेल्या सर्व अटींत बसते',
+    'relaxation_row_relaxed' => 'एक अट सैल करून दाखवलेले',
+    'relaxation_floor_not_reached' => 'शक्य तेवढं सैल करूनही मोजकीच स्थळे मिळाली.',
+    'relaxation_never_relaxed' => 'धर्म, लिंग आणि कायदेशीर विवाहाचे वय कधीही सैल केले जात नाही.',
 ]);

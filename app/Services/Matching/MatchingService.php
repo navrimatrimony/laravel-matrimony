@@ -369,11 +369,20 @@ class MatchingService
             $seekerUser = $profile->user;
             $candidateUser = $candidate->user;
             $withActorAdjustments = $this->pool()->appliesActorAdjustments();
-            $score = ($withActorAdjustments && $seekerUser && $candidateUser)
-                ? $this->matchBoost->applyBoost($seekerUser, $candidateUser, $baseScore)
-                : $baseScore;
-            if ($withActorAdjustments && $seekerUser && $candidateUser) {
-                $score = max(0, min(100, $score + $this->behaviorScoring->scoreAdjustment($seekerUser, $candidate)));
+            if ($withActorAdjustments) {
+                $score = ($seekerUser && $candidateUser)
+                    ? $this->matchBoost->applyBoost($seekerUser, $candidateUser, $baseScore)
+                    : $baseScore;
+                if ($seekerUser && $candidateUser) {
+                    $score = max(0, min(100, $score + $this->behaviorScoring->scoreAdjustment($seekerUser, $candidate)));
+                }
+            } else {
+                // The ACTOR layer (pair boost + behaviour) stays off — see
+                // {@see CandidatePoolStrategy::appliesActorAdjustments()}. Candidate QUALITY is a
+                // different thing entirely: verification, photo, completeness and recency belong to the
+                // candidate alone and say nothing about who is looking. Dropping them made a Suchak
+                // rank an empty, unverified card level with a complete, KYC-verified one.
+                $score = max(0, min(100, $baseScore + $this->matchBoost->candidateQualityDelta($candidate, $candidateUser)));
             }
             $reasons = $this->explainScore($profile, $candidate);
 
@@ -1261,29 +1270,45 @@ class MatchingService
      */
     private function hasFatalMismatch(array $build): bool
     {
-        return $this->fatalMismatchRows($build) !== [];
+        return $this->evaluatePreferenceBuild($build, $this->activeTier)['fatal'];
     }
 
     /**
+     * Public, single-direction twin of the in-pipeline tolerance test.
+     *
+     * Any surface that filters on a {@see ProfilePreferenceMatchService::build()} payload must ask this
+     * instead of counting `counts['not_matched']` itself — a raw count treats a ₹1 income shortfall or a
+     * 4 cm height miss exactly like a declared religion requirement, which is the silent-hard-filter
+     * defect this method exists to prevent. Tolerated rows come back as `warnings` so the surface can
+     * SHOW the near-miss rather than delete the candidate.
+     *
      * @param  array<string, mixed>  $build
-     * @return list<array<string, mixed>>
+     * @param  int|null  $tier  Defaults to the strict tier: a standalone question is never asked at a
+     *                          relaxed tier, only a feed run climbing the ladder is.
+     * @return array{fatal: bool, warnings: list<string>}
      */
-    private function fatalMismatchRows(array $build): array
+    public function evaluatePreferenceBuild(array $build, ?int $tier = null): array
     {
-        $relaxed = MatchRelaxationLadder::relaxedFieldsUpTo($this->activeTier);
-        $out = [];
+        $relaxed = MatchRelaxationLadder::relaxedFieldsUpTo($tier ?? MatchRelaxationLadder::TIER_STRICT);
+        $fatal = false;
+        $warnings = [];
 
         foreach ($build['rows'] ?? [] as $row) {
             if (($row['status'] ?? '') !== ProfilePreferenceMatchService::STATUS_NOT_MATCHED) {
                 continue;
             }
-            if ($this->mismatchIsTolerated($row, $relaxed)) {
+            if (! $this->mismatchIsTolerated($row, $relaxed)) {
+                $fatal = true;
+
                 continue;
             }
-            $out[] = $row;
+            $reason = trim((string) ($row['reason'] ?? ''));
+            if ($reason !== '') {
+                $warnings[$reason] = true;
+            }
         }
 
-        return $out;
+        return ['fatal' => $fatal, 'warnings' => array_keys($warnings)];
     }
 
     /**
@@ -1314,21 +1339,11 @@ class MatchingService
      */
     private function toleratedMismatchWarnings(MatrimonyProfile $seeker, MatrimonyProfile $candidate): array
     {
-        $relaxed = MatchRelaxationLadder::relaxedFieldsUpTo($this->activeTier);
         $warnings = [];
 
         foreach ([$this->directionalPreferenceBuild($seeker, $candidate), $this->directionalPreferenceBuild($candidate, $seeker)] as $build) {
-            foreach ($build['rows'] ?? [] as $row) {
-                if (($row['status'] ?? '') !== ProfilePreferenceMatchService::STATUS_NOT_MATCHED) {
-                    continue;
-                }
-                if (! $this->mismatchIsTolerated($row, $relaxed)) {
-                    continue;
-                }
-                $reason = (string) ($row['reason'] ?? '');
-                if ($reason !== '') {
-                    $warnings[$reason] = true;
-                }
+            foreach ($this->evaluatePreferenceBuild($build, $this->activeTier)['warnings'] as $reason) {
+                $warnings[$reason] = true;
             }
         }
 
@@ -1751,6 +1766,8 @@ class MatchingService
      *   field_parts: list<array{points: int, reasons: list<string>}>,
      *   preferred_penalties: list<array{reason: string, impact: int}>,
      *   behavior_delta: int,
+     *   quality_delta: int,
+     *   quality_signals: list<array{key: string, points: int, reason: string}>,
      *   before_boost: int,
      *   final_score: int
      * }
@@ -1800,9 +1817,9 @@ class MatchingService
 
             $seeker->loadMissing('user');
             $candidate->loadMissing('user');
-            // Keep in sync with {@see findMatchesForTab}: field score then boost only (no behavior layer).
+            // Keep in sync with {@see collectTierRows}: field score then boost only (no behavior layer).
             // $withActorAdjustments = false is the Suchak-initiated case — the represented candidate's
-            // dormant account has no activity of its own, so only the field score is meaningful.
+            // dormant account has no activity of its own, so the ACTOR-keyed layer is skipped.
             $applyActor = $withActorAdjustments && $seeker->user && $candidate->user;
             $finalScore = $applyActor
                 ? $this->matchBoost->applyBoost($seeker->user, $candidate->user, $baseScore)
@@ -1810,13 +1827,31 @@ class MatchingService
             $behaviorDelta = $applyActor
                 ? $this->behaviorScoring->scoreAdjustment($seeker->user, $candidate)
                 : 0;
-            $finalScore = max(0, min(100, $finalScore + $behaviorDelta));
+
+            // ...but candidate-intrinsic QUALITY (KYC, photo, completeness, mobile, recency) is not an
+            // actor signal at all, so it still applies when the actor layer is deliberately off. Without
+            // it a Suchak saw an empty card tied with a verified, complete, recently-touched one.
+            // When the actor layer IS on, applyBoost() already contains these signals — adding them here
+            // would double-count them, hence the strict either/or.
+            $qualitySignals = $withActorAdjustments
+                ? []
+                : $this->matchBoost->explainCandidateQuality($candidate, $candidate->user);
+            $qualityDelta = 0;
+            foreach ($qualitySignals as $signal) {
+                $qualityDelta += (int) ($signal['points'] ?? 0);
+            }
+
+            $finalScore = max(0, min(100, $finalScore + $behaviorDelta + $qualityDelta));
 
             return [
                 'field_parts' => $fieldParts,
                 'field_points' => $fieldPoints,
                 'preferred_penalties' => [],
                 'behavior_delta' => $behaviorDelta,
+                'quality_delta' => $qualityDelta,
+                // list<array{key: string, points: int, reason: string}> — already trimmed to the
+                // aggregate cap, so the reasons always add up to `quality_delta`.
+                'quality_signals' => $qualitySignals,
                 'before_boost' => $baseScore,
                 'final_score' => $finalScore,
             ];

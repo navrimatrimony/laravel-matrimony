@@ -45,8 +45,11 @@ class SuchakMatchFitService
             return null;
         }
 
-        // Suchak-initiated: no boost / behaviour layer (decision C — the represented candidate's
+        // Suchak-initiated: no ACTOR boost / behaviour layer (decision C — the represented candidate's
         // dormant account has no activity, and the Suchak's own activity is not this candidate's).
+        // The candidate-intrinsic quality delta (verified / photo / complete / recently touched) still
+        // applies — see {@see MatchingService::computeMatchBreakdown()} — because it describes the
+        // candidate, not the actor, and a Suchak must not see an empty card tied with a verified one.
         $breakdown = $this->matching->computeMatchBreakdown($seeker, $candidate, false);
 
         $score = (int) ($breakdown['final_score'] ?? 0);
@@ -125,6 +128,16 @@ class SuchakMatchFitService
                 if ($reason !== '') {
                     $reasons[] = $reason;
                 }
+            }
+        }
+
+        // "Why is this on top" must stay truthful: the quality delta moved the score, so its signals
+        // are listed alongside the field reasons. They are already trimmed to the aggregate cap, so
+        // the listed points sum to exactly the delta that was applied.
+        foreach ($breakdown['quality_signals'] ?? [] as $signal) {
+            $reason = trim((string) ($signal['reason'] ?? ''));
+            if ($reason !== '' && (int) ($signal['points'] ?? 0) > 0) {
+                $reasons[] = $reason;
             }
         }
 

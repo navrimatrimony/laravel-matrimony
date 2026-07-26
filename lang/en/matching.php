@@ -78,4 +78,25 @@ return [
     'suchak_weak_signal' => ':field needs review',
     'suchak_fit_signals' => '{1} :n matched signal|[2,*] :n matched signals',
     'suchak_fit_notes' => '{1} :n review note|[2,*] :n review notes',
+
+    // ------------------------------------------------------------------
+    // Tiered relaxation ladder ({@see \App\Services\Matching\MatchRelaxationLadder},
+    // reported by MatchingService::lastRelaxationSummary()). `relaxation_tier_N` is the note for
+    // the highest tier the run had to climb; `relaxation_field_*` labels the `relaxed_fields` list.
+    // ------------------------------------------------------------------
+    'relaxation_heading' => 'How this list was widened',
+    'relaxation_tier_0' => 'Strict match — nothing was relaxed.',
+    'relaxation_tier_1' => 'Income / height conditions eased.',
+    'relaxation_tier_2' => 'Widened to nearby districts.',
+    'relaxation_tier_3' => 'Caste eased (religion unchanged).',
+    'relaxation_notice' => 'To find enough options we eased this: :note',
+    'relaxation_field_income' => 'Income',
+    'relaxation_field_height' => 'Height',
+    'relaxation_field_location' => 'Location',
+    'relaxation_field_caste' => 'Caste',
+    'relaxation_fields_label' => 'Eased: :fields',
+    'relaxation_row_strict' => 'Fits every stated condition',
+    'relaxation_row_relaxed' => 'Shown after easing a condition',
+    'relaxation_floor_not_reached' => 'Even after easing everything we could, only a few options were found.',
+    'relaxation_never_relaxed' => 'Religion, gender and the legal marriage age are never relaxed.',
 ];

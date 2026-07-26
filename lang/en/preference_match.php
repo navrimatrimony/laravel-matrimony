@@ -74,6 +74,39 @@ return [
     'reason_education_close' => 'Close to their education expectations.',
     'reason_education_below' => 'Below the education levels they selected.',
     'reason_education_not_listed' => 'Your level is not among their selections.',
+
+    // ------------------------------------------------------------------
+    // Explicitly declared community requirement (CommunityLockResolver lock).
+    // Only emitted when the seeker gave an EXPLICIT signal, so the wording says "asked for",
+    // never "we assumed".
+    // ------------------------------------------------------------------
+    'reason_religion_locked' => 'They have clearly asked for a specific religion, and yours is not in it.',
+    'reason_caste_locked' => 'They have clearly asked for a specific caste, and yours is not in it.',
+
+    // ------------------------------------------------------------------
+    // Stated location preference, resolved through taluka/district proximity.
+    // ------------------------------------------------------------------
+    'reason_location_nearby_taluka' => 'Your taluka is next to a taluka they asked for.',
+    'reason_location_same_district' => 'Same district as the taluka they asked for.',
+    'reason_location_nearby_district' => 'Your district is next to a district they asked for.',
+
+    // ------------------------------------------------------------------
+    // ASSUMED preferences. The seeker stated NOTHING here — the engine assumed a sensible range
+    // from their own profile. Every string must say so out loud: a matchmaker must never read one
+    // of these as the family's stated wish. An assumed row can never rule a candidate out.
+    // ------------------------------------------------------------------
+    'reason_age_within_assumed' => 'They did not state an age preference; this fits the range we assumed for them.',
+    'reason_age_near_assumed' => 'They did not state an age preference; this is just outside the range we assumed — our guess, not their condition.',
+    'reason_age_outside_assumed' => 'They did not state an age preference; this is outside the range we assumed — our guess, not their condition.',
+    'reason_height_within_assumed' => 'They did not state a height preference; this fits the range we assumed for them.',
+    'reason_height_outside_assumed' => 'They did not state a height preference; this is outside the range we assumed — our guess, not their condition.',
+    'reason_education_within_assumed' => 'They did not state an education expectation; this fits the level we assumed for them.',
+    'reason_education_outside_assumed' => 'They did not state an education expectation; this is outside the level we assumed — our guess, not their condition.',
+    'reason_marital_matches_assumed' => 'They did not state a marital-status expectation; this fits what we assumed for them.',
+    'reason_marital_differs_assumed' => 'They did not state a marital-status expectation; this differs from what we assumed — our guess, not their condition.',
+    'reason_location_same_district_assumed' => 'They did not state a location preference; we assumed their own district, and this is in it.',
+    'reason_location_nearby_district_assumed' => 'They did not state a location preference; we assumed their own district, and this is a neighbouring one.',
+    'reason_location_far_assumed' => 'They did not state a location preference; this is far from their own district — nearness was only our assumption.',
     'reason_missing_profession' => 'Add your profession.',
     'reason_profession_not_listed' => 'Your profession is not among their selections.',
     'reason_missing_income' => 'Add income details to compare.',

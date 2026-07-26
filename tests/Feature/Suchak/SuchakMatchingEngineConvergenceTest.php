@@ -6,16 +6,19 @@ use App\Models\Caste;
 use App\Models\City;
 use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
+use App\Models\ProfileKycSubmission;
 use App\Models\Religion;
 use App\Models\SuchakAccount;
 use App\Models\SuchakConsent;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakSuggestionService;
+use App\Services\MatchBoostService;
 use App\Services\Matching\MatchingService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -28,12 +31,27 @@ class SuchakMatchingEngineConvergenceTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** @var list<string> */
+    private array $photoFiles = [];
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->seed(MinimalLocationSeeder::class);
         ProfileCanonicalResidenceService::forgetCachedMasters();
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->photoFiles as $file) {
+            if (is_file($file)) {
+                @unlink($file);
+            }
+        }
+        $this->photoFiles = [];
+
+        parent::tearDown();
     }
 
     public function test_suchak_suggestions_are_engine_scored_and_span_members_and_other_suchak_candidates(): void
@@ -117,6 +135,164 @@ class SuchakMatchingEngineConvergenceTest extends TestCase
         // ...and the not-yet-activated Suchak candidate is still excluded from the member pool.
         $this->assertNotContains('Convergence Other Suchak Candidate', $matchedNames);
         $this->assertNotContains('Convergence Seeker Candidate', $matchedNames);
+    }
+
+    /**
+     * The Suchak path deliberately disables the ACTOR-keyed layer (boost + behaviour), because a
+     * dormant Suchak-created account has no activity of its own. That must not also throw away the
+     * candidate's OWN quality signals — a Suchak has to see the verified, photo-bearing, complete
+     * candidate first. Both candidates here are field-identical, so the base score is provably equal
+     * and only the quality delta can separate them.
+     */
+    public function test_suchak_path_ranks_a_verified_photo_bearing_candidate_above_an_identical_empty_one(): void
+    {
+        $fixture = $this->qualityFixture();
+
+        $suggestions = app(SuchakSuggestionService::class)->suggestionsForRepresentation(
+            $fixture['own_account'],
+            $fixture['seeker_representation'],
+        );
+
+        $byName = $suggestions->keyBy(static fn (array $row): string => (string) $row['basic']['display_name']);
+        $this->assertTrue($byName->has('Quality Verified Candidate'));
+        $this->assertTrue($byName->has('Quality Empty Candidate'));
+
+        $verified = $byName->get('Quality Verified Candidate');
+        $empty = $byName->get('Quality Empty Candidate');
+
+        // Field compatibility is identical by construction — nothing but candidate quality is left.
+        $this->assertSame(
+            $empty['match_base_score'],
+            $verified['match_base_score'],
+            'Fixture is broken: the two candidates must share one base score for this test to mean anything.',
+        );
+
+        $this->assertGreaterThan(
+            $empty['match_score'],
+            $verified['match_score'],
+            'A verified, photo-bearing, complete candidate must outrank an identical empty one on the Suchak path.',
+        );
+
+        // Quality moved the score, so it must be visible in the "why is this on top" reasons.
+        $this->assertContains(__('matching_engine.boost_reason_verified_kyc'), $verified['reasons']);
+        $this->assertContains(__('matching_engine.boost_reason_photo'), $verified['reasons']);
+        $this->assertNotContains(__('matching_engine.boost_reason_verified_kyc'), $empty['reasons']);
+
+        // Ordering of the returned collection follows it.
+        $names = $suggestions->map(static fn (array $row): string => (string) $row['basic']['display_name'])->values()->all();
+        $this->assertLessThan(
+            array_search('Quality Empty Candidate', $names, true),
+            array_search('Quality Verified Candidate', $names, true),
+        );
+    }
+
+    /**
+     * The member path already gets these signals inside {@see MatchBoostService::applyBoost()}.
+     * Adding the candidate-quality delta there too would double-count them, so it must stay at zero.
+     */
+    public function test_member_path_scoring_is_unchanged_by_the_candidate_quality_delta(): void
+    {
+        $fixture = $this->qualityFixture();
+
+        /** @var MatrimonyProfile $seeker */
+        $seeker = $fixture['member_seeker'];
+        /** @var MatrimonyProfile $candidate */
+        $candidate = $fixture['verified_candidate'];
+
+        $breakdown = app(MatchingService::class)->computeMatchBreakdown($seeker, $candidate);
+
+        $this->assertSame(0, $breakdown['quality_delta'], 'The member path must not add the quality delta on top of applyBoost().');
+        $this->assertSame([], $breakdown['quality_signals']);
+
+        $expected = max(0, min(100, app(MatchBoostService::class)->applyBoost(
+            $seeker->user,
+            $candidate->user,
+            (int) $breakdown['before_boost'],
+        ) + (int) $breakdown['behavior_delta']));
+
+        $this->assertSame($expected, (int) $breakdown['final_score'], 'Member scoring must still be exactly boost + behaviour.');
+    }
+
+    /**
+     * Two field-identical male candidates plus the Suchak's own female seeker. The candidates differ
+     * only in KYC / approved photo / verified mobile — never in anything {@see MatchingService} scores.
+     *
+     * @return array<string, mixed>
+     */
+    private function qualityFixture(): array
+    {
+        [$religion, $caste] = $this->community();
+        $ownAccount = $this->suchakAccount(['suchak_name' => 'Quality Own Suchak']);
+        $community = ['religion_id' => $religion->id, 'caste_id' => $caste->id];
+
+        $seekerProfile = $this->profile(array_merge($community, [
+            'full_name' => 'Quality Seeker Candidate',
+            'gender_id' => $this->genderId('female'),
+            'date_of_birth' => now()->subYears(27)->toDateString(),
+            'height_cm' => 158,
+        ]), activated: false);
+
+        $shared = array_merge($community, [
+            'gender_id' => $this->genderId('male'),
+            'date_of_birth' => now()->subYears(30)->toDateString(),
+            'height_cm' => 172,
+        ]);
+
+        $verified = $this->profile(array_merge($shared, ['full_name' => 'Quality Verified Candidate']), activated: true);
+        $empty = $this->profile(array_merge($shared, ['full_name' => 'Quality Empty Candidate']), activated: true);
+
+        $memberSeeker = $this->profile(array_merge($community, [
+            'full_name' => 'Quality Member Seeker',
+            'gender_id' => $this->genderId('female'),
+            'date_of_birth' => now()->subYears(28)->toDateString(),
+            'height_cm' => 160,
+        ]), activated: true);
+
+        $this->applyQualitySignals($verified);
+
+        // Recency is the one quality signal both must share, so it cannot explain the gap.
+        foreach ([$verified, $empty] as $profile) {
+            DB::table('matrimony_profiles')->where('id', $profile->id)->update(['updated_at' => now()->subDay()]);
+            User::query()->whereKey($profile->user_id)->update(['last_seen_at' => now()->subDay()]);
+        }
+
+        Cache::flush();
+
+        return [
+            'own_account' => $ownAccount,
+            'seeker_representation' => $this->activeRepresentation($ownAccount, $seekerProfile),
+            'verified_candidate' => $verified->fresh(['user']),
+            'empty_candidate' => $empty->fresh(['user']),
+            'member_seeker' => $memberSeeker->fresh(['user', 'gender']),
+        ];
+    }
+
+    /**
+     * Approved photo + approved KYC + verified mobile. All three are written straight to storage so
+     * nothing here touches a field {@see MatchingService::calculateScore()} reads.
+     */
+    private function applyQualitySignals(MatrimonyProfile $profile): void
+    {
+        $dir = storage_path('app/public/matrimony_photos');
+        if (! is_dir($dir)) {
+            mkdir($dir, 0775, true);
+        }
+        $file = 'suchak-quality-'.$profile->id.'.jpg';
+        file_put_contents($dir.DIRECTORY_SEPARATOR.$file, 'x');
+        $this->photoFiles[] = $dir.DIRECTORY_SEPARATOR.$file;
+
+        DB::table('matrimony_profiles')
+            ->where('id', $profile->id)
+            ->update(['profile_photo' => $file, 'photo_approved' => true]);
+
+        ProfileKycSubmission::query()->create([
+            'matrimony_profile_id' => $profile->id,
+            'id_document_path' => 'kyc/'.$profile->id.'.pdf',
+            'status' => ProfileKycSubmission::STATUS_APPROVED,
+            'reviewed_at' => now()->subDay(),
+        ]);
+
+        User::query()->whereKey($profile->user_id)->update(['mobile_verified_at' => now()->subDay()]);
     }
 
     /**
