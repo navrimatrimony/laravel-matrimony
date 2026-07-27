@@ -72,7 +72,13 @@ class SuchakProfileRequestsApiController extends Controller
         if ($filter === self::FILTER_OPEN) {
             $query->whereIn('request_status', SuchakProfileRequest::OPEN_STATUSES);
         } elseif ($filter === self::FILTER_ANSWERED) {
+            // "Answered" means the Suchak has acted on it — which includes their
+            // OWN reply, not only the candidate's final yes/no. Without
+            // accepted_by_suchak here the tab stayed empty right after a Suchak
+            // replied, so the reply looked lost. Forwarding is an action too.
             $query->whereIn('request_status', [
+                SuchakProfileRequest::STATUS_ACCEPTED_BY_SUCHAK,
+                SuchakProfileRequest::STATUS_FORWARDED_TO_CANDIDATE,
                 SuchakProfileRequest::STATUS_CANDIDATE_INTERESTED,
                 SuchakProfileRequest::STATUS_CANDIDATE_NOT_INTERESTED,
             ]);
