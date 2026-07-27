@@ -8,6 +8,7 @@ use App\Models\Message;
 use App\Models\MessageParticipantState;
 use App\Notifications\NewChatMessageNotification;
 use App\Services\AdminActivityNotificationGate;
+use App\Services\CommunicationPolicyService;
 use App\Services\FeatureUsageService;
 use App\Services\NotificationService;
 use App\Services\ShowcaseChat\ShowcaseOrchestrationService;
@@ -61,8 +62,18 @@ class ChatMessageService
             ->exists();
     }
 
-    public function sendTextMessage(MatrimonyProfile $sender, MatrimonyProfile $receiver, Conversation $conversation, string $bodyText): Message
-    {
+    /**
+     * $actorRole names the human pressing send. A Suchak relay is stored under
+     * the candidate's profile, so the policy cannot infer it from $sender —
+     * see {@see ChatPolicyService::canSendMessage()}.
+     */
+    public function sendTextMessage(
+        MatrimonyProfile $sender,
+        MatrimonyProfile $receiver,
+        Conversation $conversation,
+        string $bodyText,
+        string $actorRole = CommunicationPolicyService::ACTOR_MEMBER,
+    ): Message {
         $bodyText = trim($bodyText);
         if ($bodyText === '') {
             throw ValidationException::withMessages(['body_text' => 'Message cannot be empty.']);
@@ -75,7 +86,7 @@ class ChatMessageService
             'message_type' => Message::TYPE_TEXT,
             'body_text' => $bodyText,
             'image_path' => null,
-        ]);
+        ], $actorRole);
     }
 
     public function sendImageMessage(MatrimonyProfile $sender, MatrimonyProfile $receiver, Conversation $conversation, UploadedFile $image, ?string $caption = null): Message
@@ -171,14 +182,19 @@ class ChatMessageService
         });
     }
 
-    protected function sendMessage(MatrimonyProfile $sender, MatrimonyProfile $receiver, Conversation $conversation, array $payload): Message
-    {
-        $decision = $this->policy->canSendMessage($sender, $receiver, $conversation);
+    protected function sendMessage(
+        MatrimonyProfile $sender,
+        MatrimonyProfile $receiver,
+        Conversation $conversation,
+        array $payload,
+        string $actorRole = CommunicationPolicyService::ACTOR_MEMBER,
+    ): Message {
+        $decision = $this->policy->canSendMessage($sender, $receiver, $conversation, $actorRole);
         if (! $decision->allowed) {
             throw ValidationException::withMessages(['policy' => $decision->humanMessage !== '' ? $decision->humanMessage : 'Cannot send message.']);
         }
 
-        return DB::transaction(function () use ($sender, $receiver, $conversation, $payload) {
+        return DB::transaction(function () use ($sender, $receiver, $conversation, $payload, $actorRole) {
             $sentAt = now();
 
             $message = Message::create([
@@ -210,7 +226,7 @@ class ChatMessageService
 
             // Reply gate: if receiver replied (i.e. sender is receiver in other direction), clear lock.
             $this->policy->clearReplyGateOnReply($sender, $receiver, $conversation);
-            $this->policy->registerReplyGateLockIfNeeded($sender, $receiver, $conversation);
+            $this->policy->registerReplyGateLockIfNeeded($sender, $receiver, $conversation, $actorRole);
 
             // Notify receiver (database channel) after successful commit — never the sender.
             if ($receiver->id !== $sender->id && $receiver->user) {

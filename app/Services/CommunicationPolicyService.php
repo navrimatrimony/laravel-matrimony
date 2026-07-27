@@ -12,12 +12,25 @@ class CommunicationPolicyService
 {
     public const KEY_PREFIX = 'communication_';
 
+    /**
+     * Who is actually pressing send.
+     *
+     * A Suchak relays through the candidate's profile, so `sender_profile_id`
+     * cannot tell a relayed message from the candidate's own — the acting role
+     * travels with the call instead. See {@see replyGateLimitsFor()}.
+     */
+    public const ACTOR_MEMBER = 'member';
+
+    public const ACTOR_SUCHAK = 'suchak';
+
     public const KEYS = [
         // Messaging (chat)
         'allow_messaging',
         'messaging_mode',
         'max_consecutive_messages_without_reply',
         'reply_gate_cooling_hours',
+        'suchak_max_consecutive_messages_without_reply',
+        'suchak_reply_gate_cooling_hours',
         'max_messages_per_day_per_sender',
         'max_messages_per_week_per_sender',
         'max_messages_per_month_per_sender',
@@ -68,6 +81,22 @@ class CommunicationPolicyService
             $v = (int) $coolingHours;
             if ($v >= 1 && $v <= 720) {
                 $config['reply_gate_cooling_hours'] = $v;
+            }
+        }
+
+        $suchakConsecutive = AdminSetting::getValue(self::KEY_PREFIX . 'suchak_max_consecutive_messages_without_reply', null);
+        if ($suchakConsecutive !== null && $suchakConsecutive !== '') {
+            $v = (int) $suchakConsecutive;
+            if ($v >= 1 && $v <= 20) {
+                $config['suchak_max_consecutive_messages_without_reply'] = $v;
+            }
+        }
+
+        $suchakCoolingHours = AdminSetting::getValue(self::KEY_PREFIX . 'suchak_reply_gate_cooling_hours', null);
+        if ($suchakCoolingHours !== null && $suchakCoolingHours !== '') {
+            $v = (int) $suchakCoolingHours;
+            if ($v >= 1 && $v <= 720) {
+                $config['suchak_reply_gate_cooling_hours'] = $v;
             }
         }
 
@@ -155,6 +184,36 @@ class CommunicationPolicyService
     }
 
     /**
+     * The reply-gate numbers that apply to the role actually pressing send.
+     *
+     * There is ONE reply gate. Only its two thresholds are role-scoped, because
+     * a member sending repeatedly is the harassment case the gate exists for,
+     * while a Suchak is a professional intermediary whose job is to follow up
+     * with families across many conversations.
+     *
+     * `ACTOR_MEMBER` reads the original keys with the original fallbacks, so
+     * member behaviour is unchanged whether or not the Suchak keys are set.
+     *
+     * @return array{max_consecutive: int, cooling_hours: int}
+     */
+    public static function replyGateLimitsFor(string $actorRole, ?array $config = null): array
+    {
+        $config ??= self::getConfig();
+
+        if ($actorRole === self::ACTOR_SUCHAK) {
+            return [
+                'max_consecutive' => (int) ($config['suchak_max_consecutive_messages_without_reply'] ?? 4),
+                'cooling_hours' => (int) ($config['suchak_reply_gate_cooling_hours'] ?? 24),
+            ];
+        }
+
+        return [
+            'max_consecutive' => (int) ($config['max_consecutive_messages_without_reply'] ?? 2),
+            'cooling_hours' => (int) ($config['reply_gate_cooling_hours'] ?? 24),
+        ];
+    }
+
+    /**
      * Get current effective values for admin form (same shape as config).
      */
     public static function getCurrentForAdmin(): array
@@ -166,6 +225,8 @@ class CommunicationPolicyService
             'messaging_mode' => AdminSetting::getValue(self::KEY_PREFIX . 'messaging_mode', (string) ($config['messaging_mode'] ?? 'free_chat_with_reply_gate')),
             'max_consecutive_messages_without_reply' => AdminSetting::getValue(self::KEY_PREFIX . 'max_consecutive_messages_without_reply', (string) ($config['max_consecutive_messages_without_reply'] ?? 2)),
             'reply_gate_cooling_hours' => AdminSetting::getValue(self::KEY_PREFIX . 'reply_gate_cooling_hours', (string) ($config['reply_gate_cooling_hours'] ?? 24)),
+            'suchak_max_consecutive_messages_without_reply' => AdminSetting::getValue(self::KEY_PREFIX . 'suchak_max_consecutive_messages_without_reply', (string) ($config['suchak_max_consecutive_messages_without_reply'] ?? 4)),
+            'suchak_reply_gate_cooling_hours' => AdminSetting::getValue(self::KEY_PREFIX . 'suchak_reply_gate_cooling_hours', (string) ($config['suchak_reply_gate_cooling_hours'] ?? 24)),
             'max_messages_per_day_per_sender' => AdminSetting::getValue(self::KEY_PREFIX . 'max_messages_per_day_per_sender', (string) ($config['max_messages_per_day_per_sender'] ?? 20)),
             'max_messages_per_week_per_sender' => AdminSetting::getValue(self::KEY_PREFIX . 'max_messages_per_week_per_sender', (string) ($config['max_messages_per_week_per_sender'] ?? 100)),
             'max_messages_per_month_per_sender' => AdminSetting::getValue(self::KEY_PREFIX . 'max_messages_per_month_per_sender', (string) ($config['max_messages_per_month_per_sender'] ?? 300)),

@@ -12,6 +12,7 @@ use App\Services\Chat\ChatMessageService;
 use App\Services\Chat\ChatPolicyService;
 use App\Services\Chat\PolicyDecision;
 use App\Services\ChatListService;
+use App\Services\CommunicationPolicyService;
 
 /**
  * The Suchak's view of the EXISTING member↔candidate conversation.
@@ -225,6 +226,10 @@ class SuchakChatThreadService
      * ChatPolicyService's, verbatim: daily/weekly/monthly caps and the reply
      * gate cooldown reach the app with the policy's own wording and
      * locked_until, and are never worked around here.
+     *
+     * The acting role is passed for the same reason the send path passes it —
+     * this preview must agree with what the send will actually do, and the
+     * candidate's profile id alone cannot say who is writing.
      */
     public function canSendPayload(
         SuchakProfileRequest $request,
@@ -245,7 +250,12 @@ class SuchakChatThreadService
         }
 
         return $this->presenter->policyPayload(
-            $this->policy->canSendMessage($customer, $member, $conversation)
+            $this->policy->canSendMessage(
+                $customer,
+                $member,
+                $conversation,
+                CommunicationPolicyService::ACTOR_SUCHAK,
+            )
         );
     }
 }

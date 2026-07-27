@@ -23,6 +23,8 @@ class CommunicationPolicyMessagingTest extends TestCase
             // Force a real change vs defaults so controller stores + sets success.
             'max_consecutive_messages_without_reply' => 3,
             'reply_gate_cooling_hours' => 25,
+            'suchak_max_consecutive_messages_without_reply' => 4,
+            'suchak_reply_gate_cooling_hours' => 24,
             'max_messages_per_day_per_sender' => 20,
             'max_messages_per_week_per_sender' => 100,
             'max_messages_per_month_per_sender' => 300,
@@ -71,6 +73,8 @@ class CommunicationPolicyMessagingTest extends TestCase
             'messaging_mode' => 'free_chat_with_reply_gate',
             'max_consecutive_messages_without_reply' => 0, // invalid
             'reply_gate_cooling_hours' => 24,
+            'suchak_max_consecutive_messages_without_reply' => 4,
+            'suchak_reply_gate_cooling_hours' => 24,
             'max_messages_per_day_per_sender' => 20,
             'max_messages_per_week_per_sender' => 100,
             'max_messages_per_month_per_sender' => 300,

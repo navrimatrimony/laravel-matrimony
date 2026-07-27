@@ -14,6 +14,7 @@ use App\Models\SuchakProfileRequest;
 use App\Models\User;
 use App\Services\Chat\ChatConversationService;
 use App\Services\Chat\ChatMessageService;
+use App\Services\CommunicationPolicyService;
 use App\Services\Interest\SuchakRoutedInterestService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -272,11 +273,15 @@ class SuchakRequestPipelineService
                 $lockedRequest->requestingMatrimonyProfile,
             );
 
+            // Sent under the candidate's profile — the acting role is what tells
+            // ChatPolicyService this is a Suchak following up, not the candidate
+            // writing repeatedly.
             $message = $this->chatMessageService->sendTextMessage(
                 $lockedRequest->targetMatrimonyProfile,
                 $lockedRequest->requestingMatrimonyProfile,
                 $conversation,
                 $this->suchakReplyChatBody($account, $replyText),
+                CommunicationPolicyService::ACTOR_SUCHAK,
             );
 
             $repliedAt = now();
@@ -804,7 +809,8 @@ class SuchakRequestPipelineService
             $line .= "\n".$note;
         }
 
-        $body = $actorRole === SuchakPipelineEvent::ACTOR_SUCHAK && $account !== null
+        $sentBySuchak = $actorRole === SuchakPipelineEvent::ACTOR_SUCHAK && $account !== null;
+        $body = $sentBySuchak
             ? $this->suchakReplyChatBody($account, $line)
             : $line;
 
@@ -819,6 +825,9 @@ class SuchakRequestPipelineService
                 $requestingProfile,
                 $conversation,
                 $body,
+                $sentBySuchak
+                    ? CommunicationPolicyService::ACTOR_SUCHAK
+                    : CommunicationPolicyService::ACTOR_MEMBER,
             );
         } catch (ValidationException) {
             return null;

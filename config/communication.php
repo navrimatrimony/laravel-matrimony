@@ -27,6 +27,15 @@ return [
     // Cooling period after reply-gate limit is hit (hours).
     'reply_gate_cooling_hours' => (int) env('COMMUNICATION_REPLY_GATE_COOLING_HOURS', 24),
 
+    /*
+    | Same reply gate, Suchak thresholds. A Suchak is a professional
+    | intermediary who follows up with families across many conversations, so
+    | the member numbers above would block legitimate work. These apply only
+    | when the send is a Suchak relay (see CommunicationPolicyService::ACTOR_*).
+    */
+    'suchak_max_consecutive_messages_without_reply' => (int) env('COMMUNICATION_SUCHAK_MAX_CONSECUTIVE_MESSAGES_WITHOUT_REPLY', 4),
+    'suchak_reply_gate_cooling_hours' => (int) env('COMMUNICATION_SUCHAK_REPLY_GATE_COOLING_HOURS', 24),
+
     // Sender usage limits (rolling windows).
     'max_messages_per_day_per_sender' => (int) env('COMMUNICATION_MAX_MESSAGES_PER_DAY_PER_SENDER', 20),
     'max_messages_per_week_per_sender' => (int) env('COMMUNICATION_MAX_MESSAGES_PER_WEEK_PER_SENDER', 100),

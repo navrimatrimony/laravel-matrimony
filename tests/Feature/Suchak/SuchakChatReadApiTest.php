@@ -186,11 +186,14 @@ class SuchakChatReadApiTest extends TestCase
         $sent->assertJsonPath('data.chat_message.author_role', SuchakChatThreadService::AUTHOR_SUCHAK);
         $sent->assertJsonPath('data.chat_message.body_text', 'पहिला संदेश');
 
-        // The reply gate is admin policy (max_consecutive_messages_without_reply)
-        // applied by the SAME ChatPolicyService a member goes through. The Suchak
-        // gets no exemption from it and no extra gate either.
-        $cfg = CommunicationPolicyService::getConfig();
-        $maxConsecutive = (int) ($cfg['max_consecutive_messages_without_reply'] ?? 2);
+        // The reply gate is admin policy applied by the SAME ChatPolicyService a
+        // member goes through. The Suchak gets no exemption from it and no extra
+        // gate either — only its own admin-configured threshold, because a
+        // professional intermediary following up with a family is not the
+        // harassment case the gate exists for.
+        $maxConsecutive = CommunicationPolicyService::replyGateLimitsFor(
+            CommunicationPolicyService::ACTOR_SUCHAK
+        )['max_consecutive'];
 
         for ($i = 1; $i < $maxConsecutive; $i++) {
             $this->postJson("/api/v1/suchak/chats/{$conversationId}/messages", [

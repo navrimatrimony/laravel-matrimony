@@ -78,8 +78,20 @@ class ChatPolicyService
         return PolicyDecision::allow($access->meta);
     }
 
-    public function canSendMessage(MatrimonyProfile $sender, MatrimonyProfile $receiver, Conversation $conversation): PolicyDecision
-    {
+    /**
+     * $actorRole is the human pressing send, which is NOT always the sender
+     * profile: SuchakRequestPipelineService relays a Suchak's words into the
+     * member↔candidate conversation as the CANDIDATE's profile, so
+     * `sender_profile_id` cannot tell the two apart. Callers that act on a
+     * Suchak's behalf pass ACTOR_SUCHAK; everything else keeps the member
+     * default and behaves exactly as before.
+     */
+    public function canSendMessage(
+        MatrimonyProfile $sender,
+        MatrimonyProfile $receiver,
+        Conversation $conversation,
+        string $actorRole = CommunicationPolicyService::ACTOR_MEMBER,
+    ): PolicyDecision {
         $access = $this->canAccessMessaging($sender, $receiver);
         if (! $access->allowed) {
             return $access;
@@ -138,7 +150,7 @@ class ChatPolicyService
 
         $mode = (string) ($cfg['messaging_mode'] ?? 'free_chat_with_reply_gate');
         if ($mode === 'free_chat_with_reply_gate') {
-            $maxConsecutive = (int) ($cfg['max_consecutive_messages_without_reply'] ?? 2);
+            $maxConsecutive = CommunicationPolicyService::replyGateLimitsFor($actorRole, $cfg)['max_consecutive'];
             // After a cooling period ends, allow a fresh quota of N messages.
             $cycleBoundary = $latestCooldown?->locked_until;
             $consecutive = $this->countTrailingConsecutiveUnreplied($conversation->id, $sender->id, $receiver->id, $cycleBoundary);
@@ -153,15 +165,29 @@ class ChatPolicyService
         return PolicyDecision::allow($access->meta);
     }
 
-    public function registerReplyGateLockIfNeeded(MatrimonyProfile $sender, MatrimonyProfile $receiver, Conversation $conversation): void
-    {
+    /**
+     * The trailing count and the cooldown row are keyed by profile pair, and a
+     * Suchak relay carries the candidate's profile id, so a candidate's own
+     * messages and their Suchak's relayed ones share ONE counter and ONE lock.
+     * That is deliberate: the gate protects the RECEIVER, who sees a single
+     * profile writing to them, and separate counters would let the pair send
+     * their two quotas back to back — weakening the gate for the member. Only
+     * the threshold and the cooling length follow whoever pressed send.
+     */
+    public function registerReplyGateLockIfNeeded(
+        MatrimonyProfile $sender,
+        MatrimonyProfile $receiver,
+        Conversation $conversation,
+        string $actorRole = CommunicationPolicyService::ACTOR_MEMBER,
+    ): void {
         $cfg = CommunicationPolicyService::getConfig();
         $mode = (string) ($cfg['messaging_mode'] ?? 'free_chat_with_reply_gate');
         if ($mode !== 'free_chat_with_reply_gate') {
             return;
         }
 
-        $maxConsecutive = (int) ($cfg['max_consecutive_messages_without_reply'] ?? 2);
+        $limits = CommunicationPolicyService::replyGateLimitsFor($actorRole, $cfg);
+        $maxConsecutive = $limits['max_consecutive'];
         $latestCooldown = MessagePolicyCooldown::query()
             ->where('sender_profile_id', $sender->id)
             ->where('receiver_profile_id', $receiver->id)
@@ -175,7 +201,7 @@ class ChatPolicyService
             return;
         }
 
-        $hours = (int) ($cfg['reply_gate_cooling_hours'] ?? 24);
+        $hours = $limits['cooling_hours'];
         $lockedUntil = now()->addHours(max(1, $hours));
 
         MessagePolicyCooldown::updateOrCreate(

@@ -64,15 +64,33 @@
 
                 <div class="space-y-3">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Consecutive message limit without reply</label>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Consecutive message limit without reply (member)</label>
                         <input type="number" name="max_consecutive_messages_without_reply" value="{{ old('max_consecutive_messages_without_reply', $current['max_consecutive_messages_without_reply'] ?? 2) }}" min="1" max="20"
                             class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cooling period (hours)</label>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cooling period (hours, member)</label>
                         <input type="number" name="reply_gate_cooling_hours" value="{{ old('reply_gate_cooling_hours', $current['reply_gate_cooling_hours'] ?? 24) }}" min="1" max="720"
                             class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
                     </div>
+                </div>
+            </div>
+
+            <div class="mt-6 grid gap-6 md:grid-cols-2">
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Consecutive message limit without reply (Suchak)</label>
+                        <input type="number" name="suchak_max_consecutive_messages_without_reply" value="{{ old('suchak_max_consecutive_messages_without_reply', $current['suchak_max_consecutive_messages_without_reply'] ?? 4) }}" min="1" max="20"
+                            class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cooling period (hours, Suchak)</label>
+                        <input type="number" name="suchak_reply_gate_cooling_hours" value="{{ old('suchak_reply_gate_cooling_hours', $current['suchak_reply_gate_cooling_hours'] ?? 24) }}" min="1" max="720"
+                            class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                    </div>
+                </div>
+                <div class="space-y-3">
+                    <p class="text-xs text-gray-500 mt-1">Same reply gate, Suchak thresholds. They apply only to a Suchak's relayed follow-up, which is stored under the candidate's profile — a member writing on their own account always uses the member numbers above. The counter and the lock stay shared per profile pair, so the gate is never widened for the person receiving the messages.</p>
                 </div>
             </div>
 
