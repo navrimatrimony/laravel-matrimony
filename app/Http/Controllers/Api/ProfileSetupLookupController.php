@@ -507,10 +507,18 @@ class ProfileSetupLookupController extends Controller
             return [];
         }
 
+        // Resolved once per request, never inside the map(). Schema::hasColumn()
+        // is an uncached information_schema round trip, so asking per row turned
+        // 264 education degrees into ~1,000 extra queries and ~2s of wall clock.
+        $hasCodeMr = Schema::hasColumn('master_education', 'code_mr');
+        $hasFullForm = Schema::hasColumn('master_education', 'full_form');
+        $hasCategoryNameMr = Schema::hasColumn('master_education_categories', 'name_mr');
+        $hasCategoryIsActive = Schema::hasColumn('master_education_categories', 'is_active');
+
         return EducationDegree::query()
             ->with('category')
             ->when(
-                Schema::hasColumn('master_education_categories', 'is_active'),
+                $hasCategoryIsActive,
                 fn ($query) => $query->whereHas('category', fn ($category) => $category->where('is_active', true))
             )
             ->orderBy('sort_order')
@@ -521,11 +529,11 @@ class ProfileSetupLookupController extends Controller
                 'code' => $degree->code,
                 'label' => $degree->code,
                 'label_en' => $degree->code,
-                'label_mr' => Schema::hasColumn('master_education', 'code_mr') ? LocalizedText::value($degree, 'code_mr') : null,
-                'full_form' => Schema::hasColumn('master_education', 'full_form') ? ($degree->full_form ?: null) : null,
+                'label_mr' => $hasCodeMr ? LocalizedText::value($degree, 'code_mr') : null,
+                'full_form' => $hasFullForm ? ($degree->full_form ?: null) : null,
                 'category_id' => $degree->category_id ? (int) $degree->category_id : null,
                 'category_label' => $degree->category?->name,
-                'category_label_mr' => Schema::hasColumn('master_education_categories', 'name_mr')
+                'category_label_mr' => $hasCategoryNameMr
                     ? LocalizedText::value($degree->category, 'name_mr')
                     : null,
             ])
@@ -542,6 +550,8 @@ class ProfileSetupLookupController extends Controller
             return [];
         }
 
+        $hasNameMr = Schema::hasColumn('master_occupation_categories', 'name_mr');
+
         return OccupationCategory::query()
             ->orderBy('sort_order')
             ->orderBy('name')
@@ -550,7 +560,7 @@ class ProfileSetupLookupController extends Controller
                 'id' => (int) $category->id,
                 'label' => $category->name,
                 'label_en' => $category->name,
-                'label_mr' => Schema::hasColumn('master_occupation_categories', 'name_mr') ? LocalizedText::value($category, 'name_mr') : null,
+                'label_mr' => $hasNameMr ? LocalizedText::value($category, 'name_mr') : null,
                 'legacy_working_with_type_id' => $category->legacy_working_with_type_id
                     ? (int) $category->legacy_working_with_type_id
                     : null,
@@ -568,6 +578,9 @@ class ProfileSetupLookupController extends Controller
             return [];
         }
 
+        $hasNameMr = Schema::hasColumn('master_occupations', 'name_mr');
+        $hasCategoryNameMr = Schema::hasColumn('master_occupation_categories', 'name_mr');
+
         return OccupationMaster::query()
             ->with('category')
             ->orderBy('sort_order')
@@ -577,10 +590,10 @@ class ProfileSetupLookupController extends Controller
                 'id' => (int) $occupation->id,
                 'label' => $occupation->name,
                 'label_en' => $occupation->name,
-                'label_mr' => Schema::hasColumn('master_occupations', 'name_mr') ? LocalizedText::value($occupation, 'name_mr') : null,
+                'label_mr' => $hasNameMr ? LocalizedText::value($occupation, 'name_mr') : null,
                 'category_id' => $occupation->category_id ? (int) $occupation->category_id : null,
                 'category_label' => $occupation->category?->name,
-                'category_label_mr' => Schema::hasColumn('master_occupation_categories', 'name_mr')
+                'category_label_mr' => $hasCategoryNameMr
                     ? LocalizedText::value($occupation->category, 'name_mr')
                     : null,
             ])
