@@ -338,7 +338,23 @@ class SuchakRequestPresenter
     {
         $parts = array_values(array_filter($parts, fn ($value): bool => $this->cleanString($value) !== null));
 
-        return $parts === [] ? null : implode(' • ', $parts);
+        // Drop repeats, case- and space-insensitively. Religion and caste are
+        // genuinely the same word for several communities (Buddhist, Jain,
+        // Sikh...), and the Suchak was reading "Buddhist • Buddhist" on the
+        // request card — which looks like a bug in the data rather than a fact
+        // about the person.
+        $seen = [];
+        $unique = [];
+        foreach ($parts as $part) {
+            $key = mb_strtolower(trim((string) $part));
+            if ($key === '' || isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $unique[] = $part;
+        }
+
+        return $unique === [] ? null : implode(' • ', $unique);
     }
 
     private function dateString(mixed $value): ?string
