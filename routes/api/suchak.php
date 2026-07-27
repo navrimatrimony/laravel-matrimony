@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\Suchak\SuchakPaymentIdentityApiController;
 use App\Http\Controllers\Api\Suchak\SuchakPaymentRequestOptionsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakPaymentRequestsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakPaymentsApiController;
+use App\Http\Controllers\Api\Suchak\SuchakProfileRequestsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakPayuCheckoutApiController;
 use App\Http\Controllers\Api\Suchak\SuchakRegisterApiController;
 use App\Http\Controllers\Api\Suchak\SuchakRepresentedProfileApiController;
@@ -113,6 +114,15 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::post('/nxt/{representation}/profile/photo', [SuchakRepresentedProfileApiController::class, 'uploadPhoto']);
     Route::get('/nxt/{representation}/consent-contacts', [SuchakRepresentedProfileApiController::class, 'consentContacts']);
     Route::post('/nxt/{representation}/preferences/auto-draft', [SuchakRepresentedProfileApiController::class, 'autoDraftPreferences']);
+
+    // Incoming member→Suchak requests. Until now this pipeline existed only on
+    // the website, so a Suchak using the app never learned that a member had
+    // approached one of their customers. Same service as the web reply route.
+    Route::get('/profile-requests', [SuchakProfileRequestsApiController::class, 'index']);
+    Route::get('/profile-requests/{profileRequest}', [SuchakProfileRequestsApiController::class, 'show']);
+    Route::post('/profile-requests/{profileRequest}/reply', [SuchakProfileRequestsApiController::class, 'reply']);
+    Route::post('/profile-requests/{profileRequest}/forward', [SuchakProfileRequestsApiController::class, 'forward']);
+    Route::post('/profile-requests/{profileRequest}/decision', [SuchakProfileRequestsApiController::class, 'decide']);
 
     // Ranked, masked match suggestions for one represented candidate + the
     // learning log behind them (impression on read, decision on write).

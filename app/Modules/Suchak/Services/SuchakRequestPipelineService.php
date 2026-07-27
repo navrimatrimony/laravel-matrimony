@@ -21,6 +21,14 @@ use InvalidArgumentException;
 
 class SuchakRequestPipelineService
 {
+    public const DECISION_INTERESTED = 'interested';
+    public const DECISION_NOT_INTERESTED = 'not_interested';
+
+    public const DECISIONS = [
+        self::DECISION_INTERESTED,
+        self::DECISION_NOT_INTERESTED,
+    ];
+
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakAccessService $accessService,
@@ -240,6 +248,12 @@ class SuchakRequestPipelineService
                 throw new InvalidArgumentException('Suchak request does not belong to this Suchak account.');
             }
 
+            // Consent, and only consent, makes this Suchak the person's
+            // representative. A revoked/expired consent must close the reply
+            // path on EVERY surface (web + both apps), so the check lives here
+            // rather than in either controller.
+            $this->assertSuchakMayActOnRequest($lockedRequest);
+
             if (! $lockedRequest->isOpen()) {
                 throw new InvalidArgumentException('Suchak request is not open.');
             }
@@ -322,6 +336,472 @@ class SuchakRequestPipelineService
 
         return $request->request_status === SuchakProfileRequest::STATUS_EXPIRED
             || $request->pipeline?->pipeline_status === SuchakPipeline::STATUS_EXPIRED;
+    }
+
+    /**
+     * Lazy SLA sweep. There is no cron for expirePipelineIfPastSla(), so every
+     * read surface (member profile detail, member request list, Suchak inbox)
+     * runs the sweep for its own narrow scope first. That is what makes
+     * "no reply inside the SLA window closes the request" actually true, and it
+     * reuses the existing expiry mechanism instead of adding a second timer.
+     *
+     * @param  callable(\Illuminate\Database\Eloquent\Builder): void  $scope
+     */
+    public function expireDuePipelines(callable $scope): int
+    {
+        $duePipelines = SuchakPipeline::query()
+            ->where('pipeline_status', '!=', SuchakPipeline::STATUS_EXPIRED)
+            ->where('lock_expires_at', '<=', now())
+            ->whereHas('request', function ($query): void {
+                $query->whereIn('request_status', SuchakProfileRequest::OPEN_STATUSES);
+            })
+            ->tap($scope)
+            ->get();
+
+        foreach ($duePipelines as $pipeline) {
+            $this->expirePipelineIfPastSla($pipeline);
+        }
+
+        return $duePipelines->count();
+    }
+
+    public function expireDuePipelinesForRequestingProfile(MatrimonyProfile $requestingProfile): int
+    {
+        return $this->expireDuePipelines(
+            fn ($query) => $query->where('requesting_matrimony_profile_id', $requestingProfile->id),
+        );
+    }
+
+    public function expireDuePipelinesForTargetProfile(MatrimonyProfile $targetProfile): int
+    {
+        return $this->expireDuePipelines(
+            fn ($query) => $query->where('target_matrimony_profile_id', $targetProfile->id),
+        );
+    }
+
+    public function expireDuePipelinesForAccount(SuchakAccount $account): int
+    {
+        return $this->expireDuePipelines(
+            fn ($query) => $query->where('selected_suchak_account_id', $account->id),
+        );
+    }
+
+    /**
+     * pending → viewed_by_suchak. Idempotent: any later state is left alone, so
+     * opening the same request twice never rewinds the lifecycle.
+     */
+    public function markViewedBySuchak(
+        SuchakProfileRequest $request,
+        SuchakAccount $account,
+        User $actor,
+    ): SuchakProfileRequest {
+        if ((int) $request->selected_suchak_account_id !== (int) $account->id) {
+            throw new InvalidArgumentException(__('profile.suchak_request_not_yours'));
+        }
+
+        if ($request->request_status !== SuchakProfileRequest::STATUS_PENDING) {
+            return $request;
+        }
+
+        return DB::transaction(function () use ($request, $actor): SuchakProfileRequest {
+            /** @var SuchakProfileRequest $lockedRequest */
+            $lockedRequest = SuchakProfileRequest::query()
+                ->whereKey($request->id)
+                ->lockForUpdate()
+                ->with('pipeline')
+                ->firstOrFail();
+
+            if ($lockedRequest->request_status !== SuchakProfileRequest::STATUS_PENDING) {
+                return $lockedRequest;
+            }
+
+            SuchakProfileRequest::query()
+                ->whereKey($lockedRequest->id)
+                ->update([
+                    'request_status' => SuchakProfileRequest::STATUS_VIEWED_BY_SUCHAK,
+                    'updated_at' => now(),
+                ]);
+
+            if ($lockedRequest->pipeline) {
+                $this->recordPipelineEvent(
+                    $lockedRequest->pipeline,
+                    SuchakPipelineEvent::EVENT_SUCHAK_VIEWED,
+                    SuchakPipelineEvent::ACTOR_SUCHAK,
+                    $actor->id,
+                );
+            }
+
+            return $lockedRequest->fresh(['pipeline']);
+        });
+    }
+
+    /**
+     * accepted/viewed → forwarded_to_candidate. This is the Suchak telling the
+     * platform "I have put this in front of the family"; the family's answer
+     * then arrives through recordCandidateDecision().
+     *
+     * @return array{request: SuchakProfileRequest}
+     */
+    public function forwardToCandidate(
+        SuchakProfileRequest $request,
+        SuchakAccount $account,
+        User $actor,
+        ?string $note = null,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): array {
+        return DB::transaction(function () use ($request, $account, $actor, $note, $ipAddress, $userAgent): array {
+            /** @var SuchakProfileRequest $lockedRequest */
+            $lockedRequest = SuchakProfileRequest::query()
+                ->whereKey($request->id)
+                ->lockForUpdate()
+                ->with(['pipeline', 'representation'])
+                ->firstOrFail();
+
+            if ((int) $lockedRequest->selected_suchak_account_id !== (int) $account->id) {
+                throw new InvalidArgumentException(__('profile.suchak_request_not_yours'));
+            }
+
+            $this->assertSuchakMayActOnRequest($lockedRequest);
+
+            if (in_array($lockedRequest->request_status, [
+                SuchakProfileRequest::STATUS_FORWARDED_TO_CANDIDATE,
+                SuchakProfileRequest::STATUS_CANDIDATE_INTERESTED,
+                SuchakProfileRequest::STATUS_CANDIDATE_NOT_INTERESTED,
+            ], true)) {
+                return ['request' => $lockedRequest];
+            }
+
+            SuchakProfileRequest::query()
+                ->whereKey($lockedRequest->id)
+                ->update([
+                    'request_status' => SuchakProfileRequest::STATUS_FORWARDED_TO_CANDIDATE,
+                    'updated_at' => now(),
+                ]);
+
+            if ($lockedRequest->pipeline) {
+                $this->recordPipelineEvent(
+                    $lockedRequest->pipeline,
+                    SuchakPipelineEvent::EVENT_FORWARDED_TO_CANDIDATE,
+                    SuchakPipelineEvent::ACTOR_SUCHAK,
+                    $actor->id,
+                    $this->nullableLimitedString($note, 500),
+                );
+            }
+
+            $this->activityLogger->record([
+                'suchak_account_id' => $account->id,
+                'actor_user_id' => $actor->id,
+                'actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
+                'action_type' => SuchakActivityLog::ACTION_PIPELINE_STATUS_CHANGED,
+                'target_type' => 'suchak_profile_request',
+                'target_id' => $lockedRequest->id,
+                'matrimony_profile_id' => $lockedRequest->target_matrimony_profile_id,
+                'ip_address' => $ipAddress,
+                'user_agent' => Str::limit((string) $userAgent, 512, ''),
+                'metadata_json' => [
+                    'context' => 'forwarded_to_candidate',
+                    'request_status' => SuchakProfileRequest::STATUS_FORWARDED_TO_CANDIDATE,
+                    'representation_id' => $lockedRequest->representation_id,
+                ],
+            ]);
+
+            return ['request' => $lockedRequest->fresh(['pipeline'])];
+        });
+    }
+
+    /**
+     * The "family said yes / no" half of the lifecycle, and the ONE place that
+     * decides the both-can-answer race.
+     *
+     * PO decision: when the candidate holds their own account, the candidate AND
+     * the Suchak both see the request and either may answer — first answer wins.
+     * The race is settled by taking a row lock on the request inside the
+     * transaction and re-reading the status under that lock; the loser is told
+     * cleanly that it was already answered (and by whom) instead of getting an
+     * error or silently overwriting the winner.
+     *
+     * @param  'interested'|'not_interested'  $decision
+     * @return array{
+     *   request: SuchakProfileRequest,
+     *   already_answered: bool,
+     *   answered_by: 'suchak'|'candidate'|null,
+     *   answered_at: \Illuminate\Support\Carbon|null,
+     *   message: Message|null
+     * }
+     */
+    public function recordCandidateDecision(
+        SuchakProfileRequest $request,
+        User $actor,
+        string $decision,
+        ?string $note = null,
+        ?SuchakAccount $account = null,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): array {
+        if (! in_array($decision, [self::DECISION_INTERESTED, self::DECISION_NOT_INTERESTED], true)) {
+            throw new InvalidArgumentException(__('profile.suchak_request_decision_invalid'));
+        }
+
+        return DB::transaction(function () use ($request, $actor, $decision, $note, $account, $ipAddress, $userAgent): array {
+            /** @var SuchakProfileRequest $lockedRequest */
+            $lockedRequest = SuchakProfileRequest::query()
+                ->whereKey($request->id)
+                ->lockForUpdate()
+                ->with([
+                    'pipeline',
+                    'representation',
+                    'requestingMatrimonyProfile.user',
+                    'targetMatrimonyProfile.user',
+                ])
+                ->firstOrFail();
+
+            $actorRole = $this->resolveDecisionActorRole($lockedRequest, $actor, $account);
+
+            if ($actorRole === SuchakPipelineEvent::ACTOR_SUCHAK) {
+                $this->assertSuchakMayActOnRequest($lockedRequest);
+            }
+
+            // First-answer-wins. Re-read under the lock: whoever got here second
+            // sees the winner's status and writes nothing at all.
+            if ($this->isAlreadyAnswered($lockedRequest)) {
+                $decidedBy = $this->decisionActorFor($lockedRequest);
+
+                return [
+                    'request' => $lockedRequest,
+                    'already_answered' => true,
+                    'answered_by' => $decidedBy['role'] ?? null,
+                    'answered_at' => $decidedBy['at'] ?? null,
+                    'message' => null,
+                ];
+            }
+
+            if (! $lockedRequest->isOpen()) {
+                throw new InvalidArgumentException(__('profile.suchak_request_not_open'));
+            }
+
+            $status = $decision === self::DECISION_INTERESTED
+                ? SuchakProfileRequest::STATUS_CANDIDATE_INTERESTED
+                : SuchakProfileRequest::STATUS_CANDIDATE_NOT_INTERESTED;
+
+            $decidedAt = now();
+
+            SuchakProfileRequest::query()
+                ->whereKey($lockedRequest->id)
+                ->update([
+                    'request_status' => $status,
+                    'updated_at' => $decidedAt,
+                ]);
+
+            $chatMessage = $this->postDecisionToExistingChat(
+                $lockedRequest,
+                $actorRole,
+                $decision,
+                $note,
+                $account,
+            );
+
+            if ($chatMessage !== null) {
+                SuchakProfileRequest::query()
+                    ->whereKey($lockedRequest->id)
+                    ->update([
+                        'chat_conversation_id' => $chatMessage->conversation_id,
+                        'chat_message_id' => $chatMessage->id,
+                        'updated_at' => $decidedAt,
+                    ]);
+            }
+
+            if ($lockedRequest->pipeline) {
+                $this->recordPipelineEvent(
+                    $lockedRequest->pipeline,
+                    $decision === self::DECISION_INTERESTED
+                        ? SuchakPipelineEvent::EVENT_CANDIDATE_INTERESTED
+                        : SuchakPipelineEvent::EVENT_CANDIDATE_NOT_INTERESTED,
+                    $actorRole,
+                    $actor->id,
+                    $this->nullableLimitedString($note, 500),
+                );
+            }
+
+            $this->activityLogger->record([
+                'suchak_account_id' => $lockedRequest->selected_suchak_account_id,
+                'actor_user_id' => $actor->id,
+                'actor_type' => $actorRole === SuchakPipelineEvent::ACTOR_SUCHAK
+                    ? SuchakActivityLog::ACTOR_SUCHAK
+                    : SuchakActivityLog::ACTOR_USER,
+                'action_type' => SuchakActivityLog::ACTION_PIPELINE_STATUS_CHANGED,
+                'target_type' => 'suchak_profile_request',
+                'target_id' => $lockedRequest->id,
+                'matrimony_profile_id' => $lockedRequest->target_matrimony_profile_id,
+                'ip_address' => $ipAddress,
+                'user_agent' => Str::limit((string) $userAgent, 512, ''),
+                'metadata_json' => [
+                    'context' => 'candidate_decision',
+                    'request_status' => $status,
+                    'answered_by' => $actorRole,
+                    'representation_id' => $lockedRequest->representation_id,
+                    'chat_message_id' => $chatMessage?->id,
+                ],
+            ]);
+
+            return [
+                'request' => $lockedRequest->fresh(['pipeline', 'chatConversation', 'chatMessage']),
+                'already_answered' => false,
+                'answered_by' => $actorRole,
+                'answered_at' => $decidedAt,
+                'message' => $chatMessage,
+            ];
+        });
+    }
+
+    /**
+     * Who settled the candidate decision, read back from the immutable pipeline
+     * event trail. Deliberately derived rather than stored on a new column: the
+     * event already records actor_type + actor_id + created_at, and a second
+     * copy of that fact could drift from it.
+     *
+     * @return array{role: 'suchak'|'candidate', user_id: int|null, at: \Illuminate\Support\Carbon|null}|null
+     */
+    public function decisionActorFor(SuchakProfileRequest $request): ?array
+    {
+        $request->loadMissing('pipeline');
+
+        if ($request->pipeline === null) {
+            return null;
+        }
+
+        $event = SuchakPipelineEvent::query()
+            ->where('pipeline_id', $request->pipeline->id)
+            ->whereIn('event_type', [
+                SuchakPipelineEvent::EVENT_CANDIDATE_INTERESTED,
+                SuchakPipelineEvent::EVENT_CANDIDATE_NOT_INTERESTED,
+            ])
+            ->orderByDesc('id')
+            ->first();
+
+        if ($event === null) {
+            return null;
+        }
+
+        return [
+            'role' => $event->actor_type === SuchakPipelineEvent::ACTOR_CANDIDATE ? 'candidate' : 'suchak',
+            'user_id' => $event->actor_id !== null ? (int) $event->actor_id : null,
+            'at' => $event->created_at,
+        ];
+    }
+
+    public function isAlreadyAnswered(SuchakProfileRequest $request): bool
+    {
+        return in_array($request->request_status, [
+            SuchakProfileRequest::STATUS_CANDIDATE_INTERESTED,
+            SuchakProfileRequest::STATUS_CANDIDATE_NOT_INTERESTED,
+        ], true);
+    }
+
+    /**
+     * True when the candidate is a real platform member who can answer for
+     * themselves. When false the Suchak is the only possible answerer, so there
+     * is no race to settle.
+     */
+    public function candidateCanAnswer(SuchakProfileRequest $request): bool
+    {
+        $request->loadMissing('targetMatrimonyProfile.user');
+
+        return $request->targetMatrimonyProfile?->user !== null;
+    }
+
+    /**
+     * Consent is what makes a Suchak the person's representative. Once it is
+     * gone the Suchak may not answer for them — reuses the SAME predicate
+     * (hasValidConsent) every other Suchak surface uses.
+     */
+    private function assertSuchakMayActOnRequest(SuchakProfileRequest $request): void
+    {
+        $request->loadMissing('representation');
+        $representation = $request->representation;
+
+        if ($representation === null
+            || $representation->representation_status !== SuchakProfileRepresentation::STATUS_ACTIVE
+            || ! $representation->hasValidConsent()) {
+            throw new InvalidArgumentException(__('profile.suchak_request_consent_required'));
+        }
+    }
+
+    /**
+     * @return 'suchak'|'candidate'
+     */
+    private function resolveDecisionActorRole(
+        SuchakProfileRequest $request,
+        User $actor,
+        ?SuchakAccount $account,
+    ): string {
+        if ($account !== null) {
+            if ((int) $request->selected_suchak_account_id !== (int) $account->id) {
+                throw new InvalidArgumentException(__('profile.suchak_request_not_yours'));
+            }
+
+            return SuchakPipelineEvent::ACTOR_SUCHAK;
+        }
+
+        $request->loadMissing('targetMatrimonyProfile');
+
+        if ((int) ($request->targetMatrimonyProfile?->user_id ?? 0) === (int) $actor->id) {
+            return SuchakPipelineEvent::ACTOR_CANDIDATE;
+        }
+
+        throw new InvalidArgumentException(__('profile.suchak_request_decision_not_allowed'));
+    }
+
+    /**
+     * Notify the member of the outcome through the SAME member↔candidate chat
+     * the Suchak reply uses. Best-effort by design: a chat policy block must
+     * never lose the family's answer, which is already committed above.
+     */
+    private function postDecisionToExistingChat(
+        SuchakProfileRequest $request,
+        string $actorRole,
+        string $decision,
+        ?string $note,
+        ?SuchakAccount $account,
+    ): ?Message {
+        $requestingProfile = $request->requestingMatrimonyProfile;
+        $targetProfile = $request->targetMatrimonyProfile;
+
+        if ($requestingProfile === null
+            || $targetProfile === null
+            || ! $this->profileIsActive($requestingProfile)
+            || ! $this->profileIsActive($targetProfile)) {
+            return null;
+        }
+
+        $line = $decision === self::DECISION_INTERESTED
+            ? __('profile.suchak_request_decision_chat_interested')
+            : __('profile.suchak_request_decision_chat_not_interested');
+
+        $note = $this->nullableLimitedString($note, 500);
+        if ($note !== null) {
+            $line .= "\n".$note;
+        }
+
+        $body = $actorRole === SuchakPipelineEvent::ACTOR_SUCHAK && $account !== null
+            ? $this->suchakReplyChatBody($account, $line)
+            : $line;
+
+        try {
+            $conversation = $this->chatConversationService->findOrCreateConversationBetweenProfiles(
+                $targetProfile,
+                $requestingProfile,
+            );
+
+            return $this->chatMessageService->sendTextMessage(
+                $targetProfile,
+                $requestingProfile,
+                $conversation,
+                $body,
+            );
+        } catch (ValidationException) {
+            return null;
+        }
     }
 
     private function assertRequestCanBeCreated(

@@ -4,13 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\ContactRequest;
 use App\Models\MatrimonyProfile;
-use App\Models\ProfileVisibilitySetting;
-use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use App\Services\ContactRequestService;
+use App\Support\Suchak\SuchakContactRouting;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -107,25 +105,6 @@ class ContactRequestController extends Controller
 
     private function isSuchakOnlyProfile(MatrimonyProfile $profile): bool
     {
-        $publiclyRoutableSuchakQuery = SuchakProfileRepresentation::query()
-            ->publiclyRoutable()
-            ->where('matrimony_profile_id', $profile->id);
-
-        if ((clone $publiclyRoutableSuchakQuery)
-            ->whereIn('representation_mode', SuchakProfileRepresentation::SUCHAK_CREATED_MODES)
-            ->exists()) {
-            return true;
-        }
-
-        if (! (clone $publiclyRoutableSuchakQuery)->exists() || ! Schema::hasColumn('profile_visibility_settings', 'contact_routing_mode')) {
-            return false;
-        }
-
-        $mode = DB::table('profile_visibility_settings')
-            ->where('profile_id', $profile->id)
-            ->value('contact_routing_mode');
-
-        return ProfileVisibilitySetting::normalizeContactRoutingMode(is_string($mode) ? $mode : null)
-            === ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY;
+        return SuchakContactRouting::isRouted($profile);
     }
 }

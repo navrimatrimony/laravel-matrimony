@@ -3,17 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\MatrimonyProfile;
-use App\Models\ProfileVisibilitySetting;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Services\ContactAccessService;
 use App\Services\FeatureUsageService;
 use App\Services\MediationRequestService;
+use App\Support\Suchak\SuchakContactRouting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class ProfileContactActionController extends Controller
 {
@@ -149,26 +148,7 @@ class ProfileContactActionController extends Controller
 
     private function isSuchakOnlyProfile(MatrimonyProfile $profile): bool
     {
-        $publiclyRoutableSuchakQuery = SuchakProfileRepresentation::query()
-            ->publiclyRoutable()
-            ->where('matrimony_profile_id', $profile->id);
-
-        if ((clone $publiclyRoutableSuchakQuery)
-            ->whereIn('representation_mode', SuchakProfileRepresentation::SUCHAK_CREATED_MODES)
-            ->exists()) {
-            return true;
-        }
-
-        if (! (clone $publiclyRoutableSuchakQuery)->exists() || ! Schema::hasColumn('profile_visibility_settings', 'contact_routing_mode')) {
-            return false;
-        }
-
-        $mode = DB::table('profile_visibility_settings')
-            ->where('profile_id', $profile->id)
-            ->value('contact_routing_mode');
-
-        return ProfileVisibilitySetting::normalizeContactRoutingMode(is_string($mode) ? $mode : null)
-            === ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY;
+        return SuchakContactRouting::isRouted($profile);
     }
 
     private function revealSuchakContact(
@@ -218,39 +198,11 @@ class ProfileContactActionController extends Controller
 
     private function routableSuchakRepresentationFor(MatrimonyProfile $profile, ?int $representationId): ?SuchakProfileRepresentation
     {
-        $query = SuchakProfileRepresentation::query()
-            ->with([
-                'suchakAccount.contactNumbers' => fn ($query) => $query
-                    ->where('is_active', true)
-                    ->orderByDesc('is_whatsapp')
-                    ->orderBy('id'),
-            ])
-            ->publiclyRoutable()
-            ->where('matrimony_profile_id', $profile->id)
-            ->orderBy('id');
-
-        if ($representationId !== null) {
-            $query->whereKey($representationId);
-        }
-
-        return $query->first();
+        return SuchakContactRouting::routableRepresentationFor($profile, $representationId);
     }
 
     private function suchakPhoneFor(SuchakProfileRepresentation $representation): string
     {
-        $account = $representation->suchakAccount;
-        $contactNumber = $account?->contactNumbers
-            ?->first(fn ($number): bool => (bool) ($number->is_active ?? false) && trim((string) ($number->phone_number ?? '')) !== '');
-
-        if ($contactNumber) {
-            return trim((string) $contactNumber->phone_number);
-        }
-
-        $whatsapp = trim((string) ($account?->whatsapp_number ?? ''));
-        if ($whatsapp !== '') {
-            return $whatsapp;
-        }
-
-        return trim((string) ($account?->mobile_number ?? ''));
+        return SuchakContactRouting::accountPhone($representation->suchakAccount);
     }
 }

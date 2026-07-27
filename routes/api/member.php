@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\ExtendedFieldApiController;
 use App\Http\Controllers\Api\FieldRegistryApiController;
 use App\Http\Controllers\Api\InterestApiController;
 use App\Http\Controllers\Api\MatrimonyProfileApiController;
+use App\Http\Controllers\Api\MemberSuchakRequestApiController;
 use App\Http\Controllers\Api\MobileBiodataExportApiController;
 use App\Http\Controllers\Api\MobileChatApiController;
 use App\Http\Controllers\Api\MobileNotificationApiController;
@@ -47,6 +48,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/matrimony-profiles/{id}', [MatrimonyProfileApiController::class, 'showById']); // GET PROFILE BY ID
     Route::post('/matrimony-profiles/{id}/contact-reveal', [ContactActionApiController::class, 'reveal']); // REVEAL CONTACT
     Route::post('/matrimony-profiles/{id}/contact-requests', [ContactInboxApiController::class, 'store']); // REQUEST CONTACT
+    /*
+    | Suchak request pipeline (member side) — same engine as the website.
+    | A Suchak-routed profile never exposes a contact number here; the member
+    | asks the Suchak, and the answer comes back through the existing chat.
+    */
+    Route::get('/matrimony-profiles/{id}/suchak-requests', [MemberSuchakRequestApiController::class, 'showForProfile']); // WHO MANAGES THIS PROFILE + MY REQUEST STATE
+    Route::post('/matrimony-profiles/{id}/suchak-requests', [MemberSuchakRequestApiController::class, 'store']); // CREATE SUCHAK REQUEST
+    Route::get('/suchak-requests', [MemberSuchakRequestApiController::class, 'index']); // MY SUCHAK REQUESTS (SENT + AS CANDIDATE)
+    Route::post('/suchak-requests/{id}/decision', [MemberSuchakRequestApiController::class, 'decide']); // CANDIDATE ANSWERS (RACES THE SUCHAK)
     Route::get('/contact-inbox', [ContactInboxApiController::class, 'index']); // CONTACT REQUEST INBOX
     Route::post('/contact-requests/{id}/approve', [ContactInboxApiController::class, 'approve']); // APPROVE CONTACT REQUEST
     Route::post('/contact-requests/{id}/reject', [ContactInboxApiController::class, 'reject']); // REJECT CONTACT REQUEST

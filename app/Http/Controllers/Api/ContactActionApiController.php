@@ -4,16 +4,16 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\MatrimonyProfile;
-use App\Models\ProfileVisibilitySetting;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
+use App\Modules\Suchak\Services\SuchakRequestPresenter;
 use App\Services\Api\MobileDiscoveryFilterService;
 use App\Services\Api\MobileProfileDisplayPresenter;
 use App\Services\ContactAccessService;
+use App\Support\Suchak\SuchakContactRouting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 
 class ContactActionApiController extends Controller
@@ -48,8 +48,12 @@ class ContactActionApiController extends Controller
             return $this->error('Profile not found.', 404);
         }
 
-        if ($this->isSuchakRoutedProfile($profile)) {
-            return $this->error('Contact reveal is not available in mobile for this profile yet.', 422);
+        // Suchak-routed: the number that unlocks is the SUCHAK's own business
+        // number, never the candidate's. Same service call the website makes
+        // (ProfileContactActionController::revealSuchakContact), so the same
+        // quota/plan gate applies and there is no second reveal path.
+        if (SuchakContactRouting::isRouted($profile)) {
+            return $this->revealSuchakContact($request, $user, $profile);
         }
 
         $visibilitySettings = DB::table('profile_visibility_settings')
@@ -78,29 +82,46 @@ class ContactActionApiController extends Controller
         ]);
     }
 
-    private function isSuchakRoutedProfile(MatrimonyProfile $profile): bool
+    /**
+     * Mobile twin of the website's Suchak reveal. Reveals the Suchak's own
+     * number through the existing ContactAccessService::consumeRoutedContactReveal
+     * so plan/quota accounting is identical on both surfaces. The candidate's
+     * number is not read, not masked, not returned.
+     */
+    private function revealSuchakContact(Request $request, User $user, MatrimonyProfile $profile): JsonResponse
     {
-        $publiclyRoutableSuchakQuery = SuchakProfileRepresentation::query()
-            ->publiclyRoutable()
-            ->where('matrimony_profile_id', $profile->id);
+        $representationId = (int) $request->input('representation_id', 0) ?: null;
+        $representation = SuchakContactRouting::routableRepresentationFor($profile, $representationId);
 
-        if ((clone $publiclyRoutableSuchakQuery)
-            ->whereIn('representation_mode', SuchakProfileRepresentation::SUCHAK_CREATED_MODES)
-            ->exists()) {
-            return true;
+        if (! $representation instanceof SuchakProfileRepresentation) {
+            return $this->error(__('profile.suchak_request_no_suchak'), 404);
         }
 
-        if (! (clone $publiclyRoutableSuchakQuery)->exists()
-            || ! Schema::hasColumn('profile_visibility_settings', 'contact_routing_mode')) {
-            return false;
+        try {
+            $result = $this->contactAccess->consumeRoutedContactReveal(
+                $user,
+                $profile,
+                SuchakContactRouting::accountPhone($representation->suchakAccount),
+            );
+        } catch (InvalidArgumentException $exception) {
+            return $this->error($exception->getMessage(), 422);
         }
 
-        $mode = DB::table('profile_visibility_settings')
-            ->where('profile_id', $profile->id)
-            ->value('contact_routing_mode');
+        $profile->refresh()->loadMissing('user');
+        $display = $this->displayPresenter->forProfile($profile, $user);
 
-        return ProfileVisibilitySetting::normalizeContactRoutingMode(is_string($mode) ? $mode : null)
-            === ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY;
+        return response()->json([
+            'success' => true,
+            'message' => __('profile.suchak_contact_number_revealed'),
+            'contact' => [
+                'phone' => $result['phone'] ?? null,
+                'email' => null,
+            ],
+            'suchak' => app(SuchakRequestPresenter::class)->suchakBlock($representation),
+            'display' => [
+                'contact' => $display['contact'] ?? null,
+            ],
+        ]);
     }
 
     private function error(string $message, int $status): JsonResponse

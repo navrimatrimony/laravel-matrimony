@@ -10,12 +10,14 @@ use App\Models\HiddenProfile;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Models\Plan;
-use App\Models\ProfileVisibilitySetting;
 use App\Models\ProfilePhoto;
 use App\Models\Shortlist;
 use App\Models\SuchakProfileRepresentation;
+use App\Models\SuchakProfileRequest;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Modules\Suchak\Services\SuchakRequestPipelineService;
+use App\Modules\Suchak\Services\SuchakRequestPresenter;
 use App\Services\CommunicationPolicyService;
 use App\Services\ContactAccessService;
 use App\Services\ContactRequestService;
@@ -36,6 +38,7 @@ use App\Services\SiteIdentityService;
 use App\Services\ViewTrackingService;
 use App\Support\HeightDisplay;
 use App\Support\ProfileDisplayCopy;
+use App\Support\Suchak\SuchakContactRouting;
 use Carbon\Carbon;
 use App\Support\LocalizedText;
 use Illuminate\Database\Eloquent\Model;
@@ -1309,11 +1312,7 @@ class MobileProfileDisplayPresenter
             $profile->loadMissing('user');
             $contactRequestContext = $this->contactRequestContext($profile, $viewer);
             if ($this->isSuchakRoutedProfile($profile)) {
-                return $this->contactPayloadState(
-                    enabled: true,
-                    state: 'unavailable',
-                    message: $this->tr('Contact for this profile is handled outside the mobile contact request flow.')
-                );
+                return $this->suchakContactPayload($profile, $viewerProfile);
             }
 
             $contactAccess = app(ContactAccessService::class)->resolveViewerContext(
@@ -1435,6 +1434,7 @@ class MobileProfileDisplayPresenter
         bool $whatsappEnabled = false,
         ?array $contactRequest = null,
         ?array $requestOptions = null,
+        ?array $suchak = null,
     ): array {
         $state = in_array($state, [
             'revealed',
@@ -1446,6 +1446,13 @@ class MobileProfileDisplayPresenter
             'contact_request_pending',
             'contact_request_rejected',
             'contact_request_unavailable',
+            // Suchak-routed profiles. ADDITIVE: a client that does not know
+            // these four falls back to its own "unavailable" branch and still
+            // renders `message`, so nothing regresses before the app ships.
+            SuchakRequestPresenter::CONTACT_STATE_AVAILABLE,
+            SuchakRequestPresenter::CONTACT_STATE_PENDING,
+            SuchakRequestPresenter::CONTACT_STATE_ANSWERED,
+            SuchakRequestPresenter::CONTACT_STATE_CLOSED,
             'unavailable',
         ], true) ? $state : 'unavailable';
 
@@ -1460,6 +1467,7 @@ class MobileProfileDisplayPresenter
             'primary_cta' => $primaryCta,
             'contact_request' => $contactRequest,
             'request_options' => $requestOptions,
+            'suchak' => $suchak,
             'whatsapp_response' => [
                 'visible' => $whatsappVisible,
                 'label' => LocalizedText::isMarathi() ? 'व्हॉट्सॲप प्रतिसाद' : 'WhatsApp Response',
@@ -1489,7 +1497,17 @@ class MobileProfileDisplayPresenter
     private function contactPrimaryCta(string $label, string $style, string $action, bool $enabled): array
     {
         $style = in_array($style, ['primary', 'secondary', 'disabled'], true) ? $style : 'disabled';
-        $action = in_array($action, ['view_contact', 'send_contact_request', 'upgrade', 'none'], true) ? $action : 'none';
+        // Additive: 'send_suchak_request' / 'open_suchak_chat' belong to the
+        // Suchak-routed contact block. A client that does not know them treats
+        // the CTA as unhandled rather than firing the wrong action.
+        $action = in_array($action, [
+            'view_contact',
+            'send_contact_request',
+            'upgrade',
+            'send_suchak_request',
+            'open_suchak_chat',
+            'none',
+        ], true) ? $action : 'none';
 
         return [
             'label' => $label,
@@ -1709,32 +1727,67 @@ class MobileProfileDisplayPresenter
 
     private function isSuchakRoutedProfile(MatrimonyProfile $profile): bool
     {
-        if (! Schema::hasTable('suchak_profile_representations')) {
-            return false;
+        return SuchakContactRouting::isRouted($profile);
+    }
+
+    /**
+     * Contact block for a Suchak-routed profile.
+     *
+     * The candidate's number is never read here — the only phone value that can
+     * appear is the Suchak's own, masked. What the member gets instead is WHO
+     * manages the profile plus where their own request with that Suchak stands,
+     * so the request pipeline that already exists on the website becomes
+     * reachable from the app.
+     *
+     * @return array<string, mixed>
+     */
+    private function suchakContactPayload(MatrimonyProfile $profile, MatrimonyProfile $viewerProfile): array
+    {
+        $representation = SuchakContactRouting::routableRepresentationFor($profile);
+
+        if (! $representation instanceof SuchakProfileRepresentation) {
+            return $this->contactPayloadState(
+                enabled: true,
+                state: 'unavailable',
+                message: __('profile.suchak_request_no_suchak'),
+            );
         }
 
-        $publiclyRoutableSuchakQuery = SuchakProfileRepresentation::query()
-            ->publiclyRoutable()
-            ->where('matrimony_profile_id', $profile->id);
+        $pipelineService = app(SuchakRequestPipelineService::class);
+        $pipelineService->expireDuePipelinesForRequestingProfile($viewerProfile);
 
-        if ((clone $publiclyRoutableSuchakQuery)
-            ->whereIn('representation_mode', SuchakProfileRepresentation::SUCHAK_CREATED_MODES)
-            ->exists()) {
-            return true;
-        }
+        $latestRequest = SuchakProfileRequest::query()
+            ->with(['pipeline', 'representation.suchakAccount.contactNumbers'])
+            ->where('requesting_matrimony_profile_id', $viewerProfile->id)
+            ->where('target_matrimony_profile_id', $profile->id)
+            ->where('representation_id', $representation->id)
+            ->orderByDesc('id')
+            ->first();
 
-        if (! (clone $publiclyRoutableSuchakQuery)->exists()
-            || ! Schema::hasTable('profile_visibility_settings')
-            || ! Schema::hasColumn('profile_visibility_settings', 'contact_routing_mode')) {
-            return false;
-        }
+        $presenter = app(SuchakRequestPresenter::class);
+        $state = $presenter->contactStateFor($representation, $latestRequest);
 
-        $mode = DB::table('profile_visibility_settings')
-            ->where('profile_id', $profile->id)
-            ->value('contact_routing_mode');
+        $suchakBlock = $presenter->suchakBlock($representation);
+        $suchakBlock['request'] = $latestRequest !== null
+            ? $presenter->memberRequestPayload($latestRequest)
+            : null;
+        $suchakBlock['can_request'] = $latestRequest === null || $presenter->canResend($latestRequest);
 
-        return ProfileVisibilitySetting::normalizeContactRoutingMode(is_string($mode) ? $mode : null)
-            === ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY;
+        return $this->contactPayloadState(
+            enabled: true,
+            state: $state['state'],
+            message: $state['message'],
+            // Top-level masked_phone is the CANDIDATE's number everywhere else,
+            // so it stays null here. The Suchak's own masked number lives in the
+            // suchak block, where it cannot be mistaken for the candidate's.
+            primaryCta: $this->contactPrimaryCta(
+                $state['cta_label'],
+                $state['cta_enabled'] ? 'primary' : 'disabled',
+                $state['cta_action'],
+                $state['cta_enabled'],
+            ),
+            suchak: $suchakBlock,
+        );
     }
 
     private function dateString(mixed $value): ?string

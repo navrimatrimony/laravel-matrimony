@@ -6,18 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\ContactGrant;
 use App\Models\ContactRequest;
 use App\Models\MatrimonyProfile;
-use App\Models\ProfileVisibilitySetting;
-use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Services\Api\MobileDiscoveryFilterService;
 use App\Services\Api\MobileProfileDisplayPresenter;
 use App\Services\CommunicationPolicyService;
 use App\Services\ContactRequestService;
+use App\Support\Suchak\SuchakContactRouting;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -54,8 +51,12 @@ class ContactInboxApiController extends Controller
             return $this->error('Profile not found.', 404);
         }
 
-        if ($this->isSuchakRoutedProfile($profile)) {
-            return $this->error('Contact request is not available in mobile for this profile yet.', 422);
+        // A Suchak-routed profile has no contact to request — the member asks
+        // the Suchak instead. Rather than dead-ending the shipped app on a 422,
+        // the same call now creates a real Suchak request through the existing
+        // pipeline, and the response says which Suchak has it.
+        if (SuchakContactRouting::isRouted($profile)) {
+            return $this->storeSuchakRequest($request, $profile);
         }
 
         $receiver = $profile->user;
@@ -391,34 +392,28 @@ class ContactInboxApiController extends Controller
         };
     }
 
-    private function isSuchakRoutedProfile(MatrimonyProfile $profile): bool
+    /**
+     * Legacy-client bridge: the contact-request call on a Suchak-routed profile
+     * is fulfilled as a Suchak request. Delegates to the member Suchak-request
+     * controller so there is exactly ONE create path (quota, SLA, attribution
+     * lock and chat injection all come from SuchakRequestPipelineService).
+     */
+    private function storeSuchakRequest(Request $request, MatrimonyProfile $profile): JsonResponse
     {
-        if (! Schema::hasTable('suchak_profile_representations')) {
-            return false;
-        }
+        $reason = $this->cleanString($request->input('reason'));
+        $note = $this->cleanString($request->input('other_reason_text'))
+            ?? $this->cleanString($request->input('message'));
 
-        $publiclyRoutableSuchakQuery = SuchakProfileRepresentation::query()
-            ->publiclyRoutable()
-            ->where('matrimony_profile_id', $profile->id);
+        $request->merge([
+            'request_reason' => $reason,
+            'message' => $note,
+        ]);
 
-        if ((clone $publiclyRoutableSuchakQuery)
-            ->whereIn('representation_mode', SuchakProfileRepresentation::SUCHAK_CREATED_MODES)
-            ->exists()) {
-            return true;
-        }
-
-        if (! (clone $publiclyRoutableSuchakQuery)->exists()
-            || ! Schema::hasTable('profile_visibility_settings')
-            || ! Schema::hasColumn('profile_visibility_settings', 'contact_routing_mode')) {
-            return false;
-        }
-
-        $mode = DB::table('profile_visibility_settings')
-            ->where('profile_id', $profile->id)
-            ->value('contact_routing_mode');
-
-        return ProfileVisibilitySetting::normalizeContactRoutingMode(is_string($mode) ? $mode : null)
-            === ProfileVisibilitySetting::CONTACT_ROUTING_SUCHAK_ONLY;
+        return app(MemberSuchakRequestApiController::class)->store(
+            $request,
+            (int) $profile->id,
+            app(MobileDiscoveryFilterService::class),
+        );
     }
 
     private function dateString(mixed $value): ?string
