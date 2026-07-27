@@ -20,6 +20,16 @@ use Illuminate\Support\Facades\Schema;
 class SubscriptionPlansSeeder extends Seeder
 {
     /**
+     * Female tiers get ~2x the male numeric quotas at the same price.
+     *
+     * Only real numeric quotas are scaled. Boolean feature flags must NEVER be doubled:
+     * {@see PlanQuotaPolicy::attributesFromCatalogFeatureMap()} accepts only '1'/'true'/'yes'/'on'
+     * as "on", so doubling a '1' flag to '2' silently persists the feature as DISABLED —
+     * which is how every female paid plan lost chat_can_read, photo_full_access,
+     * priority_listing, advanced_profile_search and profile_whatsapp_direct.
+     *
+     * Key types come from config/plan_features.php (SSOT for key + type).
+     *
      * @param  array<string, string>  $features
      * @return array<string, string>
      */
@@ -29,9 +39,13 @@ class SubscriptionPlansSeeder extends Seeder
             PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD,
             PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT,
         ];
+        $featureTypes = (array) config('plan_features', []);
         $out = $features;
         foreach ($out as $k => $v) {
             if (in_array($k, $skipKeys, true)) {
+                continue;
+            }
+            if (! self::isScalableQuotaKey((string) $k, $featureTypes)) {
                 continue;
             }
             $s = trim((string) $v);
@@ -49,6 +63,20 @@ class SubscriptionPlansSeeder extends Seeder
         }
 
         return $out;
+    }
+
+    /**
+     * True only for keys whose value is a real numeric quota, per config/plan_features.php.
+     * Unknown keys are treated as non-scalable so a newly added boolean flag can never be
+     * corrupted by default.
+     *
+     * @param  array<string, array<string, mixed>>  $featureTypes
+     */
+    private static function isScalableQuotaKey(string $key, array $featureTypes): bool
+    {
+        $type = (string) ($featureTypes[$key]['type'] ?? '');
+
+        return in_array($type, ['limit', 'days'], true);
     }
 
     /**
