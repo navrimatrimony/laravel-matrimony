@@ -54,6 +54,21 @@ return [
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+            // PHP runs on config('app.timezone') (Asia/Kolkata); production MySQL runs
+            // on SYSTEM = UTC, so NOW()/CURRENT_TIMESTAMP is 5:30 behind PHP's now().
+            //
+            // Leave DB_TIMEZONE UNSET unless the one-time correction below has been
+            // applied. Every datetime already stored was written by PHP as an IST
+            // wall-clock literal and read back under the same session zone, so it
+            // round-trips correctly today. Issuing `SET time_zone='+05:30'` would
+            // re-interpret ALL existing TIMESTAMP values 5:30 later on read (measured
+            // on production: a message stored as 13:25:56 reads back as 18:55:56).
+            //
+            // The clock split is only reachable when the DATABASE authors a value.
+            // Application code never calls NOW()/CURDATE() in SQL, so the fix is to
+            // keep DB-generated timestamp columns out of the schema — see
+            // 2026_07_27_160000_stop_database_from_authoring_chat_timestamps.
+            'timezone' => env('DB_TIMEZONE'),
             'prefix' => '',
             'prefix_indexes' => true,
             'strict' => true,
@@ -75,6 +90,9 @@ return [
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+            // See the mysql connection above for why DB_TIMEZONE must stay unset
+            // until existing rows have been corrected.
+            'timezone' => env('DB_TIMEZONE'),
             'prefix' => '',
             'prefix_indexes' => true,
             'strict' => true,

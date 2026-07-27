@@ -224,10 +224,14 @@ class ChatPolicyService
      */
     protected function countTrailingConsecutiveUnreplied(int $conversationId, int $senderId, int $receiverId, ?\DateTimeInterface $since = null): int
     {
+        // `id` breaks ties: two messages can legitimately share the same second, and
+        // ordering by `sent_at` alone leaves their relative order undefined — which
+        // decides whether this reads as "unanswered" or "already replied to".
         $rows = DB::table('messages')
             ->where('conversation_id', $conversationId)
             ->when($since !== null, fn ($qb) => $qb->where('sent_at', '>', $since))
             ->orderByDesc('sent_at')
+            ->orderByDesc('id')
             ->limit(50)
             ->get(['sender_profile_id']);
 

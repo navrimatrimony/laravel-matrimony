@@ -139,6 +139,7 @@ class ChatMessageService
             $latest = Message::query()
                 ->where('conversation_id', $conversation->id)
                 ->orderByDesc('sent_at')
+                ->orderByDesc('id')
                 ->first();
 
             $state = MessageParticipantState::firstOrCreate(
