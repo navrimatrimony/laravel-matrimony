@@ -141,7 +141,10 @@ class SuchakRequestPresenter
             'requestingMatrimonyProfile.religion',
             'requestingMatrimonyProfile.caste',
             'requestingMatrimonyProfile.location',
-            'targetMatrimonyProfile',
+            'targetMatrimonyProfile.gender',
+            'targetMatrimonyProfile.religion',
+            'targetMatrimonyProfile.caste',
+            'targetMatrimonyProfile.location',
             'representation',
         ]);
 
@@ -167,12 +170,19 @@ class SuchakRequestPresenter
             'answered_at' => $this->dateString($decidedBy['at'] ?? null),
             'candidate_can_answer' => $this->pipelineService->candidateCanAnswer($request),
             'from_profile' => $this->profileSummary($request->requestingMatrimonyProfile),
-            'customer' => [
-                'representation_id' => $representation !== null ? (int) $representation->id : null,
-                'matrimony_profile_id' => (int) $request->target_matrimony_profile_id,
-                'name' => $this->cleanString($request->targetMatrimonyProfile?->full_name),
-                'consent_valid' => $representation?->hasValidConsent() === true,
-            ],
+            // The Suchak's list puts THEIR customer on the left of every row, so it
+            // needs the same summary the sender gets — photo, age, location. Reuses
+            // profileSummary() rather than assembling a second, thinner shape that
+            // would drift from it.
+            'customer' => array_merge(
+                $this->profileSummary($request->targetMatrimonyProfile) ?? [],
+                [
+                    'representation_id' => $representation !== null ? (int) $representation->id : null,
+                    'matrimony_profile_id' => (int) $request->target_matrimony_profile_id,
+                    'name' => $this->cleanString($request->targetMatrimonyProfile?->full_name),
+                    'consent_valid' => $representation?->hasValidConsent() === true,
+                ],
+            ),
             'actions' => [
                 'can_reply' => $this->suchakMayAct($request),
                 'can_forward' => $this->suchakMayAct($request)
