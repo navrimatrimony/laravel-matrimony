@@ -39,7 +39,12 @@ Route::post('/whatsapp/register-user', [WhatsAppController::class, 'registerUser
 
 Route::get('/location/search', [LocationController::class, 'search']);
 Route::get('/location/nearby', [LocationController::class, 'nearby']);
-Route::get('/profiles/nearby', [NearbyProfileController::class, 'index']);
+// Returns member profiles, so it belongs behind a session even though it reads
+// like a location lookup — it sat beside /location/* and inherited their
+// public-by-default placement. Nothing calls it (neither Flutter app, nor any
+// blade), so requiring auth breaks no caller.
+Route::get('/profiles/nearby', [NearbyProfileController::class, 'index'])
+    ->middleware('auth:sanctum');
 Route::post('/location/suggestions', [ApiLocationSuggestionController::class, 'store'])
     ->middleware('auth:sanctum');
 
