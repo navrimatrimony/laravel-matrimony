@@ -7,12 +7,18 @@ use App\Models\Taluka;
 use App\Models\User;
 use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->seed(\Database\Seeders\MasterLookupSeeder::class);
     $this->seed(MinimalLocationSeeder::class);
+
+    // The endpoint returns member profiles, so it now requires a session. These
+    // cases are about the location maths, not the gate — the gate has its own
+    // test below.
+    Sanctum::actingAs(User::factory()->create());
 });
 
 function setupNearbyProfilesFixture(): array
@@ -133,4 +139,15 @@ test('type filter runs without error', function () {
 
     $this->getJson('/api/profiles/nearby?location_id='.$fx['source_location_id'].'&radius=25&type=village')
         ->assertOk();
+});
+
+test('nearby profiles are not readable without a session', function () {
+    $fx = setupNearbyProfilesFixture();
+
+    // Drop the session the beforeEach hook set up, so this reaches the route
+    // exactly as an anonymous caller would.
+    app('auth')->forgetGuards();
+
+    $this->getJson('/api/profiles/nearby?location_id='.$fx['source_location_id'].'&radius=25')
+        ->assertUnauthorized();
 });
