@@ -131,7 +131,7 @@ class ChatPolicyService
         if ($latestCooldown && $latestCooldown->locked_until && $latestCooldown->locked_until->isFuture()) {
             return PolicyDecision::deny(
                 'reply_gate_cooldown',
-                'तुम्ही सलग मर्यादित संदेश पाठवले आहेत. समोरील व्यक्तीचा reply येईपर्यंत किंवा cooling period संपेपर्यंत पुन्हा संदेश पाठवता येणार नाही.',
+                (string) __('chat_ui.reply_gate_cooldown'),
                 $latestCooldown->locked_until
             );
         }
@@ -145,7 +145,7 @@ class ChatPolicyService
             if ($consecutive >= $maxConsecutive) {
                 return PolicyDecision::deny(
                     'reply_gate_limit',
-                    'तुम्ही सलग मर्यादित संदेश पाठवले आहेत. समोरील व्यक्तीचा reply येईपर्यंत किंवा cooling period संपेपर्यंत पुन्हा संदेश पाठवता येणार नाही.'
+                    (string) __('chat_ui.reply_gate_limit', ['max' => (string) $maxConsecutive])
                 );
             }
         }

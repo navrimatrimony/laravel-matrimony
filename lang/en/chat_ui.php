@@ -30,4 +30,6 @@ return [
     'view_profile_of' => 'View profile of :name',
     'new_message_toast_title' => 'New chat message',
     'new_message_toast_action' => 'Open unread chats',
+    'reply_gate_limit' => 'You have sent :max messages in a row with no reply yet. As soon as they reply you can send again.',
+    'reply_gate_cooldown' => 'You have sent more messages in a row than allowed. You can send again once they reply, or when the waiting period ends.',
 ];
