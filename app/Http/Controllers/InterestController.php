@@ -7,6 +7,7 @@ use App\Models\MatrimonyProfile;
 use App\Services\Interest\InterestActionOutcome;
 use App\Services\Interest\InterestActionService;
 use App\Services\Interest\ReceivedInterestTeaserPolicy;
+use App\Services\Interest\SuchakRoutedInterestService;
 use App\Services\InterestSendLimitService;
 use App\Services\WhoViewed\WhoViewedTeaserPresenter;
 use App\Support\ErrorFactory;
@@ -46,6 +47,7 @@ class InterestController extends Controller
         private readonly InterestActionService $interestActions,
         private readonly InterestSendLimitService $interestSendLimit,
         private readonly WhoViewedTeaserPresenter $whoViewedTeaserPresenter,
+        private readonly SuchakRoutedInterestService $routedInterests,
     ) {}
 
     /*
@@ -251,12 +253,19 @@ class InterestController extends Controller
             ['path' => $hubPath, 'pageName' => 'spage']
         );
 
+        // Same routed truth the mobile sent list gets, built by the same service:
+        // an interest sitting with a Suchak must not read as a bare "pending".
+        // Only the page being rendered is resolved, so the routing lookup never
+        // runs for ordinary member-to-member rows on another page.
+        $sentSuchakRouting = $this->routedInterests->sentListRoutingMap($sentSlice);
+
         return view('interests.index', compact(
             'activeTab',
             'statusFilter',
             'receivedCounts',
             'sentCounts',
             'sentInterests',
+            'sentSuchakRouting',
             'receivedInterests',
             'unlockById',
             'interestViewLimit',

@@ -14,6 +14,7 @@ use App\Models\SuchakProfileRequest;
 use App\Models\User;
 use App\Services\Chat\ChatConversationService;
 use App\Services\Chat\ChatMessageService;
+use App\Services\Interest\SuchakRoutedInterestService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -521,6 +522,10 @@ class SuchakRequestPipelineService
      * cleanly that it was already answered (and by whom) instead of getting an
      * error or silently overwriting the winner.
      *
+     * When the request carries a member's plain interest (heart), the underlying
+     * `interests` row is settled here too — see
+     * {@see SuchakRoutedInterestService::applyRequestDecisionToInterest()}.
+     *
      * @param  'interested'|'not_interested'  $decision
      * @return array{
      *   request: SuchakProfileRequest,
@@ -610,6 +615,17 @@ class SuchakRequestPipelineService
                         'updated_at' => $decidedAt,
                     ]);
             }
+
+            // A request that carries a member's plain INTEREST must settle that
+            // interest too, or the member's sent list keeps saying "pending" for
+            // an approach that was already answered. This is the ONE authoritative
+            // transition for the two states: it runs inside this transaction,
+            // under the same first-answer-wins lock, so the request status and the
+            // interest status commit together and cannot drift.
+            // Resolved lazily on purpose — the bridge depends on this service, so
+            // constructor-injecting it back would be a container cycle.
+            app(SuchakRoutedInterestService::class)
+                ->applyRequestDecisionToInterest($lockedRequest, $decision, $actor);
 
             if ($lockedRequest->pipeline) {
                 $this->recordPipelineEvent(

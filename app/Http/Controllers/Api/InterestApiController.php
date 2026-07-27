@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Services\Interest\InterestActionService;
+use App\Services\Interest\SuchakRoutedInterestService;
 use App\Services\InterestSendLimitService;
 use App\Support\ErrorFactory;
 use App\Support\RuleResultResponder;
@@ -23,6 +24,7 @@ class InterestApiController extends Controller
     public function __construct(
         private readonly InterestActionService $interestActions,
         private readonly InterestSendLimitService $interestSendLimit,
+        private readonly SuchakRoutedInterestService $routedInterests,
     ) {}
 
     /**
@@ -93,10 +95,24 @@ class InterestApiController extends Controller
             ->latest()
             ->get();
 
+        // Additive `suchak_routing` block (null for ordinary interests): a member
+        // who approached a Suchak-managed profile must see WHERE their one
+        // interest actually is — "with <Suchak>" — instead of a bare "pending"
+        // that reads as if nobody received it. Every string is the same one the
+        // profile contact card and the Suchak app already use.
+        $routingById = $this->routedInterests->sentListRoutingMap($sentInterests);
+
+        $sentPayload = $sentInterests->map(function (Interest $interest) use ($routingById): array {
+            $row = $interest->toArray();
+            $row['suchak_routing'] = $routingById[$interest->id] ?? null;
+
+            return $row;
+        })->values();
+
         return response()->json([
             'success' => true,
             'data' => [
-                'sent' => $sentInterests,
+                'sent' => $sentPayload,
             ],
         ]);
     }

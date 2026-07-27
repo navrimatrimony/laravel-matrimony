@@ -34,6 +34,10 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  *
  * Guard order is the web order (web was the correct surface). Callers must not re-implement any
  * of these checks — per the frozen no-duplicate rule, one fact has one home.
+ *
+ * Suchak routing: when the receiving profile is managed by a Suchak, the interest is ALSO placed
+ * in the Suchak's existing request pipeline by {@see SuchakRoutedInterestService}. That is a pure
+ * add-on — nothing below changes for an ordinary member-to-member interest.
  */
 class InterestActionService
 {
@@ -42,6 +46,7 @@ class InterestActionService
         private readonly InterestPriorityService $interestPriority,
         private readonly ShowcaseInterestPolicyService $showcaseInterestPolicy,
         private readonly RuleEngineService $ruleEngine,
+        private readonly SuchakRoutedInterestService $routedInterests,
     ) {}
 
     // -------------------------------------------------------------------------
@@ -94,6 +99,11 @@ class InterestActionService
             ->where('receiver_profile_id', $receiverProfile->id)
             ->first();
         if ($existing !== null) {
+            // Re-tapping the heart after a Suchak-routed approach closed on SLA is how the member
+            // sends a "fresh one" (PO decision). The interest row is unique per pair, so the SAME
+            // row is re-offered through a NEW pipeline request — the member never sees two.
+            $this->routeToSuchakIfNeeded($senderUser, $senderProfile, $receiverProfile, $existing);
+
             return InterestActionOutcome::alreadyExists($existing, 'interest.interest_sent_successfully');
         }
 
@@ -134,6 +144,8 @@ class InterestActionService
 
         // Lost a race with a concurrent send: treat exactly like the duplicate branch above.
         if (! $interest->wasRecentlyCreated) {
+            $this->routeToSuchakIfNeeded($senderUser, $senderProfile, $receiverProfile, $interest);
+
             return InterestActionOutcome::alreadyExists($interest, 'interest.interest_sent_successfully');
         }
 
@@ -147,6 +159,12 @@ class InterestActionService
         }
 
         $this->recordMatchBehavior($senderUser, $receiverProfile, 'interest_sent');
+
+        // LAST, and deliberately after the quota/notification work: a Suchak-routed target also
+        // gets this approach in the Suchak's existing inbox. The heart is the primary action on
+        // every card, so without this the pipeline is bypassed in the common case and the
+        // opportunity dies silently.
+        $this->routeToSuchakIfNeeded($senderUser, $senderProfile, $receiverProfile, $interest);
 
         return InterestActionOutcome::success($interest, 'interest.interest_sent_successfully');
     }
@@ -305,6 +323,20 @@ class InterestActionService
     // -------------------------------------------------------------------------
     // Internals
     // -------------------------------------------------------------------------
+
+    /**
+     * Hands a settled interest to the Suchak pipeline when — and only when — the receiving profile
+     * is Suchak-routed. A non-routed target returns immediately, so ordinary member-to-member
+     * interests keep byte-identical behaviour.
+     */
+    private function routeToSuchakIfNeeded(
+        User $senderUser,
+        MatrimonyProfile $senderProfile,
+        MatrimonyProfile $receiverProfile,
+        Interest $interest,
+    ): void {
+        $this->routedInterests->routeInterest($senderUser, $senderProfile, $receiverProfile, $interest);
+    }
 
     private function blockExists(int|string $blockerProfileId, int|string $blockedProfileId): bool
     {

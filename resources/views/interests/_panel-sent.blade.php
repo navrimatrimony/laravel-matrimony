@@ -31,6 +31,17 @@
                         <span class="font-semibold text-red-600 dark:text-red-400">{{ __('interests.rejected') }}</span>
                     @endif
                 </p>
+                @php($sentRouting = ($sentSuchakRouting ?? [])[$interest->id] ?? null)
+                @if ($sentRouting)
+                    {{-- Suchak-routed approach: say WHERE it actually is, so a pending row
+                         never reads as if nobody received it. Same copy as the contact card. --}}
+                    <p class="mt-2 rounded-xl bg-indigo-50 px-3 py-2 text-sm text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-200">
+                        {{ $sentRouting['message'] }}
+                        @if (! empty($sentRouting['status_label']))
+                            <span class="mt-1 block text-xs font-semibold">{{ $sentRouting['status_label'] }}</span>
+                        @endif
+                    </p>
+                @endif
                 @if ($interest->status === 'pending')
                     <form method="POST" action="{{ route('interests.withdraw', $interest->id) }}" class="mt-3">
                         @csrf
