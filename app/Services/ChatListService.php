@@ -94,6 +94,47 @@ final class ChatListService
     }
 
     /**
+     * The unread boundary for ONE conversation, from ONE viewer's side.
+     *
+     * Same predicate as every other unread surface in this service
+     * (receiver_profile_id = viewer, read_at IS NULL) — there is exactly one
+     * unread state and this is it. `message_participant_states` carries the
+     * viewer's last_read pointer, but it is written in the same transaction as
+     * `messages.read_at` ({@see \App\Services\Chat\ChatMessageService::applyConversationRead()}),
+     * so reading it here would be a second calculation of the same fact, not a
+     * better one.
+     *
+     * `first_unread_message_id` is the OLDEST unread message — where the app
+     * draws its "unread from here" divider. Ordered by `sent_at` with an `id`
+     * tie-breaker: same-second messages are common, and without the tie-breaker
+     * the divider would land on a different message run to run.
+     *
+     * @return array{unread_count: int, first_unread_message_id: int|null}
+     */
+    public function getConversationUnreadSummary(int $profileId, int $conversationId): array
+    {
+        $unread = fn () => DB::table('messages')
+            ->where('conversation_id', $conversationId)
+            ->where('receiver_profile_id', $profileId)
+            ->whereNull('read_at');
+
+        $count = (int) $unread()->count();
+        if ($count === 0) {
+            return ['unread_count' => 0, 'first_unread_message_id' => null];
+        }
+
+        $firstUnreadId = $unread()
+            ->orderBy('sent_at')
+            ->orderBy('id')
+            ->value('id');
+
+        return [
+            'unread_count' => $count,
+            'first_unread_message_id' => $firstUnreadId === null ? null : (int) $firstUnreadId,
+        ];
+    }
+
+    /**
      * Base list query:
      * - only conversations where profile participates
      * - optionally narrowed to an explicit conversation id whitelist (used by

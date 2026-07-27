@@ -36,7 +36,9 @@ use App\Services\CommunicationPolicyService;
  */
 class SuchakChatThreadService
 {
-    public const AUTHOR_MEMBER = 'member';
+    /** The base role every chat payload starts from — one definition, not two. */
+    public const AUTHOR_MEMBER = ChatApiPresenter::AUTHOR_MEMBER;
+
     public const AUTHOR_SUCHAK = 'suchak';
     public const AUTHOR_CANDIDATE = 'candidate';
 
@@ -131,6 +133,15 @@ class SuchakChatThreadService
         $messages = $this->presenter->threadMessages($conversation, $sinceId);
         $messages->loadMissing(['senderProfile', 'receiverProfile']);
 
+        // Same snapshot-then-clear order as the member thread: the response that
+        // carries the divider is the one that marks the thread read. The viewer
+        // is the customer's profile — the identity the Suchak already reads and
+        // writes as — so this counts the member's messages, never the Suchak's
+        // own relayed ones.
+        $unread = $customer instanceof MatrimonyProfile
+            ? $this->presenter->threadUnread($conversation, $customer)
+            : ['unread_count' => 0, 'first_unread_message_id' => null];
+
         if ($markRead) {
             // The same single read state the member chat uses. There is no
             // second, Suchak-only read pointer.
@@ -151,6 +162,8 @@ class SuchakChatThreadService
                 ->values()
                 ->all(),
             'last_id' => $messages->last()?->id,
+            'unread_count' => $unread['unread_count'],
+            'first_unread_message_id' => $unread['first_unread_message_id'],
             'can_send' => $this->canSendPayload($request, $customer, $member, $conversation),
         ];
     }

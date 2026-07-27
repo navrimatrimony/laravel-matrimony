@@ -145,6 +145,17 @@ class MobileChatApiController extends Controller
         $messages = $this->threadMessages($conversation, $sinceId);
         $messages->loadMissing(['senderProfile', 'receiverProfile']);
 
+        // Snapshot the unread boundary BEFORE marking read — this is the very
+        // response the app draws its "unread from here" divider on, and the same
+        // call is about to clear it. The next fetch correctly returns 0/null.
+        //
+        // The paid read gate does NOT zero this. A read-locked member still HAS
+        // the messages; they just cannot read the bodies (already nulled above
+        // with read_locked = true). The inbox badge and /chats/unread-count have
+        // always counted them regardless of plan, and the upgrade prompt depends
+        // on that count being honest. A position is not a body.
+        $unread = $this->presenter->threadUnread($conversation, $me);
+
         if (! $readLocked) {
             $this->messages->markConversationRead($me, $conversation);
         }
@@ -160,6 +171,8 @@ class MobileChatApiController extends Controller
                 ->values()
                 ->all(),
             'last_id' => $messages->last()?->id,
+            'unread_count' => $unread['unread_count'],
+            'first_unread_message_id' => $unread['first_unread_message_id'],
             'read_locked_for_incoming' => $readLocked,
             'can_send' => $this->policyPayload($this->policy->canSendMessage($me, $other, $conversation)),
             'showcase' => $showcase,

@@ -5,6 +5,7 @@ namespace App\Services\Chat;
 use App\Models\Conversation;
 use App\Models\MatrimonyProfile;
 use App\Models\Message;
+use App\Services\ChatListService;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -21,10 +22,28 @@ use Illuminate\Support\Collection;
  */
 class ChatApiPresenter
 {
+    public const AUTHOR_MEMBER = 'member';
+
     public function __construct(
         protected ChatConversationService $conversations,
         protected ChatMessageModerationService $moderation,
+        protected ChatListService $chatList,
     ) {}
+
+    /**
+     * Where the "unread from here" divider goes for this viewer in this thread.
+     *
+     * Delegates to {@see ChatListService::getConversationUnreadSummary()} so the
+     * member thread, the Suchak thread and the inbox badge all count the same
+     * rows. Callers must take this snapshot BEFORE marking the thread read —
+     * the response that carries the divider is the very response that clears it.
+     *
+     * @return array{unread_count: int, first_unread_message_id: int|null}
+     */
+    public function threadUnread(Conversation $conversation, MatrimonyProfile $viewer): array
+    {
+        return $this->chatList->getConversationUnreadSummary((int) $viewer->id, (int) $conversation->id);
+    }
 
     /**
      * Thread window. `since_id > 0` is the polling path (ascending, new only);
@@ -111,7 +130,23 @@ class ChatApiPresenter
             'preview_text' => $incomingLocked ? (string) __('chat_ui.read_locked_preview') : $this->cleanString($display['text'] ?? null),
             'read_locked' => $incomingLocked,
             'show_filtered_badge' => (bool) ($display['show_filtered_badge'] ?? false),
-            'delivery_status' => $message->delivery_status,
+            // The neutral, always-present base: in a member↔member thread every
+            // message is authored by a member, and the label is simply who sent
+            // it (already exposed as `sender.name`, so no new disclosure and
+            // nothing to withhold when the body is read-locked).
+            //
+            // A Suchak relay is STORED under the candidate's profile, so the
+            // sender id alone cannot tell `candidate` from `suchak`. Only the
+            // Suchak surface knows which side of the request the viewer sits on,
+            // so it — and only it — narrows this to `candidate`/`suchak`:
+            // {@see \App\Modules\Suchak\Services\SuchakChatThreadService::messagePayload()}.
+            'author_role' => self::AUTHOR_MEMBER,
+            'author_label' => $this->cleanString($message->senderProfile?->full_name),
+            // Always the RECIPIENT's view of the message, so the sender's own
+            // bubble can show ✓ vs ✓✓. Written by
+            // {@see \App\Services\Chat\ChatMessageService::applyConversationRead()}
+            // alongside read_at, in the same transaction.
+            'delivery_status' => (string) ($message->delivery_status ?: Message::DELIVERY_SENT),
             'sent_at' => $this->dateValue($message->sent_at),
             'read_at' => $this->dateValue($message->read_at),
             'sender' => $this->profilePayload($message->senderProfile),
