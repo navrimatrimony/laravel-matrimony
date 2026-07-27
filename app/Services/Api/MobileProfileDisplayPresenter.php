@@ -34,6 +34,7 @@ use App\Services\ProfilePreferenceMatchService;
 use App\Services\ProfileLifecycleService;
 use App\Services\ProfilePartnerCommunityFlagService;
 use App\Services\ProfilePhotoAccessService;
+use App\Services\Profile\ProfileViewLockBlurPolicy;
 use App\Services\SiteIdentityService;
 use App\Services\ViewTrackingService;
 use App\Support\HeightDisplay;
@@ -2738,7 +2739,8 @@ class MobileProfileDisplayPresenter
      *     tier: string,
      *     photo_count: int,
      *     primary_photo_url: ?string,
-     *     has_locked_photos: bool
+     *     has_locked_photos: bool,
+     *     blur_photo_class: string
      * }
      */
     private function photoAlbumPayload(MatrimonyProfile $profile, ?User $viewer, bool $isOwnProfile): array
@@ -2787,6 +2789,11 @@ class MobileProfileDisplayPresenter
             'photo_count' => count($slots),
             'primary_photo_url' => $slots[0]['url'] ?? null,
             'has_locked_photos' => collect($slots)->contains(fn (array $slot): bool => (bool) $slot['blur']),
+            // How strongly a slot whose `blur` is true should be blurred. The web
+            // read this admin dial and mobile did not, so the app guessed. Always
+            // present (even with nothing locked) so the client never falls back to
+            // a hardcoded value. Same grammar as the teaser `blur_photo_class`.
+            'blur_photo_class' => app(ProfileViewLockBlurPolicy::class)->photoBlurClass(),
         ];
     }
 

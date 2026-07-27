@@ -2327,6 +2327,54 @@ Success response: HTTP 200
 }
 ```
 
+#### `display.photo_album` — locked-photo album (added 2026-07-27)
+
+Present on every response that carries the full profile-detail `display` block
+(`MobileProfileDisplayPresenter::forProfile`): `GET /api/v1/matrimony-profile`,
+`GET /api/v1/matrimony-profiles/{id}`,
+`POST /api/v1/matrimony-profiles/{id}/contact-reveal`,
+`POST /api/v1/matrimony-profiles/{id}/contact-requests` and
+`POST /api/v1/matrimony-profiles/{id}/suchak-requests`. The lightweight list
+`display` (`forListCard`) does **not** carry it.
+
+```json
+"photo_album": {
+  "slots": [
+    { "url": "https://navrimilenavryala.com/storage/matrimony_photos/a.jpg", "blur": false },
+    { "url": "https://navrimilenavryala.com/storage/matrimony_photos/b.jpg", "blur": true }
+  ],
+  "message_key": "profile.photos_upgrade_to_view_all",
+  "message": "Upgrade to view all photos",
+  "tier": "free_own_photo",
+  "photo_count": 2,
+  "primary_photo_url": "https://navrimilenavryala.com/storage/matrimony_photos/a.jpg",
+  "has_locked_photos": true,
+  "blur_photo_class": "blur-[40px] scale-105 opacity-100"
+}
+```
+
+- `slots[].blur` — the per-photo access **decision** (owned by
+  `ProfilePhotoAccessService`). Unchanged: `true` means this photo is locked for
+  this viewer.
+- `blur_photo_class` — **new, additive.** How *strongly* a slot whose `blur` is
+  `true` must be rendered. Carries the admin dial
+  `profile_view_lock_blur_strength` (35–100, default 78), resolved by
+  `App\Services\Profile\ProfileViewLockBlurPolicy`. Clients must render locked
+  slots from this string instead of a hardcoded blur, otherwise the admin's
+  setting is silently ignored on mobile.
+
+Same token grammar as the teaser `blur_photo_class`, so the member app parses it
+with the helper it already has (`lib/core/locked_teaser.dart` →
+`blurSigmaForClass` / `photoScaleForClass` / `photoOpacityForClass`). It is a
+**different lock** from the nine-key teaser payload and is never routed through
+the teaser presenter.
+
+Always present, even when nothing is locked, so a client never needs a fallback
+value. The default (78) emits `blur-[40px]`, which resolves to the blur both
+clients already render — an older app that ignores the key is unaffected.
+
+Strength → CSS px anchors: `35 → 12px`, `78 → 40px`, `100 → 64px`.
+
 ## Interests
 
 All interest endpoints require a bearer token and a matrimony profile for the logged-in user.

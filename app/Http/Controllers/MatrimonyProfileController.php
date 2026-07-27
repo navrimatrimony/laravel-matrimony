@@ -1550,7 +1550,7 @@ class MatrimonyProfileController extends Controller
         if (! in_array($profileViewLockStartSection, ['basic_info', 'physical', 'education_career', 'family', 'siblings_detail', 'extended_family', 'alliance', 'property', 'horoscope', 'partner_preferences', 'additional'], true)) {
             $profileViewLockStartSection = 'family';
         }
-        $profileViewLockBlurStrength = max(35, min(100, (int) \App\Models\AdminSetting::getValue('profile_view_lock_blur_strength', '78')));
+        $profileViewLockBlurStrength = app(\App\Services\Profile\ProfileViewLockBlurPolicy::class)->strength();
         $profileViewLockDisplayMode = (string) \App\Models\AdminSetting::getValue('profile_view_lock_display_mode', 'merged_blur_card');
         if (! in_array($profileViewLockDisplayMode, ['merged_blur_card', 'heading_lock_rows', 'per_section_blur'], true)) {
             $profileViewLockDisplayMode = 'merged_blur_card';

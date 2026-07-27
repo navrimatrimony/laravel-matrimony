@@ -10,6 +10,7 @@ use App\Services\Chat\ChatTeaserPolicy;
 use App\Services\Interest\ReceivedInterestTeaserPolicy;
 use App\Services\MemberPresencePresentationService;
 use App\Services\Parsing\ProviderResolver;
+use App\Services\Profile\ProfileViewLockBlurPolicy;
 use App\Services\ProfileCompletenessService;
 use App\Services\Push\PushTypeRegistry;
 use App\Services\SettingService;
@@ -703,7 +704,7 @@ class AdminSettingsController extends Controller
             'memberChatDesktopOpenMode' => (string) AdminSetting::getValue('member_chat_desktop_open_mode', 'popup'),
             'memberChatMobileOpenMode' => (string) AdminSetting::getValue('member_chat_mobile_open_mode', 'full_page'),
             'profileViewLockStartSection' => (string) AdminSetting::getValue('profile_view_lock_start_section', 'family'),
-            'profileViewLockBlurStrength' => max(35, min(100, (int) AdminSetting::getValue('profile_view_lock_blur_strength', '78'))),
+            'profileViewLockBlurStrength' => app(ProfileViewLockBlurPolicy::class)->strength(),
             'profileViewLockDisplayMode' => $profileViewLockDisplayModeAdmin,
             'canManageBillingSettings' => $viewer?->hasAdminRole(['super_admin']) ?? false,
             'billingLegalName' => (string) AdminSetting::getValue('billing_legal_name', ''),
@@ -869,7 +870,7 @@ class AdminSettingsController extends Controller
         AdminSetting::setValue('member_chat_desktop_open_mode', $memberChatDesktopOpenMode);
         AdminSetting::setValue('member_chat_mobile_open_mode', $memberChatMobileOpenMode);
         $profileViewLockStartSection = (string) $request->input('profile_view_lock_start_section', 'family');
-        $profileViewLockBlurStrength = max(35, min(100, (int) $request->input('profile_view_lock_blur_strength', 78)));
+        $profileViewLockBlurStrength = ProfileViewLockBlurPolicy::clamp($request->input('profile_view_lock_blur_strength', ProfileViewLockBlurPolicy::DEFAULT_STRENGTH));
         AdminSetting::setValue('profile_view_lock_start_section', $profileViewLockStartSection);
         AdminSetting::setValue('profile_view_lock_blur_strength', (string) $profileViewLockBlurStrength);
         $profileViewLockDisplayMode = (string) $request->input('profile_view_lock_display_mode', 'merged_blur_card');
