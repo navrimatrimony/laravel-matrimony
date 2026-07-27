@@ -35,6 +35,23 @@ class SuchakRequestPresenter
     ) {
     }
 
+    /**
+     * The member reads this on a card that stays on screen, so it must state a
+     * DURABLE fact, not an event. "सूचकांकडून उत्तर आले" is true only for the
+     * first moment — after the member has replied in the chat themselves it
+     * still announced the Suchak's reply as fresh news. Only that one state
+     * differs; every other status reuses the shared vocabulary, and the
+     * Suchak's own list keeps the original action wording.
+     */
+    public function memberStatusLabel(?string $status): ?string
+    {
+        if ((string) $status === SuchakProfileRequest::STATUS_ACCEPTED_BY_SUCHAK) {
+            return (string) __('profile.suchak_request_status_member_conversation_open');
+        }
+
+        return $this->statusLabel($status);
+    }
+
     public function statusLabel(?string $status): ?string
     {
         if ($status === null || $status === '') {
@@ -85,7 +102,7 @@ class SuchakRequestPresenter
         return [
             'id' => (int) $request->id,
             'status' => $request->request_status,
-            'status_label' => $this->statusLabel($request->request_status),
+            'status_label' => $this->memberStatusLabel($request->request_status),
             'is_open' => $request->isOpen(),
             'request_reason' => $request->request_reason,
             'message' => $request->message,
