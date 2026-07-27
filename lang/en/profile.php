@@ -313,6 +313,7 @@ return [
     'gunamilan_bride' => 'Bride',
     'gunamilan_groom' => 'Groom',
     'gunamilan_not_available' => 'Not available',
+    'update_partially_locked' => 'Saved, but :count field(s) could not be changed because someone else had already set them.',
     'gunamilan_required_label' => 'Gunamilan match required',
     'gunamilan_required_help' => 'When on, only matches scoring at least 18 of 36 are shown. If either side has no patrika details filled in, the match is not excluded — gunamilan simply cannot be checked.',
     'gunamilan_missing_title' => 'Some horoscope information is missing',

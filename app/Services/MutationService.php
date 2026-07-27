@@ -27,6 +27,25 @@ use Illuminate\Validation\ValidationException;
  */
 class MutationService
 {
+    /**
+     * Core fields the LAST applyManualSnapshot() call refused to write because
+     * another actor holds a lock on them.
+     *
+     * Manual mode deliberately never reports a conflict to the caller, so a
+     * skipped field used to leave no trace but a log line — the request still
+     * answered 200 "updated" while the value was discarded. Callers read this
+     * so a save that dropped data can say so.
+     *
+     * @var list<string>
+     */
+    private static array $lastLockedSkips = [];
+
+    /** @return list<string> */
+    public static function lastLockedSkips(): array
+    {
+        return array_values(array_unique(self::$lastLockedSkips));
+    }
+
     /** Supported snapshot_schema_version values. Unsupported → throw before transaction. */
     private const SUPPORTED_SNAPSHOT_VERSIONS = [1];
 
@@ -218,6 +237,7 @@ class MutationService
      */
     public function applyManualSnapshot(MatrimonyProfile $profile, array $snapshot, int $actorUserId, string $mode = 'manual'): array
     {
+        self::$lastLockedSkips = [];
         $snapshot = $this->stripDeprecatedSnapshotKeysForApply($snapshot);
         if (isset($snapshot['core']) && is_array($snapshot['core'])) {
             app(\App\Services\OccupationService::class)->mergeLegacyCareerCoreForApply($snapshot['core'], (int) ($profile->user_id ?? 0) ?: null);
@@ -360,6 +380,9 @@ class MutationService
                     }
                     if (! $isAdmin && ProfileFieldLockService::isLocked($profile, $fieldKey)) {
                         \Illuminate\Support\Facades\Log::info('MANUAL EDIT: field locked (skipped)', ['field' => $fieldKey, 'profile_id' => $profile->id]);
+                        // Reported back to the caller: a save that discards a value
+                        // must never answer a bare 200 "updated". See :lockedSkips.
+                        self::$lastLockedSkips[] = $fieldKey;
 
                         continue;
                     }
@@ -397,6 +420,7 @@ class MutationService
                         ]);
                         if (! $isAdmin && ProfileFieldLockService::isLocked($profile, $fieldKey)) {
                             \Illuminate\Support\Facades\Log::info('MANUAL EDIT: field locked (skipped)', ['field' => $fieldKey, 'profile_id' => $profile->id]);
+                            self::$lastLockedSkips[] = $fieldKey;
 
                             continue;
                         }

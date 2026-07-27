@@ -1646,7 +1646,30 @@ class MatrimonyProfileApiController extends Controller
      */
     private function lockKeysForMobileSnapshot(array $core): array
     {
-        return array_values(array_diff(array_keys($core), ['caste']));
+        // Lock only fields this actor actually supplied a VALUE for.
+        //
+        // Locking every key in the payload froze fields nobody had filled: the
+        // apps post a whole section at once, including its empty inputs, so one
+        // save planted locks on a dozen blank fields. A later save by a
+        // DIFFERENT actor (the Suchak editing a candidate the candidate once
+        // touched, or vice versa) is then silently skipped in MutationService,
+        // while the request still returns 200 "updated".
+        //
+        // Verified on production: profile 261 carried locks on 30+ fields owned
+        // by another actor, which is why the Suchak's father/mother details
+        // vanished on every save.
+        $keys = [];
+        foreach ($core as $key => $value) {
+            if ($key === 'caste') {
+                continue;
+            }
+            if ($value === null || $value === '' || $value === []) {
+                continue;
+            }
+            $keys[] = $key;
+        }
+
+        return array_values(array_unique($keys));
     }
 
     /**
@@ -1768,10 +1791,12 @@ class MatrimonyProfileApiController extends Controller
 
         // Phase-5B: All updates via MutationService (source=manual, profile_change_history)
         $snapshot = $this->buildMobileProfileSnapshotFromApi($request, $profile);
+        $lockedSkips = [];
         if ($this->mobileSnapshotHasWritableData($snapshot)) {
             $changedFields = $this->lockKeysForMobileSnapshot($snapshot['core'] ?? []);
             ProfileFieldLockService::removeActorOwnedLocks($profile, $changedFields, $actor);
             app(MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $actor->id, 'manual');
+            $lockedSkips = MutationService::lastLockedSkips();
             if (! empty($changedFields)) {
                 ProfileFieldLockService::applyLocks($profile, $changedFields, 'CORE', $actor);
             }
@@ -1780,11 +1805,20 @@ class MatrimonyProfileApiController extends Controller
 
         $profileData = $this->buildGovernanceParityProfilePayload($this->freshMobileProfileResponseModel($profile));
 
-        return response()->json([
+        // A save that silently discarded a value must never answer a bare 200
+        // "updated" — that is exactly how the family details went missing with
+        // no error anywhere. Additive key: existing clients ignore it.
+        $payload = [
             'success' => true,
             'message' => 'Matrimony profile updated',
             'profile' => $profileData,
-        ]);
+        ];
+        if ($lockedSkips !== []) {
+            $payload['skipped_locked_fields'] = $lockedSkips;
+            $payload['message'] = __('profile.update_partially_locked', ['count' => (string) count($lockedSkips)]);
+        }
+
+        return response()->json($payload);
     }
 
     private function mobileSnapshotHasWritableData(array $snapshot): bool
