@@ -30,11 +30,29 @@ use App\Models\DeviceToken;
  * Row shape:
  *   notification  FQCN of the Laravel Notification class. This is what lands in
  *                 `notifications.type`, so it is the lookup key at dispatch time.
+ *   preference_key  OPTIONAL. The canonical per-user preference key for the EVENT
+ *                 this type represents. Omit it and the push key is used, which is
+ *                 right for an event that has no other home. Set it when the event
+ *                 ALREADY has a preference key — `inactive_reminder` and
+ *                 `new_matches` both do, from the engagement engine — so the fact
+ *                 "does this member want new-matches digests?" keeps exactly one
+ *                 storage key and one screen. See UserNotificationPreferencesService.
  *   group         UI grouping for the settings screens (see self::GROUPS).
  *   target        Stable deep-link target the Flutter apps switch on. Never a URL
- *                 or a route name — the apps own their own navigation.
+ *                 or a route name — the apps own their own navigation. This is a
+ *                 CONTRACT: both apps switch on it, so never rename or repurpose
+ *                 one, and never invent a target with no producer here.
  *   data_keys     Keys copied from the notification's stored `data` array into the
  *                 FCM data block, so the app can open the exact row. Keep it small.
+ *
+ *                 EVERY id here MUST be a key the notification's own toArray()
+ *                 actually writes, and its name MUST identify the model it belongs
+ *                 to. Bit us 2026-07-27: `mediation_request_id` looked like a
+ *                 `SuchakProfileRequest` id and was wired as one, but
+ *                 `MediationRequest extends ContactRequest` — it is a
+ *                 `contact_requests` row, a different id space entirely. A deep
+ *                 link on it opens the wrong record or 404s, silently, only for
+ *                 ids that happen to collide. Name the id after its table.
  *   apps          Which app's devices may receive it.
  *   default_push  Admin-side default before anyone touches the admin panel.
  */
@@ -51,7 +69,8 @@ final class PushTypeRegistry
             'notification' => \App\Notifications\InterestSentNotification::class,
             'group' => 'interest',
             'target' => 'interests_received',
-            'data_keys' => ['interest_id', 'profile_id'],
+            // The notification stores no interest id — only who sent it.
+            'data_keys' => ['sender_profile_id'],
             'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => true,
         ],
@@ -59,7 +78,7 @@ final class PushTypeRegistry
             'notification' => \App\Notifications\InterestAcceptedNotification::class,
             'group' => 'interest',
             'target' => 'interests_sent',
-            'data_keys' => ['interest_id', 'profile_id'],
+            'data_keys' => ['accepter_profile_id'],
             'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => true,
         ],
@@ -67,7 +86,7 @@ final class PushTypeRegistry
             'notification' => \App\Notifications\InterestRejectedNotification::class,
             'group' => 'interest',
             'target' => 'interests_sent',
-            'data_keys' => ['interest_id', 'profile_id'],
+            'data_keys' => ['rejecter_profile_id'],
             'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => false,
         ],
@@ -83,15 +102,19 @@ final class PushTypeRegistry
             'notification' => \App\Notifications\ChatMessageLockedNotification::class,
             'group' => 'chat',
             'target' => 'plans',
-            'data_keys' => ['conversation_id'],
-            'apps' => [DeviceToken::APP_MEMBER, DeviceToken::APP_SUCHAK],
+            // This notification stores no conversation id, so there is nothing to
+            // deep-link to beyond the plans screen.
+            'data_keys' => [],
+            // Member-only: the plan gate on chat is a member monetization concept,
+            // and the Suchak app has no equivalent screen for this target.
+            'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => false,
         ],
         'contact_request_received' => [
             'notification' => \App\Notifications\ContactRequestReceivedNotification::class,
             'group' => 'contact',
             'target' => 'contact_inbox',
-            'data_keys' => ['contact_request_id', 'profile_id'],
+            'data_keys' => ['contact_request_id', 'sender_profile_id'],
             'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => true,
         ],
@@ -99,7 +122,7 @@ final class PushTypeRegistry
             'notification' => \App\Notifications\ContactRequestAcceptedNotification::class,
             'group' => 'contact',
             'target' => 'contact_inbox',
-            'data_keys' => ['contact_request_id', 'profile_id'],
+            'data_keys' => ['contact_request_id', 'receiver_profile_id'],
             'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => true,
         ],
@@ -107,7 +130,7 @@ final class PushTypeRegistry
             'notification' => \App\Notifications\ContactRequestRejectedNotification::class,
             'group' => 'contact',
             'target' => 'contact_inbox',
-            'data_keys' => ['contact_request_id', 'profile_id'],
+            'data_keys' => ['contact_request_id', 'receiver_profile_id'],
             'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => false,
         ],
@@ -123,31 +146,45 @@ final class PushTypeRegistry
             'notification' => \App\Notifications\ContactGrantRevokedNotification::class,
             'group' => 'contact',
             'target' => 'contact_inbox',
-            'data_keys' => ['contact_grant_id'],
+            'data_keys' => ['contact_grant_id', 'contact_request_id'],
             'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => false,
         ],
+        /*
+        | Mediation: `MediationRequest extends ContactRequest`, so both of these
+        | carry a `contact_requests` row id — NOT a SuchakProfileRequest id, and
+        | not an id of any "mediation_requests" table (there is none). Both are
+        | sent to MEMBERS (MediationRequestService notifies $receiver and
+        | $mediation->sender), so they are member-app only and land in the
+        | contact inbox, which is the screen that lists contact_requests.
+        |
+        | The payload deliberately emits ONLY `contact_request_id`. The
+        | notifications also store a `mediation_request_id` alias of the same
+        | value; forwarding it would re-create the ambiguity that made the Suchak
+        | app deep-link into the wrong model.
+        */
         'mediation_request_received' => [
             'notification' => \App\Notifications\MediationRequestReceivedNotification::class,
             'group' => 'contact',
-            'target' => 'suchak_requests',
-            'data_keys' => ['mediation_request_id', 'profile_id'],
-            'apps' => [DeviceToken::APP_MEMBER, DeviceToken::APP_SUCHAK],
+            'target' => 'contact_inbox',
+            'data_keys' => ['contact_request_id', 'sender_profile_id'],
+            'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => true,
         ],
         'mediation_request_response' => [
             'notification' => \App\Notifications\MediationRequestResponseNotification::class,
             'group' => 'contact',
-            'target' => 'suchak_requests',
-            'data_keys' => ['mediation_request_id', 'profile_id'],
-            'apps' => [DeviceToken::APP_MEMBER, DeviceToken::APP_SUCHAK],
+            'target' => 'contact_inbox',
+            'data_keys' => ['contact_request_id'],
+            'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => true,
         ],
         'photo_approved' => [
             'notification' => \App\Notifications\ImageApprovedNotification::class,
             'group' => 'profile',
             'target' => 'my_photos',
-            'data_keys' => ['photo_id'],
+            // Photo moderation notifications store only a reason, no photo id.
+            'data_keys' => [],
             'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => true,
         ],
@@ -155,7 +192,7 @@ final class PushTypeRegistry
             'notification' => \App\Notifications\ImageRejectedNotification::class,
             'group' => 'profile',
             'target' => 'my_photos',
-            'data_keys' => ['photo_id'],
+            'data_keys' => [],
             'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => true,
         ],
@@ -163,7 +200,7 @@ final class PushTypeRegistry
             'notification' => \App\Notifications\ProfileViewedNotification::class,
             'group' => 'engagement',
             'target' => 'who_viewed_me',
-            'data_keys' => ['profile_id'],
+            'data_keys' => ['viewer_profile_id'],
             'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => false,
         ],
@@ -174,6 +211,10 @@ final class PushTypeRegistry
             'data_keys' => ['match_count'],
             'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => true,
+            // Binds to the EXISTING engagement preference. Inventing a second key
+            // here would orphan every choice members have already made and let the
+            // two disagree silently.
+            'preference_key' => \App\Services\UserNotificationPreferencesService::KEY_ENGAGEMENT_MATCHES_DIGEST,
         ],
         'inactive_reminder' => [
             'notification' => \App\Notifications\InactiveUserReminderNotification::class,
@@ -182,6 +223,7 @@ final class PushTypeRegistry
             'data_keys' => [],
             'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => true,
+            'preference_key' => \App\Services\UserNotificationPreferencesService::KEY_ENGAGEMENT_INACTIVE,
         ],
         'plan_expiring' => [
             'notification' => \App\Notifications\PlanExpiringSoonNotification::class,
@@ -297,6 +339,30 @@ final class PushTypeRegistry
     public function defaultPushEnabled(string $key): bool
     {
         return (bool) (self::TYPES[$key]['default_push'] ?? false);
+    }
+
+    /**
+     * The canonical per-user preference key for the EVENT behind a push type.
+     *
+     * Usually the push key itself. Where the event already had a preference key
+     * before push existed, that older key wins — one fact, one destination.
+     */
+    public function preferenceKey(string $pushKey): string
+    {
+        return (string) (self::TYPES[$pushKey]['preference_key'] ?? $pushKey);
+    }
+
+    /**
+     * Every canonical event preference key this registry implies, deduplicated.
+     *
+     * @return list<string>
+     */
+    public function preferenceKeys(): array
+    {
+        return array_values(array_unique(array_map(
+            fn (string $key): string => $this->preferenceKey($key),
+            $this->keys(),
+        )));
     }
 
     /**

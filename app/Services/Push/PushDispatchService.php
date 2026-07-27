@@ -345,24 +345,47 @@ class PushDispatchService
      * ONLY types the admin has enabled platform-wide are returned: showing a
      * switch whose outcome the member cannot affect is worse than hiding it.
      *
-     * @return list<array{key: string, group: string, group_label: string, label: string, description: string, push_enabled: bool}>
+     * `key` is the CANONICAL EVENT preference key, not the push key — that is
+     * what makes this screen show exactly one switch per fact. `push_type` is the
+     * registry key, exposed only so an app can correlate a category with the
+     * `type` field it will later receive in an FCM data block.
+     *
+     * @return list<array{key: string, push_type: string, group: string, group_label: string, label: string, description: string, push_enabled: bool, blocked_by_event_setting: bool}>
      */
     public function settingsCategoriesFor(string $app, ?Model $owner): array
     {
         $rows = [];
+        $seen = [];
 
         foreach ($this->registry->forApp($app) as $key => $row) {
             if (! $this->platform->pushTypeEnabled($key)) {
                 continue;
             }
 
+            $eventKey = $this->registry->preferenceKey($key);
+
+            // Two push types could share one event key; the member must still see
+            // a single switch for that single fact.
+            if (isset($seen[$eventKey])) {
+                continue;
+            }
+            $seen[$eventKey] = true;
+
+            $eventWanted = $this->preferences->eventEnabled($owner, $eventKey);
+
             $rows[] = [
-                'key' => $key,
+                'key' => $eventKey,
+                'push_type' => $key,
                 'group' => $row['group'],
                 'group_label' => $this->registry->groupLabel($row['group']),
                 'label' => $this->registry->label($key),
                 'description' => $this->registry->description($key),
                 'push_enabled' => $this->preferences->pushTypeEnabled($owner, $key),
+                // True when the member has switched the EVENT off elsewhere (the
+                // engagement section of the settings screen). The push toggle then
+                // cannot turn anything on, so the app should render it disabled
+                // rather than showing a switch that silently does nothing.
+                'blocked_by_event_setting' => ! $eventWanted,
             ];
         }
 

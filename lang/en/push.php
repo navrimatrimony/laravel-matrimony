@@ -98,17 +98,19 @@ return [
             'body' => 'Contact access has been withdrawn.',
         ],
 
+        // Mediation = an assisted contact request between two members. Not the
+        // Suchak profile-request pipeline; do not word it as one.
         'mediation_request_received' => [
-            'label' => 'Suchak request received',
-            'description' => 'When a request reaches you through a Suchak.',
-            'title' => 'Suchak request',
-            'body' => 'A new request has reached you through a Suchak.',
+            'label' => 'Mediation request received',
+            'description' => 'When an assisted request reaches you.',
+            'title' => 'New request',
+            'body' => 'A new request has reached you.',
         ],
         'mediation_request_response' => [
-            'label' => 'Suchak request answered',
-            'description' => 'When your Suchak request is answered.',
-            'title' => 'Suchak request answered',
-            'body' => 'There is an answer to your Suchak request.',
+            'label' => 'Mediation request answered',
+            'description' => 'When your assisted request is answered.',
+            'title' => 'Request answered',
+            'body' => 'There is an answer to your request.',
         ],
 
         'photo_approved' => [

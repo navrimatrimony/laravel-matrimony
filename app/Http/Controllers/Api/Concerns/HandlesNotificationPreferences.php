@@ -43,6 +43,13 @@ trait HandlesNotificationPreferences
      * PUT — partial update. Unknown or admin-disabled category keys are rejected
      * rather than ignored, so a stale app build fails loudly instead of silently
      * writing a preference that can never take effect.
+     *
+     * This screen governs the PUSH CHANNEL. A `categories` entry writes the push
+     * override for that event, NOT the event switch itself — the event switch is
+     * a different fact with its own single home (for the engagement events, the
+     * notifications section of `GET /settings`). Keeping the two apart is what
+     * lets a member keep the new-matches digest by email while silencing it on
+     * their phone, without any key existing twice.
      */
     protected function applyNotificationPreferences(Request $request, Model $owner, string $app): JsonResponse
     {
@@ -53,11 +60,12 @@ trait HandlesNotificationPreferences
         ]);
 
         $dispatcher = app(PushDispatchService::class);
+        $preferences = app(UserNotificationPreferencesService::class);
 
         // Only categories this app shows AND the admin has enabled are writable.
         $allowed = array_column($dispatcher->settingsCategoriesFor($app, $owner), 'key');
 
-        $updates = [];
+        $channelUpdates = [];
 
         foreach ((array) ($validated['categories'] ?? []) as $key => $value) {
             if (! in_array((string) $key, $allowed, true)) {
@@ -66,18 +74,29 @@ trait HandlesNotificationPreferences
                 ]);
             }
 
-            $updates[UserNotificationPreferencesService::KEY_PUSH_PREFIX.$key] = (bool) $value;
+            $channelUpdates[(string) $key] = [
+                UserNotificationPreferencesService::CHANNEL_PUSH => (bool) $value,
+            ];
         }
 
-        if (array_key_exists('quiet_hours_enabled', $validated)) {
-            $updates[UserNotificationPreferencesService::KEY_PUSH_QUIET_HOURS] = (bool) $validated['quiet_hours_enabled'];
-        }
-
-        if ($updates !== [] && ! app(UserNotificationPreferencesService::class)->saveForOwner($owner, $updates)) {
+        if ($channelUpdates !== [] && ! $preferences->saveChannelOverrides($owner, $channelUpdates)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Notification preferences are not available for this account.',
             ], 422);
+        }
+
+        if (array_key_exists('quiet_hours_enabled', $validated)) {
+            $saved = $preferences->saveForOwner($owner, [
+                UserNotificationPreferencesService::KEY_PUSH_QUIET_HOURS => (bool) $validated['quiet_hours_enabled'],
+            ]);
+
+            if (! $saved) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Notification preferences are not available for this account.',
+                ], 422);
+            }
         }
 
         return $this->notificationPreferencePayload($owner->refresh(), $app);
