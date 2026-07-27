@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Suchak\SuchakAppConfigApiController;
 use App\Http\Controllers\Api\Suchak\SuchakBillingApiController;
+use App\Http\Controllers\Api\Suchak\SuchakChatApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCollaborationsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCollaborationsMutationsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakConsentRequestsApiController;
@@ -123,6 +124,18 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::post('/profile-requests/{profileRequest}/reply', [SuchakProfileRequestsApiController::class, 'reply']);
     Route::post('/profile-requests/{profileRequest}/forward', [SuchakProfileRequestsApiController::class, 'forward']);
     Route::post('/profile-requests/{profileRequest}/decision', [SuchakProfileRequestsApiController::class, 'decide']);
+
+    // The READ half of that same pipeline. The Suchak's reply already lands in
+    // the member↔candidate conversation; without these the member's answer was
+    // invisible to the person handling the match. Same chat engine, same
+    // payload shape as /chats for members — only the authorization differs
+    // (conversation must belong to a request this Suchak owns, with consent).
+    // Polling via ?since_id=, no realtime layer.
+    Route::get('/chats', [SuchakChatApiController::class, 'index']);
+    Route::get('/chats/unread-count', [SuchakChatApiController::class, 'unreadCount']);
+    Route::get('/chats/{conversation}', [SuchakChatApiController::class, 'show']);
+    Route::post('/chats/{conversation}/messages', [SuchakChatApiController::class, 'send']);
+    Route::post('/chats/{conversation}/read', [SuchakChatApiController::class, 'read']);
 
     // Ranked, masked match suggestions for one represented candidate + the
     // learning log behind them (impression on read, decision on write).

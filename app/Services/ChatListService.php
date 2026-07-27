@@ -25,9 +25,9 @@ final class ChatListService
      *
      * @return Collection<int, Conversation>
      */
-    public function getAllConversations(int $profileId): Collection
+    public function getAllConversations(int $profileId, ?array $onlyConversationIds = null): Collection
     {
-        $rows = $this->baseListQuery($profileId)->get();
+        $rows = $this->baseListQuery($profileId, $onlyConversationIds)->get();
         return $this->hydrateListRows($rows);
     }
 
@@ -81,17 +81,24 @@ final class ChatListService
     /**
      * Unread total count across all conversations (for badges/polling).
      */
-    public function getUnreadMessageCount(int $profileId): int
+    public function getUnreadMessageCount(int $profileId, ?array $onlyConversationIds = null): int
     {
         return (int) DB::table('messages')
             ->where('receiver_profile_id', $profileId)
             ->whereNull('read_at')
+            ->when(
+                $onlyConversationIds !== null,
+                fn ($q) => $q->whereIn('conversation_id', $onlyConversationIds)
+            )
             ->count();
     }
 
     /**
      * Base list query:
      * - only conversations where profile participates
+     * - optionally narrowed to an explicit conversation id whitelist (used by
+     *   the Suchak inbox, which may only see the threads attached to requests
+     *   it owns — never the customer's full mailbox)
      * - join other participant profile via CASE expression
      * - add unread_count via subquery
      * - eager-load lastMessage
@@ -99,7 +106,7 @@ final class ChatListService
      *
      * @return Builder<Conversation>
      */
-    private function baseListQuery(int $profileId): Builder
+    private function baseListQuery(int $profileId, ?array $onlyConversationIds = null): Builder
     {
         $otherIdExpr = "CASE WHEN conversations.profile_one_id = ? THEN conversations.profile_two_id ELSE conversations.profile_one_id END";
 
@@ -124,6 +131,10 @@ final class ChatListService
                 'other.gender_id as other_gender_id',
                 'other.user_id as other_user_id',
             ])
+            ->when(
+                $onlyConversationIds !== null,
+                fn (Builder $q) => $q->whereIn('conversations.id', $onlyConversationIds)
+            )
             ->with(['lastMessage'])
             ->orderByDesc('conversations.last_message_at')
             ->orderByDesc('conversations.id');

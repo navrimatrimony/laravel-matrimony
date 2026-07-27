@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\SuchakAccount;
 use App\Models\SuchakProfileRequest;
 use App\Models\User;
+use App\Modules\Suchak\Services\SuchakChatThreadService;
 use App\Modules\Suchak\Services\SuchakRequestPipelineService;
 use App\Modules\Suchak\Services\SuchakRequestPresenter;
 use Illuminate\Http\JsonResponse;
@@ -31,6 +32,7 @@ class SuchakProfileRequestsApiController extends Controller
     public function __construct(
         private readonly SuchakRequestPipelineService $pipelineService,
         private readonly SuchakRequestPresenter $presenter,
+        private readonly SuchakChatThreadService $chatThreads,
     ) {
     }
 
@@ -144,6 +146,11 @@ class SuchakProfileRequestsApiController extends Controller
             'data' => [
                 'profile_request' => $this->presenter->suchakRequestPayload($profileRequest),
                 'decision_options' => $this->decisionOptions(),
+                // The exchange, not just the opening line. A Suchak who replied
+                // could previously see neither their own reply nor anything the
+                // member wrote afterwards — the request read as a one-shot card.
+                // Null when nothing has been written yet.
+                'chat' => $this->chatThreads->threadForRequest($account, $profileRequest),
             ],
         ]);
     }
@@ -183,6 +190,9 @@ class SuchakProfileRequestsApiController extends Controller
                 'profile_request' => $this->presenter->suchakRequestPayload($result['request']),
                 'chat_conversation_id' => (int) $result['message']->conversation_id,
                 'chat_message_id' => (int) $result['message']->id,
+                // The thread the reply just landed in, so the screen shows the
+                // Suchak their own words immediately instead of a blank card.
+                'chat' => $this->chatThreads->threadForRequest($account, $result['request']),
             ],
         ]);
     }

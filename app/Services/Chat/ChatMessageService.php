@@ -116,6 +116,25 @@ class ChatMessageService
             return;
         }
 
+        $this->applyConversationRead($reader, $conversation);
+    }
+
+    /**
+     * Mark read on behalf of an authorized representative (a Suchak reading the
+     * thread of a customer they hold active consent for).
+     *
+     * FEATURE_CHAT_CAN_READ is a *member plan* gate on the member's own inbox;
+     * a Suchak's authority comes from consent, not from their customer's plan,
+     * so it is not consulted here. The read state itself is the same single
+     * state — there is no second, Suchak-only read pointer.
+     */
+    public function markConversationReadForRepresentative(MatrimonyProfile $reader, Conversation $conversation): void
+    {
+        $this->applyConversationRead($reader, $conversation);
+    }
+
+    protected function applyConversationRead(MatrimonyProfile $reader, Conversation $conversation): void
+    {
         DB::transaction(function () use ($reader, $conversation) {
             $latest = Message::query()
                 ->where('conversation_id', $conversation->id)

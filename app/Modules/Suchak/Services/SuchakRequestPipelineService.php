@@ -731,14 +731,19 @@ class SuchakRequestPipelineService
      * gone the Suchak may not answer for them — reuses the SAME predicate
      * (hasValidConsent) every other Suchak surface uses.
      */
-    private function assertSuchakMayActOnRequest(SuchakProfileRequest $request): void
+    public function suchakMayActOnRequest(SuchakProfileRequest $request): bool
     {
         $request->loadMissing('representation');
         $representation = $request->representation;
 
-        if ($representation === null
-            || $representation->representation_status !== SuchakProfileRepresentation::STATUS_ACTIVE
-            || ! $representation->hasValidConsent()) {
+        return $representation !== null
+            && $representation->representation_status === SuchakProfileRepresentation::STATUS_ACTIVE
+            && $representation->hasValidConsent();
+    }
+
+    private function assertSuchakMayActOnRequest(SuchakProfileRequest $request): void
+    {
+        if (! $this->suchakMayActOnRequest($request)) {
             throw new InvalidArgumentException(__('profile.suchak_request_consent_required'));
         }
     }
@@ -959,6 +964,30 @@ class SuchakRequestPipelineService
         }
 
         return $normalized;
+    }
+
+    /**
+     * The exact inverse of {@see suchakReplyChatBody}, kept beside it so the
+     * prefix format has ONE definition.
+     *
+     * A Suchak's words are stored as sent by the candidate's profile — that is
+     * how the pipeline relays them. Without this, every surface reading the
+     * thread would show the Suchak their own reply as if the candidate had
+     * written it. Returns null when the message is genuinely the candidate's.
+     *
+     * @return array{suchak_name: string, text: string}|null
+     */
+    public function parseSuchakRelayedChatBody(?string $body): ?array
+    {
+        $body = (string) $body;
+        if (! preg_match('/^सूचकांकडून संदेश \((.*?)\):\r?\n?(.*)$/su', $body, $matches)) {
+            return null;
+        }
+
+        return [
+            'suchak_name' => trim($matches[1]),
+            'text' => trim($matches[2]),
+        ];
     }
 
     private function suchakReplyChatBody(SuchakAccount $account, string $replyText): string
