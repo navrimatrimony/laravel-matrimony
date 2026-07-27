@@ -561,11 +561,26 @@ class LocationService
         $sourceLat = (float) $source->lat;
         $sourceLng = (float) $source->lng;
 
+        // Bound the scan to a lat/lng box before measuring distance. Without it
+        // this loaded EVERY geocoded address in the country into memory and
+        // haversined each one — measured at 1.5 s and ~500 MB per call on
+        // production, twice per profile view, which killed the PHP worker and
+        // surfaced to the app as a 502. The rows outside the box are exactly
+        // the ones the radius filter below would have discarded anyway.
+        //
+        // Same box maths as nearbyTalukasByCoordinate() further down, and it
+        // uses the index from 2026_07_26_150000_add_geo_bounding_box_index.
+        $latDelta = $radiusKm / 111.045;
+        $cosLat = cos(deg2rad($sourceLat));
+        $lngDelta = abs($cosLat) < 0.01 ? 180.0 : $radiusKm / (111.045 * abs($cosLat));
+
         $candidates = Location::query()
             ->select(['id', 'lat', 'lng'])
             ->whereNotNull('lat')
             ->whereNotNull('lng')
             ->where('id', '!=', $locationId)
+            ->whereBetween('lat', [max(-90.0, $sourceLat - $latDelta), min(90.0, $sourceLat + $latDelta)])
+            ->whereBetween('lng', [max(-180.0, $sourceLng - $lngDelta), min(180.0, $sourceLng + $lngDelta)])
             ->get();
 
         $distanceByLocation = [];
