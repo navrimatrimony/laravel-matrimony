@@ -324,12 +324,72 @@
                 </div>
             </div>
 
+            {{--
+                Mobile push switchboard. The per-type rows are rendered FROM
+                App\Services\Push\PushTypeRegistry — adding a notification type
+                there makes it appear here automatically, with no edit to this
+                view and no new admin screen.
+            --}}
+            <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">{{ __('admin_notifications.push_heading') }}</h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">{{ __('admin_notifications.push_intro') }}</p>
+
+                <div class="space-y-4">
+                    <label class="admin-toggle">
+                        <input type="checkbox" name="notification_push_enabled" value="1" @checked(old('notification_push_enabled', $np['push_enabled'] ?? false))>
+                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                        <span class="toggle-label">{{ __('admin_notifications.push_enabled') }}</span>
+                    </label>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 -mt-2 ml-16">{{ __('admin_notifications.push_enabled_help') }}</p>
+
+                    <label class="admin-toggle">
+                        <input type="checkbox" name="notification_push_quiet_hours_enabled" value="1" @checked(old('notification_push_quiet_hours_enabled', $np['push_quiet_hours_enabled'] ?? true))>
+                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                        <span class="toggle-label">{{ __('admin_notifications.push_quiet_hours') }}</span>
+                    </label>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 -mt-2 ml-16">{{ __('admin_notifications.push_quiet_hours_help') }}</p>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 ml-0 sm:ml-16">
+                        <div>
+                            <label class="block text-xs mb-1">{{ __('admin_notifications.push_quiet_hours_start') }}</label>
+                            <input type="number" min="0" max="23" name="notification_push_quiet_hours_start" value="{{ old('notification_push_quiet_hours_start', $np['push_quiet_hours_start'] ?? 22) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                        </div>
+                        <div>
+                            <label class="block text-xs mb-1">{{ __('admin_notifications.push_quiet_hours_end') }}</label>
+                            <input type="number" min="0" max="23" name="notification_push_quiet_hours_end" value="{{ old('notification_push_quiet_hours_end', $np['push_quiet_hours_end'] ?? 8) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                        </div>
+                    </div>
+
+                    <div class="pt-2">
+                        <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">{{ __('admin_notifications.push_types_heading') }}</h3>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">{{ __('admin_notifications.push_types_help') }}</p>
+
+                        {{-- Marker so an unchecked box is stored as OFF rather than "not submitted". --}}
+                        <input type="hidden" name="notification_push_types[__present]" value="1">
+
+                        @foreach ($pushTypeGroups ?? [] as $group => $rows)
+                            <p class="mt-4 mb-2 text-xs font-semibold text-gray-700 dark:text-gray-300">{{ $rows[0]['group_label'] }}</p>
+                            <div class="space-y-2 ml-1">
+                                @foreach ($rows as $row)
+                                    <label class="admin-toggle">
+                                        <input type="checkbox" name="notification_push_types[{{ $row['key'] }}]" value="1" @checked(old('notification_push_types.'.$row['key'], $row['enabled']))>
+                                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                        <span class="toggle-label">{{ $row['label'] }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+
             <div class="rounded-lg border border-indigo-200 bg-indigo-50/80 px-4 py-3 text-xs text-indigo-900 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-100">
                 <p class="font-semibold">{{ __('admin_notifications.channel_matrix_title') }}</p>
                 <ul class="mt-2 list-disc list-inside space-y-1">
                     <li>{{ __('admin_notifications.channel_in_app') }}</li>
                     <li>{{ __('admin_notifications.channel_email') }}</li>
                     <li>{{ __('admin_notifications.channel_whatsapp') }}</li>
+                    <li>{{ __('admin_notifications.channel_push') }}</li>
                 </ul>
                 <p class="mt-3 text-indigo-800/90 dark:text-indigo-100/90">{{ __('admin_notifications.queue_worker_note') }}</p>
             </div>

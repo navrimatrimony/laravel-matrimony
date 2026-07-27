@@ -4,6 +4,7 @@ use App\Http\Controllers\AbuseReportController;
 use App\Http\Controllers\Api\BiodataIntakeApiController;
 use App\Http\Controllers\Api\CasteLookupController;
 use App\Http\Controllers\Api\ContactActionApiController;
+use App\Http\Controllers\Api\DeviceTokenApiController;
 use App\Http\Controllers\Api\ContactInboxApiController;
 use App\Http\Controllers\Api\ExtendedFieldApiController;
 use App\Http\Controllers\Api\FieldRegistryApiController;
@@ -17,6 +18,7 @@ use App\Http\Controllers\Api\MobilePlanApiController;
 use App\Http\Controllers\Api\MobileProfilePhotoApiController;
 use App\Http\Controllers\Api\MobileProfileListApiController;
 use App\Http\Controllers\Api\MobileSettingsApiController;
+use App\Http\Controllers\Api\NotificationPreferenceApiController;
 use App\Http\Controllers\Api\ProfileSetupLookupController;
 use App\Http\Controllers\Api\ProfileActionApiController;
 use App\Http\Controllers\Api\ProfileFieldLockApiController;
@@ -75,6 +77,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/chats/{conversation}', [MobileChatApiController::class, 'show']); // MOBILE CHAT THREAD
     Route::post('/chats/{conversation}/messages', [MobileChatApiController::class, 'sendText']); // SEND MOBILE CHAT TEXT
     Route::post('/chats/{conversation}/read', [MobileChatApiController::class, 'read']); // MARK MOBILE CHAT READ
+    /*
+    | Mobile push (FCM). Registration is per DEVICE, so the DELETE is what the
+    | app calls on logout — leaving the token behind would keep pushing to a
+    | phone the member has signed out of.
+    */
+    Route::post('/device-tokens', [DeviceTokenApiController::class, 'store']); // REGISTER FCM DEVICE TOKEN
+    Route::delete('/device-tokens', [DeviceTokenApiController::class, 'destroy']); // UNREGISTER ON LOGOUT
+    /*
+    | Server-driven notification settings screen: the category list comes from
+    | the server, so a new notification type appears in the app with no new APK.
+    */
+    Route::get('/notification-preferences', [NotificationPreferenceApiController::class, 'show']); // PUSH CATEGORIES + QUIET HOURS
+    Route::put('/notification-preferences', [NotificationPreferenceApiController::class, 'update']); // PARTIAL UPDATE
     Route::get('/settings', [MobileSettingsApiController::class, 'index']); // MOBILE SETTINGS
     Route::put('/settings/privacy', [MobileSettingsApiController::class, 'updatePrivacy']); // UPDATE PRIVACY SETTINGS
     Route::put('/settings/notifications', [MobileSettingsApiController::class, 'updateNotifications']); // UPDATE NOTIFICATION SETTINGS

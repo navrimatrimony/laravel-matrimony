@@ -11,6 +11,7 @@ use App\Services\Interest\ReceivedInterestTeaserPolicy;
 use App\Services\MemberPresencePresentationService;
 use App\Services\Parsing\ProviderResolver;
 use App\Services\ProfileCompletenessService;
+use App\Services\Push\PushTypeRegistry;
 use App\Services\SettingService;
 use App\Services\Showcase\ShowcaseInterestPolicyService;
 use App\Services\NotificationPlatformSettingsService;
@@ -730,7 +731,42 @@ class AdminSettingsController extends Controller
                 ->mapWithKeys(fn (string $key): array => [$key => $siteIdentity->assetUrl($key)])
                 ->all(),
             'notificationPlatform' => app(NotificationPlatformSettingsService::class)->formDefaults(),
+            'pushTypeGroups' => $this->pushTypeGroups(),
         ]);
+    }
+
+    /**
+     * Push types for the admin notifications tab, grouped for display.
+     *
+     * Built from {@see PushTypeRegistry} rather than a list in the view, so a new
+     * notification type gets its admin toggle automatically. A type with no
+     * stored AdminSetting row shows its registry default instead of erroring.
+     *
+     * @return array<string, list<array{key: string, label: string, group_label: string, enabled: bool}>>
+     */
+    private function pushTypeGroups(): array
+    {
+        $registry = app(PushTypeRegistry::class);
+        $effective = app(NotificationPlatformSettingsService::class)->pushTypeMatrix();
+
+        $groups = [];
+
+        foreach (PushTypeRegistry::GROUPS as $group) {
+            foreach ($registry->all() as $key => $row) {
+                if ($row['group'] !== $group) {
+                    continue;
+                }
+
+                $groups[$group][] = [
+                    'key' => $key,
+                    'label' => $registry->label($key),
+                    'group_label' => $registry->groupLabel($group),
+                    'enabled' => (bool) ($effective[$key] ?? false),
+                ];
+            }
+        }
+
+        return $groups;
     }
 
     public function updateAppSettings(Request $request, SettingService $settings, SiteIdentityService $siteIdentity): \Illuminate\Http\RedirectResponse
@@ -775,6 +811,12 @@ class AdminSettingsController extends Controller
             'notification_new_matches_digest_enabled' => 'nullable|in:0,1',
             'notification_plan_expiry_notify_days' => ['nullable', 'string', 'max:80', 'regex:/^[\d,\s]+$/'],
             'notification_retention_days' => 'nullable|integer|min:7|max:3650',
+            'notification_push_enabled' => 'nullable|in:0,1',
+            'notification_push_quiet_hours_enabled' => 'nullable|in:0,1',
+            'notification_push_quiet_hours_start' => 'nullable|integer|min:0|max:23',
+            'notification_push_quiet_hours_end' => 'nullable|integer|min:0|max:23',
+            'notification_push_types' => 'nullable|array',
+            'notification_push_types.*' => 'nullable|in:0,1',
             'data_engine_allow_fix_mode' => 'nullable|in:0,1',
             'data_engine_fix_mode_duration' => ['nullable', 'string', Rule::in(['2_hours', '1_day', 'forever'])],
             'site_name' => ['nullable', 'string', 'max:160'],
@@ -851,6 +893,13 @@ class AdminSettingsController extends Controller
             'notification_new_matches_digest_enabled' => $request->boolean('notification_new_matches_digest_enabled'),
             'notification_plan_expiry_notify_days' => trim((string) $request->input('notification_plan_expiry_notify_days', '7,2,1')),
             'notification_retention_days' => (int) $request->input('notification_retention_days', 90),
+            'notification_push_enabled' => $request->boolean('notification_push_enabled'),
+            'notification_push_quiet_hours_enabled' => $request->boolean('notification_push_quiet_hours_enabled'),
+            'notification_push_quiet_hours_start' => (int) $request->input('notification_push_quiet_hours_start', 22),
+            'notification_push_quiet_hours_end' => (int) $request->input('notification_push_quiet_hours_end', 8),
+            // The hidden `__present` marker means the push section was rendered,
+            // so an absent key is a deliberate OFF rather than a partial post.
+            'notification_push_types' => (array) $request->input('notification_push_types', []),
         ]);
         if ($canManageBillingSettings) {
             AdminSetting::setValue('billing_legal_name', trim((string) $request->input('billing_legal_name', '')));

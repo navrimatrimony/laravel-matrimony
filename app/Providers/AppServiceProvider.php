@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Contracts\Intake\BulkIntakeWhatsAppConsentSender;
 use App\Contracts\WhatsApp\WhatsAppMessageProvider;
+use App\Listeners\SendPushForDatabaseNotification;
 use App\Models\MatrimonyProfile;
 use App\Models\Plan;
 use App\Models\SystemRule;
@@ -22,6 +23,7 @@ use Illuminate\Database\Events\MigrationEnded;
 use Illuminate\Database\Events\MigrationsEnded;
 use Illuminate\Database\Events\MigrationsStarted;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
@@ -105,6 +107,12 @@ class AppServiceProvider extends ServiceProvider
         // …and for the memoised default-free plan row, which migrations/seeders create and rewrite.
         Event::listen(MigrationsStarted::class, static fn () => Plan::flushDefaultFreeMemo());
         Event::listen(MigrationsEnded::class, static fn () => Plan::flushDefaultFreeMemo());
+
+        // Mobile push. Bound to the notification event rather than to business
+        // flows on purpose: every database notification — including types nobody
+        // has written yet — reaches one switchboard, so enabling or disabling a
+        // type is an admin toggle, not a deploy. See PushDispatchService.
+        Event::listen(NotificationSent::class, SendPushForDatabaseNotification::class);
         // Guard against misconfiguration: Sarvam structured parser must use Sarvam M only.
 
         $envSarvamStructured = strtolower(trim((string) env('INTAKE_SARVAM_STRUCTURED_MODEL', '')));

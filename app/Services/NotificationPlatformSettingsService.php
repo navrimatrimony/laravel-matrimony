@@ -3,9 +3,15 @@
 namespace App\Services;
 
 use App\Models\AdminSetting;
+use App\Services\Push\PushTypeRegistry;
 
 /**
  * Platform notification toggles: admin DB overrides with .env / config fallback.
+ *
+ * This is the ADMIN half of the two-level notification switchboard. The per-user
+ * half is {@see UserNotificationPreferencesService}. Precedence is fixed and
+ * one-directional: admin OFF wins over any user preference, so a type the
+ * platform has disabled cannot be re-enabled by a member.
  */
 class NotificationPlatformSettingsService
 {
@@ -24,6 +30,31 @@ class NotificationPlatformSettingsService
     public const KEY_PLAN_EXPIRY_NOTIFY_DAYS = 'notification_plan_expiry_notify_days';
 
     public const KEY_RETENTION_DAYS = 'notification_retention_days';
+
+    /*
+    |--------------------------------------------------------------------------
+    | Push (FCM) — the runtime switchboard
+    |--------------------------------------------------------------------------
+    |
+    | The product owner must be able to turn any notification type's push on or
+    | off without a code change or a new APK, so the per-type switches live here
+    | (AdminSetting rows) rather than in config or in a hardcoded list.
+    |
+    | Per-type keys are built as `notification_push_type_<push key>`, where the
+    | push key comes from App\Services\Push\PushTypeRegistry. A type with no row
+    | in admin_settings falls back to that registry's `default_push`, so a newly
+    | added type is never an error and never a surprise blast.
+    |
+    */
+    public const KEY_PUSH_ENABLED = 'notification_push_enabled';
+
+    public const KEY_PUSH_TYPE_PREFIX = 'notification_push_type_';
+
+    public const KEY_PUSH_QUIET_HOURS_ENABLED = 'notification_push_quiet_hours_enabled';
+
+    public const KEY_PUSH_QUIET_HOURS_START = 'notification_push_quiet_hours_start';
+
+    public const KEY_PUSH_QUIET_HOURS_END = 'notification_push_quiet_hours_end';
 
     public function mailEnabled(): bool
     {
@@ -98,6 +129,80 @@ class NotificationPlatformSettingsService
     }
 
     /**
+     * Master switch for the whole push channel.
+     *
+     * Admin row wins; otherwise the .env kill switch (ENGAGEMENT_PUSH_ENABLED).
+     */
+    public function pushEnabled(): bool
+    {
+        return $this->boolFromDbOrConfig(
+            self::KEY_PUSH_ENABLED,
+            (bool) config('engagement.push.enabled', false),
+        );
+    }
+
+    /**
+     * May this notification type push, platform-wide?
+     *
+     * Unknown key → false. A type nobody has described is never blasted out.
+     */
+    public function pushTypeEnabled(string $pushKey): bool
+    {
+        $registry = app(PushTypeRegistry::class);
+
+        if (! $registry->has($pushKey)) {
+            return false;
+        }
+
+        return $this->boolFromDbOrConfig(
+            self::KEY_PUSH_TYPE_PREFIX.$pushKey,
+            $registry->defaultPushEnabled($pushKey),
+        );
+    }
+
+    /**
+     * Effective admin state of every registered push type.
+     *
+     * @return array<string, bool>
+     */
+    public function pushTypeMatrix(): array
+    {
+        $out = [];
+
+        foreach (app(PushTypeRegistry::class)->keys() as $key) {
+            $out[$key] = $this->pushTypeEnabled($key);
+        }
+
+        return $out;
+    }
+
+    public function pushQuietHoursEnabled(): bool
+    {
+        return $this->boolFromDbOrConfig(
+            self::KEY_PUSH_QUIET_HOURS_ENABLED,
+            (bool) config('engagement.push.quiet_hours.enabled', true),
+        );
+    }
+
+    /** Hour of day (0–23) the quiet window opens. */
+    public function pushQuietHoursStart(): int
+    {
+        return $this->clampHour($this->intFromDbOrConfig(
+            self::KEY_PUSH_QUIET_HOURS_START,
+            (int) config('engagement.push.quiet_hours.start_hour', 22),
+        ));
+    }
+
+    /** Hour of day (0–23) the quiet window closes. */
+    public function pushQuietHoursEnd(): int
+    {
+        return $this->clampHour($this->intFromDbOrConfig(
+            self::KEY_PUSH_QUIET_HOURS_END,
+            (int) config('engagement.push.quiet_hours.end_hour', 8),
+        ));
+    }
+
+    /**
      * Values for admin app-settings form (effective = DB or fallback).
      *
      * @return array<string, mixed>
@@ -105,6 +210,11 @@ class NotificationPlatformSettingsService
     public function formDefaults(): array
     {
         return [
+            'push_enabled' => $this->pushEnabled(),
+            'push_types' => $this->pushTypeMatrix(),
+            'push_quiet_hours_enabled' => $this->pushQuietHoursEnabled(),
+            'push_quiet_hours_start' => $this->pushQuietHoursStart(),
+            'push_quiet_hours_end' => $this->pushQuietHoursEnd(),
             'mail_enabled' => $this->mailEnabled(),
             'inactive_reminder_enabled' => $this->inactiveReminderEnabled(),
             'inactive_whatsapp_enabled' => $this->inactiveWhatsappEnabled(),
@@ -129,6 +239,64 @@ class NotificationPlatformSettingsService
         AdminSetting::setValue(self::KEY_NEW_MATCHES_DIGEST_ENABLED, $validated['notification_new_matches_digest_enabled'] ? '1' : '0');
         AdminSetting::setValue(self::KEY_PLAN_EXPIRY_NOTIFY_DAYS, (string) $validated['notification_plan_expiry_notify_days']);
         AdminSetting::setValue(self::KEY_RETENTION_DAYS, (string) max(7, min(3650, (int) $validated['notification_retention_days'])));
+
+        $this->persistPushFromAdminForm($validated);
+    }
+
+    /**
+     * Push half of the admin notifications tab.
+     *
+     * Only writes keys the form actually submitted, so a partial post (or an
+     * older admin build) cannot silently reset the whole matrix.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    private function persistPushFromAdminForm(array $validated): void
+    {
+        if (array_key_exists('notification_push_enabled', $validated)) {
+            AdminSetting::setValue(self::KEY_PUSH_ENABLED, $validated['notification_push_enabled'] ? '1' : '0');
+        }
+
+        if (array_key_exists('notification_push_quiet_hours_enabled', $validated)) {
+            AdminSetting::setValue(
+                self::KEY_PUSH_QUIET_HOURS_ENABLED,
+                $validated['notification_push_quiet_hours_enabled'] ? '1' : '0'
+            );
+        }
+
+        if (array_key_exists('notification_push_quiet_hours_start', $validated)) {
+            AdminSetting::setValue(
+                self::KEY_PUSH_QUIET_HOURS_START,
+                (string) $this->clampHour((int) $validated['notification_push_quiet_hours_start'])
+            );
+        }
+
+        if (array_key_exists('notification_push_quiet_hours_end', $validated)) {
+            AdminSetting::setValue(
+                self::KEY_PUSH_QUIET_HOURS_END,
+                (string) $this->clampHour((int) $validated['notification_push_quiet_hours_end'])
+            );
+        }
+
+        // The form posts the full checkbox set, so an absent key means "unchecked",
+        // not "not submitted" — but only when the push_types array is present at all.
+        if (! array_key_exists('notification_push_types', $validated) || ! is_array($validated['notification_push_types'])) {
+            return;
+        }
+
+        $submitted = $validated['notification_push_types'];
+
+        foreach (app(PushTypeRegistry::class)->keys() as $key) {
+            AdminSetting::setValue(
+                self::KEY_PUSH_TYPE_PREFIX.$key,
+                ! empty($submitted[$key]) ? '1' : '0'
+            );
+        }
+    }
+
+    private function clampHour(int $hour): int
+    {
+        return max(0, min(23, $hour));
     }
 
     private function boolFromDbOrConfig(string $key, bool $configDefault): bool

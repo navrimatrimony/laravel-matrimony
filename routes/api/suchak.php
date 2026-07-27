@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Suchak\SuchakCustomerPlanApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomerShareCardApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomersApiController;
 use App\Http\Controllers\Api\Suchak\SuchakDashboardApiController;
+use App\Http\Controllers\Api\Suchak\SuchakDeviceTokenApiController;
 use App\Http\Controllers\Api\Suchak\SuchakIntakeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakLoginApiController;
 use App\Http\Controllers\Api\Suchak\SuchakManualProfileApiController;
@@ -19,6 +20,7 @@ use App\Http\Controllers\Api\Suchak\SuchakMatchSuggestionsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeetingsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeetingsMutationsApiController;
+use App\Http\Controllers\Api\Suchak\SuchakNotificationPreferenceApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomerOpsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakPaymentSetupApiController;
 use App\Http\Controllers\Api\Suchak\SuchakPaymentIdentityApiController;
@@ -62,6 +64,17 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::post('/register/office-photo', [SuchakRegisterApiController::class, 'storeOfficePhoto']);
     Route::post('/register/documents', [SuchakRegisterApiController::class, 'storeDocument']);
     Route::get('/register/status', [SuchakRegisterApiController::class, 'status']);
+
+    /*
+    | Mobile push (FCM). Tokens are owned by the SuchakAccount, so the same phone
+    | can hold both apps without one unregistering the other.
+    */
+    Route::post('/device-tokens', [SuchakDeviceTokenApiController::class, 'store']); // REGISTER FCM DEVICE TOKEN
+    Route::delete('/device-tokens', [SuchakDeviceTokenApiController::class, 'destroy']); // UNREGISTER ON LOGOUT
+    // Same server-driven settings payload as the member app; category list is
+    // filtered to types the Suchak app can actually render.
+    Route::get('/notification-preferences', [SuchakNotificationPreferenceApiController::class, 'show']);
+    Route::put('/notification-preferences', [SuchakNotificationPreferenceApiController::class, 'update']);
 
     Route::get('/me', SuchakMeApiController::class);
     Route::get('/dashboard', SuchakDashboardApiController::class);
