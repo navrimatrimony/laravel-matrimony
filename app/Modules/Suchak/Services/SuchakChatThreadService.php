@@ -98,7 +98,7 @@ class SuchakChatThreadService
         SuchakAccount $account,
         SuchakProfileRequest $request,
         int $sinceId = 0,
-        bool $markRead = true,
+        bool $markRead = false,
     ): ?array {
         $conversationId = (int) ($request->chat_conversation_id ?? 0);
         if ($conversationId <= 0) {
@@ -124,8 +124,13 @@ class SuchakChatThreadService
     public function thread(
         SuchakProfileRequest $request,
         Conversation $conversation,
+        // Reading is a GET; marking read is an INTENT. Defaulting this to true
+        // meant every poll tick and every request-detail load told the member
+        // "they read it" — including when the Suchak had scrolled away or was
+        // only glancing at the preview card. Callers now opt in, and in practice
+        // only POST /suchak/chats/{id}/read does.
         int $sinceId = 0,
-        bool $markRead = true,
+        bool $markRead = false,
     ): array {
         $customer = $request->targetMatrimonyProfile;
         $member = $request->requestingMatrimonyProfile;

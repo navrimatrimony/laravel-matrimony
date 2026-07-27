@@ -66,8 +66,17 @@ class SuchakChatThreadContractTest extends TestCase
         $opened->assertJsonPath('data.unread_count', 2);
         $opened->assertJsonPath('data.first_unread_message_id', $messages[0]['id']);
 
-        // Opening the thread is what marks it read; the next poll must be clean,
-        // or the divider would stick to the screen forever.
+        // A GET must NOT mark read — polling every few seconds would otherwise
+        // keep telling the member "they read it" while the Suchak had scrolled
+        // away, or was only glancing at the request-detail preview card.
+        $this->getJson("/api/v1/suchak/chats/{$conversationId}")
+            ->assertOk()
+            ->assertJsonPath('data.unread_count', 2);
+
+        // Marking read is an explicit intent, and after it the next poll is
+        // clean — otherwise the divider would stick to the screen forever.
+        $this->postJson("/api/v1/suchak/chats/{$conversationId}/read")->assertOk();
+
         $this->getJson("/api/v1/suchak/chats/{$conversationId}")
             ->assertOk()
             ->assertJsonPath('data.unread_count', 0)
@@ -188,9 +197,10 @@ class SuchakChatThreadContractTest extends TestCase
         $mine = $this->firstOwnMessage($this->getJson("/api/v1/chats/{$conversationId}")->assertOk()->json('messages'));
         $this->assertSame(Message::DELIVERY_SENT, $mine['delivery_status']);
 
-        // The Suchak reads on the candidate's behalf — the recipient side.
+        // The Suchak reads on the candidate's behalf — the recipient side. It is
+        // the explicit read call that counts, not merely fetching the thread.
         Sanctum::actingAs($fixture['account']->user);
-        $this->getJson("/api/v1/suchak/chats/{$conversationId}")->assertOk();
+        $this->postJson("/api/v1/suchak/chats/{$conversationId}/read")->assertOk();
 
         Sanctum::actingAs($fixture['member']);
         $mine = $this->firstOwnMessage($this->getJson("/api/v1/chats/{$conversationId}")->assertOk()->json('messages'));
