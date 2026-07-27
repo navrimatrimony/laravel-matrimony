@@ -206,15 +206,61 @@ class ErrorFactory
         );
     }
 
+    /**
+     * Receiver blocked the sender. Deliberately reuses the neutral "cannot send" wording so the
+     * refusal never reveals that a block exists.
+     */
+    public static function interestReceiverBlockedSender(): RuleResult
+    {
+        return new RuleResult(
+            false,
+            'INTEREST_BLOCKED',
+            __('interest.cannot_send_to_profile'),
+            null,
+        );
+    }
+
+    public static function interestSenderHasBlockedReceiver(): RuleResult
+    {
+        return new RuleResult(
+            false,
+            'INTEREST_SENDER_BLOCKED',
+            __('interest.blocked_unblock_to_send'),
+            [
+                'type' => 'redirect',
+                'label' => __('interest.blocked_list_action'),
+                'url' => route('blocks.index'),
+            ],
+        );
+    }
+
+    /**
+     * Receiver has not paid to reveal this incoming interest yet, so accept stays closed.
+     * (Reject is allowed without reveal — see {@see \App\Services\Interest\InterestActionService::reject()}.)
+     */
+    public static function interestAcceptRequiresReveal(): RuleResult
+    {
+        return new RuleResult(
+            false,
+            'INTEREST_ACCEPT_NEEDS_REVEAL',
+            __('interests.accept_reject_requires_reveal'),
+            [
+                'type' => 'redirect',
+                'label' => __('interests.upgrade_for_more_reveals'),
+                'url' => route('plans.index'),
+            ],
+        );
+    }
+
     public static function interestApiMatrimonyProfileRequired(): RuleResult
     {
         return new RuleResult(
             false,
             'INTEREST_API_NEED_PROFILE',
-            'आधी matrimony profile तयार करा.',
+            __('interest.create_profile_first'),
             [
                 'type' => 'redirect',
-                'label' => 'Profile सुरू करा',
+                'label' => __('interest.create_profile_action'),
                 'url' => route('matrimony.profile.wizard.section', ['section' => 'basic-info']),
             ],
         );
@@ -225,7 +271,7 @@ class ErrorFactory
         return new RuleResult(
             false,
             'INTEREST_API_SELF',
-            'Swatahla interest pathvu shakat nahi.',
+            __('interest.cannot_send_to_self'),
             null,
         );
     }
@@ -235,7 +281,7 @@ class ErrorFactory
         return new RuleResult(
             false,
             'INTEREST_API_PROFILE_MISSING',
-            'Profile सापडला नाही. Refresh करून पुन्हा प्रयत्न करा.',
+            __('interest.profile_missing'),
             null,
         );
     }
@@ -245,10 +291,10 @@ class ErrorFactory
         return new RuleResult(
             false,
             'INTEREST_API_SENDER_STATE',
-            'Tumcha profile ya state madhun interest pathvu shakat nahi.',
+            __('interest.sender_cannot_send_current_state'),
             [
                 'type' => 'redirect',
-                'label' => 'Profile bagha',
+                'label' => __('interest.view_profile_action'),
                 'url' => route('matrimony.profile.edit'),
             ],
         );
@@ -259,7 +305,7 @@ class ErrorFactory
         return new RuleResult(
             false,
             'INTEREST_API_RECEIVER_STATE',
-            'Ya profile la interest pathvu shakat nahi.',
+            __('interest.cannot_send_to_profile'),
             null,
         );
     }
@@ -269,7 +315,7 @@ class ErrorFactory
         return new RuleResult(
             false,
             'INTEREST_DUPLICATE',
-            'Interest आधीच पाठवला आहे.',
+            __('interest.interest_already_sent'),
             null,
         );
     }
@@ -279,7 +325,7 @@ class ErrorFactory
         return new RuleResult(
             false,
             'INTEREST_NOT_FOUND',
-            'Interest सापडला नाही.',
+            __('interest.interest_not_found'),
             null,
         );
     }
@@ -289,7 +335,7 @@ class ErrorFactory
         return new RuleResult(
             false,
             'INTEREST_API_NOT_RECEIVER',
-            'फक्त receiver ही क्रिया करू शकतो.',
+            __('interest.only_receiver_can_act'),
             null,
         );
     }
@@ -299,7 +345,7 @@ class ErrorFactory
         return new RuleResult(
             false,
             'INTEREST_API_NOT_SENDER',
-            'फक्त pathvnara (sender) cancel करू शकतो.',
+            __('interest.only_sender_can_withdraw'),
             null,
         );
     }
@@ -309,7 +355,7 @@ class ErrorFactory
         return new RuleResult(
             false,
             'INTEREST_ALREADY_PROCESSED',
-            'हा interest आधीच process झाला आहे.',
+            __('interest.interest_already_processed'),
             null,
         );
     }
@@ -319,7 +365,7 @@ class ErrorFactory
         return new RuleResult(
             false,
             'INTEREST_WITHDRAW_NOT_PENDING',
-            'फक्त pending interest cancel करता येईल.',
+            __('interest.only_pending_withdraw'),
             null,
         );
     }

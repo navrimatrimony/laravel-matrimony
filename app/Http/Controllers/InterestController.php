@@ -2,32 +2,21 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Block;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
-use App\Models\User;
-use App\Models\UserMatchBehavior;
-use App\Notifications\InterestAcceptedNotification;
-use App\Notifications\InterestRejectedNotification;
-use App\Notifications\InterestSentNotification;
-use App\Services\AdminActivityNotificationGate;
+use App\Services\Interest\InterestActionOutcome;
+use App\Services\Interest\InterestActionService;
 use App\Services\Interest\ReceivedInterestTeaserPolicy;
-use App\Services\InterestPriorityService;
 use App\Services\InterestSendLimitService;
-use App\Services\ProfileLifecycleService;
-use App\Services\RuleEngineService;
-use App\Services\Showcase\ShowcaseInterestPolicyService;
 use App\Services\WhoViewed\WhoViewedTeaserPresenter;
 use App\Support\ErrorFactory;
 use App\Support\RuleResultResponder;
-use App\Support\SafeNotifier;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /*
 |--------------------------------------------------------------------------
@@ -45,11 +34,17 @@ class InterestController extends Controller
     /** @var list<string> */
     private const INTEREST_STATUS_FILTERS = ['all', 'pending', 'accepted', 'rejected'];
 
+    /**
+     * Refusals that are an authorization failure rather than a rule denial: the web surface has
+     * always answered those with a bare 403 and keeps doing so.
+     *
+     * @var list<string>
+     */
+    private const WEB_FORBIDDEN_CODES = ['INTEREST_API_NOT_RECEIVER', 'INTEREST_API_NOT_SENDER'];
+
     public function __construct(
+        private readonly InterestActionService $interestActions,
         private readonly InterestSendLimitService $interestSendLimit,
-        private readonly InterestPriorityService $interestPriority,
-        private readonly ShowcaseInterestPolicyService $showcaseInterestPolicy,
-        private readonly RuleEngineService $ruleEngine,
         private readonly WhoViewedTeaserPresenter $whoViewedTeaserPresenter,
     ) {}
 
@@ -72,124 +67,44 @@ class InterestController extends Controller
 
     public function store(MatrimonyProfile $matrimony_profile_id)
     {
-        // 🔁 Internal SSOT variable alias
-        $matrimonyProfile = $matrimony_profile_id;
-
         // 🔒 AUTH USER (authentication only)
         $authUser = auth()->user();
 
-        // 🔒 GUARD: MatrimonyProfile must exist
-        if (! $authUser || ! $authUser->matrimonyProfile) {
+        if (! $authUser) {
             return redirect()
                 ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
                 ->with('error', __('interest.create_profile_first'));
         }
 
-        // 🔒 Sender & Receiver Profiles (SSOT)
-        $senderProfile = $authUser->matrimonyProfile;
-        $receiverProfile = $matrimonyProfile;
+        // 🔒 All interest rules live in InterestActionService — shared with the mobile API.
+        $outcome = $this->interestActions->send($authUser, $matrimony_profile_id);
 
-        // 🔒 GUARD: Cannot send interest to own profile
-        if ($senderProfile->id === $receiverProfile->id) {
-            return back()->with(
-                'error',
-                __('interest.cannot_send_to_self')
-            );
+        if (! $outcome->ok) {
+            return $this->renderRefusal($outcome);
         }
 
-        // 🔒 GUARD: Receiver has blocked sender → do not reveal
-        if (Block::where('blocker_profile_id', $receiverProfile->id)->where('blocked_profile_id', $senderProfile->id)->exists()) {
-            return back()->with('error', __('interest.cannot_send_to_profile'));
+        return back()->with('success', $outcome->message());
+    }
+
+    /**
+     * Renders a refused interest action on the web surface. {@see RuleResultResponder::toResponse()}
+     * keeps the historical dual behaviour (flash on a page post, JSON when the caller asked for it).
+     */
+    private function renderRefusal(InterestActionOutcome $outcome): JsonResponse|RedirectResponse
+    {
+        $error = $outcome->error ?? ErrorFactory::generic();
+
+        if (in_array($error->code, self::WEB_FORBIDDEN_CODES, true)) {
+            abort(403);
         }
 
-        // 🔒 GUARD: Sender has blocked receiver
-        if (Block::where('blocker_profile_id', $senderProfile->id)->where('blocked_profile_id', $receiverProfile->id)->exists()) {
-            return back()->with('error', __('interest.blocked_unblock_to_send'));
+        if ($error->code === 'INTEREST_API_NEED_PROFILE' && ! request()->expectsJson()) {
+            return redirect()
+                ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
+                ->with('error', $error->message);
         }
 
-        // 🔒 Safety check (defensive)
-        if (! $senderProfile || ! $receiverProfile) {
-            abort(403, __('interest.create_profile_first'));
-        }
-
-        // Day 7: Sender lifecycle — Archived/Suspended/Search-Hidden cannot send interest
-        if (! ProfileLifecycleService::canInitiateInteraction($senderProfile)) {
-            return back()->with('error', __('interest.sender_cannot_send_current_state'));
-        }
-
-        $senderRule = $this->ruleEngine->checkInterestMandatoryCoreForSender($senderProfile);
-        if (! $senderRule->allowed) {
-            return RuleResultResponder::toResponse($senderRule);
-        }
-        $targetRule = $this->ruleEngine->checkInterestMandatoryCoreForSendTarget($receiverProfile);
-        if (! $targetRule->allowed) {
-            return RuleResultResponder::toResponse($targetRule);
-        }
-
-        // Day 7: Archived/Suspended/Search-Hidden → interest blocked
-        if (! ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
-            return back()->with('error', __('interest.cannot_send_to_profile'));
-        }
-
-        $sendEval = $this->showcaseInterestPolicy->evaluateSendInterest($senderProfile, $receiverProfile);
-        if (! $sendEval['ok']) {
-            $policyMsg = trim((string) ($sendEval['message'] ?? ''));
-
-            return RuleResultResponder::toResponse(
-                $policyMsg !== ''
-                    ? ErrorFactory::deny('INTEREST_SHOWCASE_POLICY', $policyMsg, null)
-                    : ErrorFactory::interestSendBlocked()
-            );
-        }
-
-        // Daily interest send quota via entitlements + user_feature_usages (new sends only)
-        $alreadySent = Interest::where('sender_profile_id', $senderProfile->id)
-            ->where('receiver_profile_id', $receiverProfile->id)
-            ->exists();
-        if (! $alreadySent && ! ($sendEval['bypass_plan_quota'] ?? false)) {
-            try {
-                $this->interestSendLimit->assertCanSend($authUser);
-            } catch (HttpException $e) {
-                return RuleResultResponder::toResponse(
-                    ErrorFactory::interestSendLimitHttp($e->getStatusCode(), $e->getMessage()),
-                    $e->getStatusCode()
-                );
-            }
-        }
-
-        // 🔁 Duplicate interest protection
-        $interest = Interest::firstOrCreate(
-            [
-                'sender_profile_id' => $senderProfile->id,
-                'receiver_profile_id' => $receiverProfile->id,
-            ],
-            [
-                'status' => 'pending',
-                'priority_score' => $this->interestPriority->baseScoreForSender($authUser),
-            ]
-        );
-
-        if ($interest->wasRecentlyCreated && ! ($sendEval['bypass_plan_quota'] ?? false)) {
-            $this->interestSendLimit->recordSuccessfulSend($authUser);
-            $receiverOwner = $receiverProfile->user;
-            if ($receiverOwner && AdminActivityNotificationGate::allowsPeerActivityNotification($authUser)) {
-                SafeNotifier::notify($receiverOwner, new InterestSentNotification($senderProfile));
-            }
-        }
-
-        if ($interest->wasRecentlyCreated && Schema::hasTable('user_match_behaviors')) {
-            $targetUser = $receiverProfile->user;
-            if ($targetUser?->matrimonyProfile) {
-                UserMatchBehavior::query()->create([
-                    'actor_user_id' => $authUser->id,
-                    'target_profile_id' => $targetUser->matrimonyProfile->id,
-                    'action' => 'interest_sent',
-                    'created_at' => now(),
-                ]);
-            }
-        }
-
-        return back()->with('success', __('interest.interest_sent_successfully'));
+        return RuleResultResponder::toResponse($error, $outcome->status);
     }
 
     /**
@@ -354,26 +269,6 @@ class InterestController extends Controller
         ));
     }
 
-    /**
-     * Incoming interest is “revealed” for this billing window (name/photo/link); accept stays blocked until then. Reject may proceed without reveal.
-     */
-    private function interestIsRevealedToReceiver(User $user, Interest $interest): bool
-    {
-        $receiver = $user->matrimonyProfile;
-        if (! $receiver) {
-            return false;
-        }
-
-        $slice = Interest::query()
-            ->where('receiver_profile_id', $receiver->id)
-            ->whereKey($interest->id)
-            ->get();
-
-        $map = $this->interestSendLimit->incomingInterestUnlockMap($user, $slice);
-
-        return ($map[$interest->id] ?? false) === true;
-    }
-
     private function normalizeInterestStatusFilter(mixed $raw): string
     {
         $s = strtolower(trim((string) $raw));
@@ -445,83 +340,17 @@ class InterestController extends Controller
         $user = auth()->user();
 
         // 🔒 Guard: login आवश्यक
-        if (! $user || ! $user->matrimonyProfile) {
+        if (! $user) {
             abort(403);
         }
 
-        // 🔒 Guard: हा interest logged-in user चाच असला पाहिजे
-        if ($interest->receiver_profile_id !== $user->matrimonyProfile->id) {
-            abort(403);
+        $outcome = $this->interestActions->accept($user, $interest);
+
+        if (! $outcome->ok) {
+            return $this->renderRefusal($outcome);
         }
 
-        // 🔒 Guard: फक्त pending interest accept करता येईल
-        if ($interest->status !== 'pending') {
-            return back()->with('error', __('interest.interest_already_processed'));
-        }
-
-        if (! $this->interestIsRevealedToReceiver($user, $interest)) {
-            return back()->with('error', __('interests.accept_reject_requires_reveal'));
-        }
-
-        if ($msg = $this->showcaseInterestPolicy->validateAcceptInterest($user->matrimonyProfile, $interest)) {
-            return RuleResultResponder::toResponse(ErrorFactory::deny('INTEREST_SHOWCASE_POLICY', $msg, null));
-        }
-
-        $receiverProfile = $interest->receiverProfile;
-        if (! $receiverProfile) {
-            return back()->with('error', __('interest.cannot_send_to_profile'));
-        }
-        $acceptRule = $this->ruleEngine->checkInterestMandatoryCoreForAccept($receiverProfile);
-        if (! $acceptRule->allowed) {
-            return RuleResultResponder::toResponse($acceptRule);
-        }
-
-        // ✅ Accept
-        $interest->update([
-            'status' => 'accepted',
-        ]);
-
-        $senderProfile = $interest->senderProfile;
-
-        if (Schema::hasTable('user_match_behaviors')) {
-            $senderUser = $senderProfile?->user;
-            if ($senderUser?->matrimonyProfile) {
-                UserMatchBehavior::query()->create([
-                    'actor_user_id' => $user->id,
-                    'target_profile_id' => $senderUser->matrimonyProfile->id,
-                    'action' => 'interest_accepted',
-                    'created_at' => now(),
-                ]);
-            }
-        }
-
-        // Phase-5: Grant contact visibility via normalized table (replaces contact_visible_to JSON)
-        if ($senderProfile && $receiverProfile->contact_unlock_mode === 'after_interest_accepted') {
-            \Illuminate\Support\Facades\DB::table('profile_contact_visibility')->insertOrIgnore([
-                'owner_profile_id' => $receiverProfile->id,
-                'viewer_profile_id' => $senderProfile->id,
-                'granted_via' => 'interest_accept',
-                'granted_at' => now(),
-                'revoked_at' => null,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-            \Illuminate\Support\Facades\DB::table('contact_access_log')->insert([
-                'owner_profile_id' => $receiverProfile->id,
-                'viewer_profile_id' => $senderProfile->id,
-                'source' => 'interest',
-                'unlocked_at' => now(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        }
-
-        $senderOwner = $interest->senderProfile?->user;
-        if ($senderOwner && AdminActivityNotificationGate::allowsPeerActivityNotification($user)) {
-            SafeNotifier::notify($senderOwner, new InterestAcceptedNotification($receiverProfile));
-        }
-
-        return back()->with('success', __('interest.interest_accepted'));
+        return back()->with('success', $outcome->message());
     }
 
     /*
@@ -537,35 +366,17 @@ class InterestController extends Controller
         $user = auth()->user();
 
         // 🔒 Guard: login आवश्यक
-        if (! $user || ! $user->matrimonyProfile) {
+        if (! $user) {
             abort(403);
         }
 
-        // 🔒 Guard: हा interest logged-in user चाच असला पाहिजे
-        if ($interest->receiver_profile_id !== $user->matrimonyProfile->id) {
-            abort(403);
+        $outcome = $this->interestActions->reject($user, $interest);
+
+        if (! $outcome->ok) {
+            return $this->renderRefusal($outcome);
         }
 
-        // 🔒 Guard: फक्त pending interest reject करता येईल
-        if ($interest->status !== 'pending') {
-            return back()->with('error', __('interest.interest_already_processed'));
-        }
-
-        if ($msg = $this->showcaseInterestPolicy->validateRejectInterest($user->matrimonyProfile, $interest)) {
-            return RuleResultResponder::toResponse(ErrorFactory::deny('INTEREST_SHOWCASE_POLICY', $msg, null));
-        }
-
-        // ✅ Reject
-        $interest->update([
-            'status' => 'rejected',
-        ]);
-
-        $senderOwner = $interest->senderProfile?->user;
-        if ($senderOwner && AdminActivityNotificationGate::allowsPeerActivityNotification($user)) {
-            SafeNotifier::notify($senderOwner, new InterestRejectedNotification($user->matrimonyProfile));
-        }
-
-        return back()->with('success', __('interest.interest_rejected'));
+        return back()->with('success', $outcome->message());
     }
 
     /*
@@ -580,28 +391,17 @@ class InterestController extends Controller
     {
         $user = auth()->user();
 
-        // 🔒 Guard: login + profile आवश्यक
-        if (! $user || ! $user->matrimonyProfile) {
+        // 🔒 Guard: login आवश्यक
+        if (! $user) {
             abort(403);
         }
 
-        // 🔒 Guard: फक्त sender च withdraw करू शकतो
-        if ($interest->sender_profile_id !== $user->matrimonyProfile->id) {
-            abort(403);
+        $outcome = $this->interestActions->withdraw($user, $interest);
+
+        if (! $outcome->ok) {
+            return $this->renderRefusal($outcome);
         }
 
-        // 🔒 Guard: फक्त pending interest withdraw करता येईल
-        if ($interest->status !== 'pending') {
-            return back()->with('error', __('interest.only_pending_withdraw'));
-        }
-
-        if ($msg = $this->showcaseInterestPolicy->validateWithdrawInterest($user->matrimonyProfile, $interest)) {
-            return RuleResultResponder::toResponse(ErrorFactory::deny('INTEREST_SHOWCASE_POLICY', $msg, null));
-        }
-
-        // ✅ Withdraw = delete record
-        $interest->delete();
-
-        return back()->with('success', __('interest.interest_withdrawn_successfully'));
+        return back()->with('success', $outcome->message());
     }
 }

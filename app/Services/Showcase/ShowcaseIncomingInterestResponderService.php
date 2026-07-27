@@ -4,12 +4,8 @@ namespace App\Services\Showcase;
 
 use App\Models\AdminSetting;
 use App\Models\Interest;
-use App\Notifications\InterestAcceptedNotification;
-use App\Notifications\InterestRejectedNotification;
-use App\Services\AdminActivityNotificationGate;
+use App\Services\Interest\InterestActionService;
 use App\Services\RuleEngineService;
-use App\Support\SafeNotifier;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Responds to pending interests where a **real** member sent to a **showcase** receiver.
@@ -23,6 +19,7 @@ class ShowcaseIncomingInterestResponderService
     public function __construct(
         private readonly ShowcaseInterestPolicyService $policy,
         private readonly RuleEngineService $ruleEngine,
+        private readonly InterestActionService $interestActions,
     ) {}
 
     /**
@@ -84,46 +81,18 @@ class ShowcaseIncomingInterestResponderService
         return ['accepted' => $accepted, 'rejected' => $rejected, 'skipped' => $skipped];
     }
 
+    /**
+     * Side effects are the shared ones ({@see InterestActionService}) so an auto-accept produces
+     * exactly the rows and notifications a member accept does. The guards above stay here — this
+     * path deliberately acts for a showcase profile that cannot log in.
+     */
     private function applyAccept(Interest $interest, \App\Models\MatrimonyProfile $receiverProfile): void
     {
-        $interest->update(['status' => 'accepted']);
-
-        $senderProfile = $interest->senderProfile;
-        if ($senderProfile && $receiverProfile->contact_unlock_mode === 'after_interest_accepted') {
-            DB::table('profile_contact_visibility')->insertOrIgnore([
-                'owner_profile_id' => $receiverProfile->id,
-                'viewer_profile_id' => $senderProfile->id,
-                'granted_via' => 'interest_accept',
-                'granted_at' => now(),
-                'revoked_at' => null,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-            DB::table('contact_access_log')->insert([
-                'owner_profile_id' => $receiverProfile->id,
-                'viewer_profile_id' => $senderProfile->id,
-                'source' => 'interest',
-                'unlocked_at' => now(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        }
-
-        $actorUser = $receiverProfile->user;
-        $senderOwner = $senderProfile?->user;
-        if ($senderOwner && $actorUser && AdminActivityNotificationGate::allowsPeerActivityNotification($actorUser)) {
-            SafeNotifier::notify($senderOwner, new InterestAcceptedNotification($receiverProfile));
-        }
+        $this->interestActions->applyAcceptEffects($interest, $receiverProfile, $receiverProfile->user);
     }
 
     private function applyReject(Interest $interest, \App\Models\MatrimonyProfile $receiverProfile): void
     {
-        $interest->update(['status' => 'rejected']);
-
-        $actorUser = $receiverProfile->user;
-        $senderOwner = $interest->senderProfile?->user;
-        if ($senderOwner && $actorUser && AdminActivityNotificationGate::allowsPeerActivityNotification($actorUser)) {
-            SafeNotifier::notify($senderOwner, new InterestRejectedNotification($receiverProfile));
-        }
+        $this->interestActions->applyRejectEffects($interest, $receiverProfile, $receiverProfile->user);
     }
 }
