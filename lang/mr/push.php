@@ -6,6 +6,13 @@
  * FROZEN RULE: every numeral here is Latin 0-9, never Devanagari (०-९). That
  * covers the quiet-hours times (":start", ":end" arrive pre-formatted as HH:MM)
  * and any count or duration added later.
+ *
+ * `body` is the generic fallback — used when the server knows nothing about the
+ * person behind the event. `body_named` / `body_named_preview` are used instead
+ * when the receiver's plan has ALREADY revealed that person, so their name may be
+ * spoken. A locked row never reaches these keys: its body is the teaser line the
+ * WhoViewedTeaserPresenter produced under the admin's privacy policy. See
+ * App\Services\Push\PushTeaserCopyService.
  */
 return [
 
@@ -30,12 +37,14 @@ return [
             'description' => 'कोणी तुम्हाला स्वारस्य पाठवल्यावर.',
             'title' => 'नवीन स्वारस्य',
             'body' => 'कोणीतरी तुमच्या प्रोफाइलमध्ये स्वारस्य दाखवले आहे.',
+            'body_named' => ':name यांनी तुम्हाला स्वारस्य पाठवले आहे.',
         ],
         'interest_accepted' => [
             'label' => 'स्वारस्य स्वीकारले',
             'description' => 'तुम्ही पाठवलेले स्वारस्य स्वीकारल्यावर.',
             'title' => 'स्वारस्य स्वीकारले',
             'body' => 'तुमचे स्वारस्य स्वीकारले गेले आहे.',
+            'body_named' => ':name यांनी तुमचे स्वारस्य स्वीकारले आहे.',
         ],
         'interest_rejected' => [
             'label' => 'स्वारस्य नाकारले',
@@ -49,6 +58,8 @@ return [
             'description' => 'नवीन चॅट संदेश आल्यावर.',
             'title' => 'नवीन संदेश',
             'body' => 'तुम्हाला नवीन संदेश आला आहे.',
+            'body_named' => ':name यांनी तुम्हाला संदेश पाठवला आहे.',
+            'body_named_preview' => ':name: :preview',
         ],
         'chat_message_locked' => [
             'label' => 'संदेश लॉक आहे',
@@ -121,6 +132,7 @@ return [
             'description' => 'कोणी तुमचे प्रोफाइल पाहिल्यावर.',
             'title' => 'प्रोफाइल पाहिले',
             'body' => 'कोणीतरी तुमचे प्रोफाइल पाहिले आहे.',
+            'body_named' => ':name यांनी तुमचे प्रोफाइल पाहिले आहे.',
         ],
         'new_matches' => [
             'label' => 'नवीन जुळणी',

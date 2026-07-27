@@ -45,6 +45,7 @@ class PushDispatchService
         private readonly UserNotificationPreferencesService $preferences,
         private readonly DeviceTokenService $deviceTokens,
         private readonly FirebasePushService $firebase,
+        private readonly PushTeaserCopyService $teaserCopy,
     ) {}
 
     /**
@@ -250,23 +251,43 @@ class PushDispatchService
      * `push_body` in its own `toDatabase()` array. Otherwise the reviewed strings
      * from lang/{en,mr}/push.php are used.
      *
+     * The title stays the EVENT label on purpose. Android shows it in full while
+     * the body is clipped to roughly 40–50 characters, so the split that reads
+     * best is "title = what happened, body = who it was" — see
+     * {@see PushTeaserCopyService}.
+     *
      * @param  array<string, mixed>  $data
      */
     private function title(string $pushKey, array $data): string
     {
         $override = trim((string) ($data['push_title'] ?? ''));
 
-        return $override !== '' ? $override : (string) __('push.types.'.$pushKey.'.title');
+        return $this->teaserCopy->normalizeDigits(
+            $override !== '' ? $override : (string) __('push.types.'.$pushKey.'.title')
+        );
     }
 
     /**
+     * Order: explicit override → person-aware teaser copy → generic reviewed line.
+     *
+     * The middle step is what stops a push reading "someone showed interest" when
+     * the server can truthfully say "a girl from Khanapur, 22, never married —
+     * 82% match" without naming her. It returns null whenever it has nothing
+     * better than the generic line, so a missing teaser degrades to today's
+     * behaviour instead of a half-built sentence.
+     *
      * @param  array<string, mixed>  $data
      */
     private function body(string $pushKey, array $data): string
     {
         $override = trim((string) ($data['push_body'] ?? ''));
         if ($override !== '') {
-            return $override;
+            return $this->teaserCopy->normalizeDigits($override);
+        }
+
+        $teaserBody = trim((string) $this->teaserCopy->body($pushKey, $data));
+        if ($teaserBody !== '') {
+            return $teaserBody;
         }
 
         // Scalars only — the translator replaces `:key` placeholders from these.
@@ -277,7 +298,9 @@ class PushDispatchService
             }
         }
 
-        return (string) __('push.types.'.$pushKey.'.body', $replace);
+        return $this->teaserCopy->normalizeDigits(
+            (string) __('push.types.'.$pushKey.'.body', $replace)
+        );
     }
 
     /**

@@ -12,6 +12,13 @@
  *
  * Digits in every string MUST be Latin 0-9 (frozen workspace rule) — this applies
  * to the Marathi file too.
+ *
+ * `body` is the generic fallback — used when the server knows nothing about the
+ * person behind the event. `body_named` / `body_named_preview` are used instead
+ * when the receiver's plan has ALREADY revealed that person, so their name may be
+ * spoken. A locked row never reaches these keys: its body is the teaser line the
+ * WhoViewedTeaserPresenter produced under the admin's privacy policy. See
+ * App\Services\Push\PushTeaserCopyService.
  */
 return [
 
@@ -40,12 +47,14 @@ return [
             'description' => 'When someone sends you an interest.',
             'title' => 'New interest',
             'body' => 'Someone has shown interest in your profile.',
+            'body_named' => ':name sent you an interest.',
         ],
         'interest_accepted' => [
             'label' => 'Interest accepted',
             'description' => 'When someone accepts the interest you sent.',
             'title' => 'Interest accepted',
             'body' => 'Your interest has been accepted.',
+            'body_named' => ':name accepted your interest.',
         ],
         'interest_rejected' => [
             'label' => 'Interest declined',
@@ -59,6 +68,8 @@ return [
             'description' => 'When you receive a new chat message.',
             'title' => 'New message',
             'body' => 'You have received a new message.',
+            'body_named' => ':name sent you a message.',
+            'body_named_preview' => ':name: :preview',
         ],
         'chat_message_locked' => [
             'label' => 'Message locked',
@@ -131,6 +142,7 @@ return [
             'description' => 'When someone views your profile.',
             'title' => 'Profile viewed',
             'body' => 'Someone has viewed your profile.',
+            'body_named' => ':name viewed your profile.',
         ],
         'new_matches' => [
             'label' => 'New matches',

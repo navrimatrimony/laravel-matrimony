@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
 use App\Services\Image\ProfilePhotoUrlService;
+use App\Services\WhoViewed\WhoViewedTeaserPresenter;
 use App\Support\NotificationLocalization;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,19 +16,6 @@ use Illuminate\Support\Str;
 
 class MobileNotificationApiController extends Controller
 {
-    /** @var list<string> */
-    private const TEASER_DISPLAY_KEYS = [
-        'headline',
-        'lines',
-        'viewed_summary',
-        'photo_url',
-        'avatar_style',
-        'blur_photo_class',
-        'accent_line',
-        'match_line',
-        'interest_hint',
-    ];
-
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -372,27 +360,7 @@ class MobileNotificationApiController extends Controller
             return null;
         }
 
-        $display = [];
-        foreach (self::TEASER_DISPLAY_KEYS as $field) {
-            if (! array_key_exists($field, $teaser)) {
-                continue;
-            }
-
-            if ($field === 'lines') {
-                $lines = is_array($teaser[$field])
-                    ? array_values(array_filter(array_map('strval', $teaser[$field]), fn (string $line): bool => trim($line) !== ''))
-                    : [];
-                $display[$field] = $lines;
-                continue;
-            }
-
-            $value = $teaser[$field];
-            if (is_scalar($value) || $value === null) {
-                $display[$field] = $value;
-            }
-        }
-
-        return $display;
+        return WhoViewedTeaserPresenter::displayPayload($teaser);
     }
 
     /**

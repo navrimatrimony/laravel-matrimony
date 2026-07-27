@@ -6,10 +6,10 @@ use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Services\Interest\InterestActionOutcome;
 use App\Services\Interest\InterestActionService;
+use App\Services\Interest\ReceivedInterestTeaserBuilder;
 use App\Services\Interest\ReceivedInterestTeaserPolicy;
 use App\Services\Interest\SuchakRoutedInterestService;
 use App\Services\InterestSendLimitService;
-use App\Services\WhoViewed\WhoViewedTeaserPresenter;
 use App\Support\ErrorFactory;
 use App\Support\RuleResultResponder;
 use Illuminate\Http\JsonResponse;
@@ -46,7 +46,7 @@ class InterestController extends Controller
     public function __construct(
         private readonly InterestActionService $interestActions,
         private readonly InterestSendLimitService $interestSendLimit,
-        private readonly WhoViewedTeaserPresenter $whoViewedTeaserPresenter,
+        private readonly ReceivedInterestTeaserBuilder $receivedTeasers,
         private readonly SuchakRoutedInterestService $routedInterests,
     ) {}
 
@@ -160,14 +160,7 @@ class InterestController extends Controller
             ->latest()
             ->get();
 
-        $receivedInterestsFull = Interest::with([
-            'senderProfile.user',
-            'senderProfile.occupationMaster',
-            'senderProfile.occupationCustom',
-            'senderProfile.maritalStatus',
-            'senderProfile.location',
-            'senderProfile.gender',
-        ])
+        $receivedInterestsFull = Interest::with(ReceivedInterestTeaserBuilder::SENDER_PROFILE_EAGER_LOADS)
             ->where('receiver_profile_id', $myProfileId)
             ->receivedInboxOrder()
             ->get();
@@ -180,31 +173,15 @@ class InterestController extends Controller
         $receivedTeaserRaw = ReceivedInterestTeaserPolicy::normalized();
         $receivedInterestCardLayout = (string) ($receivedTeaserRaw['card_layout'] ?? 'horizontal');
         $applyRichReceivedLockedTeaser = ! empty($receivedTeaserRaw['rich_teaser_enabled']);
-        $interestTeaserPolicy = ReceivedInterestTeaserPolicy::forLockedPresentation($receivedTeaserRaw);
         $interestTeaserPlansUrl = route('plans.index');
-        $lockedInterestTeasers = [];
-        if ($applyRichReceivedLockedTeaser) {
-            $receiverProfile = $authUser->matrimonyProfile;
-            foreach ($receivedInterestsFull as $interestRow) {
-                if (($unlockById[$interestRow->id] ?? true) === true) {
-                    continue;
-                }
-                $senderProfile = $interestRow->senderProfile;
-                if ($senderProfile === null) {
-                    continue;
-                }
-                $lockedInterestTeasers[$interestRow->id] = $this->whoViewedTeaserPresenter->presentFromMatrimonyProfile(
-                    $senderProfile,
-                    $interestRow->created_at,
-                    $interestTeaserPolicy,
-                    [
-                        'owner_profile' => $receiverProfile,
-                        'viewer_view_count' => 1,
-                        'teaser_time_line' => 'interest_received',
-                    ]
-                );
-            }
-        }
+
+        // Shared with the mobile inbox — see ReceivedInterestTeaserBuilder.
+        $lockedInterestTeasers = $this->receivedTeasers->forLockedRows(
+            $receivedInterestsFull,
+            $unlockById,
+            $authUser->matrimonyProfile,
+            $receivedTeaserRaw,
+        );
 
         $rowOrder = (string) ($receivedTeaserRaw['received_inbox_row_order'] ?? 'priority_then_recent');
         if (! in_array($rowOrder, ReceivedInterestTeaserPolicy::RECEIVED_INBOX_ROW_ORDERS, true)) {

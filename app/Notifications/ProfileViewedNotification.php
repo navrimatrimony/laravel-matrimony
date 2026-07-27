@@ -60,6 +60,10 @@ class ProfileViewedNotification extends Notification
             return NotificationMarathiPayload::withMessage([
                 'type' => 'profile_viewed',
                 'message' => $message,
+                // Named separately from `message` so the push copy never has to
+                // parse an English sentence back apart to find the name. Only set
+                // on the branch the identity gate already allowed to reveal.
+                'viewer_name' => $name,
                 'viewer_profile_id' => $this->viewerProfile->id,
                 'is_view_back' => $this->isViewBack,
                 'revealed' => true,

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Services\Interest\InterestActionService;
+use App\Services\Interest\ReceivedInterestTeaserBuilder;
 use App\Services\Interest\SuchakRoutedInterestService;
 use App\Services\InterestSendLimitService;
 use App\Support\ErrorFactory;
@@ -25,6 +26,7 @@ class InterestApiController extends Controller
         private readonly InterestActionService $interestActions,
         private readonly InterestSendLimitService $interestSendLimit,
         private readonly SuchakRoutedInterestService $routedInterests,
+        private readonly ReceivedInterestTeaserBuilder $receivedTeasers,
     ) {}
 
     /**
@@ -130,14 +132,25 @@ class InterestApiController extends Controller
 
         $myProfileId = $user->matrimonyProfile->id;
 
-        $receivedInterests = Interest::with(['senderProfile.gender'])
+        // Every relation the teaser presenter reads, loaded once for the page.
+        // See ReceivedInterestTeaserBuilder::SENDER_PROFILE_EAGER_LOADS.
+        $receivedInterests = Interest::with(ReceivedInterestTeaserBuilder::SENDER_PROFILE_EAGER_LOADS)
             ->where('receiver_profile_id', $myProfileId)
             ->receivedInboxOrder()
             ->get();
 
         $unlockById = $this->interestSendLimit->incomingInterestUnlockMap($user, $receivedInterests);
 
-        $receivedPayload = $receivedInterests->map(function (Interest $interest) use ($unlockById) {
+        // Same teasers the web inbox has always shown, narrowed to the nine keys
+        // the app's shared LockedTeaser widget reads. Locked rows only.
+        $teasersById = $this->receivedTeasers->forLockedRows(
+            $receivedInterests,
+            $unlockById,
+            $user->matrimonyProfile,
+            displayShapeOnly: true,
+        );
+
+        $receivedPayload = $receivedInterests->map(function (Interest $interest) use ($unlockById, $teasersById) {
             $revealed = $unlockById[$interest->id] ?? true;
             $row = $interest->only(['id', 'sender_profile_id', 'receiver_profile_id', 'status', 'priority_score', 'created_at', 'updated_at']);
             if ($revealed && $interest->senderProfile) {
@@ -151,6 +164,12 @@ class InterestApiController extends Controller
                 $row['sender_profile'] = null;
             }
             $row['incoming_reveal_unlocked'] = $revealed;
+
+            // A revealed row shows the real person; carrying a teaser next to it
+            // would contradict that, so the key is only ever present when locked.
+            if (! $revealed && isset($teasersById[$interest->id])) {
+                $row['teaser'] = $teasersById[$interest->id];
+            }
 
             return $row;
         })->values();

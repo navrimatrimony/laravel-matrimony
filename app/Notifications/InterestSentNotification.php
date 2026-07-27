@@ -59,6 +59,9 @@ class InterestSentNotification extends Notification
             return NotificationMarathiPayload::withMessage([
                 'type' => 'interest_sent',
                 'message' => "{$name} sent you an interest.",
+                // Named separately from `message` so the push copy never has to
+                // parse an English sentence back apart to find the name.
+                'sender_name' => $name,
                 'sender_profile_id' => $this->senderProfile->id,
                 'revealed' => true,
             ]);

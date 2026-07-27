@@ -19,11 +19,74 @@ use Illuminate\Support\Facades\Schema;
  */
 final class WhoViewedTeaserPresenter
 {
+    /**
+     * The teaser keys every mobile surface emits, and the ONLY ones the Flutter
+     * member app reads (`lib/core/locked_teaser.dart` → `LockedTeaser.fromJson`).
+     *
+     * This list is the contract. It is exactly what {@see self::present} and
+     * {@see self::presentFromMatrimonyProfile} return, so a surface that runs its
+     * output through {@see self::displayPayload} can never emit a wider shape than
+     * the client understands — nor a narrower one than it expects.
+     *
+     * @var list<string>
+     */
+    public const DISPLAY_KEYS = [
+        'headline',
+        'lines',
+        'viewed_summary',
+        'photo_url',
+        'avatar_style',
+        'blur_photo_class',
+        'accent_line',
+        'match_line',
+        'interest_hint',
+    ];
+
     public function __construct(
         private LocationService $locationService,
         private ProfilePhotoUrlService $profilePhotoUrlService,
         private RuleEngineService $ruleEngine,
     ) {}
+
+    /**
+     * Narrow any teaser-shaped array down to {@see self::DISPLAY_KEYS}.
+     *
+     * Used on both mobile surfaces: the notification list (where the teaser was
+     * decoded from a stored JSON blob and could be anything) and the received
+     * interests list (where it came straight from this presenter). One narrowing,
+     * so the two can never drift.
+     *
+     * @param  array<string, mixed>  $teaser
+     * @return array<string, mixed>
+     */
+    public static function displayPayload(array $teaser): array
+    {
+        $display = [];
+
+        foreach (self::DISPLAY_KEYS as $field) {
+            if (! array_key_exists($field, $teaser)) {
+                continue;
+            }
+
+            if ($field === 'lines') {
+                $display[$field] = is_array($teaser[$field])
+                    ? array_values(array_filter(
+                        array_map('strval', $teaser[$field]),
+                        static fn (string $line): bool => trim($line) !== '',
+                    ))
+                    : [];
+
+                continue;
+            }
+
+            $value = $teaser[$field];
+            if (is_scalar($value) || $value === null) {
+                $display[$field] = $value;
+            }
+        }
+
+        return $display;
+    }
 
     /**
      * @param  array<string, mixed>  $policy  {@see WhoViewedTeaserPolicy::normalized()}
