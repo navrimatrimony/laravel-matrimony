@@ -46,6 +46,7 @@ return [
     'locked_badge' => 'Locked',
 
     'teaser_interest_at' => 'Interest :time',
+    'teaser_interest_just_now' => 'Interest received just now',
     'teaser_interest_recent' => 'Interest received recently',
     'teaser_interest_this_week' => 'Interest received this week',
     'teaser_interest_this_month' => 'Interest received this month',

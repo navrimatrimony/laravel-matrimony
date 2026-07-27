@@ -10,6 +10,7 @@ use App\Services\Interest\ReceivedInterestTeaserPolicy;
 use App\Services\Location\LocationService;
 use App\Services\RuleEngineService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
+use App\Support\LatinDigits;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 
@@ -116,7 +117,9 @@ final class WhoViewedTeaserPresenter
             return [
                 'headline' => __('who_viewed.teaser_headline_anonymous'),
                 'lines' => [],
-                'viewed_summary' => $this->viewedSummary($view->created_at, $policy, (string) ($context['teaser_time_line'] ?? 'profile_view')),
+                'viewed_summary' => LatinDigits::normalize(
+                    $this->viewedSummary($view->created_at, $policy, (string) ($context['teaser_time_line'] ?? 'profile_view'))
+                ),
                 'photo_url' => null,
                 'avatar_style' => $avatarStyle,
                 'blur_photo_class' => $blurPhotoClass,
@@ -158,15 +161,31 @@ final class WhoViewedTeaserPresenter
         $viewer->loadMissing(['user', 'occupationMaster', 'maritalStatus', 'location']);
 
         $residenceLeaf = $this->resolveResidenceLeafLocation($viewer);
-        $locationLine = $this->locationTeaserLine($viewer, (string) $policy['location_granularity'], $residenceLeaf);
         $nameMode = (string) $policy['name_display'];
+
+        // The courtesy headline names a place ("A woman from Kurhani Taluka"), so
+        // that node is dropped from the attribute line below. Saying the same
+        // taluka twice — once in the loudest line on the card and again as the
+        // first attribute — reads like a database dump, not a person.
+        $headlinePlaceNode = $nameMode === 'courtesy_from_place'
+            ? $this->courtesyHeadlinePlaceNode($residenceLeaf)
+            : null;
+
+        $locationLine = $this->locationTeaserLine(
+            $viewer,
+            (string) $policy['location_granularity'],
+            $residenceLeaf,
+            $headlinePlaceNode,
+        );
         $nameLine = $this->displayNameLine($viewer, $nameMode, $policy);
 
         $lines = [];
 
         if ($nameMode === 'courtesy_from_place') {
             $who = $this->courtesyWhoPrefix($viewer);
-            $place = $this->courtesyHeadlinePlace($residenceLeaf);
+            $place = $headlinePlaceNode !== null
+                ? $this->formatHeadlinePlaceByType($headlinePlaceNode)
+                : null;
             if ($place !== null && $place !== '') {
                 $headline = __('who_viewed.teaser_headline_courtesy_from_place', [
                     'who' => $who,
@@ -175,7 +194,7 @@ final class WhoViewedTeaserPresenter
             } else {
                 $headline = $who;
             }
-            if ($locationLine !== null && $locationLine !== '' && $locationLine !== $place) {
+            if ($locationLine !== null && $locationLine !== '') {
                 $lines[] = $locationLine;
             }
         } elseif (in_array($nameMode, ['full', 'first_only', 'masked'], true)) {
@@ -230,23 +249,33 @@ final class WhoViewedTeaserPresenter
         $at = $relevantAt ?? now();
         $timeLine = (string) ($context['teaser_time_line'] ?? 'profile_view');
 
+        // Every text field is forced to Latin digits on the way out (FROZEN rule).
+        // The numbers here are built from PHP ints and are already Latin; the guard
+        // is for the locale-aware formatters — Carbon's relative time above all —
+        // that decide for themselves how to render a number in `mr`.
         return [
-            'headline' => $headline,
-            'lines' => $lines,
-            'viewed_summary' => $this->viewedSummary($at, $policy, $timeLine),
+            'headline' => LatinDigits::normalize((string) $headline),
+            'lines' => array_map(
+                static fn (string $line): string => LatinDigits::normalize($line),
+                $lines,
+            ),
+            'viewed_summary' => LatinDigits::normalize($this->viewedSummary($at, $policy, $timeLine)),
             'photo_url' => $photoUrl,
             'avatar_style' => $avatarStyle,
             'blur_photo_class' => $blurPhotoClass,
-            'accent_line' => $this->repeatViewAccentLine($policy, $context),
-            'match_line' => $matchLine,
-            'interest_hint' => $this->interestHintLine($viewer),
+            'accent_line' => LatinDigits::normalizeNullable($this->repeatViewAccentLine($policy, $context)),
+            'match_line' => LatinDigits::normalizeNullable($matchLine),
+            'interest_hint' => LatinDigits::normalize($this->interestHintLine($viewer)),
         ];
     }
 
     /**
      * Headline place for “A girl from …”: prefer taluka, metro/city, or parent of suburb/village — not state-only.
+     *
+     * Returns the NODE, not a label, so the caller can both format it for the
+     * headline and exclude it from the attribute line.
      */
-    private function courtesyHeadlinePlace(?Location $leaf): ?string
+    private function courtesyHeadlinePlaceNode(?Location $leaf): ?Location
     {
         if ($leaf === null) {
             return null;
@@ -278,7 +307,7 @@ final class WhoViewedTeaserPresenter
                 $walk->loadMissing('parent');
                 $wt = strtolower((string) ($walk->hierarchy ?? ''));
                 if (in_array($wt, ['taluka', 'district'], true)) {
-                    return $this->formatHeadlinePlaceByType($walk);
+                    return $walk;
                 }
                 $walk = $walk->parent;
                 $guard++;
@@ -287,31 +316,31 @@ final class WhoViewedTeaserPresenter
 
         $cityNode = $h['city'];
         if ($cityNode !== null && $isMetroOrCapital($cityNode)) {
-            return $cityNode->localizedName();
+            return $cityNode;
         }
 
         if ($h['taluka'] !== null) {
-            return $this->formatHeadlinePlaceByType($h['taluka']);
+            return $h['taluka'];
         }
 
         if ($type === 'village' && $cat === 'city') {
-            return $leaf->localizedName();
+            return $leaf;
         }
 
         if ($cityNode !== null) {
-            return $cityNode->localizedName();
+            return $cityNode;
         }
 
         if ($isMetroOrCapital($leaf)) {
-            return $leaf->localizedName();
+            return $leaf;
         }
 
         if ($h['district'] !== null) {
-            return $h['district']->localizedName();
+            return $h['district'];
         }
 
         if ($type === 'district') {
-            return $leaf->localizedName();
+            return $leaf;
         }
 
         return null;
@@ -558,6 +587,18 @@ final class WhoViewedTeaserPresenter
         $mode = (string) ($policy['teaser_viewed_time'] ?? 'human');
         $interest = $timeLine === 'interest_received';
 
+        // Sub-minute is "just now", in BOTH modes.
+        //
+        // A teaser is built at the moment of the event, so Carbon's relative time
+        // rendered "पाहिले: 0 सेकंदपूर्वी" — "Viewed: 0 seconds ago" — on real
+        // production rows. Nothing is wrong with the timestamp; "0 seconds ago" is
+        // simply not a thing to say to a member.
+        if ($at !== null && $this->isJustNow($at)) {
+            return $interest
+                ? __('interests.teaser_interest_just_now')
+                : __('who_viewed.teaser_viewed_just_now');
+        }
+
         if ($mode === 'human' && $at !== null) {
             return $interest
                 ? __('interests.teaser_interest_at', ['time' => $at->diffForHumans()])
@@ -591,8 +632,33 @@ final class WhoViewedTeaserPresenter
             : __('who_viewed.teaser_viewed_earlier');
     }
 
-    private function locationTeaserLine(MatrimonyProfile $viewer, string $granularity, ?Location $leafPre = null): ?string
+    /**
+     * The place attribute line, e.g. “Muzaffarpur, Bihar”.
+     *
+     * Never finer than the admin's granularity, and never a village — the
+     * hierarchy nodes below taluka are simply not read here.
+     *
+     * @param  Location|null  $alreadyNamed  a node the headline already spoke; it is
+     *                                       dropped so the card cannot say the same
+     *                                       place twice
+     */
+    /**
+     * Under a minute either side of now.
+     *
+     * Absolute, so a clock-skewed or queue-delayed timestamp a few seconds in the
+     * FUTURE reads "just now" rather than Carbon's "0 seconds from now".
+     */
+    private function isJustNow(Carbon $at): bool
     {
+        return $at->diffInSeconds(now(), true) < 60;
+    }
+
+    private function locationTeaserLine(
+        MatrimonyProfile $viewer,
+        string $granularity,
+        ?Location $leafPre = null,
+        ?Location $alreadyNamed = null,
+    ): ?string {
         if (! Schema::hasTable(Location::geoTable())) {
             return null;
         }
@@ -605,22 +671,36 @@ final class WhoViewedTeaserPresenter
         $this->locationService->ensureAncestorsLoaded($leaf);
         $h = $this->locationService->getFullHierarchy($leaf);
 
-        return match ($granularity) {
-            'state_only' => $h['state']?->localizedName(),
-            'district_and_above' => $this->joinParts(array_filter([
-                $h['district']?->localizedName(),
-                $h['state']?->localizedName(),
-            ])),
-            'taluka_and_above' => $this->joinParts(array_filter([
-                $h['taluka']?->localizedName(),
-                $h['district']?->localizedName(),
-                $h['state']?->localizedName(),
-            ])),
-            default => $this->joinParts(array_filter([
-                $h['district']?->localizedName(),
-                $h['state']?->localizedName(),
-            ])),
+        $nodes = match ($granularity) {
+            'state_only' => [$h['state']],
+            'taluka_and_above' => [$h['taluka'], $h['district'], $h['state']],
+            default => [$h['district'], $h['state']],
         };
+
+        $namedId = $alreadyNamed?->id;
+        $namedLabel = $alreadyNamed !== null ? trim((string) $alreadyNamed->localizedName()) : null;
+
+        $labels = [];
+        foreach ($nodes as $node) {
+            if (! $node instanceof Location) {
+                continue;
+            }
+
+            $label = trim((string) $node->localizedName());
+            if ($label === '') {
+                continue;
+            }
+
+            // Match on id first; fall back to the label, because the headline may
+            // have picked a node from a parallel walk rather than this hierarchy.
+            if (($namedId !== null && (int) $node->id === (int) $namedId) || $label === $namedLabel) {
+                continue;
+            }
+
+            $labels[] = $label;
+        }
+
+        return $this->joinParts($labels);
     }
 
     /**
@@ -646,6 +726,13 @@ final class WhoViewedTeaserPresenter
     }
 
     /**
+     * Joins place names the way a person would say them: “Muzaffarpur, Bihar”.
+     *
+     * It used to be `implode(' / ')`, which put a slash-separated hierarchy —
+     * “Kurhani / Muzaffarpur / Bihar” — on the loudest card in the product. The
+     * data was right; it read like a database path, which is the opposite of the
+     * "a real person you might want to meet" feeling the whole card exists for.
+     *
      * @param  list<string|null>  $parts
      */
     private function joinParts(array $parts): ?string
@@ -662,7 +749,7 @@ final class WhoViewedTeaserPresenter
             return null;
         }
 
-        return implode(' / ', $clean);
+        return implode(__('who_viewed.teaser_place_separator'), $clean);
     }
 
     private function truncate(string $s, int $max = 48): string

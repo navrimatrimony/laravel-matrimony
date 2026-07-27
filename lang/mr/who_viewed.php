@@ -28,6 +28,8 @@ return [
     'teaser_photo_view_plans' => 'प्लॅन पहा ›',
     'teaser_photo_paid_hint' => 'हे paid feature आहे.',
     'teaser_taluka_suffix' => 'तालुका',
+    // Place names are joined the way a person says them, not as a hierarchy path.
+    'teaser_place_separator' => ', ',
     'teaser_interest_hint_girl' => 'ही मुलगी तुमच्या प्रोफाइलमध्ये interested असू शकते.',
     'teaser_interest_hint_woman' => 'ही महिला तुमच्या प्रोफाइलमध्ये interested असू शकते.',
     'teaser_interest_hint_boy' => 'हा मुलगा तुमच्या प्रोफाइलमध्ये interested असू शकतो.',
@@ -40,7 +42,10 @@ return [
     'bubble_dismiss' => 'बंद करा',
 
     'teaser_headline_anonymous' => 'कोणीतरी',
-    'teaser_headline_courtesy_from_place' => ':place हून :who,',
+    // Self-contained: this is rendered ALONE as the loudest line on the mobile
+    // card, so it must not end mid-sentence waiting for a template to glue the
+    // next fragment on. It carries the place, so the attribute line below drops it.
+    'teaser_headline_courtesy_from_place' => ':place हून :who',
     'courtesy_a_girl' => 'एक मुलगी',
     'courtesy_a_woman' => 'एक स्त्री',
     'courtesy_a_boy' => 'एक मुलगा',
@@ -53,6 +58,9 @@ return [
     'teaser_viewed_profile_times' => 'तुमची प्रोफाइल :count वेळा पाहिली',
     'teaser_match_score' => 'तुमच्या पसंतीशी चांगली जुळणारी प्रोफाइल (:score%)',
     'teaser_name_masked_fallback' => 'M•••••',
+    // Sub-minute. Carbon renders that moment as '0 सेकंदपूर्वी', which is broken
+    // output; a teaser is built at the instant of the view, so it is the common case.
+    'teaser_viewed_just_now' => 'आत्ताच पाहिले',
     'teaser_viewed_recent' => 'अलीकडेच पाहिले',
     'teaser_viewed_this_week' => 'या आठवड्यात पाहिले',
     'teaser_viewed_this_month' => 'या महिन्यात पाहिले',

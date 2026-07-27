@@ -46,6 +46,7 @@ return [
     'locked_badge' => 'लॉक',
 
     'teaser_interest_at' => 'इच्छा :time',
+    'teaser_interest_just_now' => 'आत्ताच इच्छा मिळाली',
     'teaser_interest_recent' => 'अलीकडेच इच्छा मिळाली',
     'teaser_interest_this_week' => 'या आठवड्यात इच्छा मिळाली',
     'teaser_interest_this_month' => 'या महिन्यात इच्छा मिळाली',

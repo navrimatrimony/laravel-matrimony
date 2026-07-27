@@ -308,6 +308,124 @@ class ReceivedInterestTeaserAndPushCopyTest extends TestCase
         ]));
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Presenter output quality — pinned from a real production payload
+    |--------------------------------------------------------------------------
+    */
+
+    public function test_courtesy_teaser_reads_as_a_sentence_and_never_names_a_place_twice(): void
+    {
+        $viewer = User::factory()->create(['is_admin' => false]);
+        $viewerProfile = $this->createActiveProfileWithResidence($viewer, [
+            'full_name' => self::SENDER_REAL_NAME,
+            'date_of_birth' => now()->subYears(27)->subDays(20)->toDateString(),
+        ]);
+
+        $owner = User::factory()->create(['is_admin' => false]);
+        $ownerProfile = $this->createActiveProfileWithResidence($owner);
+
+        $teaser = app(WhoViewedTeaserPresenter::class)->presentFromMatrimonyProfile(
+            $viewerProfile,
+            now(),
+            [
+                'name_display' => 'courtesy_from_place',
+                'location_granularity' => 'taluka_and_above',
+                'show_age_mode' => 'exact',
+                'teaser_avatar_style' => 'blur',
+                'teaser_blur_strength' => 'medium',
+                'teaser_viewed_time' => 'human',
+            ],
+            ['owner_profile' => $ownerProfile, 'teaser_time_line' => 'profile_view'],
+        );
+
+        // Rendered alone as the loudest line on the card — it must be a whole
+        // phrase, not a fragment waiting for a template to finish it.
+        $this->assertNotSame(
+            ',',
+            mb_substr((string) $teaser['headline'], -1),
+            'The headline must not dangle on a trailing comma.'
+        );
+
+        $placeLine = $teaser['lines'][0] ?? '';
+
+        // A slash-separated hierarchy reads like a database path, not a person.
+        $this->assertStringNotContainsString(' / ', $placeLine);
+
+        // Whatever the headline already named must not be repeated as an attribute.
+        foreach (preg_split('/,\s*/u', $placeLine, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $part) {
+            $this->assertStringNotContainsString(
+                trim($part),
+                (string) $teaser['headline'],
+                'The card named the same place twice.'
+            );
+        }
+
+        $this->assertStringNotContainsString(self::SENDER_REAL_NAME, json_encode($teaser, JSON_UNESCAPED_UNICODE));
+    }
+
+    public function test_sub_minute_teaser_time_reads_just_now_in_both_modes(): void
+    {
+        $viewer = User::factory()->create(['is_admin' => false]);
+        $viewerProfile = $this->createActiveProfileWithResidence($viewer);
+        $owner = User::factory()->create(['is_admin' => false]);
+        $ownerProfile = $this->createActiveProfileWithResidence($owner);
+
+        foreach (['human', 'bucket'] as $mode) {
+            $teaser = app(WhoViewedTeaserPresenter::class)->presentFromMatrimonyProfile(
+                $viewerProfile,
+                now(),
+                [
+                    'name_display' => 'masked',
+                    'location_granularity' => 'district_and_above',
+                    'show_age_mode' => 'exact',
+                    'teaser_avatar_style' => 'blur',
+                    'teaser_blur_strength' => 'medium',
+                    'teaser_viewed_time' => $mode,
+                ],
+                ['owner_profile' => $ownerProfile, 'teaser_time_line' => 'profile_view'],
+            );
+
+            $this->assertSame(
+                __('who_viewed.teaser_viewed_just_now'),
+                $teaser['viewed_summary'],
+                "Sub-minute must read 'just now' in {$mode} mode, never '0 seconds ago'."
+            );
+        }
+    }
+
+    public function test_teaser_payload_never_carries_devanagari_digits(): void
+    {
+        $viewer = User::factory()->create(['is_admin' => false]);
+        $viewerProfile = $this->createActiveProfileWithResidence($viewer, [
+            'date_of_birth' => now()->subYears(27)->subDays(20)->toDateString(),
+        ]);
+        $owner = User::factory()->create(['is_admin' => false]);
+        $ownerProfile = $this->createActiveProfileWithResidence($owner);
+
+        app()->setLocale('mr');
+
+        $teaser = app(WhoViewedTeaserPresenter::class)->presentFromMatrimonyProfile(
+            $viewerProfile,
+            now()->subDays(3),
+            [
+                'name_display' => 'courtesy_from_place',
+                'location_granularity' => 'taluka_and_above',
+                'show_age_mode' => 'exact',
+                'teaser_avatar_style' => 'blur',
+                'teaser_blur_strength' => 'medium',
+                'teaser_viewed_time' => 'human',
+            ],
+            ['owner_profile' => $ownerProfile, 'teaser_time_line' => 'profile_view'],
+        );
+
+        $this->assertSame(
+            0,
+            preg_match('/[\x{0966}-\x{096F}]/u', json_encode($teaser, JSON_UNESCAPED_UNICODE)),
+            'FROZEN: every numeral in a teaser must be Latin 0-9.'
+        );
+    }
+
     public function test_push_language_files_stay_symmetric(): void
     {
         $mr = require base_path('lang/mr/push.php');

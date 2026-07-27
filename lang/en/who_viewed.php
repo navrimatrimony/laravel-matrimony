@@ -28,6 +28,8 @@ return [
     'teaser_photo_view_plans' => 'View plans ›',
     'teaser_photo_paid_hint' => 'This is a paid feature.',
     'teaser_taluka_suffix' => 'Taluka',
+    // Place names are joined the way a person says them, not as a hierarchy path.
+    'teaser_place_separator' => ', ',
     'teaser_interest_hint_girl' => 'This girl may be interested in your profile.',
     'teaser_interest_hint_woman' => 'This woman may be interested in your profile.',
     'teaser_interest_hint_boy' => 'This boy may be interested in your profile.',
@@ -40,7 +42,10 @@ return [
     'bubble_dismiss' => 'Dismiss',
 
     'teaser_headline_anonymous' => 'Someone',
-    'teaser_headline_courtesy_from_place' => ':who from :place,',
+    // Self-contained: this is rendered ALONE as the loudest line on the mobile
+    // card, so it must not end mid-sentence waiting for a template to glue the
+    // next fragment on. It carries the place, so the attribute line below drops it.
+    'teaser_headline_courtesy_from_place' => ':who from :place',
     'courtesy_a_girl' => 'A girl',
     'courtesy_a_woman' => 'A woman',
     'courtesy_a_boy' => 'A boy',
@@ -53,6 +58,9 @@ return [
     'teaser_viewed_profile_times' => 'Viewed your profile :count times',
     'teaser_match_score' => 'Strong match with your preferences (:score%)',
     'teaser_name_masked_fallback' => 'M•••••',
+    // Sub-minute. Carbon renders that moment as '0 seconds ago', which is broken
+    // output; a teaser is built at the instant of the view, so it is the common case.
+    'teaser_viewed_just_now' => 'Viewed just now',
     'teaser_viewed_recent' => 'Viewed recently',
     'teaser_viewed_this_week' => 'Viewed this week',
     'teaser_viewed_this_month' => 'Viewed this month',

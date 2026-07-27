@@ -4,6 +4,7 @@ namespace App\Services\Push;
 
 use App\Services\Chat\ChatTeaserPolicy;
 use App\Services\WhoViewed\WhoViewedTeaserPresenter;
+use App\Support\LatinDigits;
 
 /**
  * "There is a person behind this push — what may it say about them?"
@@ -66,12 +67,6 @@ final class PushTeaserCopyService
      */
     private const NAME_PLACEHOLDER = 'Someone';
 
-    /** Devanagari digits are FROZEN out of every user-facing string. */
-    private const DEVANAGARI_DIGITS = [
-        '०' => '0', '१' => '1', '२' => '2', '३' => '3', '४' => '4',
-        '५' => '5', '६' => '6', '७' => '7', '८' => '8', '९' => '9',
-    ];
-
     /**
      * Push body for one notification, or null to keep the generic reviewed line.
      *
@@ -121,7 +116,7 @@ final class PushTeaserCopyService
      */
     public function normalizeDigits(string $value): string
     {
-        return strtr($value, self::DEVANAGARI_DIGITS);
+        return LatinDigits::normalize($value);
     }
 
     /**
