@@ -122,10 +122,22 @@ class MobileMoreMatchesSectionService
             ->limit(self::CANDIDATE_POOL_LIMIT)
             ->get();
 
+        // Every candidate's own stated preferences, in one batch instead of ~14 queries per
+        // candidate inside the loop below. This is the same loader the feed uses, and it decomposes
+        // strictly per profile, so each candidate is judged on exactly the row set the single-profile
+        // path would have read for it.
+        $preferences = $this->matchingService->targetPreferencesFor(
+            $candidates->map(static fn (MatrimonyProfile $c): int => (int) $c->id)->all(),
+        );
+
         $rows = collect();
         foreach ($candidates as $candidate) {
             try {
-                $fit = ProfilePreferenceMatchService::build($viewerProfile, $candidate);
+                $fit = ProfilePreferenceMatchService::build(
+                    $viewerProfile,
+                    $candidate,
+                    $preferences[(int) $candidate->id] ?? null,
+                );
             } catch (\Throwable) {
                 continue;
             }

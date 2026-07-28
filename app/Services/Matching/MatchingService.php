@@ -1343,6 +1343,24 @@ class MatchingService
     }
 
     /**
+     * Batch-loaded target preferences for callers outside the feed, keyed by profile id and shaped
+     * exactly like {@see ProfilePreferenceMatchService::build()}'s `$targetPreferencesOverride`.
+     *
+     * Discovery's "looking for me" section evaluates a whole candidate pool one profile at a time.
+     * Without this it fell through to the single-profile loader inside the loop and paid ~14 queries
+     * per candidate — 160 candidates, ~2,200 queries, for a set this method reads in ~14 total. The
+     * per-profile decomposition is what makes the two byte-identical (see
+     * {@see self::ensureTargetPreferencesLoaded()}), so the verdicts do not move.
+     *
+     * @param  list<int>  $profileIds
+     * @return array<int, array<string, mixed>>
+     */
+    public function targetPreferencesFor(array $profileIds): array
+    {
+        return $this->ensureTargetPreferencesLoaded($profileIds);
+    }
+
+    /**
      * @param  list<int>  $profileIds
      * @return array<int, array<string, mixed>>
      */
