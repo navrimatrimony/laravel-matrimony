@@ -153,6 +153,148 @@ class ProfilePhotoUrlService
     }
 
     /**
+     * Relative paths of every photo a viewer may actually be shown for this profile, in album order.
+     *
+     * THE single source for "which photos does this profile have?". The list card, the profile hero,
+     * the photo album and the discovery rank all read this, so a profile can never resolve to a photo
+     * on one screen and to nothing on another. A path whose bytes are missing is dropped here — that
+     * is deliberate: a filename in the database is not a photo, and handing one out is how a card with
+     * no photo and a detail screen with a broken image end up disagreeing about the same profile.
+     *
+     * Order: effectively-approved `profile_photos` rows (primary first), then the legacy
+     * `matrimony_profiles.profile_photo` column.
+     *
+     * @return list<string>
+     */
+    public static function visiblePhotoRelativePaths(MatrimonyProfile $profile): array
+    {
+        $paths = [];
+
+        foreach (self::approvedGalleryPhotoRows($profile) as $photo) {
+            $path = self::normalizeMatrimonyPhotoPath((string) $photo->file_path);
+            if ($path === null || self::isPendingPlaceholder($path)) {
+                continue;
+            }
+            if (! self::storedFileExistsForRelativePath($path)) {
+                continue;
+            }
+            $paths[] = $path;
+        }
+
+        $legacy = self::usableLegacyPhotoRelativePath($profile);
+        if ($legacy !== null) {
+            $paths[] = $legacy;
+        }
+
+        return array_values(array_unique($paths));
+    }
+
+    /**
+     * Public URLs for {@see visiblePhotoRelativePaths()} — every URL returned points at bytes that exist.
+     *
+     * @return list<string>
+     */
+    public static function visiblePhotoUrls(MatrimonyProfile $profile): array
+    {
+        $service = app(self::class);
+
+        $urls = array_map(
+            static fn (string $path): string => $service->publicUrl($path, $profile),
+            self::visiblePhotoRelativePaths($profile),
+        );
+
+        return array_values(array_unique(array_filter($urls)));
+    }
+
+    /**
+     * Whether this profile has at least one renderable photo. Cheaper than {@see visiblePhotoUrls()}
+     * (no URL building) and answers by exactly the same rule, so "has a photo" can never disagree
+     * with "here is the photo".
+     */
+    public static function hasVisiblePhoto(MatrimonyProfile $profile): bool
+    {
+        return self::visiblePhotoRelativePaths($profile) !== [];
+    }
+
+    /**
+     * The legacy `profile_photo` value only when it is still usable: approved, not a pending
+     * placeholder awaiting the queue job, and backed by bytes on disk.
+     *
+     * API payloads echo this raw column and both apps build a URL from it client-side, so a name
+     * whose file is gone must not be handed out.
+     */
+    public static function usableLegacyPhotoRelativePath(MatrimonyProfile $profile): ?string
+    {
+        $legacy = self::normalizeMatrimonyPhotoPath((string) ($profile->profile_photo ?? ''));
+
+        if (
+            $legacy === null
+            || $profile->photo_approved === false
+            || self::isPendingPlaceholder($legacy)
+            || ! self::storedFileExistsForRelativePath($legacy)
+        ) {
+            return null;
+        }
+
+        return $legacy;
+    }
+
+    /**
+     * The raw `profile_photo` value as an API payload should echo it.
+     *
+     * Both apps turn this bare filename into a URL client-side, so it follows exactly the same
+     * "bytes exist" rule as {@see visiblePhotoUrls()} — otherwise a screen that reads this field
+     * shows a broken image for a profile whose card correctly shows none. A `pending/…` placeholder
+     * still passes while its temp bytes are on disk: that is an upload being processed, which the
+     * apps render as a processing state rather than as a photo.
+     */
+    public static function apiLegacyPhotoValue(MatrimonyProfile $profile): ?string
+    {
+        $raw = trim((string) ($profile->profile_photo ?? ''));
+
+        if ($raw !== ''
+            && $profile->photo_approved !== false
+            && self::isPendingPlaceholder($raw)
+            && self::storedFileExistsForRelativePath($raw)
+        ) {
+            return $raw;
+        }
+
+        return self::usableLegacyPhotoRelativePath($profile) !== null ? $raw : null;
+    }
+
+    /**
+     * Effectively-approved gallery rows, in album order. Prefers an already eager-loaded `photos`
+     * relation (which may be unconstrained, hence the PHP-side status filter) and otherwise queries,
+     * so callers get the same set whether or not they eager-loaded.
+     *
+     * @return iterable<int, ProfilePhoto>
+     */
+    private static function approvedGalleryPhotoRows(MatrimonyProfile $profile): iterable
+    {
+        if ($profile->relationLoaded('photos')) {
+            return $profile->photos
+                ->filter(static fn (ProfilePhoto $photo): bool => $photo->effectiveApprovedStatus() === 'approved')
+                ->values();
+        }
+
+        if (! Schema::hasTable('profile_photos')) {
+            return [];
+        }
+
+        $query = ProfilePhoto::query()
+            ->where('profile_id', $profile->id)
+            ->effectivelyApproved()
+            ->orderByDesc('is_primary');
+
+        if (Schema::hasColumn('profile_photos', 'sort_order')) {
+            $query->orderBy('sort_order');
+        }
+
+        return $query->orderBy('id')->get(['id', 'profile_id', 'file_path', 'is_primary']);
+    }
+
+    /**
      * Backward compatible resolver:
      * - new: storage/app/public/matrimony_photos (served via /storage)
      * - old: public/uploads/matrimony_photos (served via /uploads)

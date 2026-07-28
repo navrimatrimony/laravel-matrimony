@@ -7,9 +7,9 @@ use App\Models\ProfilePhoto;
 use App\Models\User;
 use App\Models\UserDailyPhotoProfileView;
 use App\Models\UserFeatureUsage;
+use App\Services\Image\ProfilePhotoUrlService;
 use App\Support\PlanFeatureKeys;
 use App\Support\UserFeatureUsageKeys;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -38,11 +38,10 @@ class ProfilePhotoAccessService
         User $viewer,
         MatrimonyProfile $subject,
         bool $isOwnProfile,
-        Collection $galleryPhotos,
     ): array {
         if ($isOwnProfile) {
             return [
-                'slots' => $this->buildSlotsFromSources($subject, $galleryPhotos, allBlur: false),
+                'slots' => $this->buildSlotsFromSources($subject, allBlur: false),
                 'message_key' => null,
                 'tier' => 'own_profile',
             ];
@@ -50,7 +49,7 @@ class ProfilePhotoAccessService
 
         if ($this->featureUsage->shouldBypassUsageLimits($viewer)) {
             return [
-                'slots' => $this->buildSlotsFromSources($subject, $galleryPhotos, allBlur: false),
+                'slots' => $this->buildSlotsFromSources($subject, allBlur: false),
                 'message_key' => null,
                 'tier' => 'paid',
             ];
@@ -59,7 +58,7 @@ class ProfilePhotoAccessService
         $viewerProfile = $viewer->matrimonyProfile;
         if (! $viewerProfile) {
             return [
-                'slots' => $this->buildSlotsFromSources($subject, $galleryPhotos, allBlur: true),
+                'slots' => $this->buildSlotsFromSources($subject, allBlur: true),
                 'message_key' => 'profile.photos_upload_to_unlock_more',
                 'tier' => 'free_no_photo',
             ];
@@ -68,7 +67,7 @@ class ProfilePhotoAccessService
         $uid = (int) $viewer->id;
         if ($this->entitlements->hasFeature($uid, PlanFeatureKeys::PHOTO_FULL_ACCESS)) {
             return [
-                'slots' => $this->buildSlotsFromSources($subject, $galleryPhotos, allBlur: false),
+                'slots' => $this->buildSlotsFromSources($subject, allBlur: false),
                 'message_key' => null,
                 'tier' => 'paid',
             ];
@@ -77,7 +76,7 @@ class ProfilePhotoAccessService
         $hasOwnPhoto = $this->viewerHasApprovedOwnPhoto($viewerProfile);
 
         if ($hasOwnPhoto) {
-            $slots = $this->buildSlotsWithFirstUnblurredRestBlurred($subject, $galleryPhotos);
+            $slots = $this->buildSlotsWithFirstUnblurredRestBlurred($subject);
 
             return [
                 'slots' => $slots,
@@ -110,7 +109,7 @@ class ProfilePhotoAccessService
         $blockedByDailyCap = ! $alreadyRecorded && $distinctToday >= $maxPerDay;
 
         if ($blockedByDailyCap) {
-            $slots = $this->buildSlotsFromSources($subject, $galleryPhotos, allBlur: true);
+            $slots = $this->buildSlotsFromSources($subject, allBlur: true);
 
             return [
                 'slots' => $slots,
@@ -139,7 +138,7 @@ class ProfilePhotoAccessService
             });
         }
 
-        $slots = $this->buildSlotsWithFirstUnblurredRestBlurred($subject, $galleryPhotos);
+        $slots = $this->buildSlotsWithFirstUnblurredRestBlurred($subject);
 
         return [
             'slots' => $slots,
@@ -165,44 +164,28 @@ class ProfilePhotoAccessService
     }
 
     /**
+     * This service decides WHO may see a photo (blur, tier, daily cap). WHICH photos exist and what
+     * their URLs are belongs to {@see ProfilePhotoUrlService} — the same resolver the list card and
+     * the profile hero read. It used to build URLs here from `profile_photo` and from a gallery
+     * collection the caller passed in, neither of which checked that the file still existed, so the
+     * album offered photos the card had already (correctly) suppressed as missing.
+     *
      * @return list<array{url: string, blur: bool}>
      */
-    private function buildSlotsFromSources(MatrimonyProfile $subject, Collection $galleryPhotos, bool $allBlur): array
+    private function buildSlotsFromSources(MatrimonyProfile $subject, bool $allBlur): array
     {
-        $slots = [];
-        $primaryUrl = $this->primaryPhotoPublicUrl($subject);
-        if ($primaryUrl !== null) {
-            $slots[] = ['url' => $primaryUrl, 'blur' => $allBlur];
-        } else {
-            $fallback = \App\Services\Image\ProfilePhotoUrlService::primaryNonPendingGalleryRelativePath($subject);
-            if ($fallback !== null) {
-                $primaryUrl = app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($fallback);
-                $slots[] = ['url' => $primaryUrl, 'blur' => $allBlur];
-            }
-        }
-        foreach ($galleryPhotos as $p) {
-            if (empty($p->file_path)) {
-                continue;
-            }
-            $url = app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($p->file_path);
-            if ($primaryUrl !== null && $url === $primaryUrl) {
-                continue;
-            }
-            $slots[] = [
-                'url' => $url,
-                'blur' => $allBlur,
-            ];
-        }
-
-        return $slots;
+        return array_map(
+            static fn (string $url): array => ['url' => $url, 'blur' => $allBlur],
+            ProfilePhotoUrlService::visiblePhotoUrls($subject),
+        );
     }
 
     /**
      * @return list<array{url: string, blur: bool}>
      */
-    private function buildSlotsWithFirstUnblurredRestBlurred(MatrimonyProfile $subject, Collection $galleryPhotos): array
+    private function buildSlotsWithFirstUnblurredRestBlurred(MatrimonyProfile $subject): array
     {
-        $slots = $this->buildSlotsFromSources($subject, $galleryPhotos, allBlur: true);
+        $slots = $this->buildSlotsFromSources($subject, allBlur: true);
         if ($slots === []) {
             return [];
         }
@@ -217,15 +200,5 @@ class ProfilePhotoAccessService
     private function hasMultipleVisibleSlots(array $slots): bool
     {
         return count($slots) > 1;
-    }
-
-    private function primaryPhotoPublicUrl(MatrimonyProfile $subject): ?string
-    {
-        $path = trim((string) ($subject->profile_photo ?? ''));
-        if ($path === '' || $subject->photo_approved === false) {
-            return null;
-        }
-
-        return app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($path, $subject);
     }
 }

@@ -11,8 +11,8 @@ use App\Models\FieldRegistry;
 use App\Models\Interest;
 use App\Models\Location;
 use App\Models\MasterMaritalStatus;
-use App\Models\MediationRequest;
 use App\Models\MatrimonyProfile;
+use App\Models\MediationRequest;
 use App\Models\Message;
 use App\Models\Profession;
 use App\Models\ProfilePhoto;
@@ -1519,8 +1519,7 @@ class MatrimonyProfileController extends Controller
         $photoAlbumPresentation = $this->profilePhotoAccessService->buildAlbumPresentation(
             $user,
             $profile,
-            $isOwnProfile,
-            $galleryPhotos
+            $isOwnProfile
         );
 
         $reportablePhotoSummary = ! $isOwnProfile ? self::buildReportablePhotoSummary($profile) : null;

@@ -20,6 +20,9 @@ class ProfilePhotoAccessServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** @var list<string> */
+    private array $createdPhotoFiles = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -27,6 +30,31 @@ class ProfilePhotoAccessServiceTest extends TestCase
         $this->seed(MinimalLocationSeeder::class);
         $this->seed(MasterLookupSeeder::class);
         ProfileCanonicalResidenceService::forgetCachedMasters();
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->createdPhotoFiles as $abs) {
+            @unlink($abs);
+        }
+        $this->createdPhotoFiles = [];
+
+        parent::tearDown();
+    }
+
+    /**
+     * Album slots only exist for photos whose bytes are on disk, so these fixtures need real files.
+     */
+    private function storePhotoFile(string $relativePath): string
+    {
+        $abs = storage_path('app/public/matrimony_photos/'.$relativePath);
+        if (! is_dir(dirname($abs))) {
+            mkdir(dirname($abs), 0755, true);
+        }
+        file_put_contents($abs, 'x');
+        $this->createdPhotoFiles[] = $abs;
+
+        return $relativePath;
     }
 
     private function seedGenders(): array
@@ -51,7 +79,7 @@ class ProfilePhotoAccessServiceTest extends TestCase
             'gender_id' => $femaleGid,
             'is_suspended' => false,
             'full_name' => $name,
-            'profile_photo' => $photoPath,
+            'profile_photo' => $this->storePhotoFile($photoPath),
             'photo_approved' => true,
             'visibility_override' => true,
         ]);
@@ -77,8 +105,7 @@ class ProfilePhotoAccessServiceTest extends TestCase
 
         for ($i = 1; $i <= 5; $i++) {
             $subject = $this->makeSubject($femaleGid, "Subject {$i}", "p{$i}.jpg");
-            $gallery = collect();
-            $pres = $svc->buildAlbumPresentation($viewer->fresh(), $subject, false, $gallery);
+            $pres = $svc->buildAlbumPresentation($viewer->fresh(), $subject, false);
             $this->assertNotEmpty($pres['slots'], "subject {$i}");
             $this->assertFalse($pres['slots'][0]['blur'], "first slot clear for subject {$i}");
             if (count($pres['slots']) > 1) {
@@ -87,7 +114,7 @@ class ProfilePhotoAccessServiceTest extends TestCase
         }
 
         $sixth = $this->makeSubject($femaleGid, 'Subject Six', 'p6.jpg');
-        $presSix = $svc->buildAlbumPresentation($viewer->fresh(), $sixth, false, collect());
+        $presSix = $svc->buildAlbumPresentation($viewer->fresh(), $sixth, false);
         $this->assertNotEmpty($presSix['slots']);
         foreach ($presSix['slots'] as $slot) {
             $this->assertTrue($slot['blur'], 'sixth profile all blurred');
@@ -113,7 +140,7 @@ class ProfilePhotoAccessServiceTest extends TestCase
         $subject = $this->makeSubject($femaleGid, 'Target', 't1.jpg');
         \App\Models\ProfilePhoto::query()->create([
             'profile_id' => $subject->id,
-            'file_path' => 't2.jpg',
+            'file_path' => $this->storePhotoFile('t2.jpg'),
             'is_primary' => false,
             'sort_order' => 1,
             'uploaded_via' => 'web',
@@ -121,17 +148,10 @@ class ProfilePhotoAccessServiceTest extends TestCase
             'watermark_detected' => false,
         ]);
 
-        $gallery = \App\Models\ProfilePhoto::query()
-            ->where('profile_id', $subject->id)
-            ->where('is_primary', false)
-            ->where('approved_status', 'approved')
-            ->get();
-
         $pres = app(ProfilePhotoAccessService::class)->buildAlbumPresentation(
             $viewer->fresh(),
             $subject->fresh(),
-            false,
-            $gallery
+            false
         );
 
         $this->assertFalse($pres['slots'][0]['blur']);

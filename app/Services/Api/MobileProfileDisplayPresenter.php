@@ -10,38 +10,37 @@ use App\Models\HiddenProfile;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Models\Plan;
-use App\Models\ProfilePhoto;
 use App\Models\Shortlist;
+use App\Models\Subscription;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakProfileRequest;
-use App\Models\Subscription;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakRequestPipelineService;
 use App\Modules\Suchak\Services\SuchakRequestPresenter;
-use App\Services\CommunicationPolicyService;
-use App\Services\ContactAccessService;
-use App\Services\ContactRequestService;
 use App\Services\Chat\ChatConversationService;
 use App\Services\Chat\ChatPolicyService;
 use App\Services\Chat\PolicyDecision;
-use App\Services\Image\ProfilePhotoUrlService;
-use App\Services\IncomeEngineService;
+use App\Services\CommunicationPolicyService;
+use App\Services\ContactAccessService;
+use App\Services\ContactRequestService;
 use App\Services\EducationService;
 use App\Services\Gunamilan\GunamilanService;
+use App\Services\Image\ProfilePhotoUrlService;
+use App\Services\IncomeEngineService;
 use App\Services\Location\LocationService;
 use App\Services\PartnerPreferenceSuggestionService;
-use App\Services\ProfilePreferenceMatchService;
+use App\Services\Profile\ProfileViewLockBlurPolicy;
 use App\Services\ProfileLifecycleService;
 use App\Services\ProfilePartnerCommunityFlagService;
 use App\Services\ProfilePhotoAccessService;
-use App\Services\Profile\ProfileViewLockBlurPolicy;
+use App\Services\ProfilePreferenceMatchService;
 use App\Services\SiteIdentityService;
 use App\Services\ViewTrackingService;
 use App\Support\HeightDisplay;
+use App\Support\LocalizedText;
 use App\Support\ProfileDisplayCopy;
 use App\Support\Suchak\SuchakContactRouting;
 use Carbon\Carbon;
-use App\Support\LocalizedText;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -693,7 +692,6 @@ class MobileProfileDisplayPresenter
     }
 
     /**
-     * @param  mixed  $sections
      * @return array<int, array<string, mixed>>
      */
     private function gunamilanRows(mixed $sections): array
@@ -752,7 +750,6 @@ class MobileProfileDisplayPresenter
     }
 
     /**
-     * @param  mixed  $missingFields
      * @return array<int, array{side: string, label: string}>
      */
     private function gunamilanMissingFields(mixed $missingFields): array
@@ -2684,49 +2681,7 @@ class MobileProfileDisplayPresenter
      */
     private function visiblePhotoSummary(MatrimonyProfile $profile): array
     {
-        $urls = [];
-        if ($profile->relationLoaded('photos')) {
-            $profile->photos
-                ->filter(fn (ProfilePhoto $photo): bool => $photo->effectiveApprovedStatus() === 'approved')
-                ->each(function (ProfilePhoto $photo) use ($profile, &$urls): void {
-                    $path = ProfilePhotoUrlService::normalizeMatrimonyPhotoPath((string) $photo->file_path);
-                    if ($path === null || ProfilePhotoUrlService::isPendingPlaceholder($path)) {
-                        return;
-                    }
-                    if (! ProfilePhotoUrlService::storedFileExistsForRelativePath($path)) {
-                        return;
-                    }
-                    $urls[] = app(ProfilePhotoUrlService::class)->publicUrl($path, $profile);
-                });
-        } elseif (Schema::hasTable('profile_photos')) {
-            ProfilePhoto::query()
-                ->where('profile_id', $profile->id)
-                ->effectivelyApproved()
-                ->ordered()
-                ->get(['file_path'])
-                ->each(function (ProfilePhoto $photo) use ($profile, &$urls): void {
-                    $path = ProfilePhotoUrlService::normalizeMatrimonyPhotoPath((string) $photo->file_path);
-                    if ($path === null || ProfilePhotoUrlService::isPendingPlaceholder($path)) {
-                        return;
-                    }
-                    if (! ProfilePhotoUrlService::storedFileExistsForRelativePath($path)) {
-                        return;
-                    }
-                    $urls[] = app(ProfilePhotoUrlService::class)->publicUrl($path, $profile);
-                });
-        }
-
-        $legacy = ProfilePhotoUrlService::normalizeMatrimonyPhotoPath((string) ($profile->profile_photo ?? ''));
-        if (
-            $legacy !== null
-            && $profile->photo_approved !== false
-            && ! ProfilePhotoUrlService::isPendingPlaceholder($legacy)
-            && ProfilePhotoUrlService::storedFileExistsForRelativePath($legacy)
-        ) {
-            $urls[] = app(ProfilePhotoUrlService::class)->publicUrl($legacy, $profile);
-        }
-
-        $urls = array_values(array_unique(array_filter($urls)));
+        $urls = ProfilePhotoUrlService::visiblePhotoUrls($profile);
 
         return [count($urls), $urls[0] ?? null];
     }
@@ -2749,8 +2704,7 @@ class MobileProfileDisplayPresenter
             ? app(ProfilePhotoAccessService::class)->buildAlbumPresentation(
                 $viewer,
                 $profile,
-                $isOwnProfile,
-                $this->approvedGalleryPhotoRows($profile)
+                $isOwnProfile
             )
             : [
                 'slots' => [],
@@ -2795,30 +2749,6 @@ class MobileProfileDisplayPresenter
             // a hardcoded value. Same grammar as the teaser `blur_photo_class`.
             'blur_photo_class' => app(ProfileViewLockBlurPolicy::class)->photoBlurClass(),
         ];
-    }
-
-    private function approvedGalleryPhotoRows(MatrimonyProfile $profile): \Illuminate\Support\Collection
-    {
-        if (! Schema::hasTable('profile_photos')) {
-            return collect();
-        }
-
-        $query = ProfilePhoto::query()
-            ->where('profile_id', $profile->id)
-            ->effectivelyApproved();
-
-        if (Schema::hasColumn('profile_photos', 'sort_order')) {
-            $query->orderByDesc('is_primary')->orderBy('sort_order')->orderBy('id');
-        } else {
-            $query->orderByDesc('is_primary')->orderByDesc('created_at')->orderBy('id');
-        }
-
-        return $query->get([
-            'id',
-            'profile_id',
-            'file_path',
-            'is_primary',
-        ]);
     }
 
     private function isVerified(MatrimonyProfile $profile): bool

@@ -19,9 +19,9 @@ use App\Services\IncomeEngineService;
 use App\Services\Matching\MatchingService;
 use App\Services\MutationService;
 use App\Services\OccupationService;
-use App\Services\PartnerPreferenceSuggestionService;
-use App\Services\PartnerPreferenceSnapshotBuilder;
 use App\Services\Parsing\IntakeControlledFieldNormalizer;
+use App\Services\PartnerPreferenceSnapshotBuilder;
+use App\Services\PartnerPreferenceSuggestionService;
 use App\Services\ProfileFieldLockService;
 use App\Services\ProfilePartnerCommunityFlagService;
 use App\Services\ProfileRotationService;
@@ -29,8 +29,8 @@ use App\Services\ViewTrackingService;
 use App\Support\MaritalDependencyRules;
 use App\Support\MarriageAgePolicy;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\Facades\Log;
@@ -304,7 +304,6 @@ class MatrimonyProfileApiController extends Controller
                 $snapshot['children'] = [];
             }
         }
-
 
         if ($this->requestInputKeyExists($request, 'narrative_about_me') || $this->requestInputKeyExists($request, 'narrative_expectations')) {
             $existing = $profile instanceof MatrimonyProfile && Schema::hasTable('profile_extended_attributes')
@@ -1077,6 +1076,7 @@ class MatrimonyProfileApiController extends Controller
             $value = $request->input($field);
             if ($value === '') {
                 $row[$field] = null;
+
                 continue;
             }
             $row[$field] = in_array($field, $intFields, true)
@@ -1991,7 +1991,7 @@ class MatrimonyProfileApiController extends Controller
                 'state_id' => $geo['state_id'],
                 'district_id' => $geo['district_id'],
                 'taluka_id' => $hints['taluka_id'] !== '' ? (int) $hints['taluka_id'] : null,
-                'profile_photo' => ($profile->profile_photo && $profile->photo_approved !== false) ? $profile->profile_photo : null,
+                'profile_photo' => \App\Services\Image\ProfilePhotoUrlService::apiLegacyPhotoValue($profile),
                 'primary_photo_url' => $primaryPhotoUrl,
                 'profile_photo_url' => $primaryPhotoUrl,
                 'approved_photo_url' => $primaryPhotoUrl,
@@ -2847,9 +2847,7 @@ class MatrimonyProfileApiController extends Controller
             unset($profileData[$privateKey]);
         }
 
-        if ($profile->photo_approved === false || ! $profile->profile_photo) {
-            $profileData['profile_photo'] = null;
-        }
+        $profileData['profile_photo'] = \App\Services\Image\ProfilePhotoUrlService::apiLegacyPhotoValue($profile);
 
         return $profileData;
     }
@@ -3379,5 +3377,4 @@ class MatrimonyProfileApiController extends Controller
 
         return null;
     }
-
 }

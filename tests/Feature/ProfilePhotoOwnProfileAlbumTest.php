@@ -44,8 +44,7 @@ class ProfilePhotoOwnProfileAlbumTest extends TestCase
             $pres = app(ProfilePhotoAccessService::class)->buildAlbumPresentation(
                 $user,
                 $profile->fresh(),
-                true,
-                collect()
+                true
             );
 
             $this->assertNotEmpty($pres['slots'], 'owner should get at least one album slot while photo is pending admin');
