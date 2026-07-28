@@ -257,6 +257,29 @@ final class PushTypeRegistry
             'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => true,
         ],
+        /*
+        | Security alert, not a product update. It fires on the member's OWN
+        | device too, seconds after they changed the password there — that echo
+        | is accepted, because the device this actually matters on is the OTHER
+        | one: the phone whose session was just revoked. Suppressing the echo
+        | would mean excluding the originating device, and PushDispatchService
+        | resolves tokens from the notifiable, not from the request.
+        |
+        | `target` is `notifications` — the app has no security screen, and the
+        | notification list is where the full sentence (and the "contact us"
+        | line) is readable. Both apps already handle that target.
+        |
+        | Member app only, like every other `account` row: the Suchak app has its
+        | own registration/password routes and does not surface this event.
+        */
+        'password_changed' => [
+            'notification' => \App\Notifications\PasswordChangedNotification::class,
+            'group' => 'account',
+            'target' => 'notifications',
+            'data_keys' => [],
+            'apps' => [DeviceToken::APP_MEMBER],
+            'default_push' => true,
+        ],
         'referral_activity' => [
             'notification' => \App\Notifications\ReferralActivityNotification::class,
             'group' => 'account',

@@ -30,4 +30,5 @@ return [
     'contact_request_received_message' => ':name requested your contact details.',
     'image_approved_message' => 'Your profile photo was approved. It is now visible on your profile.',
     'open_contact_inbox' => 'Open contact requests',
+    'password_changed_message' => 'Your account password was changed and all other devices were signed out. If this was not you, contact us now.',
 ];

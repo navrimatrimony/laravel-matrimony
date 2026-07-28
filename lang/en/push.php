@@ -181,6 +181,12 @@ return [
             'title' => 'Profile removed',
             'body' => 'Your profile has been removed.',
         ],
+        'password_changed' => [
+            'label' => 'Password changed',
+            'description' => 'When your account password is changed.',
+            'title' => 'Password changed',
+            'body' => 'Your account password was changed. If this was not you, contact us now.',
+        ],
         'referral_activity' => [
             'label' => 'Referral activity',
             'description' => 'When someone you invited joins.',
