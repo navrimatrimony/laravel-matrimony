@@ -39,17 +39,37 @@ use App\Services\ViewTrackingService;
 use App\Support\HeightDisplay;
 use App\Support\LocalizedText;
 use App\Support\ProfileDisplayCopy;
+use App\Support\SchemaPresence;
 use App\Support\Suchak\SuchakContactRouting;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Throwable;
 
 class MobileProfileDisplayPresenter
 {
     private const LOCATION_NEARBY_RADIUS_KM = 25;
+
+    /**
+     * Viewer-scoped relation sets ("who have I already shortlisted / hidden / blocked / sent
+     * interest to"), memoised per viewer profile for the life of this presenter instance.
+     *
+     * {@see actions()} used to answer each of those with its own `exists()` per card. That is five
+     * round trips per row for facts that are identical across every row of the same render — a
+     * six-section discovery page issued 312 of them. The sets themselves are small (a member's own
+     * shortlists / blocks / hides), so reading each one once and testing membership in PHP is both
+     * fewer queries and less total work.
+     *
+     * Lifetime is deliberately the instance, not the process: this presenter is not a singleton, so
+     * a memo cannot outlive the one list/detail render that built it, and the action controllers
+     * that create shortlists/blocks/hides ({@see \App\Http\Controllers\Api\ProfileActionApiController})
+     * do not render cards through this presenter at all. Nothing can therefore observe its own write
+     * as stale.
+     *
+     * @var array<string, array<int, true>>
+     */
+    private array $viewerRelationSets = [];
 
     private const LABEL_KEYS = [
         'label_mr',
@@ -1799,7 +1819,7 @@ class MobileProfileDisplayPresenter
 
     private function acceptedInterestExists(MatrimonyProfile $viewerProfile, MatrimonyProfile $targetProfile): bool
     {
-        if (! Schema::hasTable('interests')) {
+        if (! SchemaPresence::hasTable('interests')) {
             return false;
         }
 
@@ -1819,7 +1839,7 @@ class MobileProfileDisplayPresenter
 
     private function profileVisibilitySettings(MatrimonyProfile $profile): ?object
     {
-        if (! Schema::hasTable('profile_visibility_settings')) {
+        if (! SchemaPresence::hasTable('profile_visibility_settings')) {
             return null;
         }
 
@@ -1831,50 +1851,35 @@ class MobileProfileDisplayPresenter
     private function actions(MatrimonyProfile $profile, ?MatrimonyProfile $viewerProfile): array
     {
         $canInteract = $viewerProfile !== null && (int) $viewerProfile->id !== (int) $profile->id;
-        $hasInterests = Schema::hasTable('interests');
-        $hasShortlists = Schema::hasTable('shortlists');
-        $hasHiddenProfiles = Schema::hasTable('hidden_profiles');
-        $hasBlocks = Schema::hasTable('blocks');
+        $hasInterests = SchemaPresence::hasTable('interests');
+        $hasShortlists = SchemaPresence::hasTable('shortlists');
+        $hasHiddenProfiles = SchemaPresence::hasTable('hidden_profiles');
+        $hasBlocks = SchemaPresence::hasTable('blocks');
 
-        $alreadyInterested = false;
-        if ($canInteract && $hasInterests) {
-            $alreadyInterested = Interest::query()
-                ->where('sender_profile_id', $viewerProfile->id)
-                ->where('receiver_profile_id', $profile->id)
-                ->exists();
-        }
+        $viewerProfileId = $canInteract ? (int) $viewerProfile->id : 0;
+        $targetId = (int) $profile->id;
+
+        $alreadyInterested = $canInteract && $hasInterests
+            && isset($this->viewerRelationSet('interests_sent', $viewerProfileId)[$targetId]);
 
         $blockedEitherWay = $canInteract && $hasBlocks
-            ? ViewTrackingService::isBlocked($viewerProfile->id, $profile->id)
-            : false;
+            && isset($this->viewerRelationSet('blocked_either_way', $viewerProfileId)[$targetId]);
         $canAct = $canInteract
             && ! $blockedEitherWay
             && ProfileLifecycleService::canInitiateInteraction($viewerProfile)
             && ProfileLifecycleService::canReceiveInterest($profile);
 
         $isShortlisted = $canInteract && $hasShortlists
-            ? Shortlist::query()
-                ->where('owner_profile_id', $viewerProfile->id)
-                ->where('shortlisted_profile_id', $profile->id)
-                ->exists()
-            : false;
+            && isset($this->viewerRelationSet('shortlisted', $viewerProfileId)[$targetId]);
         $isHidden = $canInteract && $hasHiddenProfiles
-            ? HiddenProfile::query()
-                ->where('owner_profile_id', $viewerProfile->id)
-                ->where('hidden_profile_id', $profile->id)
-                ->exists()
-            : false;
+            && isset($this->viewerRelationSet('hidden', $viewerProfileId)[$targetId]);
         $isBlocked = $canInteract && $hasBlocks
-            ? Block::query()
-                ->where('blocker_profile_id', $viewerProfile->id)
-                ->where('blocked_profile_id', $profile->id)
-                ->exists()
-            : false;
+            && isset($this->viewerRelationSet('blocked_by_viewer', $viewerProfileId)[$targetId]);
 
         return [
             'can_send_interest' => $canAct && ! $alreadyInterested,
             'interest_sent' => $alreadyInterested,
-            'can_report' => $canInteract && Schema::hasTable('abuse_reports'),
+            'can_report' => $canInteract && SchemaPresence::hasTable('abuse_reports'),
             'can_shortlist' => $canAct && $hasShortlists && ! $isShortlisted,
             'can_hide' => $canAct && $hasHiddenProfiles && ! $isHidden,
             'can_block' => $canAct && $hasBlocks && ! $isBlocked,
@@ -1882,6 +1887,54 @@ class MobileProfileDisplayPresenter
             'is_hidden' => $isHidden,
             'is_blocked' => $isBlocked,
         ];
+    }
+
+    /**
+     * One viewer-scoped relation set, read once per presenter instance.
+     *
+     * @see self::$viewerRelationSets
+     *
+     * @return array<int, true> profile ids, as a set for O(1) membership
+     */
+    private function viewerRelationSet(string $kind, int $viewerProfileId): array
+    {
+        if ($viewerProfileId < 1) {
+            return [];
+        }
+
+        $key = $kind.':'.$viewerProfileId;
+        if (isset($this->viewerRelationSets[$key])) {
+            return $this->viewerRelationSets[$key];
+        }
+
+        $ids = match ($kind) {
+            'interests_sent' => Interest::query()
+                ->where('sender_profile_id', $viewerProfileId)
+                ->pluck('receiver_profile_id'),
+            'shortlisted' => Shortlist::query()
+                ->where('owner_profile_id', $viewerProfileId)
+                ->pluck('shortlisted_profile_id'),
+            'hidden' => HiddenProfile::query()
+                ->where('owner_profile_id', $viewerProfileId)
+                ->pluck('hidden_profile_id'),
+            'blocked_by_viewer' => Block::query()
+                ->where('blocker_profile_id', $viewerProfileId)
+                ->pluck('blocked_profile_id'),
+            // Bidirectional, and deliberately the existing single source for blocked-ids rather than
+            // a second query shape beside it.
+            'blocked_either_way' => ViewTrackingService::getBlockedProfileIds($viewerProfileId),
+            default => collect(),
+        };
+
+        $set = [];
+        foreach ($ids as $id) {
+            $id = (int) $id;
+            if ($id > 0) {
+                $set[$id] = true;
+            }
+        }
+
+        return $this->viewerRelationSets[$key] = $set;
     }
 
     /**
@@ -2652,7 +2705,7 @@ class MobileProfileDisplayPresenter
 
     private function aboutBody(MatrimonyProfile $profile): ?string
     {
-        if (Schema::hasTable('profile_extended_attributes')) {
+        if (SchemaPresence::hasTable('profile_extended_attributes')) {
             $body = DB::table('profile_extended_attributes')
                 ->where('profile_id', $profile->id)
                 ->value('narrative_about_me');
@@ -2662,7 +2715,7 @@ class MobileProfileDisplayPresenter
             }
         }
 
-        if (Schema::hasTable('profile_extended_fields')) {
+        if (SchemaPresence::hasTable('profile_extended_fields')) {
             $body = DB::table('profile_extended_fields')
                 ->where('profile_id', $profile->id)
                 ->where('field_key', 'narrative_about_me')
@@ -2757,7 +2810,7 @@ class MobileProfileDisplayPresenter
             return true;
         }
 
-        if (! Schema::hasTable('profile_verification_tag')) {
+        if (! SchemaPresence::hasTable('profile_verification_tag')) {
             return false;
         }
 
@@ -2829,7 +2882,7 @@ class MobileProfileDisplayPresenter
 
     private function partnerPreferencePivotLabels(MatrimonyProfile $profile, string $pivotTable, string $pivotColumn, string $masterTable): ?string
     {
-        if (! Schema::hasTable($pivotTable) || ! Schema::hasTable($masterTable)) {
+        if (! SchemaPresence::hasTable($pivotTable) || ! SchemaPresence::hasTable($masterTable)) {
             return null;
         }
 
@@ -2871,7 +2924,7 @@ class MobileProfileDisplayPresenter
 
     private function extendedNarrativeExpectations(MatrimonyProfile $profile): ?string
     {
-        if (! Schema::hasTable('profile_extended_attributes')) {
+        if (! SchemaPresence::hasTable('profile_extended_attributes')) {
             return null;
         }
 

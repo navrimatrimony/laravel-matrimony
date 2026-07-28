@@ -11,9 +11,9 @@ use App\Services\ProfileLifecycleService;
 use App\Services\ProfilePreferenceMatchService;
 use App\Services\WhoViewed\WhoViewedRowsService;
 use App\Services\WhoViewed\WhoViewedTeaserPolicy;
+use App\Support\SchemaPresence;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Schema;
 
 class MobileMoreMatchesSectionService
 {
@@ -174,7 +174,7 @@ class MobileMoreMatchesSectionService
      */
     private function recentlyViewedSection(MatrimonyProfile $viewerProfile, User $viewer, array $context): array
     {
-        if (! Schema::hasTable('profile_views')) {
+        if (! SchemaPresence::hasTable('profile_views')) {
             return $this->section('recently_viewed', $context, 'recently_viewed', collect());
         }
 
@@ -394,7 +394,7 @@ class MobileMoreMatchesSectionService
             'occupationCustom',
             'horoscope',
         ];
-        if (Schema::hasTable('profile_photos')) {
+        if (SchemaPresence::hasTable('profile_photos')) {
             $relations[] = 'photos';
         }
 
@@ -406,7 +406,7 @@ class MobileMoreMatchesSectionService
      */
     private function distinctProfileViews(string $ownerColumn, int $ownerProfileId, string $profileColumn, ?int $limit = null): Collection
     {
-        if (! Schema::hasTable('profile_views')) {
+        if (! SchemaPresence::hasTable('profile_views')) {
             return collect();
         }
 
