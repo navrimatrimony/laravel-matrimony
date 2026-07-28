@@ -92,6 +92,18 @@ class ProfilePreferenceMatchService
     private static array $viewerDegreeIdCache = [];
 
     /**
+     * Per-run memo for master-table label lines ("Graduate, Post Graduate", "Veg, Jain").
+     *
+     * These read static reference rows — education, occupation, diet, marital status — and a run asks
+     * for them once per candidate. Candidates overwhelmingly share the same handful of id sets, so
+     * the same `whereIn` was re-issued dozens of times per request for a string that cannot differ.
+     * Keyed by table + column + the exact id set, so two different id sets never collide.
+     *
+     * @var array<string, string>
+     */
+    private static array $masterLabelCache = [];
+
+    /**
      * Drops every per-run memo owned by this service (and the shared geography resolver).
      */
     public static function flushRuntimeCaches(): void
@@ -99,6 +111,7 @@ class ProfilePreferenceMatchService
         self::$residenceGeoCache = [];
         self::$residenceDisplayCache = [];
         self::$viewerDegreeIdCache = [];
+        self::$masterLabelCache = [];
         GunamilanPairEvaluator::flush();
         NearbyGeographyResolver::flush();
         EducationService::flushDegreeMatchCache();
@@ -445,7 +458,7 @@ class ProfilePreferenceMatchService
 
         $their = $allowed === []
             ? __('preference_match.open_to_all')
-            : (string) MasterMaritalStatus::query()->whereIn('id', $allowed)->orderBy('label')->pluck('label')->filter()->implode(', ');
+            : self::maritalStatusLabels($allowed);
 
         $yours = $viewer->maritalStatus?->label ?? __('preference_match.value_unknown');
         if (! $viewer->marital_status_id) {
@@ -1113,6 +1126,30 @@ class ProfilePreferenceMatchService
     }
 
     /**
+     * Label line for a marital-status id set. Ordered by label (not by the caller's id order), which
+     * is why it does not go through {@see labelsForIds()}.
+     *
+     * @see self::$masterLabelCache
+     *
+     * @param  array<int, int>  $ids
+     */
+    private static function maritalStatusLabels(array $ids): string
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        sort($ids);
+        $key = 'master_marital_statuses|label_ordered|'.implode(',', $ids);
+
+        return self::$masterLabelCache[$key] ??= (string) MasterMaritalStatus::query()
+            ->whereIn('id', $ids)
+            ->orderBy('label')
+            ->pluck('label')
+            ->filter()
+            ->implode(', ');
+    }
+
+    /**
+     * @see self::$masterLabelCache
+     *
      * @param  array<int, int>  $ids
      */
     private static function labelsForIds(string $table, array $ids, string $labelColumn): string
@@ -1120,9 +1157,13 @@ class ProfilePreferenceMatchService
         if ($ids === []) {
             return '';
         }
-        $rows = DB::table($table)->whereIn('id', $ids)->pluck($labelColumn);
 
-        return $rows->implode(', ');
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        sort($ids);
+        $key = $table.'|'.$labelColumn.'|'.implode(',', $ids);
+
+        return self::$masterLabelCache[$key]
+            ??= DB::table($table)->whereIn('id', $ids)->pluck($labelColumn)->implode(', ');
     }
 
     /**
