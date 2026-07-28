@@ -11,6 +11,19 @@ use Illuminate\Support\Facades\Log;
 class LocationService
 {
     /**
+     * Location nodes (and their wired `parent` relations) already loaded by
+     * {@see hydrateParentChain()} on this instance.
+     *
+     * Geography is reference data. The pool is scoped to the instance, and this service is bound as
+     * a singleton in {@see \App\Providers\AppServiceProvider} — without Octane that is one instance
+     * per request, so the pool cannot outlive the request that built it. If this application ever
+     * adopts Octane, this pool needs an explicit flush between requests.
+     *
+     * @var array<int, Location>
+     */
+    private array $ancestorPool = [];
+
+    /**
      * Return upward chain from immediate parent to root.
      *
      * @return array<int, Location>
@@ -845,7 +858,11 @@ class LocationService
             return;
         }
 
-        $known = [];
+        // Ancestors already resolved on this instance. A profile card renders one location line, and
+        // a discovery page renders dozens — but they nearly all sit under the same taluka, district,
+        // state and country, so every card was re-reading a chain the previous card had just walked.
+        // Seeding from the pool makes the second and later cards free.
+        $known = $this->ancestorPool;
         foreach ($locations as $location) {
             $known[(int) $location->id] = $location;
 
@@ -896,5 +913,7 @@ class LocationService
                 $node->setRelation('parent', $known[(int) $node->parent_id]);
             }
         }
+
+        $this->ancestorPool = $known;
     }
 }

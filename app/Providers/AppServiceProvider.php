@@ -45,6 +45,14 @@ class AppServiceProvider extends ServiceProvider
         // Gunamilan master tables are tiny and static; one in-memory copy per
         // process is what keeps a pair comparison at zero queries.
         $this->app->singleton(\App\Services\Gunamilan\GunamilanMasterData::class);
+        // Geography lookup. Both services memoize the address hierarchy they walk, but almost every
+        // caller reaches them through app(...) rather than constructor injection (see the accessors
+        // on App\Models\MatrimonyProfile), which built a fresh instance — and threw the memo away —
+        // on every single call. Shared per request, one district/state/country chain is walked once
+        // for a whole page of cards instead of once per card. Read-only reference data, and without
+        // Octane a singleton here is scoped to the request.
+        $this->app->singleton(\App\Services\Location\LocationService::class);
+        $this->app->singleton(\App\Services\Location\LocationFormatterService::class);
         $this->app->bind(WhatsAppMessageProvider::class, function ($app) {
             $provider = strtolower(trim((string) config('whatsapp.response_provider', 'null')));
             $liveEnabled = (bool) config('whatsapp.response_live_enabled', false);
