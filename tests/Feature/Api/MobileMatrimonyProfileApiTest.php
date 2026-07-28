@@ -3821,6 +3821,13 @@ test('MobileProfile more sections matching and nearby nested rows expose approve
     $fileName = mobileApiAttachProfilePhoto($targetProfile);
 
     $this->mock(MatchingService::class, function ($mock) use ($targetProfile): void {
+        // The "looking for me" section batch-loads every candidate's own preferences before it
+        // grades them. An empty map means each candidate falls through to the single-profile
+        // loader, which is exactly what this test exercised before the batch existed — so the
+        // rows asserted below are unchanged.
+        $mock->shouldReceive('targetPreferencesFor')
+            ->withAnyArgs()
+            ->andReturn([]);
         $mock->shouldReceive('findMatchesForTab')
             ->withAnyArgs()
             ->andReturnUsing(function (MatrimonyProfile $profile, string $tab, int $limit = 24, bool $withExplain = false) use ($targetProfile) {
