@@ -26,7 +26,7 @@ final class LocationFormatterService
             return '';
         }
 
-        $location = Location::query()->find($locationId);
+        $location = $this->locationService->findLocation($locationId);
         if ($location === null) {
             return '';
         }

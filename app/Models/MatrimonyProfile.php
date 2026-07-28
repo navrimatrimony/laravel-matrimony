@@ -497,7 +497,7 @@ class MatrimonyProfile extends Model
         if (! $this->location_id || ! self::hasGeoTableCached()) {
             return $empty;
         }
-        $leaf = Location::query()->find((int) $this->location_id);
+        $leaf = app(LocationService::class)->findLocation((int) $this->location_id);
         if ($leaf === null) {
             return $empty;
         }
@@ -558,7 +558,7 @@ class MatrimonyProfile extends Model
         if (! $this->location_id || ! self::hasGeoTableCached()) {
             return $empty;
         }
-        $leaf = Location::query()->find((int) $this->location_id);
+        $leaf = app(LocationService::class)->findLocation((int) $this->location_id);
         if ($leaf === null) {
             return $empty;
         }

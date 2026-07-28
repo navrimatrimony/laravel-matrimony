@@ -24,12 +24,45 @@ class LocationService
     private array $ancestorPool = [];
 
     /**
+     * A geo row by id, served from {@see self::$ancestorPool} when the chain walk already loaded it.
+     *
+     * The same leaf is looked up several times per profile — residence geo ids, the residence display
+     * line and the formatted label each re-`find()` it — and neighbouring profiles share districts and
+     * states outright. Anything already pooled is free; anything new joins the pool for the next
+     * caller.
+     */
+    public function findLocation(?int $locationId): ?Location
+    {
+        $locationId = (int) $locationId;
+        if ($locationId < 1 || ! SchemaPresence::hasTable(Location::geoTable())) {
+            return null;
+        }
+
+        if (isset($this->ancestorPool[$locationId])) {
+            return $this->ancestorPool[$locationId];
+        }
+
+        $location = Location::query()->find($locationId);
+        if ($location instanceof Location) {
+            $this->ancestorPool[$locationId] = $location;
+        }
+
+        return $location;
+    }
+
+    /**
      * Return upward chain from immediate parent to root.
      *
      * @return array<int, Location>
      */
     public function getAncestors(Location $location): array
     {
+        // Wire the chain from the pool first. Climbing it with a lazy load per level cost one query
+        // per ancestor per profile — the list endpoint resolves two location fields per card, so a
+        // 20-card page paid ~56 of them for a handful of distinct districts and states. After this
+        // the loop below finds every level already loaded and issues nothing.
+        $this->hydrateParentChain(collect([$location]));
+
         $ancestors = [];
         if (! $location->relationLoaded('parent')) {
             $location->load('parent');
