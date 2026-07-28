@@ -92,31 +92,6 @@ class ProfilePreferenceMatchService
     private static array $viewerDegreeIdCache = [];
 
     /**
-     * Per-run memo for master-table label lines ("Graduate, Post Graduate", "Veg, Jain").
-     *
-     * These read static reference rows — education, occupation, diet, marital status — and a run asks
-     * for them once per candidate. Candidates overwhelmingly share the same handful of id sets, so
-     * the same `whereIn` was re-issued dozens of times per request for a string that cannot differ.
-     * Keyed by table + column + the exact id set, so two different id sets never collide.
-     *
-     * @var array<string, string>
-     */
-    private static array $masterLabelCache = [];
-
-    /**
-     * Per-run memo for single master rows and aggregates read while grading a pair — the viewer's
-     * education degree, their occupation name, the lowest sort_order in a preferred-degree set.
-     *
-     * All three describe the VIEWER or a static reference row, so they are the same on every pair in
-     * a run, yet each was re-read per candidate. {@see self::$viewerDegreeIdCache} already memoised
-     * *which* degree the viewer holds; this memoises the row that id then loads, which is the query
-     * that was actually being repeated.
-     *
-     * @var array<string, mixed>
-     */
-    private static array $masterRowCache = [];
-
-    /**
      * Drops every per-run memo owned by this service (and the shared geography resolver).
      */
     public static function flushRuntimeCaches(): void
@@ -124,8 +99,6 @@ class ProfilePreferenceMatchService
         self::$residenceGeoCache = [];
         self::$residenceDisplayCache = [];
         self::$viewerDegreeIdCache = [];
-        self::$masterLabelCache = [];
-        self::$masterRowCache = [];
         GunamilanPairEvaluator::flush();
         NearbyGeographyResolver::flush();
         EducationService::flushDegreeMatchCache();
@@ -472,7 +445,7 @@ class ProfilePreferenceMatchService
 
         $their = $allowed === []
             ? __('preference_match.open_to_all')
-            : self::maritalStatusLabels($allowed);
+            : (string) MasterMaritalStatus::query()->whereIn('id', $allowed)->orderBy('label')->pluck('label')->filter()->implode(', ');
 
         $yours = $viewer->maritalStatus?->label ?? __('preference_match.value_unknown');
         if (! $viewer->marital_status_id) {
@@ -820,7 +793,7 @@ class ProfilePreferenceMatchService
         if ($degreeIds === []) {
             $their = __('preference_match.open_to_all');
             $viewerDegreeId = self::resolveViewerPrimaryDegreeId($viewer);
-            $viewerDegree = $viewerDegreeId ? self::educationDegreeRow((int) $viewerDegreeId) : null;
+            $viewerDegree = $viewerDegreeId ? EducationDegree::query()->find($viewerDegreeId) : null;
             $yours = $viewerDegree
                 ? $viewerDegree->shortDisplayLabel()
                 : trim((string) ($viewer->highest_education ?? ''));
@@ -840,7 +813,7 @@ class ProfilePreferenceMatchService
         }
 
         $viewerDegreeId = self::resolveViewerPrimaryDegreeId($viewer);
-        $viewerDegree = $viewerDegreeId ? self::educationDegreeRow((int) $viewerDegreeId) : null;
+        $viewerDegree = $viewerDegreeId ? EducationDegree::query()->find($viewerDegreeId) : null;
         $yours = $viewerDegree
             ? $viewerDegree->shortDisplayLabel()
             : trim((string) ($viewer->highest_education ?? ''));
@@ -859,7 +832,7 @@ class ProfilePreferenceMatchService
         }
 
         $vSort = (int) ($viewerDegree->sort_order ?? 0);
-        $minPrefSort = self::minDegreeSortOrder($degreeIds);
+        $minPrefSort = (int) EducationDegree::query()->whereIn('id', $degreeIds)->min('sort_order');
         if ($vSort > 0 && $minPrefSort > 0 && $vSort >= $minPrefSort - 1) {
             return self::row('education', __('preference_match.field_education'), $their, $yours, $strict, self::STATUS_FLEXIBLE, __('preference_match.reason_education_close'), $derived);
         }
@@ -897,7 +870,7 @@ class ProfilePreferenceMatchService
         $viewer->loadMissing(['occupationMaster', 'occupationCustom']);
         $viewerOccId = isset($viewer->occupation_master_id) ? (int) $viewer->occupation_master_id : null;
         $yours = $viewerOccId
-            ? (string) (self::occupationMasterName((int) $viewerOccId) ?? $viewer->occupationMaster?->name ?? '')
+            ? (string) (OccupationMaster::query()->whereKey($viewerOccId)->value('name') ?? $viewer->occupationMaster?->name ?? '')
             : trim((string) ($viewer->occupation_title ?: ($viewer->resolvedProfession()?->name ?? '')));
         if ($yours === '') {
             $yours = __('preference_match.value_unknown');
@@ -1140,81 +1113,6 @@ class ProfilePreferenceMatchService
     }
 
     /**
-     * @see self::$masterRowCache
-     */
-    private static function educationDegreeRow(int $degreeId): ?EducationDegree
-    {
-        if ($degreeId < 1) {
-            return null;
-        }
-
-        return self::$masterRowCache['degree:'.$degreeId]
-            ??= EducationDegree::query()->find($degreeId);
-    }
-
-    /**
-     * @see self::$masterRowCache
-     */
-    private static function occupationMasterName(int $occupationId): ?string
-    {
-        if ($occupationId < 1) {
-            return null;
-        }
-
-        $key = 'occupation_name:'.$occupationId;
-        if (array_key_exists($key, self::$masterRowCache)) {
-            return self::$masterRowCache[$key];
-        }
-
-        return self::$masterRowCache[$key] = OccupationMaster::query()
-            ->whereKey($occupationId)
-            ->value('name');
-    }
-
-    /**
-     * Lowest `sort_order` across a preferred-degree id set.
-     *
-     * @see self::$masterRowCache
-     *
-     * @param  array<int, int>  $degreeIds
-     */
-    private static function minDegreeSortOrder(array $degreeIds): int
-    {
-        $degreeIds = array_values(array_unique(array_map('intval', $degreeIds)));
-        sort($degreeIds);
-        if ($degreeIds === []) {
-            return 0;
-        }
-
-        return self::$masterRowCache['degree_min_sort:'.implode(',', $degreeIds)]
-            ??= (int) EducationDegree::query()->whereIn('id', $degreeIds)->min('sort_order');
-    }
-
-    /**
-     * Label line for a marital-status id set. Ordered by label (not by the caller's id order), which
-     * is why it does not go through {@see labelsForIds()}.
-     *
-     * @see self::$masterLabelCache
-     *
-     * @param  array<int, int>  $ids
-     */
-    private static function maritalStatusLabels(array $ids): string
-    {
-        $ids = array_values(array_unique(array_map('intval', $ids)));
-        sort($ids);
-        $key = 'master_marital_statuses|label_ordered|'.implode(',', $ids);
-
-        return self::$masterLabelCache[$key] ??= (string) MasterMaritalStatus::query()
-            ->whereIn('id', $ids)
-            ->orderBy('label')
-            ->pluck('label')
-            ->filter()
-            ->implode(', ');
-    }
-
-    /**
-     * @see self::$masterLabelCache
-     *
      * @param  array<int, int>  $ids
      */
     private static function labelsForIds(string $table, array $ids, string $labelColumn): string
@@ -1222,13 +1120,9 @@ class ProfilePreferenceMatchService
         if ($ids === []) {
             return '';
         }
+        $rows = DB::table($table)->whereIn('id', $ids)->pluck($labelColumn);
 
-        $ids = array_values(array_unique(array_map('intval', $ids)));
-        sort($ids);
-        $key = $table.'|'.$labelColumn.'|'.implode(',', $ids);
-
-        return self::$masterLabelCache[$key]
-            ??= DB::table($table)->whereIn('id', $ids)->pluck($labelColumn)->implode(', ');
+        return $rows->implode(', ');
     }
 
     /**

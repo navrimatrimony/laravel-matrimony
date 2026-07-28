@@ -6,10 +6,10 @@ use App\Models\MatrimonyProfile;
 use App\Models\ProfileView;
 use App\Services\ProfileLifecycleService;
 use App\Services\ViewTrackingService;
-use App\Support\SchemaPresence;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 
 final class WhoViewedRowsService
 {
@@ -196,7 +196,7 @@ final class WhoViewedRowsService
         ?array &$fifoSlotViewerIdsOut = null,
     ): array {
         $fifoSlotViewerIdsOut = null;
-        if (! SchemaPresence::hasTable('profile_views')) {
+        if (! Schema::hasTable('profile_views')) {
             return ['views' => collect(), 'unique_count' => 0];
         }
 
@@ -356,7 +356,7 @@ final class WhoViewedRowsService
     private function viewerProfileViewCounts(MatrimonyProfile $owner, ?CarbonInterface $since, array $viewerProfileIds): array
     {
         $viewerProfileIds = array_values(array_unique(array_filter(array_map('intval', $viewerProfileIds))));
-        if ($viewerProfileIds === [] || ! SchemaPresence::hasTable('profile_views')) {
+        if ($viewerProfileIds === [] || ! Schema::hasTable('profile_views')) {
             return [];
         }
 

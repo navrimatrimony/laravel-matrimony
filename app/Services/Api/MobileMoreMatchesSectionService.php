@@ -11,9 +11,9 @@ use App\Services\ProfileLifecycleService;
 use App\Services\ProfilePreferenceMatchService;
 use App\Services\WhoViewed\WhoViewedRowsService;
 use App\Services\WhoViewed\WhoViewedTeaserPolicy;
-use App\Support\SchemaPresence;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 
 class MobileMoreMatchesSectionService
 {
@@ -122,22 +122,10 @@ class MobileMoreMatchesSectionService
             ->limit(self::CANDIDATE_POOL_LIMIT)
             ->get();
 
-        // Every candidate's own stated preferences, in one batch instead of ~14 queries per
-        // candidate inside the loop below. This is the same loader the feed uses, and it decomposes
-        // strictly per profile, so each candidate is judged on exactly the row set the single-profile
-        // path would have read for it.
-        $preferences = $this->matchingService->targetPreferencesFor(
-            $candidates->map(static fn (MatrimonyProfile $c): int => (int) $c->id)->all(),
-        );
-
         $rows = collect();
         foreach ($candidates as $candidate) {
             try {
-                $fit = ProfilePreferenceMatchService::build(
-                    $viewerProfile,
-                    $candidate,
-                    $preferences[(int) $candidate->id] ?? null,
-                );
+                $fit = ProfilePreferenceMatchService::build($viewerProfile, $candidate);
             } catch (\Throwable) {
                 continue;
             }
@@ -186,7 +174,7 @@ class MobileMoreMatchesSectionService
      */
     private function recentlyViewedSection(MatrimonyProfile $viewerProfile, User $viewer, array $context): array
     {
-        if (! SchemaPresence::hasTable('profile_views')) {
+        if (! Schema::hasTable('profile_views')) {
             return $this->section('recently_viewed', $context, 'recently_viewed', collect());
         }
 
@@ -406,7 +394,7 @@ class MobileMoreMatchesSectionService
             'occupationCustom',
             'horoscope',
         ];
-        if (SchemaPresence::hasTable('profile_photos')) {
+        if (Schema::hasTable('profile_photos')) {
             $relations[] = 'photos';
         }
 
@@ -418,7 +406,7 @@ class MobileMoreMatchesSectionService
      */
     private function distinctProfileViews(string $ownerColumn, int $ownerProfileId, string $profileColumn, ?int $limit = null): Collection
     {
-        if (! SchemaPresence::hasTable('profile_views')) {
+        if (! Schema::hasTable('profile_views')) {
             return collect();
         }
 

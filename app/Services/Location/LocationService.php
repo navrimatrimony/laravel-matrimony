@@ -11,58 +11,12 @@ use Illuminate\Support\Facades\Log;
 class LocationService
 {
     /**
-     * Location nodes (and their wired `parent` relations) already loaded by
-     * {@see hydrateParentChain()} on this instance.
-     *
-     * Geography is reference data. The pool is scoped to the instance, and this service is bound as
-     * a singleton in {@see \App\Providers\AppServiceProvider} — without Octane that is one instance
-     * per request, so the pool cannot outlive the request that built it. If this application ever
-     * adopts Octane, this pool needs an explicit flush between requests.
-     *
-     * @var array<int, Location>
-     */
-    private array $ancestorPool = [];
-
-    /**
-     * A geo row by id, served from {@see self::$ancestorPool} when the chain walk already loaded it.
-     *
-     * The same leaf is looked up several times per profile — residence geo ids, the residence display
-     * line and the formatted label each re-`find()` it — and neighbouring profiles share districts and
-     * states outright. Anything already pooled is free; anything new joins the pool for the next
-     * caller.
-     */
-    public function findLocation(?int $locationId): ?Location
-    {
-        $locationId = (int) $locationId;
-        if ($locationId < 1 || ! SchemaPresence::hasTable(Location::geoTable())) {
-            return null;
-        }
-
-        if (isset($this->ancestorPool[$locationId])) {
-            return $this->ancestorPool[$locationId];
-        }
-
-        $location = Location::query()->find($locationId);
-        if ($location instanceof Location) {
-            $this->ancestorPool[$locationId] = $location;
-        }
-
-        return $location;
-    }
-
-    /**
      * Return upward chain from immediate parent to root.
      *
      * @return array<int, Location>
      */
     public function getAncestors(Location $location): array
     {
-        // Wire the chain from the pool first. Climbing it with a lazy load per level cost one query
-        // per ancestor per profile — the list endpoint resolves two location fields per card, so a
-        // 20-card page paid ~56 of them for a handful of distinct districts and states. After this
-        // the loop below finds every level already loaded and issues nothing.
-        $this->hydrateParentChain(collect([$location]));
-
         $ancestors = [];
         if (! $location->relationLoaded('parent')) {
             $location->load('parent');
@@ -891,11 +845,7 @@ class LocationService
             return;
         }
 
-        // Ancestors already resolved on this instance. A profile card renders one location line, and
-        // a discovery page renders dozens — but they nearly all sit under the same taluka, district,
-        // state and country, so every card was re-reading a chain the previous card had just walked.
-        // Seeding from the pool makes the second and later cards free.
-        $known = $this->ancestorPool;
+        $known = [];
         foreach ($locations as $location) {
             $known[(int) $location->id] = $location;
 
@@ -946,7 +896,5 @@ class LocationService
                 $node->setRelation('parent', $known[(int) $node->parent_id]);
             }
         }
-
-        $this->ancestorPool = $known;
     }
 }

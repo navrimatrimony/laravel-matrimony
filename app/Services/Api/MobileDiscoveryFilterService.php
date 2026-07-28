@@ -8,20 +8,11 @@ use App\Models\User;
 use App\Services\ProfileLifecycleService;
 use App\Services\ProfileVisibilityPolicyService;
 use App\Services\ViewTrackingService;
-use App\Support\SchemaPresence;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema;
 
 class MobileDiscoveryFilterService
 {
-    /**
-     * Per-viewer excluded-id sets, memoised for this instance.
-     *
-     * @see excludedProfileIdSet()
-     *
-     * @var array<int, array<int, true>>
-     */
-    private array $excludedIdSets = [];
-
     /**
      * @param  Builder<MatrimonyProfile>  $query
      * @return Builder<MatrimonyProfile>
@@ -85,12 +76,10 @@ class MobileDiscoveryFilterService
         if ($this->genderKey($target) !== $targetGender) {
             return false;
         }
-        // Blocked-either-way and hidden-by-viewer are both viewer-scoped sets, and
-        // excludedProfileIdsForViewer() is already the union of exactly those two. Asking it once
-        // per request beats the two exists() queries this used to run per candidate — the discovery
-        // page calls isAllowedTarget() twice for every row of every section, which was 250 round
-        // trips for one unchanging answer.
-        if (isset($this->excludedProfileIdSet($viewer)[(int) $target->id])) {
+        if (ViewTrackingService::isBlocked((int) $viewerProfile->id, (int) $target->id)) {
+            return false;
+        }
+        if ($this->isHiddenByViewer($viewerProfile, $target)) {
             return false;
         }
 
@@ -128,7 +117,7 @@ class MobileDiscoveryFilterService
             ->map(static fn ($id): int => (int) $id)
             ->all();
 
-        if (SchemaPresence::hasTable('hidden_profiles')) {
+        if (Schema::hasTable('hidden_profiles')) {
             $hidden = HiddenProfile::query()
                 ->where('owner_profile_id', (int) $viewerProfile->id)
                 ->pluck('hidden_profile_id')
@@ -140,33 +129,24 @@ class MobileDiscoveryFilterService
         return array_values(array_unique(array_filter($ids)));
     }
 
-    /**
-     * {@see excludedProfileIdsForViewer()} as a membership set, memoised for the life of this
-     * instance (one request's discovery render). Not a singleton, so it cannot outlive that render.
-     *
-     * @return array<int, true>
-     */
-    private function excludedProfileIdSet(User $viewer): array
-    {
-        $key = (int) $viewer->id;
-        if (isset($this->excludedIdSets[$key])) {
-            return $this->excludedIdSets[$key];
-        }
-
-        $set = [];
-        foreach ($this->excludedProfileIdsForViewer($viewer) as $id) {
-            $set[(int) $id] = true;
-        }
-
-        return $this->excludedIdSets[$key] = $set;
-    }
-
     private function viewerProfile(User $viewer): ?MatrimonyProfile
     {
         $viewer->loadMissing('matrimonyProfile.gender');
         $profile = $viewer->matrimonyProfile;
 
         return $profile instanceof MatrimonyProfile ? $profile : null;
+    }
+
+    private function isHiddenByViewer(MatrimonyProfile $viewerProfile, MatrimonyProfile $target): bool
+    {
+        if (! Schema::hasTable('hidden_profiles')) {
+            return false;
+        }
+
+        return HiddenProfile::query()
+            ->where('owner_profile_id', (int) $viewerProfile->id)
+            ->where('hidden_profile_id', (int) $target->id)
+            ->exists();
     }
 
     private function genderKey(?MatrimonyProfile $profile): ?string
