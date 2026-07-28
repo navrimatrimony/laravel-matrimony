@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Suchak;
 
 use App\Http\Controllers\Controller;
+use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakCommissionAgreement;
@@ -10,6 +11,7 @@ use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakCollaborationService;
 use App\Modules\Suchak\Services\SuchakCustomerListService;
+use App\Services\ProfileSectionReadinessService;
 use App\Support\Suchak\SuchakLocalizedText;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,6 +24,7 @@ class SuchakCustomerDetailApiController extends Controller
         Request $request,
         int $representation,
         SuchakCustomerListService $customerListService,
+        ProfileSectionReadinessService $readinessService,
     ): JsonResponse {
         $user = $request->user();
         if (! $user instanceof User) {
@@ -66,6 +69,16 @@ class SuchakCustomerDetailApiController extends Controller
                             'lifecycle_label' => $row['lifecycle_label'] ?? null,
                             'paid' => $row['paid'] ?? null,
                             'consent_history' => $this->consentHistory($account, $representation),
+                            // What is still worth filling in, section by
+                            // section, so the Suchak knows what to ask BEFORE
+                            // they dial the number below it on the screen.
+                            // Identical block to the one the edit hub reads
+                            // (`GET /suchak/nxt/{representation}/profile`) —
+                            // one service, so the card and the edit screen it
+                            // opens always print the same counts.
+                            'readiness' => $readinessService->forProfile(
+                                $this->profileForRow($row)
+                            ),
                             'view_url' => $row['view_url'] ?? null,
                             'edit_url' => $row['edit_url'] ?? null,
                             'manage_url' => $row['manage_url'] ?? null,
@@ -80,6 +93,23 @@ class SuchakCustomerDetailApiController extends Controller
         }
 
         return response()->json(['success' => false, 'message' => 'Customer not found for this Suchak account.'], 404);
+    }
+
+    /**
+     * The candidate profile behind a customer row, or null for a row that has
+     * no profile yet (a scanned biodata awaiting conversion). The row already
+     * carries `profile_id` as the server's own signal for that, so no second
+     * lookup rule is invented here.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function profileForRow(array $row): ?MatrimonyProfile
+    {
+        $profileId = $row['profile_id'] ?? null;
+
+        return $profileId === null
+            ? null
+            : MatrimonyProfile::query()->find((int) $profileId);
     }
 
     /**

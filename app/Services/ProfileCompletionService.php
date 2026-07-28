@@ -94,7 +94,13 @@ class ProfileCompletionService
         return $children > 0 || $hasCareerCore;
     }
 
-    private static function sectionLocationFilled(MatrimonyProfile $profile): bool
+    /**
+     * Public because {@see ProfileSectionReadinessService} counts "does this
+     * candidate have a residence?" as one of the basic-info facts a Suchak can
+     * fill. Reused rather than re-implemented so there is one answer to
+     * "where does this person live?".
+     */
+    public static function sectionLocationFilled(MatrimonyProfile $profile): bool
     {
         if (($profile->location_id ?? null)) {
             return true;

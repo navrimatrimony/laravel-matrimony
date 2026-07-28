@@ -13,6 +13,7 @@ use App\Modules\Suchak\Services\SuchakAccessService;
 use App\Modules\Suchak\Services\SuchakConsentContactSuggestionService;
 use App\Services\MutationService;
 use App\Services\ProfileCompletionService;
+use App\Services\ProfileSectionReadinessService;
 use App\Services\Onboarding\MobileOnboardingDraftService;
 use App\Services\Onboarding\MobileProfileStepSnapshotService;
 use App\Services\Onboarding\RegistrationPartnerPreferenceService;
@@ -138,7 +139,7 @@ class SuchakRepresentedProfileApiController extends Controller
     }
 
     /**
-     * @return array{percent: int, sections: array<int, array<string, string>>, incomplete_sections: array<int, string>}
+     * @return array{percent: int, sections: array<int, array<string, string>>, incomplete_sections: array<int, string>, readiness: array<string, mixed>}
      */
     private function completionPayload(MatrimonyProfile $profile): array
     {
@@ -158,6 +159,13 @@ class SuchakRepresentedProfileApiController extends Controller
             'percent' => ProfileCompletionService::calculateCompletionPercentage($profile),
             'sections' => $sections,
             'incomplete_sections' => $incomplete,
+            // The edit hub renders THIS block, not `percent` above — the two
+            // are different scales (five weighted buckets vs eleven edit
+            // sections), and printing both on one line is how the hub ended up
+            // saying "100% complete · 4 sections need work". Same block, same
+            // numbers, as the customer detail screen's readiness card, so the
+            // card and the screen it opens can never disagree.
+            'readiness' => app(ProfileSectionReadinessService::class)->forProfile($profile),
         ];
     }
 
