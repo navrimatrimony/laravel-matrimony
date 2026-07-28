@@ -4,17 +4,17 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\Account\MemberPasswordService;
 use App\Services\Api\MobileOtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules;
 
 class MobileAccountController extends Controller
 {
-    public function update(Request $request, MobileOtpService $otpService): JsonResponse
+    public function update(Request $request, MobileOtpService $otpService, MemberPasswordService $passwords): JsonResponse
     {
         $validated = $request->validate([
             'creator_name' => ['required', 'string', 'max:255'],
@@ -75,11 +75,19 @@ class MobileAccountController extends Controller
             }
         }
 
-        if (filled($validated['password'] ?? null)) {
-            $updates['password'] = Hash::make((string) $validated['password']);
-        }
-
         $user->forceFill($updates)->save();
+
+        /*
+        | Onboarding sets the FIRST password here; the security side effects that
+        | belong to a later change (revoking other sessions, the alert) are not
+        | run, because there is nothing yet to revoke and nothing happened that
+        | the member did not just do. Only the hashing is shared — MemberPasswordService
+        | stays the single writer of users.password on the member surface.
+        | Changing an EXISTING password is POST /api/v1/account/password.
+        */
+        if (filled($validated['password'] ?? null)) {
+            $passwords->set($user, (string) $validated['password']);
+        }
         $otpService->persistAlertsOptIn($user, array_key_exists('whatsapp_alerts_opt_in', $validated)
             ? (bool) $validated['whatsapp_alerts_opt_in']
             : null);

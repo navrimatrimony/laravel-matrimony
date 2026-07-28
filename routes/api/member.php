@@ -4,24 +4,25 @@ use App\Http\Controllers\AbuseReportController;
 use App\Http\Controllers\Api\BiodataIntakeApiController;
 use App\Http\Controllers\Api\CasteLookupController;
 use App\Http\Controllers\Api\ContactActionApiController;
-use App\Http\Controllers\Api\DeviceTokenApiController;
 use App\Http\Controllers\Api\ContactInboxApiController;
+use App\Http\Controllers\Api\DeviceTokenApiController;
 use App\Http\Controllers\Api\ExtendedFieldApiController;
 use App\Http\Controllers\Api\FieldRegistryApiController;
 use App\Http\Controllers\Api\InterestApiController;
 use App\Http\Controllers\Api\MatrimonyProfileApiController;
+use App\Http\Controllers\Api\MemberPasswordApiController;
 use App\Http\Controllers\Api\MemberSuchakRequestApiController;
 use App\Http\Controllers\Api\MobileBiodataExportApiController;
 use App\Http\Controllers\Api\MobileChatApiController;
 use App\Http\Controllers\Api\MobileNotificationApiController;
 use App\Http\Controllers\Api\MobilePlanApiController;
-use App\Http\Controllers\Api\MobileProfilePhotoApiController;
 use App\Http\Controllers\Api\MobileProfileListApiController;
+use App\Http\Controllers\Api\MobileProfilePhotoApiController;
 use App\Http\Controllers\Api\MobileSettingsApiController;
 use App\Http\Controllers\Api\NotificationPreferenceApiController;
-use App\Http\Controllers\Api\ProfileSetupLookupController;
 use App\Http\Controllers\Api\ProfileActionApiController;
 use App\Http\Controllers\Api\ProfileFieldLockApiController;
+use App\Http\Controllers\Api\ProfileSetupLookupController;
 use App\Http\Controllers\Api\ReligionLookupController;
 use Illuminate\Support\Facades\Route;
 
@@ -109,6 +110,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/interests/{id}/accept', [InterestApiController::class, 'accept']); // ACCEPT INTEREST
     Route::post('/interests/{id}/reject', [InterestApiController::class, 'reject']); // REJECT INTEREST
     Route::post('/interests/{id}/withdraw', [InterestApiController::class, 'withdraw']); // WITHDRAW INTEREST
+    /*
+    | Account security. The ONLY change-password path a member has: the emailed
+    | reset link (/auth/password/forgot + /auth/password/reset) cannot reach a
+    | mobile-only member, so without this one they stay locked out. Sits beside
+    | the other authenticated /account/* routes declared in routes/api.php —
+    | both files load inside the same Route::prefix('v1') group, so the URL is
+    | /api/v1/account/password either way.
+    |
+    | No current_password field, on purpose — see App\Services\Account\MemberPasswordService.
+    */
+    Route::post('/account/password', [MemberPasswordApiController::class, 'update']); // CHANGE PASSWORD (revokes other sessions)
     Route::post('/logout', [\App\Http\Controllers\Api\AuthController::class, 'logout']); // LOGOUT
 
     /*
