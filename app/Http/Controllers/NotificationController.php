@@ -3,9 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MatrimonyProfile;
-use App\Services\Interest\ReceivedInterestTeaserPolicy;
-use App\Services\WhoViewed\WhoViewedTeaserPolicy;
-use App\Services\WhoViewed\WhoViewedTeaserPresenter;
+use App\Services\WhoViewed\NotificationTeaserRenderer;
 use Illuminate\Http\Request;
 
 /*
@@ -20,7 +18,7 @@ use Illuminate\Http\Request;
 class NotificationController extends Controller
 {
     public function __construct(
-        protected WhoViewedTeaserPresenter $whoViewedTeaserPresenter,
+        protected NotificationTeaserRenderer $teaserRenderer,
     ) {}
 
     private function extractActorProfileId(array $data): ?int
@@ -77,13 +75,13 @@ class NotificationController extends Controller
         $unreadNotifications = $user->unreadNotifications;
         $ownerProfile = $user->matrimonyProfile;
 
+        // REVEALED rows only. The blade reads `$actorProfiles` solely to draw the
+        // named, tappable header on a row the member is allowed to see, so the
+        // locked-type fallback that used to widen this list was fetching profiles
+        // nothing ever rendered — and it read the very keys a locked payload omits.
         $actorProfileIds = [];
         foreach ($notifications as $n) {
-            $data = is_array($n->data) ? $n->data : [];
-            $id = $this->extractActorProfileId($data);
-            if (! $id && in_array((string) ($data['type'] ?? ''), ['interest_sent', 'profile_viewed'], true)) {
-                $id = $this->extractActorProfileIdAny($data);
-            }
+            $id = $this->extractActorProfileId(is_array($n->data) ? $n->data : []);
             if ($id) {
                 $actorProfileIds[] = $id;
             }
@@ -98,43 +96,13 @@ class NotificationController extends Controller
                 ->keyBy('id');
         }
 
-        $localizedTeasers = [];
-        foreach ($notifications as $n) {
-            $data = is_array($n->data) ? $n->data : [];
-            $type = (string) ($data['type'] ?? '');
-            $revealed = ($data['revealed'] ?? true) !== false;
-            $hasTeaser = is_array($data['teaser'] ?? null);
-            if (! $hasTeaser || $revealed || ! in_array($type, ['interest_sent', 'profile_viewed'], true)) {
-                continue;
-            }
-
-            $actorProfileId = $this->extractActorProfileIdAny($data);
-            $actor = ($actorProfileId && $actorProfiles->has($actorProfileId))
-                ? $actorProfiles->get($actorProfileId)
-                : null;
-            if (! $actor) {
-                continue;
-            }
-
-            if ($type === 'interest_sent') {
-                $policy = ReceivedInterestTeaserPolicy::forLockedPresentation(ReceivedInterestTeaserPolicy::normalized());
-                $timeLine = 'interest_received';
-            } else {
-                $policy = WhoViewedTeaserPolicy::forWhoViewedLockedTeasers(WhoViewedTeaserPolicy::normalized());
-                $timeLine = 'profile_view';
-            }
-
-            $localizedTeasers[$n->id] = $this->whoViewedTeaserPresenter->presentFromMatrimonyProfile(
-                $actor,
-                $n->created_at,
-                $policy,
-                [
-                    'owner_profile' => $ownerProfile,
-                    'viewer_view_count' => 1,
-                    'teaser_time_line' => $timeLine,
-                ]
-            );
-        }
+        // One renderer, shared with the mobile list. The loop that used to live here
+        // looked the actor up under `viewer_profile_id` / `sender_profile_id`, which a
+        // LOCKED payload deliberately omits — so it never once produced a teaser and
+        // the blade silently fell through to the stored, frozen, wrong-language one.
+        // It also hardcoded `viewer_view_count` to 1, which would have dropped the
+        // "viewed your profile 7 times" line the moment it did start working.
+        $localizedTeasers = $this->teaserRenderer->forPage($notifications->getCollection(), $ownerProfile);
 
         return view('notifications.index', compact('request', 'notifications', 'unreadNotifications', 'actorProfiles', 'localizedTeasers'));
     }
@@ -155,30 +123,10 @@ class NotificationController extends Controller
             $actorProfile = MatrimonyProfile::query()->where('id', $actorProfileId)->first();
         }
 
-        $localizedTeaser = null;
-        $type = (string) ($data['type'] ?? '');
-        $revealed = ($data['revealed'] ?? true) !== false;
-        $hasTeaser = is_array($data['teaser'] ?? null);
-        if ($actorProfile && $hasTeaser && ! $revealed && in_array($type, ['interest_sent', 'profile_viewed'], true)) {
-            if ($type === 'interest_sent') {
-                $policy = ReceivedInterestTeaserPolicy::forLockedPresentation(ReceivedInterestTeaserPolicy::normalized());
-                $timeLine = 'interest_received';
-            } else {
-                $policy = WhoViewedTeaserPolicy::forWhoViewedLockedTeasers(WhoViewedTeaserPolicy::normalized());
-                $timeLine = 'profile_view';
-            }
-
-            $localizedTeaser = $this->whoViewedTeaserPresenter->presentFromMatrimonyProfile(
-                $actorProfile,
-                $notification->created_at,
-                $policy,
-                [
-                    'owner_profile' => $request->user()->matrimonyProfile,
-                    'viewer_view_count' => 1,
-                    'teaser_time_line' => $timeLine,
-                ]
-            );
-        }
+        // Same renderer as the list, page of one — so opening a card cannot show a
+        // different language, or a different time, than the card that was tapped.
+        $localizedTeaser = $this->teaserRenderer
+            ->forPage(collect([$notification]), $user->matrimonyProfile)[(string) $notification->id] ?? null;
 
         return view('notifications.show', compact('notification', 'actorProfile', 'localizedTeaser'));
     }

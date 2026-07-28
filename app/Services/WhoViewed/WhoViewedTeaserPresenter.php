@@ -43,6 +43,18 @@ final class WhoViewedTeaserPresenter
         'interest_hint',
     ];
 
+    /**
+     * Whether the geo table exists — asked once per instance, not once per card.
+     *
+     * {@see self::locationTeaserLine} guards on it, and that guard used to be a live
+     * `Schema::hasTable()` on every row. That is a real round trip, and the moment a
+     * whole page of locked teasers started being rendered server-side it became
+     * exactly one query per row on top of an otherwise fully batched read — 100 rows,
+     * 100 lookups, for an answer that cannot change mid-request. Scoped to the
+     * instance rather than static so a test that drops the table gets a fresh one.
+     */
+    private ?bool $geoTableExists = null;
+
     public function __construct(
         private LocationService $locationService,
         private ProfilePhotoUrlService $profilePhotoUrlService,
@@ -659,7 +671,7 @@ final class WhoViewedTeaserPresenter
         ?Location $leafPre = null,
         ?Location $alreadyNamed = null,
     ): ?string {
-        if (! Schema::hasTable(Location::geoTable())) {
+        if (! $this->geoTableExists()) {
             return null;
         }
 
@@ -750,6 +762,14 @@ final class WhoViewedTeaserPresenter
         }
 
         return implode(__('who_viewed.teaser_place_separator'), $clean);
+    }
+
+    /**
+     * @see self::$geoTableExists
+     */
+    private function geoTableExists(): bool
+    {
+        return $this->geoTableExists ??= Schema::hasTable(Location::geoTable());
     }
 
     private function truncate(string $s, int $max = 48): string

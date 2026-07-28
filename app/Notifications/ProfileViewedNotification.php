@@ -7,6 +7,7 @@ use App\Models\ProfileView;
 use App\Models\User;
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Services\WhoViewed\NotificationTeaserRenderer;
 use App\Services\WhoViewed\WhoViewedNotificationIdentityGate;
 use App\Services\WhoViewed\WhoViewedTeaserPolicy;
 use App\Services\WhoViewed\WhoViewedTeaserPresenter;
@@ -97,6 +98,11 @@ class ProfileViewedNotification extends Notification
             'is_view_back' => $this->isViewBack,
             'revealed' => false,
             'viewer_dedupe_token' => $token,
+            // Server-side only, and deliberately NOT `viewer_profile_id`: that key
+            // means "an actor this reader may see" and is scanned to build a
+            // tappable profile link. This one lets the server rebuild the same
+            // MASKED card in the reader's language — see NotificationTeaserRenderer.
+            NotificationTeaserRenderer::ACTOR_PROFILE_ID_KEY => $viewerId,
             'teaser' => $teaser,
             'teaser_plans_url' => route('plans.index'),
             'teaser_context_url' => route('who-viewed.index'),

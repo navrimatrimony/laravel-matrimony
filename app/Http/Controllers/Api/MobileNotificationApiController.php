@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
 use App\Services\Image\ProfilePhotoUrlService;
-use App\Services\WhoViewed\WhoViewedTeaserPresenter;
+use App\Services\WhoViewed\NotificationTeaserRenderer;
 use App\Support\NotificationLocalization;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,6 +16,10 @@ use Illuminate\Support\Str;
 
 class MobileNotificationApiController extends Controller
 {
+    public function __construct(
+        private readonly NotificationTeaserRenderer $teaserRenderer,
+    ) {}
+
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -31,6 +35,10 @@ class MobileNotificationApiController extends Controller
             ->paginate($perPage);
         $collection = $notifications->getCollection();
         $actorProfiles = $this->actorProfilesFor($collection);
+        // Once for the page — the renderer batches the actor profiles, their
+        // relations and the repeat-view counts into a fixed handful of queries, so a
+        // fifty-row page costs the same as a one-row page.
+        $renderedTeasers = $this->teaserRenderer->forPage($collection, $user->matrimonyProfile);
 
         return response()->json([
             'success' => true,
@@ -38,7 +46,7 @@ class MobileNotificationApiController extends Controller
             'unread_count' => $this->unreadCountFor($user),
             'notifications' => $notifications
                 ->getCollection()
-                ->map(fn (DatabaseNotification $notification): array => $this->notificationPayload($notification, $user, $actorProfiles))
+                ->map(fn (DatabaseNotification $notification): array => $this->notificationPayload($notification, $user, $actorProfiles, $renderedTeasers))
                 ->values()
                 ->all(),
             'meta' => [
@@ -85,7 +93,14 @@ class MobileNotificationApiController extends Controller
             'success' => true,
             'message' => 'Notification marked as read.',
             'unread_count' => $this->unreadCountFor($user),
-            'notification' => $this->notificationPayload($notification, $user),
+            'notification' => $this->notificationPayload(
+                $notification,
+                $user,
+                null,
+                // Same renderer, page of one — otherwise tapping a card would hand
+                // back the frozen wrong-language copy of the row just rendered.
+                $this->teaserRenderer->forPage(collect([$notification]), $user->matrimonyProfile),
+            ),
         ]);
     }
 
@@ -107,16 +122,28 @@ class MobileNotificationApiController extends Controller
 
     /**
      * @param  Collection<int, MatrimonyProfile>|null  $actorProfiles
+     * @param  array<string, array<string, mixed>>  $renderedTeasers  keyed by notification id
      */
-    private function notificationPayload(DatabaseNotification $notification, User $user, ?Collection $actorProfiles = null): array
-    {
+    private function notificationPayload(
+        DatabaseNotification $notification,
+        User $user,
+        ?Collection $actorProfiles = null,
+        array $renderedTeasers = [],
+    ): array {
         $data = is_array($notification->data) ? $notification->data : [];
-        $locale = NotificationLocalization::preferredLocaleForUser($user);
+        $locale = $this->readerLocale();
         $key = $this->notificationKey($notification, $data);
         $message = NotificationLocalization::displayMessage($data, $locale);
         $action = $this->actionPayload($data);
         $actor = $this->actorPayload($data, $actorProfiles);
-        $display = $this->displayPayload($key, $data, $action, $actor, $locale);
+        $display = $this->displayPayload(
+            $key,
+            $data,
+            $action,
+            $actor,
+            $locale,
+            $renderedTeasers[(string) $notification->id] ?? null,
+        );
 
         return [
             'id' => (string) $notification->id,
@@ -135,6 +162,25 @@ class MobileNotificationApiController extends Controller
             'route_hint' => $action['route_hint'] ?? null,
             'display' => $display,
         ];
+    }
+
+    /**
+     * The language this response is written in — ONE answer for the whole payload.
+     *
+     * Comes from {@see \App\Http\Middleware\SetApiLocale}, the api group's single
+     * locale resolver: explicit `?locale=` → the app's live `Accept-Language` → the
+     * saved `preferred_locale` → Marathi. The saved preference is still honoured,
+     * just at the precedence that middleware documents.
+     *
+     * This used to read `preferredLocaleForUser()`, which puts the SAVED preference
+     * first and so answered differently from the resolver. That was survivable while
+     * every string here came from the same call, but the teaser is now rendered
+     * through `__()` — i.e. under the resolver — and two ranking rules on one card
+     * is how you ship a Marathi teaser under an English sentence.
+     */
+    private function readerLocale(): string
+    {
+        return NotificationLocalization::normalize(app()->getLocale());
     }
 
     /**
@@ -300,18 +346,19 @@ class MobileNotificationApiController extends Controller
      * @param  array<string, mixed>  $data
      * @param  array<string, mixed>|null  $action
      * @param  array<string, mixed>|null  $actor
+     * @param  array<string, mixed>|null  $renderedTeaser  freshly rebuilt in the reader's locale, when possible
      * @return array<string, mixed>
      */
-    private function displayPayload(string $key, array $data, ?array $action, ?array $actor, string $locale): array
+    private function displayPayload(string $key, array $data, ?array $action, ?array $actor, string $locale, ?array $renderedTeaser = null): array
     {
-        $teaser = $this->teaserDisplayPayload($key, $data);
+        $teaser = $this->teaserDisplayPayload($key, $data, $renderedTeaser);
 
         return [
             'layout' => $this->displayLayout($key, $teaser, $actor),
             'actor' => $actor,
             'teaser' => $teaser,
             'cta' => $this->ctaPayload($key, $action, $locale),
-            'secondary_cta' => $this->secondaryCtaPayload($key, $data, $teaser, $locale),
+            'secondary_cta' => $this->secondaryCtaPayload($key, $data, $teaser),
             'privacy' => $this->privacyPayload($teaser, $actor),
         ];
     }
@@ -346,21 +393,29 @@ class MobileNotificationApiController extends Controller
     }
 
     /**
+     * The locked teaser card: freshly rendered when the row allows it, stored otherwise.
+     *
+     * A fresh render is in the reader's language and carries a live relative time. A
+     * stored one is whatever language the VIEWER happened to be using and says
+     * "just now" forever — but it is also what production has served for every row
+     * written before {@see NotificationTeaserRenderer::ACTOR_PROFILE_ID_KEY} existed,
+     * so it stays the fallback rather than a blank card.
+     *
      * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>|null  $renderedTeaser
      * @return array<string, mixed>|null
      */
-    private function teaserDisplayPayload(string $key, array $data): ?array
+    private function teaserDisplayPayload(string $key, array $data, ?array $renderedTeaser = null): ?array
     {
         if (($data['revealed'] ?? true) !== false || ! in_array($key, ['interest_sent', 'profile_viewed'], true)) {
             return null;
         }
 
-        $teaser = $data['teaser'] ?? null;
-        if (! is_array($teaser)) {
-            return null;
+        if ($renderedTeaser !== null && $renderedTeaser !== []) {
+            return $renderedTeaser;
         }
 
-        return WhoViewedTeaserPresenter::displayPayload($teaser);
+        return $this->teaserRenderer->storedTeaser($data);
     }
 
     /**
@@ -419,24 +474,29 @@ class MobileNotificationApiController extends Controller
     }
 
     /**
+     * The "open who viewed me" button under a locked card.
+     *
+     * The label used to be read straight off the row, where it was written once in
+     * the VIEWER's language and never got a `_mr` twin — the same defect as the
+     * teaser, on the same card. It is rebuilt in the reader's language now; the row's
+     * copy survives only as {@see NotificationTeaserRenderer::contextLabel}'s own
+     * last resort. The two hardcoded Marathi/English pairs that sat here are gone
+     * with it: `lang/{en,mr}/notifications.php` already owns this wording.
+     *
      * @param  array<string, mixed>  $data
      * @param  array<string, mixed>|null  $teaser
      * @return array<string, mixed>|null
      */
-    private function secondaryCtaPayload(string $key, array $data, ?array $teaser, string $locale): ?array
+    private function secondaryCtaPayload(string $key, array $data, ?array $teaser): ?array
     {
         if ($teaser === null) {
             return null;
         }
 
-        $marathi = NotificationLocalization::isMarathi($locale);
         $routeHint = $key === 'interest_sent' ? 'received_interests' : 'who_viewed';
-        $defaultLabel = $key === 'interest_sent'
-            ? ($marathi ? 'आलेल्या इच्छा पहा' : 'View received interests')
-            : ($marathi ? 'कोणी प्रोफाइल पाहिले ते पहा' : 'View who viewed');
 
         return [
-            'label' => trim((string) ($data['teaser_context_label'] ?? '')) ?: $defaultLabel,
+            'label' => $this->teaserRenderer->contextLabel($key, $data),
             'action_type' => $routeHint,
             'route_hint' => $routeHint,
         ];

@@ -8,6 +8,7 @@ use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
 use App\Services\Interest\ReceivedInterestTeaserPolicy;
 use App\Services\InterestSendLimitService;
+use App\Services\WhoViewed\NotificationTeaserRenderer;
 use App\Services\WhoViewed\WhoViewedTeaserPresenter;
 use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
@@ -88,6 +89,12 @@ class InterestSentNotification extends Notification
             'message' => __('interests.notification_blurred_sender'),
             'sender_profile_id' => null,
             'revealed' => false,
+            // Server-side only, and deliberately NOT `sender_profile_id` — that key
+            // stays null precisely because this reader may not see the sender, and it
+            // is scanned to build a tappable profile link. This one lets the server
+            // rebuild the same MASKED card in the reader's language later; it is in
+            // no link scanner. See NotificationTeaserRenderer.
+            NotificationTeaserRenderer::ACTOR_PROFILE_ID_KEY => (int) $this->senderProfile->id,
             'teaser' => $teaser,
             'teaser_plans_url' => route('plans.index'),
             'teaser_context_url' => route('interests.received'),
