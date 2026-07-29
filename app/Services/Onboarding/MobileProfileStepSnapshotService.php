@@ -38,12 +38,9 @@ class MobileProfileStepSnapshotService
         'family_type_id',
         'horoscope',
         'astrology',
-        'gan_id',
-        'nadi_id',
-        'yoni_id',
-        'varna_id',
-        'vashya_id',
-        'rashi_lord_id',
+        // gan_id / nadi_id / yoni_id / varna_id / vashya_id / rashi_lord_id are NOT
+        // forbidden: they are derived (never asked of the member) and allow-listed on
+        // the astro step below. rejectUnexpectedKeys still blocks them on every other step.
         'devak',
         'kul',
         'gotra',
@@ -147,6 +144,11 @@ class MobileProfileStepSnapshotService
             'gan_id',
             'nadi_id',
             'yoni_id',
+            // Derived from the chosen rashi via master_rashis (HoroscopeRuleService
+            // ::getRashiAshtakootaForFrontend, shipped in the bootstrap payload).
+            'varna_id',
+            'vashya_id',
+            'rashi_lord_id',
         ],
     ];
 
@@ -371,6 +373,9 @@ class MobileProfileStepSnapshotService
                 'gan_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_gans', 'id')->where('is_active', true)],
                 'nadi_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_nadis', 'id')->where('is_active', true)],
                 'yoni_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_yonis', 'id')->where('is_active', true)],
+                'varna_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_varnas', 'id')->where('is_active', true)],
+                'vashya_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_vashyas', 'id')->where('is_active', true)],
+                'rashi_lord_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_rashi_lords', 'id')->where('is_active', true)],
             ],
         ];
 

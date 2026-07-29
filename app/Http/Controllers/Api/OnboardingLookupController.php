@@ -99,6 +99,7 @@ class OnboardingLookupController extends Controller
             // Same payload/key/shape as ProfileSetupLookupController::remainingProfileOptions
             // so onboarding and Edit Profile can run one shared client-side parser.
             'horoscope_rules' => $horoscopeRuleService->getRulesForFrontend(),
+            'rashi_ashtakoota' => $horoscopeRuleService->getRashiAshtakootaForFrontend(),
             'age_policy' => [
                 'min_age' => 18,
                 'max_age' => 80,
