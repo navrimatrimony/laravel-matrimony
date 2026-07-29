@@ -265,6 +265,16 @@ class MatrimonyProfile extends Model
      */
     protected array $pendingCanonicalSelfResidence = [];
 
+    /**
+     * Leaf `addresses.id` → resolved residence geography. See {@see leafGeoBundle()} for why this is
+     * safe to memo and why it is capped.
+     *
+     * @var array<int, array{geo: array<string, mixed>, hints: array<string, string>}>
+     */
+    private static array $leafGeoBundleMemo = [];
+
+    private const LEAF_GEO_MEMO_LIMIT = 512;
+
     protected function locationId(): Attribute
     {
         return Attribute::make(
@@ -506,33 +516,56 @@ class MatrimonyProfile extends Model
      */
     public static function geoAddressIdsForLeaf(?int $leafId): array
     {
-        $empty = ['district_id' => null, 'state_id' => null, 'country_id' => null, 'taluka_id' => null, 'lat' => null, 'lng' => null];
+        return self::leafGeoBundle($leafId)['geo'];
+    }
+
+    /**
+     * Resolve an {@code addresses} leaf into BOTH residence shapes in one pass, memoised by leaf id.
+     *
+     * Every profile card asks for {@see residenceGeoAddressIds()} and {@see residenceLocationHierarchyHints()}
+     * back to back, and each one used to independently load the leaf and walk its parent chain — 18-odd
+     * `addresses` queries per profile, 364 for a 20-row page on production. They differ only in output
+     * shape, so they now share one resolution.
+     *
+     * Memoising is safe here specifically because the key is an ADDRESS id, not a profile id: this
+     * caches "what is the hierarchy above address X", which is master data and immutable within a
+     * request. A member moving house changes which leaf their profile points at — it does not change
+     * what sits above that leaf — so no write path can leave this stale.
+     *
+     * The cap keeps the memo structurally incapable of growing with the data: it is a page-sized
+     * lookaside, not an accumulating index, which matters in long-running queue workers.
+     *
+     * @return array{geo: array{district_id: int|null, state_id: int|null, country_id: int|null, taluka_id: int|null, lat: float|null, lng: float|null}, hints: array{location_id: string, country_id: string, state_id: string, district_id: string, taluka_id: string}}
+     */
+    private static function leafGeoBundle(?int $leafId): array
+    {
+        $emptyGeo = ['district_id' => null, 'state_id' => null, 'country_id' => null, 'taluka_id' => null, 'lat' => null, 'lng' => null];
+        $emptyHints = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
         if ($leafId === null || $leafId <= 0 || ! self::hasGeoTableCached()) {
-            return $empty;
+            return ['geo' => $emptyGeo, 'hints' => $emptyHints];
         }
+        if (isset(self::$leafGeoBundleMemo[$leafId])) {
+            return self::$leafGeoBundleMemo[$leafId];
+        }
+
         $leaf = Location::query()->find($leafId);
         if ($leaf === null) {
-            return $empty;
+            return ['geo' => $emptyGeo, 'hints' => $emptyHints];
         }
         $svc = app(LocationService::class);
         $h = $svc->getFullHierarchy($leaf);
-        $district = $h['district'] ?? null;
-        if ($district === null && $leaf->hierarchy === 'district') {
-            $district = $leaf;
-        }
-        $state = $h['state'] ?? null;
-        if ($state === null && $leaf->hierarchy === 'state') {
-            $state = $leaf;
-        }
-        $country = $svc->getAncestorByType($leaf, 'country');
-        if ($country === null && $leaf->hierarchy === 'country') {
-            $country = $leaf;
-        }
+        $rawDistrict = $h['district'] ?? null;
+        $rawState = $h['state'] ?? null;
+        $rawTaluka = $h['taluka'] ?? null;
+        $rawCountry = $svc->getAncestorByType($leaf, 'country');
 
-        $taluka = $h['taluka'] ?? null;
-        if ($taluka === null && $leaf->hierarchy === 'taluka') {
-            $taluka = $leaf;
-        }
+        // The hints shape reports the chain strictly ABOVE the leaf; the geo shape additionally treats a
+        // leaf that IS a district/state/country/taluka as its own value. Kept distinct on purpose — both
+        // are consumed by shipped clients.
+        $district = $rawDistrict ?? ($leaf->hierarchy === 'district' ? $leaf : null);
+        $state = $rawState ?? ($leaf->hierarchy === 'state' ? $leaf : null);
+        $country = $rawCountry ?? ($leaf->hierarchy === 'country' ? $leaf : null);
+        $taluka = $rawTaluka ?? ($leaf->hierarchy === 'taluka' ? $leaf : null);
 
         // Position for distance-based ranking, taken from the most specific
         // node that actually has one: the place itself, else its taluka, else
@@ -549,14 +582,35 @@ class MatrimonyProfile extends Model
             }
         }
 
-        return [
-            'district_id' => $district !== null ? (int) $district->id : null,
-            'state_id' => $state !== null ? (int) $state->id : null,
-            'country_id' => $country !== null ? (int) $country->id : null,
-            'taluka_id' => $taluka !== null ? (int) $taluka->id : null,
-            'lat' => $lat,
-            'lng' => $lng,
+        $bundle = [
+            'geo' => [
+                'district_id' => $district !== null ? (int) $district->id : null,
+                'state_id' => $state !== null ? (int) $state->id : null,
+                'country_id' => $country !== null ? (int) $country->id : null,
+                'taluka_id' => $taluka !== null ? (int) $taluka->id : null,
+                'lat' => $lat,
+                'lng' => $lng,
+            ],
+            'hints' => [
+                'location_id' => (string) $leafId,
+                'country_id' => $rawCountry ? (string) $rawCountry->id : '',
+                'state_id' => $rawState ? (string) $rawState->id : '',
+                'district_id' => $rawDistrict ? (string) $rawDistrict->id : '',
+                'taluka_id' => $rawTaluka ? (string) $rawTaluka->id : '',
+            ],
         ];
+
+        if (count(self::$leafGeoBundleMemo) >= self::LEAF_GEO_MEMO_LIMIT) {
+            self::$leafGeoBundleMemo = [];
+        }
+
+        return self::$leafGeoBundleMemo[$leafId] = $bundle;
+    }
+
+    /** Drop the leaf → geography lookaside. Only needed when `addresses` rows are rewritten in-process. */
+    public static function flushLeafGeoMemo(): void
+    {
+        self::$leafGeoBundleMemo = [];
     }
 
     /**
@@ -567,25 +621,7 @@ class MatrimonyProfile extends Model
      */
     public function residenceLocationHierarchyHints(): array
     {
-        $empty = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
-        if (! $this->location_id || ! self::hasGeoTableCached()) {
-            return $empty;
-        }
-        $leaf = Location::query()->find((int) $this->location_id);
-        if ($leaf === null) {
-            return $empty;
-        }
-        $svc = app(LocationService::class);
-        $h = $svc->getFullHierarchy($leaf);
-        $country = $svc->getAncestorByType($leaf, 'country');
-
-        return [
-            'location_id' => (string) $this->location_id,
-            'country_id' => $country ? (string) $country->id : '',
-            'state_id' => $h['state'] ? (string) $h['state']->id : '',
-            'district_id' => $h['district'] ? (string) $h['district']->id : '',
-            'taluka_id' => $h['taluka'] ? (string) $h['taluka']->id : '',
-        ];
+        return self::leafGeoBundle($this->location_id !== null ? (int) $this->location_id : null)['hints'];
     }
 
     /**
