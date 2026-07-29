@@ -304,9 +304,10 @@ final class WhoViewedRowsService
         if ($viewerProfile->is_suspended ?? false) {
             return false;
         }
-        if ($viewerProfile->isShowcaseProfile()) {
-            return false;
-        }
+        // Active showcase viewers stay eligible — same product rule as mobile
+        // discovery (94e8ac34). Showcase→real profile_views must surface in
+        // recent_visitors / who-viewed teasers; draft/suspended still fail the
+        // visibility check below.
         if (! ProfileLifecycleService::isVisibleToOthers($viewerProfile)) {
             return false;
         }
