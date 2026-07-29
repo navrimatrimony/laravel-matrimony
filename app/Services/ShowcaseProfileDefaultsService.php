@@ -234,10 +234,12 @@ class ShowcaseProfileDefaultsService
                 $loc = self::locationHierarchyForShowcaseFromRealUsersPolicy($policy);
             }
             if ($loc === null) {
-                $loc = self::pickShowcaseHierarchyAnywhereInGeo();
+                // Drop the tag requirement before dropping geography: a wrong kind of place
+                // inside the chosen state beats the right kind of place in another state.
+                $loc = self::pickShowcaseHierarchyFromAddressTags($policy, true);
             }
-            if ($loc === null) {
-                $loc = self::locationHierarchyForShowcase();
+            if ($loc === null && self::policyAllowedDistrictIdsForBulk($policy) === null) {
+                $loc = self::pickShowcaseHierarchyAnywhereInGeo() ?? self::locationHierarchyForShowcase();
             }
         } else {
             $loc = self::locationHierarchyForShowcaseFromRealUsers();
@@ -944,15 +946,10 @@ class ShowcaseProfileDefaultsService
      * @param  array<string, mixed>  $bulkPolicy  normalized {@see ShowcaseBulkCreateSettings::normalize}
      * @return array{country_id:int|null,state_id:int|null,district_id:int|null,taluka_id:int|null,city_id:int|null,work_state_id:int|null,work_city_id:int|null}|null
      */
-    private static function pickShowcaseHierarchyFromAddressTags(array $bulkPolicy): ?array
+    private static function pickShowcaseHierarchyFromAddressTags(array $bulkPolicy, bool $ignoreTags = false): ?array
     {
         $addr = Location::geoTable();
         if (! Schema::hasTable($addr)) {
-            return null;
-        }
-
-        $strictTags = ShowcaseAddressEligibility::tagsForContext($bulkPolicy);
-        if ($strictTags === []) {
             return null;
         }
 
@@ -960,9 +957,33 @@ class ShowcaseProfileDefaultsService
 
         $q = Location::query()
             ->where('hierarchy', 'village')
-            ->whereIn('tag', $strictTags)
             ->whereNotNull('name')
             ->where('name', '!=', '');
+
+        if (! $ignoreTags) {
+            $strictTags = ShowcaseAddressEligibility::tagsForContext($bulkPolicy);
+            if ($strictTags === []) {
+                return null;
+            }
+            $q->whereIn('tag', $strictTags);
+        }
+
+        // The tag multiselect answers "what kind of place", never "where" — without this the
+        // country/state/district multiselects were ignored and a Maharashtra-only bulk run
+        // pulled tagged villages from every state in the country.
+        $allowedDistrictIds = self::policyAllowedDistrictIdsForBulk($bulkPolicy);
+        if ($allowedDistrictIds !== null) {
+            if ($allowedDistrictIds === []) {
+                return null;
+            }
+            $parentIds = Location::query()
+                ->whereIn('parent_id', $allowedDistrictIds)
+                ->pluck('id')
+                ->map(static fn ($v): int => (int) $v)
+                ->all();
+            // Villages normally hang off a taluka, but a suburban row may sit straight under the district.
+            $q->whereIn('parent_id', array_values(array_unique(array_merge($parentIds, $allowedDistrictIds))));
+        }
 
         if (Schema::hasColumn($addr, 'is_active')) {
             $q->where(function ($w) {
@@ -970,14 +991,61 @@ class ShowcaseProfileDefaultsService
             });
         }
 
+        $allowedDistrictSet = $allowedDistrictIds !== null ? array_flip($allowedDistrictIds) : null;
+
         foreach ($q->inRandomOrder()->limit(80)->get() as $leaf) {
             $built = self::hierarchyKeysForBulkTaggedResidence($leaf, $svc);
-            if ($built !== null) {
-                return $built;
+            if ($built === null) {
+                continue;
             }
+            if ($allowedDistrictSet !== null && ! isset($allowedDistrictSet[(int) $built['district_id']])) {
+                continue;
+            }
+
+            return $built;
         }
 
         return null;
+    }
+
+    /**
+     * Districts the bulk policy allows, as the intersection of its district / state / country
+     * multiselects. Null means the admin set no geography filter at all.
+     *
+     * @param  array<string, mixed>  $policy  normalized {@see ShowcaseBulkCreateSettings::normalize}
+     * @return list<int>|null
+     */
+    private static function policyAllowedDistrictIdsForBulk(array $policy): ?array
+    {
+        $ids = null;
+
+        if (($policy['district_ids'] ?? []) !== []) {
+            $ids = array_map('intval', $policy['district_ids']);
+        }
+
+        if (($policy['state_ids'] ?? []) !== []) {
+            // District extends Location(addresses): legacy state_id maps to parent_id.
+            $inStates = District::query()
+                ->whereIn('parent_id', $policy['state_ids'])
+                ->pluck('id')
+                ->map(static fn ($v): int => (int) $v)
+                ->all();
+            $ids = $ids === null ? $inStates : array_values(array_intersect($ids, $inStates));
+        }
+
+        if (($policy['country_ids'] ?? []) !== []) {
+            $stateIds = State::query()->whereIn('parent_id', $policy['country_ids'])->pluck('id')->all();
+            $inCountries = $stateIds === []
+                ? []
+                : District::query()
+                    ->whereIn('parent_id', $stateIds)
+                    ->pluck('id')
+                    ->map(static fn ($v): int => (int) $v)
+                    ->all();
+            $ids = $ids === null ? $inCountries : array_values(array_intersect($ids, $inCountries));
+        }
+
+        return $ids === null ? null : array_values(array_unique($ids));
     }
 
     /**
