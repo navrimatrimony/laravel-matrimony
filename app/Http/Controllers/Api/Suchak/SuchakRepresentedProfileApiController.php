@@ -19,7 +19,6 @@ use App\Services\Onboarding\MobileProfileStepSnapshotService;
 use App\Services\Onboarding\RegistrationPartnerPreferenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -269,15 +268,29 @@ class SuchakRepresentedProfileApiController extends Controller
         }
         [, $profile, $member] = $context;
 
-        $request->validate([
-            'profile_photo' => 'required|image|max:2048',
-        ]);
+        // Same admission rules as every other photo upload surface. The rules are
+        // about the CANDIDATE's account and profile, not the Suchak doing the
+        // upload, so the member is what the policy is asked about.
+        $policy = app(\App\Services\Image\ProfilePhotoUploadPolicy::class);
 
-        if (Schema::hasColumn('users', 'photo_uploads_suspended') && (bool) $member->photo_uploads_suspended) {
+        $denial = $policy->denyBeforeUpload($member, $profile);
+        if ($denial instanceof \App\Services\Image\ProfilePhotoUploadDenial) {
             return response()->json([
                 'success' => false,
-                'message' => 'Photo uploads have been suspended for this candidate account.',
-            ], 403);
+                'message' => $denial->message,
+            ], $denial->status);
+        }
+
+        $request->validate([
+            'profile_photo' => 'required|image|max:'.$policy->maxUploadKb(),
+        ]);
+
+        $denial = $policy->denyForCount($profile, 1);
+        if ($denial instanceof \App\Services\Image\ProfilePhotoUploadDenial) {
+            return response()->json([
+                'success' => false,
+                'message' => $denial->message,
+            ], $denial->status);
         }
 
         $file = $request->file('profile_photo');
