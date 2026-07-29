@@ -2009,30 +2009,6 @@ Possible errors:
 - HTTP 404: profile not found
 - HTTP 422: validation error
 
-### POST `/api/v1/matrimony-profile/photo`
-
-Requires bearer token. Multipart upload.
-
-Request:
-
-```http
-Content-Type: multipart/form-data
-profile_photo=<image file, max 2048 KB>
-```
-
-Success response: HTTP 200
-
-```json
-{
-  "success": true,
-  "message": "Profile photo uploaded. Processing will complete shortly.",
-  "data": {
-    "profile_photo": "<pending_filename_or_path>",
-    "status": "processing"
-  }
-}
-```
-
 ### GET `/api/v1/matrimony-profiles`
 
 Requires bearer token. Lists visible, non-suspended active profiles. Legacy top-level fields remain present for backward compatibility. Newer clients may use the optional `display.card` and `display.actions` payload for match-card rendering.

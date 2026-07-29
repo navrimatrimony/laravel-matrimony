@@ -39,7 +39,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/matrimony-profile', [MatrimonyProfileApiController::class, 'show'])
         ->middleware('mobile.cache:private,45,120,my-matrimony-profile');  // FETCH
     Route::put('/matrimony-profile', [MatrimonyProfileApiController::class, 'update']); // UPDATE
-    Route::post('/matrimony-profile/photo', [MatrimonyProfileApiController::class, 'uploadPhoto']); // PHOTO UPLOAD
     Route::get('/matrimony-profile/photos', [MobileProfilePhotoApiController::class, 'index']); // PHOTO GALLERY
     Route::post('/matrimony-profile/photos', [MobileProfilePhotoApiController::class, 'store']); // UPLOAD GALLERY PHOTO
     Route::post('/matrimony-profile/photos/{photo}/primary', [MobileProfilePhotoApiController::class, 'makePrimary']); // SET PRIMARY PHOTO
