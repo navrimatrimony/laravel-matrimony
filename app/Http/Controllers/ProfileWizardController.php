@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Phase-5B: Section-based profile wizard. MutationService-only save path.
@@ -1807,9 +1808,28 @@ class ProfileWizardController extends Controller
             'user_id' => auth()->id() ?? null,
         ]);
 
+        // Website wizard photo step — same shared policy as both API surfaces.
+        // Refusals surface as normal validation errors on the `profile_photo`
+        // field so the Blade view renders them like any other wizard error.
+        $policy = app(\App\Services\Image\ProfilePhotoUploadPolicy::class);
+
+        $denial = $policy->denyBeforeUpload($request->user(), $profile);
+        if ($denial instanceof \App\Services\Image\ProfilePhotoUploadDenial) {
+            throw ValidationException::withMessages([
+                'profile_photo' => $denial->message,
+            ]);
+        }
+
         $request->validate([
-            'profile_photo' => ['required', 'image', 'max:2048'],
+            'profile_photo' => ['required', 'image', 'max:'.$policy->maxUploadKb()],
         ]);
+
+        $denial = $policy->denyForCount($profile, 1);
+        if ($denial instanceof \App\Services\Image\ProfilePhotoUploadDenial) {
+            throw ValidationException::withMessages([
+                'profile_photo' => $denial->message,
+            ]);
+        }
 
         $file = $request->file('profile_photo');
         $pending = app(\App\Services\Image\ImageProcessingService::class)

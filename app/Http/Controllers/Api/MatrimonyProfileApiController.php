@@ -1913,10 +1913,6 @@ class MatrimonyProfileApiController extends Controller
             'user_id' => auth()->id() ?? null,
         ]);
 
-        $request->validate([
-            'profile_photo' => 'required|image|max:2048',
-        ]);
-
         $user = $request->user();
 
         $profile = MatrimonyProfile::where('user_id', $user->id)->first();
@@ -1928,11 +1924,29 @@ class MatrimonyProfileApiController extends Controller
             ], 404);
         }
 
-        if (Schema::hasColumn('users', 'photo_uploads_suspended') && (bool) $user->photo_uploads_suspended) {
+        // Legacy single-photo endpoint (still called by older published APKs).
+        // It must obey exactly the same admin rules as the gallery endpoint —
+        // one shared policy, no second copy of the checks.
+        $policy = app(\App\Services\Image\ProfilePhotoUploadPolicy::class);
+
+        $denial = $policy->denyBeforeUpload($user, $profile);
+        if ($denial instanceof \App\Services\Image\ProfilePhotoUploadDenial) {
             return response()->json([
                 'success' => false,
-                'message' => 'Photo uploads have been suspended for your account.',
-            ], 403);
+                'message' => $denial->message,
+            ], $denial->status);
+        }
+
+        $request->validate([
+            'profile_photo' => 'required|image|max:'.$policy->maxUploadKb(),
+        ]);
+
+        $denial = $policy->denyForCount($profile, 1);
+        if ($denial instanceof \App\Services\Image\ProfilePhotoUploadDenial) {
+            return response()->json([
+                'success' => false,
+                'message' => $denial->message,
+            ], $denial->status);
         }
 
         $file = $request->file('profile_photo');

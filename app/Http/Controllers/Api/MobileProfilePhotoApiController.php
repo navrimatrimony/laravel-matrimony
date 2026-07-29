@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessProfilePhoto;
-use App\Models\AdminSetting;
 use App\Models\MatrimonyProfile;
 use App\Models\PhotoModerationLog;
 use App\Models\ProfileKycSubmission;
@@ -13,6 +12,8 @@ use App\Models\User;
 use App\Services\Image\ImageProcessingService;
 use App\Services\Image\ProfileGalleryPhotoDeletionService;
 use App\Services\Image\ProfilePhotoPendingStateService;
+use App\Services\Image\ProfilePhotoUploadDenial;
+use App\Services\Image\ProfilePhotoUploadPolicy;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\MutationService;
 use App\Services\ProfileShowReadService;
@@ -48,20 +49,14 @@ class MobileProfilePhotoApiController extends Controller
             ]);
         }
 
-        if (Schema::hasColumn('users', 'photo_uploads_suspended') && (bool) $user->photo_uploads_suspended) {
-            return $this->error('Photo uploads have been suspended for your account.', 403, [
-                'can_upload' => false,
-            ]);
+        $policy = app(ProfilePhotoUploadPolicy::class);
+
+        $denial = $policy->denyBeforeUpload($user, $profile);
+        if ($denial instanceof ProfilePhotoUploadDenial) {
+            return $this->error($denial->message, $denial->status, $denial->extra);
         }
 
-        if ($this->profileLifecycleBlocksPhotoUpload($profile)) {
-            return $this->error('Profile is locked for photo changes right now.', 422, [
-                'can_upload' => false,
-            ]);
-        }
-
-        $maxUploadMb = max(1, (int) AdminSetting::getValue('photo_max_upload_mb', '8'));
-        $maxUploadKb = $maxUploadMb * 1024;
+        $maxUploadKb = $policy->maxUploadKb();
         $request->validate([
             'profile_photo' => ['sometimes', 'image', 'max:'.$maxUploadKb],
             'profile_photos' => ['sometimes', 'array'],
@@ -73,17 +68,10 @@ class MobileProfilePhotoApiController extends Controller
             return $this->error('Please select at least one photo.', 422);
         }
 
-        $maxPerProfile = max(1, (int) AdminSetting::getValue('photo_max_per_profile', '5'));
-        $currentCount = $this->currentPhotoCount($profile);
-        if (($currentCount + count($files)) > $maxPerProfile) {
-            return $this->error(
-                "You can upload up to {$maxPerProfile} photos. Delete one photo before uploading a new one.",
-                422,
-                [
-                    'max_photos' => $maxPerProfile,
-                    'current_photo_count' => $currentCount,
-                ],
-            );
+        $currentCount = $policy->currentPhotoCount($profile);
+        $denial = $policy->denyForCount($profile, count($files));
+        if ($denial instanceof ProfilePhotoUploadDenial) {
+            return $this->error($denial->message, $denial->status, $denial->extra);
         }
 
         $queued = [];
@@ -242,8 +230,8 @@ class MobileProfilePhotoApiController extends Controller
     private function galleryPayload(MatrimonyProfile $profile, string $message, array $extra = []): array
     {
         $photos = $this->photoRows($profile);
-        $maxPerProfile = max(1, (int) AdminSetting::getValue('photo_max_per_profile', '5'));
-        $canReorder = Schema::hasTable('profile_photos')
+        $maxPerProfile = app(ProfilePhotoUploadPolicy::class)->maxPerProfile();
+        $canReorder =Schema::hasTable('profile_photos')
             && Schema::hasColumn('profile_photos', 'sort_order')
             && count(array_filter($photos, fn ($photo) => $photo['id'] !== null)) > 1;
 
@@ -475,16 +463,7 @@ class MobileProfilePhotoApiController extends Controller
 
     private function currentPhotoCount(MatrimonyProfile $profile): int
     {
-        $count = Schema::hasTable('profile_photos')
-            ? (int) ProfilePhoto::query()->where('profile_id', $profile->id)->count()
-            : 0;
-
-        $corePhoto = trim((string) ($profile->profile_photo ?? ''));
-        if ($count === 0 && $corePhoto !== '') {
-            return 1;
-        }
-
-        return $count;
+        return app(ProfilePhotoUploadPolicy::class)->currentPhotoCount($profile);
     }
 
     private function ownProfile(Request $request): ?MatrimonyProfile
@@ -501,12 +480,7 @@ class MobileProfilePhotoApiController extends Controller
 
     private function profileLifecycleBlocksPhotoUpload(MatrimonyProfile $profile): bool
     {
-        return in_array($profile->lifecycle_state, [
-            'intake_uploaded',
-            'awaiting_user_approval',
-            'approved_pending_mutation',
-            'conflict_pending',
-        ], true);
+        return app(ProfilePhotoUploadPolicy::class)->lifecycleBlocks($profile);
     }
 
     private function profilePhotoStatus(MatrimonyProfile $profile): string
