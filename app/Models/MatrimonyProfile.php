@@ -493,11 +493,24 @@ class MatrimonyProfile extends Model
      */
     public function residenceGeoAddressIds(): array
     {
+        return self::geoAddressIdsForLeaf($this->location_id !== null ? (int) $this->location_id : null);
+    }
+
+    /**
+     * Same resolution as {@see residenceGeoAddressIds()} for an arbitrary {@code addresses} leaf id.
+     *
+     * Callers that must rank by geography from a leaf the seeker chose (rather than from the seeker's
+     * own stored residence) share this one implementation — see {@see \App\Services\Matching\NearbyFeedService}.
+     *
+     * @return array{district_id: int|null, state_id: int|null, country_id: int|null, taluka_id: int|null, lat: float|null, lng: float|null}
+     */
+    public static function geoAddressIdsForLeaf(?int $leafId): array
+    {
         $empty = ['district_id' => null, 'state_id' => null, 'country_id' => null, 'taluka_id' => null, 'lat' => null, 'lng' => null];
-        if (! $this->location_id || ! self::hasGeoTableCached()) {
+        if ($leafId === null || $leafId <= 0 || ! self::hasGeoTableCached()) {
             return $empty;
         }
-        $leaf = Location::query()->find((int) $this->location_id);
+        $leaf = Location::query()->find($leafId);
         if ($leaf === null) {
             return $empty;
         }

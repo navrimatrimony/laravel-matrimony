@@ -11,6 +11,24 @@ use Illuminate\Support\Facades\Log;
 class LocationService
 {
     /**
+     * Hard ceiling on any proximity scan. Large enough to cover India end to end, so a feed that has
+     * to widen all the way out is still ONE bounding-box query — the box simply stops narrowing.
+     */
+    private const MAX_RADIUS_KM = 4000;
+
+    /** Only ~360 taluka rows are geocoded at all, so this ceiling is never the binding constraint. */
+    private const MAX_NEARBY_LIMIT = 10000;
+
+    /**
+     * The labelled variant keeps its historical clamps: every row it returns costs a hierarchy walk
+     * and a label format, so it must stay a short list. Unlabelled ranking has no such cost and uses
+     * the wider ceilings above.
+     */
+    private const LABELLED_NEARBY_MAX_RADIUS_KM = 250;
+
+    private const LABELLED_NEARBY_MAX_LIMIT = 50;
+
+    /**
      * Return upward chain from immediate parent to root.
      *
      * @return array<int, Location>
@@ -561,46 +579,14 @@ class LocationService
         $sourceLat = (float) $source->lat;
         $sourceLng = (float) $source->lng;
 
-        // Bound the scan to a lat/lng box before measuring distance. Without it
-        // this loaded EVERY geocoded address in the country into memory and
-        // haversined each one — measured at 1.5 s and ~500 MB per call on
-        // production, twice per profile view, which killed the PHP worker and
-        // surfaced to the app as a 502. The rows outside the box are exactly
-        // the ones the radius filter below would have discarded anyway.
-        //
-        // Same box maths as nearbyTalukasByCoordinate() further down, and it
-        // uses the index from 2026_07_26_150000_add_geo_bounding_box_index.
-        $latDelta = $radiusKm / 111.045;
-        $cosLat = cos(deg2rad($sourceLat));
-        $lngDelta = abs($cosLat) < 0.01 ? 180.0 : $radiusKm / (111.045 * abs($cosLat));
-
-        $candidates = Location::query()
-            ->select(['id', 'lat', 'lng'])
-            ->whereNotNull('lat')
-            ->whereNotNull('lng')
-            ->where('id', '!=', $locationId)
-            ->whereBetween('lat', [max(-90.0, $sourceLat - $latDelta), min(90.0, $sourceLat + $latDelta)])
-            ->whereBetween('lng', [max(-180.0, $sourceLng - $lngDelta), min(180.0, $sourceLng + $lngDelta)])
-            ->get();
-
-        $distanceByLocation = [];
-        foreach ($candidates as $candidate) {
-            $distance = $this->haversineDistanceKm(
-                $sourceLat,
-                $sourceLng,
-                (float) $candidate->lat,
-                (float) $candidate->lng
-            );
-
-            if ($distance > $radiusKm) {
-                continue;
-            }
-
-            $candidateLocationId = (int) $candidate->id;
-            if (! isset($distanceByLocation[$candidateLocationId]) || $distance < $distanceByLocation[$candidateLocationId]) {
-                $distanceByLocation[$candidateLocationId] = $distance;
-            }
-        }
+        $distanceByLocation = $this->distanceMapWithinRadius(
+            $sourceLat,
+            $sourceLng,
+            $radiusKm,
+            hierarchy: null,
+            activeOnly: false,
+            excludeLocationId: $locationId,
+        );
 
         if ($distanceByLocation === []) {
             return [];
@@ -658,53 +644,16 @@ class LocationService
      */
     public function nearbyTalukasByCoordinate(float $lat, float $lng, int $radiusKm = 75, int $limit = 12): array
     {
-        $radiusKm = max(1, min(250, $radiusKm));
-        $limit = max(1, min(50, $limit));
-
-        $latDelta = $radiusKm / 111.045;
-        $cosLat = cos(deg2rad($lat));
-        $lngDelta = abs($cosLat) < 0.01 ? 180.0 : $radiusKm / (111.045 * abs($cosLat));
-
-        $minLat = max(-90.0, $lat - $latDelta);
-        $maxLat = min(90.0, $lat + $latDelta);
-        $minLng = max(-180.0, $lng - $lngDelta);
-        $maxLng = min(180.0, $lng + $lngDelta);
-
-        $candidates = Location::query()
-            ->select(['id', 'lat', 'lng'])
-            ->where('hierarchy', 'taluka')
-            ->where('is_active', true)
-            ->whereNotNull('lat')
-            ->whereNotNull('lng')
-            ->whereBetween('lat', [$minLat, $maxLat])
-            ->whereBetween('lng', [$minLng, $maxLng])
-            ->get();
-
-        $distanceByLocation = [];
-        foreach ($candidates as $candidate) {
-            $distance = $this->haversineDistanceKm(
-                $lat,
-                $lng,
-                (float) $candidate->lat,
-                (float) $candidate->lng
-            );
-
-            if ($distance > $radiusKm) {
-                continue;
-            }
-
-            $candidateLocationId = (int) $candidate->id;
-            if (! isset($distanceByLocation[$candidateLocationId]) || $distance < $distanceByLocation[$candidateLocationId]) {
-                $distanceByLocation[$candidateLocationId] = $distance;
-            }
-        }
+        $distanceByLocation = $this->talukaDistancesByCoordinate(
+            $lat,
+            $lng,
+            min(self::LABELLED_NEARBY_MAX_RADIUS_KM, $radiusKm),
+            min(self::LABELLED_NEARBY_MAX_LIMIT, $limit),
+        );
 
         if ($distanceByLocation === []) {
             return [];
         }
-
-        asort($distanceByLocation, SORT_NUMERIC);
-        $distanceByLocation = array_slice($distanceByLocation, 0, $limit, true);
 
         $locations = Location::query()
             ->with('parent')
@@ -810,6 +759,100 @@ class LocationService
             ->filter()
             ->values()
             ->all();
+    }
+
+    /**
+     * Geocoded taluka ids within `$radiusKm` of a coordinate, nearest first, as `id => distance_km`.
+     *
+     * This is the ids-only core that {@see nearbyTalukasByCoordinate()} decorates with names, labels
+     * and ancestor ids. Callers that only need to RANK by proximity — {@see \App\Services\Matching\NearbyFeedService}
+     * ranks the whole nearby feed this way — take this one instead and skip the per-row hierarchy walk
+     * and label formatting, which is the expensive half and is pure waste when nothing is displayed.
+     *
+     * @return array<int, float> ordered nearest first
+     */
+    public function talukaIdsByDistance(float $lat, float $lng, int $radiusKm, int $limit): array
+    {
+        return $this->talukaDistancesByCoordinate($lat, $lng, $radiusKm, $limit);
+    }
+
+    /**
+     * @return array<int, float> `addresses.id` => distance km, nearest first, at most `$limit` entries
+     */
+    private function talukaDistancesByCoordinate(float $lat, float $lng, int $radiusKm, int $limit): array
+    {
+        $radiusKm = max(1, min(self::MAX_RADIUS_KM, $radiusKm));
+        $limit = max(1, min(self::MAX_NEARBY_LIMIT, $limit));
+
+        $distanceByLocation = $this->distanceMapWithinRadius(
+            $lat,
+            $lng,
+            $radiusKm,
+            hierarchy: 'taluka',
+            activeOnly: true,
+            excludeLocationId: null,
+        );
+
+        return array_slice($distanceByLocation, 0, $limit, true);
+    }
+
+    /**
+     * The one owner of "geocoded `addresses` rows within a radius of a coordinate".
+     *
+     * Bound the scan to a lat/lng box before measuring distance. Without it this loaded EVERY geocoded
+     * address in the country into memory and haversined each one — measured at 1.5 s and ~500 MB per
+     * call on production, twice per profile view, which killed the PHP worker and surfaced to the app
+     * as a 502. The rows outside the box are exactly the ones the radius filter would have discarded
+     * anyway. Uses the index from 2026_07_26_150000_add_geo_bounding_box_index.
+     *
+     * @return array<int, float> `addresses.id` => distance km, sorted nearest first
+     */
+    private function distanceMapWithinRadius(
+        float $lat,
+        float $lng,
+        int $radiusKm,
+        ?string $hierarchy,
+        bool $activeOnly,
+        ?int $excludeLocationId,
+    ): array {
+        $latDelta = $radiusKm / 111.045;
+        $cosLat = cos(deg2rad($lat));
+        $lngDelta = abs($cosLat) < 0.01 ? 180.0 : $radiusKm / (111.045 * abs($cosLat));
+
+        $query = Location::query()
+            ->select(['id', 'lat', 'lng'])
+            ->whereNotNull('lat')
+            ->whereNotNull('lng')
+            ->whereBetween('lat', [max(-90.0, $lat - $latDelta), min(90.0, $lat + $latDelta)])
+            ->whereBetween('lng', [max(-180.0, $lng - $lngDelta), min(180.0, $lng + $lngDelta)]);
+
+        if ($hierarchy !== null && $hierarchy !== '') {
+            $query->where('hierarchy', $hierarchy);
+        }
+        if ($activeOnly) {
+            $query->where('is_active', true);
+        }
+        if ($excludeLocationId !== null) {
+            $query->where('id', '!=', $excludeLocationId);
+        }
+
+        $distanceByLocation = [];
+        foreach ($query->get() as $candidate) {
+            $distance = $this->haversineDistanceKm($lat, $lng, (float) $candidate->lat, (float) $candidate->lng);
+
+            if ($distance > $radiusKm) {
+                continue;
+            }
+
+            $candidateLocationId = (int) $candidate->id;
+            if (! isset($distanceByLocation[$candidateLocationId]) || $distance < $distanceByLocation[$candidateLocationId]) {
+                $distanceByLocation[$candidateLocationId] = $distance;
+            }
+        }
+
+        asort($distanceByLocation, SORT_NUMERIC);
+
+        return $distanceByLocation;
     }
 
     private function haversineDistanceKm(float $lat1, float $lng1, float $lat2, float $lng2): float

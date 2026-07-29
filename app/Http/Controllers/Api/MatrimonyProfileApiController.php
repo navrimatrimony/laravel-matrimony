@@ -17,6 +17,7 @@ use App\Services\Api\MobileProfileDisplayPresenter;
 use App\Services\EducationService;
 use App\Services\IncomeEngineService;
 use App\Services\Matching\MatchingService;
+use App\Services\Matching\NearbyFeedService;
 use App\Services\MutationService;
 use App\Services\OccupationService;
 use App\Services\Parsing\IntakeControlledFieldNormalizer;
@@ -1964,9 +1965,16 @@ class MatrimonyProfileApiController extends Controller
         $viewer = $request->user();
         $relations = $this->mobileListRelations();
         $feed = $this->mobileListFeed($request);
-        $profiles = $feed === null
-            ? $this->legacyMobileListProfiles($request, $viewer, $discovery, $relations)
-            : $this->feedMobileListProfiles($request, $viewer, $discovery, $matching, $relations, $feed);
+        $pagination = null;
+
+        if ($feed === 'nearby') {
+            [$profiles, $pagination] = $this->nearbyFeedProfiles($request, $viewer, $discovery, $relations);
+        } elseif ($feed === null) {
+            $profiles = $this->legacyMobileListProfiles($request, $viewer, $discovery, $relations);
+        } else {
+            $profiles = $this->feedMobileListProfiles($request, $viewer, $discovery, $matching, $relations, $feed);
+        }
+
         $presenter = app(MobileProfileDisplayPresenter::class);
 
         // Transform to include gender from the governed profile relation only.
@@ -2001,10 +2009,17 @@ class MatrimonyProfileApiController extends Controller
             ];
         });
 
-        return response()->json([
+        $payload = [
             'success' => true,
             'profiles' => $profiles,
-        ]);
+        ];
+        // Additive only — the shipped app reads `profiles` and ignores unknown keys. Clients that DO
+        // read it can lazy-load the next page instead of asking for the whole country at once.
+        if ($pagination !== null) {
+            $payload['pagination'] = $pagination;
+        }
+
+        return response()->json($payload);
     }
 
     /**
@@ -2079,9 +2094,79 @@ class MatrimonyProfileApiController extends Controller
         return match ($feed) {
             'daily' => $this->matchingFeedProfiles($request, $viewer, $discovery, $matching, $relations, MatchingService::TAB_DAILY),
             'my_matches' => $this->matchingFeedProfiles($request, $viewer, $discovery, $matching, $relations, MatchingService::TAB_PERFECT),
-            'nearby' => $this->matchingFeedProfiles($request, $viewer, $discovery, $matching, $relations, MatchingService::TAB_NEAR),
             default => $this->newFeedProfiles($request, $viewer, $discovery, $relations),
         };
+    }
+
+    /**
+     * "जवळची स्थळे" — own taluka first, then outward with no district/state ceiling, paginated.
+     *
+     * @param  array<int|string, mixed>  $relations
+     * @return array{0: Collection<int, MatrimonyProfile>, 1: array<string, mixed>}
+     */
+    private function nearbyFeedProfiles(
+        Request $request,
+        ?User $viewer,
+        MobileDiscoveryFilterService $discovery,
+        array $relations
+    ): array {
+        $page = max(1, (int) $request->integer('page', 1));
+        $perPage = (int) $request->integer('per_page', NearbyFeedService::DEFAULT_PER_PAGE);
+        $perPage = max(1, min(NearbyFeedService::MAX_PER_PAGE, $perPage));
+        $empty = ['page' => $page, 'per_page' => $perPage, 'count' => 0, 'has_more' => false];
+
+        if (! $viewer instanceof User || ! $discovery->viewerCanDiscover($viewer)) {
+            return [collect(), $empty];
+        }
+
+        $viewer->loadMissing('matrimonyProfile.gender');
+        $viewerProfile = $viewer->matrimonyProfile;
+        if (! $viewerProfile instanceof MatrimonyProfile) {
+            return [collect(), $empty];
+        }
+
+        $result = app(NearbyFeedService::class)->page(
+            $viewer,
+            $viewerProfile,
+            $this->nearbyOriginLeafId($request),
+            $page,
+            $perPage,
+            // Geographic parameters are the ORIGIN of this feed, never a filter on it — the widening
+            // is the whole point of the tab. Every other filter still narrows the pool as usual.
+            fn (Builder $query) => $this->applyMobileListFilters($query, $request, false),
+        );
+
+        $byId = MatrimonyProfile::with($relations)
+            ->whereIn('id', $result['ids'] !== [] ? $result['ids'] : [0])
+            ->get()
+            ->keyBy(fn (MatrimonyProfile $profile): int => (int) $profile->id);
+
+        $profiles = collect($result['ids'])
+            ->map(fn (int $id) => $byId->get($id))
+            ->filter()
+            ->values();
+
+        return [$profiles, [
+            'page' => $result['page'],
+            'per_page' => $result['per_page'],
+            'count' => $profiles->count(),
+            'has_more' => $result['has_more'],
+        ]];
+    }
+
+    /**
+     * Most specific geography the request named, as an {@code addresses} leaf id. Null ⇒ centre the
+     * feed on the viewer's own residence.
+     */
+    private function nearbyOriginLeafId(Request $request): ?int
+    {
+        foreach (['location_id', 'taluka_id', 'district_id', 'state_id', 'country_id'] as $key) {
+            if ($request->filled($key) && (int) $request->integer($key) > 0) {
+                return (int) $request->integer($key);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -2208,7 +2293,7 @@ class MatrimonyProfileApiController extends Controller
     /**
      * @param  Builder<MatrimonyProfile>  $query
      */
-    private function applyMobileListFilters(Builder $query, Request $request): void
+    private function applyMobileListFilters(Builder $query, Request $request, bool $applyResidenceGeo = true): void
     {
         $table = $query->getModel()->getTable();
 
@@ -2224,20 +2309,26 @@ class MatrimonyProfileApiController extends Controller
         }
 
         // Residence geo: filter by ancestor {@code addresses.id} (canonical leaf is {@see location_id}).
-        if ($request->filled('country_id')) {
-            $query->whereResidenceUnderAncestor((int) $request->country_id);
-        }
-        if ($request->filled('state_id')) {
-            $query->whereResidenceUnderAncestor((int) $request->state_id);
-        }
-        if ($request->filled('district_id')) {
-            $query->whereResidenceUnderAncestor((int) $request->district_id);
-        }
-        if ($request->filled('taluka_id')) {
-            $query->whereResidenceUnderAncestor((int) $request->taluka_id);
-        }
-        if ($request->filled('location_id')) {
-            $query->where('location_id', $request->location_id);
+        if ($applyResidenceGeo) {
+            if ($request->filled('country_id')) {
+                $query->whereResidenceUnderAncestor((int) $request->country_id);
+            }
+            if ($request->filled('state_id')) {
+                $query->whereResidenceUnderAncestor((int) $request->state_id);
+            }
+            if ($request->filled('district_id')) {
+                $query->whereResidenceUnderAncestor((int) $request->district_id);
+            }
+            if ($request->filled('taluka_id')) {
+                $query->whereResidenceUnderAncestor((int) $request->taluka_id);
+            }
+            // `matrimony_profiles.location_id` was dropped in 2026_05_11_200000 — residence now lives
+            // in `profile_addresses`. A raw where() on the vanished column made every request carrying
+            // this parameter a 500 ("Unknown column 'location_id'"). The scope is the schema-aware
+            // owner of that lookup and is exactly what the four ancestors above already use.
+            if ($request->filled('location_id')) {
+                $query->whereResidenceUnderAncestor((int) $request->integer('location_id'));
+            }
         }
 
         if ($request->filled('height_from_cm') && Schema::hasColumn($table, 'height_cm')) {
