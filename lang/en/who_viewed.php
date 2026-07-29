@@ -30,10 +30,10 @@ return [
     'teaser_taluka_suffix' => 'Taluka',
     // Place names are joined the way a person says them, not as a hierarchy path.
     'teaser_place_separator' => ', ',
-    'teaser_interest_hint_girl' => 'This girl may be interested in your profile.',
-    'teaser_interest_hint_woman' => 'This woman may be interested in your profile.',
-    'teaser_interest_hint_boy' => 'This boy may be interested in your profile.',
-    'teaser_interest_hint_man' => 'This man may be interested in your profile.',
+    'teaser_interest_hint_girl' => 'This bride may be interested in your profile.',
+    'teaser_interest_hint_woman' => 'This bride may be interested in your profile.',
+    'teaser_interest_hint_boy' => 'This groom may be interested in your profile.',
+    'teaser_interest_hint_man' => 'This groom may be interested in your profile.',
     'teaser_interest_hint_person' => 'This person may be interested in your profile.',
 
     'bubble_title' => 'Your profile got attention',
@@ -46,10 +46,10 @@ return [
     // card, so it must not end mid-sentence waiting for a template to glue the
     // next fragment on. It carries the place, so the attribute line below drops it.
     'teaser_headline_courtesy_from_place' => ':who from :place',
-    'courtesy_a_girl' => 'A girl',
-    'courtesy_a_woman' => 'A woman',
-    'courtesy_a_boy' => 'A boy',
-    'courtesy_a_man' => 'A man',
+    'courtesy_a_girl' => 'A bride',
+    'courtesy_a_woman' => 'A bride',
+    'courtesy_a_boy' => 'A groom',
+    'courtesy_a_man' => 'A groom',
     'teaser_headline_anonymous_from' => 'Someone from :place',
     'teaser_name_fallback' => 'Member',
     'teaser_age_exact' => 'Age :age',

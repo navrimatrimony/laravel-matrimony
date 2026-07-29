@@ -197,7 +197,7 @@ class ReceivedInterestTeaserAndPushCopyTest extends TestCase
             'type' => 'interest_sent',
             'revealed' => false,
             'teaser' => [
-                'headline' => 'खानापूर हून एक मुलगी',
+                'headline' => 'खानापूर हून एक वधू',
                 'lines' => ['22 वर्षे', 'अविवाहित'],
                 'viewed_summary' => 'काही वेळापूर्वी स्वारस्य दाखवले',
                 'photo_url' => null,
@@ -210,7 +210,7 @@ class ReceivedInterestTeaserAndPushCopyTest extends TestCase
         ]);
 
         $this->assertNotNull($body);
-        $this->assertStringStartsWith('खानापूर हून एक मुलगी', $body, 'Who/where must be front-loaded.');
+        $this->assertStringStartsWith('खानापूर हून एक वधू', $body, 'Who/where must be front-loaded.');
         $this->assertStringContainsString('22 वर्षे', $body);
         $this->assertStringContainsString('82%', $body);
         $this->assertNotSame(__('push.types.new_interest.body'), $body);
@@ -225,7 +225,7 @@ class ReceivedInterestTeaserAndPushCopyTest extends TestCase
             'type' => 'profile_viewed',
             'revealed' => false,
             'teaser' => [
-                'headline' => 'सांगली हून एक मुलगा',
+                'headline' => 'सांगली हून एक वर',
                 'lines' => ['२८ वर्षे'],
                 'match_line' => '७५% जुळणी',
             ],

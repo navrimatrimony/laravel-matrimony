@@ -30,10 +30,10 @@ return [
     'teaser_taluka_suffix' => 'तालुका',
     // Place names are joined the way a person says them, not as a hierarchy path.
     'teaser_place_separator' => ', ',
-    'teaser_interest_hint_girl' => 'ही मुलगी तुमच्या प्रोफाइलमध्ये interested असू शकते.',
-    'teaser_interest_hint_woman' => 'ही महिला तुमच्या प्रोफाइलमध्ये interested असू शकते.',
-    'teaser_interest_hint_boy' => 'हा मुलगा तुमच्या प्रोफाइलमध्ये interested असू शकतो.',
-    'teaser_interest_hint_man' => 'हा पुरुष तुमच्या प्रोफाइलमध्ये interested असू शकतो.',
+    'teaser_interest_hint_girl' => 'ही वधू तुमच्या प्रोफाइलमध्ये interested असू शकते.',
+    'teaser_interest_hint_woman' => 'ही वधू तुमच्या प्रोफाइलमध्ये interested असू शकते.',
+    'teaser_interest_hint_boy' => 'हा वर तुमच्या प्रोफाइलमध्ये interested असू शकतो.',
+    'teaser_interest_hint_man' => 'हा वर तुमच्या प्रोफाइलमध्ये interested असू शकतो.',
     'teaser_interest_hint_person' => 'कोणीतरी तुमच्या प्रोफाइलमध्ये interested असू शकते.',
 
     'bubble_title' => 'तुमच्या प्रोफाइलला लक्ष',
@@ -46,10 +46,10 @@ return [
     // card, so it must not end mid-sentence waiting for a template to glue the
     // next fragment on. It carries the place, so the attribute line below drops it.
     'teaser_headline_courtesy_from_place' => ':place हून :who',
-    'courtesy_a_girl' => 'एक मुलगी',
-    'courtesy_a_woman' => 'एक स्त्री',
-    'courtesy_a_boy' => 'एक मुलगा',
-    'courtesy_a_man' => 'एक पुरुष',
+    'courtesy_a_girl' => 'एक वधू',
+    'courtesy_a_woman' => 'एक वधू',
+    'courtesy_a_boy' => 'एक वर',
+    'courtesy_a_man' => 'एक वर',
     'teaser_headline_anonymous_from' => ':place भागातील कोणीतरी',
     'teaser_name_fallback' => 'सदस्य',
     'teaser_age_exact' => 'वय :age',
