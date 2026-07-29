@@ -141,6 +141,12 @@ class MobileProfileStepSnapshotService
             'nakshatra_id',
             'rashi_id',
             'charan',
+            // Derived from the chosen nakshatra via master_nakshatra_attributes
+            // (client auto-fills, never asked of the member). Land in the same
+            // profile_horoscope_data columns the website / Edit Profile write.
+            'gan_id',
+            'nadi_id',
+            'yoni_id',
         ],
     ];
 
@@ -362,6 +368,9 @@ class MobileProfileStepSnapshotService
                 'nakshatra_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_nakshatras', 'id')->where('is_active', true)],
                 'rashi_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_rashis', 'id')->where('is_active', true)],
                 'charan' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:4'],
+                'gan_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_gans', 'id')->where('is_active', true)],
+                'nadi_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_nadis', 'id')->where('is_active', true)],
+                'yoni_id' => ['sometimes', 'nullable', 'integer', Rule::exists('master_yonis', 'id')->where('is_active', true)],
             ],
         ];
 

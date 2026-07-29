@@ -25,6 +25,7 @@ use App\Models\OccupationMaster;
 use App\Models\Religion;
 use App\Models\SubCaste;
 use App\Models\WorkingWithType;
+use App\Services\HoroscopeRuleService;
 use App\Services\Location\LocationFormatterService;
 use App\Services\Location\LocationOpenPlaceSuggestionService;
 use App\Services\Location\LocationService;
@@ -60,7 +61,7 @@ class OnboardingLookupController extends Controller
 
     public function __construct(private readonly OnboardingLookupOptionFormatter $labels) {}
 
-    public function bootstrap(Request $request): JsonResponse
+    public function bootstrap(Request $request, HoroscopeRuleService $horoscopeRuleService): JsonResponse
     {
         $locale = $this->locale($request);
 
@@ -95,6 +96,9 @@ class OnboardingLookupController extends Controller
                 $this->staticOption('3', '3', '3', $locale),
                 $this->staticOption('4', '4', '4', $locale),
             ],
+            // Same payload/key/shape as ProfileSetupLookupController::remainingProfileOptions
+            // so onboarding and Edit Profile can run one shared client-side parser.
+            'horoscope_rules' => $horoscopeRuleService->getRulesForFrontend(),
             'age_policy' => [
                 'min_age' => 18,
                 'max_age' => 80,
