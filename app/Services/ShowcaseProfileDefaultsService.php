@@ -226,8 +226,19 @@ class ShowcaseProfileDefaultsService
 
         $loc = null;
         if ($policy !== null) {
-            // Admin bulk: strict — residence may come only from rows whose `tag` is in the bulk tag multiselect.
+            // Admin bulk: prefer rows whose `tag` is in the bulk tag multiselect, then the
+            // policy district/state/country pool. Residence is mandatory, so fall back to geo
+            // rather than leaving district_id/city_id null (which drops the profile entirely).
             $loc = self::pickShowcaseHierarchyFromAddressTags($policy);
+            if ($loc === null) {
+                $loc = self::locationHierarchyForShowcaseFromRealUsersPolicy($policy);
+            }
+            if ($loc === null) {
+                $loc = self::pickShowcaseHierarchyAnywhereInGeo();
+            }
+            if ($loc === null) {
+                $loc = self::locationHierarchyForShowcase();
+            }
         } else {
             $loc = self::locationHierarchyForShowcaseFromRealUsers();
             if ($loc === null) {

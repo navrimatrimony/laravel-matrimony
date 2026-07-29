@@ -35,7 +35,8 @@ class ShowcaseProfileFactory
         array $attributeOverrides = [],
         string $lifecycleState = 'draft',
         ?int $searcherMatrimonyProfileId = null,
-        bool $useAdminBulkFieldPolicy = false
+        bool $useAdminBulkFieldPolicy = false,
+        ?array $policyOverride = null
     ): ?int {
         return $this->createWithOutcome(
             $sequenceIndex,
@@ -44,7 +45,8 @@ class ShowcaseProfileFactory
             $attributeOverrides,
             $lifecycleState,
             $searcherMatrimonyProfileId,
-            $useAdminBulkFieldPolicy
+            $useAdminBulkFieldPolicy,
+            $policyOverride
         )->profileId;
     }
 
@@ -58,11 +60,16 @@ class ShowcaseProfileFactory
         array $attributeOverrides = [],
         string $lifecycleState = 'draft',
         ?int $searcherMatrimonyProfileId = null,
-        bool $useAdminBulkFieldPolicy = false
+        bool $useAdminBulkFieldPolicy = false,
+        ?array $policyOverride = null
     ): ShowcaseProfileCreateResult {
-        $bulkPolicy = ($useAdminBulkFieldPolicy && $searcherMatrimonyProfileId === null)
-            ? ShowcaseBulkCreateSettings::policy()
-            : null;
+        // $policyOverride comes from ShowcaseBucketPlanner: the admin bulk policy narrowed to
+        // one photo bucket (religion + marital + age range), so the generated profile matches
+        // an eng/ folder that actually has an unused photo.
+        $bulkPolicy = $policyOverride
+            ?? (($useAdminBulkFieldPolicy && $searcherMatrimonyProfileId === null)
+                ? ShowcaseBulkCreateSettings::policy()
+                : null);
 
         $attrs = array_merge(
             ShowcaseProfileDefaultsService::fullAttributesForShowcaseProfile($sequenceIndex, $genderOverride, $bulkPolicy),

@@ -43,8 +43,8 @@ class ShowcasePhotoPoolService
             return null;
         }
 
-        $religionKey = $this->folderKeyFromMasterValue(Religion::query()->whereKey($religionId)->value('key'));
-        $maritalKey = $this->folderKeyFromMasterValue(MasterMaritalStatus::query()->whereKey($maritalStatusId)->value('key'));
+        $religionKey = self::folderKeyFor(Religion::query()->whereKey($religionId)->value('key'));
+        $maritalKey = self::folderKeyFor(MasterMaritalStatus::query()->whereKey($maritalStatusId)->value('key'));
         if ($religionKey === null || $maritalKey === null) {
             return null;
         }
@@ -332,7 +332,8 @@ class ShowcasePhotoPoolService
         return [$total, $unused];
     }
 
-    private function folderKeyFromMasterValue(mixed $value): ?string
+    /** Master `key` -> eng/ folder segment (shared with {@see ShowcaseBucketPlanner}). */
+    public static function folderKeyFor(mixed $value): ?string
     {
         if (! is_string($value)) {
             return null;

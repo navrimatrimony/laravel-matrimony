@@ -39,4 +39,16 @@ return [
     'pool_health_exhausted' => 'Unused शून्य असलेले buckets',
     'pool_health_empty' => 'अजून eng/ folders नाहीत. Bulk आधी Showcase photo pool मध्ये upload करा.',
     'pool_health_manage' => 'Photo pool व्यवस्थापन',
+
+    'reachable_title' => 'सध्याच्या bulk settings नुसार वापरता येणारे फोटो',
+    'reachable_help' => ':unused unused फोटोंपैकी :available आत्ता वापरता येतील. Profiles याच फोटोंवरून तयार होतात, त्यामुळे काहीही गपचूप वगळले जात नाही.',
+    'reachable_edit_settings' => 'Bulk settings बदला',
+    'reachable_blocked_title' => 'सध्याच्या settings मुळे अगम्य: :count फोटो',
+    'reachable_edit_hint' => 'ते वापरण्यासाठी संबंधित marital status / religion निवडा किंवा age range वाढवा.',
+    'blocked_gender' => 'या वेळी हे gender निवडलेले नाही',
+    'blocked_religion' => 'bulk settings मध्ये हा धर्म परवानगी नाही',
+    'blocked_marital' => 'bulk settings मध्ये हा marital status निवडलेला नाही',
+    'blocked_age' => 'bulk age range च्या बाहेर',
+    'success_capped_by_pool' => ':requested मागितले, :available तयार झाले — सध्याच्या settings नुसार वापरण्यायोग्य फोटो तेवढेच होते.',
+    'error_no_reachable_photos' => 'सध्याच्या bulk settings शी एकही फोटो जुळत नाही (pool मध्ये :unused unused फोटो आहेत). Auto-showcase settings → Admin bulk मध्ये संबंधित marital status / religion निवडा किंवा age range वाढवा, नाहीतर त्या categories चे फोटो अपलोड करा.',
 ];

@@ -39,4 +39,16 @@ return [
     'pool_health_exhausted' => 'Buckets with zero unused',
     'pool_health_empty' => 'No eng/ photo folders yet. Upload categories in Showcase photo pool before bulk create.',
     'pool_health_manage' => 'Manage photo pool',
+
+    'reachable_title' => 'Reachable with current bulk settings',
+    'reachable_help' => ':available of :unused unused photos can be used right now. Profiles are generated from these photos, so nothing is silently skipped.',
+    'reachable_edit_settings' => 'Change bulk settings',
+    'reachable_blocked_title' => 'Blocked by current settings: :count photos',
+    'reachable_edit_hint' => 'Select the missing marital statuses / religions or widen the age range to unlock them.',
+    'blocked_gender' => 'gender not selected in this run',
+    'blocked_religion' => 'religion not allowed by bulk settings',
+    'blocked_marital' => 'marital status not selected in bulk settings',
+    'blocked_age' => 'outside the bulk age range',
+    'success_capped_by_pool' => 'Requested :requested, created :available — limited by usable photos for the current settings.',
+    'error_no_reachable_photos' => 'No photo matches the current bulk settings (:unused unused photos in the pool). Select the matching marital statuses / religions or widen the age range under Auto-showcase settings → Admin bulk, or upload photos for those categories.',
 ];

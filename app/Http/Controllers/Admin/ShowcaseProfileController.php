@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\MatrimonyProfile;
 use App\Services\Maintenance\MatrimonyProfileDatabasePurger;
 use App\Services\Showcase\AutoShowcaseSettings;
+use App\Services\Showcase\ShowcaseBucketPlanner;
 use App\Services\Showcase\ShowcaseBulkCreateReport;
+use App\Services\Showcase\ShowcaseBulkCreateSettings;
 use App\Services\Showcase\ShowcasePhotoPoolService;
 use App\Services\Showcase\ShowcaseProfileCreateResult;
 use App\Services\Showcase\ShowcaseProfileFactory;
@@ -72,6 +74,8 @@ class ShowcaseProfileController extends Controller
             'photoPolicyLabels' => ShowcaseBulkCreateReport::photoPolicyLabels(),
             'noPhotoProfileIds' => array_keys(array_filter($noPhotoProfileIds)),
             'poolHealth' => app(ShowcasePhotoPoolService::class)->poolHealthSummary(),
+            'bucketPlan' => app(ShowcaseBucketPlanner::class)->plan(ShowcaseBulkCreateSettings::policy()),
+            'bucketBlockedLabels' => ShowcaseBucketPlanner::blockedReasonLabels(),
         ]);
     }
 
@@ -87,12 +91,36 @@ class ShowcaseProfileController extends Controller
             ? $genderChoice
             : null;
 
+        // Photo-pool first: only draw buckets that still have an unused photo AND satisfy the
+        // admin bulk policy, so no profile is generated for an eng/ folder that cannot serve it.
+        $policy = ShowcaseBulkCreateSettings::policy();
+        $planner = app(ShowcaseBucketPlanner::class);
+        $plan = $planner->plan($policy, $genderOverride);
+        $slots = $planner->drawSlots($plan, $policy, $count);
+
+        if ($slots === []) {
+            return redirect()
+                ->route('admin.showcase-profile.bulk-create')
+                ->with('error', __('showcase_bulk.error_no_reachable_photos', [
+                    'unused' => (int) ($plan['pool_unused'] ?? 0),
+                ]));
+        }
+
         $actorUserId = (int) ($request->user()?->id ?? 0);
         $report = new ShowcaseBulkCreateReport($count);
         $factory = app(ShowcaseProfileFactory::class);
         $lifecycle = AutoShowcaseSettings::bulkShowcaseLifecycle();
-        for ($i = 0; $i < $count; $i++) {
-            $report->add($factory->createWithOutcome($i, $genderOverride, $actorUserId, [], $lifecycle, null, true));
+        foreach ($slots as $i => $slot) {
+            $report->add($factory->createWithOutcome(
+                $i,
+                $slot['gender'],
+                $actorUserId,
+                [],
+                $lifecycle,
+                null,
+                true,
+                $slot['policy']
+            ));
         }
 
         $summary = $report->toSummary();
@@ -111,6 +139,12 @@ class ShowcaseProfileController extends Controller
         }
         if ($summary['skipped_no_location'] > 0) {
             $message .= ' '.__('showcase_bulk.success_skipped_location', ['count' => $summary['skipped_no_location']]);
+        }
+        if (count($slots) < $count) {
+            $message .= ' '.__('showcase_bulk.success_capped_by_pool', [
+                'requested' => $count,
+                'available' => count($slots),
+            ]);
         }
 
         return redirect()

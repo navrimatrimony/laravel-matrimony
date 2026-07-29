@@ -27,6 +27,11 @@
             {{ session('success') }}
         </div>
     @endif
+    @if (session('error'))
+        <div class="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+            {{ session('error') }}
+        </div>
+    @endif
 
     @php $pool = $poolHealth ?? ['bucket_count' => 0, 'total_photos' => 0, 'exhausted_buckets' => 0, 'low_unused_buckets' => 0]; @endphp
     <div class="mb-6 rounded-xl border border-violet-200 bg-violet-50/50 px-4 py-4 dark:border-violet-900/50 dark:bg-violet-950/20">
@@ -46,6 +51,35 @@
             </div>
             <a href="{{ route('admin.showcase-photo-pool.index') }}" class="shrink-0 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700">{{ __('showcase_bulk.pool_health_manage') }}</a>
         </div>
+    </div>
+
+    @php
+        $plan = is_array($bucketPlan ?? null) ? $bucketPlan : ['buckets' => [], 'blocked' => [], 'available' => 0, 'pool_unused' => 0];
+        $blockedLabels = $bucketBlockedLabels ?? [];
+        $blockedTotal = (int) array_sum(array_column($plan['blocked'] ?? [], 'unused'));
+    @endphp
+    <div class="mb-6 rounded-xl border px-4 py-4 {{ (int) $plan['available'] > 0 ? 'border-sky-200 bg-sky-50/60 dark:border-sky-900/50 dark:bg-sky-950/20' : 'border-red-300 bg-red-50 dark:border-red-900/50 dark:bg-red-950/20' }}">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <p class="text-sm font-bold text-gray-900 dark:text-gray-100">{{ __('showcase_bulk.reachable_title') }}</p>
+                <p class="mt-1 text-xs text-gray-700 dark:text-gray-300">
+                    {{ __('showcase_bulk.reachable_help', ['available' => (int) $plan['available'], 'unused' => (int) $plan['pool_unused']]) }}
+                </p>
+            </div>
+            <a href="{{ route('admin.auto-showcase-settings.edit') }}#bulk" class="shrink-0 rounded-lg bg-sky-600 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-700">{{ __('showcase_bulk.reachable_edit_settings') }}</a>
+        </div>
+        @if ($blockedTotal > 0)
+            <p class="mt-3 text-xs font-semibold text-amber-900 dark:text-amber-200">{{ __('showcase_bulk.reachable_blocked_title', ['count' => $blockedTotal]) }}</p>
+            <ul class="mt-2 space-y-1 text-[11px] text-gray-700 dark:text-gray-300">
+                @foreach (array_slice($plan['blocked'], 0, 12) as $b)
+                    <li>
+                        <span class="font-mono">{{ $b['folder'] }}</span>
+                        <span class="text-gray-500">— {{ $b['unused'] }} —</span>
+                        <span>{{ $blockedLabels[$b['reason']] ?? $b['reason'] }}</span>
+                    </li>
+                @endforeach
+            </ul>
+        @endif
     </div>
 
     @if (is_array($summary))
