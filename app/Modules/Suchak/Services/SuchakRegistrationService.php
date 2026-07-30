@@ -6,6 +6,7 @@ use App\Models\AdminSetting;
 use App\Models\Location;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
+use App\Models\SuchakVerificationDocument;
 use App\Models\SuchakVerificationRecord;
 use App\Models\User;
 use App\Services\Image\ImageModerationService;
@@ -29,9 +30,7 @@ class SuchakRegistrationService
 
     private const CACHE_KEY_PREFIX = 'suchak_registration_otp:';
 
-    public function __construct(private readonly SuchakActivityLogger $activityLogger)
-    {
-    }
+    public function __construct(private readonly SuchakActivityLogger $activityLogger) {}
 
     /**
      * @param  array<string, mixed>  $attributes
@@ -526,6 +525,47 @@ class SuchakRegistrationService
         ];
     }
 
+    /**
+     * Removes one file from a verification, and the stored file with it.
+     *
+     * The record survives even when its last file goes: the requirement still
+     * exists, it is simply unmet again, and dropping the row would take the
+     * admin's remarks with it.
+     */
+    public function deleteVerificationDocument(SuchakVerificationDocument $document): void
+    {
+        $record = $document->record;
+        $path = (string) $document->document_path;
+
+        DB::transaction(function () use ($document, $record): void {
+            $document->delete();
+
+            if (! $record) {
+                return;
+            }
+
+            $remaining = $record->documents()->orderByDesc('id')->first();
+
+            $record->forceFill([
+                // Keep the single-path column pointing at something that still
+                // exists, or every older reader would follow it to a deleted
+                // file.
+                'document_path' => $remaining?->document_path,
+                'admin_status' => SuchakVerificationRecord::STATUS_PENDING,
+                'admin_user_id' => null,
+                'verified_at' => null,
+                'rejected_at' => null,
+            ])->save();
+        });
+
+        // Outside the transaction: losing the blob after the rows are gone is
+        // an orphaned file, which is harmless. Losing the rows after the blob
+        // is a record pointing at nothing, which is not.
+        if ($path !== '' && Storage::disk('local')->exists($path)) {
+            Storage::disk('local')->delete($path);
+        }
+    }
+
     private function storeVerificationDocument(
         SuchakAccount $account,
         UploadedFile $document,
@@ -555,13 +595,20 @@ class SuchakRegistrationService
             ]);
         }
 
-        return SuchakVerificationRecord::query()->updateOrCreate(
+        $record = SuchakVerificationRecord::query()->updateOrCreate(
             [
                 'suchak_account_id' => $account->id,
                 'verification_type' => $verificationType,
             ],
             [
+                // Kept pointing at the newest file. Everything that reads a
+                // verification through this single column — the admin list, the
+                // "uploaded" flag in the onboarding status — keeps working
+                // without knowing the record now holds several.
                 'document_path' => $path,
+                // Any new file reopens the decision. Approving page one and
+                // then receiving page two must not leave the record approved
+                // on evidence nobody has looked at.
                 'admin_status' => SuchakVerificationRecord::STATUS_PENDING,
                 'admin_user_id' => null,
                 'remarks' => null,
@@ -570,6 +617,17 @@ class SuchakRegistrationService
                 'rejected_at' => null,
             ],
         );
+
+        // Appended, never replaced. A Suchak sending the back of an Aadhaar
+        // after the front used to erase the front, and nothing said so.
+        $record->documents()->create([
+            'document_path' => $path,
+            'original_name' => Str::limit((string) $document->getClientOriginalName(), 255, ''),
+            'mime_type' => $document->getClientMimeType(),
+            'size_bytes' => $document->getSize() ?: null,
+        ]);
+
+        return $record->refresh();
     }
 
     /**

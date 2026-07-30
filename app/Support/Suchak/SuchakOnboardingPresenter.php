@@ -16,7 +16,7 @@ class SuchakOnboardingPresenter
     public function forAccount(SuchakAccount $account, ?Collection $verificationRecords = null): array
     {
         $account->loadMissing('user');
-        $verificationRecords ??= $account->verificationRecords()->latest('id')->get();
+        $verificationRecords ??= $account->verificationRecords()->with('documents')->latest('id')->get();
 
         $mobileVerified = $account->user?->mobile_verified_at !== null;
         $verificationStatus = (string) $account->verification_status;
@@ -144,7 +144,7 @@ class SuchakOnboardingPresenter
      * "documents in" signal from the same rule instead of restating it — there
      * is one definition of what a Suchak must submit.
      *
-     * @return array<string, bool>  document type => required
+     * @return array<string, bool> document type => required
      */
     public static function documentRequirements(string $businessType): array
     {
@@ -179,6 +179,17 @@ class SuchakOnboardingPresenter
                 'status' => $status,
                 'status_label' => __('suchak.labels.common.'.$statusLabelKey),
                 'remarks' => LocalizedText::column($record, 'remarks') ?: null,
+                // Every file under this verification, so the Suchak can see
+                // what they have already sent instead of guessing whether the
+                // second page arrived.
+                'documents' => $record
+                    ? $record->documents->map(fn ($document): array => [
+                        'id' => $document->id,
+                        'name' => $document->original_name,
+                        'is_pdf' => $document->isPdf(),
+                        'size_bytes' => $document->size_bytes,
+                    ])->values()->all()
+                    : [],
             ];
         })->values();
     }

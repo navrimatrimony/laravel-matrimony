@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Suchak;
 
 use App\Http\Controllers\Controller;
 use App\Models\SuchakAccount;
+use App\Models\SuchakVerificationDocument;
 use App\Models\SuchakVerificationRecord;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakRegistrationService;
@@ -358,6 +359,47 @@ class SuchakRegisterApiController extends Controller
         ]);
     }
 
+    /**
+     * Removes one file from a verification.
+     *
+     * Scoped to the caller's own account on purpose: the id alone must never be
+     * enough to reach someone else's identity proof.
+     *
+     * Deleting the last file leaves the verification itself standing but empty,
+     * so the onboarding step correctly reads as "not sent" again rather than
+     * disappearing from the checklist.
+     */
+    public function destroyDocument(
+        Request $request,
+        int $document,
+        SuchakRegistrationService $registrationService,
+    ): JsonResponse {
+        $user = $this->requireSuchakUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        $account = $user->suchakAccount;
+        $row = SuchakVerificationDocument::query()
+            ->whereKey($document)
+            ->whereHas('record', fn ($query) => $query->where('suchak_account_id', $account->id))
+            ->first();
+
+        if (! $row) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Document not found.',
+            ], 404);
+        }
+
+        $registrationService->deleteVerificationDocument($row);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Document removed.',
+        ]);
+    }
+
     public function status(Request $request, SuchakOnboardingPresenter $onboardingPresenter): JsonResponse
     {
         $user = $this->requireSuchakUser($request);
@@ -367,7 +409,10 @@ class SuchakRegisterApiController extends Controller
 
         $account = $user->suchakAccount;
         $account->load([
-            'verificationRecords' => fn ($query) => $query->latest('id'),
+            // With the files loaded: the presenter now lists them, and without
+            // this it would fetch each verification's documents one query at a
+            // time.
+            'verificationRecords' => fn ($query) => $query->with('documents')->latest('id'),
         ]);
 
         $onboarding = $onboardingPresenter->forAccount($account, $account->verificationRecords);

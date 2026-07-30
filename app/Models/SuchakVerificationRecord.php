@@ -5,30 +5,43 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SuchakVerificationRecord extends Model
 {
     use HasFactory;
 
     public const TYPE_IDENTITY = 'identity';
+
     public const TYPE_OFFICE = 'office';
+
     public const TYPE_BUSINESS = 'business';
+
     public const TYPE_PHONE = 'phone';
+
     public const TYPE_PROFILE_PHOTO = 'profile_photo';
+
     /** Organization branding — optional during native APK onboarding. */
     public const TYPE_ORGANIZATION_LOGO = 'organization_logo';
+
     /** Organization office photo — optional during native APK onboarding. */
     public const TYPE_OFFICE_PHOTO = 'office_photo';
+
     public const TYPE_OTHER = 'other';
 
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_APPROVED = 'approved';
+
     public const STATUS_REJECTED = 'rejected';
 
     /** AI safety outcome at upload (ops queue routing). */
     public const MODERATION_SAFE = 'safe';
+
     public const MODERATION_REVIEW = 'review';
+
     public const MODERATION_REJECTED = 'rejected';
+
     public const MODERATION_ERROR = 'error';
 
     protected $table = 'suchak_verification_records';
@@ -52,6 +65,20 @@ class SuchakVerificationRecord extends Model
         'verified_at' => 'datetime',
         'rejected_at' => 'datetime',
     ];
+
+    /**
+     * Every file sent for this verification, oldest first.
+     *
+     * `document_path` on the record still names the newest one, so callers that
+     * only ever wanted "the document" keep working; this is for the ones that
+     * need to see all of them — the Suchak reviewing what they sent, and the
+     * admin deciding on it.
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(SuchakVerificationDocument::class, 'suchak_verification_record_id')
+            ->orderBy('id');
+    }
 
     public function suchakAccount(): BelongsTo
     {

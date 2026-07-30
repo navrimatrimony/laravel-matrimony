@@ -63,6 +63,8 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::post('/register/organization-logo', [SuchakRegisterApiController::class, 'storeOrganizationLogo']);
     Route::post('/register/office-photo', [SuchakRegisterApiController::class, 'storeOfficePhoto']);
     Route::post('/register/documents', [SuchakRegisterApiController::class, 'storeDocument']);
+    Route::delete('/register/documents/{document}', [SuchakRegisterApiController::class, 'destroyDocument'])
+        ->whereNumber('document');
     Route::get('/register/status', [SuchakRegisterApiController::class, 'status']);
 
     /*
