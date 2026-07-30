@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 class SuchakConsentService
@@ -28,8 +29,7 @@ class SuchakConsentService
         private readonly SuchakAccessService $accessService,
         private readonly SuchakPolicyService $policyService,
         private readonly SuchakCustomerLifecycleService $customerLifecycleService,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<string, mixed>  $attributes
@@ -429,8 +429,7 @@ class SuchakConsentService
         User $actor,
         ?string $ipAddress = null,
         ?string $userAgent = null,
-    ): SuchakConsent
-    {
+    ): SuchakConsent {
         $this->assertOtpFormat($otp);
         $consent->refresh()->loadMissing('suchakAccount');
         $this->assertConsentSuchakActor($consent, $actor);
@@ -655,6 +654,131 @@ class SuchakConsentService
             $updated = $consent->fresh(['representation']);
             $this->recordEvent($updated, SuchakConsentEvent::EVENT_CONSENT_ACCEPTED, SuchakConsentEvent::ACTOR_SUCHAK, $actor->id, $proofNote);
             $this->recordActivity($updated, $actor, SuchakActivityLog::ACTION_CONSENT_VERIFIED, 'consent_manual_proof_accepted', $ipAddress, $userAgent);
+
+            return $updated;
+        });
+    }
+
+    /**
+     * Records the Suchak's own declaration that the candidate agreed in person.
+     *
+     * This exists because the alternative is worse. A Suchak sitting across
+     * from a family will not wait for a link to be opened; without an honest
+     * way to say "they agreed in front of me", the workaround is to send the
+     * link to their own phone and accept it there — which lands in the data as
+     * the candidate having consented, and is simply false. A declaration is at
+     * least true about what happened.
+     *
+     * It is therefore recorded as what it is, and never as candidate consent:
+     * its own channel, the declaring user's identity, and a flag on the
+     * representation so {@see SuchakProfileRepresentation::scopeWithCandidateGivenConsent()}
+     * can keep it from blocking another Suchak.
+     *
+     * @param  array{consent_given_by_name?: string, candidate_name_affirmed?: string, consent_giver_relation?: string, consent_mobile_number?: string, consent_type?: string}  $attributes
+     */
+    public function recordSuchakDeclaredConsent(
+        SuchakProfileRepresentation $representation,
+        User $actor,
+        array $attributes = [],
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): SuchakConsent {
+        $representation->loadMissing(['suchakAccount', 'matrimonyProfile']);
+        $this->assertRepresentationSuchakActor($representation, $actor);
+
+        // The name is typed back by the Suchak on purpose. Reading a person's
+        // name and affirming it is a different act from ticking a box, and it
+        // is the only friction standing between "I was there" and a habit.
+        $affirmed = trim((string) ($attributes['candidate_name_affirmed'] ?? ''));
+        if ($affirmed === '') {
+            throw ValidationException::withMessages([
+                'candidate_name_affirmed' => __('The candidate name must be confirmed.'),
+            ]);
+        }
+
+        $consentType = (string) ($attributes['consent_type'] ?? SuchakConsent::TYPE_ONE_YEAR);
+        if (! in_array($consentType, SuchakConsent::TYPES, true)) {
+            $consentType = SuchakConsent::TYPE_ONE_YEAR;
+        }
+
+        $validFrom = now();
+        $validUntil = $this->validUntilFor($consentType, $validFrom);
+
+        return DB::transaction(function () use (
+            $representation,
+            $actor,
+            $attributes,
+            $affirmed,
+            $consentType,
+            $validFrom,
+            $validUntil,
+            $ipAddress,
+            $userAgent
+        ): SuchakConsent {
+            $consent = SuchakConsent::query()->create([
+                'suchak_account_id' => $representation->suchak_account_id,
+                'matrimony_profile_id' => $representation->matrimony_profile_id,
+                'representation_id' => $representation->id,
+                'consent_status' => SuchakConsent::STATUS_ACCEPTED,
+                'consent_type' => $consentType,
+                'consent_channel' => SuchakConsent::CHANNEL_SUCHAK_DECLARED,
+                'consent_method' => SuchakConsent::METHOD_SUCHAK_DECLARED,
+                // Snapshot what was actually affirmed, not the consent text a
+                // candidate would have read — nobody read that here. Stored so
+                // an audit can see, months later, exactly what the Suchak put
+                // their name to.
+                'consent_text_snapshot' => 'Declared by the Suchak: '.$affirmed
+                    .' gave consent in person. The Suchak accepts responsibility for this declaration.',
+                'consent_template_version' => SuchakConsent::TEMPLATE_VERSION_V1,
+                'consent_text_version' => SuchakConsent::CONSENT_TEXT_VERSION_V1,
+                'consent_given_by_name' => trim((string) ($attributes['consent_given_by_name'] ?? $affirmed)),
+                'relationship_to_candidate' => $attributes['consent_giver_relation'] ?? null,
+                'consent_giver_relation' => $attributes['consent_giver_relation'] ?? null,
+                'consent_mobile_number' => $attributes['consent_mobile_number'] ?? null,
+                // No token is ever minted. There is no link for anyone to open,
+                // and a dangling token would look like an unanswered request.
+                'accepted_at' => $validFrom,
+                'decided_at' => $validFrom,
+                'used_at' => $validFrom,
+                'valid_from' => $validFrom,
+                'valid_until' => $validUntil,
+                'delivery_status' => 'suchak_declared',
+                'ip_address' => $ipAddress,
+                'user_agent' => Str::limit((string) $userAgent, 512, ''),
+            ]);
+
+            SuchakProfileRepresentation::query()
+                ->whereKey($representation->id)
+                ->update([
+                    'representation_status' => SuchakProfileRepresentation::STATUS_ACTIVE,
+                    'consent_status' => SuchakProfileRepresentation::CONSENT_ACCEPTED,
+                    'consent_is_suchak_declared' => true,
+                    // Left alone on purpose: this is not a verified consent, and
+                    // "first verified" must keep meaning the first time the
+                    // candidate themselves answered.
+                    'consent_verified_at' => null,
+                    'consent_valid_until' => $validUntil,
+                    'revoked_at' => null,
+                ]);
+
+            $this->promoteConsentedClaimToCustomer($consent);
+
+            $updated = $consent->fresh(['representation']);
+            $this->recordEvent(
+                $updated,
+                SuchakConsentEvent::EVENT_CONSENT_ACCEPTED,
+                SuchakConsentEvent::ACTOR_SUCHAK,
+                $actor->id,
+                'Suchak declared in-person consent for: '.Str::limit($affirmed, 160, ''),
+            );
+            $this->recordActivity(
+                $updated,
+                $actor,
+                SuchakActivityLog::ACTION_CONSENT_VERIFIED,
+                'consent_suchak_declared',
+                $ipAddress,
+                $userAgent,
+            );
 
             return $updated;
         });
@@ -1119,6 +1243,24 @@ class SuchakConsentService
 
         if ((int) $consent->suchakAccount->user_id !== (int) $actor->id) {
             throw new InvalidArgumentException('Only the consent Suchak actor can manage consent.');
+        }
+    }
+
+    /**
+     * Same rule as [assertConsentSuchakActor], applied before any consent row
+     * exists — a declaration creates one from nothing, so the guard cannot hang
+     * off the consent.
+     */
+    private function assertRepresentationSuchakActor(SuchakProfileRepresentation $representation, User $actor): void
+    {
+        $account = $representation->suchakAccount;
+
+        if ($account === null || ! $this->accessService->canPrepareCustomers($account)) {
+            throw new InvalidArgumentException('Only active Suchak accounts can manage consent.');
+        }
+
+        if ((int) $account->user_id !== (int) $actor->id) {
+            throw new InvalidArgumentException('Only the representation Suchak actor can manage consent.');
         }
     }
 

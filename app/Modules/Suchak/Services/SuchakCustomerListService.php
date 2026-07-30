@@ -224,8 +224,14 @@ class SuchakCustomerListService
             'gender' => $this->genderLabel($profile),
             'address' => $profile?->residenceLocationDisplayLine() ?: '—',
             'status_label' => $this->statusLabel($representation->representation_status, 'representation'),
-            'consent_label' => $this->statusLabel($representation->consent_status, 'consent'),
+            'consent_label' => $representation->consent_is_suchak_declared
+                ? __('suchak.labels.consent.suchak_declared')
+                : $this->statusLabel($representation->consent_status, 'consent'),
             'consent_status' => (string) $representation->consent_status,
+            // Never merged into consent_status. Everything downstream treats
+            // 'accepted' as the candidate having agreed, and this one did not
+            // come from them.
+            'consent_is_suchak_declared' => (bool) $representation->consent_is_suchak_declared,
             'consent_action_url' => $canRenewConsent
                 ? route('suchak.representations.consents.renew', $representation)
                 : ($canRequestConsent ? route('suchak.representations.consents.request', $representation) : null),

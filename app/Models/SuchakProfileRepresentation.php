@@ -15,12 +15,19 @@ class SuchakProfileRepresentation extends Model
     use HasFactory;
 
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_CONSENT_PENDING = 'consent_pending';
+
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_REVOKED = 'revoked';
+
     public const STATUS_EXPIRED = 'expired';
+
     public const STATUS_REJECTED = 'rejected';
+
     public const STATUS_SUSPENDED = 'suspended';
+
     public const STATUS_CANDIDATE_DEACTIVATED = 'candidate_deactivated';
 
     public const STATUSES = [
@@ -35,10 +42,15 @@ class SuchakProfileRepresentation extends Model
     ];
 
     public const MODE_UPLOADED_BY_SUCHAK = 'uploaded_by_suchak';
+
     public const MODE_MATCHED_EXISTING_PROFILE = 'matched_existing_profile';
+
     public const MODE_CANDIDATE_INVITED_SUCHAK = 'candidate_invited_suchak';
+
     public const MODE_ADMIN_ASSIGNED = 'admin_assigned';
+
     public const MODE_PRIMARY_SUCHAK = 'primary_suchak';
+
     public const MODE_MANUAL_FORM_BY_SUCHAK = 'manual_form_by_suchak';
 
     public const MODES = [
@@ -69,10 +81,15 @@ class SuchakProfileRepresentation extends Model
     ];
 
     public const CONSENT_NOT_REQUESTED = 'not_requested';
+
     public const CONSENT_REQUESTED = 'requested';
+
     public const CONSENT_ACCEPTED = 'accepted';
+
     public const CONSENT_REJECTED = 'rejected';
+
     public const CONSENT_EXPIRED = 'expired';
+
     public const CONSENT_REVOKED = 'revoked';
 
     public const CONSENT_STATUSES = [
@@ -93,6 +110,7 @@ class SuchakProfileRepresentation extends Model
         'representation_status',
         'representation_mode',
         'consent_status',
+        'consent_is_suchak_declared',
         'first_uploaded_at',
         'first_identified_at',
         'first_verified_consent_at',
@@ -107,6 +125,7 @@ class SuchakProfileRepresentation extends Model
         'first_identified_at' => 'datetime',
         'first_verified_consent_at' => 'datetime',
         'consent_verified_at' => 'datetime',
+        'consent_is_suchak_declared' => 'boolean',
         'consent_valid_until' => 'datetime',
         'revoked_at' => 'datetime',
         'candidate_deactivated_at' => 'datetime',
@@ -264,6 +283,26 @@ class SuchakProfileRepresentation extends Model
                     ->whereNull('consent_valid_until')
                     ->orWhere('consent_valid_until', '>=', now());
             });
+    }
+
+    /**
+     * Valid consent that the CANDIDATE actually gave.
+     *
+     * Narrower than withValidConsent() by exactly one thing: a consent the
+     * Suchak declared on the candidate's behalf does not count.
+     *
+     * This is the predicate for standing in another Suchak's way, and only
+     * this one. A declaration is enough for the Suchak who made it to manage
+     * the customer - that is the whole point of offering it - but it must not
+     * be enough to stop a different Suchak from asking that person directly.
+     * Otherwise one tick would let anyone lock a candidate away without the
+     * candidate ever being contacted.
+     */
+    public function scopeWithCandidateGivenConsent(Builder $query): Builder
+    {
+        return $query
+            ->withValidConsent()
+            ->where('consent_is_suchak_declared', false);
     }
 
     /**

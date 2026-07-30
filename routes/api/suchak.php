@@ -85,6 +85,8 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::get('/customers/{representation}/share-card', SuchakCustomerShareCardApiController::class);
     Route::post('/customers/{representation}/consents', [SuchakConsentsApiController::class, 'store']);
     Route::post('/customers/{representation}/consents/renew', [SuchakConsentsApiController::class, 'renew']);
+    // The Suchak's own declaration that the candidate agreed in person.
+    Route::post('/customers/{representation}/consents/declare', [SuchakConsentsApiController::class, 'declare']);
     Route::get('/customers/{representation}/payment-request-options', SuchakPaymentRequestOptionsApiController::class);
     Route::post('/customers/{representation}/payment-setup', SuchakPaymentSetupApiController::class);
     Route::post('/customers/{representation}/notes', [SuchakCustomerOpsApiController::class, 'storeNote']);

@@ -38,6 +38,73 @@ class SuchakConsentsApiController extends Controller
         return $this->dispatch($request, $representation, $consentService, renewal: false);
     }
 
+    /**
+     * The Suchak declares the candidate agreed in person.
+     *
+     * Separate from store() rather than another consent_method inside it,
+     * because this one produces no link, no token and no message — there is
+     * nothing to deliver. Sharing the request shape would have meant carrying
+     * fields that can never apply.
+     */
+    public function declare(
+        Request $request,
+        int $representation,
+        SuchakConsentService $consentService,
+    ): JsonResponse {
+        $user = $request->user();
+        if (! $user instanceof User || $user->suchakAccount === null) {
+            return response()->json(['success' => false, 'message' => 'Suchak account is required.'], 403);
+        }
+
+        /** @var SuchakAccount $account */
+        $account = $user->suchakAccount;
+
+        /** @var SuchakProfileRepresentation|null $row */
+        $row = SuchakProfileRepresentation::query()
+            ->whereKey($representation)
+            ->where('suchak_account_id', $account->id)
+            ->first();
+
+        if ($row === null) {
+            return response()->json(['success' => false, 'message' => 'Customer not found for this Suchak account.'], 404);
+        }
+
+        $validated = $request->validate([
+            // Typed back by the Suchak, not sent as a boolean. Affirming a
+            // person by name is the friction that keeps this from becoming the
+            // reflex option.
+            'candidate_name_affirmed' => ['required', 'string', 'max:191'],
+            'consent_given_by_name' => ['nullable', 'string', 'max:191'],
+            'consent_giver_relation' => ['nullable', 'string', 'max:64'],
+            'consent_mobile_number' => ['nullable', 'string', 'max:20'],
+            'consent_type' => ['nullable', 'string', Rule::in(SuchakConsent::TYPES)],
+        ]);
+
+        try {
+            $consent = $consentService->recordSuchakDeclaredConsent(
+                $row,
+                $user,
+                $validated,
+                $request->ip(),
+                $request->userAgent(),
+            );
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Consent recorded on the Suchak\'s declaration.',
+            'data' => [
+                'consent_id' => $consent->id,
+                'consent_status' => $consent->consent_status,
+                'consent_channel' => $consent->consent_channel,
+                'representation_id' => $consent->representation_id,
+                'suchak_declared' => true,
+            ],
+        ], 201);
+    }
+
     public function renew(
         Request $request,
         int $representation,

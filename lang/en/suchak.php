@@ -431,6 +431,7 @@ return [
             'rejected' => 'Consent declined',
             'expired' => 'Consent expired',
             'cancelled' => 'Consent request cancelled',
+            'suchak_declared' => 'Consent declared by Suchak',
             'revoked' => 'Consent withdrawn',
         ],
 

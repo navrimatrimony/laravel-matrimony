@@ -13,13 +13,21 @@ class SuchakConsent extends Model
     use HasFactory;
 
     public const STATUS_REQUESTED = 'requested';
+
     public const STATUS_LINK_OPENED = 'link_opened';
+
     public const STATUS_OTP_SENT = 'otp_sent';
+
     public const STATUS_OTP_VERIFIED = 'otp_verified';
+
     public const STATUS_ACCEPTED = 'accepted';
+
     public const STATUS_REJECTED = 'rejected';
+
     public const STATUS_EXPIRED = 'expired';
+
     public const STATUS_CANCELLED = 'cancelled';
+
     public const STATUS_REVOKED = 'revoked';
 
     public const STATUSES = [
@@ -50,7 +58,9 @@ class SuchakConsent extends Model
     ];
 
     public const TYPE_ONE_YEAR = 'one_year';
+
     public const TYPE_TWO_YEAR = 'two_year';
+
     public const TYPE_UNTIL_REVOKED = 'until_revoked';
 
     public const TYPES = [
@@ -60,13 +70,30 @@ class SuchakConsent extends Model
     ];
 
     public const CHANNEL_WHATSAPP_DEEP_LINK = 'whatsapp_deep_link';
+
     public const CHANNEL_SMS_OTP = 'sms_otp';
+
     public const CHANNEL_VOICE_OTP = 'voice_otp';
+
     public const CHANNEL_OFFLINE_PROOF = 'offline_proof';
+
     public const CHANNEL_ADMIN_ASSISTED = 'admin_assisted';
+
     public const CHANNEL_SUCHAK_RELAYED_LINK = 'suchak_relayed_link';
+
     public const CHANNEL_OFFLINE_SIGNED_PROOF = 'offline_signed_proof';
+
     public const CHANNEL_PLATFORM_ASSISTED_LINK = 'platform_assisted_link';
+
+    /**
+     * The Suchak's own word that the candidate agreed in person.
+     *
+     * Deliberately its own channel and never folded into the others: every
+     * one of those ends with the candidate doing something - opening a link,
+     * signing a form. This one ends with nobody but the Suchak having acted,
+     * and that difference has to stay visible in the data forever.
+     */
+    public const CHANNEL_SUCHAK_DECLARED = 'suchak_declared';
 
     public const CHANNELS = [
         self::CHANNEL_WHATSAPP_DEEP_LINK,
@@ -77,16 +104,22 @@ class SuchakConsent extends Model
         self::CHANNEL_SUCHAK_RELAYED_LINK,
         self::CHANNEL_OFFLINE_SIGNED_PROOF,
         self::CHANNEL_PLATFORM_ASSISTED_LINK,
+        self::CHANNEL_SUCHAK_DECLARED,
     ];
 
     public const METHOD_SUCHAK_RELAYED_LINK = self::CHANNEL_SUCHAK_RELAYED_LINK;
+
     public const METHOD_OFFLINE_SIGNED_PROOF = self::CHANNEL_OFFLINE_SIGNED_PROOF;
+
     public const METHOD_PLATFORM_ASSISTED_LINK = self::CHANNEL_PLATFORM_ASSISTED_LINK;
+
+    public const METHOD_SUCHAK_DECLARED = self::CHANNEL_SUCHAK_DECLARED;
 
     public const METHODS = [
         self::METHOD_SUCHAK_RELAYED_LINK,
         self::METHOD_OFFLINE_SIGNED_PROOF,
         self::METHOD_PLATFORM_ASSISTED_LINK,
+        self::METHOD_SUCHAK_DECLARED,
     ];
 
     public const LINK_METHODS = [
@@ -95,9 +128,11 @@ class SuchakConsent extends Model
     ];
 
     public const TEMPLATE_VERSION_V1 = 'v1';
+
     public const CONSENT_TEXT_VERSION_V1 = 'suchak_consent_v1';
 
     public const DEFAULT_TOKEN_EXPIRY_DAYS = 7;
+
     public const MAX_OTP_ATTEMPTS = 5;
 
     protected $table = 'suchak_consents';
