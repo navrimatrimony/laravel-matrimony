@@ -3,17 +3,19 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\User;
+use App\Services\Api\GoogleSignInService;
+use App\Support\MobileNumber;
+use Illuminate\Auth\Events\Registered;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rules;
-use App\Support\MobileNumber;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Throwable;
-
 
 class AuthController extends Controller
 {
@@ -51,6 +53,50 @@ class AuthController extends Controller
             'token' => $token,
             'user' => [
                 'id' => $user->id,
+                'email' => $user->email,
+            ],
+        ]);
+    }
+
+    /**
+     * Google sign-in and sign-up, over one route.
+     *
+     * The app sends the ID token Google handed it and nothing else — no email
+     * alongside it, because a caller-supplied address would be an unverified
+     * claim sitting next to a verified one. The address comes out of the token.
+     *
+     * `is_new_user` reports what happened, but the app does not have to trust it
+     * to route: it asks for the profile afterwards exactly as it does after a
+     * password login, and a member with no profile lands in onboarding either
+     * way. The flag is there so the client can word the greeting correctly.
+     */
+    public function google(Request $request, GoogleSignInService $googleSignIn): JsonResponse
+    {
+        $validated = $request->validate([
+            'id_token' => ['required', 'string', 'max:8192'],
+        ]);
+
+        try {
+            $result = $googleSignIn->authenticate((string) $validated['id_token']);
+        } catch (HttpException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], $e->getStatusCode() ?: 422);
+        }
+
+        /** @var User $user */
+        $user = $result['user'];
+        $token = $user->createToken('mobile-app')->plainTextToken;
+
+        return response()->json([
+            'success' => true,
+            'message' => $result['is_new_user'] ? 'Registration successful' : 'Login successful',
+            'token' => $token,
+            'is_new_user' => $result['is_new_user'],
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
                 'email' => $user->email,
             ],
         ]);
@@ -118,43 +164,44 @@ class AuthController extends Controller
 
         return null;
     }
+
     /**
- * Mobile API Register (JSON + Sanctum Token)
- */
-public function register(Request $request)
-{
-    // 1️⃣ Validate input
-    $request->validate([
-        'name' => ['required', 'string', 'max:255'],
-        'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users,email'],
-        'password' => ['required', Rules\Password::defaults()],
-    ]);
+     * Mobile API Register (JSON + Sanctum Token)
+     */
+    public function register(Request $request)
+    {
+        // 1️⃣ Validate input
+        $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', Rules\Password::defaults()],
+        ]);
 
-    // 2️⃣ Create user
-    $user = User::create([
-        'name' => $request->name,
-        'email' => $request->email,
-        'password' => Hash::make($request->password),
-    ]);
+        // 2️⃣ Create user
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+        ]);
 
-    // 3️⃣ Fire registered event without letting mail transport failures break mobile registration.
-    $this->dispatchRegisteredEventForMobile($user);
+        // 3️⃣ Fire registered event without letting mail transport failures break mobile registration.
+        $this->dispatchRegisteredEventForMobile($user);
 
-    // 4️⃣ Create Sanctum token
-    $token = $user->createToken('mobile-app')->plainTextToken;
+        // 4️⃣ Create Sanctum token
+        $token = $user->createToken('mobile-app')->plainTextToken;
 
-    // 5️⃣ JSON response
-    return response()->json([
-        'success' => true,
-        'message' => 'Registration successful',
-        'token' => $token,
-        'user' => [
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-        ],
-    ], 200);
-}
+        // 5️⃣ JSON response
+        return response()->json([
+            'success' => true,
+            'message' => 'Registration successful',
+            'token' => $token,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+            ],
+        ], 200);
+    }
 
     private function dispatchRegisteredEventForMobile(User $user): void
     {
@@ -186,5 +233,4 @@ public function register(Request $request)
             'message' => 'Logged out successfully',
         ], 200);
     }
-
 }

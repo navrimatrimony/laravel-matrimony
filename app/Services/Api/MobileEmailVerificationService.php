@@ -116,30 +116,56 @@ class MobileEmailVerificationService
     public function verifyGoogleEmail(User $user, string $email, string $idToken): User
     {
         $email = $this->normalizeEmail($email);
+        $claims = $this->verifiedGoogleClaims($idToken);
+        $googleEmail = $this->normalizeEmail((string) ($claims['email'] ?? ''));
+
+        if ($googleEmail !== $email) {
+            throw new HttpException(422, 'Google email verification failed.');
+        }
+
+        return $this->markEmailVerified($user, $email);
+    }
+
+    /**
+     * Verify a Google ID token and return its claims.
+     *
+     * This is the single place the app trusts Google: it checks the token with
+     * Google itself, that it was minted for one of our own client IDs, and that
+     * Google considers the address verified. Both the signed-in email
+     * verification flow and the signed-out Google sign-in flow go through here,
+     * so there is exactly one implementation of "is this Google token real".
+     *
+     * @return array<string, mixed>
+     */
+    public function verifiedGoogleClaims(string $idToken): array
+    {
         $idToken = trim($idToken);
         if ($idToken === '') {
             throw new HttpException(422, 'Google email verification token is missing.');
         }
 
-        $claims = $this->googleTokenClaims($idToken);
-        $googleEmail = $this->normalizeEmail((string) ($claims['email'] ?? ''));
-        $emailVerified = filter_var($claims['email_verified'] ?? false, FILTER_VALIDATE_BOOL) === true;
-        $audience = trim((string) ($claims['aud'] ?? ''));
         $allowedAudiences = $this->googleClientIds();
-
         if ($allowedAudiences === []) {
             throw new HttpException(422, 'Google sign-in is not configured.');
         }
+
+        $claims = $this->googleTokenClaims($idToken);
+        $audience = trim((string) ($claims['aud'] ?? ''));
 
         if (! in_array($audience, $allowedAudiences, true)) {
             throw new HttpException(422, 'Google email verification audience is invalid.');
         }
 
-        if ($googleEmail === '' || $googleEmail !== $email || ! $emailVerified) {
+        $googleEmail = $this->normalizeEmail((string) ($claims['email'] ?? ''));
+        $emailVerified = filter_var($claims['email_verified'] ?? false, FILTER_VALIDATE_BOOL) === true;
+
+        if ($googleEmail === '' || ! $emailVerified) {
             throw new HttpException(422, 'Google email verification failed.');
         }
 
-        return $this->markEmailVerified($user, $email);
+        $claims['email'] = $googleEmail;
+
+        return $claims;
     }
 
     private function googleTokenClaims(string $idToken): array
