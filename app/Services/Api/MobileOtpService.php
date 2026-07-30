@@ -90,7 +90,12 @@ class MobileOtpService
     /**
      * @return array{user: User, token: string, is_new_account: bool}
      */
-    public function verifyChallenge(array $validated, Request $request): array
+    /**
+     * @param  User|null  $actor  Whoever is already signed in, when anyone is.
+     *                            Their account keeps the session and simply
+     *                            gains the verified number.
+     */
+    public function verifyChallenge(array $validated, Request $request, ?User $actor = null): array
     {
         $mobile = MobileNumber::normalize((string) ($validated['mobile'] ?? ''));
         if ($mobile === null) {
@@ -105,7 +110,9 @@ class MobileOtpService
         }
         RateLimiter::hit($verifyIpKey, self::SEND_DECAY_SECONDS);
 
-        $result = DB::transaction(function () use ($validated, $mobile): array {
+        // Whoever is already signed in, if anyone. Passed in rather than read
+        // here so the caller decides what counts as authenticated.
+        $result = DB::transaction(function () use ($validated, $mobile, $actor): array {
             $challenge = MobileOtpChallenge::query()
                 ->where('challenge_id', (string) $validated['challenge_id'])
                 ->where('mobile', $mobile)
@@ -145,10 +152,45 @@ class MobileOtpService
                 'verified_at' => now(),
             ])->save();
 
-            $user = User::query()
+            $owner = User::query()
                 ->where('mobile', $mobile)
                 ->lockForUpdate()
                 ->first();
+
+            // Someone is already signed in — they are verifying THEIR number,
+            // not signing in with it.
+            //
+            // Resolving by mobile alone used to switch them onto whatever
+            // account held it, and onto a brand new empty one when nothing did.
+            // A member who had just finished onboarding was handed a session
+            // for an account with no name and no profile, so the app sent them
+            // back to the first question and their work sat orphaned on the
+            // account they had actually filled it in on.
+            if ($actor !== null) {
+                if ($owner !== null && (int) $owner->id !== (int) $actor->id) {
+                    // Never move a number off another account: that would let
+                    // anyone claim a number they can receive one code on.
+                    throw new HttpException(409, 'This mobile number is already used by another account.');
+                }
+
+                $actor->forceFill([
+                    'mobile' => $mobile,
+                    'mobile_verified_at' => now(),
+                ])->save();
+
+                $this->persistConsents($actor, $challenge);
+                $this->persistAlertsOptIn($actor, $challenge->whatsapp_alerts_opt_in);
+
+                return [
+                    // No new token. The session they already hold stays valid,
+                    // and issuing another would only invite the app to swap it.
+                    'user' => $actor->fresh('matrimonyProfile'),
+                    'token' => null,
+                    'is_new_account' => false,
+                ];
+            }
+
+            $user = $owner;
 
             $isNewAccount = false;
             if ($user === null) {

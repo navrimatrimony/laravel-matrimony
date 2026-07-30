@@ -74,7 +74,10 @@ class MobileOtpController extends Controller
         ]);
 
         try {
-            $result = $otpService->verifyChallenge($validated, $request);
+            // Resolved explicitly: this route is not behind auth middleware
+            // (it is also the sign-in path), so a token only becomes a user if
+            // we ask the guard for it.
+            $result = $otpService->verifyChallenge($validated, $request, $request->user('sanctum'));
         } catch (HttpException $e) {
             return $this->httpExceptionResponse($e);
         } catch (ValidationException $e) {
@@ -85,6 +88,9 @@ class MobileOtpController extends Controller
 
         return response()->json([
             'success' => true,
+            // Null when an already signed-in member simply verified their own
+            // number — their existing session stands, and handing back a second
+            // token would invite the app to replace a perfectly good one.
             'token' => $result['token'],
             'token_type' => 'Bearer',
             'user' => $otpService->userPayload($user),
