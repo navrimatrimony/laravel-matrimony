@@ -11,6 +11,7 @@ use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakAccessService;
 use App\Modules\Suchak\Services\SuchakConsentContactSuggestionService;
+use App\Support\MobileNumber;
 use App\Services\MutationService;
 use App\Services\ProfileCompletionService;
 use App\Services\ProfileSectionReadinessService;
@@ -94,6 +95,74 @@ class SuchakRepresentedProfileApiController extends Controller
             'message' => 'Consent contact options loaded.',
             'data' => $result,
         ]);
+    }
+
+    /**
+     * Record one more number the candidate can be reached on.
+     *
+     * Consent may only target a number already stored on the profile
+     * (SuchakConsentService::assertIntendedMobileBelongsToProfile) — a rule
+     * that closed a real hole: a Suchak could otherwise send the link to their
+     * own phone and tick "I agree" for someone who never did. But the app had
+     * no way to ADD a number, so a Suchak who could not reach the candidate on
+     * their own line simply ran out of road.
+     *
+     * This is the way back in, and it keeps the rule intact by making the
+     * number profile data first: whose it is must be stated, so what lands on
+     * the allow-list is an attributable household contact, not an anonymous
+     * send target. The list comes back refreshed so the caller can select it.
+     */
+    public function storeConsentContact(
+        Request $request,
+        SuchakProfileRepresentation $representation,
+        SuchakAccessService $accessService,
+        SuchakConsentContactSuggestionService $suggestionService,
+        MutationService $mutationService,
+    ): JsonResponse {
+        $context = $this->authorizedContext($request, $representation, $accessService);
+        if ($context instanceof JsonResponse) {
+            return $context;
+        }
+        [$account, $profile] = $context;
+
+        $validated = $request->validate([
+            'mobile' => ['required', 'string', 'max:32'],
+            // Deliberately not nullable: an unlabelled contact used to sort as
+            // the candidate's own number, the highest consent priority, on no
+            // evidence at all (fixed in ca401c4d). Unknown is not an option.
+            'relation' => ['required', Rule::in(['father', 'mother', 'sibling', 'guardian', 'other'])],
+            'owner_name' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $mobile = MobileNumber::normalize((string) $validated['mobile']);
+        if ($mobile === null) {
+            return response()->json([
+                'success' => false,
+                'message' => __('otp.enter_valid_10_digit_mobile'),
+                'errors' => ['mobile' => [__('otp.enter_valid_10_digit_mobile')]],
+            ], 422);
+        }
+
+        if (! in_array($mobile, $suggestionService->allowedMobiles($profile), true)) {
+            $mutationService->recordHouseholdContact(
+                $profile,
+                $mobile,
+                (string) $validated['relation'],
+                (string) ($validated['owner_name'] ?? ''),
+            );
+        }
+
+        $result = $suggestionService->forRepresentation($representation, $profile->refresh());
+        $result['representation_id'] = (int) $representation->id;
+        $result['profile_id'] = (int) $profile->id;
+        $result['suchak_account_id'] = (int) $account->id;
+        $result['added_mobile'] = $mobile;
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Consent contact stored.',
+            'data' => $result,
+        ], 201);
     }
 
     /**
