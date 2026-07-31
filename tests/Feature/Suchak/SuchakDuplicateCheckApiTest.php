@@ -295,7 +295,7 @@ class SuchakDuplicateCheckApiTest extends TestCase
      * Suchak-entered DOBs are approximate, so the scan widened from same-MONTH
      * to birth-year ±1. An off-by-a-year DOB must surface — as advisory only.
      */
-    public function test_dob_off_by_one_year_is_found_as_medium(): void
+    public function test_a_nearby_birthday_is_reported_but_does_not_count_as_a_date_match(): void
     {
         $this->actingAsVerifiedSuchak('9876505925');
         $profileId = $this->existingMember('9876505926', 'Ganesh Jadhav', '1999-11-02', 'male');
@@ -308,9 +308,51 @@ class SuchakDuplicateCheckApiTest extends TestCase
         ])->assertOk();
 
         $match = collect($response->json('data.matches'))->firstWhere('profile_id', $profileId);
-        $this->assertNotNull($match, 'A ±1 year DOB drift must still be reported.');
-        $this->assertSame('medium', $match['confidence']);
+        $this->assertNotNull($match, 'The birth-year window must still surface the name.');
+        // The name carries this match on its own; the birthday does not agree.
+        $this->assertSame('none', $match['signals']['dob']);
+        $this->assertSame('low', $match['confidence']);
         $this->assertFalse($match['is_hard_stop']);
+    }
+
+    public function test_the_same_month_is_not_a_birthday_match(): void
+    {
+        $this->actingAsVerifiedSuchak('9876505927');
+        $profileId = $this->existingMember('9876505928', 'Sunita Gaikwad', '2001-07-17', 'female');
+
+        // Same name, same July, six days apart. This used to score 'year_month'
+        // and say "date of birth" on screen, which read like proof.
+        $response = $this->postJson('/api/v1/suchak/manual-profiles/duplicate-check', [
+            'candidate_name' => 'Sunita Gaikwad',
+            'candidate_mobile' => '9700000782',
+            'date_of_birth' => '2001-07-11',
+            'candidate_gender' => 'female',
+        ])->assertOk();
+
+        $match = collect($response->json('data.matches'))->firstWhere('profile_id', $profileId);
+        $this->assertNotNull($match);
+        $this->assertSame('none', $match['signals']['dob']);
+        $this->assertFalse($match['is_hard_stop']);
+        $this->assertFalse($response->json('data.hard_stop'));
+    }
+
+    public function test_the_whole_birthday_agreeing_still_hard_stops(): void
+    {
+        $this->actingAsVerifiedSuchak('9876505929');
+        $profileId = $this->existingMember('9876505930', 'Sunita Gaikwad', '2001-07-17', 'female');
+
+        $response = $this->postJson('/api/v1/suchak/manual-profiles/duplicate-check', [
+            'candidate_name' => 'Sunita Gaikwad',
+            'candidate_mobile' => '9700000783',
+            'date_of_birth' => '2001-07-17',
+            'candidate_gender' => 'female',
+        ])->assertOk();
+
+        $match = collect($response->json('data.matches'))->firstWhere('profile_id', $profileId);
+        $this->assertNotNull($match);
+        $this->assertSame('exact', $match['signals']['dob']);
+        $this->assertSame('high', $match['confidence']);
+        $this->assertTrue($match['is_hard_stop']);
     }
 
     /**
@@ -348,9 +390,10 @@ class SuchakDuplicateCheckApiTest extends TestCase
         $this->assertFalse($match['is_hard_stop']);
         $this->assertFalse($response->json('data.hard_stop'));
         $this->assertTrue($match['shared_number_possible']);
-        // The evidence is still reported in full — advisory, not hidden.
+        // The evidence is still reported in full — advisory, not hidden. The
+        // birthday is six days apart, so it does not agree at all.
         $this->assertSame('none', $match['signals']['name']);
-        $this->assertSame('year_month', $match['signals']['dob']);
+        $this->assertSame('none', $match['signals']['dob']);
     }
 
     public function test_candidates_own_number_still_hard_stops_on_the_number_alone(): void

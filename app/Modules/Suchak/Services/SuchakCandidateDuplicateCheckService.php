@@ -23,6 +23,9 @@ use Illuminate\Support\Facades\Schema;
  *   they declared as a sibling's or a parent's is a family line by their own
  *   account, and a hit on it alone can only ever be advisory. Only a number
  *   declared as the candidate's own still hard-stops on the number alone.
+ * - A birthday agrees or it does not (PO decision 2026-07-31). Same month or
+ *   same year is a coincidence, not a person: in one village a July 1999 pool
+ *   is dozens deep. Only the same day, month AND year counts as a DOB match.
  * - name(fuzzy) + DOB + gender together ≈ 80% duplicate likelihood → 'high'.
  * - DOB+gender with NO name overlap is deliberately dropped: in a large pool
  *   same-day-same-gender strangers are common and would flood the Suchak with
@@ -496,8 +499,9 @@ final class SuchakCandidateDuplicateCheckService
      *   1. exact DOB day (when a DOB was typed)
      *   2. literal name-token hits — catches a same-person row whose stored DOB
      *      is different or missing, and is the ONLY pass when no DOB is typed
-     *   3. birth-year ±1 window — Suchak-entered DOBs are approximate, so the
-     *      old same-MONTH window missed real duplicates
+     *   3. birth-year ±1 window — a net, not a rule: Suchak-entered DOBs are
+     *      approximate, so this surfaces rows whose name may still match. The
+     *      date itself only scores when it agrees exactly (see dobMatchLevel)
      *   4. village/caste narrowed recency sweep (weak signal, DOB-less only)
      * Each pass is ordered by id DESC (most recently created first) so the
      * result is deterministic across runs.
@@ -628,11 +632,14 @@ final class SuchakCandidateDuplicateCheckService
     }
 
     /**
-     * exact      — same calendar day.
-     * year_month — same year and month.
-     * year       — same year.
-     * near_year  — within ±1 year (approximate DOB tolerance).
-     * none       — no DOB on either side, or further apart than that.
+     * exact — same day, month and year.
+     * none  — anything else, including a DOB missing on either side.
+     *
+     * There is deliberately nothing in between. A shared birth month or year
+     * used to count as partial agreement, which read as evidence on screen and
+     * pushed strangers into the same bucket; the birth-year window in
+     * [identityCandidates] still finds those rows, it just no longer scores
+     * them on the date.
      */
     private function dobMatchLevel(?string $typedDob, mixed $storedDob): string
     {
@@ -645,23 +652,8 @@ final class SuchakCandidateDuplicateCheckService
         if ($stored === '' || $typed === '') {
             return 'none';
         }
-        if ($stored === $typed) {
-            return 'exact';
-        }
-        if (substr($stored, 0, 7) === substr($typed, 0, 7)) {
-            return 'year_month';
-        }
-        if (substr($stored, 0, 4) === substr($typed, 0, 4)) {
-            return 'year';
-        }
 
-        $storedYear = (int) substr($stored, 0, 4);
-        $typedYear = (int) substr($typed, 0, 4);
-        if ($storedYear > 0 && $typedYear > 0 && abs($storedYear - $typedYear) <= 1) {
-            return 'near_year';
-        }
-
-        return 'none';
+        return $stored === $typed ? 'exact' : 'none';
     }
 
     private function parseDate(?string $value): ?\Illuminate\Support\Carbon
@@ -684,8 +676,7 @@ final class SuchakCandidateDuplicateCheckService
     {
         $hasMobile = $row['mobile_sources'] !== [];
         $nameStrong = in_array($row['name_match'], [NameMatcher::LEVEL_EXACT, NameMatcher::LEVEL_STRONG], true);
-        $dobStrong = in_array($row['dob_match'], ['exact', 'year_month'], true);
-        $dobWeak = in_array($row['dob_match'], ['year', 'near_year'], true);
+        $dobStrong = $row['dob_match'] === 'exact';
         $genderOk = $row['gender_match'] !== false; // null (unknown) does not veto
         $soft = $row['soft_match'] === true;
 
@@ -705,16 +696,12 @@ final class SuchakCandidateDuplicateCheckService
         if ($nameStrong && $dobStrong && $genderOk) {
             return self::CONFIDENCE_HIGH;
         }
-        // Approximate DOB (±1 year) is deliberately advisory, never a hard stop.
-        if ($nameStrong && $dobWeak && $genderOk) {
-            return self::CONFIDENCE_MEDIUM;
-        }
-        // No DOB anywhere: name(+gender) alone can only ever be a hint. A
+        // No agreeing DOB: name(+gender) alone can only ever be a hint. A
         // matching village/caste lifts it one notch, still advisory.
         if ($nameStrong && $row['dob_match'] === 'none' && $genderOk) {
             return $soft ? self::CONFIDENCE_MEDIUM : self::CONFIDENCE_LOW;
         }
-        if ($row['name_match'] === NameMatcher::LEVEL_PARTIAL && $row['dob_match'] === 'exact' && $genderOk) {
+        if ($row['name_match'] === NameMatcher::LEVEL_PARTIAL && $dobStrong && $genderOk) {
             return self::CONFIDENCE_MEDIUM;
         }
         if ($row['name_match'] === NameMatcher::LEVEL_PARTIAL && $row['dob_match'] === 'none' && $genderOk && $soft) {

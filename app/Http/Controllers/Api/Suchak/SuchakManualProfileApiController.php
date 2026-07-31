@@ -196,10 +196,18 @@ class SuchakManualProfileApiController extends Controller
             ], 422);
         }
 
-        $existingMember = User::query()
-            ->where('mobile', $mobile)
-            ->with('matrimonyProfile')
-            ->first();
+        // Whose number this is decides what the number IS (PO decision
+        // 2026-07-31). Only the candidate's own becomes their account mobile.
+        // A father's or a brother's is a way to reach the household, and the
+        // household shares it — two sisters on one line is ordinary here. It
+        // used to land in users.mobile, which is unique, so the second sister
+        // could not be registered at all: the create call answered 409 and
+        // offered nothing but "ask that person for consent", who was not her.
+        $numberIsCandidateOwn = $validated['registering_for'] === SuchakCandidateDuplicateCheckService::REGISTERING_FOR_CANDIDATE_SELF;
+
+        $existingMember = $numberIsCandidateOwn
+            ? User::query()->where('mobile', $mobile)->with('matrimonyProfile')->first()
+            : null;
 
         if ($existingMember !== null) {
             return $this->handleExistingMobileProfile(
@@ -228,6 +236,7 @@ class SuchakManualProfileApiController extends Controller
             [$member, $profile, $representation] = DB::transaction(function () use (
                 $validated,
                 $mobile,
+                $numberIsCandidateOwn,
                 $genderId,
                 $request,
                 $account,
@@ -239,7 +248,11 @@ class SuchakManualProfileApiController extends Controller
                 $member = User::query()->create([
                     'name' => $validated['candidate_name'],
                     'email' => ($validated['candidate_email'] ?? null) ?: null,
-                    'mobile' => $mobile,
+                    // Left empty for a household number: it is not this
+                    // person's identity, and claiming it as one would block
+                    // the next family member and hand them a login they never
+                    // asked for.
+                    'mobile' => $numberIsCandidateOwn ? $mobile : null,
                     'password' => Hash::make(Str::random(40)),
                     'registering_for' => $validated['registering_for'],
                     'referral_code' => User::generateUniqueReferralCode(),
@@ -250,6 +263,18 @@ class SuchakManualProfileApiController extends Controller
                     'gender_id' => $genderId,
                     'is_suspended' => AdminSettingService::isManualProfileActivationRequired(),
                 ]);
+
+                if (! $numberIsCandidateOwn) {
+                    // Primary, so primary_contact_number resolves to it and the
+                    // consent request still goes to the number that was typed.
+                    $mutationService->recordHouseholdContact(
+                        $profile,
+                        $mobile,
+                        $this->contactRelationKeyFor($validated['registering_for']),
+                        $validated['candidate_name'],
+                        isPrimary: true,
+                    );
+                }
 
                 $representation = $representationService->createPendingManualProfile(
                     $account,
@@ -601,6 +626,24 @@ class SuchakManualProfileApiController extends Controller
      *
      * @return array<string, string>
      */
+    /**
+     * "Whose mobile is this?" answered in the create form, expressed as a
+     * master_contact_relations key.
+     *
+     * The two vocabularies are close but not the same: the form asks who the
+     * Suchak is registering FOR, the contacts table records who a number
+     * BELONGS TO. Where the form is vaguer than the table (a relative, a
+     * friend) the honest answer is 'other' rather than a guessed relative.
+     */
+    private function contactRelationKeyFor(string $registeringFor): string
+    {
+        return match ($registeringFor) {
+            'parent_guardian' => 'guardian',
+            'sibling' => 'sibling',
+            default => 'other',
+        };
+    }
+
     private function registeringForOptions(): array
     {
         return [

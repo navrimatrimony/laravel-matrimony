@@ -3060,6 +3060,60 @@ class MutationService
     /**
      * Mark a profile_contacts row as verified (self numbers only). Used after OTP check in controller.
      */
+    /**
+     * Store a phone number that belongs to someone in the candidate's household.
+     *
+     * A relative's number is a way to reach the candidate, not the candidate's
+     * identity, so it never becomes a login mobile on `users`. profile_contacts
+     * is where every other part of the product already looks for it — the
+     * duplicate check scans it, and MatrimonyProfile::primary_contact_number
+     * prefers it over the account mobile, which keeps consent going to the
+     * number the Suchak actually typed.
+     *
+     * @param  string  $relationKey  a master_contact_relations key (father,
+     *                               mother, guardian, sibling, other, self)
+     */
+    public function recordHouseholdContact(
+        MatrimonyProfile $profile,
+        string $phoneNumber,
+        string $relationKey,
+        string $contactName,
+        bool $isPrimary = false,
+    ): void {
+        $phone = trim($phoneNumber);
+        if ($phone === '') {
+            return;
+        }
+
+        $row = [
+            'profile_id' => $profile->id,
+            'phone_number' => $phone,
+            'contact_name' => trim($contactName) !== '' ? trim($contactName) : $relationKey,
+            'is_primary' => $isPrimary,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        if (Schema::hasColumn('profile_contacts', 'relation_type')) {
+            $row['relation_type'] = $relationKey;
+        }
+        if (Schema::hasColumn('profile_contacts', 'contact_relation_id')) {
+            $row['contact_relation_id'] = DB::table('master_contact_relations')
+                ->where('key', $relationKey)
+                ->value('id');
+        }
+        if (Schema::hasColumn('profile_contacts', 'visibility_rule')) {
+            $row['visibility_rule'] = 'unlock_only';
+        }
+        if (Schema::hasColumn('profile_contacts', 'verified_status')) {
+            $row['verified_status'] = false;
+        }
+
+        DB::table('profile_contacts')->insert(
+            array_intersect_key($row, array_fill_keys(Schema::getColumnListing('profile_contacts'), true))
+        );
+    }
+
     public function markSelfContactVerified(MatrimonyProfile $profile, int $contactId, int $actingUserId): void
     {
         $this->assertActingUserOwnsProfile($profile, $actingUserId);
