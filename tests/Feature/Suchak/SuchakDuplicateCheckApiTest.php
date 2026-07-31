@@ -326,6 +326,75 @@ class SuchakDuplicateCheckApiTest extends TestCase
         return $match;
     }
 
+    public function test_relatives_number_alone_is_advisory_not_a_hard_stop(): void
+    {
+        $this->actingAsVerifiedSuchak('9876506101');
+        $profileId = $this->existingMember('9876506102', 'Sunita Gaikwad', '2001-07-17', 'female');
+
+        // A second sister on the household line: same number, different name,
+        // and the Suchak says up front the number is a sibling's. This used to
+        // come back 'high', which hard-stops, so she could not be registered.
+        $response = $this->postJson('/api/v1/suchak/manual-profiles/duplicate-check', [
+            'candidate_name' => 'Rashi Khanna',
+            'candidate_mobile' => '9876506102',
+            'date_of_birth' => '2001-07-11',
+            'candidate_gender' => 'female',
+            'registering_for' => 'sibling',
+        ])->assertOk();
+
+        $match = collect($response->json('data.matches'))->firstWhere('profile_id', $profileId);
+        $this->assertNotNull($match);
+        $this->assertSame('medium', $match['confidence']);
+        $this->assertFalse($match['is_hard_stop']);
+        $this->assertFalse($response->json('data.hard_stop'));
+        $this->assertTrue($match['shared_number_possible']);
+        // The evidence is still reported in full — advisory, not hidden.
+        $this->assertSame('none', $match['signals']['name']);
+        $this->assertSame('year_month', $match['signals']['dob']);
+    }
+
+    public function test_candidates_own_number_still_hard_stops_on_the_number_alone(): void
+    {
+        $this->actingAsVerifiedSuchak('9876506103');
+        $profileId = $this->existingMember('9876506104', 'Sunita Gaikwad', '2001-07-17', 'female');
+
+        $response = $this->postJson('/api/v1/suchak/manual-profiles/duplicate-check', [
+            'candidate_name' => 'Rashi Khanna',
+            'candidate_mobile' => '9876506104',
+            'candidate_gender' => 'female',
+            'registering_for' => 'self',
+        ])->assertOk();
+
+        $match = collect($response->json('data.matches'))->firstWhere('profile_id', $profileId);
+        $this->assertNotNull($match);
+        $this->assertSame('high', $match['confidence']);
+        $this->assertTrue($match['is_hard_stop']);
+        // Their own number cannot belong to two people, so the shared-line
+        // warning stays off here.
+        $this->assertFalse($match['shared_number_possible']);
+    }
+
+    public function test_relative_declaration_does_not_rescue_a_real_duplicate(): void
+    {
+        $this->actingAsVerifiedSuchak('9876506105');
+        $profileId = $this->existingMember('9876506106', 'Shriram Kadam', '2000-05-10', 'male');
+
+        // Same name, same day of birth: whoever the number belongs to, this is
+        // the same person, and the check must still say so.
+        $response = $this->postJson('/api/v1/suchak/manual-profiles/duplicate-check', [
+            'candidate_name' => 'Sriram Kadam',
+            'candidate_mobile' => '9876506106',
+            'date_of_birth' => '2000-05-10',
+            'candidate_gender' => 'male',
+            'registering_for' => 'sibling',
+        ])->assertOk();
+
+        $match = collect($response->json('data.matches'))->firstWhere('profile_id', $profileId);
+        $this->assertNotNull($match);
+        $this->assertSame('confirmed', $match['confidence']);
+        $this->assertTrue($match['is_hard_stop']);
+    }
+
     private function actingAsVerifiedSuchak(string $mobile): SuchakAccount
     {
         $this->ensureGenders();

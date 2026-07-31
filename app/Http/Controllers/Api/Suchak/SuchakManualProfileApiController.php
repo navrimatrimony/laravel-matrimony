@@ -105,6 +105,14 @@ class SuchakManualProfileApiController extends Controller
             'candidate_mobile' => ['required', 'string', 'max:32'],
             'date_of_birth' => ['nullable', 'date_format:Y-m-d'],
             'candidate_gender' => ['nullable', Rule::exists('master_genders', 'key')->where('is_active', true)],
+            // Whose number was typed. Same keys and same question as the
+            // create endpoint asks — the answer decides whether a lone mobile
+            // hit can hard-stop onboarding. Nullable so an older app build
+            // still checks (it then scores as the candidate's own number).
+            'registering_for' => [
+                'nullable',
+                Rule::in(array_keys($this->registeringForOptions())),
+            ],
             // Optional weak signals — only used when no DOB was typed, and they
             // can never raise a match above 'medium' (advisory).
             'location_id' => ['nullable', 'integer'],
@@ -127,6 +135,7 @@ class SuchakManualProfileApiController extends Controller
             $validated['candidate_gender'] ?? null,
             $account,
             [
+                'registering_for' => $validated['registering_for'] ?? null,
                 'location_id' => $validated['location_id'] ?? null,
                 'caste_id' => $validated['caste_id'] ?? null,
             ],

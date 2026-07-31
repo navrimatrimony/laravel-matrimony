@@ -18,6 +18,11 @@ use Illuminate\Support\Facades\Schema;
  * - Mobile alone is NOT decisive — rural candidates share a father's/brother's
  *   number, so three sisters may legitimately sit on one number. A mobile hit
  *   is therefore combined with name+DOB+gender before calling it "confirmed".
+ * - Whose number it is settles the rest (PO decision 2026-07-31). The Suchak
+ *   already answers "whose mobile is this?" on the first screen, so a number
+ *   they declared as a sibling's or a parent's is a family line by their own
+ *   account, and a hit on it alone can only ever be advisory. Only a number
+ *   declared as the candidate's own still hard-stops on the number alone.
  * - name(fuzzy) + DOB + gender together ≈ 80% duplicate likelihood → 'high'.
  * - DOB+gender with NO name overlap is deliberately dropped: in a large pool
  *   same-day-same-gender strangers are common and would flood the Suchak with
@@ -66,14 +71,25 @@ final class SuchakCandidateDuplicateCheckService
 
     public const OWNER_UNREPRESENTED = 'unrepresented';
 
+    /**
+     * The one 'registering_for' key that means the typed number belongs to the
+     * candidate themselves. Every other key the create endpoint offers
+     * (parent_guardian, sibling, relative, friend, other) names someone else,
+     * i.e. a number the household shares.
+     */
+    public const REGISTERING_FOR_CANDIDATE_SELF = 'self';
+
     private const MAX_MATCHES = 5;
 
     private const IDENTITY_SCAN_LIMIT = 300;
 
     /**
-     * @param  array{location_id?: int|null, caste_id?: int|null}  $options
-     *                                                                       Weak secondary signals (village/caste). Optional — they only ever
-     *                                                                       upgrade a DOB-less name hit from 'low' to 'medium'.
+     * @param  array{location_id?: int|null, caste_id?: int|null, registering_for?: string|null}  $options
+     *                                                                                                        location_id/caste_id are weak secondary signals (village/caste), and
+     *                                                                                                        only ever upgrade a DOB-less name hit from 'low' to 'medium'.
+     *                                                                                                        registering_for is the Suchak's own answer to "whose mobile is this?"
+     *                                                                                                        — 'self' means the candidate's own number, anything else means a
+     *                                                                                                        shared family line (see REGISTERING_FOR_CANDIDATE_SELF).
      * @return array{matches: array<int, array<string, mixed>>, match_count: int, hard_stop: bool}
      */
     public function check(
@@ -91,6 +107,13 @@ final class SuchakCandidateDuplicateCheckService
         $casteId = isset($options['caste_id']) && Schema::hasColumn('matrimony_profiles', 'caste_id')
             ? (int) $options['caste_id']
             : null;
+
+        // Absent (an older app build) is treated as the candidate's own number,
+        // which keeps the stricter pre-2026-07-31 behaviour rather than quietly
+        // loosening the check for clients that never answered the question.
+        $numberIsCandidateOwn = ! array_key_exists('registering_for', $options)
+            || $options['registering_for'] === null
+            || $options['registering_for'] === self::REGISTERING_FOR_CANDIDATE_SELF;
 
         /** @var array<int, array<string, mixed>> $rows profile_id => working row */
         $rows = [];
@@ -144,7 +167,7 @@ final class SuchakCandidateDuplicateCheckService
             $row['soft_match'] = ($locationId !== null && (int) $profile->location_id === $locationId)
                 || ($casteId !== null && (int) $profile->caste_id === $casteId);
 
-            $confidence = $this->confidence($row);
+            $confidence = $this->confidence($row, $numberIsCandidateOwn);
             if ($confidence === null) {
                 continue;
             }
@@ -173,10 +196,12 @@ final class SuchakCandidateDuplicateCheckService
                     'gender' => $row['gender_match'],
                     'soft' => $row['soft_match'],
                 ],
-                // Shared family number warning: the number matched, but not as
-                // the candidate's own login mobile — could be a sibling/parent.
+                // Shared family number warning. True from either side: the
+                // stored profile holds the number somewhere other than its own
+                // login mobile, OR the Suchak told us it is a relative's number.
                 'shared_number_possible' => $row['mobile_sources'] !== []
-                    && ! in_array('self_mobile', $row['mobile_sources'], true),
+                    && (! in_array('self_mobile', $row['mobile_sources'], true)
+                        || ! $numberIsCandidateOwn),
                 'owner_type' => $owner['owner_type'],
                 'owner_suchak_name' => $owner['owner_suchak_name'],
                 'already_represented_by_me' => $owner['already_represented_by_me'],
@@ -651,7 +676,11 @@ final class SuchakCandidateDuplicateCheckService
         }
     }
 
-    private function confidence(array $row): ?string
+    /**
+     * @param  bool  $numberIsCandidateOwn  the Suchak's answer to "whose mobile is
+     *                                      this?" — false for a parent's, sibling's or any other shared line.
+     */
+    private function confidence(array $row, bool $numberIsCandidateOwn): ?string
     {
         $hasMobile = $row['mobile_sources'] !== [];
         $nameStrong = in_array($row['name_match'], [NameMatcher::LEVEL_EXACT, NameMatcher::LEVEL_STRONG], true);
@@ -664,7 +693,14 @@ final class SuchakCandidateDuplicateCheckService
             return self::CONFIDENCE_CONFIRMED;
         }
         if ($hasMobile) {
-            return self::CONFIDENCE_HIGH;
+            // A number the Suchak declared as a relative's proves a household,
+            // not a person. Blocking on it turned away real second sisters —
+            // and the block was total, since 'high' hard-stops just like
+            // 'confirmed'. Advisory instead: the evidence still shows, the
+            // Suchak still decides.
+            return $numberIsCandidateOwn
+                ? self::CONFIDENCE_HIGH
+                : self::CONFIDENCE_MEDIUM;
         }
         if ($nameStrong && $dobStrong && $genderOk) {
             return self::CONFIDENCE_HIGH;
