@@ -20,14 +20,28 @@ return new class extends Migration
     }
 
     /**
-     * Safe to reverse wholesale: before this migration no write path could ever
-     * store 'bureau' (the constant existed but no validation rule accepted it),
-     * so every 'bureau' row is one this migration created.
+     * NOT reversible, and the original reasoning here was wrong.
+     *
+     * This was written to reverse wholesale on the premise that no write path
+     * could ever have stored 'bureau' — the constant existed but no validation
+     * rule accepted it — so every 'bureau' row had to be one this migration
+     * created. Production said otherwise: immediately before `up()` ran there
+     * were already **8** accounts holding 'bureau' beside the 5 holding
+     * 'organization'. Something wrote them; validation was evidently not the
+     * only door.
+     *
+     * Those two populations are now indistinguishable, so a wholesale reversal
+     * would relabel 8 accounts that were never 'organization' in the first
+     * place. Refusing is the honest answer: a rollback that silently corrupts
+     * rows is worse than a rollback that stops. To undo this deliberately,
+     * write a new migration that names the specific account ids.
      */
     public function down(): void
     {
-        DB::table('suchak_accounts')
-            ->where('business_type', 'bureau')
-            ->update(['business_type' => 'organization']);
+        throw new RuntimeException(
+            'Not reversible: 8 accounts already held "bureau" before this ran, '
+            .'and they are now indistinguishable from the 5 it converted. '
+            .'Undo by account id in a new migration if you really mean to.',
+        );
     }
 };
