@@ -99,6 +99,14 @@ final class AdminNavigationCatalog
                     self::tab('Photo review', 'admin.suchak.photo-reviews.index', ['admin.suchak.photo-reviews.*']),
                     self::tab('Safety', 'admin.suchak.safety.index', ['admin.suchak.safety.*']),
                     self::tab('Plans', 'admin.suchak.plans.index', ['admin.suchak.plans.*']),
+                    // Meetings sits before Payouts because it FEEDS payouts:
+                    // admin.suchak.visits.qualify-payout mints a real platform
+                    // payout. The pattern is deliberately the whole
+                    // `admin.suchak.visits.*` family, not just the index —
+                    // EnsureAdminSectionAccess fails OPEN on a route name no
+                    // module claims, so an unlisted POST here would be an
+                    // ungated payout, not merely a hidden tab.
+                    self::tab('Meetings', 'admin.suchak.visits.index', ['admin.suchak.visits.*']),
                     self::tab('Payouts', 'admin.suchak.payouts.index', ['admin.suchak.payouts.*']),
                     self::tab('Retention', 'admin.suchak.retention.index', ['admin.suchak.retention.*']),
                     self::tab('Academy', 'admin.suchak.academy.index', ['admin.suchak.academy.*']),

@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\Suchak\PayoutController;
 use App\Http\Controllers\Admin\Suchak\RetentionController;
 use App\Http\Controllers\Admin\Suchak\SafetyController;
 use App\Http\Controllers\Admin\Suchak\SettingsController;
+use App\Http\Controllers\Admin\Suchak\VisitConfirmationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -42,6 +43,27 @@ Route::middleware(['auth', 'admin', 'admin.section'])
         Route::post('/plans', [PlanCatalogController::class, 'store'])->name('plans.store');
         Route::put('/plans/{suchakPlan}', [PlanCatalogController::class, 'update'])->name('plans.update');
         Route::post('/plans/accounts/{suchakAccount}/assign', [PlanCatalogController::class, 'assignAccountPlan'])->name('plans.accounts.assign');
+        /*
+        | Meetings. confirmByAdmin() and qualifyPayoutForVisit() are admin-only
+        | inside SuchakVisitConfirmationService and had no route at all, so under
+        | the default user_and_admin policy no meeting could reach `confirmed`
+        | and no visit payout could be qualified outside a test.
+        |
+        | `admin.section` alone does NOT gate these: EnsureAdminSectionAccess
+        | resolves the section from AdminNavigationCatalog and returns $next()
+        | when no module claims the route name. All four names below are claimed
+        | by the Suchak Network module's `admin.suchak.visits.*` pattern — adding
+        | a fifth visit route without extending that pattern re-opens the hole,
+        | and tests/Feature/Admin/AdminNavigationAccessTest.php only catches the
+        | GET half of it.
+        */
+        Route::get('/visits', [VisitConfirmationController::class, 'index'])->name('visits.index');
+        Route::post('/visits/{visit}/confirm', [VisitConfirmationController::class, 'confirm'])
+            ->whereNumber('visit')->name('visits.confirm');
+        Route::post('/visits/{visit}/dispute', [VisitConfirmationController::class, 'dispute'])
+            ->whereNumber('visit')->name('visits.dispute');
+        Route::post('/visits/{visit}/qualify-payout', [VisitConfirmationController::class, 'qualifyPayout'])
+            ->whereNumber('visit')->name('visits.qualify-payout');
         Route::get('/payouts', [PayoutController::class, 'index'])->name('payouts.index');
         Route::post('/payouts/settlements/generate', [PayoutController::class, 'generateSettlement'])->name('payouts.settlements.generate');
         Route::post('/payouts/{payout}/approve', [PayoutController::class, 'approve'])->name('payouts.approve');
