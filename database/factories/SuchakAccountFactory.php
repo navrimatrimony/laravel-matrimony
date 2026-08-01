@@ -31,6 +31,13 @@ class SuchakAccountFactory extends Factory
             'verification_status' => SuchakAccount::VERIFICATION_PENDING,
             'public_status' => SuchakAccount::PUBLIC_HIDDEN,
             'verified_at' => null,
+            // A registered Suchak, mirroring SuchakRegistrationService::register(),
+            // which is the only path that creates a usable account and always sets
+            // this. Null means "signup abandoned mid-onboarding", and every access
+            // gate (SuchakAccessService::canOperate / canPrepareCustomers) refuses
+            // such an account before it ever looks at verification_status. Fixtures
+            // that mean to test an unfinished signup say so explicitly with null.
+            'registration_completed_at' => now(),
             'rejected_at' => null,
             'suspended_at' => null,
             'archived_at' => null,
