@@ -66,6 +66,12 @@ class SuchakCustomerAgreement extends Model
         'created_by_user_id',
         'accepted_by_user_id',
         'accepted_at',
+        'acceptance_token_hash',
+        'acceptance_token_expires_at',
+        'acceptance_token_used_at',
+        'accepted_ip_address',
+        'accepted_user_agent',
+        'accepted_by_name',
         'declined_by_user_id',
         'declined_at',
         'decline_reason',
@@ -82,6 +88,8 @@ class SuchakCustomerAgreement extends Model
         'agreement_revision' => 'integer',
         'price_amount' => 'decimal:2',
         'accepted_at' => 'datetime',
+        'acceptance_token_expires_at' => 'datetime',
+        'acceptance_token_used_at' => 'datetime',
         'declined_at' => 'datetime',
         'bypassed_at' => 'datetime',
         'expired_at' => 'datetime',
@@ -154,6 +162,20 @@ class SuchakCustomerAgreement extends Model
             self::TERMS_ACCEPTED,
             self::TERMS_BYPASSED,
         ], true);
+    }
+
+    /**
+     * Mirrors SuchakConsent::isTokenExpired() — a public link that has aged out
+     * must read the same on both surfaces, so a customer is never told one link
+     * is dead and an equally old one is live.
+     *
+     * A never-issued link is not expired: it simply does not exist, and the
+     * caller decides what that means.
+     */
+    public function isAcceptanceTokenExpired(): bool
+    {
+        return $this->acceptance_token_expires_at !== null
+            && $this->acceptance_token_expires_at->isPast();
     }
 
     public function delete(): ?bool

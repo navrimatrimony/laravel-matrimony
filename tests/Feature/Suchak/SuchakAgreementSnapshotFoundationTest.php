@@ -362,6 +362,11 @@ class SuchakAgreementSnapshotFoundationTest extends TestCase
             'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
             'public_status' => SuchakAccount::PUBLIC_ACTIVE,
             'verified_at' => now(),
+            // canOperate() gates on isRegistrationComplete() before it ever looks
+            // at verification, so an account "verified" without this column can do
+            // nothing. Absent here, every package-managing test in this file failed
+            // on the access wall and never reached what it meant to assert.
+            'registration_completed_at' => now(),
         ]);
 
         return [$user, $account];

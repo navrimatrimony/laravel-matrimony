@@ -49,6 +49,9 @@ class SuchakCustomerPlanService
             'duration' => $this->requiredDuration($input['duration'] ?? null),
             'services_json' => $services,
             'per_meeting_fee_amount' => $this->normalizeAmount($input['per_meeting_fee_amount'] ?? null, 'Per-meeting fee', true),
+            // Priced independently of the offline fee — an online session is its own
+            // work, so nothing here is derived from or validated against the other.
+            'per_meeting_online_fee_amount' => $this->normalizeAmount($input['per_meeting_online_fee_amount'] ?? null, 'Per-meeting online fee', true),
             'post_marriage_fee_mode' => $this->normalizeMode($input['post_marriage_fee_mode'] ?? null),
             'post_marriage_fee_amount' => $this->normalizeAmount($input['post_marriage_fee_amount'] ?? null, 'Post-marriage fee', true),
             'original_price_amount' => $this->normalizeAmount($input['original_price_amount'] ?? null, 'Original price', true),
@@ -306,6 +309,7 @@ class SuchakCustomerPlanService
             'duration' => $override?->duration,
             'services' => $services,
             'per_meeting_fee_amount' => $override?->per_meeting_fee_amount,
+            'per_meeting_online_fee_amount' => $override?->per_meeting_online_fee_amount,
             'post_marriage_fee_mode' => $override?->post_marriage_fee_mode,
             'post_marriage_fee_amount' => $override?->post_marriage_fee_amount,
             'is_visible' => $override === null ? true : (bool) $override->is_visible,
@@ -338,6 +342,7 @@ class SuchakCustomerPlanService
             'duration' => $custom->duration,
             'services' => $custom->services_json ?? [],
             'per_meeting_fee_amount' => $custom->per_meeting_fee_amount,
+            'per_meeting_online_fee_amount' => $custom->per_meeting_online_fee_amount,
             'post_marriage_fee_mode' => $custom->post_marriage_fee_mode,
             'post_marriage_fee_amount' => $custom->post_marriage_fee_amount,
             'is_visible' => (bool) $custom->is_visible,
@@ -455,6 +460,9 @@ class SuchakCustomerPlanService
         }
         if (array_key_exists('per_meeting_fee_amount', $input)) {
             $plan->per_meeting_fee_amount = $this->normalizeAmount($input['per_meeting_fee_amount'], 'Per-meeting fee', true);
+        }
+        if (array_key_exists('per_meeting_online_fee_amount', $input)) {
+            $plan->per_meeting_online_fee_amount = $this->normalizeAmount($input['per_meeting_online_fee_amount'], 'Per-meeting online fee', true);
         }
         if (array_key_exists('post_marriage_fee_mode', $input)) {
             $plan->post_marriage_fee_mode = $this->normalizeMode($input['post_marriage_fee_mode']);

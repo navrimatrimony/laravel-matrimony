@@ -176,6 +176,9 @@ class SuchakPackageCatalogService
         // one price normaliser: a second one would be free to drift from it, and the
         // package currency is already settled above — a fee can never carry another.
         [$perMeetingFeeAmount] = $this->normalizedPrice($attributes['per_meeting_fee_amount'] ?? null, $currency);
+        // Carried across on its own: the online rate is a separate quoted figure, so
+        // an absent offline fee must never suppress it (or vice versa).
+        [$perMeetingOnlineFeeAmount] = $this->normalizedPrice($attributes['per_meeting_online_fee_amount'] ?? null, $currency);
         [$postMarriageFeeAmount] = $this->normalizedPrice($attributes['post_marriage_fee_amount'] ?? null, $currency);
         // An unrecognised mode is dropped, not rejected: it only decides how the
         // post-marriage fee reads to the customer, and refusing the whole package
@@ -198,6 +201,7 @@ class SuchakPackageCatalogService
             'price_amount' => $priceAmount,
             'currency' => $currency,
             'per_meeting_fee_amount' => $perMeetingFeeAmount,
+            'per_meeting_online_fee_amount' => $perMeetingOnlineFeeAmount,
             'post_marriage_fee_mode' => $postMarriageFeeMode,
             'post_marriage_fee_amount' => $postMarriageFeeAmount,
             'customized_by_user_id' => $actor->id,

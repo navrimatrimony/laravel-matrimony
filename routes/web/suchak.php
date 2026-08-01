@@ -19,6 +19,7 @@ use App\Http\Controllers\Suchak\PaymentRequestPublicController;
 use App\Http\Controllers\Suchak\PlanPaymentController;
 use App\Http\Controllers\Suchak\ProfileRequestReplyController;
 use App\Http\Controllers\Suchak\ProfileUpdateSuggestionController;
+use App\Http\Controllers\Suchak\PublicAgreementController;
 use App\Http\Controllers\Suchak\PublicConsentController;
 use App\Http\Controllers\Suchak\PublicMarketplaceController;
 use App\Http\Controllers\Suchak\QrScanController;
@@ -92,6 +93,14 @@ Route::prefix('suchak')
             ->where('token', '[A-Za-z0-9]{64}')
             ->middleware('throttle:10,1')
             ->name('consents.public.decision');
+        Route::get('/agreement/{token}', [PublicAgreementController::class, 'show'])
+            ->where('token', '[A-Za-z0-9]{64}')
+            ->middleware('throttle:30,1')
+            ->name('agreements.public.show');
+        Route::post('/agreement/{token}/decision', [PublicAgreementController::class, 'decision'])
+            ->where('token', '[A-Za-z0-9]{64}')
+            ->middleware('throttle:10,1')
+            ->name('agreements.public.decision');
     });
 
 Route::middleware('auth')

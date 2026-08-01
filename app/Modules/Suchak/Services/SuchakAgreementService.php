@@ -18,6 +18,13 @@ use InvalidArgumentException;
 
 class SuchakAgreementService
 {
+    /**
+     * Matches SuchakConsent::DEFAULT_TOKEN_EXPIRY_DAYS. Both links reach the same
+     * family through the same WhatsApp forward, so a customer who sits on one for
+     * a week must find both dead, not one still live.
+     */
+    private const ACCEPTANCE_TOKEN_EXPIRY_DAYS = 7;
+
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakAccessService $accessService,
@@ -237,6 +244,149 @@ class SuchakAgreementService
         });
     }
 
+    /**
+     * Mints the single-use public link a customer accepts the price terms on.
+     *
+     * The link is issued from the logged-in Suchak side, so the ordinary actor
+     * check still applies here — it is only the customer's later click that has
+     * no identity to check.
+     *
+     * Re-issuing overwrites the previous hash and clears the used marker, which
+     * is what makes a lost or stale WhatsApp forward stop working the moment a
+     * replacement is sent.
+     *
+     * No activity row is written here: SuchakActivityLog has no action for an
+     * agreement link being issued, and borrowing a neighbouring one would put a
+     * false event in the audit trail. The token columns are the record until
+     * that action exists.
+     *
+     * @return array{agreement: SuchakCustomerAgreement, raw_token: string, acceptance_url: string, expires_at: \Illuminate\Support\Carbon}
+     */
+    public function issueAcceptanceLink(
+        SuchakCustomerAgreement $agreement,
+        User $actor,
+    ): array {
+        $agreement->refresh()->loadMissing(['suchakAccount', 'customerContext', 'servicePackage']);
+        $this->assertTermsActor($agreement, $actor);
+
+        return DB::transaction(function () use ($agreement): array {
+            /** @var SuchakCustomerAgreement $locked */
+            $locked = SuchakCustomerAgreement::query()
+                ->whereKey($agreement->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $this->assertPendingTerms($locked);
+            $this->assertPackageSnapshotCurrent($locked);
+
+            $rawToken = Str::random(64);
+            $expiresAt = now()->addDays(self::ACCEPTANCE_TOKEN_EXPIRY_DAYS);
+
+            // Query builder, not a model save: the row is still pending today, but
+            // the acceptance path next door cannot use a save at all, and a single
+            // write mechanism for this table keeps the two from diverging.
+            SuchakCustomerAgreement::query()
+                ->whereKey($locked->id)
+                ->update([
+                    'acceptance_token_hash' => hash('sha256', $rawToken),
+                    'acceptance_token_expires_at' => $expiresAt,
+                    'acceptance_token_used_at' => null,
+                    'updated_at' => now(),
+                ]);
+
+            return [
+                'agreement' => $locked->fresh($this->agreementRelations()),
+                'raw_token' => $rawToken,
+                'acceptance_url' => $this->publicAcceptanceUrl($rawToken),
+                'expires_at' => $expiresAt,
+            ];
+        });
+    }
+
+    /**
+     * Looks an agreement up from a raw public token. Read-only on purpose: the
+     * agreement has no "link opened" state to move to, and any write here would
+     * be a write on a row that may already be frozen.
+     */
+    public function resolvePublicAcceptanceToken(string $token): ?SuchakCustomerAgreement
+    {
+        if (! preg_match('/^[A-Za-z0-9]{64}$/', $token)) {
+            return null;
+        }
+
+        return SuchakCustomerAgreement::query()
+            ->with($this->agreementRelations())
+            ->where('acceptance_token_hash', hash('sha256', $token))
+            ->first();
+    }
+
+    /**
+     * Records a customer's acceptance arriving from the public link.
+     *
+     * Two things make this different from acceptTerms and neither is optional:
+     *
+     * 1. The write is a query-builder update. SuchakCustomerAgreement throws on
+     *    any model save once terms_status is final, and this call is the very
+     *    transition that makes it final — a save would abort mid-acceptance.
+     * 2. accepted_by_user_id stays NULL. Possession of the secret link is what
+     *    was proven, not who is holding it, and there is no OTP on this path
+     *    yet. Naming a user here would record a verification that never ran.
+     *
+     * What is stored is only what actually happened: the typed name, the IP, the
+     * user agent, and the moment the link was spent.
+     */
+    public function recordPublicAcceptance(
+        SuchakCustomerAgreement $agreement,
+        string $acceptedByName,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): SuchakCustomerAgreement {
+        $agreement->refresh()->loadMissing(['suchakAccount', 'customerContext', 'servicePackage']);
+        $acceptedByName = $this->requiredText($acceptedByName, 'Accepting person name is required.', 160);
+        $this->assertPublicAcceptanceAllowed($agreement);
+
+        return DB::transaction(function () use ($agreement, $acceptedByName, $ipAddress, $userAgent): SuchakCustomerAgreement {
+            /** @var SuchakCustomerAgreement $locked */
+            $locked = SuchakCustomerAgreement::query()
+                ->whereKey($agreement->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            // Same two guards the logged-in path uses; a public click must not be
+            // able to accept a superseded revision or a stale package snapshot.
+            $this->assertPendingTerms($locked);
+            $this->assertPackageSnapshotCurrent($locked);
+
+            $acceptedAt = now();
+
+            SuchakCustomerAgreement::query()
+                ->whereKey($locked->id)
+                ->update([
+                    'terms_status' => SuchakCustomerAgreement::TERMS_ACCEPTED,
+                    'accepted_at' => $acceptedAt,
+                    'acceptance_token_used_at' => $acceptedAt,
+                    'accepted_ip_address' => $ipAddress,
+                    'accepted_user_agent' => $userAgent === null ? null : Str::limit($userAgent, 512, ''),
+                    'accepted_by_name' => $acceptedByName,
+                    'invoice_note' => 'Terms accepted by customer from public link for agreement revision '.$locked->agreement_revision.'.',
+                    'updated_at' => $acceptedAt,
+                ]);
+
+            $fresh = $locked->fresh($this->agreementRelations());
+            $this->recordActivity(
+                $fresh,
+                null,
+                SuchakActivityLog::ACTION_CUSTOMER_AGREEMENT_TERMS_ACCEPTED,
+                'customer_agreement_public_acceptance',
+                'Suchak customer agreement terms accepted from public link.',
+                $ipAddress,
+                $userAgent,
+            );
+
+            return $fresh;
+        });
+    }
+
     public function bypassTerms(
         SuchakCustomerAgreement $agreement,
         User $actor,
@@ -447,6 +597,35 @@ class SuchakAgreementService
     }
 
     /**
+     * The public counterpart of assertTermsActor.
+     *
+     * assertTermsActor is untouched and still governs the logged-in path. Here
+     * there is no actor to authorise, so what is checked instead is the token:
+     * that one was ever issued, that it has not already been spent, and that it
+     * has not aged out. This mirrors assertPublicDecisionAllowed on the consent
+     * side, which trades actor identity for link possession the same way.
+     */
+    private function assertPublicAcceptanceAllowed(SuchakCustomerAgreement $agreement): void
+    {
+        if ($agreement->acceptance_token_hash === null) {
+            throw new InvalidArgumentException('This agreement has no public acceptance link.');
+        }
+
+        if ($agreement->acceptance_token_used_at !== null) {
+            throw new InvalidArgumentException('Agreement acceptance link has already been used.');
+        }
+
+        if ($agreement->isAcceptanceTokenExpired()) {
+            throw new InvalidArgumentException('Agreement acceptance link has expired.');
+        }
+    }
+
+    private function publicAcceptanceUrl(string $rawToken): string
+    {
+        return route('suchak.agreements.public.show', ['token' => $rawToken]);
+    }
+
+    /**
      * Whether the agreement's stored snapshot still matches its (current)
      * package. Reused by {@see acceptOrReviseTerms} to decide when a fresh
      * revision is needed instead of throwing.
@@ -500,6 +679,7 @@ class SuchakAgreementService
                 // Fee terms are part of what the customer agreed to, so editing one
                 // has to invalidate the snapshot just like editing the price does.
                 'per_meeting_fee_amount' => $package->per_meeting_fee_amount === null ? null : number_format((float) $package->per_meeting_fee_amount, 2, '.', ''),
+                'per_meeting_online_fee_amount' => $package->per_meeting_online_fee_amount === null ? null : number_format((float) $package->per_meeting_online_fee_amount, 2, '.', ''),
                 'post_marriage_fee_mode' => $package->post_marriage_fee_mode,
                 'post_marriage_fee_amount' => $package->post_marriage_fee_amount === null ? null : number_format((float) $package->post_marriage_fee_amount, 2, '.', ''),
                 'status' => $package->package_status,
@@ -539,9 +719,14 @@ class SuchakAgreementService
         return 'Terms pending under '.$policyMode.' Suchak terms policy for agreement revision '.$revision.'.';
     }
 
+    /**
+     * $actor is nullable because a public acceptance has no signed-in user to
+     * attribute — the same shape SuchakConsentService::recordActivity already
+     * uses for candidate decisions arriving from a consent link.
+     */
     private function recordActivity(
         SuchakCustomerAgreement $agreement,
-        User $actor,
+        ?User $actor,
         string $actionType,
         string $context,
         string $reason,
@@ -552,7 +737,7 @@ class SuchakAgreementService
 
         $this->activityLogger->record([
             'suchak_account_id' => $agreement->suchak_account_id,
-            'actor_user_id' => $actor->id,
+            'actor_user_id' => $actor?->id,
             'actor_type' => $this->actorType($agreement, $actor),
             'action_type' => $actionType,
             'target_type' => 'suchak_customer_agreement',
@@ -575,12 +760,12 @@ class SuchakAgreementService
     }
 
     private function adminAuditLog(
-        User $actor,
+        ?User $actor,
         SuchakCustomerAgreement $agreement,
         string $actionType,
         string $reason,
     ): ?AdminAuditLog {
-        if (! $this->accessService->isAdmin($actor)) {
+        if ($actor === null || ! $this->accessService->isAdmin($actor)) {
             return null;
         }
 
@@ -594,8 +779,14 @@ class SuchakAgreementService
         );
     }
 
-    private function actorType(SuchakCustomerAgreement $agreement, User $actor): string
+    private function actorType(SuchakCustomerAgreement $agreement, ?User $actor): string
     {
+        // A public acceptance is the customer acting, not the platform: ACTOR_USER
+        // keeps that readable in the trail even though no user id backs it.
+        if ($actor === null) {
+            return SuchakActivityLog::ACTOR_USER;
+        }
+
         if ($this->accessService->isAdmin($actor)) {
             return SuchakActivityLog::ACTOR_ADMIN;
         }

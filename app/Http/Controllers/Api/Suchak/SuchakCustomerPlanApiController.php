@@ -63,6 +63,9 @@ class SuchakCustomerPlanApiController extends Controller
             'services.*.name_mr' => ['nullable', 'string', 'max:160'],
             'include_basic' => ['nullable', 'boolean'],
             'per_meeting_fee_amount' => ['nullable', 'numeric', 'min:0'],
+            // No max/min tied to the offline fee: an online session is priced on its
+            // own merits and is allowed to cost more than a visit.
+            'per_meeting_online_fee_amount' => ['nullable', 'numeric', 'min:0'],
             'post_marriage_fee_mode' => ['nullable', Rule::in(SuchakCustomerPlan::POST_MARRIAGE_FEE_MODES)],
             'post_marriage_fee_amount' => ['nullable', 'numeric', 'min:0'],
             'original_price_amount' => ['nullable', 'numeric', 'min:0'],
@@ -140,6 +143,7 @@ class SuchakCustomerPlanApiController extends Controller
                 'services.*.name_mr' => ['nullable', 'string', 'max:160'],
                 'include_basic' => ['sometimes', 'boolean'],
                 'per_meeting_fee_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+                'per_meeting_online_fee_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
                 'post_marriage_fee_mode' => ['sometimes', 'nullable', Rule::in(SuchakCustomerPlan::POST_MARRIAGE_FEE_MODES)],
                 'post_marriage_fee_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
                 'original_price_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],

@@ -173,8 +173,12 @@ class SuchakPaymentRequestOptionsApiController extends Controller
      * deliverables. Presets keep their code key ('basic' / 'premium').
      *
      * ADDITIVE since 2026-07-26 — the plan's own SAVED TERMS travel with it:
-     * `duration`, `per_meeting_fee_amount`, `post_marriage_fee_mode` and
-     * `post_marriage_fee_amount`. A Suchak fixes these ONCE while creating the
+     * `duration`, `per_meeting_fee_amount`, `per_meeting_online_fee_amount`,
+     * `post_marriage_fee_mode` and `post_marriage_fee_amount`. The two meeting
+     * fees are unrelated figures, not a rate and a modifier — a long online
+     * counselling session may be quoted above an offline visit, so the app must
+     * read whichever one applies rather than deriving it.
+     * A Suchak fixes these ONCE while creating the
      * plan; without them on the wire the send screen fell back to hardcoded
      * client defaults (1 year / unchecked / ₹999 / "as wished") and the Suchak
      * had to retype them on every request. Null means "this plan did not fix
@@ -223,6 +227,7 @@ class SuchakPaymentRequestOptionsApiController extends Controller
                 // rows from these instead of from hardcoded defaults.
                 'duration' => $entry['duration'] ?? null,
                 'per_meeting_fee_amount' => $entry['per_meeting_fee_amount'] ?? null,
+                'per_meeting_online_fee_amount' => $entry['per_meeting_online_fee_amount'] ?? null,
                 'post_marriage_fee_mode' => $entry['post_marriage_fee_mode'] ?? null,
                 'post_marriage_fee_amount' => $entry['post_marriage_fee_amount'] ?? null,
                 'deliverables' => $deliverables,
