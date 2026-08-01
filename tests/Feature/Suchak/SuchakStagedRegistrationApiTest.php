@@ -31,11 +31,16 @@ class SuchakStagedRegistrationApiTest extends TestCase
             ]);
     }
 
-    public function test_register_rejects_bureau_business_type(): void
+    /**
+     * Only 'individual' and 'bureau' exist. 'organization' was renamed to
+     * 'bureau' on 2026-08-01 and must never be accepted again — this is the
+     * regression guard for that rename.
+     */
+    public function test_register_rejects_unknown_business_type(): void
     {
         $this->postJson('/api/v1/suchak/register', [
-            'suchak_name' => 'Bureau Test',
-            'business_type' => SuchakAccount::BUSINESS_TYPE_BUREAU,
+            'suchak_name' => 'Unknown Type Test',
+            'business_type' => 'organization',
             'office_name' => 'Office',
             'whatsapp_number' => '9876501234',
             'address_line' => 'Pune',

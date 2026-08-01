@@ -162,6 +162,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
             'suchak_name' => 'Ganesh Suchak',
             'office_name' => 'Ganesh Marriage Bureau',
             'business_type' => SuchakAccount::BUSINESS_TYPE_BUREAU,
+            'employee_count' => 3,
             'whatsapp_number' => '9876543210',
             'email' => 'ganesh-suchak@example.test',
             'address_line' => 'Pune office',
@@ -184,6 +185,9 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
         ]);
         $this->assertSame(SuchakAccount::VERIFICATION_PENDING, $account->verification_status);
         $this->assertSame(SuchakAccount::PUBLIC_HIDDEN, $account->public_status);
+        $this->assertSame(SuchakAccount::BUSINESS_TYPE_BUREAU, $account->business_type);
+        $this->assertSame('Ganesh Marriage Bureau', $account->office_name);
+        $this->assertSame(3, (int) $account->employee_count);
         $this->assertSame('9876543210', $account->mobile_number);
         $this->assertSame('9876543210', $account->whatsapp_number);
         $this->assertSame((int) $city->id, (int) $account->city_id);
@@ -703,7 +707,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
             'user_id' => $user->id,
             'suchak_name' => 'Profile Setup Suchak',
             'office_name' => 'Setup Bureau',
-            'business_type' => SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
+            'business_type' => SuchakAccount::BUSINESS_TYPE_BUREAU,
             'mobile_number' => '9876543217',
             'whatsapp_number' => '9876543217',
             'verification_status' => SuchakAccount::VERIFICATION_VERIFIED,
@@ -724,7 +728,7 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
             ->assertSee('Your photo', false)
             ->assertSee('Identity proof', false)
             ->assertSee('Visiting card / office proof', false)
-            ->assertSee('Organization logo / document', false)
+            ->assertSee('Bureau logo / document', false)
             ->assertSee('Add customer entry', false)
             ->assertSee(route('suchak.register.photo'), false)
             ->assertSee(route('suchak.register.documents.store'), false)

@@ -182,12 +182,9 @@ class SuchakRegistrationService
         $this->assertRegistrationIncomplete($account);
 
         $businessType = (string) $attributes['business_type'];
-        if (! in_array($businessType, [
-            SuchakAccount::BUSINESS_TYPE_INDIVIDUAL,
-            SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
-        ], true)) {
+        if (! in_array($businessType, SuchakAccount::BUSINESS_TYPES, true)) {
             throw ValidationException::withMessages([
-                'business_type' => 'Select individual or organization.',
+                'business_type' => 'Select individual or marriage bureau.',
             ]);
         }
 
@@ -201,15 +198,15 @@ class SuchakRegistrationService
         $officeName = $this->nullableString($attributes['office_name'] ?? null);
         $employeeCount = $attributes['employee_count'] ?? null;
 
-        if ($businessType === SuchakAccount::BUSINESS_TYPE_ORGANIZATION) {
+        if ($businessType === SuchakAccount::BUSINESS_TYPE_BUREAU) {
             if ($officeName === null || $officeName === '') {
                 throw ValidationException::withMessages([
-                    'office_name' => 'Organization name is required.',
+                    'office_name' => 'Bureau name is required.',
                 ]);
             }
             if ($employeeCount === null || (int) $employeeCount < 1) {
                 throw ValidationException::withMessages([
-                    'employee_count' => 'Enter how many people work in the organization.',
+                    'employee_count' => 'Enter how many people work in the bureau.',
                 ]);
             }
         } else {
@@ -305,7 +302,7 @@ class SuchakRegistrationService
             ]);
         }
 
-        // Office photo is optional for organization accounts (native APK can skip).
+        // Office photo is optional for bureau accounts (native APK can skip).
 
         if (! filled($user->password)) {
             throw ValidationException::withMessages([

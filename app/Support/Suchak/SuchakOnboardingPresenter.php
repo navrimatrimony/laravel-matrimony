@@ -150,11 +150,8 @@ class SuchakOnboardingPresenter
     {
         return [
             SuchakVerificationRecord::TYPE_IDENTITY => true,
-            SuchakVerificationRecord::TYPE_OFFICE => in_array($businessType, [
-                SuchakAccount::BUSINESS_TYPE_BUREAU,
-                SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
-            ], true),
-            SuchakVerificationRecord::TYPE_BUSINESS => $businessType === SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
+            SuchakVerificationRecord::TYPE_OFFICE => $businessType === SuchakAccount::BUSINESS_TYPE_BUREAU,
+            SuchakVerificationRecord::TYPE_BUSINESS => $businessType === SuchakAccount::BUSINESS_TYPE_BUREAU,
         ];
     }
 

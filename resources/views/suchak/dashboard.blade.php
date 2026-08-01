@@ -102,7 +102,7 @@
     $identityKycRow = $kycRows->firstWhere('type', \App\Models\SuchakVerificationRecord::TYPE_IDENTITY);
     $officeKycRow = $kycRows->firstWhere('type', \App\Models\SuchakVerificationRecord::TYPE_OFFICE);
     $businessKycRow = $kycRows->firstWhere('type', \App\Models\SuchakVerificationRecord::TYPE_BUSINESS);
-    $isOrganizationSuchak = $suchakAccount->business_type === \App\Models\SuchakAccount::BUSINESS_TYPE_ORGANIZATION;
+    $isBureauSuchak = $suchakAccount->business_type === \App\Models\SuchakAccount::BUSINESS_TYPE_BUREAU;
     $kycBadgeTone = static function (?array $row): string {
         return match ($row['status'] ?? null) {
             \App\Models\SuchakVerificationRecord::STATUS_APPROVED => 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100',
@@ -289,7 +289,7 @@
                 <p class="text-xs font-bold uppercase tracking-wide text-red-700 dark:text-red-300">Profile setup</p>
                 <h2 class="mt-1 text-xl font-bold text-gray-950 dark:text-gray-100">Complete your Suchak profile first</h2>
                 <p class="mt-2 max-w-3xl text-sm leading-6 text-gray-600 dark:text-gray-300">
-                    Add your photo, visiting card or office proof, and organization document when applicable. You can start customer entry while admin verification continues.
+                    Add your photo, visiting card or office proof, and bureau document when applicable. You can start customer entry while admin verification continues.
                 </p>
             </div>
             <a href="{{ route('suchak.manual-profiles.create') }}" class="inline-flex w-fit items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-red-700">
@@ -337,7 +337,7 @@
                 @foreach ([
                     ['row' => $identityKycRow, 'type' => \App\Models\SuchakVerificationRecord::TYPE_IDENTITY, 'title' => 'Identity proof', 'body' => 'Upload Aadhaar, passport, or other readable identity proof for KYC.'],
                     ['row' => $officeKycRow, 'type' => \App\Models\SuchakVerificationRecord::TYPE_OFFICE, 'title' => 'Visiting card / office proof', 'body' => 'Upload your visiting card, office proof, or bureau letterhead.'],
-                    ['row' => $businessKycRow, 'type' => \App\Models\SuchakVerificationRecord::TYPE_BUSINESS, 'title' => 'Organization logo / document', 'body' => 'For organization Suchak, upload logo image or organization document for admin verification.', 'visible' => $isOrganizationSuchak],
+                    ['row' => $businessKycRow, 'type' => \App\Models\SuchakVerificationRecord::TYPE_BUSINESS, 'title' => 'Bureau logo / document', 'body' => 'For a marriage bureau, upload the logo image or bureau document for admin verification.', 'visible' => $isBureauSuchak],
                 ] as $setupUpload)
                     @php
                         $setupVisible = $setupUpload['visible'] ?? true;

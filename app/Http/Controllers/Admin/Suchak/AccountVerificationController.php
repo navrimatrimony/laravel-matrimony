@@ -68,11 +68,7 @@ class AccountVerificationController extends Controller
     /** @return array<int, string> */
     public static function businessTypes(): array
     {
-        return [
-            SuchakAccount::BUSINESS_TYPE_INDIVIDUAL,
-            SuchakAccount::BUSINESS_TYPE_BUREAU,
-            SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
-        ];
+        return SuchakAccount::BUSINESS_TYPES;
     }
 
     public function index(Request $request): View

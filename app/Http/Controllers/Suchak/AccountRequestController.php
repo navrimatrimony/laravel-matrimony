@@ -65,17 +65,14 @@ class AccountRequestController extends Controller
         $validated = $request->validate([
             'suchak_name' => ['required', 'string', 'max:255'],
             'office_name' => [
-                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_ORGANIZATION),
+                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_BUREAU),
                 'nullable',
                 'string',
                 'max:255',
             ],
-            'business_type' => ['required', 'string', Rule::in([
-                SuchakAccount::BUSINESS_TYPE_INDIVIDUAL,
-                SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
-            ])],
+            'business_type' => ['required', 'string', Rule::in(SuchakAccount::BUSINESS_TYPES)],
             'employee_count' => [
-                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_ORGANIZATION),
+                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_BUREAU),
                 'nullable',
                 'integer',
                 'min:1',
@@ -366,10 +363,9 @@ class AccountRequestController extends Controller
      */
     private function businessTypes(): array
     {
-        return [
-            SuchakAccount::BUSINESS_TYPE_INDIVIDUAL => __('suchak.business_types.individual'),
-            SuchakAccount::BUSINESS_TYPE_ORGANIZATION => __('suchak.business_types.organization'),
-        ];
+        return collect(SuchakAccount::BUSINESS_TYPES)
+            ->mapWithKeys(fn (string $type): array => [$type => __('suchak.business_types.'.$type)])
+            ->all();
     }
 
     /**

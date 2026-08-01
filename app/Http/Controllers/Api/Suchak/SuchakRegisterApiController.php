@@ -39,17 +39,14 @@ class SuchakRegisterApiController extends Controller
         $validated = $request->validate([
             'suchak_name' => ['required', 'string', 'max:255'],
             'office_name' => [
-                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_ORGANIZATION),
+                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_BUREAU),
                 'nullable',
                 'string',
                 'max:255',
             ],
-            'business_type' => ['required', 'string', Rule::in([
-                SuchakAccount::BUSINESS_TYPE_INDIVIDUAL,
-                SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
-            ])],
+            'business_type' => ['required', 'string', Rule::in(SuchakAccount::BUSINESS_TYPES)],
             'employee_count' => [
-                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_ORGANIZATION),
+                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_BUREAU),
                 'nullable',
                 'integer',
                 'min:1',
@@ -193,18 +190,15 @@ class SuchakRegisterApiController extends Controller
 
         $validated = $request->validate([
             'suchak_name' => ['required', 'string', 'max:255'],
-            'business_type' => ['required', 'string', Rule::in([
-                SuchakAccount::BUSINESS_TYPE_INDIVIDUAL,
-                SuchakAccount::BUSINESS_TYPE_ORGANIZATION,
-            ])],
+            'business_type' => ['required', 'string', Rule::in(SuchakAccount::BUSINESS_TYPES)],
             'office_name' => [
-                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_ORGANIZATION),
+                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_BUREAU),
                 'nullable',
                 'string',
                 'max:255',
             ],
             'employee_count' => [
-                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_ORGANIZATION),
+                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_BUREAU),
                 'nullable',
                 'integer',
                 'min:1',
@@ -292,10 +286,10 @@ class SuchakRegisterApiController extends Controller
         if ($user instanceof JsonResponse) {
             return $user;
         }
-        if ($user->suchakAccount?->business_type !== SuchakAccount::BUSINESS_TYPE_ORGANIZATION) {
+        if ($user->suchakAccount?->business_type !== SuchakAccount::BUSINESS_TYPE_BUREAU) {
             return response()->json([
                 'success' => false,
-                'message' => 'Organization logo is only for organization accounts.',
+                'message' => 'Bureau logo is only for marriage bureau accounts.',
             ], 422);
         }
 
@@ -313,10 +307,10 @@ class SuchakRegisterApiController extends Controller
         if ($user instanceof JsonResponse) {
             return $user;
         }
-        if ($user->suchakAccount?->business_type !== SuchakAccount::BUSINESS_TYPE_ORGANIZATION) {
+        if ($user->suchakAccount?->business_type !== SuchakAccount::BUSINESS_TYPE_BUREAU) {
             return response()->json([
                 'success' => false,
-                'message' => 'Office photo is only for organization accounts.',
+                'message' => 'Office photo is only for marriage bureau accounts.',
             ], 422);
         }
 

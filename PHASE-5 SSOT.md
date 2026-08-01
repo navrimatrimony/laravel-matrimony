@@ -14666,7 +14666,11 @@ Allowed business_type values:
 
 * individual
 * bureau
-* organization
+
+(AMENDED 2026-08-01 by product-owner decision: 'organization' was renamed to
+'bureau' — the marriage bureau (विवाह मंडळ). Exactly two types exist. Migration
+2026_08_01_180000_rename_suchak_business_type_organization_to_bureau rewrote the
+stored rows.)
 
 Allowed verification_status values:
 
@@ -14952,7 +14956,7 @@ SuchakAccount:
 
 * BUSINESS_TYPE_INDIVIDUAL = individual
 * BUSINESS_TYPE_BUREAU = bureau
-* BUSINESS_TYPE_ORGANIZATION = organization
+* BUSINESS_TYPES = [individual, bureau]  (the one allow-list every validator reads)
 * VERIFICATION_PENDING = pending
 * VERIFICATION_VERIFIED = verified
 * VERIFICATION_REJECTED = rejected

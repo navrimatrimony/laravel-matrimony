@@ -13,7 +13,17 @@ class SuchakAccount extends Model
 
     public const BUSINESS_TYPE_INDIVIDUAL = 'individual';
     public const BUSINESS_TYPE_BUREAU = 'bureau';
-    public const BUSINESS_TYPE_ORGANIZATION = 'organization';
+
+    /**
+     * The only two Suchak business types that exist. Every validation rule,
+     * admin filter and label map reads this list — do not restate it inline.
+     *
+     * @var list<string>
+     */
+    public const BUSINESS_TYPES = [
+        self::BUSINESS_TYPE_INDIVIDUAL,
+        self::BUSINESS_TYPE_BUREAU,
+    ];
 
     public const VERIFICATION_PENDING = 'pending';
     public const VERIFICATION_VERIFIED = 'verified';
