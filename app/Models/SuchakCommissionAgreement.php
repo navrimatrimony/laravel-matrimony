@@ -35,6 +35,7 @@ class SuchakCommissionAgreement extends Model
 
     protected $fillable = [
         'collaboration_request_id',
+        'customer_agreement_id',
         'groom_side_suchak_account_id',
         'bride_side_suchak_account_id',
         'collector_suchak_account_id',
@@ -62,6 +63,16 @@ class SuchakCommissionAgreement extends Model
     public function collaborationRequest(): BelongsTo
     {
         return $this->belongsTo(SuchakCollaborationRequest::class, 'collaboration_request_id');
+    }
+
+    /**
+     * The customer agreement REVISION in force when this engagement was formed. Revisions are rows in
+     * suchak_customer_agreements (agreement_revision + supersedes_agreement_id), so this id names the
+     * exact terms the declared share is a share of — that is what keeps it claimable a year later.
+     */
+    public function customerAgreement(): BelongsTo
+    {
+        return $this->belongsTo(SuchakCustomerAgreement::class, 'customer_agreement_id');
     }
 
     public function groomSideSuchakAccount(): BelongsTo

@@ -35,6 +35,20 @@ class SuchakCollaborationRequest extends Model
         self::STATUS_ADMIN_REVIEW,
     ];
 
+    /**
+     * Which of the two existing account columns holds the CUSTOMER-OWNING Suchak (blueprint 6.1).
+     * The pair is stored by direction; in the marketplace the responder is the requester, so
+     * direction no longer implies role. This is a side label — never a second copy of an account id.
+     */
+    public const SIDE_REQUESTING = 'requesting';
+    public const SIDE_TARGET = 'target';
+
+    /** @var list<string> */
+    public const SIDES = [
+        self::SIDE_REQUESTING,
+        self::SIDE_TARGET,
+    ];
+
     protected $table = 'suchak_collaboration_requests';
 
     protected $fillable = [
@@ -44,7 +58,9 @@ class SuchakCollaborationRequest extends Model
         'target_matrimony_profile_id',
         'requesting_representation_id',
         'target_representation_id',
+        'customer_owner_side',
         'status',
+        'marketplace_stage',
         'message',
         'requested_at',
         'responded_at',
@@ -97,9 +113,60 @@ class SuchakCollaborationRequest extends Model
         return $this->hasMany(SuchakLedgerEntry::class, 'collaboration_request_id');
     }
 
+    public function stageEvents(): HasMany
+    {
+        return $this->hasMany(SuchakCollaborationStageEvent::class, 'collaboration_request_id');
+    }
+
     public function isOpen(): bool
     {
         return in_array($this->status, self::OPEN_STATUSES, true);
+    }
+
+    /**
+     * The Suchak who holds the customer relationship, the customer agreement and the collection.
+     */
+    public function customerOwnerSuchakAccountId(): int
+    {
+        return $this->customer_owner_side === self::SIDE_REQUESTING
+            ? (int) $this->requesting_suchak_account_id
+            : (int) $this->target_suchak_account_id;
+    }
+
+    /**
+     * The Suchak who is helping — the other side of the same pair.
+     */
+    public function helpingSuchakAccountId(): int
+    {
+        return $this->customer_owner_side === self::SIDE_REQUESTING
+            ? (int) $this->target_suchak_account_id
+            : (int) $this->requesting_suchak_account_id;
+    }
+
+    public function isCustomerOwner(int $suchakAccountId): bool
+    {
+        return $this->customerOwnerSuchakAccountId() === $suchakAccountId;
+    }
+
+    public function isHelpingSuchak(int $suchakAccountId): bool
+    {
+        return $this->helpingSuchakAccountId() === $suchakAccountId;
+    }
+
+    /**
+     * Which directional slot a participating account sits in, or null when it is not a participant.
+     */
+    public function sideForAccount(int $suchakAccountId): ?string
+    {
+        if ((int) $this->requesting_suchak_account_id === $suchakAccountId) {
+            return self::SIDE_REQUESTING;
+        }
+
+        if ((int) $this->target_suchak_account_id === $suchakAccountId) {
+            return self::SIDE_TARGET;
+        }
+
+        return null;
     }
 
     public function delete(): ?bool

@@ -6,7 +6,9 @@ use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakCollaborationRequest;
+use App\Models\SuchakCollaborationStageEvent;
 use App\Models\SuchakCommissionAgreement;
+use App\Models\SuchakCustomerAgreement;
 use App\Models\SuchakFeatureSuspension;
 use App\Models\SuchakPaymentContext;
 use App\Models\SuchakProfileRepresentation;
@@ -506,6 +508,175 @@ class SuchakCollaborationService
             && $collaboration->commissionAgreement?->isAcceptedByBothSides() === true;
     }
 
+    /**
+     * Name the customer-owning side of the engagement and freeze the customer agreement REVISION in
+     * force (blueprint 6.1). The role is derived from whose agreement it is — it is never typed —
+     * and the revision link is written once so a share stays claimable against the terms that applied.
+     */
+    public function linkCustomerAgreement(
+        SuchakCollaborationRequest $collaboration,
+        SuchakAccount $account,
+        User $actor,
+        SuchakCustomerAgreement $customerAgreement,
+    ): SuchakCollaborationRequest {
+        $account->refresh();
+        $collaboration->refresh()->loadMissing('commissionAgreement');
+        $this->assertParticipantActor($collaboration, $account, $actor);
+
+        if ((int) $customerAgreement->suchak_account_id !== (int) $account->id) {
+            throw new InvalidArgumentException('Customer agreement belongs to another Suchak account.');
+        }
+
+        $ownerSide = $collaboration->sideForAccount((int) $account->id);
+        if ($ownerSide === null) {
+            throw new InvalidArgumentException('Suchak account is not part of this collaboration.');
+        }
+
+        return DB::transaction(function () use ($collaboration, $customerAgreement, $ownerSide): SuchakCollaborationRequest {
+            /** @var SuchakCollaborationRequest $locked */
+            $locked = SuchakCollaborationRequest::query()
+                ->whereKey($collaboration->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $locked->loadMissing('commissionAgreement');
+
+            $agreement = $locked->commissionAgreement ?? $this->createMissingAgreement($locked);
+            $linkedAgreementId = $agreement->customer_agreement_id === null
+                ? null
+                : (int) $agreement->customer_agreement_id;
+
+            if ($linkedAgreementId !== null && $linkedAgreementId !== (int) $customerAgreement->id) {
+                throw new InvalidArgumentException('This engagement is already bound to another customer agreement revision.');
+            }
+
+            if ($linkedAgreementId === null) {
+                SuchakCommissionAgreement::query()
+                    ->whereKey($agreement->id)
+                    ->update(['customer_agreement_id' => $customerAgreement->id]);
+            }
+
+            SuchakCollaborationRequest::query()
+                ->whereKey($locked->id)
+                ->update(['customer_owner_side' => $ownerSide]);
+
+            return $locked->fresh(['commissionAgreement']);
+        });
+    }
+
+    /**
+     * Record a marketplace ladder stage (blueprint 6a). Either Suchak may raise the claim (D26).
+     *
+     * Stages outside CONFIRMABLE_STAGES settle on the claim; the last three (marriage settled,
+     * engagement, marriage) wait for confirmStage(). The 7-day silent-then-dispute timer is Phase 3.
+     */
+    public function claimStage(
+        SuchakCollaborationRequest $collaboration,
+        SuchakAccount $account,
+        User $actor,
+        string $stageKey,
+        ?string $note = null,
+    ): SuchakCollaborationStageEvent {
+        $account->refresh();
+        $collaboration->refresh()->loadMissing('commissionAgreement');
+        $this->assertParticipantActor($collaboration, $account, $actor);
+        $this->assertLadderStage($stageKey);
+
+        if ($collaboration->status !== SuchakCollaborationRequest::STATUS_ACCEPTED) {
+            throw new InvalidArgumentException('Marketplace stages can only be recorded on an accepted collaboration.');
+        }
+
+        return DB::transaction(function () use ($collaboration, $account, $actor, $stageKey, $note): SuchakCollaborationStageEvent {
+            /** @var SuchakCollaborationRequest $locked */
+            $locked = SuchakCollaborationRequest::query()
+                ->whereKey($collaboration->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $existing = SuchakCollaborationStageEvent::query()
+                ->where('collaboration_request_id', $locked->id)
+                ->where('stage_key', $stageKey)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing !== null) {
+                throw new InvalidArgumentException('This marketplace stage is already recorded for the engagement.');
+            }
+
+            $event = SuchakCollaborationStageEvent::query()->create([
+                'collaboration_request_id' => $locked->id,
+                'stage_key' => $stageKey,
+                'claimed_by_actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
+                'claimed_by_suchak_account_id' => $account->id,
+                'claimed_by_user_id' => $actor->id,
+                'claimed_at' => now(),
+                'event_note' => $this->nullableLimitedString($note, 2000),
+            ]);
+
+            if (! SuchakCollaborationStageEvent::requiresConfirmation($stageKey)) {
+                $this->advanceMarketplaceStage($locked, $stageKey);
+            }
+
+            return $event->fresh() ?? $event;
+        });
+    }
+
+    /**
+     * Confirm a claimed terminal stage (D26). The customer confirms; an admin may confirm in their place.
+     * Neither participating Suchak's own user may confirm their side's claim.
+     */
+    public function confirmStage(
+        SuchakCollaborationRequest $collaboration,
+        User $confirmingUser,
+        string $stageKey,
+        ?string $note = null,
+    ): SuchakCollaborationStageEvent {
+        $collaboration->refresh();
+        $this->assertLadderStage($stageKey);
+
+        if (! SuchakCollaborationStageEvent::requiresConfirmation($stageKey)) {
+            throw new InvalidArgumentException('This marketplace stage does not carry a confirmation.');
+        }
+
+        $actorType = $this->confirmationActorType($collaboration, $confirmingUser);
+
+        return DB::transaction(function () use ($collaboration, $confirmingUser, $stageKey, $note, $actorType): SuchakCollaborationStageEvent {
+            /** @var SuchakCollaborationRequest $locked */
+            $locked = SuchakCollaborationRequest::query()
+                ->whereKey($collaboration->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            /** @var SuchakCollaborationStageEvent|null $event */
+            $event = SuchakCollaborationStageEvent::query()
+                ->where('collaboration_request_id', $locked->id)
+                ->where('stage_key', $stageKey)
+                ->lockForUpdate()
+                ->first();
+
+            if ($event === null) {
+                throw new InvalidArgumentException('This marketplace stage has not been claimed yet.');
+            }
+
+            if ($event->confirmed_at !== null) {
+                throw new InvalidArgumentException('This marketplace stage is already confirmed.');
+            }
+
+            SuchakCollaborationStageEvent::query()
+                ->whereKey($event->id)
+                ->update([
+                    'confirmed_by_actor_type' => $actorType,
+                    'confirmed_by_user_id' => $confirmingUser->id,
+                    'confirmed_at' => now(),
+                    'event_note' => $this->nullableLimitedString($note, 2000) ?? $event->event_note,
+                    'updated_at' => now(),
+                ]);
+
+            $this->advanceMarketplaceStage($locked, $stageKey);
+
+            return $event->fresh() ?? $event;
+        });
+    }
+
     private function assertCanCreate(
         SuchakAccount $requestingAccount,
         User $actor,
@@ -596,6 +767,52 @@ class SuchakCollaborationService
         if (! $this->accessService->canOperate($account)) {
             throw new InvalidArgumentException('Only verified Suchak accounts can use collaboration actions.');
         }
+    }
+
+    private function assertLadderStage(string $stageKey): void
+    {
+        if (! SuchakCollaborationStageEvent::isValidStage($stageKey)) {
+            throw new InvalidArgumentException('Unknown marketplace stage key: '.$stageKey.'.');
+        }
+    }
+
+    /**
+     * The customer confirms; an admin may stand in. A participating Suchak's own user may not.
+     */
+    private function confirmationActorType(SuchakCollaborationRequest $collaboration, User $confirmingUser): string
+    {
+        if ($this->accessService->isAdmin($confirmingUser)) {
+            return SuchakActivityLog::ACTOR_ADMIN;
+        }
+
+        $participantUserIds = SuchakAccount::query()
+            ->whereKey([
+                $collaboration->requesting_suchak_account_id,
+                $collaboration->target_suchak_account_id,
+            ])
+            ->pluck('user_id')
+            ->map(fn ($userId): int => (int) $userId)
+            ->all();
+
+        if (in_array((int) $confirmingUser->id, $participantUserIds, true)) {
+            throw new InvalidArgumentException('A participating Suchak cannot confirm their own marketplace stage claim.');
+        }
+
+        return SuchakActivityLog::ACTOR_USER;
+    }
+
+    /**
+     * The ladder only ever moves forward — a later stage never rewinds the engagement's position.
+     */
+    private function advanceMarketplaceStage(SuchakCollaborationRequest $collaboration, string $stageKey): void
+    {
+        if (! SuchakCollaborationStageEvent::isStageAfter($stageKey, $collaboration->marketplace_stage)) {
+            return;
+        }
+
+        SuchakCollaborationRequest::query()
+            ->whereKey($collaboration->id)
+            ->update(['marketplace_stage' => $stageKey]);
     }
 
     private function assertPendingAndNotExpired(SuchakCollaborationRequest $collaboration): void
