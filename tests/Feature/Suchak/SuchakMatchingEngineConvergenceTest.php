@@ -16,6 +16,7 @@ use App\Modules\Suchak\Services\SuchakSuggestionService;
 use App\Services\MatchBoostService;
 use App\Services\Matching\MatchingService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
+use App\Support\CandidateNameMask;
 use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -65,20 +66,34 @@ class SuchakMatchingEngineConvergenceTest extends TestCase
 
         $this->assertGreaterThanOrEqual(2, $suggestions->count(), 'Suchak pool should reach both universes.');
 
-        $byProfile = $suggestions->keyBy(static fn (array $row): string => (string) $row['basic']['display_name']);
+        // A row is identified by candidate_profile_id, never by its name: SuchakCandidateMaskingService
+        // decides what a Suchak may call a candidate, and the default is the shared mask.
+        $byProfile = $suggestions->keyBy(static fn (array $row): int => (int) $row['candidate_profile_id']);
 
         // Platform member — already visible to members today.
-        $this->assertTrue($byProfile->has('Convergence Platform Member'));
-        $memberRow = $byProfile->get('Convergence Platform Member');
+        $memberId = (int) $fixture['member_profile']->id;
+        $this->assertTrue($byProfile->has($memberId));
+        $memberRow = $byProfile->get($memberId);
         $this->assertSame(SuchakSuggestionService::SOURCE_PLATFORM_MEMBER, $memberRow['source']);
         $this->assertSame('member', $memberRow['acting_actor']);
+        // The raw full_name never travels: an unrepresented member has nobody to un-mask him.
+        $this->assertSame(
+            CandidateNameMask::mask('Convergence Platform Member'),
+            $memberRow['basic']['display_name'],
+        );
 
         // Another Suchak's candidate, still awaiting manual activation — invisible to the member pool.
-        $this->assertTrue($byProfile->has('Convergence Other Suchak Candidate'));
-        $otherRow = $byProfile->get('Convergence Other Suchak Candidate');
+        $otherId = (int) $fixture['other_suchak_profile']->id;
+        $this->assertTrue($byProfile->has($otherId));
+        $otherRow = $byProfile->get($otherId);
         $this->assertSame(SuchakSuggestionService::SOURCE_SUCHAK_REPRESENTED, $otherRow['source']);
         $this->assertSame('suchak', $otherRow['acting_actor']);
         $this->assertNotNull($otherRow['target_suchak_label']);
+        // Neither does a rival Suchak's candidate, absent an explicit shares_name.
+        $this->assertSame(
+            CandidateNameMask::mask('Convergence Other Suchak Candidate'),
+            $otherRow['basic']['display_name'],
+        );
 
         foreach ([$memberRow, $otherRow] as $row) {
             // Real engine output, not a boolean heuristic.
@@ -153,12 +168,16 @@ class SuchakMatchingEngineConvergenceTest extends TestCase
             $fixture['seeker_representation'],
         );
 
-        $byName = $suggestions->keyBy(static fn (array $row): string => (string) $row['basic']['display_name']);
-        $this->assertTrue($byName->has('Quality Verified Candidate'));
-        $this->assertTrue($byName->has('Quality Empty Candidate'));
+        // Keyed by candidate_profile_id — display_name is masked, so it is not a stable key.
+        $byProfile = $suggestions->keyBy(static fn (array $row): int => (int) $row['candidate_profile_id']);
+        $verifiedId = (int) $fixture['verified_candidate']->id;
+        $emptyId = (int) $fixture['empty_candidate']->id;
 
-        $verified = $byName->get('Quality Verified Candidate');
-        $empty = $byName->get('Quality Empty Candidate');
+        $this->assertTrue($byProfile->has($verifiedId));
+        $this->assertTrue($byProfile->has($emptyId));
+
+        $verified = $byProfile->get($verifiedId);
+        $empty = $byProfile->get($emptyId);
 
         // Field compatibility is identical by construction — nothing but candidate quality is left.
         $this->assertSame(
@@ -179,10 +198,10 @@ class SuchakMatchingEngineConvergenceTest extends TestCase
         $this->assertNotContains(__('matching_engine.boost_reason_verified_kyc'), $empty['reasons']);
 
         // Ordering of the returned collection follows it.
-        $names = $suggestions->map(static fn (array $row): string => (string) $row['basic']['display_name'])->values()->all();
+        $order = $suggestions->map(static fn (array $row): int => (int) $row['candidate_profile_id'])->values()->all();
         $this->assertLessThan(
-            array_search('Quality Empty Candidate', $names, true),
-            array_search('Quality Verified Candidate', $names, true),
+            array_search($emptyId, $order, true),
+            array_search($verifiedId, $order, true),
         );
     }
 
@@ -353,6 +372,8 @@ class SuchakMatchingEngineConvergenceTest extends TestCase
             'own_account' => $ownAccount,
             'other_account' => $otherAccount,
             'seeker_representation' => $seekerRepresentation,
+            'member_profile' => $memberProfile,
+            'other_suchak_profile' => $otherSuchakProfile,
             'member_seeker' => $memberSeeker,
             'secret_mobiles' => $secretMobiles,
         ];
