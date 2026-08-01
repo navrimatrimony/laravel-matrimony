@@ -10,8 +10,11 @@ use App\Models\SuchakCustomerAgreementStage;
 use App\Models\SuchakServicePackage;
 use App\Models\SuchakServicePackageDeliverable;
 use App\Models\SuchakServicePackageStage;
+use App\Models\SuchakSuccessFeeTranche;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Support\MoneyFormat;
+use App\Support\Suchak\SuchakContactRouting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -29,6 +32,7 @@ class SuchakAgreementService
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakAccessService $accessService,
         private readonly SuchakPolicyService $policyService,
+        private readonly SuchakSuccessFeeTrancheService $trancheService,
     ) {
     }
 
@@ -253,23 +257,24 @@ class SuchakAgreementService
      *
      * Re-issuing overwrites the previous hash and clears the used marker, which
      * is what makes a lost or stale WhatsApp forward stop working the moment a
-     * replacement is sent.
+     * replacement is sent. Because re-issuing silently kills the link already in
+     * the customer's hands, every issuance writes its own activity row —
+     * ACTION_CUSTOMER_AGREEMENT_LINK_ISSUED, which exists for exactly this and
+     * nothing else. The token columns hold only the newest link; the trail holds
+     * all of them.
      *
-     * No activity row is written here: SuchakActivityLog has no action for an
-     * agreement link being issued, and borrowing a neighbouring one would put a
-     * false event in the audit trail. The token columns are the record until
-     * that action exists.
-     *
-     * @return array{agreement: SuchakCustomerAgreement, raw_token: string, acceptance_url: string, expires_at: \Illuminate\Support\Carbon}
+     * @return array{agreement: SuchakCustomerAgreement, raw_token: string, acceptance_url: string, expires_at: \Illuminate\Support\Carbon, forward_message: string}
      */
     public function issueAcceptanceLink(
         SuchakCustomerAgreement $agreement,
         User $actor,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
     ): array {
         $agreement->refresh()->loadMissing(['suchakAccount', 'customerContext', 'servicePackage']);
         $this->assertTermsActor($agreement, $actor);
 
-        return DB::transaction(function () use ($agreement): array {
+        return DB::transaction(function () use ($agreement, $actor, $ipAddress, $userAgent): array {
             /** @var SuchakCustomerAgreement $locked */
             $locked = SuchakCustomerAgreement::query()
                 ->whereKey($agreement->id)
@@ -294,13 +299,53 @@ class SuchakAgreementService
                     'updated_at' => now(),
                 ]);
 
+            $fresh = $locked->fresh($this->agreementRelations());
+            $acceptanceUrl = $this->publicAcceptanceUrl($rawToken);
+
+            $this->recordActivity(
+                $fresh,
+                $actor,
+                SuchakActivityLog::ACTION_CUSTOMER_AGREEMENT_LINK_ISSUED,
+                'customer_agreement_link_issued',
+                'Suchak customer agreement acceptance link issued.',
+                $ipAddress,
+                $userAgent,
+            );
+
             return [
-                'agreement' => $locked->fresh($this->agreementRelations()),
+                'agreement' => $fresh,
                 'raw_token' => $rawToken,
-                'acceptance_url' => $this->publicAcceptanceUrl($rawToken),
+                'acceptance_url' => $acceptanceUrl,
                 'expires_at' => $expiresAt,
+                'forward_message' => $this->acceptanceForwardMessage($fresh, $acceptanceUrl),
             ];
         });
+    }
+
+    /**
+     * The Marathi WhatsApp text the Suchak forwards with the link.
+     *
+     * Lives beside the link it carries, so there is one place that knows what an
+     * agreement link is worded as. Nothing generic is re-solved here: the Suchak
+     * name comes from the shared owner (SuchakContactRouting::displayName, the
+     * same name a member sees on the profile page and in chat) and the amount
+     * from MoneyFormat, the one money formatter.
+     *
+     * D27: who is asking, what it is, what it costs, the link. The page behind
+     * the link carries the rest — repeating rules or reassurance here would give
+     * the reader nothing to do differently.
+     */
+    private function acceptanceForwardMessage(SuchakCustomerAgreement $agreement, string $acceptanceUrl): string
+    {
+        $suchakName = SuchakContactRouting::displayName($agreement->suchakAccount);
+        $price = MoneyFormat::amount($agreement->price_amount, (string) ($agreement->currency ?: 'INR'));
+
+        return "नमस्कार,\n\n"
+            ."मी {$suchakName}.\n\n"
+            ."सेवा शुल्काचा करार तुमच्या स्वीकारासाठी पाठवत आहे.\n"
+            .($price === null ? '' : "नोंदणी शुल्क: {$price}\n")
+            ."\nकरार पाहण्यासाठी आणि स्वीकारण्यासाठी खालील लिंकवर क्लिक करा:\n"
+            .$acceptanceUrl;
     }
 
     /**
@@ -485,7 +530,15 @@ class SuchakAgreementService
         $bodyMr = $this->limitedText($attributes['agreement_body_mr'] ?? null, 5000);
         $invoiceNote = $this->invoiceNote($termsStatus, $policyMode, $revision, $attributes['invoice_note'] ?? null);
         $invoiceNoteMr = $this->limitedText($attributes['invoice_note_mr'] ?? null, 1000);
-        $snapshotHash = $this->agreementSnapshotHash($package, $policyMode, $title, $body);
+
+        // Blueprint 7.4: the success-fee split is set at agreement time and freezes with the
+        // rest of the terms, so it is resolved before the digest and hashed with it.
+        $supersededTranches = $this->supersededTranches($supersedesAgreementId);
+        $trancheRows = $this->resolveTranchePlan($attributes, $supersededTranches);
+        $this->trancheService->assertPackageCarriesFixedSuccessFee($package, $trancheRows);
+        $this->trancheService->assertPlanChangeAllowed($supersededTranches, $trancheRows);
+
+        $snapshotHash = $this->agreementSnapshotHash($package, $policyMode, $title, $body, $trancheRows);
 
         $agreement = SuchakCustomerAgreement::query()->create([
             'suchak_account_id' => $package->suchak_account_id,
@@ -544,7 +597,92 @@ class SuchakAgreementService
             ]);
         }
 
+        $this->persistTranchePlan($agreement, $trancheRows, $supersededTranches);
+
         return $agreement;
+    }
+
+    /**
+     * The tranche rows of the revision being superseded, or none for a first agreement.
+     *
+     * @return list<SuchakSuccessFeeTranche>
+     */
+    private function supersededTranches(?int $supersedesAgreementId): array
+    {
+        if ($supersedesAgreementId === null) {
+            return [];
+        }
+
+        return SuchakSuccessFeeTranche::query()
+            ->where('customer_agreement_id', $supersedesAgreementId)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->all();
+    }
+
+    /**
+     * An explicit split wins; otherwise the previous revision's split carries forward.
+     *
+     * Carrying forward matters more than it looks: createRevisionForPackageChange is called
+     * from acceptOrReviseTerms with only the title and body, so without this a package edit
+     * would silently drop a split the customer had already agreed to and the whole success fee
+     * would fall due at one stage.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @param  list<SuchakSuccessFeeTranche>  $supersededTranches
+     * @return list<array<string, mixed>>
+     */
+    private function resolveTranchePlan(array $attributes, array $supersededTranches): array
+    {
+        if (array_key_exists('success_fee_tranches', $attributes) && is_array($attributes['success_fee_tranches'])) {
+            return $this->trancheService->normalizePlan($attributes['success_fee_tranches']);
+        }
+
+        return $this->trancheService->snapshotPayload($supersededTranches);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $trancheRows
+     * @param  list<SuchakSuccessFeeTranche>  $supersededTranches
+     */
+    private function persistTranchePlan(
+        SuchakCustomerAgreement $agreement,
+        array $trancheRows,
+        array $supersededTranches,
+    ): void {
+        if ($trancheRows === []) {
+            return;
+        }
+
+        // M9: the ledger follows the customer, not the revision. When the split is unchanged the
+        // previous revision's release and payment state moves with it, so a tranche already paid
+        // stays paid across a package edit and the family's total exposure never resets.
+        $carriedState = [];
+        if ($this->trancheService->snapshotPayload($supersededTranches) === $trancheRows) {
+            foreach ($supersededTranches as $tranche) {
+                $carriedState[(string) $tranche->trigger_stage_key] = $tranche;
+            }
+        }
+
+        foreach ($trancheRows as $row) {
+            $source = $carriedState[$row['trigger_stage_key']] ?? null;
+
+            SuchakSuccessFeeTranche::query()->create([
+                'customer_agreement_id' => $agreement->id,
+                'sort_order' => $row['sort_order'],
+                'trigger_stage_key' => $row['trigger_stage_key'],
+                'share_percent' => $row['share_percent'],
+                'is_final_tranche' => $row['is_final_tranche'],
+                'released_by_collaboration_request_id' => $source?->released_by_collaboration_request_id,
+                'released_by_stage_event_id' => $source?->released_by_stage_event_id,
+                'released_at' => $source?->released_at,
+                'customer_payment_id' => $source?->customer_payment_id,
+                'settled_at' => $source?->settled_at,
+            ]);
+        }
+
+        $this->trancheService->logAdvisories($trancheRows, (int) $agreement->id);
     }
 
     private function assertPackageManager(SuchakServicePackage $package, User $actor): void
@@ -641,6 +779,9 @@ class SuchakAgreementService
             $agreement->terms_policy_mode,
             $agreement->agreement_title,
             $agreement->agreement_body,
+            // Read straight from the table, never from an already-loaded relation: a stale
+            // in-memory copy would hide the very edit this comparison exists to catch.
+            $agreement->successFeeTranches()->get()->all(),
         );
 
         return hash_equals($agreement->agreement_snapshot_hash, $currentHash);
@@ -659,12 +800,18 @@ class SuchakAgreementService
      * Public only so a data migration can re-digest stored agreements through
      * this exact payload; copying the payload into the migration would let the
      * two drift, which is precisely the staleness this hash exists to detect.
+     *
+     * @param  iterable<int, SuchakSuccessFeeTranche|array<string, mixed>>  $successFeeTranches
+     *                                                                     the success-fee split
+     *                                                                     (blueprint 7.4), as
+     *                                                                     models or canonical rows
      */
     public function agreementSnapshotHash(
         SuchakServicePackage $package,
         string $policyMode,
         string $title,
         ?string $body,
+        iterable $successFeeTranches = [],
     ): string {
         return hash('sha256', json_encode([
             'terms_policy_mode' => $policyMode,
@@ -702,6 +849,11 @@ class SuchakAgreementService
                 'sort_order' => (int) $deliverable->sort_order,
                 'is_required' => (bool) $deliverable->is_required,
             ])->values()->all(),
+            // The success-fee split freezes with the agreement (blueprint 7.4), so re-cutting a
+            // tranche after acceptance has to read as "terms changed" for exactly the same
+            // reason editing the price or either meeting fee does. Plan facts only — release and
+            // payment state is ledger movement, not a change of terms.
+            'success_fee_tranches' => $this->trancheService->snapshotPayload($successFeeTranches),
         ], JSON_THROW_ON_ERROR));
     }
 
@@ -838,6 +990,7 @@ class SuchakAgreementService
             'supersedesAgreement',
             'stages',
             'deliverables',
+            'successFeeTranches',
         ];
     }
 }

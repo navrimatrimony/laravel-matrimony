@@ -36,6 +36,17 @@
     $pageTitle = 'शुल्क करार';
     $ogDescription = 'शुल्क तपासा आणि स्वीकारा.';
 
+    // The success fee is quoted once above; these rows say WHEN each part of it
+    // falls due. Every row carries its own rupee figure so nobody has to compute
+    // a percentage of a number printed further up the page.
+    $trancheRows = collect($terms['success_fee_tranches'] ?? [])
+        ->map(static fn (array $row): array => [
+            'label' => $row['label'],
+            'share' => $row['share'],
+            'amount' => \App\Support\MoneyFormat::amount($row['amount'] ?? null, $currency),
+        ])
+        ->all();
+
     $feeRows = [
         ['label' => 'नोंदणी शुल्क', 'value' => $registrationFee],
         ['label' => 'प्रत्यक्ष भेटीचे शुल्क (प्रति भेट)', 'value' => $offlineMeetingFee],
@@ -127,6 +138,25 @@
                                     </div>
                                 @endforeach
                             </dl>
+
+                            @if ($trancheRows !== [])
+                                <div class="mt-3 border-t border-gray-200 pt-3 dark:border-gray-700">
+                                    <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">विवाह ठरल्यानंतरचे शुल्क — कधी किती</h3>
+                                    <ul class="mt-2 grid gap-1.5">
+                                        @foreach ($trancheRows as $trancheRow)
+                                            <li class="flex items-baseline justify-between gap-3 rounded-md bg-white px-3 py-2 shadow-sm dark:bg-gray-900">
+                                                <span class="text-sm text-gray-700 dark:text-gray-200">{{ $trancheRow['label'] }}</span>
+                                                <span class="flex shrink-0 items-baseline gap-2">
+                                                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ $trancheRow['share'] }}</span>
+                                                    @if ($trancheRow['amount'] !== null)
+                                                        <span class="text-base font-bold text-gray-950 dark:text-gray-50">{{ $trancheRow['amount'] }}</span>
+                                                    @endif
+                                                </span>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
                         </section>
 
                         <section class="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">

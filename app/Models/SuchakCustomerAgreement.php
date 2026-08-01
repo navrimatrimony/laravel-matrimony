@@ -145,6 +145,20 @@ class SuchakCustomerAgreement extends Model
             ->orderBy('id');
     }
 
+    /**
+     * The success-fee split frozen with this revision (blueprint 7.4).
+     *
+     * Ordered by sort_order because the order IS the specification: T2's "final tranche" is the
+     * last row and T4's "first tranche" is the first, so an unordered read silently changes what
+     * both rules are talking about.
+     */
+    public function successFeeTranches(): HasMany
+    {
+        return $this->hasMany(SuchakSuccessFeeTranche::class, 'customer_agreement_id')
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
+
     public function paymentRequests(): HasMany
     {
         return $this->hasMany(SuchakPaymentRequest::class, 'customer_agreement_id');

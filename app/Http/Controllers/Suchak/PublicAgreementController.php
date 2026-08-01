@@ -3,8 +3,13 @@
 namespace App\Http\Controllers\Suchak;
 
 use App\Http\Controllers\Controller;
+use App\Models\SuchakCollaborationStageEvent;
 use App\Models\SuchakCustomerAgreement;
+use App\Models\SuchakCustomerPlan;
+use App\Models\SuchakServicePackage;
+use App\Models\SuchakSuccessFeeTranche;
 use App\Modules\Suchak\Services\SuchakAgreementService;
+use App\Modules\Suchak\Services\SuchakSuccessFeeTrancheService;
 use App\Support\LocalizedText;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -119,7 +124,46 @@ class PublicAgreementController extends Controller
             'meeting_online_fee' => $package?->per_meeting_online_fee_amount,
             'success_fee_mode' => $package?->post_marriage_fee_mode,
             'success_fee_amount' => $package?->post_marriage_fee_amount,
+            'success_fee_tranches' => $this->trancheRowsFor($agreement, $package),
         ];
+    }
+
+    /**
+     * The split the customer is actually agreeing to.
+     *
+     * The tranche plan is inside the snapshot digest this page freezes, so a
+     * customer who accepts without seeing it has agreed to a schedule nobody
+     * showed them — the exact failure the freeze exists to prevent. Each row
+     * carries its own rupee figure, because "10%" of a figure printed elsewhere
+     * on the page is arithmetic we are asking a family to do under pressure.
+     *
+     * @return list<array{label: string, share: ?string, amount: ?string}>
+     */
+    private function trancheRowsFor(
+        SuchakCustomerAgreement $agreement,
+        ?SuchakServicePackage $package,
+    ): array {
+        $tranches = $agreement->successFeeTranches()->orderBy('sort_order')->get();
+        if ($tranches->isEmpty()) {
+            return [];
+        }
+
+        // One arithmetic owner: the same service that validated the plan computes
+        // the money, so the page can never quote a figure the rules did not produce.
+        $amounts = $package?->post_marriage_fee_mode === SuchakCustomerPlan::MODE_FIXED
+            ? app(SuchakSuccessFeeTrancheService::class)
+                ->amounts($package->post_marriage_fee_amount, $tranches)
+            : [];
+
+        return $tranches->values()->map(static fn (SuchakSuccessFeeTranche $tranche, int $index): array => [
+            'label' => SuchakCollaborationStageEvent::stageLabel((string) $tranche->trigger_stage_key),
+            // The final tranche is the remainder, never a percentage (T2), so it
+            // says so rather than printing a number the rules do not define.
+            'share' => $tranche->is_final_tranche
+                ? 'उर्वरित रक्कम'
+                : rtrim(rtrim(number_format((float) $tranche->share_percent, 2, '.', ''), '0'), '.').'%',
+            'amount' => $amounts[$index] ?? null,
+        ])->all();
     }
 
     private function stateFor(?SuchakCustomerAgreement $agreement): string

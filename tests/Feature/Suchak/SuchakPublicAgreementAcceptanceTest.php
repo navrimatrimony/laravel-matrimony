@@ -4,6 +4,7 @@ namespace Tests\Feature\Suchak;
 
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
+use App\Models\SuchakCollaborationStageEvent;
 use App\Models\SuchakCustomerAgreement;
 use App\Models\SuchakCustomerPlan;
 use App\Models\SuchakPolicy;
@@ -74,6 +75,40 @@ class SuchakPublicAgreementAcceptanceTest extends TestCase
         // FROZEN rule: every numeral a reader sees is Latin 0-9.
         $response->assertDontSee('०', false);
         $response->assertDontSee('५', false);
+    }
+
+    /**
+     * The tranche plan is inside the digest this page freezes. A customer who
+     * accepts without being shown it has agreed to a payment schedule nobody
+     * showed them — which is the precise failure the freeze exists to prevent.
+     */
+    public function test_the_page_shows_the_success_fee_split_the_customer_is_agreeing_to(): void
+    {
+        [$suchakUser, $agreement] = $this->pendingAgreementFixture([
+            'success_fee_tranches' => [
+                ['trigger_stage_key' => SuchakCollaborationStageEvent::STAGE_MARRIAGE_SETTLED, 'share_percent' => 10],
+                ['trigger_stage_key' => SuchakCollaborationStageEvent::STAGE_ENGAGEMENT, 'share_percent' => 40],
+                ['trigger_stage_key' => SuchakCollaborationStageEvent::STAGE_MARRIAGE, 'share_percent' => 50],
+            ],
+        ]);
+        $link = app(SuchakAgreementService::class)->issueAcceptanceLink($agreement, $suchakUser);
+
+        $response = $this->get(route('suchak.agreements.public.show', ['token' => $link['raw_token']]));
+
+        $response->assertOk();
+        $response->assertSee('लग्न ठरल्यावर', false);
+        $response->assertSee('साखरपुड्यानंतर', false);
+        $response->assertSee('विवाहानंतर', false);
+
+        // Each row carries its own rupee figure — a family should not have to
+        // compute 10% of a number printed elsewhere on the page.
+        $response->assertSee('₹2,500', false);
+        $response->assertSee('₹10,000', false);
+        $response->assertSee('₹12,500', false);
+
+        // T2: the last tranche is the remainder, never a percentage.
+        $response->assertSee('उर्वरित रक्कम', false);
+        $response->assertDontSee('50%', false);
     }
 
     public function test_public_acceptance_records_evidence_without_a_user_and_leaves_the_row_immutable(): void
@@ -197,7 +232,7 @@ class SuchakPublicAgreementAcceptanceTest extends TestCase
     /**
      * @return array{0: User, 1: SuchakCustomerAgreement}
      */
-    private function pendingAgreementFixture(): array
+    private function pendingAgreementFixture(array $agreementAttributes = []): array
     {
         $user = User::factory()->create();
         $account = SuchakAccount::factory()->create([
@@ -253,6 +288,7 @@ class SuchakPublicAgreementAcceptanceTest extends TestCase
         $agreement = app(SuchakAgreementService::class)->createAgreementForPackage(
             $package->fresh(['suchakAccount', 'stages', 'deliverables.servicePackageStage']),
             $user,
+            $agreementAttributes,
         );
 
         $this->assertSame(SuchakCustomerAgreement::TERMS_PENDING, $agreement->terms_status);
