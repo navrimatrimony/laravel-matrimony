@@ -131,6 +131,7 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::get('/meetings', SuchakMeetingsApiController::class);
     Route::post('/meetings', [SuchakMeetingsMutationsApiController::class, 'schedule']);
     Route::post('/meetings/{visit}/complete', [SuchakMeetingsMutationsApiController::class, 'complete']);
+    Route::post('/meetings/{visit}/cancel', [SuchakMeetingsMutationsApiController::class, 'cancel']);
     Route::post('/intakes', [SuchakIntakeApiController::class, 'store']);
     Route::get('/manual-profiles/meta', [SuchakManualProfileApiController::class, 'meta']);
     Route::post('/manual-profiles/duplicate-check', [SuchakManualProfileApiController::class, 'duplicateCheck']);

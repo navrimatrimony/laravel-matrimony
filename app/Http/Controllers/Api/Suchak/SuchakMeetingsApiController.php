@@ -31,25 +31,17 @@ class SuchakMeetingsApiController extends Controller
             ], 403);
         }
 
+        // No hand-maintained column projection. The response shape is decided by
+        // the mapping below, not by the SELECT, and a hand-listed projection
+        // silently drops every column a later migration adds — which is exactly
+        // how a frozen fee would keep rendering in the wrong currency after
+        // `fee_currency` lands. Fifty rows of one table is not a query worth
+        // buying that failure mode.
         $visits = SuchakVisitConfirmation::query()
             ->where('suchak_account_id', $account->id)
             ->latest('id')
             ->limit(50)
-            ->get([
-                'id',
-                'pipeline_id',
-                'representation_id',
-                'target_matrimony_profile_id',
-                'requesting_matrimony_profile_id',
-                'visit_status',
-                'confirmation_policy_mode',
-                'scheduled_for',
-                'schedule_note',
-                'suchak_completion_status',
-                'user_confirmation_status',
-                'admin_confirmation_status',
-                'created_at',
-            ])
+            ->get()
             ->map(static fn (SuchakVisitConfirmation $visit): array => [
                 'id' => $visit->id,
                 'pipeline_id' => $visit->pipeline_id,
@@ -58,6 +50,20 @@ class SuchakMeetingsApiController extends Controller
                 'requesting_matrimony_profile_id' => $visit->requesting_matrimony_profile_id,
                 'visit_status' => $visit->visit_status,
                 'confirmation_policy_mode' => $visit->confirmation_policy_mode,
+                // Which meeting of this pair, how it was held, and what it cost.
+                // Per meeting only — D17 forbids a running total on any screen
+                // where a family is deciding about a person.
+                'meeting_sequence' => $visit->meeting_sequence,
+                'meeting_mode' => $visit->meeting_mode,
+                'fee_amount' => $visit->fee_amount,
+                // The unit the quote froze in travels with the figure. A frozen
+                // fee carries its own currency; formatting it against the INR
+                // default would print ₹ over a USD agreement's number. The
+                // pairing lives on the model accessor — one place decides how a
+                // frozen quote reads, so no surface can drift to the default.
+                'fee_currency' => $visit->fee_currency,
+                'fee_display' => $visit->fee_display,
+                'helper_suchak_account_id' => $visit->helper_suchak_account_id,
                 'scheduled_for' => $visit->scheduled_for?->toIso8601String(),
                 'schedule_note' => $visit->schedule_note,
                 'suchak_completion_status' => $visit->suchak_completion_status,

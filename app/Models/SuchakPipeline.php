@@ -84,9 +84,25 @@ class SuchakPipeline extends Model
         return $this->hasMany(SuchakPipelineEvent::class, 'pipeline_id');
     }
 
-    public function visitConfirmation(): HasOne
+    /**
+     * A pair may meet more than once (D24 — an arranged re-visit is charged at
+     * the same rate). This was a hasOne backed by `unique(pipeline_id)` until
+     * 2026-08-01; the unique is gone and so is the one-meeting assumption.
+     */
+    public function visitConfirmations(): HasMany
     {
-        return $this->hasOne(SuchakVisitConfirmation::class, 'pipeline_id');
+        return $this->hasMany(SuchakVisitConfirmation::class, 'pipeline_id')
+            ->orderBy('meeting_sequence');
+    }
+
+    /**
+     * The meeting that decides what the pair may do next — scheduling is blocked
+     * while it is still open, and it is the one a screen should show first.
+     */
+    public function latestVisitConfirmation(): HasOne
+    {
+        return $this->hasOne(SuchakVisitConfirmation::class, 'pipeline_id')
+            ->latestOfMany('meeting_sequence');
     }
 
     public function isPastSla(?CarbonInterface $at = null): bool

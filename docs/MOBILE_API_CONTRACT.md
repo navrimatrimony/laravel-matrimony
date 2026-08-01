@@ -2664,3 +2664,70 @@ wrong person. This adapter resolves the candidate's user and calls the same
 service, so the suggestion engine is reused rather than duplicated.
 `persist()` will not overwrite preferences that were edited manually, so the
 call is safe to repeat.
+
+---
+
+## Suchak meetings — the member half (blueprint 1a, 2026-08-01)
+
+`SuchakVisitConfirmationService` has always been able to confirm, dispute,
+admin-confirm and payout-qualify a meeting; four of those seven capabilities had
+no route, so in production a meeting could only ever be `scheduled` or
+`completed` and D9's "the customer confirms" was unreachable.
+
+The two member-side actions land here, on the member API, because the actor is
+the member: the service accepts exactly the user who owns
+`requesting_matrimony_profile_id`. `confirmByAdmin` and `qualifyPayoutForVisit`
+are **not** here — they are admin-only inside the service and live on
+`admin/suchak/visits/*`.
+
+Auth: `auth:sanctum`. A meeting that is not the caller's returns **404**, never
+403 — a member has no business learning that someone else's meeting exists.
+
+### POST `/api/v1/suchak-meetings/{visit}/confirm`
+
+Body: `confirmation_note` (required, max 1000).
+
+```json
+{
+  "success": true,
+  "message": "भेट झाल्याची पुष्टी नोंदवली.",
+  "data": {
+    "visit_id": 12,
+    "visit_status": "confirmed",
+    "user_confirmation_status": "confirmed",
+    "meeting_sequence": 2,
+    "meeting_mode": "offline",
+    "fee_amount": "3000.00",
+    "fee_display": "₹3,000"
+  }
+}
+```
+
+`fee_amount` / `fee_display` are **this meeting's fee alone** (D17). There is no
+running total in this payload and none may be added: a cumulative figure shown
+while a family is deciding about a person reads as a regret ledger. The
+accumulated figure belongs on the payments screen.
+
+`meeting_sequence` counts meetings within one pipeline. `> 1` means a re-visit,
+charged at the same rate as the first visit (D24) — no discount, no escalation.
+
+### POST `/api/v1/suchak-meetings/{visit}/dispute`
+
+Body: `dispute_reason` (required, max 1000). Same payload shape;
+`visit_status` becomes `disputed`. Opens a `SuchakDispute` and an **active
+payout hold** (blueprint 7.2). Silence is never an automatic zero, and neither
+is a refusal.
+
+### Changed: POST `/api/v1/suchak/meetings` (Suchak app)
+
+Two optional new inputs, and three new response keys:
+
+| Field | Meaning |
+|---|---|
+| `meeting_mode` (in) | `offline` \| `online`. Defaults to `offline`. Picks which per-meeting rate freezes onto the meeting — the two rates are fully independent amounts (D2). |
+| `helper_suchak_account_id` (in) | Whose candidate was met, on a marketplace meeting. Must not be the arranging Suchak's own account. |
+| `meeting_sequence`, `meeting_mode`, `fee_amount`, `fee_display` (out) | As above. |
+
+A second meeting is refused while one is still open — `scheduled`,
+completed-but-unconfirmed, or `disputed` — with a 422. Once the first is
+`confirmed` (or payout-qualified, or cancelled) the pair may meet again.

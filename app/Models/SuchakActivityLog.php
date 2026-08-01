@@ -213,6 +213,8 @@ class SuchakActivityLog extends Model
 
     public const ACTION_VISIT_PAYOUT_QUALIFIED = 'visit_payout_qualified';
 
+    public const ACTION_VISIT_CANCELLED = 'visit_cancelled';
+
     public const ACTION_GROWTH_ATTRIBUTION_RECORDED = 'growth_attribution_recorded';
 
     public const ACTION_GROWTH_REWARD_RULE_CREATED = 'growth_reward_rule_created';

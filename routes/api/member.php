@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\FieldRegistryApiController;
 use App\Http\Controllers\Api\InterestApiController;
 use App\Http\Controllers\Api\MatrimonyProfileApiController;
 use App\Http\Controllers\Api\MemberPasswordApiController;
+use App\Http\Controllers\Api\MemberSuchakMeetingApiController;
 use App\Http\Controllers\Api\MemberSuchakRequestApiController;
 use App\Http\Controllers\Api\MobileBiodataExportApiController;
 use App\Http\Controllers\Api\MobileChatApiController;
@@ -59,6 +60,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/matrimony-profiles/{id}/suchak-requests', [MemberSuchakRequestApiController::class, 'store']); // CREATE SUCHAK REQUEST
     Route::get('/suchak-requests', [MemberSuchakRequestApiController::class, 'index']); // MY SUCHAK REQUESTS (SENT + AS CANDIDATE)
     Route::post('/suchak-requests/{id}/decision', [MemberSuchakRequestApiController::class, 'decide']); // CANDIDATE ANSWERS (RACES THE SUCHAK)
+    /*
+    | The member half of the meeting engine. D9 — the customer confirms — and
+    | blueprint 7.2: a meeting the member disputes opens a dispute and a payout
+    | hold instead of quietly falling due. Same SuchakVisitConfirmationService
+    | the Suchak app schedules and completes through; only the actor differs.
+    */
+    Route::post('/suchak-meetings/{visit}/confirm', [MemberSuchakMeetingApiController::class, 'confirm'])
+        ->whereNumber('visit'); // MEMBER CONFIRMS THE MEETING HAPPENED
+    Route::post('/suchak-meetings/{visit}/dispute', [MemberSuchakMeetingApiController::class, 'dispute'])
+        ->whereNumber('visit'); // MEMBER DISPUTES A CLAIMED MEETING
     Route::get('/contact-inbox', [ContactInboxApiController::class, 'index']); // CONTACT REQUEST INBOX
     Route::post('/contact-requests/{id}/approve', [ContactInboxApiController::class, 'approve']); // APPROVE CONTACT REQUEST
     Route::post('/contact-requests/{id}/reject', [ContactInboxApiController::class, 'reject']); // REJECT CONTACT REQUEST

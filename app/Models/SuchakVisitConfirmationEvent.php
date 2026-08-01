@@ -19,6 +19,7 @@ class SuchakVisitConfirmationEvent extends Model
     public const EVENT_ADMIN_CONFIRMED = 'admin_confirmed';
     public const EVENT_DISPUTED = 'disputed';
     public const EVENT_PAYOUT_QUALIFIED = 'payout_qualified';
+    public const EVENT_CANCELLED = 'cancelled';
 
     public const EVENTS = [
         self::EVENT_SCHEDULED,
@@ -27,6 +28,7 @@ class SuchakVisitConfirmationEvent extends Model
         self::EVENT_ADMIN_CONFIRMED,
         self::EVENT_DISPUTED,
         self::EVENT_PAYOUT_QUALIFIED,
+        self::EVENT_CANCELLED,
     ];
 
     public const ACTOR_SUCHAK = 'suchak';
