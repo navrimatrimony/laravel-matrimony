@@ -84,11 +84,25 @@ class SuchakPaymentSetupApiController extends Controller
             'services' => ['nullable', 'array'],
             'services.*' => ['string', 'max:160'],
             'include_basic' => ['nullable', 'boolean'],
-            // The four per-meeting / post-marriage fees of the CUSTOM branch.
+            // The four per-meeting / post-marriage fees, honoured on BOTH branches.
             // Same vocabulary as SuchakCustomerPlanApiController::store() — the
             // endpoint that writes these very figures onto a reusable plan — so
-            // one fee is validated one way wherever it is submitted. A preset
-            // send ignores them: there the plan governs (see presetPlanFees()).
+            // one fee is validated one way wherever it is submitted.
+            //
+            // A fee posted with the send WINS over the plan's default. The
+            // reusable plan is the default; this send is the decision. Presets
+            // used to ignore these keys, which is how a Suchak could quote
+            // "प्रत्यक्ष भेटीचे शुल्क ₹999" in WhatsApp on the Basic card while
+            // the acceptance page the family then froze said nothing had been
+            // agreed for meetings — the message and the frozen terms disagreeing
+            // is the one failure this endpoint exists to prevent.
+            //
+            // Key ABSENT means "nothing decided here, use the plan". Key PRESENT
+            // AND NULL means "decided: nothing is charged", which is what the app
+            // already sends for an opted-out fee and what the message already
+            // reflects by omitting the line. Both readings live in
+            // submittedPlanTerms(), which also carries `price_amount` above under
+            // the same rule: the send's figure beats the plan's default.
             'per_meeting_fee_amount' => ['nullable', 'numeric', 'min:0'],
             // No relation to the offline fee, in either direction: an online
             // session is priced on its own merits (D2).
@@ -148,6 +162,39 @@ class SuchakPaymentSetupApiController extends Controller
                     $selectedPackageName = 'Matchmaking service';
                 }
 
+                // THE one money decision for this send — registration price plus
+                // the four per-meeting / post-marriage fees — resolved once and
+                // used by every branch below: create, re-quote and refuse alike.
+                // Two layers, one rule, all five figures:
+                //
+                //   default  ← what the plan is configured to charge
+                //   decision ← what THIS send actually quoted the family
+                //
+                // The two existing resolvers cooperate to produce it instead of a
+                // third appearing: presetPlanTerms() lays down the default and
+                // submittedPlanTerms() overlays the decision.
+                //
+                // The preset base underneath both layers is the code-defined plan
+                // (SuchakDefaultPlans). It is the last resort, not the authority:
+                // it stands only where the Suchak configured no override and this
+                // send quoted nothing — which is precisely the case where it is
+                // also the figure the app displayed. A preset send that pinned
+                // this base regardless is how an acceptance page came to read
+                // "नोंदणी शुल्क ₹2,000" while the message said otherwise.
+                $fees = $plan === null
+                    ? array_merge([
+                        'price_amount' => '5000',
+                        'currency' => strtoupper((string) ($validated['currency'] ?? 'INR')),
+                    ], $this->submittedPlanTerms($validated))
+                    : array_merge(
+                        [
+                            'price_amount' => (string) $plan['price_amount'],
+                            'currency' => strtoupper((string) $plan['currency']),
+                        ],
+                        $this->presetPlanTerms($customerPlanService, $account, (string) $plan['key']),
+                        $this->submittedPlanTerms($validated),
+                    );
+
                 $package = SuchakServicePackage::query()
                     ->where('suchak_account_id', $account->id)
                     ->where('customer_context_id', $customerContext->id)
@@ -155,6 +202,50 @@ class SuchakPaymentSetupApiController extends Controller
                     ->where('package_name', $selectedPackageName)
                     ->orderByDesc('id')
                     ->first();
+
+                // Re-sending the same plan to the same customer reuses the package
+                // that is already published for them. Reusing it VERBATIM is the
+                // second way the message and the freeze can disagree: the WhatsApp
+                // text is composed from what the Suchak just typed, so an edited
+                // fee is quoted to the family while the package still carries the
+                // old figure the acceptance page reads.
+                //
+                // What may be done about it depends entirely on whether anyone has
+                // accepted yet, so ask that question before writing anything.
+                if ($package !== null) {
+                    $drift = $packageCatalogService->planTermsDrift($package, $fees);
+
+                    if ($drift !== []) {
+                        if ($this->hasSatisfiedAgreement($package)) {
+                            // Accepted (or bypassed / not-required) terms are the
+                            // whole point of the freeze, and the public acceptance
+                            // page reads these fees LIVE off the package
+                            // (PublicAgreementController::termsFor) — editing them
+                            // would rewrite what a customer already agreed to,
+                            // retroactively, with no record on their side. Refuse
+                            // instead, and say which figure moved. Nothing is
+                            // written; the accepted agreement stays exactly as
+                            // accepted.
+                            throw new InvalidArgumentException(
+                                $this->acceptedTermsChangeRefusal($package, $drift)
+                            );
+                        }
+
+                        // Nobody has accepted yet, so the quote may still move.
+                        // Write it, and let the machinery already wired below do
+                        // the rest: the pending revision's snapshot digest covers
+                        // these four columns (SuchakAgreementService::
+                        // agreementSnapshotHash), so it now reads as stale and is
+                        // superseded by a fresh revision built from this package.
+                        $package = $packageCatalogService->applyPlanTerms(
+                            $package,
+                            $user,
+                            $drift,
+                            $request->ip(),
+                            $request->userAgent(),
+                        );
+                    }
+                }
 
                 $createdPackage = false;
                 if ($package === null) {
@@ -172,9 +263,9 @@ class SuchakPaymentSetupApiController extends Controller
                                 'package_name_mr' => $plan['name_mr'] ?? null,
                                 'package_description' => $plan['description'] ?? '',
                                 'package_description_mr' => $plan['description_mr'] ?? null,
-                                'price_amount' => (string) $plan['price_amount'],
-                                'currency' => strtoupper((string) $plan['currency']),
-                            ], $this->presetPlanFees($customerPlanService, $account, (string) $plan['key'])),
+                                // Price and currency ride in $fees with the four
+                                // fees: one resolution, one place, five figures.
+                            ], $fees),
                             $payload['stages'],
                             $payload['deliverables'],
                             $customerContext,
@@ -225,9 +316,7 @@ class SuchakPaymentSetupApiController extends Controller
                             array_merge([
                                 'package_name' => $selectedPackageName,
                                 'package_description' => 'Customer service package prepared from Suchak mobile for Track A collection.',
-                                'price_amount' => (string) ($validated['price_amount'] ?? '5000'),
-                                'currency' => strtoupper((string) ($validated['currency'] ?? 'INR')),
-                            ], $this->submittedFees($validated)),
+                            ], $fees),
                             [
                                 [
                                     'stage_key' => $stageKey,
@@ -406,8 +495,13 @@ class SuchakPaymentSetupApiController extends Controller
     }
 
     /**
-     * The four fees a PRESET send must quote, taken from the Suchak's own
-     * configured plan and from nowhere else.
+     * What a PRESET send DEFAULTS its money terms to: the Suchak's own configured
+     * plan, and nothing else.
+     *
+     * The default, not the decision. Whatever this send actually posted is laid
+     * over the top by {@see submittedPlanTerms}, because the plan is the figure
+     * the Suchak configured once and the request is the figure he just quoted
+     * this family in WhatsApp — and the frozen terms have to be the second one.
      *
      * Bound to SuchakCustomerPlanService::resolveCarousel() — the exact resolver
      * SuchakPaymentRequestOptionsApiController::carouselPlansPayload() reads, so
@@ -417,17 +511,21 @@ class SuchakPaymentSetupApiController extends Controller
      * no-duplicate rule forbids; and picking `resolveForManagement()` instead
      * would let a HIDDEN plan freeze a fee the carousel never showed anyone.
      *
-     * All four stay null when the Suchak configured no plan for this preset —
+     * All four FEES stay null when the Suchak configured no plan for this preset —
      * "ठरलेले नाही" on the acceptance page is the truthful answer, and a default
      * amount invented here would be a charge nobody agreed to.
      *
-     * A preset send deliberately ignores any fee on the request: the plan is the
-     * authority for a plan, and letting the caller override it would reopen the
-     * gap between what was shown and what was frozen.
+     * The registration PRICE behaves the other way round and has to: a package
+     * without a price is not a truthful "nothing agreed", it is a broken quote.
+     * So price and currency are returned only when the carousel actually supplied
+     * them, leaving the caller's code-preset base standing when it did not. The
+     * carousel entry has already layered the Suchak's override over that base
+     * (SuchakCustomerPlanService::presetEntry), so what comes back here is by
+     * construction the figure the app printed on the card.
      *
      * @return array<string, mixed>
      */
-    private function presetPlanFees(
+    private function presetPlanTerms(
         SuchakCustomerPlanService $customerPlanService,
         SuchakAccount $account,
         string $presetKey,
@@ -440,30 +538,53 @@ class SuchakPaymentSetupApiController extends Controller
             }
         }
 
-        return [
+        $terms = [
             'per_meeting_fee_amount' => $entry['per_meeting_fee_amount'] ?? null,
             'per_meeting_online_fee_amount' => $entry['per_meeting_online_fee_amount'] ?? null,
             'post_marriage_fee_mode' => $entry['post_marriage_fee_mode'] ?? null,
             'post_marriage_fee_amount' => $entry['post_marriage_fee_amount'] ?? null,
         ];
+
+        foreach (['price_amount', 'currency'] as $key) {
+            if (($entry[$key] ?? null) !== null) {
+                $terms[$key] = $entry[$key];
+            }
+        }
+
+        return $terms;
     }
 
     /**
-     * The four fees a CUSTOM send quotes, exactly as submitted.
+     * The money terms THIS SEND decided, exactly as submitted — the layer that
+     * wins, on both branches.
      *
      * A custom plan is not addressable through `plan_key` (that field admits
      * only the two code presets), so a Suchak sending one of their own reusable
      * plans arrives here with its figures on the request — the same figures the
-     * carousel handed the app in the first place. Absent keys stay absent rather
-     * than becoming null, so this never overwrites anything the caller left to
-     * the catalog service to decide.
+     * carousel handed the app in the first place. A preset send may now carry
+     * them too, and when it does they beat the plan's defaults.
+     *
+     * Absent keys stay absent, and that absence is load-bearing in two places:
+     * on a preset it is what lets the plan's default stand, and on a custom send
+     * it is what leaves the figure to the catalog service instead of forcing a
+     * null. A key posted AS null is the opposite — an explicit "nothing is
+     * charged", which is exactly what the app sends for a fee the Suchak opted
+     * out of and left out of the WhatsApp message. Laravel's validated() keeps
+     * that distinction intact, so array_key_exists is the honest test.
+     *
+     * `price_amount` is the one figure that reads its absence differently, and
+     * has to: a fee can honestly be "nothing is charged", but a package whose
+     * registration price is nothing is not a cheaper quote, it is a broken one —
+     * which is why validation already refuses anything below 0.01. So a real
+     * figure overrides the plan's, and a missing or null one leaves the plan's
+     * standing rather than erasing it.
      *
      * @param  array<string, mixed>  $validated
      * @return array<string, mixed>
      */
-    private function submittedFees(array $validated): array
+    private function submittedPlanTerms(array $validated): array
     {
-        $fees = [];
+        $terms = [];
         foreach ([
             'per_meeting_fee_amount',
             'per_meeting_online_fee_amount',
@@ -471,11 +592,88 @@ class SuchakPaymentSetupApiController extends Controller
             'post_marriage_fee_amount',
         ] as $key) {
             if (array_key_exists($key, $validated)) {
-                $fees[$key] = $validated[$key];
+                $terms[$key] = $validated[$key];
             }
         }
 
-        return $fees;
+        if (($validated['price_amount'] ?? null) !== null) {
+            $terms['price_amount'] = $validated['price_amount'];
+        }
+
+        return $terms;
+    }
+
+    /**
+     * Whether any revision of this package's agreement is already in force.
+     *
+     * The same three statuses the endpoint's own agreement lookup treats as
+     * settled, and the same set SuchakCustomerAgreement::isTermsSatisfied()
+     * defines — asked as a query because the point is whether ANY revision on
+     * this package has reached that state, not what the newest row happens to
+     * say. Bypassed and not-required count: in both, someone has been told these
+     * are the terms, so the figures behind them are no longer ours to move.
+     */
+    private function hasSatisfiedAgreement(SuchakServicePackage $package): bool
+    {
+        return SuchakCustomerAgreement::query()
+            ->where('service_package_id', $package->id)
+            ->whereIn('terms_status', [
+                SuchakCustomerAgreement::TERMS_NOT_REQUIRED,
+                SuchakCustomerAgreement::TERMS_ACCEPTED,
+                SuchakCustomerAgreement::TERMS_BYPASSED,
+            ])
+            ->exists();
+    }
+
+    /**
+     * Why a re-send carrying different fees was refused, in the words the Suchak
+     * needs to act on it.
+     *
+     * Names the figure that moved and both of its values, because "आधीच
+     * स्वीकारले आहे" alone leaves the Suchak staring at a message he can see
+     * quotes ₹999 with no idea what the customer actually holds. Amounts through
+     * MoneyFormat — the one money formatter — so they read in Latin digits with
+     * Indian grouping, identical to the acceptance page they refer to.
+     *
+     * The post-marriage MODE is named without values: it is a category, not a
+     * figure, and the page words each category in its own sentence rather than a
+     * rupee amount.
+     *
+     * @param  array<string, ?string>  $drift  columns that would change, from
+     *                                         SuchakPackageCatalogService::planTermsDrift
+     */
+    private function acceptedTermsChangeRefusal(SuchakServicePackage $package, array $drift): string
+    {
+        $currency = (string) ($package->currency ?: 'INR');
+        $notQuoted = 'ठरलेले नाही';
+        // Same wording as the acceptance page's own fee table
+        // (resources/views/suchak/agreements/public.blade.php), so the Suchak
+        // reads back the exact row the customer is looking at.
+        $labels = [
+            'price_amount' => 'नोंदणी शुल्क',
+            'per_meeting_fee_amount' => 'प्रत्यक्ष भेटीचे शुल्क',
+            'per_meeting_online_fee_amount' => 'ऑनलाइन भेटीचे शुल्क',
+            'post_marriage_fee_amount' => 'विवाह ठरल्यानंतरचे शुल्क',
+        ];
+
+        $changes = [];
+        foreach ($labels as $column => $label) {
+            if (! array_key_exists($column, $drift)) {
+                continue;
+            }
+
+            $was = MoneyFormat::amount($package->getAttribute($column), $currency) ?? $notQuoted;
+            $now = MoneyFormat::amount($drift[$column], $currency) ?? $notQuoted;
+            $changes[] = $label.': '.$was.' → '.$now;
+        }
+
+        if (array_key_exists('post_marriage_fee_mode', $drift)) {
+            $changes[] = 'विवाह ठरल्यानंतरच्या शुल्काचा प्रकार';
+        }
+
+        return 'या ग्राहकाने या योजनेच्या अटी आधीच स्वीकारल्या आहेत, त्यामुळे शुल्क बदलून तीच योजना पुन्हा पाठवता येणार नाही ('
+            .implode('; ', $changes)
+            .'). स्वीकारलेला करार जसाच्या तसा राहतो. नवीन शुल्क लागू करायचे असेल तर वेगळ्या नावाची योजना तयार करून पाठवा.';
     }
 
     /**

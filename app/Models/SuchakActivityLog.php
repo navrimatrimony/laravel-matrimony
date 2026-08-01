@@ -77,6 +77,37 @@ class SuchakActivityLog extends Model
 
     public const ACTION_COMMISSION_AGREEMENT_UPDATED = 'commission_agreement_updated';
 
+    /**
+     * A Suchak opened his own customer to the marketplace, declaring the share he will pay a helper
+     * (blueprint D4). Its own action: none of the collaboration actions above can stand in, because
+     * every one of them describes an exchange between two named accounts and a challenge is
+     * published before any helper exists.
+     */
+    public const ACTION_MARKETPLACE_CHALLENGE_PUBLISHED = 'marketplace_challenge_published';
+
+    /**
+     * The publisher pulled a live challenge. Separate from _EXPIRED because A8 names withdrawal as
+     * an attack ("withdrawing or re-publishing a challenge to escape a declared share") and an
+     * expiry the publisher chose in advance is not that. A single "closed" action would erase the
+     * only distinction that matters when the question is asked.
+     */
+    public const ACTION_MARKETPLACE_CHALLENGE_WITHDRAWN = 'marketplace_challenge_withdrawn';
+
+    /** The challenge reached the expiry its publisher chose. Written by the sweep, actor `system`. */
+    public const ACTION_MARKETPLACE_CHALLENGE_EXPIRED = 'marketplace_challenge_expired';
+
+    /**
+     * A verified Suchak opened one marketplace listing (D18: "every listing open is logged and
+     * shown to the originating Suchak").
+     *
+     * The first READ this log has ever recorded. Every existing action is a write — a request
+     * created, a consent verified, a payment recorded — and borrowing one of them for a read would
+     * put "someone looked" and "someone did" in the same bucket, which is the one distinction D18
+     * exists to make. `suchak_account_id` on the row is the ORIGINATING Suchak, because the log is
+     * shown to him; the viewer is `actor_user_id` plus `viewer_suchak_account_id` in the metadata.
+     */
+    public const ACTION_MARKETPLACE_LISTING_OPENED = 'marketplace_listing_opened';
+
     public const ACTION_CRM_NOTE_ADDED = 'crm_note_added';
 
     public const ACTION_LEDGER_ENTRY_CREATED = 'ledger_entry_created';
@@ -112,6 +143,15 @@ class SuchakActivityLog extends Model
     public const ACTION_ADMIN_AUDIT_LINKED = 'admin_audit_linked';
 
     public const ACTION_SERVICE_PACKAGE_CREATED = 'service_package_created';
+
+    /**
+     * A published package was re-quoted at different fee terms.
+     *
+     * Distinct from _CREATED on purpose: the row a Suchak or an auditor reads
+     * months later has to say whether a figure was quoted at the start or
+     * changed underneath a customer, and "created" cannot carry that.
+     */
+    public const ACTION_SERVICE_PACKAGE_UPDATED = 'service_package_updated';
 
     public const ACTION_SERVICE_PACKAGE_APPROVED = 'service_package_approved';
 

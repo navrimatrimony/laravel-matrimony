@@ -171,10 +171,52 @@ class SuchakPackageCatalogService
         $packageNameMr = $this->limitedText($attributes['package_name_mr'] ?? $attributes['name_mr'] ?? null, 160);
         $packageDescription = $this->limitedText($attributes['package_description'] ?? $attributes['description'] ?? null, 3000);
         $packageDescriptionMr = $this->limitedText($attributes['package_description_mr'] ?? $attributes['description_mr'] ?? null, 3000);
-        [$priceAmount, $currency] = $this->normalizedPrice($attributes['price_amount'] ?? null, $attributes['currency'] ?? null);
+        // Only the CURRENCY is taken here. The price itself comes back from
+        // normalizedPlanTerms() below, so creating a package and re-quoting one
+        // read the registration figure through the same single definition —
+        // exactly as the four fees already do.
+        [, $currency] = $this->normalizedPrice($attributes['price_amount'] ?? null, $attributes['currency'] ?? null);
+        $approval = $this->approvalAttributes($forceAutoPublish);
+
+        $this->assertNoMisleadingClaims([$packageName, $packageDescription]);
+
+        return array_merge($approval, [
+            'suchak_account_id' => $account->id,
+            'customer_context_id' => $customerContext?->id,
+            'package_name' => $packageName,
+            'package_name_mr' => $packageNameMr,
+            'package_description' => $packageDescription,
+            'package_description_mr' => $packageDescriptionMr,
+            'currency' => $currency,
+            'customized_by_user_id' => $actor->id,
+        ], $this->normalizedPlanTerms($attributes, $currency));
+    }
+
+    /**
+     * The five money columns of a package, normalised: the registration price
+     * and the four per-meeting / post-marriage fees.
+     *
+     * All five together, and not the fees alone, because they are one quote. The
+     * registration figure used to be settled here and nowhere else, which is how
+     * a preset send could freeze the code-defined ₹2,000 while the Suchak's own
+     * plan — and the WhatsApp message he sent — said something else.
+     *
+     * Extracted so creating a package and re-quoting one read a submitted figure
+     * exactly the same way. A second copy of this mapping is the one thing that
+     * must not exist: it would be free to round, whitelist or null differently
+     * from the create path, and a package would then quote one figure at
+     * creation and another after an edit.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array{price_amount: ?string, per_meeting_fee_amount: ?string, per_meeting_online_fee_amount: ?string, post_marriage_fee_mode: ?string, post_marriage_fee_amount: ?string}
+     */
+    private function normalizedPlanTerms(array $attributes, mixed $currency = null): array
+    {
+        [$priceAmount] = $this->normalizedPrice($attributes['price_amount'] ?? null, $currency);
         // The two fee figures are money on the same package, so they go through the
         // one price normaliser: a second one would be free to drift from it, and the
-        // package currency is already settled above — a fee can never carry another.
+        // package currency is already settled by the caller — a fee can never carry
+        // another.
         [$perMeetingFeeAmount] = $this->normalizedPrice($attributes['per_meeting_fee_amount'] ?? null, $currency);
         // Carried across on its own: the online rate is a separate quoted figure, so
         // an absent offline fee must never suppress it (or vice versa).
@@ -187,25 +229,122 @@ class SuchakPackageCatalogService
         $postMarriageFeeMode = in_array($requestedPostMarriageFeeMode, SuchakCustomerPlan::POST_MARRIAGE_FEE_MODES, true)
             ? $requestedPostMarriageFeeMode
             : null;
-        $approval = $this->approvalAttributes($forceAutoPublish);
 
-        $this->assertNoMisleadingClaims([$packageName, $packageDescription]);
-
-        return array_merge($approval, [
-            'suchak_account_id' => $account->id,
-            'customer_context_id' => $customerContext?->id,
-            'package_name' => $packageName,
-            'package_name_mr' => $packageNameMr,
-            'package_description' => $packageDescription,
-            'package_description_mr' => $packageDescriptionMr,
+        return [
             'price_amount' => $priceAmount,
-            'currency' => $currency,
             'per_meeting_fee_amount' => $perMeetingFeeAmount,
             'per_meeting_online_fee_amount' => $perMeetingOnlineFeeAmount,
             'post_marriage_fee_mode' => $postMarriageFeeMode,
             'post_marriage_fee_amount' => $postMarriageFeeAmount,
-            'customized_by_user_id' => $actor->id,
-        ]);
+        ];
+    }
+
+    /**
+     * Which of the five plan-terms columns this payload would actually change,
+     * already normalised and ready to write. Empty when the package already
+     * quotes exactly these terms.
+     *
+     * Asked BEFORE anything is written, because the answer decides whether a
+     * re-send may edit the package at all: a package that already backs terms a
+     * customer accepted must be left alone, and the caller can only know that is
+     * the situation if it can first ask "would this change anything?".
+     *
+     * null and '0.00' stay distinct here. "No fee was agreed" and "the fee agreed
+     * was zero" are different sentences on the acceptance page, so flattening one
+     * into the other would silently re-quote a customer.
+     *
+     * The registration price is compared on exactly the same footing as the four
+     * fees: it is the largest figure on the page, so it is the last one that may
+     * be allowed to drift between the message and the freeze.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, ?string>
+     */
+    public function planTermsDrift(SuchakServicePackage $package, array $attributes): array
+    {
+        $drift = [];
+
+        foreach ($this->normalizedPlanTerms($attributes, $package->currency) as $column => $value) {
+            // decimal:2 casts read back as strings; compare as strings so
+            // "500.00" from the column and "500.00" from the normaliser match.
+            $current = $package->getAttribute($column);
+            $unchanged = $current === null
+                ? $value === null
+                : ($value !== null && (string) $current === (string) $value);
+
+            if (! $unchanged) {
+                $drift[$column] = $value;
+            }
+        }
+
+        return $drift;
+    }
+
+    /**
+     * Writes a plan-terms drift onto a package.
+     *
+     * Deliberately narrow: it touches the five money columns and nothing else, so
+     * a re-quote can never move a package's name, scope, currency or publish
+     * state as a side effect. Whether the write is ALLOWED — i.e. whether a
+     * customer has already accepted these terms — is the caller's decision,
+     * because only the caller knows which agreement the send is about.
+     *
+     * Every write is logged under its own action type with the before/after
+     * figures: a fee that changed under a customer is exactly the fact an audit
+     * needs to be able to find.
+     *
+     * @param  array<string, ?string>  $planTerms  the drift from {@see planTermsDrift}
+     */
+    public function applyPlanTerms(
+        SuchakServicePackage $package,
+        User $actor,
+        array $planTerms,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): SuchakServicePackage {
+        if ($planTerms === []) {
+            return $package;
+        }
+
+        $package->loadMissing('suchakAccount');
+        $this->assertSuchakActor($package->suchakAccount, $actor);
+
+        return DB::transaction(function () use ($package, $actor, $planTerms, $ipAddress, $userAgent): SuchakServicePackage {
+            /** @var SuchakServicePackage $locked */
+            $locked = SuchakServicePackage::query()
+                ->whereKey($package->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $before = [];
+            foreach (array_keys($planTerms) as $column) {
+                $before[$column] = $locked->getAttribute($column);
+            }
+
+            $locked->forceFill(array_merge($planTerms, [
+                'customized_by_user_id' => $actor->id,
+            ]))->save();
+
+            $this->activityLogger->record([
+                'suchak_account_id' => $locked->suchak_account_id,
+                'actor_user_id' => $actor->id,
+                'actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
+                'action_type' => SuchakActivityLog::ACTION_SERVICE_PACKAGE_UPDATED,
+                'target_type' => 'suchak_service_package',
+                'target_id' => $locked->id,
+                'ip_address' => $ipAddress,
+                'user_agent' => $userAgent === null ? null : Str::limit($userAgent, 512, ''),
+                'metadata_json' => [
+                    'context' => 'service_package_plan_terms_requoted',
+                    'package_status' => $locked->package_status,
+                    'customer_context_id' => $locked->customer_context_id,
+                    'plan_terms_before' => $before,
+                    'plan_terms_after' => $planTerms,
+                ],
+            ]);
+
+            return $locked->fresh(['suchakAccount', 'customerContext', 'stages', 'deliverables']);
+        });
     }
 
     /**
