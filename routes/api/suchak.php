@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\Suchak\SuchakAgreementLinkApiController;
 use App\Http\Controllers\Api\Suchak\SuchakAppConfigApiController;
 use App\Http\Controllers\Api\Suchak\SuchakBillingApiController;
 use App\Http\Controllers\Api\Suchak\SuchakChatApiController;
+use App\Http\Controllers\Api\Suchak\SuchakCollaborationStagesApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCollaborationsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCollaborationsMutationsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakConsentRequestsApiController;
@@ -17,6 +18,7 @@ use App\Http\Controllers\Api\Suchak\SuchakDeviceTokenApiController;
 use App\Http\Controllers\Api\Suchak\SuchakIntakeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakLoginApiController;
 use App\Http\Controllers\Api\Suchak\SuchakManualProfileApiController;
+use App\Http\Controllers\Api\Suchak\SuchakMarketplaceChallengeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMatchSuggestionsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeetingsApiController;
@@ -103,6 +105,45 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::post('/collaborations', [SuchakCollaborationsMutationsApiController::class, 'store']);
     Route::post('/collaborations/{collaboration}/accept', [SuchakCollaborationsMutationsApiController::class, 'accept']);
     Route::post('/collaborations/{collaboration}/reject', [SuchakCollaborationsMutationsApiController::class, 'reject']);
+    /*
+    | The marketplace ladder (blueprint 6a) and the engagement's binding to the
+    | customer agreement revision (6.1). All three services behind these routes
+    | shipped complete, guarded and tested with no controller and no route, so
+    | `customer_owner_side` could only ever hold its default and
+    | `marketplace_stage` / `customer_agreement_id` could only ever be NULL.
+    | The customer's CONFIRM half is not here — the actor is the member, so it
+    | sits on the member API (routes/api/member.php).
+    */
+    Route::post(
+        '/collaborations/{collaboration}/customer-agreement',
+        [SuchakCollaborationStagesApiController::class, 'linkCustomerAgreement'],
+    ); // BIND THE ENGAGEMENT TO THE AGREEMENT REVISION IN FORCE (WRITE-ONCE)
+    Route::post('/collaborations/{collaboration}/stages', [SuchakCollaborationStagesApiController::class, 'claimEngagementStage']); // CLAIM AN ENGAGEMENT-OWNED LADDER STAGE
+    // The four PRE-ENGAGEMENT stages: they happen before any counterparty
+    // exists, so they hang off the customer agreement, not off a collaboration.
+    Route::post('/customer-agreements/{agreement}/stages', [SuchakCollaborationStagesApiController::class, 'claimCustomerStage'])
+        ->whereNumber('agreement'); // CLAIM A PRE-ENGAGEMENT LADDER STAGE
+    /*
+    | THE CHALLENGE OBJECT (blueprint D4 / D18, phase 2).
+    |
+    | "I hold this customer; I will pay X to whoever brings the match." Published
+    | BEFORE any helper exists, which is why it needed a table of its own: every
+    | candidate owner in the schema names two Suchak accounts NOT NULL from row
+    | one. It is the INVITATION — the engagement stays
+    | suchak_collaboration_requests + suchak_commission_agreements (6.1).
+    |
+    | /mine is declared before /{challenge} or the numeric binding would swallow
+    | it. Both browse reads are gated on the VERIFIED badge (D18 / A10) in the
+    | service, which is stricter than canOperate() on purpose.
+    */
+    Route::get('/marketplace/challenges', [SuchakMarketplaceChallengeApiController::class, 'index']); // BROWSE (verified only, masked candidates)
+    Route::get('/marketplace/challenges/mine', [SuchakMarketplaceChallengeApiController::class, 'mine']); // OWN CHALLENGES — where the withdraw id comes from
+    Route::post('/marketplace/challenges', [SuchakMarketplaceChallengeApiController::class, 'store']); // PUBLISH + WRITE published_to_marketplace ON THE LADDER
+    Route::post('/marketplace/challenges/{challenge}/withdraw', [SuchakMarketplaceChallengeApiController::class, 'withdraw'])
+        ->whereNumber('challenge');
+    // Opening ONE listing is logged and shown to the originating Suchak (D18).
+    Route::get('/marketplace/challenges/{challenge}', [SuchakMarketplaceChallengeApiController::class, 'show'])
+        ->whereNumber('challenge');
     Route::get('/payments', SuchakPaymentsApiController::class);
     Route::get('/payment-identity', [SuchakPaymentIdentityApiController::class, 'show']);
     Route::post('/payment-identity', [SuchakPaymentIdentityApiController::class, 'update']);

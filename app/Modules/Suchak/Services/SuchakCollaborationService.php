@@ -566,10 +566,22 @@ class SuchakCollaborationService
     }
 
     /**
-     * Record a marketplace ladder stage (blueprint 6a). Either Suchak may raise the claim (D26).
+     * Record a marketplace ladder stage on an ENGAGEMENT (blueprint 6a). Either Suchak may raise
+     * the claim (D26).
      *
      * Stages outside CONFIRMABLE_STAGES settle on the claim; the last three (marriage settled,
      * engagement, marriage) wait for confirmStage(). The 7-day silent-then-dispute timer is Phase 3.
+     *
+     * The acceptance gate is a POSITION on STAGE_LADDER, never a second hand-written list. Section
+     * 6a runs `profile_suggested` -> `viewed` -> `interested` before acceptance, and a marketplace
+     * proposal is created `pending`; requiring acceptance for all of them made D11's 12-month
+     * clause — which binds at `viewed` — unrecordable at the exact moment it is supposed to bind.
+     *
+     * Being a PARTICIPANT is not enough. Section 6a names an actor per rung and A7 turns one of
+     * them into a money rule, so the actor is checked too — see assertStageClaimant(). Without it
+     * one Suchak walked meeting_scheduled -> meeting_completed -> meeting_confirmed ->
+     * share_settled alone and ended at `share_settled` with no act by anyone else, which is the
+     * whole evidentiary trail the realized-vs-declared ratio is computed from.
      */
     public function claimStage(
         SuchakCollaborationRequest $collaboration,
@@ -583,9 +595,23 @@ class SuchakCollaborationService
         $this->assertParticipantActor($collaboration, $account, $actor);
         $this->assertLadderStage($stageKey);
 
-        if ($collaboration->status !== SuchakCollaborationRequest::STATUS_ACCEPTED) {
-            throw new InvalidArgumentException('Marketplace stages can only be recorded on an accepted collaboration.');
+        if (SuchakCollaborationStageEvent::isPreEngagementStage($stageKey)) {
+            throw new InvalidArgumentException(
+                'Marketplace stage "'.$stageKey.'" happens before any engagement exists; record it on the customer agreement.'
+            );
         }
+
+        if (SuchakCollaborationStageEvent::requiresAcceptedEngagement($stageKey)) {
+            if ($collaboration->status !== SuchakCollaborationRequest::STATUS_ACCEPTED) {
+                throw new InvalidArgumentException(
+                    'Marketplace stage "'.$stageKey.'" can only be recorded on an accepted collaboration.'
+                );
+            }
+        } elseif (! $collaboration->isOpen()) {
+            throw new InvalidArgumentException('Marketplace stages can only be recorded on an open collaboration.');
+        }
+
+        $this->assertStageClaimant($collaboration, $account, $stageKey);
 
         return DB::transaction(function () use ($collaboration, $account, $actor, $stageKey, $note): SuchakCollaborationStageEvent {
             /** @var SuchakCollaborationRequest $locked */
@@ -604,21 +630,98 @@ class SuchakCollaborationService
                 throw new InvalidArgumentException('This marketplace stage is already recorded for the engagement.');
             }
 
-            $event = SuchakCollaborationStageEvent::query()->create([
-                'collaboration_request_id' => $locked->id,
-                'stage_key' => $stageKey,
-                'claimed_by_actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
-                'claimed_by_suchak_account_id' => $account->id,
-                'claimed_by_user_id' => $actor->id,
-                'claimed_at' => now(),
-                'event_note' => $this->nullableLimitedString($note, 2000),
-            ]);
+            $event = $this->writeStageEvent(
+                [SuchakCollaborationStageEvent::OWNER_COLUMN_COLLABORATION_REQUEST => $locked->id],
+                $account,
+                $actor,
+                $stageKey,
+                $note,
+            );
 
             if (! SuchakCollaborationStageEvent::requiresConfirmation($stageKey)) {
                 $this->advanceMarketplaceStage($locked, $stageKey);
             }
 
-            return $event->fresh() ?? $event;
+            return $event;
+        });
+    }
+
+    /**
+     * Record one of the four PRE-ENGAGEMENT ladder stages (registration, agreement proposed,
+     * agreement accepted, published to marketplace) against the customer agreement revision they
+     * happened under.
+     *
+     * These stages have no engagement to hang off — `published_to_marketplace` is the act that
+     * invites a counterparty, so by definition none exists yet. Section 4 already named their
+     * owner: *"Publication attaches to whichever agreement is accepted at that moment."*
+     *
+     * Only the customer-owning Suchak may record them; there is no second party yet to disagree,
+     * and none of the four is confirmable (CONFIRMABLE_STAGES are all terminal). No ladder position
+     * is advanced either, because `marketplace_stage` lives on an engagement and there is not one.
+     *
+     * Which is exactly why the AGREEMENT'S OWN STATE is the gate here, and the only one available:
+     * with no counter-signature and no correction path, a rung that contradicts the object it
+     * describes is a forged record written by the only party with an interest in it. Against a
+     * declined agreement this path used to write `agreement_accepted` and `published_to_marketplace`
+     * and return 201 both times. From FIRST_STAGE_REQUIRING_SATISFIED_TERMS onward the rung is only
+     * recordable when SuchakCustomerAgreement::isTermsSatisfied() actually says so.
+     */
+    public function claimCustomerStage(
+        SuchakCustomerAgreement $customerAgreement,
+        SuchakAccount $account,
+        User $actor,
+        string $stageKey,
+        ?string $note = null,
+    ): SuchakCollaborationStageEvent {
+        $account->refresh();
+        $customerAgreement->refresh();
+        $this->assertCustomerAgreementActor($customerAgreement, $account, $actor);
+        $this->assertLadderStage($stageKey);
+
+        if (! SuchakCollaborationStageEvent::isPreEngagementStage($stageKey)) {
+            throw new InvalidArgumentException(
+                'Marketplace stage "'.$stageKey.'" belongs to an engagement, not to the customer agreement.'
+            );
+        }
+
+        // Totality, not a second rule: the agreement path can only ever serve the customer-owning
+        // Suchak (assertCustomerAgreementActor already proved the agreement is his). If a rung is
+        // ever re-assigned to another actor while still sitting before FIRST_ENGAGEMENT_STAGE, this
+        // fails closed instead of quietly letting the wrong party write it.
+        if (SuchakCollaborationStageEvent::claimantFor($stageKey) !== SuchakCollaborationStageEvent::CLAIMANT_CUSTOMER_OWNER) {
+            throw new InvalidArgumentException(
+                'Marketplace stage "'.$stageKey.'" is not the customer-owning Suchak\'s to record.'
+            );
+        }
+
+        return DB::transaction(function () use ($customerAgreement, $account, $actor, $stageKey, $note): SuchakCollaborationStageEvent {
+            /** @var SuchakCustomerAgreement $locked */
+            $locked = SuchakCustomerAgreement::query()
+                ->whereKey($customerAgreement->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            // Read under the lock: terms_status is the fact the rung asserts, so it must be the
+            // value as of the write, not as of the request.
+            $this->assertCustomerTermsSupportStage($locked, $stageKey);
+
+            $existing = SuchakCollaborationStageEvent::query()
+                ->where('customer_agreement_id', $locked->id)
+                ->where('stage_key', $stageKey)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing !== null) {
+                throw new InvalidArgumentException('This marketplace stage is already recorded for the customer agreement.');
+            }
+
+            return $this->writeStageEvent(
+                [SuchakCollaborationStageEvent::OWNER_COLUMN_CUSTOMER_AGREEMENT => $locked->id],
+                $account,
+                $actor,
+                $stageKey,
+                $note,
+            );
         });
     }
 
@@ -776,6 +879,166 @@ class SuchakCollaborationService
         if (! SuchakCollaborationStageEvent::isValidStage($stageKey)) {
             throw new InvalidArgumentException('Unknown marketplace stage key: '.$stageKey.'.');
         }
+    }
+
+    /**
+     * The single writer of a stage-event row. Both claim paths come through here so the owner
+     * column is the only thing that differs between them — the actor, the timestamp and the note
+     * are recorded identically, and the model's exactly-one-owner guard is exercised on both.
+     *
+     * @param  array<string, int>  $owner  exactly one SuchakCollaborationStageEvent::OWNER_COLUMNS entry
+     */
+    private function writeStageEvent(
+        array $owner,
+        SuchakAccount $account,
+        User $actor,
+        string $stageKey,
+        ?string $note,
+    ): SuchakCollaborationStageEvent {
+        $event = SuchakCollaborationStageEvent::query()->create(array_merge($owner, [
+            'stage_key' => $stageKey,
+            'claimed_by_actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
+            'claimed_by_suchak_account_id' => $account->id,
+            'claimed_by_user_id' => $actor->id,
+            'claimed_at' => now(),
+            'event_note' => $this->nullableLimitedString($note, 2000),
+        ]));
+
+        return $event->fresh() ?? $event;
+    }
+
+    /**
+     * A pre-engagement stage has only one legitimate claimer: the Suchak whose customer agreement
+     * it is. There is no counterparty yet to hold a competing view.
+     */
+    private function assertCustomerAgreementActor(
+        SuchakCustomerAgreement $customerAgreement,
+        SuchakAccount $account,
+        User $actor,
+    ): void {
+        if ((int) $account->user_id !== (int) $actor->id) {
+            throw new InvalidArgumentException('Only the Suchak account owner can record customer marketplace stages.');
+        }
+
+        if ((int) $customerAgreement->suchak_account_id !== (int) $account->id) {
+            throw new InvalidArgumentException('Customer agreement belongs to another Suchak account.');
+        }
+
+        if (! $this->accessService->canOperate($account)) {
+            throw new InvalidArgumentException('Only verified Suchak accounts can record marketplace stages.');
+        }
+    }
+
+    /**
+     * Section 6a's per-rung ACTOR rule, applied to an engagement claim.
+     *
+     * Read STAGE_CLAIMANTS for the derivation. Three things are enforced here, in this order:
+     *
+     *  1. A rung the FAMILY owns (`viewed`, `interested`, `meeting_confirmed`) is refused to every
+     *     Suchak. The customer has no door yet — D23 defers OTP and §10 S4 records that the
+     *     delivery channel does not exist — and inventing one on the Suchak's side would not record
+     *     the customer's act, it would fake it. D11's clause binds at `viewed`, so that rung is
+     *     genuinely unrecordable today; saying so is the honest answer.
+     *  2. A role-scoped rung needs the role to be a RECORDED FACT. `customer_owner_side` DEFAULTS to
+     *     `target`, so on an unlinked engagement "helper" is a column default, not a finding —
+     *     hanging A7's money rule off a default is the same forgery one step removed. The proof the
+     *     side was written deliberately is the customer agreement link that linkCustomerAgreement()
+     *     writes in the same breath, and only the owning Suchak can supply his own agreement, so a
+     *     Suchak cannot appoint himself the other role.
+     *  3. Where the engagement already names the customer agreement in force, that agreement's own
+     *     state must support the rung — the same gate the pre-engagement path applies, for the same
+     *     reason: no meeting, tranche or share exists under terms nobody accepted.
+     */
+    private function assertStageClaimant(
+        SuchakCollaborationRequest $collaboration,
+        SuchakAccount $account,
+        string $stageKey,
+    ): void {
+        $claimant = SuchakCollaborationStageEvent::claimantFor($stageKey);
+        $label = SuchakCollaborationStageEvent::stageLabel($stageKey);
+
+        if ($claimant === SuchakCollaborationStageEvent::CLAIMANT_CUSTOMER) {
+            throw new InvalidArgumentException(
+                '"'.$label.'" हा टप्पा ग्राहक स्वतः नोंदवतो, सूचक नाही. ग्राहकासाठी स्वतंत्र प्रवेश अजून उपलब्ध नाही, '
+                .'त्यामुळे हा टप्पा सध्या नोंदवता येत नाही.'
+            );
+        }
+
+        $collaboration->loadMissing('commissionAgreement.customerAgreement');
+        $commissionAgreement = $collaboration->commissionAgreement;
+        $linkedCustomerAgreement = $commissionAgreement?->customerAgreement;
+
+        if ($linkedCustomerAgreement instanceof SuchakCustomerAgreement) {
+            $this->assertCustomerTermsSupportStage($linkedCustomerAgreement, $stageKey);
+        }
+
+        if ($claimant === SuchakCollaborationStageEvent::CLAIMANT_EITHER_SUCHAK) {
+            return;
+        }
+
+        if ($commissionAgreement?->customer_agreement_id === null) {
+            throw new InvalidArgumentException(
+                'या सहकार्यात ग्राहकाचा सूचक कोण हे अजून नोंदवलेले नाही. आधी ग्राहक करार या सहकार्याशी जोडा, '
+                .'मग "'.$label.'" हा टप्पा नोंदवता येईल.'
+            );
+        }
+
+        if ($claimant === SuchakCollaborationStageEvent::CLAIMANT_CUSTOMER_OWNER
+            && ! $collaboration->isCustomerOwner((int) $account->id)) {
+            throw new InvalidArgumentException(
+                '"'.$label.'" हा टप्पा फक्त ग्राहकाचा स्वतःचा सूचक नोंदवू शकतो.'
+            );
+        }
+
+        if ($claimant === SuchakCollaborationStageEvent::CLAIMANT_HELPER
+            && ! $collaboration->isHelpingSuchak((int) $account->id)) {
+            throw new InvalidArgumentException(
+                '"'.$label.'" हा टप्पा फक्त मदत करणारा सूचक नोंदवू शकतो. ही नोंद समोरच्या बाजूकडून येणे हाच तिचा पुरावा आहे.'
+            );
+        }
+    }
+
+    /**
+     * A rung may not contradict the object it describes. From FIRST_STAGE_REQUIRING_SATISFIED_TERMS
+     * onward the customer agreement must actually be in force, read through the existing owner of
+     * that question — SuchakCustomerAgreement::isTermsSatisfied(). The status list is never restated.
+     */
+    private function assertCustomerTermsSupportStage(SuchakCustomerAgreement $agreement, string $stageKey): void
+    {
+        if (! SuchakCollaborationStageEvent::requiresSatisfiedCustomerTerms($stageKey)) {
+            return;
+        }
+
+        if ($agreement->isTermsSatisfied()) {
+            return;
+        }
+
+        throw new InvalidArgumentException(
+            '"'.SuchakCollaborationStageEvent::stageLabel($stageKey).'" ही नोंद करता येणार नाही — '
+            .$this->customerAgreementStateReason($agreement).'.'
+        );
+    }
+
+    /**
+     * Phrases the refusal only — the GATE is isTermsSatisfied() and nothing else. These read the
+     * agreement's own timestamps rather than translating the status enum, so no second list of
+     * statuses is created here that could drift away from the one that decides.
+     */
+    private function customerAgreementStateReason(SuchakCustomerAgreement $agreement): string
+    {
+        if ($agreement->declined_at !== null) {
+            return 'ग्राहकाने हा करार नाकारला आहे';
+        }
+
+        if ($agreement->superseded_at !== null) {
+            return 'या कराराच्या जागी नवीन आवृत्ती आली आहे';
+        }
+
+        if ($agreement->expired_at !== null) {
+            return 'या कराराची मुदत संपली आहे';
+        }
+
+        return 'ग्राहकाने हा करार अजून स्वीकारलेला नाही';
     }
 
     /**

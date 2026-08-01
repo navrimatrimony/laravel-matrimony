@@ -191,40 +191,50 @@ class SuchakMarketplaceEngagementTest extends TestCase
         $service->confirmStage($collaboration, $helperUser, SuchakCollaborationStageEvent::STAGE_ENGAGEMENT);
     }
 
+    /**
+     * `viewed` and `interested` used to stand in for "any non-terminal rung" here. They cannot any
+     * more: section 6a gives both to the CUSTOMER, and no Suchak may write them
+     * (SuchakCollaborationStageEvent::STAGE_CLAIMANTS). The property under test — settles on claim,
+     * never rewinds — is unchanged; only the rungs are ones their claimant may actually record.
+     */
     public function test_non_terminal_stage_settles_on_claim_and_the_ladder_never_rewinds(): void
     {
         [$ownerUser, $ownerAccount, $helperUser, $helperAccount, $collaboration] = $this->acceptedEngagement();
+        $this->linkOwnerAgreement($collaboration, $ownerAccount, $ownerUser);
         $service = $this->service();
 
-        $viewed = $service->claimStage(
-            $collaboration,
-            $ownerAccount,
-            $ownerUser,
-            SuchakCollaborationStageEvent::STAGE_VIEWED,
-        );
-        $this->assertTrue($viewed->isSettled());
-        $this->assertSame(SuchakCollaborationStageEvent::STAGE_VIEWED, $collaboration->fresh()->marketplace_stage);
-
-        $service->claimStage(
-            $collaboration,
-            $ownerAccount,
-            $ownerUser,
+        $scheduled = $service->claimStage(
+            $collaboration->fresh(),
+            $helperAccount,
+            $helperUser,
             SuchakCollaborationStageEvent::STAGE_MEETING_SCHEDULED,
         );
+        $this->assertTrue($scheduled->isSettled());
         $this->assertSame(
             SuchakCollaborationStageEvent::STAGE_MEETING_SCHEDULED,
             $collaboration->fresh()->marketplace_stage,
         );
 
-        // An earlier stage recorded late must not pull the engagement backwards.
         $service->claimStage(
-            $collaboration,
-            $ownerAccount,
-            $ownerUser,
-            SuchakCollaborationStageEvent::STAGE_INTERESTED,
+            $collaboration->fresh(),
+            $helperAccount,
+            $helperUser,
+            SuchakCollaborationStageEvent::STAGE_MEETING_COMPLETED,
         );
         $this->assertSame(
-            SuchakCollaborationStageEvent::STAGE_MEETING_SCHEDULED,
+            SuchakCollaborationStageEvent::STAGE_MEETING_COMPLETED,
+            $collaboration->fresh()->marketplace_stage,
+        );
+
+        // An earlier stage recorded late must not pull the engagement backwards.
+        $service->claimStage(
+            $collaboration->fresh(),
+            $helperAccount,
+            $helperUser,
+            SuchakCollaborationStageEvent::STAGE_PROFILE_SUGGESTED,
+        );
+        $this->assertSame(
+            SuchakCollaborationStageEvent::STAGE_MEETING_COMPLETED,
             $collaboration->fresh()->marketplace_stage,
         );
     }
@@ -241,10 +251,10 @@ class SuchakMarketplaceEngagementTest extends TestCase
             $this->assertStringContainsString('Unknown marketplace stage key', $exception->getMessage());
         }
 
-        $service->claimStage($collaboration, $ownerAccount, $ownerUser, SuchakCollaborationStageEvent::STAGE_VIEWED);
+        $service->claimStage($collaboration, $ownerAccount, $ownerUser, SuchakCollaborationStageEvent::STAGE_MEETING_SCHEDULED);
 
         $this->expectException(InvalidArgumentException::class);
-        $service->claimStage($collaboration, $ownerAccount, $ownerUser, SuchakCollaborationStageEvent::STAGE_VIEWED);
+        $service->claimStage($collaboration, $ownerAccount, $ownerUser, SuchakCollaborationStageEvent::STAGE_MEETING_SCHEDULED);
     }
 
     public function test_stage_events_cannot_be_deleted(): void
@@ -255,7 +265,7 @@ class SuchakMarketplaceEngagementTest extends TestCase
             $collaboration,
             $ownerAccount,
             $ownerUser,
-            SuchakCollaborationStageEvent::STAGE_VIEWED,
+            SuchakCollaborationStageEvent::STAGE_MEETING_SCHEDULED,
         );
 
         $this->expectException(RuntimeException::class);
@@ -284,6 +294,22 @@ class SuchakMarketplaceEngagementTest extends TestCase
         ]);
 
         return [$ownerUser, $ownerAccount, $helperUser, $helperAccount, $collaboration];
+    }
+
+    /**
+     * Turns the two roles from a column DEFAULT into a recorded fact: `customer_owner_side` starts
+     * at `target`, and a role-scoped rung (profile_suggested, meeting_completed, share_settled) is
+     * refused until the owning Suchak has linked his own customer agreement revision.
+     */
+    private function linkOwnerAgreement(
+        SuchakCollaborationRequest $collaboration,
+        SuchakAccount $ownerAccount,
+        User $ownerUser,
+    ): SuchakCustomerAgreement {
+        $agreement = $this->customerAgreement($ownerAccount, $ownerUser, revision: 1);
+        $this->service()->linkCustomerAgreement($collaboration, $ownerAccount, $ownerUser, $agreement);
+
+        return $agreement;
     }
 
     /**

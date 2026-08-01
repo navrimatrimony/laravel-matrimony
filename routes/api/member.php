@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\MatrimonyProfileApiController;
 use App\Http\Controllers\Api\MemberPasswordApiController;
 use App\Http\Controllers\Api\MemberSuchakMeetingApiController;
 use App\Http\Controllers\Api\MemberSuchakRequestApiController;
+use App\Http\Controllers\Api\MemberSuchakStageApiController;
 use App\Http\Controllers\Api\MobileBiodataExportApiController;
 use App\Http\Controllers\Api\MobileChatApiController;
 use App\Http\Controllers\Api\MobileNotificationApiController;
@@ -70,6 +71,17 @@ Route::middleware('auth:sanctum')->group(function () {
         ->whereNumber('visit'); // MEMBER CONFIRMS THE MEETING HAPPENED
     Route::post('/suchak-meetings/{visit}/dispute', [MemberSuchakMeetingApiController::class, 'dispute'])
         ->whereNumber('visit'); // MEMBER DISPUTES A CLAIMED MEETING
+    /*
+    | The member half of the marketplace stage ladder. D26 — marriage settled,
+    | साखरपुडा and marriage are each claimed by either Suchak and CONFIRMED by
+    | the customer. Same SuchakCollaborationService the Suchak app claims
+    | through; only the actor differs. It cannot live on the Suchak API: the
+    | service refuses a participating Suchak but accepts any other user, so a
+    | Suchak-authenticated route would let a stranger release a success-fee
+    | tranche.
+    */
+    Route::post('/suchak-engagements/{collaboration}/stages/confirm', [MemberSuchakStageApiController::class, 'confirm'])
+        ->whereNumber('collaboration'); // MEMBER CONFIRMS A CLAIMED TERMINAL STAGE
     Route::get('/contact-inbox', [ContactInboxApiController::class, 'index']); // CONTACT REQUEST INBOX
     Route::post('/contact-requests/{id}/approve', [ContactInboxApiController::class, 'approve']); // APPROVE CONTACT REQUEST
     Route::post('/contact-requests/{id}/reject', [ContactInboxApiController::class, 'reject']); // REJECT CONTACT REQUEST
