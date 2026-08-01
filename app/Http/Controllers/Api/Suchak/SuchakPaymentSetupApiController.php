@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Suchak;
 
 use App\Http\Controllers\Controller;
 use App\Models\SuchakAccount;
+use App\Models\SuchakCollaborationStageEvent;
 use App\Models\SuchakCustomerAgreement;
 use App\Models\SuchakCustomerContext;
 use App\Models\SuchakCustomerPlan;
@@ -16,6 +17,7 @@ use App\Modules\Suchak\Services\SuchakCustomerLifecycleService;
 use App\Modules\Suchak\Services\SuchakCustomerPlanService;
 use App\Modules\Suchak\Services\SuchakPackageCatalogService;
 use App\Modules\Suchak\Services\SuchakPaymentCollectorResolver;
+use App\Modules\Suchak\Services\SuchakSuccessFeeTrancheService;
 use App\Modules\Suchak\Support\SuchakDefaultPlans;
 use App\Support\MoneyFormat;
 use Illuminate\Http\JsonResponse;
@@ -38,6 +40,7 @@ class SuchakPaymentSetupApiController extends Controller
         SuchakAgreementService $agreementService,
         SuchakPaymentCollectorResolver $paymentCollectorResolver,
         SuchakCustomerPlanService $customerPlanService,
+        SuchakSuccessFeeTrancheService $trancheService,
     ): JsonResponse {
         $user = $request->user();
         if (! $user instanceof User || $user->suchakAccount === null) {
@@ -109,6 +112,28 @@ class SuchakPaymentSetupApiController extends Controller
             'per_meeting_online_fee_amount' => ['nullable', 'numeric', 'min:0'],
             'post_marriage_fee_mode' => ['nullable', Rule::in(SuchakCustomerPlan::POST_MARRIAGE_FEE_MODES)],
             'post_marriage_fee_amount' => ['nullable', 'numeric', 'min:0'],
+            // Blueprint 7.4 — the success-fee split, quoted with the send and
+            // frozen into the agreement's snapshot digest beside the four fees.
+            //
+            // The app has been posting this key on both branches all along; the
+            // endpoint simply did not accept it, so validated() dropped every row
+            // and the family accepting the agreement was shown no split at all.
+            //
+            // SHAPE ONLY. The trigger comes from the stage ladder — the single
+            // ordered vocabulary of stages — REFERENCED here, never re-listed: a
+            // second copy of the stage keys is a second product, and the two would
+            // drift the first time a stage is added. The share must be a number.
+            //
+            // Every arithmetic rule stays with its one owner,
+            // SuchakSuccessFeeTrancheService: T1 (each share is a percent of the
+            // TOTAL), T2 (the last tranche is the remainder), T3 (the shares sum to
+            // exactly 100), T4 (first-smallest, advisory). Restating any of them
+            // here is how one copy ends up wrong while the other keeps passing.
+            'success_fee_tranches' => ['nullable', 'array'],
+            'success_fee_tranches.*' => ['array'],
+            'success_fee_tranches.*.trigger_stage_key' => ['required', 'string', Rule::in(SuchakCollaborationStageEvent::STAGE_LADDER)],
+            'success_fee_tranches.*.share_percent' => ['required', 'numeric'],
+            'success_fee_tranches.*.is_final_tranche' => ['nullable', 'boolean'],
         ]);
 
         try {
@@ -122,6 +147,7 @@ class SuchakPaymentSetupApiController extends Controller
                 $agreementService,
                 $paymentCollectorResolver,
                 $customerPlanService,
+                $trancheService,
                 $request,
             ): array {
                 $customerContext = SuchakCustomerContext::query()
@@ -194,6 +220,25 @@ class SuchakPaymentSetupApiController extends Controller
                         $this->presetPlanTerms($customerPlanService, $account, (string) $plan['key']),
                         $this->submittedPlanTerms($validated),
                     );
+
+                // THE one schedule decision for this send: WHEN each part of that
+                // success fee falls due (blueprint 7.4). Normalised once, here, by
+                // the service that owns the rules — so the rows compared against
+                // what the customer already holds and the rows the agreement
+                // freezes are provably the same rows, not two readings of the same
+                // request.
+                //
+                // NULL is not an empty split. Absent means this send decided
+                // nothing about the schedule, which lets the previous revision's
+                // plan carry forward (SuchakAgreementService::resolveTranchePlan) —
+                // without that, re-quoting a fee would silently drop a split the
+                // family had already agreed to. Present-and-empty (or null) is a
+                // decision: no split, the whole fee falls due at once. Exactly the
+                // absent / present-null distinction the four fees above already
+                // carry, for the same reason.
+                $submittedTranches = array_key_exists('success_fee_tranches', $validated)
+                    ? $trancheService->normalizePlan($validated['success_fee_tranches'] ?? [])
+                    : null;
 
                 $package = SuchakServicePackage::query()
                     ->where('suchak_account_id', $account->id)
@@ -354,6 +399,21 @@ class SuchakPaymentSetupApiController extends Controller
                     ->orderByDesc('id')
                     ->first();
 
+                // An accepted schedule is as frozen as an accepted fee, and for a
+                // harder reason: the split says what the family owes and WHEN, so
+                // re-cutting it after acceptance moves money they have already
+                // agreed to. The four fees refuse this above; the split refuses it
+                // here, at the only point where the accepted document is in hand.
+                //
+                // Reused, not re-sent: a send that repeats the same split is an
+                // ordinary re-share and must keep working, so only a CHANGED split
+                // is refused.
+                if ($agreement !== null && $this->trancheDrift($trancheService, $agreement, $submittedTranches)) {
+                    throw new InvalidArgumentException(
+                        $this->acceptedTrancheChangeRefusal($trancheService, $agreement)
+                    );
+                }
+
                 // TERMS_ACCEPTED is the customer's act and nothing else. It is
                 // reachable only through the public tokenised link
                 // (SuchakAgreementService::recordPublicAcceptance), which leaves
@@ -379,11 +439,19 @@ class SuchakPaymentSetupApiController extends Controller
                         ->orderByDesc('id')
                         ->first();
 
+                    // What this send decided about the schedule, in the shape
+                    // SuchakAgreementService::resolveTranchePlan reads. Absent when
+                    // the send decided nothing, so the key never appears and the
+                    // previous revision's plan carries forward untouched.
+                    $trancheTerms = $submittedTranches === null
+                        ? []
+                        : ['success_fee_tranches' => $submittedTranches];
+
                     if ($pending === null) {
                         $pending = $agreementService->createAgreementForPackage(
                             $package,
                             $user,
-                            [
+                            array_merge($trancheTerms, [
                                 'agreement_title' => $validated['agreement_title'] ?? 'Service agreement',
                                 'agreement_body' => 'Customer confirms package scope before payment request.',
                                 // RECOMMENDED, pinned: terms ARE required (the row
@@ -396,11 +464,12 @@ class SuchakPaymentSetupApiController extends Controller
                                 // opens the row already TERMS_NOT_REQUIRED, which is
                                 // the same manufactured freeze under another name.
                                 'terms_policy_mode' => SuchakCustomerAgreement::POLICY_RECOMMENDED,
-                            ],
+                            ]),
                             $request->ip(),
                             $request->userAgent(),
                         );
-                    } elseif (! $agreementService->isPackageSnapshotCurrent($pending)) {
+                    } elseif (! $agreementService->isPackageSnapshotCurrent($pending)
+                        || $this->trancheDrift($trancheService, $pending, $submittedTranches)) {
                         // A pending revision whose snapshot has drifted blocks BOTH
                         // remaining paths — issueAcceptanceLink and bypassTerms each
                         // assert snapshot currency. Supersede it with a fresh
@@ -408,15 +477,24 @@ class SuchakPaymentSetupApiController extends Controller
                         // service calls acceptOrReviseTerms makes internally) so the
                         // device-reproduced "Suchak package changed." failure cannot
                         // come back now that acceptance no longer happens here.
+                        //
+                        // A re-cut SPLIT takes this same road, and has to: nobody has
+                        // accepted, so the schedule may still move, and moving it is
+                        // a new revision rather than an edit of the one already sent.
+                        // It cannot ride on the staleness test above — the digest is
+                        // recomputed from the agreement's OWN tranche rows, so a
+                        // schedule that only exists on this request reads as
+                        // perfectly current, which is how an edited split would slip
+                        // through unwritten while an edited fee was honoured.
                         $pending = $agreementService->createRevisionForPackageChange(
                             $pending,
                             $user,
-                            [
+                            array_merge($trancheTerms, [
                                 'terms_policy_mode' => $pending->terms_policy_mode,
                                 'agreement_title' => $pending->agreement_title,
                                 'agreement_body' => $pending->agreement_body,
                                 'revision_reason' => 'Suchak package changed after pending agreement; superseded before payment request.',
-                            ],
+                            ]),
                             $request->ip(),
                             $request->userAgent(),
                         );
@@ -623,6 +701,71 @@ class SuchakPaymentSetupApiController extends Controller
                 SuchakCustomerAgreement::TERMS_BYPASSED,
             ])
             ->exists();
+    }
+
+    /**
+     * Whether this send quotes a DIFFERENT success-fee schedule than the one the
+     * given agreement already carries.
+     *
+     * Null means the send said nothing about the schedule, which is never drift —
+     * a Suchak re-quoting a meeting fee from a screen that does not touch the
+     * split must not be told the split changed.
+     *
+     * Both sides go through the tranche service's own canonical payload — the
+     * same fragment the agreement digest hashes — so "changed" here means exactly
+     * what it means everywhere else: the plan facts differ. Read from the table
+     * rather than a loaded relation, for the reason
+     * SuchakAgreementService::isPackageSnapshotCurrent gives: a stale in-memory
+     * copy would hide the very edit this comparison exists to catch.
+     *
+     * @param  ?list<array<string, mixed>>  $submitted  normalised rows, or null when
+     *                                                  this send decided nothing
+     */
+    private function trancheDrift(
+        SuchakSuccessFeeTrancheService $trancheService,
+        SuchakCustomerAgreement $agreement,
+        ?array $submitted,
+    ): bool {
+        if ($submitted === null) {
+            return false;
+        }
+
+        return $trancheService->snapshotPayload($agreement->successFeeTranches()->get())
+            !== $trancheService->snapshotPayload($submitted);
+    }
+
+    /**
+     * Why a re-send carrying a different success-fee split was refused.
+     *
+     * The sibling of {@see acceptedTermsChangeRefusal} and deliberately shaped
+     * like it: name what the customer actually holds, because the Suchak is
+     * looking at a WhatsApp message quoting a different schedule and cannot act
+     * on "आधीच स्वीकारले आहे" alone.
+     *
+     * Worded as the acceptance page words it — the same stage labels
+     * (SuchakCollaborationStageEvent::STAGE_LABELS_MR, the one label vocabulary)
+     * and the same "उर्वरित रक्कम" for the final tranche, which is what T2 makes
+     * it: a remainder, not a percentage. So the Suchak reads back the exact rows
+     * the family is looking at.
+     */
+    private function acceptedTrancheChangeRefusal(
+        SuchakSuccessFeeTrancheService $trancheService,
+        SuchakCustomerAgreement $agreement,
+    ): string {
+        $rows = [];
+        foreach ($trancheService->snapshotPayload($agreement->successFeeTranches()->get()) as $row) {
+            $rows[] = SuchakCollaborationStageEvent::stageLabel((string) $row['trigger_stage_key'])
+                .': '
+                .($row['is_final_tranche'] === true
+                    ? 'उर्वरित रक्कम'
+                    // Latin digits by construction, and no trailing ".00" — "10%" is
+                    // what the Suchak typed.
+                    : rtrim(rtrim((string) $row['share_percent'], '0'), '.').'%');
+        }
+
+        return 'या ग्राहकाने या योजनेच्या अटी आधीच स्वीकारल्या आहेत, त्यामुळे यशस्वी विवाह शुल्काचे हप्ते बदलून तीच योजना पुन्हा पाठवता येणार नाही. ग्राहकाकडे सध्या असलेले हप्ते — '
+            .($rows === [] ? 'हप्ते ठरलेले नाहीत' : implode('; ', $rows))
+            .'. स्वीकारलेला करार जसाच्या तसा राहतो. नवीन हप्ते लागू करायचे असतील तर वेगळ्या नावाची योजना तयार करून पाठवा.';
     }
 
     /**
