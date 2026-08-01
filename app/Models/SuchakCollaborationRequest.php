@@ -58,6 +58,7 @@ class SuchakCollaborationRequest extends Model
         'target_matrimony_profile_id',
         'requesting_representation_id',
         'target_representation_id',
+        'marketplace_challenge_id',
         'customer_owner_side',
         'status',
         'marketplace_stage',
@@ -106,6 +107,32 @@ class SuchakCollaborationRequest extends Model
     public function commissionAgreement(): HasOne
     {
         return $this->hasOne(SuchakCommissionAgreement::class, 'collaboration_request_id');
+    }
+
+    /**
+     * The challenge this engagement answers, or null for a direct cross-Suchak collaboration
+     * (blueprint D7). Written once, by the proposal that created the engagement.
+     *
+     * Read under a row lock by SuchakCollaborationService::lockedChallengeAnswered(), which is the
+     * one place acceptance both refuses a second accepted proposal (M1) and closes the challenge it
+     * answers (STATUS_FULFILLED).
+     */
+    public function marketplaceChallenge(): BelongsTo
+    {
+        return $this->belongsTo(SuchakMarketplaceChallenge::class, 'marketplace_challenge_id');
+    }
+
+    /**
+     * True when this engagement was formed by accepting a marketplace challenge.
+     *
+     * The predicate three separate rules read, kept in one place: the share is the CHALLENGE's and
+     * is not negotiable (D4, enforced in updateCommissionTerms), acceptance closes the challenge it
+     * answers (STATUS_FULFILLED), and the requester is the HELPER rather than the customer's own
+     * Suchak — the direction reversal that makes all of it necessary.
+     */
+    public function isMarketplaceProposal(): bool
+    {
+        return $this->marketplace_challenge_id !== null;
     }
 
     public function ledgerEntries(): HasMany

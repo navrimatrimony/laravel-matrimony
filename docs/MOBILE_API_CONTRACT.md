@@ -2731,3 +2731,87 @@ Two optional new inputs, and three new response keys:
 A second meeting is refused while one is still open — `scheduled`,
 completed-but-unconfirmed, or `disputed` — with a 422. Once the first is
 `confirmed` (or payout-qualified, or cancelled) the pair may meet again.
+
+## Suchak marketplace — challenges and accept-by-proposing (blueprint phase 2)
+
+Seven routes, all under `auth:sanctum` + `suchak.account`, all gated on the
+**verification badge** (D18 / A10) rather than on `canOperate()`. Refusals are
+Marathi sentences with `success: false`; a row outside the caller's account is a
+**404**, never a 403 — the shape of a refusal must not teach a Suchak that
+another Suchak's row exists.
+
+Money in every payload is a `*_display` string built by `App\Support\MoneyFormat`,
+in Latin digits, in the currency of the customer agreement the challenge froze.
+**No endpoint here accepts a currency**, and sending one is a 422.
+
+### The challenge (D4 / D18)
+
+| Route | Purpose |
+|---|---|
+| `POST /api/v1/suchak/marketplace/challenges` | Publish one of my candidates with a declared share. Body: `representation_id`, `declared_share_type` (`custom_percent` \| `fixed_amount`), `declared_share_percent` \| `declared_share_amount`, `expires_at` (optional; omit = "open until I withdraw it"), `publisher_note`. `currency` / `share_currency` are **prohibited**. 201 returns the listing payload. |
+| `GET /api/v1/suchak/marketplace/challenges` | Browse other Suchaks' live challenges. `per_page` 1–50, default 12. Not logged per card. |
+| `GET /api/v1/suchak/marketplace/challenges/mine` | My own challenges in every state — where the withdraw id comes from. |
+| `GET /api/v1/suchak/marketplace/challenges/{challenge}` | Open ONE listing. **This read is logged** and shown to the originating Suchak (D18). |
+| `POST /api/v1/suchak/marketplace/challenges/{challenge}/withdraw` | Body: `withdrawn_reason` (optional). Never deletes. |
+
+Each listing carries `declared_share` (`type`, `percent` \| `amount`, `display`,
+`success_fee_display`, `estimated_share_display`, `currency`), `expires_never`
+(a NULL expiry is a decision, not an omission — do not print "—"), and
+`candidate`, which is `SuchakCandidateMaskingService`'s output verbatim: name,
+village, detailed address and mobile hidden unless the originating Suchak
+revealed them, **photograph always shown** (D19a).
+
+### Accept by proposing (D7)
+
+| Route | Purpose |
+|---|---|
+| `POST /api/v1/suchak/marketplace/challenges/{challenge}/proposals` | Answer a challenge by NAMING one of my own candidates. Body: `representation_id` (mine), `message` (optional, max 2000). |
+| `GET /api/v1/suchak/marketplace/challenges/{challenge}/proposals` | The publisher's inbox for one challenge, with each proposed candidate masked. `per_page` 1–50, default 20. |
+
+**There is no bare-accept endpoint and there must never be one.** Naming the
+candidate IS the acceptance (D7).
+
+`split_type`, `groom_side_share`, `bride_side_share`, `fixed_amount`,
+`declared_share_*`, `currency` and `share_currency` are all **prohibited** on the
+propose route: the share was declared in the challenge, in advance, and is not
+negotiable (D4). The 201 echoes `declared_share` back, read from the challenge,
+so the app can show the helper the terms he has just accepted.
+
+The proposal creates the **engagement** — the existing
+`suchak_collaboration_requests` + `suchak_commission_agreements` pair, written in
+the reversed direction — and records `profile_suggested` on the stage ladder in
+the same transaction. 201 carries `collaboration_id`, `challenge_id`, `status`
+(`pending`), `marketplace_stage`, `stage_event` and `declared_share`.
+
+**The publisher answers on the routes that already exist:**
+`POST /api/v1/suchak/collaborations/{collaboration}/accept` and `/reject`. They
+gate on the target actor, and in this direction the publisher is the target.
+Accepting also closes the challenge (`status` → `fulfilled`).
+
+On a **marketplace** engagement, `/accept` carries two 422s the direct path does
+not, and the app must show both messages rather than retrying:
+
+- **One accepted proposal per challenge, ever** (M1). Once any proposal against
+  the challenge is accepted, every other proposal on it is refused — a share was
+  declared once and cannot be owed twice. The rest stay `pending` and are the
+  publisher's to `/reject`; nothing auto-rejects them.
+- **The verification badge, on both sides, at the moment the engagement forms**
+  (D18 / A10). A publisher whose badge lapsed after publishing cannot accept, and
+  neither can he read `GET .../{challenge}/proposals`; a helper whose badge lapsed
+  after proposing cannot be accepted. `/reject` is deliberately **not** gated —
+  saying no reveals nothing and creates no obligation, and a publisher who could
+  not say it would hold the helper's quota until the SLA expired it.
+
+Both apply only when `marketplace_challenge_id` is set. The direct collaboration
+path is unchanged and still runs on `canOperate()`, which admits a
+verification-pending account while the policy allows work before admin approval.
+
+`GET /api/v1/suchak/collaborations` now carries `marketplace_challenge_id`
+(null on a direct request) and `marketplace_stage`, so the app can tell a
+marketplace proposal from a direct collaboration — they are accepted with the
+same two routes but their terms are frozen and cannot be re-quoted.
+
+422 on the propose route covers: caller not verified, own challenge (A2), the
+same candidate proposed to the same challenge twice in any status (A10), a
+withdrawn / fulfilled / expired challenge, a lapsed consent on either candidate,
+and the open-collaboration quota — which the **helper** pays, since he initiated.

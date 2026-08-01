@@ -141,6 +141,29 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::post('/marketplace/challenges', [SuchakMarketplaceChallengeApiController::class, 'store']); // PUBLISH + WRITE published_to_marketplace ON THE LADDER
     Route::post('/marketplace/challenges/{challenge}/withdraw', [SuchakMarketplaceChallengeApiController::class, 'withdraw'])
         ->whereNumber('challenge');
+    /*
+    | ACCEPT BY PROPOSING (blueprint D7 / D7a / 6.1, phase 2).
+    |
+    | A helping Suchak cannot press a bare "accept" — there is deliberately no
+    | such endpoint. He NAMES one of his own candidates, and that act creates
+    | the engagement, which is the existing suchak_collaboration_requests +
+    | suchak_commission_agreements pair written in the REVERSED direction
+    | (5.2's direction note). No third table, and no second accept verb.
+    |
+    | The publisher answers on the EXISTING collaboration routes above —
+    | /collaborations/{collaboration}/accept and /reject already gate on the
+    | target actor, and in this direction the target is him. The GET below is
+    | what he reads before doing so; without it that decision is blind.
+    |
+    | The declared share is NOT a parameter on either route. D4 freezes it in
+    | the challenge, and POST /collaborations/{id}/commission (web) is refused
+    | outright for a marketplace engagement — reversed, its requester-only rule
+    | would have handed the split to the helper.
+    */
+    Route::post('/marketplace/challenges/{challenge}/proposals', [SuchakMarketplaceChallengeApiController::class, 'propose'])
+        ->whereNumber('challenge'); // PROPOSE A NAMED CANDIDATE + WRITE profile_suggested ON THE LADDER
+    Route::get('/marketplace/challenges/{challenge}/proposals', [SuchakMarketplaceChallengeApiController::class, 'proposals'])
+        ->whereNumber('challenge'); // THE PUBLISHER'S INBOX FOR ONE CHALLENGE — masked candidates
     // Opening ONE listing is logged and shown to the originating Suchak (D18).
     Route::get('/marketplace/challenges/{challenge}', [SuchakMarketplaceChallengeApiController::class, 'show'])
         ->whereNumber('challenge');

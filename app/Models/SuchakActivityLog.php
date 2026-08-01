@@ -108,6 +108,18 @@ class SuchakActivityLog extends Model
      */
     public const ACTION_MARKETPLACE_LISTING_OPENED = 'marketplace_listing_opened';
 
+    /**
+     * A helping Suchak answered a challenge by NAMING one of his own candidates (D7).
+     *
+     * Not a substitute for ACTION_COLLABORATION_REQUEST_CREATED, which the same act also writes:
+     * that row is filed under the REQUESTER's account, and in the marketplace the requester is the
+     * helper — so the publisher, whose customer this is, would never see it. This row is filed under
+     * the ORIGINATING Suchak for the same reason the listing-open row is (D18: what happens to a
+     * published candidate is shown to the Suchak who published him), with the proposer travelling in
+     * the metadata.
+     */
+    public const ACTION_MARKETPLACE_PROPOSAL_RECEIVED = 'marketplace_proposal_received';
+
     public const ACTION_CRM_NOTE_ADDED = 'crm_note_added';
 
     public const ACTION_LEDGER_ENTRY_CREATED = 'ledger_entry_created';

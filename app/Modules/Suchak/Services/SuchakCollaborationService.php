@@ -10,6 +10,7 @@ use App\Models\SuchakCollaborationStageEvent;
 use App\Models\SuchakCommissionAgreement;
 use App\Models\SuchakCustomerAgreement;
 use App\Models\SuchakFeatureSuspension;
+use App\Models\SuchakMarketplaceChallenge;
 use App\Models\SuchakPaymentContext;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
@@ -21,6 +22,34 @@ use InvalidArgumentException;
 
 class SuchakCollaborationService
 {
+    /**
+     * Which gate an ACCOUNT behind a representation must clear (H2). Three values, because the two
+     * directions of the same engagement ask two different questions:
+     *
+     *  - OPERATE           the requester on the DIRECT path. He is acting on his own book.
+     *  - PUBLIC_ROUTE      the target on the DIRECT path. He is being approached cold, so
+     *                      SuchakAccessService::canPubliclyRoute() (VERIFIED + PUBLIC_ACTIVE) is
+     *                      right: a Suchak who has taken himself out of the public directory is not
+     *                      inviting strangers.
+     *  - MARKETPLACE_BADGE both sides on the MARKETPLACE path (D18 / A10 — "visible to verified
+     *                      Suchaks only", "tie marketplace participation to the verification
+     *                      badge"). Applied to the REQUESTER it closes the under-gate: unreversed,
+     *                      the requester needed only canOperate(), which admits a PENDING account
+     *                      while the policy allows work before admin approval — precisely A10's
+     *                      cheap second account. Applied to the TARGET it replaces PUBLIC_ROUTE,
+     *                      which is not merely stricter but WRONG here: publishing a challenge
+     *                      requires the badge alone (SuchakMarketplaceChallengeService::
+     *                      assertPublisher), so keeping PUBLIC_ACTIVE in the gate would leave
+     *                      legitimately published challenges that nobody on earth could answer. It
+     *                      is the same spelling of the badge that service uses, so the marketplace
+     *                      has one rule and not two.
+     */
+    private const ACCOUNT_GATE_OPERATE = 'operate';
+
+    private const ACCOUNT_GATE_PUBLIC_ROUTE = 'public_route';
+
+    private const ACCOUNT_GATE_MARKETPLACE_BADGE = 'marketplace_badge';
+
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakAccessService $accessService,
@@ -87,7 +116,7 @@ class SuchakCollaborationService
 
                 /** @var SuchakProfileRepresentation $ownRepresentation */
                 $ownRepresentation = $match['own_representation'];
-                if ($this->hasOpenCollaborationPair($account, $ownRepresentation, $candidate)) {
+                if ($this->hasOpenCollaborationPair($ownRepresentation, $candidate)) {
                     return null;
                 }
 
@@ -129,6 +158,39 @@ class SuchakCollaborationService
     }
 
     /**
+     * Create the ENGAGEMENT: a collaboration request plus its commission agreement, 1:1 (blueprint
+     * 6.1). Two directions come through here and they are not symmetrical.
+     *
+     * DIRECT COLLABORATION (`$challenge === null`, the original path). The requester holds the
+     * customer and reaches out to another Suchak's candidate. He types the commission terms, and
+     * the target must be publicly routable because he is being approached cold.
+     *
+     * MARKETPLACE PROPOSAL (`$challenge` supplied, blueprint D7 / section 5.2's direction note).
+     * The SAME pair, REVERSED: *"the Suchak answering a challenge becomes the requester — their
+     * candidate is `requestingRepresentation`, the challenge's candidate is
+     * `targetRepresentation`."* Four things the original direction hard-wired therefore change
+     * meaning, and each is handled where it is wired rather than by a second copy of this method:
+     *
+     *  H1 `collector_suchak_account_id` is pinned to the TARGET side. Reversed, the target IS the
+     *     publisher, who owns the customer, the customer agreement and the collection — so M1
+     *     ("each customer pays only their own Suchak") lands correctly. It is verified rather than
+     *     assumed: the same row now also names the customer-owning side explicitly, and a test pins
+     *     collector == customerOwnerSuchakAccountId() in the reversed direction.
+     *  H2 the account gate was TARGET-must-be-publicly-routable, REQUESTER-need-only-operate. In
+     *     the marketplace that gates the publisher on a public-directory flag he never needed to
+     *     publish, while letting an UNVERIFIED helper propose — the exact inverse of D18/A10, which
+     *     tie marketplace participation to the verification badge on both sides. Both sides are
+     *     therefore gated on the badge here, and the direct path keeps its original two gates
+     *     untouched.
+     *  H3 the open-request quota counts `requesting_suchak_account_id`. Reversed, the HELPER pays
+     *     for each proposal and the publisher pays for none — which is DELIBERATELY LEFT ALONE:
+     *     the quota's meaning is "work you initiated against other Suchaks", proposing is exactly
+     *     that, and capping the receiving side would be D14's forbidden block ("may rank
+     *     suggestions but may not block them") wearing an entitlement's clothes.
+     *  H5 `updateCommissionTerms()` is requester-only. Reversed, that is the HELPER — the one party
+     *     D4 says may never move the split. It is refused outright on a marketplace engagement; see
+     *     that method.
+     *
      * @param  array<string, mixed>  $attributes
      * @return array{request: SuchakCollaborationRequest, agreement: SuchakCommissionAgreement}
      */
@@ -140,17 +202,18 @@ class SuchakCollaborationService
         array $attributes = [],
         ?string $ipAddress = null,
         ?string $userAgent = null,
+        ?SuchakMarketplaceChallenge $challenge = null,
     ): array {
         $requestingAccount->refresh();
         $requestingRepresentation->refresh()->loadMissing(['suchakAccount', 'matrimonyProfile.gender']);
         $targetRepresentation->refresh()->loadMissing(['suchakAccount', 'matrimonyProfile.gender']);
 
-        $this->assertCanCreate($requestingAccount, $actor, $requestingRepresentation, $targetRepresentation);
+        $this->assertCanCreate($requestingAccount, $actor, $requestingRepresentation, $targetRepresentation, $challenge !== null);
         $this->qualityControlService->assertFeatureAvailable($requestingAccount, SuchakFeatureSuspension::FEATURE_COLLABORATION);
         $this->qualityControlService->assertFeatureAvailable($targetRepresentation->suchakAccount, SuchakFeatureSuspension::FEATURE_COLLABORATION);
         $this->limitService->assertCollaborationRequestAllowed($requestingAccount);
 
-        return DB::transaction(function () use ($requestingAccount, $actor, $requestingRepresentation, $targetRepresentation, $attributes, $ipAddress, $userAgent): array {
+        return DB::transaction(function () use ($requestingAccount, $actor, $requestingRepresentation, $targetRepresentation, $attributes, $ipAddress, $userAgent, $challenge): array {
             /** @var SuchakAccount $lockedRequestingAccount */
             $lockedRequestingAccount = SuchakAccount::query()
                 ->whereKey($requestingAccount->id)
@@ -169,12 +232,11 @@ class SuchakCollaborationService
 
             $lockedRequestingRepresentation->loadMissing(['suchakAccount', 'matrimonyProfile.gender']);
             $lockedTargetRepresentation->loadMissing(['suchakAccount', 'matrimonyProfile.gender']);
-            $this->assertCanCreate($lockedRequestingAccount, $actor, $lockedRequestingRepresentation, $lockedTargetRepresentation);
+            $this->assertCanCreate($lockedRequestingAccount, $actor, $lockedRequestingRepresentation, $lockedTargetRepresentation, $challenge !== null);
             $this->qualityControlService->assertFeatureAvailable($lockedRequestingAccount, SuchakFeatureSuspension::FEATURE_COLLABORATION);
             $this->qualityControlService->assertFeatureAvailable($lockedTargetRepresentation->suchakAccount, SuchakFeatureSuspension::FEATURE_COLLABORATION);
             $this->limitService->assertCollaborationRequestAllowed($lockedRequestingAccount);
-            $this->assertNoDuplicateOpenRequest($lockedRequestingRepresentation, $lockedTargetRepresentation);
-            $commissionTerms = $this->normalizeCommissionTerms($attributes);
+            $this->assertNoDuplicateOpenRequest($lockedRequestingRepresentation, $lockedTargetRepresentation, $challenge !== null);
 
             $requestedAt = now();
             $collaboration = SuchakCollaborationRequest::query()->create([
@@ -184,6 +246,7 @@ class SuchakCollaborationService
                 'target_matrimony_profile_id' => $lockedTargetRepresentation->matrimony_profile_id,
                 'requesting_representation_id' => $lockedRequestingRepresentation->id,
                 'target_representation_id' => $lockedTargetRepresentation->id,
+                'marketplace_challenge_id' => $challenge?->id,
                 'status' => SuchakCollaborationRequest::STATUS_PENDING,
                 'message' => $this->nullableLimitedString($attributes['message'] ?? null, 2000),
                 'requested_at' => $requestedAt,
@@ -199,6 +262,15 @@ class SuchakCollaborationService
             $requesterAckColumn = (int) $requestingAccount->id === $groomAccountId
                 ? 'accepted_by_groom_suchak_at'
                 : 'accepted_by_bride_suchak_at';
+
+            // The direct path's terms are the requester's own words. The marketplace's are the
+            // CHALLENGE's (D4 — declared upfront, not negotiable), and they can only be computed
+            // once the groom/bride sides above are known: a declared share is one-directional
+            // ("what I pay whoever brings the match") while a commission agreement stores two
+            // shares named by SIDE, not by role.
+            $commissionTerms = $challenge === null
+                ? $this->normalizeCommissionTerms($attributes)
+                : $this->challengeCommissionTerms($challenge, (int) $lockedRequestingAccount->id, $groomAccountId);
 
             $agreement = SuchakCommissionAgreement::query()->create([
                 'collaboration_request_id' => $collaboration->id,
@@ -216,6 +288,28 @@ class SuchakCollaborationService
                 'agreement_status' => SuchakCommissionAgreement::STATUS_PENDING,
             ]);
 
+            if ($challenge !== null) {
+                /*
+                 * The role is a RECORDED FACT from the first row, not the `customer_owner_side`
+                 * column default — which is exactly the forgery 00e92f98 refused to hang a money
+                 * rule on. Here it is not a claim by either party: the challenge belongs to the
+                 * publisher, names his own accepted agreement revision, and only he could have
+                 * published it. The publisher is the TARGET in this reversed direction.
+                 *
+                 * Freezing the revision here is also what stops the HELPER from later calling
+                 * linkCustomerAgreement() with an agreement of his own and appointing himself the
+                 * customer-owning side: that method is write-once and this is the write.
+                 */
+                $this->bindCustomerAgreement(
+                    $collaboration,
+                    $agreement,
+                    (int) $challenge->customer_agreement_id,
+                    SuchakCollaborationRequest::SIDE_TARGET,
+                );
+                $collaboration = $collaboration->fresh() ?? $collaboration;
+                $agreement = $agreement->fresh() ?? $agreement;
+            }
+
             $this->recordActivity(
                 SuchakActivityLog::ACTION_COLLABORATION_REQUEST_CREATED,
                 $collaboration,
@@ -232,6 +326,21 @@ class SuchakCollaborationService
         });
     }
 
+    /**
+     * The publisher (or, on the direct path, the approached Suchak) turns a pending request into a
+     * live engagement. This is the moment the declared share becomes an obligation, so two guards
+     * that do not apply to rejectRequest() apply here.
+     *
+     * assertMarketplaceEngagementBadge() — D18/A10 at the moment the obligation FORMS, not only at
+     * the moment it was offered. assertChallengeStillUnanswered() — at most one accepted proposal
+     * per challenge, which is M1.
+     *
+     * Neither is copied onto rejectRequest(), and that is a decision rather than an omission:
+     * saying NO neither reveals a candidate nor creates a rupee of obligation, and a publisher who
+     * could not reject would leave every rival helper's quota (H3) burned on a proposal nobody can
+     * answer until the SLA expires it. The badge gates participation; it does not gate withdrawal
+     * from participation.
+     */
     public function acceptRequest(
         SuchakCollaborationRequest $collaboration,
         SuchakAccount $targetAccount,
@@ -241,6 +350,7 @@ class SuchakCollaborationService
     ): SuchakCollaborationRequest {
         $targetAccount->refresh();
         $this->assertTargetActor($collaboration, $targetAccount, $actor);
+        $this->assertMarketplaceEngagementBadge($collaboration, $targetAccount);
         $this->qualityControlService->assertFeatureAvailable($targetAccount, SuchakFeatureSuspension::FEATURE_COLLABORATION);
 
         return DB::transaction(function () use ($collaboration, $targetAccount, $actor, $ipAddress, $userAgent): SuchakCollaborationRequest {
@@ -251,8 +361,10 @@ class SuchakCollaborationService
                 ->firstOrFail();
             $locked->loadMissing('commissionAgreement');
             $this->assertTargetActor($locked, $targetAccount, $actor);
+            $this->assertMarketplaceEngagementBadge($locked, $targetAccount);
             $this->qualityControlService->assertFeatureAvailable($targetAccount, SuchakFeatureSuspension::FEATURE_COLLABORATION);
             $this->assertPendingAndNotExpired($locked);
+            $this->assertChallengeStillUnanswered($locked);
 
             SuchakCollaborationRequest::query()
                 ->whereKey($locked->id)
@@ -263,6 +375,7 @@ class SuchakCollaborationService
 
             $agreement = $locked->commissionAgreement ?? $this->createMissingAgreement($locked);
             $this->acknowledgeAgreementForAccount($agreement, (int) $targetAccount->id);
+            $this->fulfilAnsweredChallenge($locked);
 
             $accepted = $locked->fresh(['commissionAgreement']);
             $this->recordActivity(
@@ -326,6 +439,21 @@ class SuchakCollaborationService
     }
 
     /**
+     * Re-quote the split on a DIRECT collaboration. Requester-only, and terminally closed to the
+     * marketplace (H5).
+     *
+     * The direction reversal is the whole reason: in the marketplace the requester is the HELPER,
+     * so this method — reachable today at POST suchak/collaborations/{id}/commission — would have
+     * handed the split to the one party D4 forbids from touching it. *"The challenge declares the
+     * share the declarer will pay a helper, upfront. Accepting the challenge = accepting that
+     * share. No negotiation afterwards."* A8 depends on the same immovability: a share that could
+     * be edited after a candidate was suggested under it is a share that was never declared.
+     *
+     * The publisher cannot move it either, and does not need a separate refusal: he is the TARGET,
+     * and assertRequestingActor() already refuses every actor but the requester. A marketplace
+     * split is not re-quoted by anybody — it is republished as a new challenge, at which point the
+     * candidates already suggested keep the old one.
+     *
      * @param  array<string, mixed>  $attributes
      */
     public function updateCommissionTerms(
@@ -338,6 +466,7 @@ class SuchakCollaborationService
     ): SuchakCommissionAgreement {
         $requestingAccount->refresh();
         $this->assertRequestingActor($collaboration, $requestingAccount, $actor);
+        $this->assertCommissionTermsAreNegotiable($collaboration);
         $this->qualityControlService->assertFeatureAvailable($requestingAccount, SuchakFeatureSuspension::FEATURE_COLLABORATION);
         $terms = $this->normalizeCommissionTerms($attributes);
 
@@ -349,6 +478,7 @@ class SuchakCollaborationService
                 ->firstOrFail();
             $locked->loadMissing('commissionAgreement');
             $this->assertRequestingActor($locked, $requestingAccount, $actor);
+            $this->assertCommissionTermsAreNegotiable($locked);
             $this->qualityControlService->assertFeatureAvailable($requestingAccount, SuchakFeatureSuspension::FEATURE_COLLABORATION);
             $this->assertPendingAndNotExpired($locked);
 
@@ -551,18 +681,46 @@ class SuchakCollaborationService
                 throw new InvalidArgumentException('This engagement is already bound to another customer agreement revision.');
             }
 
-            if ($linkedAgreementId === null) {
-                SuchakCommissionAgreement::query()
-                    ->whereKey($agreement->id)
-                    ->update(['customer_agreement_id' => $customerAgreement->id]);
-            }
-
-            SuchakCollaborationRequest::query()
-                ->whereKey($locked->id)
-                ->update(['customer_owner_side' => $ownerSide]);
+            $this->bindCustomerAgreement($locked, $agreement, (int) $customerAgreement->id, $ownerSide);
 
             return $locked->fresh(['commissionAgreement']);
         });
+    }
+
+    /**
+     * The ONE writer of the two columns that together name the customer-owning side (blueprint 6.1):
+     * `suchak_commission_agreements.customer_agreement_id` and
+     * `suchak_collaboration_requests.customer_owner_side`.
+     *
+     * Two guarded entrances reach it and they answer different questions. linkCustomerAgreement()
+     * serves the direct path, where the owning Suchak proves the role by supplying his own
+     * agreement. createRequest() serves the marketplace, where the challenge already proved it
+     * before the engagement existed. They must not drift: every role-scoped ladder rung
+     * (assertStageClaimant) refuses to be written until BOTH columns say the same thing, so a path
+     * that wrote one without the other would produce an engagement whose rungs nobody may claim.
+     *
+     * The agreement id is written once and never moved; the caller owns the write-once check,
+     * because "already bound" is only an error when the caller is proposing a different revision.
+     */
+    private function bindCustomerAgreement(
+        SuchakCollaborationRequest $collaboration,
+        SuchakCommissionAgreement $agreement,
+        int $customerAgreementId,
+        string $ownerSide,
+    ): void {
+        if (! in_array($ownerSide, SuchakCollaborationRequest::SIDES, true)) {
+            throw new InvalidArgumentException('Unknown collaboration side: '.$ownerSide.'.');
+        }
+
+        if ($agreement->customer_agreement_id === null) {
+            SuchakCommissionAgreement::query()
+                ->whereKey($agreement->id)
+                ->update(['customer_agreement_id' => $customerAgreementId]);
+        }
+
+        SuchakCollaborationRequest::query()
+            ->whereKey($collaboration->id)
+            ->update(['customer_owner_side' => $ownerSide]);
     }
 
     /**
@@ -787,6 +945,7 @@ class SuchakCollaborationService
         User $actor,
         SuchakProfileRepresentation $requestingRepresentation,
         SuchakProfileRepresentation $targetRepresentation,
+        bool $marketplace = false,
     ): void {
         if ((int) $requestingAccount->user_id !== (int) $actor->id) {
             throw new InvalidArgumentException('Only the requesting Suchak account owner can create collaboration requests.');
@@ -808,13 +967,231 @@ class SuchakCollaborationService
             throw new InvalidArgumentException('Collaboration requires two different candidate profiles.');
         }
 
-        if (! $this->representationIsUsable($requestingRepresentation, requirePublicAccount: false)) {
-            throw new InvalidArgumentException('Requesting representation must be active with valid consent.');
+        if (! $this->representationIsUsable($requestingRepresentation, $marketplace
+            ? self::ACCOUNT_GATE_MARKETPLACE_BADGE
+            : self::ACCOUNT_GATE_OPERATE)) {
+            throw new InvalidArgumentException($marketplace
+                ? 'बाजारपेठेत स्थळ सुचवण्यासाठी पडताळणी झालेले सूचक खाते आणि वैध संमती असलेले सक्रिय स्थळ आवश्यक आहे.'
+                : 'Requesting representation must be active with valid consent.');
         }
 
-        if (! $this->representationIsUsable($targetRepresentation, requirePublicAccount: true)) {
-            throw new InvalidArgumentException('Target representation must be publicly routable.');
+        if (! $this->representationIsUsable($targetRepresentation, $marketplace
+            ? self::ACCOUNT_GATE_MARKETPLACE_BADGE
+            : self::ACCOUNT_GATE_PUBLIC_ROUTE)) {
+            throw new InvalidArgumentException($marketplace
+                ? 'हे आव्हान प्रसिद्ध करणाऱ्या सूचकाची पडताळणी किंवा स्थळाची संमती आता वैध नाही.'
+                : 'Target representation must be publicly routable.');
         }
+    }
+
+    /**
+     * H5's gate, and the reason it is a method rather than an inline `if`: it runs twice, once
+     * before the transaction and once under the row lock, exactly like every other rule in this
+     * service that decides whether a write may happen.
+     */
+    private function assertCommissionTermsAreNegotiable(SuchakCollaborationRequest $collaboration): void
+    {
+        if (! $collaboration->isMarketplaceProposal()) {
+            return;
+        }
+
+        throw new InvalidArgumentException(
+            'बाजारपेठेतील वाटा आव्हानात आधीच जाहीर झाला आहे आणि तो बदलता येत नाही. '
+            .'वेगळा वाटा द्यायचा असेल तर नवीन आव्हान प्रसिद्ध करावे लागेल.'
+        );
+    }
+
+    /**
+     * Acceptance closes the challenge it answers (SuchakMarketplaceChallenge::STATUS_FULFILLED).
+     *
+     * That status shipped in 9a597d1b with NO WRITER, and its own docblock named this exact moment
+     * as the only honest one: *"when a proposal made against this challenge is accepted, which is
+     * accept-by-proposing — the next slice."*
+     *
+     * Written from here rather than from SuchakMarketplaceChallengeService because that service
+     * already depends on this one (it calls claimCustomerStage() to record publication); calling
+     * back the other way would be a dependency cycle. The lifecycle POLICY — publish, withdraw,
+     * expire, browse — stays entirely over there. This is one transition that is caused by an act
+     * this service owns and cannot be observed from anywhere else.
+     *
+     * Silent when the challenge is no longer open: the publisher may accept a proposal on a
+     * challenge he has since withdrawn, and refusing that would strand a proposal he himself
+     * invited. Other PENDING proposals against the same challenge are deliberately left pending —
+     * they are the publisher's to reject or let expire, and mass-rejecting them here would answer
+     * on his behalf. That reasoning still holds and is unchanged; what it never covered is a SECOND
+     * ACCEPTANCE, which assertChallengeStillUnanswered() now refuses.
+     */
+    private function fulfilAnsweredChallenge(SuchakCollaborationRequest $collaboration): void
+    {
+        $challenge = $this->lockedChallengeAnswered($collaboration);
+
+        if ($challenge === null || ! $challenge->isOpen()) {
+            return;
+        }
+
+        $challenge->forceFill([
+            'status' => SuchakMarketplaceChallenge::STATUS_FULFILLED,
+            'fulfilled_at' => now(),
+        ])->save();
+    }
+
+    /**
+     * M1: ONE accepted proposal per challenge, ever.
+     *
+     * The proven money bug this closes. A publisher declares 30% once, on one challenge, against
+     * one customer's single ₹1,00,000 success fee. He accepts proposal A — the challenge becomes
+     * `fulfilled`. Nothing then stopped him accepting proposal B: a second engagement formed, a
+     * second commission agreement was written at the same declared 30%, and one declared share was
+     * owed twice. `assertChallengeAcceptsProposals()` guards the PROPOSE leg only; acceptance had
+     * no guard at all, which is why the second acceptance returned 200.
+     *
+     * The predicate is the FACT — "another proposal answering this challenge is already accepted" —
+     * and not the challenge's status. Status is not enough, and the gap is reachable: on a
+     * challenge the publisher WITHDREW, fulfilAnsweredChallenge() stays silent by design, so the
+     * row never reaches `fulfilled` and every proposal made before the withdrawal would still have
+     * been acceptable, one after another. Reading the sibling rows asks the question the money
+     * actually depends on.
+     *
+     * Evaluated under the CHALLENGE's row lock, not the collaboration's. Two concurrent accepts of
+     * two different proposals lock two different collaboration rows and would not exclude each
+     * other; the challenge is the one row they share. That is also why this check exists only
+     * inside the transaction — a race is not an authorisation, and evaluating it outside the lock
+     * would prove nothing.
+     *
+     * The other pending proposals are still left pending (see fulfilAnsweredChallenge()): they are
+     * the publisher's to reject, and the refusal below says so rather than answering for him.
+     */
+    private function assertChallengeStillUnanswered(SuchakCollaborationRequest $collaboration): void
+    {
+        $challenge = $this->lockedChallengeAnswered($collaboration);
+
+        if ($challenge === null) {
+            return;
+        }
+
+        $rival = SuchakCollaborationRequest::query()
+            ->where('marketplace_challenge_id', $challenge->id)
+            ->whereKeyNot($collaboration->id)
+            ->where('status', SuchakCollaborationRequest::STATUS_ACCEPTED)
+            ->exists();
+
+        if ($rival) {
+            throw new InvalidArgumentException(
+                'या आव्हानासाठी एक स्थळ आधीच स्वीकारले आहे, त्यामुळे दुसरे स्वीकारता येणार नाही. '
+                .'जाहीर केलेला वाटा एकाच जोडणीसाठी असतो. उरलेल्या सुचवणी नाकारता येतील.'
+            );
+        }
+    }
+
+    /**
+     * The challenge this engagement answers, locked, or NULL when it is not a marketplace
+     * engagement at all.
+     *
+     * One reader for both the guard and the fulfilment write, so they can never end up looking at
+     * different rows or locking on different terms. Read through the model's own
+     * `marketplaceChallenge()` relation rather than a hand-built query on the FK — the relation is
+     * the declared owner of that join and had no caller until this method.
+     */
+    private function lockedChallengeAnswered(SuchakCollaborationRequest $collaboration): ?SuchakMarketplaceChallenge
+    {
+        if (! $collaboration->isMarketplaceProposal()) {
+            return null;
+        }
+
+        /** @var SuchakMarketplaceChallenge|null $challenge */
+        $challenge = $collaboration->marketplaceChallenge()->lockForUpdate()->first();
+
+        return $challenge;
+    }
+
+    /**
+     * D18 + A10 at the moment the engagement FORMS, on both sides.
+     *
+     * The badge gated the propose leg and nothing else, so a publisher whose verification had been
+     * set back to `pending` was refused `GET /marketplace/challenges` (422) and then accepted a
+     * proposal on the very same account (200), forming the engagement and the obligation.
+     * acceptRequest() falls through to assertTargetActor() -> SuchakAccessService::canOperate(),
+     * which BY DESIGN admits VERIFICATION_PENDING while the policy allows work before admin
+     * approval — right for a Suchak building his own book, wrong for the marketplace, which D18
+     * makes the stricter surface.
+     *
+     * The direct collaboration path is untouched: this returns immediately unless the engagement
+     * names a challenge, so pending-with-policy still works exactly as it did everywhere else.
+     *
+     * BOTH accounts are checked. The helper held the badge when he proposed; if he has lost it
+     * since, accepting would put an unverified account into a live marketplace engagement, which is
+     * A10's cheap second account arriving one step later. `isVerified()` is the same spelling of
+     * the badge that ACCOUNT_GATE_MARKETPLACE_BADGE and SuchakMarketplaceChallengeService use, so
+     * the marketplace has one rule and not two.
+     */
+    private function assertMarketplaceEngagementBadge(
+        SuchakCollaborationRequest $collaboration,
+        SuchakAccount $targetAccount,
+    ): void {
+        if (! $collaboration->isMarketplaceProposal()) {
+            return;
+        }
+
+        if (! $targetAccount->isVerified()) {
+            throw new InvalidArgumentException('बाजारपेठ फक्त पडताळणी झालेल्या सूचकांना दिसते.');
+        }
+
+        $helper = SuchakAccount::query()
+            ->whereKey($collaboration->requesting_suchak_account_id)
+            ->first();
+
+        if ($helper?->isVerified() !== true) {
+            throw new InvalidArgumentException(
+                'स्थळ सुचवणाऱ्या सूचकाची पडताळणी आता वैध नाही, त्यामुळे ही सुचवणी स्वीकारता येणार नाही.'
+            );
+        }
+    }
+
+    /**
+     * The challenge's declared share, expressed in the commission agreement's own vocabulary (D4).
+     *
+     * Two translations happen here and nothing else does:
+     *
+     *  1. ONE-DIRECTIONAL → TWO-SIDED. A challenge says "I will pay the helper X". A commission
+     *     agreement stores a groom-side and a bride-side share that must total 100, named by the
+     *     CANDIDATE'S GENDER and not by role — so the helper's declared X lands on whichever side
+     *     he is on, and the publisher keeps the remainder. Which side that is comes from
+     *     agreementSideAccountIds(), the single owner of that rule, whose answer the caller passes
+     *     in; computing it a second time here is how one Suchak's share becomes the other's.
+     *  2. THE CURRENCY. Read through SuchakMarketplaceChallenge::declaredShareCurrency(), which
+     *     reads the agreement the challenge froze. The helper never supplies it, and neither does
+     *     this method.
+     *
+     * The result goes through normalizeCommissionTerms() rather than being assembled by hand, so a
+     * declared share is validated by the identical rules a typed one is — including "the percentage
+     * split must total 100", which is the arithmetic this translation could get wrong.
+     *
+     * @return array{split_type: string, groom_side_share: ?string, bride_side_share: ?string, fixed_amount: ?string, currency: string}
+     */
+    private function challengeCommissionTerms(
+        SuchakMarketplaceChallenge $challenge,
+        int $helperAccountId,
+        int $groomAccountId,
+    ): array {
+        $currency = $challenge->declaredShareCurrency();
+
+        if ($challenge->declared_share_type === SuchakCommissionAgreement::SPLIT_FIXED_AMOUNT) {
+            return $this->normalizeCommissionTerms([
+                'split_type' => SuchakCommissionAgreement::SPLIT_FIXED_AMOUNT,
+                'fixed_amount' => $challenge->declared_share_amount,
+                'currency' => $currency,
+            ]);
+        }
+
+        $helperShare = (float) $challenge->declared_share_percent;
+        $helperIsGroomSide = $helperAccountId === $groomAccountId;
+
+        return $this->normalizeCommissionTerms([
+            'split_type' => SuchakCommissionAgreement::SPLIT_CUSTOM_PERCENT,
+            'groom_side_share' => $helperIsGroomSide ? $helperShare : 100.0 - $helperShare,
+            'bride_side_share' => $helperIsGroomSide ? 100.0 - $helperShare : $helperShare,
+            'currency' => $currency,
+        ]);
     }
 
     private function assertTargetActor(
@@ -1120,24 +1497,97 @@ class SuchakCollaborationService
         return $expired;
     }
 
+    /**
+     * M1: one candidate pair, one open engagement — IN EITHER DIRECTION.
+     *
+     * The guard matched requesting==requesting AND target==target and never looked at the mirrored
+     * row. Before the marketplace the reversed direction was an accident nobody took; accept-by-
+     * proposing makes it the standard path (5.2's direction note), so it became trivially
+     * reachable, and the proven result is the M1 break itself: two open engagements on the same two
+     * candidates, two commission agreements, two ladders — and two different
+     * `collector_suchak_account_id`, which is the exact invariant "each customer pays only their
+     * own Suchak" denies. A pair whose money owner depends on which of the two Suchaks pressed
+     * first is a pair with no money owner.
+     *
+     * DIRECTION-blind, not account-blind. The accounts are still required to be the same two — as
+     * an unordered pair, like the profiles — so the one thing this refuses that it did not refuse
+     * before is the mirror of a pair that already has an open engagement. A DIFFERENT candidate on
+     * either side is a different pair and is still allowed, which is the whole marketplace: a
+     * publisher may hold several live proposals from several helpers, and a helper holding two
+     * hundred candidates may propose two of them.
+     *
+     * Going further and dropping the accounts would also refuse a second helper proposing the SAME
+     * candidate — a candidate two Suchaks both represent — to one challenge. That is legitimate
+     * competition, D14 forbids blocking it, and its money risk is not here anyway: it is closed at
+     * ACCEPTANCE by assertChallengeStillUnanswered(), where one challenge admits one accepted
+     * proposal and no more.
+     */
     private function assertNoDuplicateOpenRequest(
         SuchakProfileRepresentation $requestingRepresentation,
         SuchakProfileRepresentation $targetRepresentation,
+        bool $marketplace = false,
     ): void {
-        $duplicate = SuchakCollaborationRequest::query()
-            ->where('requesting_suchak_account_id', $requestingRepresentation->suchak_account_id)
-            ->where('target_suchak_account_id', $targetRepresentation->suchak_account_id)
-            ->where('requesting_matrimony_profile_id', $requestingRepresentation->matrimony_profile_id)
-            ->where('target_matrimony_profile_id', $targetRepresentation->matrimony_profile_id)
-            ->whereIn('status', SuchakCollaborationRequest::OPEN_STATUSES)
-            ->exists();
-
-        if ($duplicate) {
-            throw new InvalidArgumentException('An open collaboration request already exists for this Suchak/profile pair.');
+        if (! $this->hasOpenEngagementForPair($requestingRepresentation, $targetRepresentation)) {
+            return;
         }
+
+        throw new InvalidArgumentException($marketplace
+            ? 'या दोन स्थळांमध्ये आधीच एक सुरू असलेली जोडणी आहे. दिशा कोणतीही असो, एका जोडीसाठी एकच जोडणी असते.'
+            : 'An open collaboration request already exists for this Suchak/profile pair.');
     }
 
-    private function representationIsUsable(SuchakProfileRepresentation $representation, bool $requirePublicAccount): bool
+    /**
+     * Is there an OPEN engagement holding these two candidates, whichever of them was named first?
+     *
+     * The one owner of that question. Two callers ask it and they used to ask it in two different
+     * ways: assertNoDuplicateOpenRequest() matched one direction on profile ids, and
+     * hasOpenCollaborationPair() — which feeds suggestedOpportunities() — matched both directions
+     * on representation ids. Two spellings of "this pair is already engaged" is how one of them
+     * ends up wrong, and one of them was.
+     *
+     * Matched on `matrimony_profile_id`, not on `representation_id`: the pair is two PEOPLE. A
+     * candidate may be represented by more than one Suchak (`suchak_profile_representations` is
+     * unique on account+profile, not on profile), so a representation-id match would let the same
+     * two people hold two open engagements through two different rows.
+     */
+    private function hasOpenEngagementForPair(
+        SuchakProfileRepresentation $one,
+        SuchakProfileRepresentation $other,
+    ): bool {
+        $oneAccount = (int) $one->suchak_account_id;
+        $otherAccount = (int) $other->suchak_account_id;
+        $oneProfile = (int) $one->matrimony_profile_id;
+        $otherProfile = (int) $other->matrimony_profile_id;
+
+        return SuchakCollaborationRequest::query()
+            ->whereIn('status', SuchakCollaborationRequest::OPEN_STATUSES)
+            ->where(function (Builder $query) use ($oneAccount, $otherAccount, $oneProfile, $otherProfile): void {
+                $query
+                    ->where(function (Builder $query) use ($oneAccount, $otherAccount, $oneProfile, $otherProfile): void {
+                        $query
+                            ->where('requesting_suchak_account_id', $oneAccount)
+                            ->where('target_suchak_account_id', $otherAccount)
+                            ->where('requesting_matrimony_profile_id', $oneProfile)
+                            ->where('target_matrimony_profile_id', $otherProfile);
+                    })
+                    // The mirror. This half is the defect: without it the same two candidates form
+                    // a second engagement the moment the other Suchak names them first.
+                    ->orWhere(function (Builder $query) use ($oneAccount, $otherAccount, $oneProfile, $otherProfile): void {
+                        $query
+                            ->where('requesting_suchak_account_id', $otherAccount)
+                            ->where('target_suchak_account_id', $oneAccount)
+                            ->where('requesting_matrimony_profile_id', $otherProfile)
+                            ->where('target_matrimony_profile_id', $oneProfile);
+                    });
+            })
+            ->exists();
+    }
+
+    /**
+     * The candidate is usable, and the account behind it clears the gate this direction requires.
+     * The candidate half never varies; only the ACCOUNT_GATE_* half does. See the constants.
+     */
+    private function representationIsUsable(SuchakProfileRepresentation $representation, string $accountGate): bool
     {
         $profile = $representation->matrimonyProfile;
         if (! $profile instanceof MatrimonyProfile
@@ -1150,11 +1600,13 @@ class SuchakCollaborationService
             return false;
         }
 
-        if ($requirePublicAccount) {
-            return $this->accessService->canPubliclyRoute($representation->suchakAccount);
-        }
+        $account = $representation->suchakAccount;
 
-        return $this->accessService->canOperate($representation->suchakAccount);
+        return match ($accountGate) {
+            self::ACCOUNT_GATE_PUBLIC_ROUTE => $this->accessService->canPubliclyRoute($account),
+            self::ACCOUNT_GATE_MARKETPLACE_BADGE => $account?->isVerified() === true,
+            default => $this->accessService->canOperate($account),
+        };
     }
 
     private function activeProfileQuery(Builder $query): Builder
@@ -1164,27 +1616,16 @@ class SuchakCollaborationService
             ->where('is_suspended', false);
     }
 
+    /**
+     * Do not suggest an opportunity that is already an open engagement. Same question as
+     * assertNoDuplicateOpenRequest()'s, so it is the same predicate — a pair the suggester would
+     * offer and the creator would then refuse is a suggestion that exists only to fail.
+     */
     private function hasOpenCollaborationPair(
-        SuchakAccount $account,
         SuchakProfileRepresentation $ownRepresentation,
         SuchakProfileRepresentation $candidate,
     ): bool {
-        return SuchakCollaborationRequest::query()
-            ->whereIn('status', SuchakCollaborationRequest::OPEN_STATUSES)
-            ->where(function (Builder $query) use ($account, $ownRepresentation, $candidate): void {
-                $query->where(function (Builder $query) use ($account, $ownRepresentation, $candidate): void {
-                    $query
-                        ->where('requesting_suchak_account_id', $account->id)
-                        ->where('requesting_representation_id', $ownRepresentation->id)
-                        ->where('target_representation_id', $candidate->id);
-                })->orWhere(function (Builder $query) use ($account, $ownRepresentation, $candidate): void {
-                    $query
-                        ->where('target_suchak_account_id', $account->id)
-                        ->where('requesting_representation_id', $candidate->id)
-                        ->where('target_representation_id', $ownRepresentation->id);
-                });
-            })
-            ->exists();
+        return $this->hasOpenEngagementForPair($ownRepresentation, $candidate);
     }
 
     private function collectorAccountId(SuchakCollaborationRequest $collaboration, SuchakCommissionAgreement $agreement): int

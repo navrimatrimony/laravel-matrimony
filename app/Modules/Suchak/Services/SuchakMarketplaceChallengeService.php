@@ -4,6 +4,7 @@ namespace App\Modules\Suchak\Services;
 
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
+use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakCollaborationStageEvent;
 use App\Models\SuchakCommissionAgreement;
 use App\Models\SuchakCustomerAgreement;
@@ -38,6 +39,50 @@ use InvalidArgumentException;
  */
 class SuchakMarketplaceChallengeService
 {
+    /**
+     * The currency inputs the marketplace refuses, on BOTH legs.
+     *
+     * The share is a slice of the success fee the customer agreement froze, so it is spent in that
+     * agreement's money and no caller may name it (SuchakMarketplaceChallenge::
+     * declaredShareCurrency()). The proven attack: an INR agreement with a ₹1,00,000 success fee,
+     * published with `share_currency=USD`, rendered "USD 1,00,000" to every browsing Suchak.
+     *
+     * @var list<string>
+     */
+    public const CURRENCY_INPUTS = [
+        'share_currency',
+        'currency',
+    ];
+
+    /**
+     * The share inputs a PROPOSAL refuses (D4 — the share is declared in the challenge, upfront,
+     * and is not negotiable).
+     *
+     * ONE list, read by both the HTTP validator and the service guard. It was written out twice —
+     * once as `prohibited` rules in SuchakMarketplaceChallengeApiController::propose() and once in
+     * assertNoDeclaredTerms() — which meant a tenth share field added to one left the other
+     * permissive. A caller who skips the route must meet the same list as one who does not, so the
+     * list has one home and both entrances read it.
+     *
+     * @var list<string>
+     */
+    public const DECLARED_TERMS_INPUTS = [
+        'split_type',
+        'groom_side_share',
+        'bride_side_share',
+        'fixed_amount',
+        'declared_share_type',
+        'declared_share_percent',
+        'declared_share_amount',
+        ...self::CURRENCY_INPUTS,
+    ];
+
+    /** The one refusal sentence for a typed share. Read by the validator and by the guard. */
+    public const REFUSAL_SHARE_ALREADY_DECLARED = 'वाटा आव्हानात आधीच जाहीर झाला आहे; तो इथे देता येत नाही.';
+
+    /** The one refusal sentence for a typed currency. Read by the validator and by the guard. */
+    public const REFUSAL_CURRENCY_IS_THE_AGREEMENTS = 'वाट्याचे चलन ग्राहकाच्या करारातून येते; ते वेगळे देता येत नाही.';
+
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakCandidateMaskingService $maskingService,
@@ -74,8 +119,8 @@ class SuchakMarketplaceChallengeService
         $account->refresh();
         $representation->refresh();
 
-        $this->assertPublisher($account, $actor);
-        $this->assertPublishableRepresentation($account, $representation);
+        $this->assertMarketplaceActor($account, $actor);
+        $this->assertMarketplaceCandidate($account, $representation);
 
         $agreement = $this->acceptedAgreementFor($account, $representation);
         $terms = $this->normalizeDeclaredShare($input);
@@ -184,6 +229,236 @@ class SuchakMarketplaceChallengeService
             ->exists();
     }
 
+    // ── Accept by proposing (D7 / D7a / section 6.1) ──────────────────────────────────────────
+
+    /**
+     * A helping Suchak answers a challenge by NAMING one of his own candidates.
+     *
+     * D7 is the whole rule: *"A helping Suchak cannot press a bare 'accept'. They must select a
+     * specific candidate profile to propose."* There is no bare-accept entry point on this service
+     * and there must never be one — the act and the named candidate are the same act.
+     *
+     * WHAT THIS CREATES IS NOT A NEW OBJECT. Section 6.1: the engagement already exists as
+     * `suchak_collaboration_requests` + `suchak_commission_agreements`, and section 5.2's direction
+     * note says the responder becomes the requester. So this method guards, then hands the writing
+     * to SuchakCollaborationService::createRequest() with the challenge attached. Everything the
+     * reversal changes lives there, beside the wiring it changes.
+     *
+     * WHAT IT ADDS ON TOP, and why each is here rather than there:
+     *  - the challenge must still be answerable (open, unexpired, its candidate still consented).
+     *    That is challenge lifecycle, which this service owns.
+     *  - A2: a Suchak may not answer his own challenge. createRequest() already refuses same-account
+     *    pairing in English as a structural rule; this refuses it first, in Marathi, as a rule about
+     *    the marketplace.
+     *  - A10: the same candidate may not be proposed to the same challenge twice, in any status.
+     *  - the ladder rung, which is the point of the whole act (below).
+     *
+     * @param  array<string, mixed>  $input  `message` only. Share and currency are the CHALLENGE's.
+     * @return array{request: SuchakCollaborationRequest, agreement: SuchakCommissionAgreement, stage_event: SuchakCollaborationStageEvent}
+     */
+    public function proposeCandidate(
+        SuchakMarketplaceChallenge $challenge,
+        SuchakAccount $helperAccount,
+        User $actor,
+        SuchakProfileRepresentation $helperRepresentation,
+        array $input = [],
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): array {
+        $helperAccount->refresh();
+        $challenge->refresh();
+        $helperRepresentation->refresh();
+
+        $this->assertMarketplaceActor($helperAccount, $actor);
+        $this->assertNotOwnChallenge($challenge, $helperAccount);
+        $this->assertMarketplaceCandidate($helperAccount, $helperRepresentation);
+        $this->assertNoDeclaredTerms($input);
+
+        $message = $this->nullableLimitedString($input['message'] ?? null, 2000);
+
+        $proposal = DB::transaction(function () use (
+            $challenge,
+            $helperAccount,
+            $actor,
+            $helperRepresentation,
+            $message,
+            $ipAddress,
+            $userAgent,
+        ): array {
+            /** @var SuchakMarketplaceChallenge $locked */
+            $locked = SuchakMarketplaceChallenge::query()
+                ->whereKey($challenge->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $this->assertChallengeAcceptsProposals($locked, $helperAccount);
+            $this->assertNotAlreadyProposed($locked, $helperRepresentation);
+
+            $created = $this->collaborationService->createRequest(
+                $helperAccount,
+                $actor,
+                $helperRepresentation,
+                $this->challengeRepresentation($locked),
+                ['message' => $message],
+                $ipAddress,
+                $userAgent,
+                $locked,
+            );
+
+            /** @var SuchakCollaborationRequest $request */
+            $request = $created['request'];
+
+            /*
+             * THE RUNG (section 6a). `profile_suggested` is the helper's — "helper names their
+             * candidate" — and this is the moment it happens, so it is written here and not left to
+             * a separate call the app might never make.
+             *
+             * Written through claimStage(), the ONE writer of an engagement-owned stage event.
+             * Nothing about the rung is special-cased for the marketplace, and everything the ladder
+             * already enforces applies unchanged: the actor must be the HELPER
+             * (STAGE_CLAIMANTS), the role must be a recorded fact rather than the
+             * `customer_owner_side` default (which createRequest() has just written from the
+             * challenge), the frozen customer agreement must actually be in force, and the rung
+             * must be claimable on a PENDING engagement — which it is, because
+             * FIRST_STAGE_REQUIRING_ACCEPTED_ENGAGEMENT sits at `meeting_scheduled`.
+             *
+             * NO NOTE IS PASSED, deliberately. The helper's message has ONE owner —
+             * `suchak_collaboration_requests.message`, which createRequest() has just written and
+             * which proposalPayload() and the collaborations list both read. Passing the same
+             * string here as well put one sentence in two columns for one act, which is the frozen
+             * no-duplicate rule broken exactly as the rule describes it: one fact, one input, one
+             * destination. `event_note` is the wrong home besides being the second one — it is the
+             * note ABOUT a rung, and confirmStage() overwrites it with the confirming party's note,
+             * so a copy kept there is a copy that silently disappears.
+             */
+            $stageEvent = $this->collaborationService->claimStage(
+                $request,
+                $helperAccount,
+                $actor,
+                SuchakCollaborationStageEvent::STAGE_PROFILE_SUGGESTED,
+                null,
+            );
+
+            return $created + ['stage_event' => $stageEvent];
+        });
+
+        /** @var SuchakCollaborationRequest $request */
+        $request = $proposal['request'];
+
+        // Filed under the ORIGINATING Suchak. The collaboration log row createRequest() writes is
+        // filed under the requester — the helper — so without this the publisher would have no
+        // record of what happened to his own published candidate (D18).
+        $this->recordActivity(
+            SuchakActivityLog::ACTION_MARKETPLACE_PROPOSAL_RECEIVED,
+            $challenge->fresh() ?? $challenge,
+            $actor,
+            $ipAddress,
+            $userAgent,
+            [
+                'proposing_suchak_account_id' => (int) $helperAccount->id,
+                'collaboration_request_id' => (int) $request->id,
+                'proposed_representation_id' => (int) $helperRepresentation->id,
+            ],
+        );
+
+        return $proposal;
+    }
+
+    /**
+     * The proposals standing against ONE of the publisher's challenges — the door he accepts or
+     * rejects from.
+     *
+     * Without it accept-by-proposing has a blind door: `GET /suchak/collaborations` gives him an id
+     * and a Suchak name, and D19's reasoning cuts both ways — a commitment made on partial
+     * information is a bad one. The proposed candidate is presented through
+     * SuchakCandidateMaskingService like every other cross-Suchak read, so the helper's own D19a
+     * defaults protect his candidate exactly as the publisher's protect his.
+     *
+     * The declared share is NOT repeated per proposal: it is the challenge's, one per listing, and
+     * printing it on every row would invite the two to disagree.
+     *
+     * BOTH gates run, and ownership alone is not one of them. This read returns another Suchak's
+     * candidate through the same masked payload browse() and openListing() return, so D18 — "the
+     * marketplace is visible to verified Suchaks only" — applies to it exactly as it applies to
+     * them. Owning the challenge is not a substitute for holding the badge: a publisher whose
+     * verification has been withdrawn or set back to pending is refused the whole marketplace,
+     * including the door into his own listing's proposals (proven: `GET /marketplace/challenges`
+     * 422 while `GET /marketplace/challenges/{id}/proposals` returned 200 with the full masked
+     * payload of another Suchak's candidate).
+     *
+     * @return LengthAwarePaginator<int, array<string, mixed>>
+     */
+    public function proposalsFor(
+        SuchakMarketplaceChallenge $challenge,
+        SuchakAccount $account,
+        int $perPage = 20,
+    ): LengthAwarePaginator {
+        $account->refresh();
+        $this->assertMarketplaceViewer($account);
+
+        if ((int) $challenge->suchak_account_id !== (int) $account->id) {
+            throw new InvalidArgumentException('हे आव्हान तुमच्या खात्याचे नाही.');
+        }
+
+        return SuchakCollaborationRequest::query()
+            ->where('marketplace_challenge_id', $challenge->id)
+            ->with([
+                'requestingSuchakAccount',
+                'requestingRepresentation.matrimonyProfile',
+                'commissionAgreement',
+            ])
+            ->orderByDesc('id')
+            ->paginate($perPage)
+            ->through(fn (SuchakCollaborationRequest $request): array => $this->proposalPayload($request));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function proposalPayload(SuchakCollaborationRequest $request): array
+    {
+        $representation = $request->requestingRepresentation;
+        $profile = $representation?->matrimonyProfile;
+
+        return [
+            'collaboration_id' => (int) $request->id,
+            'challenge_id' => $request->marketplace_challenge_id === null
+                ? null
+                : (int) $request->marketplace_challenge_id,
+            'status' => $request->status,
+            'marketplace_stage' => $request->marketplace_stage,
+            'message' => $request->message,
+            'requested_at' => $request->requested_at?->toIso8601String(),
+            'expires_at' => $request->expires_at?->toIso8601String(),
+            'proposing_suchak' => [
+                'suchak_account_id' => (int) $request->requesting_suchak_account_id,
+                'suchak_name' => $request->requestingSuchakAccount?->suchak_name,
+                'is_verified' => $request->requestingSuchakAccount?->isVerified() === true,
+            ],
+            'proposed_candidate' => $profile === null
+                ? null
+                : $this->maskingService->maskedSummary($profile, $representation),
+        ];
+    }
+
+    /**
+     * The challenge's own candidate, as the TARGET of the reversed engagement.
+     *
+     * Loaded from the challenge rather than accepted as a parameter, so a helper can never name
+     * which candidate he is answering: he answers the one the challenge is for, or nothing.
+     */
+    private function challengeRepresentation(SuchakMarketplaceChallenge $challenge): SuchakProfileRepresentation
+    {
+        $challenge->loadMissing('representation');
+        $representation = $challenge->representation;
+
+        if (! $representation instanceof SuchakProfileRepresentation) {
+            throw new InvalidArgumentException('या आव्हानाचे स्थळ सापडले नाही.');
+        }
+
+        return $representation;
+    }
+
     // ── Withdrawing ───────────────────────────────────────────────────────────────────────────
 
     /**
@@ -202,7 +477,7 @@ class SuchakMarketplaceChallengeService
         ?string $userAgent = null,
     ): SuchakMarketplaceChallenge {
         $account->refresh();
-        $this->assertPublisher($account, $actor);
+        $this->assertMarketplaceActor($account, $actor);
 
         if ((int) $challenge->suchak_account_id !== (int) $account->id) {
             throw new InvalidArgumentException('हे आव्हान तुमच्या खात्याचे नाही.');
@@ -519,7 +794,14 @@ class SuchakMarketplaceChallengeService
     // ── Guards ────────────────────────────────────────────────────────────────────────────────
 
     /**
-     * D18 + A10: marketplace participation is tied to the verification badge, on both sides.
+     * D18 + A10: marketplace participation is tied to the verification badge, whoever is acting.
+     *
+     * ONE method for publishing and for proposing. It was two — assertPublisher() and
+     * assertProposer() — byte-for-byte identical down to both refusal strings, which is the frozen
+     * no-duplicate rule broken by copy: two spellings of one rule diverge the first time one of them
+     * is edited, and the marketplace's whole claim is that it has one participation rule and not
+     * two. The badge half is assertMarketplaceViewer(), so the badge is spelled in exactly one place
+     * across publishing, browsing, opening, proposing and reading proposals.
      *
      * Strictly stronger than SuchakAccessService::canOperate(), which admits a PENDING account when
      * the policy allows work before admin approval. That allowance is right for a Suchak building
@@ -527,17 +809,20 @@ class SuchakMarketplaceChallengeService
      * and an unverified account is exactly the cheap second account. Being stronger, it also
      * satisfies claimCustomerStage()'s own canOperate() check by construction.
      */
-    private function assertPublisher(SuchakAccount $account, User $actor): void
+    private function assertMarketplaceActor(SuchakAccount $account, User $actor): void
     {
         if ((int) $account->user_id !== (int) $actor->id) {
             throw new InvalidArgumentException('फक्त सूचक खात्याचा मालक हे करू शकतो.');
         }
 
-        if (! $account->isVerified()) {
-            throw new InvalidArgumentException('बाजारपेठेसाठी पडताळणी झालेले सूचक खाते आवश्यक आहे.');
-        }
+        $this->assertMarketplaceViewer($account);
     }
 
+    /**
+     * The badge, and nothing else. Every marketplace surface that shows another Suchak's candidate
+     * or forms an obligation against one passes through here: browse(), openListing(),
+     * proposalsFor(), and — via assertMarketplaceActor() — publish() and proposeCandidate().
+     */
     private function assertMarketplaceViewer(SuchakAccount $viewer): void
     {
         if (! $viewer->isVerified()) {
@@ -546,14 +831,29 @@ class SuchakMarketplaceChallengeService
     }
 
     /**
-     * The candidate must actually be this Suchak's, active, and consented.
-     *
-     * Consent is the load-bearing one. Section 15 records why cross-Suchak sharing is legitimate at
-     * all: the consent the candidate signed says the profile may be "forwarded to suitable and
-     * appropriate matches". Publishing a candidate whose consent has lapsed to every verified
-     * Suchak on the platform is the one thing that sentence does not cover.
+     * A2: one person running two Suchak accounts and colluding. Same-account pairing is already
+     * blocked structurally inside createRequest(); this refuses it as a marketplace rule, first and
+     * in Marathi, exactly as openListing() refuses reading one's own listing.
      */
-    private function assertPublishableRepresentation(
+    private function assertNotOwnChallenge(SuchakMarketplaceChallenge $challenge, SuchakAccount $account): void
+    {
+        if ((int) $challenge->suchak_account_id === (int) $account->id) {
+            throw new InvalidArgumentException('स्वतःच्या आव्हानाला स्वतःच स्थळ सुचवता येत नाही.');
+        }
+    }
+
+    /**
+     * The candidate must actually be this Suchak's, active, and consented — whether he is
+     * PUBLISHING that candidate or PROPOSING him against someone else's challenge.
+     *
+     * One predicate for both acts, because it is one question. Consent is the load-bearing part.
+     * Section 15 records why cross-Suchak sharing is legitimate at all: the consent the candidate
+     * signed says the profile may be "forwarded to suitable and appropriate matches". Putting a
+     * candidate whose consent has lapsed in front of another Suchak — as a listing or as a proposal
+     * — is the one thing that sentence does not cover. D8 is the same rule from the other end: only
+     * registered, consented profiles may be proposed.
+     */
+    private function assertMarketplaceCandidate(
         SuchakAccount $account,
         SuchakProfileRepresentation $representation,
     ): void {
@@ -562,11 +862,110 @@ class SuchakMarketplaceChallengeService
         }
 
         if ($representation->representation_status !== SuchakProfileRepresentation::STATUS_ACTIVE) {
-            throw new InvalidArgumentException('फक्त सक्रिय स्थळ बाजारपेठेत प्रसिद्ध करता येते.');
+            throw new InvalidArgumentException('फक्त सक्रिय स्थळ बाजारपेठेत वापरता येते.');
         }
 
         if (! $representation->hasValidConsent()) {
-            throw new InvalidArgumentException('संमती वैध असल्याशिवाय स्थळ बाजारपेठेत प्रसिद्ध करता येणार नाही.');
+            throw new InvalidArgumentException('संमती वैध असल्याशिवाय स्थळ बाजारपेठेत वापरता येणार नाही.');
+        }
+    }
+
+    /**
+     * A withdrawn, fulfilled or expired challenge takes no new proposals.
+     *
+     * `isBrowsableBy()` is the gate — the SAME one browse and openListing use, so a listing a Suchak
+     * cannot see is a listing he cannot answer, and the two can never disagree. It evaluates expiry
+     * live rather than trusting `status`, which is why no sweep runs here: a challenge whose day has
+     * passed stops accepting proposals at that instant.
+     *
+     * The candidate's consent is re-read too. It was valid when the challenge was published; a
+     * consent that has lapsed since means the listing should never have been answerable, and this is
+     * where a helper finds that out rather than after committing.
+     */
+    private function assertChallengeAcceptsProposals(
+        SuchakMarketplaceChallenge $challenge,
+        SuchakAccount $helperAccount,
+    ): void {
+        if (! $challenge->isBrowsableBy($helperAccount)) {
+            throw new InvalidArgumentException(
+                'या आव्हानाला आता स्थळ सुचवता येणार नाही — '.$this->challengeClosedReason($challenge).'.'
+            );
+        }
+
+        $challenge->loadMissing('representation');
+
+        if ($challenge->representation?->hasValidConsent() !== true) {
+            throw new InvalidArgumentException('या स्थळाची संमती आता वैध नाही.');
+        }
+    }
+
+    /**
+     * Phrases the refusal only — the GATE is isBrowsableBy() and nothing else. Reads the row's own
+     * timestamps rather than translating the status enum, the same way
+     * SuchakCollaborationService::customerAgreementStateReason() does, so no second list of statuses
+     * exists here to drift away from the one that decides.
+     */
+    private function challengeClosedReason(SuchakMarketplaceChallenge $challenge): string
+    {
+        if ($challenge->withdrawn_at !== null) {
+            return 'प्रसिद्ध करणाऱ्याने ते मागे घेतले आहे';
+        }
+
+        if ($challenge->fulfilled_at !== null) {
+            return 'या आव्हानासाठी स्थळ आधीच निश्चित झाले आहे';
+        }
+
+        if ($challenge->isPastExpiry()) {
+            return 'त्याची मुदत संपली आहे';
+        }
+
+        if (! $challenge->isOpen()) {
+            return 'ते आता खुले नाही';
+        }
+
+        return 'बाजारपेठ फक्त पडताळणी झालेल्या सूचकांना दिसते';
+    }
+
+    /**
+     * A10: the same candidate, to the same challenge, twice.
+     *
+     * Status-BLIND on purpose. assertNoDuplicateOpenRequest() inside createRequest() already stops
+     * a second OPEN proposal; re-proposing the identical candidate to the identical challenge after
+     * a rejection is not a retry, it is putting the same question to a publisher who has already
+     * answered it. The database carries the same rule as
+     * `unique(marketplace_challenge_id, requesting_representation_id)`, so a future second entrance
+     * cannot reintroduce it; this check exists to say so in Marathi instead of with a 500.
+     */
+    private function assertNotAlreadyProposed(
+        SuchakMarketplaceChallenge $challenge,
+        SuchakProfileRepresentation $representation,
+    ): void {
+        $exists = SuchakCollaborationRequest::query()
+            ->where('marketplace_challenge_id', $challenge->id)
+            ->where('requesting_representation_id', $representation->id)
+            ->exists();
+
+        if ($exists) {
+            throw new InvalidArgumentException('हे स्थळ या आव्हानासाठी तुम्ही आधीच सुचवले आहे.');
+        }
+    }
+
+    /**
+     * D4: the share is the CHALLENGE's, declared in advance and not negotiable.
+     *
+     * Refused rather than silently ignored, for the reason normalizeDeclaredShare() gives about the
+     * currency: a client that keeps sending a field it believes is honoured is worse off than one
+     * told plainly who owns it. This is the input-side half of H5 — the other half refuses to move
+     * the split after the fact (SuchakCollaborationService::updateCommissionTerms).
+     *
+     * @param  array<string, mixed>  $input
+     */
+    private function assertNoDeclaredTerms(array $input): void
+    {
+        foreach (self::DECLARED_TERMS_INPUTS as $forbidden) {
+            if (trim((string) ($input[$forbidden] ?? '')) !== '') {
+                throw new InvalidArgumentException(self::REFUSAL_SHARE_ALREADY_DECLARED);
+            }
         }
     }
 
@@ -651,11 +1050,10 @@ class SuchakMarketplaceChallengeService
             throw new InvalidArgumentException('जाहीर वाटा टक्केवारीत किंवा ठरलेल्या रकमेत असावा.');
         }
 
-        // The proven attack this closes: an INR agreement with a ₹1,00,000 success fee, published
-        // with share_currency=USD, rendered "USD 1,00,000" to every browsing Suchak.
-        foreach (['share_currency', 'currency'] as $forbidden) {
+        // The attack CURRENCY_INPUTS exists to close; the list itself lives on the class.
+        foreach (self::CURRENCY_INPUTS as $forbidden) {
             if (trim((string) ($input[$forbidden] ?? '')) !== '') {
-                throw new InvalidArgumentException('वाट्याचे चलन ग्राहकाच्या करारातून येते; ते वेगळे देता येत नाही.');
+                throw new InvalidArgumentException(self::REFUSAL_CURRENCY_IS_THE_AGREEMENTS);
             }
         }
 

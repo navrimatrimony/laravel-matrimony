@@ -63,6 +63,15 @@ class SuchakCollaborationsApiController extends Controller
                     'direction' => $incoming ? 'incoming' : 'outgoing',
                     'requesting_suchak_name' => $row->requestingSuchakAccount?->suchak_name,
                     'target_suchak_name' => $row->targetSuchakAccount?->suchak_name,
+                    // A marketplace proposal arrives on this same list and is accepted with the same
+                    // two routes, but it is not the same thing as a direct request: the terms are
+                    // frozen from the challenge and cannot be re-quoted, and the incoming candidate
+                    // is one the caller invited by publishing. Without this the app cannot tell
+                    // them apart, and the challenge's own proposal inbox has no id to link to.
+                    'marketplace_challenge_id' => $row->marketplace_challenge_id === null
+                        ? null
+                        : (int) $row->marketplace_challenge_id,
+                    'marketplace_stage' => $row->marketplace_stage,
                     'created_at' => $row->created_at?->toIso8601String(),
                     'expires_at' => $row->expires_at?->toIso8601String(),
                 ];

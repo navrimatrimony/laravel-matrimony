@@ -66,17 +66,18 @@ class SuchakMarketplaceChallengeApiController extends Controller
             'declared_share_type' => ['required', 'string', Rule::in(SuchakMarketplaceChallenge::DECLARED_SHARE_TYPES)],
             'declared_share_percent' => ['nullable', 'numeric', 'gt:0', 'max:100'],
             'declared_share_amount' => ['nullable', 'numeric', 'gt:0'],
-            // Named so it can be REFUSED. Leaving it out of the rules would let validate() drop it
-            // silently, and a client that keeps sending a currency it believes is honoured is worse
-            // off than one told plainly that the agreement owns it.
-            'share_currency' => ['prohibited'],
-            'currency' => ['prohibited'],
             'expires_at' => ['nullable', 'date'],
             'publisher_note' => ['nullable', 'string', 'max:2000'],
-        ], [
-            'share_currency.prohibited' => 'वाट्याचे चलन ग्राहकाच्या करारातून येते; ते वेगळे देता येत नाही.',
-            'currency.prohibited' => 'वाट्याचे चलन ग्राहकाच्या करारातून येते; ते वेगळे देता येत नाही.',
-        ]);
+            // Named so they can be REFUSED. Leaving them out of the rules would let validate() drop
+            // them silently, and a client that keeps sending a currency it believes is honoured is
+            // worse off than one told plainly that the agreement owns it. The LIST is the service's
+            // (CURRENCY_INPUTS) so the route and the service can never disagree about what is
+            // refused, and the sentence is the service's too.
+        ] + $this->prohibited(SuchakMarketplaceChallengeService::CURRENCY_INPUTS),
+            $this->prohibitedMessages(
+                SuchakMarketplaceChallengeService::CURRENCY_INPUTS,
+                SuchakMarketplaceChallengeService::REFUSAL_CURRENCY_IS_THE_AGREEMENTS,
+            ));
 
         /** @var SuchakProfileRepresentation|null $representation */
         $representation = SuchakProfileRepresentation::query()
@@ -251,6 +252,167 @@ class SuchakMarketplaceChallengeApiController extends Controller
             'success' => true,
             'data' => $listing,
         ]);
+    }
+
+    /**
+     * POST /api/v1/suchak/marketplace/challenges/{challenge}/proposals
+     *
+     * ACCEPT BY PROPOSING (D7). The helping Suchak answers a challenge by naming one of his own
+     * candidates; there is no bare-accept endpoint and there must never be one.
+     *
+     * Body: `representation_id` (required int, the CALLER's own candidate), `message` (optional,
+     * max 2000 — his note to the publisher).
+     *
+     * There is no share parameter and no currency parameter, and sending one is a 422 rather than a
+     * silent drop (D4: the share is declared in the challenge, upfront, and is not negotiable). The
+     * challenge's own candidate is not a parameter either — a helper answers the candidate the
+     * challenge is for, or nothing.
+     *
+     * 201: `{ success, message, data: { collaboration_id, challenge_id, status, marketplace_stage,
+     *         stage_event: {...}, declared_share: {...} } }`. The declared share is echoed back
+     *      READ FROM THE CHALLENGE, so the helper sees the terms he has just accepted.
+     *
+     * 422 covers: not verified (D18/A10), own challenge (A2), the same candidate proposed twice
+     * (A10), a withdrawn / fulfilled / expired challenge, a lapsed consent on either candidate, and
+     * the open-request quota. 404 covers a representation that is not the caller's.
+     */
+    public function propose(
+        Request $request,
+        SuchakMarketplaceChallenge $challenge,
+        SuchakMarketplaceChallengeService $challengeService,
+    ): JsonResponse {
+        $user = $this->suchakUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        $validated = $request->validate([
+            'representation_id' => ['required', 'integer'],
+            'message' => ['nullable', 'string', 'max:2000'],
+            // Named so they can be REFUSED. D4 puts the share in the challenge; a helper who keeps
+            // sending one must be told who owns it, not quietly overruled. The LIST lives on the
+            // service (DECLARED_TERMS_INPUTS) and is read here rather than restated: written out
+            // twice, a tenth share field added to one copy left the other permissive.
+        ] + $this->prohibited(SuchakMarketplaceChallengeService::DECLARED_TERMS_INPUTS),
+            $this->prohibitedMessages(
+                SuchakMarketplaceChallengeService::DECLARED_TERMS_INPUTS,
+                SuchakMarketplaceChallengeService::REFUSAL_SHARE_ALREADY_DECLARED,
+            ));
+
+        /** @var SuchakProfileRepresentation|null $representation */
+        $representation = SuchakProfileRepresentation::query()
+            ->whereKey((int) $validated['representation_id'])
+            ->where('suchak_account_id', $user->suchakAccount->id)
+            ->first();
+
+        if ($representation === null) {
+            return $this->error('हे स्थळ तुमच्या खात्यात सापडले नाही.', 404);
+        }
+
+        try {
+            $proposed = $challengeService->proposeCandidate(
+                $challenge,
+                $user->suchakAccount,
+                $user,
+                $representation,
+                $validated,
+                $request->ip(),
+                $request->userAgent(),
+            );
+        } catch (InvalidArgumentException $exception) {
+            return $this->error($exception->getMessage(), 422);
+        }
+
+        $collaboration = $proposed['request'];
+        $stageEvent = $proposed['stage_event'];
+
+        return response()->json([
+            'success' => true,
+            'message' => 'स्थळ सुचवले. आता प्रसिद्ध करणाऱ्या सूचकाच्या होकाराची वाट पाहा.',
+            'data' => [
+                'collaboration_id' => (int) $collaboration->id,
+                'challenge_id' => (int) $challenge->id,
+                'status' => $collaboration->status,
+                'marketplace_stage' => $collaboration->fresh()?->marketplace_stage,
+                'stage_event' => [
+                    'stage_event_id' => (int) $stageEvent->id,
+                    'stage_key' => $stageEvent->stage_key,
+                    'claimed_at' => $stageEvent->claimed_at?->toIso8601String(),
+                ],
+                // Read from the challenge, never from the request body: this is what he accepted.
+                'declared_share' => $challengeService->listingPayload($challenge->fresh() ?? $challenge)['declared_share'],
+            ],
+        ], 201);
+    }
+
+    /**
+     * GET /api/v1/suchak/marketplace/challenges/{challenge}/proposals
+     *
+     * The publisher's inbox for ONE challenge — the door he accepts or rejects from, using the
+     * existing POST /suchak/collaborations/{collaboration}/accept|reject, which already gate on the
+     * target actor (he is the target in this reversed direction).
+     *
+     * Without this the accept door is blind: the collaborations list gives an id and a Suchak name,
+     * and a commitment made on partial information is a bad one (D19). Each proposed candidate is
+     * masked by the same cross-Suchak presenter that masks his own (D19a).
+     *
+     * Query: `per_page` (optional, 1–50, default 20). 404 when the challenge is not the caller's.
+     */
+    public function proposals(
+        Request $request,
+        SuchakMarketplaceChallenge $challenge,
+        SuchakMarketplaceChallengeService $challengeService,
+    ): JsonResponse {
+        $user = $this->suchakUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        if ((int) $challenge->suchak_account_id !== (int) $user->suchakAccount->id) {
+            return $this->error('हे आव्हान तुमच्या खात्यात सापडले नाही.', 404);
+        }
+
+        try {
+            $proposals = $challengeService->proposalsFor(
+                $challenge,
+                $user->suchakAccount,
+                $this->perPage($request, 20, 50),
+            );
+        } catch (InvalidArgumentException $exception) {
+            return $this->error($exception->getMessage(), 422);
+        }
+
+        return $this->paginated($proposals);
+    }
+
+    /**
+     * `prohibited` rules for a field list the SERVICE owns.
+     *
+     * The list is never written out here. A field the service refuses and the route does not is a
+     * field the route accepts and then throws a 422 about from one layer down; a field the route
+     * refuses and the service does not is a field any non-route caller may still send. One list,
+     * two entrances, and this is the adapter between them.
+     *
+     * @param  list<string>  $fields
+     * @return array<string, list<string>>
+     */
+    private function prohibited(array $fields): array
+    {
+        return array_fill_keys($fields, ['prohibited']);
+    }
+
+    /**
+     * The same list again, as `field.prohibited` message keys carrying the service's own sentence.
+     *
+     * @param  list<string>  $fields
+     * @return array<string, string>
+     */
+    private function prohibitedMessages(array $fields, string $message): array
+    {
+        return array_fill_keys(
+            array_map(static fn (string $field): string => $field.'.prohibited', $fields),
+            $message,
+        );
     }
 
     private function paginated(mixed $paginator): JsonResponse
