@@ -159,7 +159,14 @@ class SuchakDailyOpportunityService
                 'action_url' => route('suchak.dashboard'),
             ]);
 
-        return $pipelineRisks->merge($leadAllocationRisks)
+        // toBase() before merge, and it is load-bearing. Eloquent's map() hands
+        // back a plain collection only when it can see a non-model in the
+        // result — so an EMPTY map stays an Eloquent collection, whose merge()
+        // calls getKey() on every item. These items are arrays. The dashboard
+        // then died with "Call to a member function getKey() on array", but
+        // only for a Suchak whose first list happened to be empty and second
+        // was not, which is why it survived every test.
+        return $pipelineRisks->toBase()->merge($leadAllocationRisks)
             ->sortBy([
                 fn (array $item): int => $item['due_at'] instanceof Carbon ? $item['due_at']->getTimestamp() : PHP_INT_MAX,
                 fn (array $item): int => (int) $item['target_id'],
@@ -200,7 +207,10 @@ class SuchakDailyOpportunityService
                 'action_url' => route('suchak.dashboard'),
             ]);
 
-        return $ledgerEntries->merge($paymentRequests)
+        // toBase() for the same reason as pipelineRisks above — this is the one
+        // that actually fired on production: no due ledger entries, one payment
+        // request, and the Suchak's home screen showed "Server Error".
+        return $ledgerEntries->toBase()->merge($paymentRequests)
             ->sortBy([
                 fn (array $item): int => $item['due_at'] instanceof Carbon ? $item['due_at']->getTimestamp() : PHP_INT_MAX,
                 fn (array $item): int => (int) $item['target_id'],
