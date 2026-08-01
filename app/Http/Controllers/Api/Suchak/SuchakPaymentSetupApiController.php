@@ -15,6 +15,7 @@ use App\Modules\Suchak\Services\SuchakCustomerLifecycleService;
 use App\Modules\Suchak\Services\SuchakPackageCatalogService;
 use App\Modules\Suchak\Services\SuchakPaymentCollectorResolver;
 use App\Modules\Suchak\Support\SuchakDefaultPlans;
+use App\Support\MoneyFormat;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -67,7 +68,14 @@ class SuchakPaymentSetupApiController extends Controller
             'price_amount' => ['nullable', 'numeric', 'min:0.01'],
             'currency' => ['nullable', 'string', 'size:3'],
             'agreement_title' => ['nullable', 'string', 'max:160'],
-            'customer_accepted_terms' => ['nullable', 'boolean'],
+            // Named for what it actually is. It was `customer_accepted_terms`,
+            // which claimed the customer had acted when nobody had asked them —
+            // and a field whose name asserts a fact it cannot know is the same
+            // dishonesty this endpoint was changed to remove. The Suchak declares
+            // an agreement reached offline; the customer's own acceptance has
+            // exactly one route, the tokenised link. Safe to rename: the shipped
+            // app has never sent this key.
+            'offline_agreement_recorded' => ['nullable', 'boolean'],
             // Custom-plan builder (no plan_key): free-form services plus an
             // optional "fold in all Basic services" toggle.
             'services' => ['nullable', 'array'],
@@ -242,11 +250,23 @@ class SuchakPaymentSetupApiController extends Controller
                     ->orderByDesc('id')
                     ->first();
 
-                // Per-request choice from the payment screen: has the customer
-                // accepted the service terms? Default true (the Suchak confirms
-                // acceptance and the request goes straight out). When false, the
-                // request records that terms are not required for this one.
-                $customerAccepted = (bool) ($validated['customer_accepted_terms'] ?? true);
+                // TERMS_ACCEPTED is the customer's act and nothing else. It is
+                // reachable only through the public tokenised link
+                // (SuchakAgreementService::recordPublicAcceptance), which leaves
+                // accepted_by_user_id NULL because possession of the link is what
+                // was proven. No branch of this endpoint may produce it: a fee
+                // obligation must never be frozen on one party's word.
+                //
+                // What a Suchak MAY record here is an offline agreement — real and
+                // common in this business, where families agree in person or on
+                // paper and are not reachable digitally. That lands in the EXISTING
+                // bypass state, which already stores who declared it, why, and an
+                // invoice note saying the terms were waived rather than accepted.
+                //
+                // Default FALSE, never true. The silent `?? true` this replaces is
+                // the actual bug: absence of a claim is not a claim, and a request
+                // that says nothing about the customer must freeze nothing.
+                $offlineAgreement = (bool) ($validated['offline_agreement_recorded'] ?? false);
 
                 $createdAgreement = false;
                 if ($agreement === null) {
@@ -262,29 +282,51 @@ class SuchakPaymentSetupApiController extends Controller
                             [
                                 'agreement_title' => $validated['agreement_title'] ?? 'Service agreement',
                                 'agreement_body' => 'Customer confirms package scope before payment request.',
-                                'terms_policy_mode' => $customerAccepted
-                                    ? SuchakCustomerAgreement::POLICY_STRICT
-                                    : SuchakCustomerAgreement::POLICY_OPTIONAL,
+                                // RECOMMENDED, pinned: terms ARE required (the row
+                                // opens PENDING, so the customer still has something
+                                // to accept), and the owning Suchak may waive them
+                                // with a recorded reason. That is exactly this
+                                // decision, and it is an existing mode — no third
+                                // status and no widening of the strict-only admin
+                                // bypass gate. OPTIONAL is deliberately gone: it
+                                // opens the row already TERMS_NOT_REQUIRED, which is
+                                // the same manufactured freeze under another name.
+                                'terms_policy_mode' => SuchakCustomerAgreement::POLICY_RECOMMENDED,
+                            ],
+                            $request->ip(),
+                            $request->userAgent(),
+                        );
+                    } elseif (! $agreementService->isPackageSnapshotCurrent($pending)) {
+                        // A pending revision whose snapshot has drifted blocks BOTH
+                        // remaining paths — issueAcceptanceLink and bypassTerms each
+                        // assert snapshot currency. Supersede it with a fresh
+                        // revision built from the current package (the same two
+                        // service calls acceptOrReviseTerms makes internally) so the
+                        // device-reproduced "Suchak package changed." failure cannot
+                        // come back now that acceptance no longer happens here.
+                        $pending = $agreementService->createRevisionForPackageChange(
+                            $pending,
+                            $user,
+                            [
+                                'terms_policy_mode' => $pending->terms_policy_mode,
+                                'agreement_title' => $pending->agreement_title,
+                                'agreement_body' => $pending->agreement_body,
+                                'revision_reason' => 'Suchak package changed after pending agreement; superseded before payment request.',
                             ],
                             $request->ip(),
                             $request->userAgent(),
                         );
                     }
 
-                    // The owning Suchak records the customer's acceptance — no
-                    // admin bypass needed (acceptOrReviseTerms permits the Suchak
-                    // owner, unlike the strict-only bypass path). Using the
-                    // revise-aware variant means a reused package whose latest
-                    // agreement is PENDING with a STALE snapshot is superseded by
-                    // a fresh revision and accepted, instead of failing with
-                    // "Suchak package changed." An already-satisfied agreement is
-                    // returned unchanged.
-                    $pending = $agreementService->acceptOrReviseTerms(
-                        $pending,
-                        $user,
-                        $request->ip(),
-                        $request->userAgent(),
-                    );
+                    if ($offlineAgreement && $pending->terms_status === SuchakCustomerAgreement::TERMS_PENDING) {
+                        $pending = $agreementService->bypassTerms(
+                            $pending,
+                            $user,
+                            $this->offlineAgreementReason($pending),
+                            $request->ip(),
+                            $request->userAgent(),
+                        );
+                    }
 
                     $agreement = $pending;
                     $createdAgreement = true;
@@ -346,5 +388,27 @@ class SuchakPaymentSetupApiController extends Controller
                 'payment_identity' => $account->fresh()->trackAPaymentIdentity(),
             ]),
         ], 201);
+    }
+
+    /**
+     * What the bypass row will say happened.
+     *
+     * Written as a declaration BY the Suchak, never as the customer's act —
+     * that distinction is the entire reason this goes to bypass instead of
+     * acceptance, and the reason column is what a human reads months later when
+     * asking why a fee was owed on an agreement the customer never opened.
+     *
+     * Marathi, because the Suchak and the customer are the two people this
+     * sentence is ever shown to. The figure comes from MoneyFormat — the one
+     * money formatter — so the record names the amount that was declared agreed,
+     * in Latin digits by construction.
+     */
+    private function offlineAgreementReason(SuchakCustomerAgreement $agreement): string
+    {
+        $price = MoneyFormat::amount($agreement->price_amount, (string) ($agreement->currency ?: 'INR'));
+
+        return 'सूचकाने नोंदवले: ग्राहकाने हा करार प्रत्यक्ष भेटीत / ऑफलाइन मान्य केला आहे'
+            .($price === null ? '' : ' (सेवा शुल्क: '.$price.')')
+            .'. ग्राहकाने online acceptance link वापरलेली नाही.';
     }
 }

@@ -55,6 +55,11 @@ class SuchakTrackAStalePendingReviseTest extends TestCase
 
     private function prepare(int $repId, array $payload): array
     {
+        // Terms no longer freeze themselves on prepare; this scenario's subject
+        // is the stale-snapshot revision, so it declares the offline agreement
+        // rather than relying on the default that used to freeze silently.
+        $payload['offline_agreement_recorded'] ??= true;
+
         $resp = $this->postJson("/api/v1/suchak/customers/{$repId}/payment-setup", $payload);
         if ($resp->status() !== 201) {
             fwrite(STDERR, "\n[PREPARE ".json_encode($payload)."] status={$resp->status()} body=".$resp->getContent()."\n");
@@ -93,16 +98,23 @@ class SuchakTrackAStalePendingReviseTest extends TestCase
         );
 
         // Prepare again — the bug used to surface "Suchak package changed" here.
-        $resp = $this->postJson("/api/v1/suchak/customers/{$rep->id}/payment-setup", ['plan_key' => 'premium']);
+        $resp = $this->postJson("/api/v1/suchak/customers/{$rep->id}/payment-setup", [
+            'plan_key' => 'premium',
+            'offline_agreement_recorded' => true,
+        ]);
         $resp->assertCreated();
         $this->assertStringNotContainsString('Suchak package changed', $resp->getContent());
 
         $prepared = $resp->json('data');
         $this->assertSame($packageId, (int) $prepared['service_package_id'], 'Same customer + plan reuses the same package.');
-        $this->assertSame(SuchakCustomerAgreement::TERMS_ACCEPTED, $prepared['terms_status']);
+        // Bypassed, not accepted: what the Suchak declares from the app is an
+        // agreement reached offline, and only the customer's own act on the
+        // tokenised link may write TERMS_ACCEPTED. Both satisfy the terms gate,
+        // which is what this scenario is actually about.
+        $this->assertSame(SuchakCustomerAgreement::TERMS_BYPASSED, $prepared['terms_status']);
 
-        // A fresh revision (rev 2) was created, accepted, and is the latest; the
-        // stale rev 1 was superseded rather than accepted.
+        // A fresh revision (rev 2) was created, its terms satisfied, and it is
+        // the latest; the stale rev 1 was superseded rather than accepted.
         $rev2 = SuchakCustomerAgreement::query()->findOrFail((int) $prepared['customer_agreement_id']);
         $this->assertNotSame($rev1Id, $rev2->id);
         $this->assertSame(2, (int) $rev2->agreement_revision);

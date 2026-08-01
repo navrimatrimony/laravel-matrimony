@@ -49,6 +49,12 @@ class SuchakTrackATwoPlanReproTest extends TestCase
 
     private function prepare(int $repId, array $payload): array
     {
+        // These scenarios are about prepare → send, not about who agreed. Terms
+        // used to freeze themselves on prepare; now nothing freezes unless
+        // somebody says so, so each prepare declares the offline agreement the
+        // Suchak in these scenarios has in fact reached.
+        $payload['offline_agreement_recorded'] ??= true;
+
         $resp = $this->postJson("/api/v1/suchak/customers/{$repId}/payment-setup", $payload);
         if ($resp->status() !== 201) {
             fwrite(STDERR, "\n[PREPARE ".json_encode($payload)."] status={$resp->status()} body=".$resp->getContent()."\n");
