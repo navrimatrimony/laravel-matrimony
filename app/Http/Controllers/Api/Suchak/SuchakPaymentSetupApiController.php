@@ -6,12 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\SuchakAccount;
 use App\Models\SuchakCustomerAgreement;
 use App\Models\SuchakCustomerContext;
+use App\Models\SuchakCustomerPlan;
 use App\Models\SuchakPaymentContext;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakServicePackage;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakAgreementService;
 use App\Modules\Suchak\Services\SuchakCustomerLifecycleService;
+use App\Modules\Suchak\Services\SuchakCustomerPlanService;
 use App\Modules\Suchak\Services\SuchakPackageCatalogService;
 use App\Modules\Suchak\Services\SuchakPaymentCollectorResolver;
 use App\Modules\Suchak\Support\SuchakDefaultPlans;
@@ -35,6 +37,7 @@ class SuchakPaymentSetupApiController extends Controller
         SuchakPackageCatalogService $packageCatalogService,
         SuchakAgreementService $agreementService,
         SuchakPaymentCollectorResolver $paymentCollectorResolver,
+        SuchakCustomerPlanService $customerPlanService,
     ): JsonResponse {
         $user = $request->user();
         if (! $user instanceof User || $user->suchakAccount === null) {
@@ -81,6 +84,17 @@ class SuchakPaymentSetupApiController extends Controller
             'services' => ['nullable', 'array'],
             'services.*' => ['string', 'max:160'],
             'include_basic' => ['nullable', 'boolean'],
+            // The four per-meeting / post-marriage fees of the CUSTOM branch.
+            // Same vocabulary as SuchakCustomerPlanApiController::store() — the
+            // endpoint that writes these very figures onto a reusable plan — so
+            // one fee is validated one way wherever it is submitted. A preset
+            // send ignores them: there the plan governs (see presetPlanFees()).
+            'per_meeting_fee_amount' => ['nullable', 'numeric', 'min:0'],
+            // No relation to the offline fee, in either direction: an online
+            // session is priced on its own merits (D2).
+            'per_meeting_online_fee_amount' => ['nullable', 'numeric', 'min:0'],
+            'post_marriage_fee_mode' => ['nullable', Rule::in(SuchakCustomerPlan::POST_MARRIAGE_FEE_MODES)],
+            'post_marriage_fee_amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         try {
@@ -93,6 +107,7 @@ class SuchakPaymentSetupApiController extends Controller
                 $packageCatalogService,
                 $agreementService,
                 $paymentCollectorResolver,
+                $customerPlanService,
                 $request,
             ): array {
                 $customerContext = SuchakCustomerContext::query()
@@ -152,14 +167,14 @@ class SuchakPaymentSetupApiController extends Controller
                         $package = $packageCatalogService->createCustomPackage(
                             $account,
                             $user,
-                            [
+                            array_merge([
                                 'package_name' => $selectedPackageName,
                                 'package_name_mr' => $plan['name_mr'] ?? null,
                                 'package_description' => $plan['description'] ?? '',
                                 'package_description_mr' => $plan['description_mr'] ?? null,
                                 'price_amount' => (string) $plan['price_amount'],
                                 'currency' => strtoupper((string) $plan['currency']),
-                            ],
+                            ], $this->presetPlanFees($customerPlanService, $account, (string) $plan['key'])),
                             $payload['stages'],
                             $payload['deliverables'],
                             $customerContext,
@@ -207,12 +222,12 @@ class SuchakPaymentSetupApiController extends Controller
                         $package = $packageCatalogService->createCustomPackage(
                             $account,
                             $user,
-                            [
+                            array_merge([
                                 'package_name' => $selectedPackageName,
                                 'package_description' => 'Customer service package prepared from Suchak mobile for Track A collection.',
                                 'price_amount' => (string) ($validated['price_amount'] ?? '5000'),
                                 'currency' => strtoupper((string) ($validated['currency'] ?? 'INR')),
-                            ],
+                            ], $this->submittedFees($validated)),
                             [
                                 [
                                     'stage_key' => $stageKey,
@@ -388,6 +403,79 @@ class SuchakPaymentSetupApiController extends Controller
                 'payment_identity' => $account->fresh()->trackAPaymentIdentity(),
             ]),
         ], 201);
+    }
+
+    /**
+     * The four fees a PRESET send must quote, taken from the Suchak's own
+     * configured plan and from nowhere else.
+     *
+     * Bound to SuchakCustomerPlanService::resolveCarousel() — the exact resolver
+     * SuchakPaymentRequestOptionsApiController::carouselPlansPayload() reads, so
+     * the figure frozen onto the package is by construction the figure the app
+     * displayed when the Suchak chose the plan. Reading the plan row directly
+     * here would be a second copy of that preset/override mapping, which the
+     * no-duplicate rule forbids; and picking `resolveForManagement()` instead
+     * would let a HIDDEN plan freeze a fee the carousel never showed anyone.
+     *
+     * All four stay null when the Suchak configured no plan for this preset —
+     * "ठरलेले नाही" on the acceptance page is the truthful answer, and a default
+     * amount invented here would be a charge nobody agreed to.
+     *
+     * A preset send deliberately ignores any fee on the request: the plan is the
+     * authority for a plan, and letting the caller override it would reopen the
+     * gap between what was shown and what was frozen.
+     *
+     * @return array<string, mixed>
+     */
+    private function presetPlanFees(
+        SuchakCustomerPlanService $customerPlanService,
+        SuchakAccount $account,
+        string $presetKey,
+    ): array {
+        $entry = null;
+        foreach ($customerPlanService->resolveCarousel($account) as $candidate) {
+            if (($candidate['is_preset'] ?? false) && ($candidate['preset_key'] ?? null) === $presetKey) {
+                $entry = $candidate;
+                break;
+            }
+        }
+
+        return [
+            'per_meeting_fee_amount' => $entry['per_meeting_fee_amount'] ?? null,
+            'per_meeting_online_fee_amount' => $entry['per_meeting_online_fee_amount'] ?? null,
+            'post_marriage_fee_mode' => $entry['post_marriage_fee_mode'] ?? null,
+            'post_marriage_fee_amount' => $entry['post_marriage_fee_amount'] ?? null,
+        ];
+    }
+
+    /**
+     * The four fees a CUSTOM send quotes, exactly as submitted.
+     *
+     * A custom plan is not addressable through `plan_key` (that field admits
+     * only the two code presets), so a Suchak sending one of their own reusable
+     * plans arrives here with its figures on the request — the same figures the
+     * carousel handed the app in the first place. Absent keys stay absent rather
+     * than becoming null, so this never overwrites anything the caller left to
+     * the catalog service to decide.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function submittedFees(array $validated): array
+    {
+        $fees = [];
+        foreach ([
+            'per_meeting_fee_amount',
+            'per_meeting_online_fee_amount',
+            'post_marriage_fee_mode',
+            'post_marriage_fee_amount',
+        ] as $key) {
+            if (array_key_exists($key, $validated)) {
+                $fees[$key] = $validated[$key];
+            }
+        }
+
+        return $fees;
     }
 
     /**
