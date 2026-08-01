@@ -6,6 +6,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\Location;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Models\SuchakProfileRepresentation;
+use App\Support\CandidateNameMask;
 use Illuminate\Support\Carbon;
 
 class SuchakCandidateMaskingService
@@ -29,6 +30,7 @@ class SuchakCandidateMaskingService
 
         return [
             'candidate_reference' => $this->maskedCandidateReference($profile, $representation),
+            'display_name' => $this->displayName($profile, $representation),
             'basic' => [
                 'gender_id' => $profile->gender_id,
                 'gender' => $this->lookupLabel($profile->gender),
@@ -44,12 +46,7 @@ class SuchakCandidateMaskingService
                 'caste' => $this->lookupLabel($profile->caste),
                 'is_policy_limited' => false,
             ],
-            'location' => [
-                'city' => $this->locationNameForCitySlot($profile->location),
-                'district' => $this->locationNameOfType($profile->location, 'district'),
-                'is_broad' => true,
-                'exact_address' => null,
-            ],
+            'location' => $this->locationSlot($profile, $representation),
             'education' => [
                 'highest' => $this->safeText($profile->highest_education),
             ],
@@ -195,6 +192,72 @@ class SuchakCandidateMaskingService
             'female' => asset('images/placeholders/female-profile.svg'),
             default => asset('images/placeholders/default-profile.svg'),
         };
+    }
+
+    /**
+     * What another Suchak may call this candidate.
+     *
+     * The originating Suchak decides, per candidate, because he is the one who
+     * knows the family. Default is the shared mask — the same one the
+     * pending-consent list uses, so a candidate is never named two different
+     * ways in two places.
+     *
+     * `shared_display_name` exists because `matrimony_profiles.full_name` is a
+     * single column: there is no surname to peel off, and splitting names is
+     * wrong for a great many of them. A Suchak who wants "Gaikwad" or
+     * "Sunita G. (Lakhandur)" types it.
+     */
+    private function displayName(
+        MatrimonyProfile $profile,
+        ?SuchakProfileRepresentation $representation,
+    ): ?string {
+        $fullName = trim((string) ($profile->full_name ?? ''));
+        if ($fullName === '') {
+            return null;
+        }
+
+        $typed = trim((string) ($representation->shared_display_name ?? ''));
+        if ($typed !== '') {
+            return $typed;
+        }
+
+        return $representation?->shares_name === true
+            ? $fullName
+            : CandidateNameMask::mask($fullName);
+    }
+
+    /**
+     * How precisely another Suchak may place this candidate.
+     *
+     * `city` was never a city: locationNameForCitySlot() walks up to the
+     * village-tagged node, so the exact village was going out under that key
+     * while `is_broad` was hardcoded true — a flag asserting the opposite of
+     * what was in the payload beside it. A matchmaker needs the region to find
+     * a match; he does not need the village to decide whether to look, and the
+     * family did not agree to be locatable by every account on the platform.
+     *
+     * So taluka-and-above by default, the village only when the originating
+     * Suchak says so, and the flag now reports what was actually sent.
+     */
+    private function locationSlot(
+        MatrimonyProfile $profile,
+        ?SuchakProfileRepresentation $representation,
+    ): array {
+        $revealVillage = $representation?->shares_village === true;
+        $district = $this->locationNameOfType($profile->location, 'district');
+
+        $city = $revealVillage
+            ? $this->locationNameForCitySlot($profile->location)
+            : $this->locationNameOfType($profile->location, 'taluka');
+
+        return [
+            'city' => $city,
+            'district' => $district,
+            'is_broad' => ! $revealVillage,
+            'exact_address' => $representation?->shares_detailed_address === true
+                ? $this->safeText($profile->address_line)
+                : null,
+        ];
     }
 
     private function locationNameForCitySlot(?Location $location): ?string

@@ -45,6 +45,9 @@ class SuchakServicePackage extends Model
         'package_description_mr',
         'price_amount',
         'currency',
+        'per_meeting_fee_amount',
+        'post_marriage_fee_mode',
+        'post_marriage_fee_amount',
         'package_status',
         'approval_policy_mode',
         'requires_admin_approval',
@@ -62,6 +65,8 @@ class SuchakServicePackage extends Model
 
     protected $casts = [
         'price_amount' => 'decimal:2',
+        'per_meeting_fee_amount' => 'decimal:2',
+        'post_marriage_fee_amount' => 'decimal:2',
         'requires_admin_approval' => 'boolean',
         'submitted_for_review_at' => 'datetime',
         'approved_at' => 'datetime',

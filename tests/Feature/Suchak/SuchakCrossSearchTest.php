@@ -65,7 +65,10 @@ class SuchakCrossSearchTest extends TestCase
         $response->assertDontSee('masked-', false);
         $response->assertDontSee('25-29', false);
         $response->assertDontSee('165-169 cm', false);
-        $response->assertSee('Pune City', false);
+        // The village no longer travels to another Suchak by default — the
+        // originating Suchak has to reveal it per candidate (D19a). The card
+        // still places the candidate, at taluka and district.
+        $response->assertDontSee('Pune City', false);
         $response->assertDontSee('Secret Candidate Alpha', false);
         $response->assertDontSee('9876543210', false);
         $response->assertDontSee('Father Secret Alpha', false);

@@ -6,6 +6,7 @@ use App\Models\AdminAuditLog;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakCustomerContext;
+use App\Models\SuchakCustomerPlan;
 use App\Models\SuchakServicePackage;
 use App\Models\SuchakServicePackageDeliverable;
 use App\Models\SuchakServicePackageStage;
@@ -171,6 +172,18 @@ class SuchakPackageCatalogService
         $packageDescription = $this->limitedText($attributes['package_description'] ?? $attributes['description'] ?? null, 3000);
         $packageDescriptionMr = $this->limitedText($attributes['package_description_mr'] ?? $attributes['description_mr'] ?? null, 3000);
         [$priceAmount, $currency] = $this->normalizedPrice($attributes['price_amount'] ?? null, $attributes['currency'] ?? null);
+        // The two fee figures are money on the same package, so they go through the
+        // one price normaliser: a second one would be free to drift from it, and the
+        // package currency is already settled above — a fee can never carry another.
+        [$perMeetingFeeAmount] = $this->normalizedPrice($attributes['per_meeting_fee_amount'] ?? null, $currency);
+        [$postMarriageFeeAmount] = $this->normalizedPrice($attributes['post_marriage_fee_amount'] ?? null, $currency);
+        // An unrecognised mode is dropped, not rejected: it only decides how the
+        // post-marriage fee reads to the customer, and refusing the whole package
+        // over it would block a send the Suchak has already committed to.
+        $requestedPostMarriageFeeMode = trim((string) ($attributes['post_marriage_fee_mode'] ?? ''));
+        $postMarriageFeeMode = in_array($requestedPostMarriageFeeMode, SuchakCustomerPlan::POST_MARRIAGE_FEE_MODES, true)
+            ? $requestedPostMarriageFeeMode
+            : null;
         $approval = $this->approvalAttributes($forceAutoPublish);
 
         $this->assertNoMisleadingClaims([$packageName, $packageDescription]);
@@ -184,6 +197,9 @@ class SuchakPackageCatalogService
             'package_description_mr' => $packageDescriptionMr,
             'price_amount' => $priceAmount,
             'currency' => $currency,
+            'per_meeting_fee_amount' => $perMeetingFeeAmount,
+            'post_marriage_fee_mode' => $postMarriageFeeMode,
+            'post_marriage_fee_amount' => $postMarriageFeeAmount,
             'customized_by_user_id' => $actor->id,
         ]);
     }

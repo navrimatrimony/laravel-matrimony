@@ -474,7 +474,14 @@ class SuchakAgreementService
         }
     }
 
-    private function agreementSnapshotHash(
+    /**
+     * The single definition of what an agreement snapshot covers.
+     *
+     * Public only so a data migration can re-digest stored agreements through
+     * this exact payload; copying the payload into the migration would let the
+     * two drift, which is precisely the staleness this hash exists to detect.
+     */
+    public function agreementSnapshotHash(
         SuchakServicePackage $package,
         string $policyMode,
         string $title,
@@ -490,6 +497,11 @@ class SuchakAgreementService
                 'description' => $package->package_description,
                 'price_amount' => $package->price_amount === null ? null : number_format((float) $package->price_amount, 2, '.', ''),
                 'currency' => $package->currency,
+                // Fee terms are part of what the customer agreed to, so editing one
+                // has to invalidate the snapshot just like editing the price does.
+                'per_meeting_fee_amount' => $package->per_meeting_fee_amount === null ? null : number_format((float) $package->per_meeting_fee_amount, 2, '.', ''),
+                'post_marriage_fee_mode' => $package->post_marriage_fee_mode,
+                'post_marriage_fee_amount' => $package->post_marriage_fee_amount === null ? null : number_format((float) $package->post_marriage_fee_amount, 2, '.', ''),
                 'status' => $package->package_status,
             ],
             'stages' => $package->stages->map(fn (SuchakServicePackageStage $stage): array => [
