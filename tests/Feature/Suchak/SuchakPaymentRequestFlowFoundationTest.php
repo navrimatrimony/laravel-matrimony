@@ -143,11 +143,18 @@ class SuchakPaymentRequestFlowFoundationTest extends TestCase
             'target_id' => $paymentRequest->id,
         ]);
 
+        // The public payment page was redesigned (commit 219af2f9). It no longer
+        // echoes the Suchak-authored `request_title`, and the old
+        // "Payment request only" / "This page is not a paid receipt" lines are
+        // gone from the codebase entirely. What the customer now sees is the
+        // plan they are paying for, the amount, and an explicit statement that
+        // paying IS the acceptance — i.e. still not a receipt. Asserting the
+        // CURRENT copy.
         $this->get(route('suchak.payment-requests.show', ['token' => $result['plain_token']]))
             ->assertOk()
-            ->assertSee('Day-37 secure request')
-            ->assertSee('Payment request only')
-            ->assertSee('This page is not a paid receipt', false)
+            ->assertSee('Day-37 Family Coordination', false)
+            ->assertSee('Amount to pay', false)
+            ->assertSee('Paying after reviewing the plan and services means accepting these service terms.', false)
             ->assertDontSee('secret-upi@bank');
 
         $opened = $paymentRequest->fresh();

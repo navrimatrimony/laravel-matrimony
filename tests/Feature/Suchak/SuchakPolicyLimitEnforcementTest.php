@@ -216,15 +216,25 @@ class SuchakPolicyLimitEnforcementTest extends TestCase
 
         $this->setPolicy(SuchakPolicyService::KEY_DEFAULT_CONSENT_VALIDITY_MONTHS, '6');
         [$pendingUser, $pendingAccount] = $this->verifiedSuchakActor();
+        $pendingProfile = $this->activeProfile(['full_name' => 'Policy Consent Candidate']);
         $pendingRepresentation = SuchakProfileRepresentation::factory()->create([
             'suchak_account_id' => $pendingAccount->id,
-            'matrimony_profile_id' => $this->activeProfile(['full_name' => 'Policy Consent Candidate'])->id,
+            'matrimony_profile_id' => $pendingProfile->id,
             'representation_status' => SuchakProfileRepresentation::STATUS_PENDING,
             'consent_status' => SuchakProfileRepresentation::CONSENT_NOT_REQUESTED,
         ]);
 
+        // Consent may only be aimed at a number already stored on the profile,
+        // so target the candidate's own account mobile — the top-priority entry
+        // in the consent allow-list.
+        $candidateMobile = (string) DB::table('users')
+            ->where('id', $pendingProfile->user_id)
+            ->value('mobile');
+
         $consentService = app(SuchakConsentService::class);
-        $consent = $consentService->requestConsent($pendingRepresentation, $pendingUser)['consent'];
+        $consent = $consentService->requestConsent($pendingRepresentation, $pendingUser, [
+            'intended_mobile' => $candidateMobile,
+        ])['consent'];
         $sent = $consentService->recordOtpSent($consent, '123456', $pendingUser);
         $accepted = $consentService->verifyOtpAndAccept($sent, '123456');
 

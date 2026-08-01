@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Modules\Suchak\Services\SuchakConsentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
@@ -422,7 +423,42 @@ class SuchakConsentFoundationTest extends TestCase
         $profile = MatrimonyProfile::factory()->create([
             'date_of_birth' => now()->subYears(28)->toDateString(),
             'highest_education' => 'B.Com',
+            'father_name' => 'Candidate Parent',
+            'father_contact_1' => '9876543210',
+            'mother_name' => 'Candidate Mother',
+            'mother_contact_1' => '9876543211',
         ]);
+
+        // Consent may only target a number ALREADY recorded on the profile
+        // (SuchakConsentService::assertIntendedMobileBelongsToProfile). The
+        // brother and guardian numbers these tests aim at therefore have to be
+        // stored the same way the live flow stores them — sibling rows and
+        // profile_contacts — otherwise the fixture is asking for consent on a
+        // number the candidate never gave anyone.
+        DB::table('profile_siblings')->insert([
+            'profile_id' => $profile->id,
+            'relation_type' => 'brother',
+            'name' => 'Candidate Brother',
+            'contact_number' => '9876543212',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $guardianContact = [
+            'profile_id' => $profile->id,
+            'contact_name' => 'Candidate Guardian',
+            'phone_number' => '9876543213',
+            'is_primary' => false,
+            'visibility_rule' => 'unlock_only',
+            'verified_status' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+        if (Schema::hasColumn('profile_contacts', 'relation_type')) {
+            $guardianContact['relation_type'] = 'guardian';
+        }
+        DB::table('profile_contacts')->insert($guardianContact);
+
         $representation = SuchakProfileRepresentation::factory()->create([
             'suchak_account_id' => $account->id,
             'matrimony_profile_id' => $profile->id,

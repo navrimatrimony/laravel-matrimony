@@ -165,7 +165,11 @@ class SuchakPlanCatalogEntitlementUiTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.suchak.accounts.show', $account))
             ->assertOk()
-            ->assertSee('Plan & Entitlement Assignment', false)
+            // The review page was rebuilt (commit 8a8f304f): plan assignment is
+            // now a collapsible section headed "Plan &amp; Entitlement" with the
+            // assigned plan name beside it, not a "Plan & Entitlement
+            // Assignment" heading. Asserting the CURRENT copy.
+            ->assertSee('Plan &amp; Entitlement', false)
             ->assertSee('Assign Suchak plan', false)
             ->assertSee('Suchak Operator', false);
 

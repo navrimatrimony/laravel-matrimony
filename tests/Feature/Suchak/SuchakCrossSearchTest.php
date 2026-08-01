@@ -84,16 +84,25 @@ class SuchakCrossSearchTest extends TestCase
         $targetAccount = $this->publicVerifiedSuchakAccount();
         [$religion, $caste] = $this->community();
 
+        // Fit is answered by the shared matching engine (SuchakMatchFitService →
+        // MatchingService), not by a local heuristic any more. The old fixture
+        // gave neither profile a gender, so isEligiblePair() refused the pair
+        // outright, fit() returned null and every card fell back to "Review
+        // manually" — the fit explanation this test is about never rendered.
+        // The two ages are also swapped so the pair reads as a realistic
+        // bride/groom pairing rather than an inverted one.
         $ownProfile = $this->activeProfile([
             'full_name' => 'Requester Bride Maya',
-            'date_of_birth' => now()->subYears(30)->toDateString(),
+            'gender_id' => $this->genderId('female'),
+            'date_of_birth' => now()->subYears(28)->toDateString(),
             'highest_education' => 'Selected Own MBA',
             'religion_id' => $religion->id,
             'caste_id' => $caste->id,
         ]);
         $targetProfile = $this->activeProfile([
             'full_name' => 'Selected Target Secret',
-            'date_of_birth' => now()->subYears(27)->toDateString(),
+            'gender_id' => $this->genderId('male'),
+            'date_of_birth' => now()->subYears(30)->toDateString(),
             'highest_education' => 'Target Public B.Tech',
             'religion_id' => $religion->id,
             'caste_id' => $caste->id,
@@ -111,9 +120,15 @@ class SuchakCrossSearchTest extends TestCase
         $response->assertSee('Search by name, age, location, education', false);
         $response->assertSee('Requester Bride Maya', false);
         $response->assertSee((string) $selectedOwnRepresentation->id, false);
-        $response->assertSee('Strong preliminary fit', false);
-        $response->assertSee('Same caste.', false);
-        $response->assertSee('Same religion.', false);
+        // Label and reasons now come from the shared engine's own vocabulary
+        // (lang/en/matching.php), not from the deleted local heuristic. The old
+        // strings 'Strong preliminary fit' / 'Same caste.' / 'Same religion.'
+        // no longer exist anywhere in the codebase. This pair scores 66% —
+        // above the 45 "possible" floor, below the 70 "strong" cut — so the
+        // engine labels it a possible fit and explains why.
+        $response->assertSee('Possible preliminary fit', false);
+        $response->assertSee('Same caste', false);
+        $response->assertSee('Same city', false);
         $response->assertSee('Details and request', false);
         $response->assertSee('name="target_representation_id"', false);
         $response->assertSee('name="requesting_representation_id"', false);

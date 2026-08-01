@@ -274,9 +274,13 @@ class SuchakDirectPaymentTrustProtectionTest extends TestCase
         [$suchakUser, , , $package, $agreement, $paymentContext] = $this->directPaymentRequestFixture();
         $result = app(SuchakPaymentRequestService::class)->createAndSend($package, $agreement, $paymentContext, $suchakUser);
 
+        // The public payment page was redesigned (commit 219af2f9) and reworded
+        // its anti-fraud warning; the customer portal still carries the original
+        // sentence. Both surfaces still warn, so assert each one's CURRENT copy
+        // rather than the single old string.
         $this->get($result['public_url'])
             ->assertOk()
-            ->assertSee('Platform-collected customers should not make direct Suchak payments', false)
+            ->assertSee('If any Suchak asks for payment outside this verified page, report it with evidence from your account.', false)
             ->assertDontSee('secret-upi@bank');
 
         $this->get($result['portal_url'])

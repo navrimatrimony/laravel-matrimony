@@ -1603,7 +1603,14 @@ class SuchakOnboardingAndVerificationLifecycleTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.suchak.accounts.show', $account))
             ->assertOk()
-            ->assertSee('View document', false)
+            // The review page was rebuilt (commit 8a8f304f): the old "View
+            // document" link is now a thumbnail plus an "Open" action, both
+            // pointing at the same guarded route. The subject of this test —
+            // the admin reaches the document only through that route and never
+            // sees the raw storage path — is unchanged, so assert the CURRENT
+            // control.
+            ->assertSee('Verification Records', false)
+            ->assertSee('>Open</a>', false)
             ->assertSee(route('admin.suchak.accounts.verification-records.document', [$account, $record]), false)
             ->assertDontSee($path, false);
 

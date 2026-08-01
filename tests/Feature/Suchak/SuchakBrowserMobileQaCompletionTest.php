@@ -158,7 +158,15 @@ class SuchakBrowserMobileQaCompletionTest extends TestCase
 
         $requestResult = $this->paymentRequestFixture($account, $profile, $suchakUser);
         $paymentRequest = $this->withMobileHeaders()->get($requestResult['public_url']);
-        $this->assertMobileReadyMarkup($paymentRequest, ['Suchak Payment Request', 'This page is not a paid receipt']);
+        // The public payment page was redesigned (commit 219af2f9): the
+        // 'Suchak Payment Request' heading and the 'This page is not a paid
+        // receipt' line no longer exist anywhere in the codebase. The mobile-QA
+        // subject (viewport, responsive markup, no private data) is unchanged,
+        // so anchor on the CURRENT copy of that page.
+        $this->assertMobileReadyMarkup($paymentRequest, [
+            'Amount to pay',
+            'Paying after reviewing the plan and services means accepting these service terms.',
+        ]);
         $paymentRequest
             ->assertDontSee('9876543210', false)
             ->assertDontSee('day61-suchak@example.test', false)

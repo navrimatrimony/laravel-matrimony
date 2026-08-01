@@ -617,6 +617,21 @@ class SuchakConsentOperationalUiTest extends TestCase
             'gender_id' => $this->genderId($genderKey),
             'highest_education' => 'B.Com',
             'location_id' => $locationId,
+            // Consent may only target a number ALREADY recorded on the profile
+            // (SuchakConsentService::assertIntendedMobileBelongsToProfile), so
+            // every number these tests aim at has to be stored here first.
+            'father_name' => 'Candidate Father',
+            'father_contact_1' => '9876543212',
+            'mother_name' => 'Candidate Mother',
+            'mother_contact_1' => '9876543211',
+        ]);
+        DB::table('profile_siblings')->insert([
+            'profile_id' => $profile->id,
+            'relation_type' => 'brother',
+            'name' => 'Candidate Brother',
+            'contact_number' => '9876543213',
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
         $contactRow = [
             'profile_id' => $profile->id,
@@ -635,6 +650,16 @@ class SuchakConsentOperationalUiTest extends TestCase
             $contactRow['relation_type'] = 'self';
         }
         DB::table('profile_contacts')->insert($contactRow);
+
+        $guardianRow = $contactRow;
+        $guardianRow['contact_name'] = 'Candidate Guardian';
+        $guardianRow['phone_number'] = '9876543214';
+        $guardianRow['is_primary'] = false;
+        if (array_key_exists('relation_type', $guardianRow)) {
+            $guardianRow['relation_type'] = 'guardian';
+        }
+        DB::table('profile_contacts')->insert($guardianRow);
+
         $representation = SuchakProfileRepresentation::factory()->create([
             'suchak_account_id' => $account->id,
             'matrimony_profile_id' => $profile->id,
