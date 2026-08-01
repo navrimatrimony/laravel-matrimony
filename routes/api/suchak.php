@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Suchak\SuchakAgreementLinkApiController;
 use App\Http\Controllers\Api\Suchak\SuchakAppConfigApiController;
 use App\Http\Controllers\Api\Suchak\SuchakBillingApiController;
 use App\Http\Controllers\Api\Suchak\SuchakChatApiController;
@@ -109,6 +110,14 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::post('/payment-requests', [SuchakPaymentRequestsApiController::class, 'store']);
     Route::post('/payment-requests/{paymentRequest}/mark-paid', [SuchakPaymentRequestsApiController::class, 'markPaid']);
     Route::post('/payment-requests/{paymentRequest}/reverse-paid', [SuchakPaymentRequestsApiController::class, 'reversePaid']);
+    // Mints (or re-mints) the single-use link the CUSTOMER accepts the price
+    // agreement on. Agreement ids come from
+    // GET /customers/{representation}/payment-request-options → customer_agreements[].id.
+    // Throttled like the public consent/agreement decision routes: re-issuing
+    // kills the link already in the customer's hands.
+    Route::post('/customer-agreements/{agreement}/acceptance-link', SuchakAgreementLinkApiController::class)
+        ->whereNumber('agreement')
+        ->middleware('throttle:10,1');
     Route::get('/plans', [SuchakBillingApiController::class, 'plans']);
     Route::get('/billing', [SuchakBillingApiController::class, 'status']);
     Route::post('/plans/{plan}/payu/start', [SuchakPayuCheckoutApiController::class, 'start']);

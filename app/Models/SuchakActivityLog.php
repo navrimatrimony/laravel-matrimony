@@ -123,6 +123,16 @@ class SuchakActivityLog extends Model
 
     public const ACTION_CUSTOMER_AGREEMENT_REVISED = 'customer_agreement_revised';
 
+    /**
+     * The Suchak minted (or re-minted) the customer's acceptance link.
+     *
+     * Its own action, not a borrowed neighbour: issuing a link is not a consent
+     * request, not a portal link, and above all not an acceptance. Re-issuing
+     * kills the previous link, so "how many links were sent, and when" is a
+     * question the audit trail must be able to answer on its own.
+     */
+    public const ACTION_CUSTOMER_AGREEMENT_LINK_ISSUED = 'customer_agreement_link_issued';
+
     public const ACTION_PAYMENT_REQUEST_CREATED = 'payment_request_created';
 
     public const ACTION_PAYMENT_REQUEST_SENT = 'payment_request_sent';
