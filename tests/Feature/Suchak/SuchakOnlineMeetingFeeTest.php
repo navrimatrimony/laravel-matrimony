@@ -186,7 +186,7 @@ class SuchakOnlineMeetingFeeTest extends TestCase
 
         // The preset reader is a different code path (it reads the OVERRIDE row,
         // not the code preset), so it gets its own row to read from.
-        $override = $service->upsertPresetOverride($account, SuchakDefaultPlans::KEY_PREMIUM, ['price_amount' => '8000']);
+        $override = $service->updatePreset($account, SuchakDefaultPlans::KEY_PREMIUM, ['price_amount' => '8000']);
         $override->forceFill(['per_meeting_online_fee_amount' => '2200.00'])->save();
 
         $carousel = collect($service->resolveCarousel($account));

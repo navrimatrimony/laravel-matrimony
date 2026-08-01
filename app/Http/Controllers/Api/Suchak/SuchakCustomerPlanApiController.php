@@ -87,9 +87,15 @@ class SuchakCustomerPlanApiController extends Controller
     }
 
     /**
-     * Update a plan. {id} may be a numeric row id (custom plan OR an existing
-     * preset-override row) or a preset key ('basic'/'premium') to upsert that
-     * preset's override.
+     * Update a plan. {id} may be a numeric row id, or a preset key
+     * ('basic'/'premium') addressing this Suchak's ready-made row — the route the
+     * shipped app uses, since it knows the key and not the id.
+     *
+     * ONE rule set for both. It used to be two, and the narrow one was written
+     * out twice: a ready-made plan could only change its price, name, visibility
+     * and order, which is precisely why a Suchak could not edit one. The service
+     * owns what a field means for which row (see applyPlanFields) — the
+     * controller only says what a well-formed value looks like.
      */
     public function update(Request $request, string $id): JsonResponse
     {
@@ -98,69 +104,25 @@ class SuchakCustomerPlanApiController extends Controller
             return $this->noAccount();
         }
 
-        // Preset-key path: upsert the code preset's override row.
-        if (SuchakDefaultPlans::find($id) !== null) {
-            $validated = $request->validate([
-                'price_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
-                'original_price_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
-                'name' => ['sometimes', 'nullable', 'string', 'max:160'],
-                'name_mr' => ['sometimes', 'nullable', 'string', 'max:160'],
-                'is_visible' => ['sometimes', 'boolean'],
-                'sort_order' => ['sometimes', 'integer', 'min:0', 'max:65535'],
-            ]);
+        $isPresetKey = SuchakDefaultPlans::find($id) !== null;
 
-            try {
-                $plan = $this->service->upsertPresetOverride($account, $id, $validated);
-            } catch (InvalidArgumentException $exception) {
-                return $this->fail($exception);
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Preset plan updated.',
-                'data' => $this->snapshot($account, ['plan_id' => $plan->id]),
-            ]);
-        }
-
-        if (! ctype_digit($id)) {
+        if (! $isPresetKey && ! ctype_digit($id)) {
             return $this->notFound();
         }
 
-        $plan = $this->ownedPlan($account, (int) $id);
-        if ($plan === null) {
-            return $this->notFound();
-        }
-
-        $validated = $plan->isCustom()
-            ? $request->validate([
-                'name' => ['sometimes', 'string', 'max:160'],
-                'name_mr' => ['sometimes', 'nullable', 'string', 'max:160'],
-                'price_amount' => ['sometimes', 'numeric', 'min:0'],
-                'currency' => ['sometimes', 'string', 'size:3'],
-                'duration' => ['sometimes', Rule::in(SuchakCustomerPlan::DURATIONS)],
-                'services' => ['sometimes', 'array'],
-                'services.*.name' => ['required_with:services', 'string', 'max:160'],
-                'services.*.name_mr' => ['nullable', 'string', 'max:160'],
-                'include_basic' => ['sometimes', 'boolean'],
-                'per_meeting_fee_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
-                'per_meeting_online_fee_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
-                'post_marriage_fee_mode' => ['sometimes', 'nullable', Rule::in(SuchakCustomerPlan::POST_MARRIAGE_FEE_MODES)],
-                'post_marriage_fee_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
-                'original_price_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
-                'private_note' => ['sometimes', 'nullable', 'string', 'max:2000'],
-                'is_visible' => ['sometimes', 'boolean'],
-            ])
-            : $request->validate([
-                'price_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
-                'original_price_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
-                'name' => ['sometimes', 'nullable', 'string', 'max:160'],
-                'name_mr' => ['sometimes', 'nullable', 'string', 'max:160'],
-                'is_visible' => ['sometimes', 'boolean'],
-                'sort_order' => ['sometimes', 'integer', 'min:0', 'max:65535'],
-            ]);
+        $validated = $request->validate($this->planFieldRules());
 
         try {
-            $plan = $this->service->update($plan, $validated);
+            if ($isPresetKey) {
+                $plan = $this->service->updatePreset($account, $id, $validated);
+            } else {
+                $plan = $this->ownedPlan($account, (int) $id);
+                if ($plan === null) {
+                    return $this->notFound();
+                }
+
+                $plan = $this->service->update($plan, $validated);
+            }
         } catch (InvalidArgumentException $exception) {
             return $this->fail($exception);
         }
@@ -236,6 +198,43 @@ class SuchakCustomerPlanApiController extends Controller
     }
 
     // ------------------------------------------------------------------
+
+    /**
+     * What a well-formed plan field looks like on an update — the same answer for
+     * a ready-made plan and a custom one.
+     *
+     * Everything is `sometimes`, because a partial update is the norm here: the
+     * management screen sends only `is_visible` for a toggle, and the editor
+     * sends the whole form. Whether a NULL is allowed is a per-row question
+     * (a ready-made row can fall back to its seed content, a custom row cannot),
+     * so the service answers it and returns a 422 with a sentence a Suchak can
+     * read, instead of this list guessing.
+     *
+     * @return array<string, array<int, mixed>>
+     */
+    private function planFieldRules(): array
+    {
+        return [
+            'name' => ['sometimes', 'nullable', 'string', 'max:160'],
+            'name_mr' => ['sometimes', 'nullable', 'string', 'max:160'],
+            'price_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'currency' => ['sometimes', 'string', 'size:3'],
+            'duration' => ['sometimes', 'nullable', Rule::in(SuchakCustomerPlan::DURATIONS)],
+            'services' => ['sometimes', 'array'],
+            'services.*.name' => ['required_with:services', 'string', 'max:160'],
+            'services.*.name_mr' => ['nullable', 'string', 'max:160'],
+            'include_basic' => ['sometimes', 'boolean'],
+            'per_meeting_fee_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            // No relation to the offline fee, in either direction.
+            'per_meeting_online_fee_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'post_marriage_fee_mode' => ['sometimes', 'nullable', Rule::in(SuchakCustomerPlan::POST_MARRIAGE_FEE_MODES)],
+            'post_marriage_fee_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'original_price_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'private_note' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'is_visible' => ['sometimes', 'boolean'],
+            'sort_order' => ['sometimes', 'integer', 'min:0', 'max:65535'],
+        ];
+    }
 
     /**
      * @param  array<string, mixed>  $extra

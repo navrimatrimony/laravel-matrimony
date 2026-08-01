@@ -3,13 +3,29 @@
 namespace App\Modules\Suchak\Support;
 
 /**
- * The ready-made service plans every Suchak gets without building one. They are
- * platform-defined presets (fixed name / price / services), so a Suchak can pick
- * one and collect payment immediately — no editing, no per-package admin review.
+ * The ready-made service plans every Suchak STARTS with — SEED CONTENT, not a
+ * runtime authority.
  *
- * One source of truth, reused by the payment-request options API (to show the
- * plan + services) and the prepare-setup flow (to instantiate the chosen plan).
- * A Suchak can still create a custom package later; that path keeps admin review.
+ * Demoted 2026-08-02. These constants used to be the plan itself: a Suchak could
+ * not edit a ready-made plan because there was nothing to edit — no row, no
+ * writer, only a `final` class with two hardcoded prices. The four fee columns a
+ * preset entry read were therefore structurally always null.
+ *
+ * Now {@see seedRows()} is read ONCE, to create the Suchak's own
+ * suchak_customer_plans row (lazily, on first read of their plans — see
+ * SuchakCustomerPlanService::ensurePresetRows). From that moment the ROW is the
+ * plan and it is editable like any other; the constants below only ever supply
+ * the initial content and a last-resort fallback for a legacy row whose columns
+ * were never filled in.
+ *
+ * `preset_key` stays on the seeded row: it is the row's identity, it is what
+ * keeps the row undeletable, and it is what the send-time flow scopes a
+ * customer's package by.
+ *
+ * Still read at send time by SuchakPaymentSetupApiController for the package
+ * NAME and the stage/deliverable payload of a preset send ({@see catalogPayload})
+ * and for the "fold in the Basic services" toggle of a custom send
+ * ({@see deliverablesForStage}). Those are unchanged by the demotion.
  */
 final class SuchakDefaultPlans
 {
@@ -101,6 +117,43 @@ final class SuchakDefaultPlans
         }
 
         return null;
+    }
+
+    /**
+     * The two presets expressed as suchak_customer_plans ROWS — the one seed
+     * shape, read by the lazy seeder (SuchakCustomerPlanService::ensurePresetRows)
+     * and by the backfill migration, so neither can drift from the other.
+     *
+     * Deliberately absent: `duration` and all four fee columns. A ready-made plan
+     * fixes no duration and charges no meeting / post-marriage fee until a Suchak
+     * says so, and NULL is how the app and the acceptance page read "ठरलेले नाही".
+     * Inventing a figure here would put a charge on a card nobody agreed to.
+     *
+     * `sort_order` is the preset's natural code order, kept until an explicit
+     * reorder moves it.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function seedRows(): array
+    {
+        $rows = [];
+
+        foreach (array_values(self::all()) as $index => $plan) {
+            $rows[] = [
+                'preset_key' => (string) $plan['key'],
+                'name' => (string) $plan['name'],
+                'name_mr' => $plan['name_mr'] ?? null,
+                'price_amount' => number_format((float) $plan['price_amount'], 2, '.', ''),
+                'currency' => strtoupper((string) $plan['currency']),
+                'services_json' => array_map(static fn (array $deliverable): array => [
+                    'name' => (string) $deliverable['name'],
+                    'name_mr' => $deliverable['name_mr'] ?? null,
+                ], $plan['deliverables'] ?? []),
+                'sort_order' => $index,
+            ];
+        }
+
+        return $rows;
     }
 
     /**

@@ -242,17 +242,26 @@ class SuchakMeetingFeeQuotingTest extends TestCase
             SuchakServicePackage::query()->findOrFail($bare['service_package_id'])->price_amount,
         );
 
-        // With an override the carousel prints the Suchak's own figure, so that
-        // is what a send quoting nothing of its own must freeze — NOT the
+        // With the Suchak's own price on the plan the carousel prints that figure,
+        // so that is what a send quoting nothing of its own must freeze — NOT the
         // hardcoded ₹2,000 the Basic preset carries in code.
-        SuchakCustomerPlan::query()->create([
-            'suchak_account_id' => $rep->suchakAccount->id,
-            'preset_key' => SuchakDefaultPlans::KEY_BASIC,
-            'price_amount' => '2500.00',
-            'currency' => 'INR',
-            'is_visible' => true,
-            'sort_order' => 0,
-        ]);
+        //
+        // updateOrCreate, not create: the prepare above already read the
+        // carousel, which seeds the ready-made plans as rows (2026-08-02), so the
+        // Basic row exists by now and the (suchak, preset_key) unique index would
+        // refuse a second one.
+        SuchakCustomerPlan::query()->updateOrCreate(
+            [
+                'suchak_account_id' => $rep->suchakAccount->id,
+                'preset_key' => SuchakDefaultPlans::KEY_BASIC,
+            ],
+            [
+                'price_amount' => '2500.00',
+                'currency' => 'INR',
+                'is_visible' => true,
+                'sort_order' => 0,
+            ],
+        );
 
         $overridden = $this->prepare($rep->id, ['plan_key' => SuchakDefaultPlans::KEY_BASIC]);
         $this->assertSame(

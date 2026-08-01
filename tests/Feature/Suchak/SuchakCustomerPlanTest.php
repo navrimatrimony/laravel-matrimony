@@ -63,7 +63,7 @@ class SuchakCustomerPlanTest extends TestCase
         $this->assertSame('Deluxe matchmaking', $carousel[2]['name']);
 
         // override a preset's price (basic 2000 -> 2500)
-        $service->upsertPresetOverride($account, SuchakDefaultPlans::KEY_BASIC, [
+        $service->updatePreset($account, SuchakDefaultPlans::KEY_BASIC, [
             'price_amount' => '2500',
         ]);
         $carousel = $service->resolveCarousel($account);
@@ -97,9 +97,10 @@ class SuchakCustomerPlanTest extends TestCase
         $planA = $service->create($account, $this->customInput('Plan A'));
         $planB = $service->create($account, $this->customInput('Plan B'));
 
-        // Presets need override rows (hence ids) to participate in a reorder.
-        $basic = $service->upsertPresetOverride($account, SuchakDefaultPlans::KEY_BASIC, []);
-        $premium = $service->upsertPresetOverride($account, SuchakDefaultPlans::KEY_PREMIUM, []);
+        // The ready-made plans are ordinary rows (seeded on first touch), so they
+        // already have ids to participate in a reorder.
+        $basic = $service->updatePreset($account, SuchakDefaultPlans::KEY_BASIC, []);
+        $premium = $service->updatePreset($account, SuchakDefaultPlans::KEY_PREMIUM, []);
 
         $service->reorder($account, [$planB->id, $planA->id, $premium->id, $basic->id]);
 
@@ -118,8 +119,8 @@ class SuchakCustomerPlanTest extends TestCase
         $service = app(SuchakCustomerPlanService::class);
 
         $only = $service->create($account, $this->customInput('Only Plan'));
-        $service->upsertPresetOverride($account, SuchakDefaultPlans::KEY_BASIC, ['is_visible' => false]);
-        $service->upsertPresetOverride($account, SuchakDefaultPlans::KEY_PREMIUM, ['is_visible' => false]);
+        $service->updatePreset($account, SuchakDefaultPlans::KEY_BASIC, ['is_visible' => false]);
+        $service->updatePreset($account, SuchakDefaultPlans::KEY_PREMIUM, ['is_visible' => false]);
 
         $this->assertCount(1, $service->resolveCarousel($account));
 
@@ -148,7 +149,7 @@ class SuchakCustomerPlanTest extends TestCase
 
         // Keep a visible custom around so the guard is not what blocks the delete.
         $service->create($account, $this->customInput('Keeper'));
-        $override = $service->upsertPresetOverride($account, SuchakDefaultPlans::KEY_BASIC, ['price_amount' => '2500']);
+        $override = $service->updatePreset($account, SuchakDefaultPlans::KEY_BASIC, ['price_amount' => '2500']);
 
         try {
             $service->delete($override);

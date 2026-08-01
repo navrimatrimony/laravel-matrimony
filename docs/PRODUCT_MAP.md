@@ -115,21 +115,32 @@ PayU checkout, billing status) is unchanged.
 **Reusable customer plans** — new table `suchak_customer_plans`, model `SuchakCustomerPlan`,
 engine `SuchakCustomerPlanService`, API `/suchak/customer-plans` (deliberately **not**
 `/suchak/plans`, which is the platform catalog).
-- `preset_key` NULL = a fully custom reusable plan. `preset_key` `basic`/`premium` = an
-  **override row** for a code-defined preset in `App\Modules\Suchak\Support\SuchakDefaultPlans`
-  (Basic ₹2000 / Premium ₹5000, auto-published). Presets stay code-defined; DB rows only override
-  or add. Unique on (suchak_account_id, preset_key) — NULLs are distinct, so many customs are fine.
+- **ONE kind of row (2026-08-02).** Every plan is a row the Suchak owns and edits in full.
+  `preset_key` NULL = a plan they built; `basic`/`premium` = one of the two **ready-made** plans,
+  **seeded** as a row from `App\Modules\Suchak\Support\SuchakDefaultPlans` (Basic ₹2000 /
+  Premium ₹5000, auto-published). That class is now **seed content, not a runtime authority** — it
+  is read once, by `SuchakCustomerPlanService::ensurePresetRows()`, **lazily on the first read** of
+  a Suchak's plans (so accounts that already existed are covered by the same one path), plus a
+  backfill migration `2026_08_02_300000`. Unique on (suchak_account_id, preset_key) — NULLs are
+  distinct, so many customs are fine.
+- `preset_key` still carries weight: it is the row's identity, it keeps the row **undeletable**
+  (hide it instead), and it is what the send-time flow scopes a customer's package by.
 - `services_json` is the **only** JSON column (`[{name, name_mr}]`). Duration
-  (`six_months / one_year / till_marriage`), the two fees, discount "was" price, `private_note`,
-  `is_visible`, `sort_order` are typed columns.
-- Service: CRUD, transactional reorder, toggleVisibility, upsertPresetOverride, `resolveCarousel`
-  (code presets + overrides + visible customs, ordered), `resolveForManagement`, last-visible-plan
-  guard, presets not deletable. `private_note` is never exposed to a customer.
+  (`six_months / one_year / till_marriage`), the two meeting fees, post-marriage fee, discount
+  "was" price, `private_note`, `is_visible`, `sort_order` are typed columns. A seeded ready-made
+  row starts with **no duration and no fee** — NULL is the honest "ठरलेले नाही".
+- Service: CRUD, transactional reorder, toggleVisibility, `ensurePresetRows`, `updatePreset`
+  (address a ready-made row by its key, which is what the shipped app knows), `resolveCarousel`
+  (every visible row, ordered), `resolveForManagement`, last-visible-plan guard, ready-made plans
+  not deletable. ONE writer (`applyPlanFields`) and ONE entry builder (`planEntry`) for both kinds.
+  `private_note` is never exposed to a customer.
 - **Send-time model is unchanged**: a chosen plan still materializes a `SuchakServicePackage` via
-  the existing `createCustomPackage()`, with **no FK back** to `suchak_customer_plans`.
-- ⚠ Backend supports a preset **price** override and a test pins it — but the **app deliberately
-  no longer exposes it** (decision 2026-07-25): in the app a preset is hide/reorder only. For a
-  different price, make a custom plan.
+  the existing `createCustomPackage()`, with **no FK back** to `suchak_customer_plans`. The plan is
+  the DEFAULT, the send is the DECISION, the package is the FROZEN RECORD.
+- ⚠ Still code-defined at send time and therefore **not** editable by a Suchak: a preset send's
+  `package_name` / description / stage+deliverable payload come from `SuchakDefaultPlans`
+  (`SuchakPaymentSetupApiController`), which is exactly what keeps re-sending Basic scoped to the
+  same package. Renaming the plan row changes the card, not the package name.
 
 **The two opt-in fees are DISCLOSED NOTES, never money owed.** `per_meeting_fee_amount` and
 `post_marriage_fee_mode/amount` (`as_wished / fixed / none`) are rendered on the plan card and in
@@ -619,7 +630,7 @@ No compile-time link — every backend contract change must be mirrored twice by
 | 2026-07-24 | The dormant package-template engine is removed rather than kept as a second way to define a plan. |
 | 2026-07-25 | A Suchak's reusable customer plans live in a NEW table `suchak_customer_plans` — not `suchak_plans` (the platform catalog they buy) and not `SuchakServicePackage` (the send-time artefact). The send-time model is unchanged; no FK back. |
 | 2026-07-25 | **Disclosed fees are never billed.** Per-meeting and post-marriage fees are opt-in notes shown on the plan card and in the message; they are never added to `amount_due`. |
-| 2026-07-25 | Presets are **hide/reorder only in the app**. The backend keeps a price-override capability, but a Suchak wanting a different price makes a custom plan. (Reversed the half-done preset price-edit UI.) |
+| 2026-07-25 | Presets are **hide/reorder only in the app**. The backend keeps a price-override capability, but a Suchak wanting a different price makes a custom plan. (Reversed the half-done preset price-edit UI.) **SUPERSEDED 2026-08-02 — see below.** |
 | 2026-07-25 | Payment records are created **only on send**, never on preview. |
 | 2026-07-25 | A payment link must unfurl as the Suchak's UPI QR — never the site's homepage image; if there is no QR, no image at all. |
 | 2026-07-25 | Track A mark-paid works **without** a proof reference (the Suchak confirming their own cash), but the request stays flagged `proof_status = required` in the risk queue. Audit is deferred, not waived. |
@@ -647,6 +658,7 @@ No compile-time link — every backend contract change must be mirrored twice by
 | 2026-08-01 | **The success fee is earned in tranches at past events — nothing is ever refunded.** Each tranche is released by a stage that already happened (e.g. 10% settled / 40% engagement / remainder at the wedding), so no money is held against a future that may not arrive. Shares are percentages **of the total** (never of the remainder), the last tranche is "the remainder" not a percentage, and the shares must sum to 100% — all validated at agreement creation. A later stage releases every earlier unpaid tranche with it. Blueprint D25 / §7.4. |
 | 2026-08-01 | **The success fee is paid once per customer in total.** If a settlement breaks and a different match succeeds later, tranches already paid count toward the total and only unpaid tranches fire — a family whose match broke twice never pays more than the one agreed figure. Attribution of the declared cross-Suchak share is therefore recorded **per tranche**, not per customer. Blueprint M9. |
 | 2026-08-01 | **Marriage settled, engagement and marriage are each claimed then confirmed**, on the meeting pattern (claim → customer confirms → 7 silent days → dispute), except that **either Suchak may raise the claim**. Blueprint D26. |
+| 2026-08-02 | **The ready-made plans are SEED CONTENT, not a runtime authority — a Suchak edits them like any other plan.** Supersedes the 2026-07-25 "hide/reorder only" decision, which was not a choice so much as a consequence: `SuchakDefaultPlans` was a final class with two hardcoded prices, so there was no row to edit, and the four fee columns a preset card READ were structurally always null. The constants are now read ONCE — lazily, on the first read of a Suchak's plans, plus a backfill migration for accounts that already exist — to create the Suchak's own `suchak_customer_plans` row. From then on there is ONE kind of plan row, one writer and one entry builder. `preset_key` stays on the row: it is its identity, it keeps the row **undeletable** (hide instead), and it is what scopes a customer's package at send time. **The freeze is untouched** — plan = DEFAULT, send = DECISION, package = FROZEN RECORD. |
 
 ## 9a. Device verification log
 
