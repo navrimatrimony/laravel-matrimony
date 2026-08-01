@@ -105,7 +105,11 @@ class SuchakSuggestionService
                 }
 
                 $summary = $this->maskingService->maskedSummary($candidate, $candidateRepresentation);
-                $summary['basic']['display_name'] = $this->displayName($candidate);
+                // The masking service decides what this candidate may be called.
+                // This line used to overwrite it with the raw full_name — for
+                // another Suchak's candidate too, on an authenticated GET, with
+                // no consent or collaboration gate in front of it.
+                $summary['basic']['display_name'] = $summary['display_name'];
                 // Identity of the row. Needed by every consumer that must act on a
                 // suggestion — the impression/decision log keys on it, and the API
                 // decision endpoint addresses a candidate by it. Contact details
