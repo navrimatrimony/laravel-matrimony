@@ -2,6 +2,7 @@
 
 @php
     use App\Support\LocalizedText;
+    use App\Support\MoneyFormat;
 
     $suchak = $paymentRequest->suchakAccount;
 
@@ -22,15 +23,9 @@
     $collectorDisclosure = LocalizedText::column($paymentRequest, 'collector_disclosure');
 
     $currency = strtoupper($paymentRequest->currency ?? 'INR');
-    $currencySymbol = $currency === 'INR' ? '₹' : $currency . ' ';
-    $amountRaw = $paymentRequest->amount_due;
-    $amountDisplay = null;
-    if ($amountRaw !== null && $amountRaw !== '') {
-        $amountFloat = (float) $amountRaw;
-        $amountDisplay = fmod($amountFloat, 1.0) === 0.0
-            ? number_format($amountFloat, 0)
-            : number_format($amountFloat, 2);
-    }
+    // Carries its own symbol, Latin digits and Indian grouping — ₹1,00,000,
+    // which is what number_format() here used to get wrong. See App\Support\MoneyFormat.
+    $amountDisplay = MoneyFormat::amount($paymentRequest->amount_due, $currency);
 
     // Services the customer is paying for (agreement snapshot deliverables + stages).
     $deliverables = $agreement?->deliverables ?? collect();
@@ -46,7 +41,7 @@
     // WhatsApp link unfurl shows THIS request's scannable UPI QR plus who/how
     // much, instead of the generic homepage image.
     $ogTitle = trim((!empty($candidateName) ? $candidateName.' साठी ' : '').'पेमेंट विनंती'
-        .($amountDisplay !== null ? ' — '.$currencySymbol.$amountDisplay : ''));
+        .($amountDisplay !== null ? ' — '.$amountDisplay : ''));
     $ogDescription = trim(($planName !== '' ? $planName.' — ' : '').'UPI ने भरा');
     // Share-preview image: prefer THIS request's scannable UPI-intent QR — the
     // qr.png route renders it live from the Suchak's CURRENT UPI VPA, so it works
@@ -121,7 +116,7 @@
         <div class="mt-5 rounded-xl bg-gray-50 px-4 py-4 text-center dark:bg-gray-900/60">
             <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">भरायची रक्कम · Amount to pay</p>
             @if ($amountDisplay !== null)
-                <p class="mt-1 text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">{{ $currencySymbol }}{{ $amountDisplay }}</p>
+                <p class="mt-1 text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">{{ $amountDisplay }}</p>
             @else
                 <p class="mt-1 text-xl font-semibold text-gray-500 dark:text-gray-400">रक्कम निश्चित होणे बाकी · To be confirmed</p>
             @endif
