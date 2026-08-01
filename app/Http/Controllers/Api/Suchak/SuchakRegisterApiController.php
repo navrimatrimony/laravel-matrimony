@@ -45,8 +45,10 @@ class SuchakRegisterApiController extends Controller
                 'max:255',
             ],
             'business_type' => ['required', 'string', Rule::in(SuchakAccount::BUSINESS_TYPES)],
+            // Never required. Most Suchaks in this trade run their मंडळ alone, and
+            // asking a one-man bureau for a team size is a question with one
+            // obvious answer and no use for it. Absent means one.
             'employee_count' => [
-                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_BUREAU),
                 'nullable',
                 'integer',
                 'min:1',
@@ -197,8 +199,10 @@ class SuchakRegisterApiController extends Controller
                 'string',
                 'max:255',
             ],
+            // Never required. Most Suchaks in this trade run their मंडळ alone, and
+            // asking a one-man bureau for a team size is a question with one
+            // obvious answer and no use for it. Absent means one.
             'employee_count' => [
-                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_BUREAU),
                 'nullable',
                 'integer',
                 'min:1',

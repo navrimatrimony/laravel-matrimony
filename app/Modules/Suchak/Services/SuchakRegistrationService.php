@@ -204,11 +204,10 @@ class SuchakRegistrationService
                     'office_name' => 'Bureau name is required.',
                 ]);
             }
-            if ($employeeCount === null || (int) $employeeCount < 1) {
-                throw ValidationException::withMessages([
-                    'employee_count' => 'Enter how many people work in the bureau.',
-                ]);
-            }
+            // Assume he works alone unless he says otherwise. Most Suchaks do,
+            // and the alternative was refusing the registration of a one-man
+            // मंडळ over a number that tells the product nothing.
+            $employeeCount = $employeeCount === null || (int) $employeeCount < 1 ? 1 : $employeeCount;
         } else {
             $officeName = null;
             $employeeCount = null;

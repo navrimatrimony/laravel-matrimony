@@ -72,7 +72,6 @@ class AccountRequestController extends Controller
             ],
             'business_type' => ['required', 'string', Rule::in(SuchakAccount::BUSINESS_TYPES)],
             'employee_count' => [
-                Rule::requiredIf(fn (): bool => (string) $request->input('business_type') === SuchakAccount::BUSINESS_TYPE_BUREAU),
                 'nullable',
                 'integer',
                 'min:1',

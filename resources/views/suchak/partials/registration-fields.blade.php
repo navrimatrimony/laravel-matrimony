@@ -32,11 +32,6 @@
         <input id="{{ $fieldIdPrefix }}office_name" name="office_name" value="{{ old('office_name') }}" maxlength="255" data-suchak-office-name class="{{ $fieldClass }}">
     </div>
 
-    <div data-employee-count-wrapper>
-        <label for="{{ $fieldIdPrefix }}employee_count" class="{{ $labelClass }}">{{ __('suchak.register.employee_count') }}</label>
-        <input id="{{ $fieldIdPrefix }}employee_count" name="employee_count" value="{{ old('employee_count') }}" type="number" min="1" max="100000" inputmode="numeric" data-suchak-employee-count class="{{ $fieldClass }}">
-    </div>
-
     <div>
         <label for="{{ $fieldIdPrefix }}whatsapp_number" class="{{ $labelClass }}">{{ __('suchak.register.whatsapp_number') }}</label>
         <input id="{{ $fieldIdPrefix }}whatsapp_number" name="whatsapp_number" value="{{ old('whatsapp_number', old('mobile_number')) }}" required maxlength="32" inputmode="numeric" autocomplete="tel" placeholder="{{ __('suchak.register.whatsapp_placeholder') }}" class="{{ $fieldClass }}">
@@ -107,8 +102,6 @@
                     var businessType = form.querySelector('[data-suchak-business-type]');
                     var officeName = form.querySelector('[data-suchak-office-name]');
                     var officeNameWrapper = form.querySelector('[data-office-name-wrapper]');
-                    var employeeCount = form.querySelector('[data-suchak-employee-count]');
-                    var employeeCountWrapper = form.querySelector('[data-employee-count-wrapper]');
 
                     var syncOfficeName = function () {
                         var required = businessType && businessType.value === @json(\App\Models\SuchakAccount::BUSINESS_TYPE_BUREAU);
@@ -122,15 +115,6 @@
                         if (officeNameWrapper) {
                             officeNameWrapper.classList.toggle('hidden', !required);
                         }
-                        if (employeeCount) {
-                            employeeCount.required = required;
-                            employeeCount.disabled = !required;
-                            if (!required) {
-                                employeeCount.value = '';
-                            }
-                        }
-                        if (employeeCountWrapper) {
-                            employeeCountWrapper.classList.toggle('hidden', !required);
                         }
                     };
 
