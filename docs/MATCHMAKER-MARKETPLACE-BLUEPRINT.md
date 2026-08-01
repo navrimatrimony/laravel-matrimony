@@ -213,11 +213,17 @@ grade for money** (§8).
 
 Both force a redesign if deferred.
 
-**6.1 The engagement (assist) object.** There is no row that can hold *one customer and two
-Suchaks*. A helper's meeting claim today has nowhere legal to be written. Shape:
-`originating_suchak_account_id`, `helper_suchak_account_id`, `customer_context_id`,
-`agreement_id`, `agreement_revision`, `declared_share`. Every suggestion, meeting and claim hangs
-off it.
+**6.1 The engagement (assist) object — it already exists.** Corrected 2026-08-01, before any code
+was written. `suchak_collaboration_requests` + `suchak_commission_agreements`, joined 1:1 by
+`unique('collaboration_request_id')`, **already are** this object under another name: two account
+ids (both NOT NULL), both candidate profiles, both representations, a status lifecycle, an expiry,
+and the declared split with a separate acceptance per side.
+
+**Do not create a `suchak_engagements` table.** What is genuinely missing is small and additive:
+a role label (the pair is currently named by *direction* — requesting/target — not by *role*, and
+the marketplace responder is the requester), an FK to the customer agreement revision in force,
+and the marketplace's own stage vocabulary on top of the existing
+pending / accepted / rejected / expired lifecycle.
 
 **6.2 Success attribution.** Two Suchaks can hold simultaneously valid representations,
 agreements and success-fee terms on the same candidate. When a marriage is recorded, **one row
@@ -545,6 +551,7 @@ On freeze:
 | Rate at meeting time, same for all | The accepted agreement governs. The marketplace is a *later, separate* occasion, so nothing is retro-priced. (Product owner's clarification) |
 | Drop customer reputation — one-shot player, no future exposure | Wrong question. The signal exists to **inform the helping Suchak** during a six-month, ten-meeting window, not to deter the family. History, not rating (D20). (Product owner's correction) |
 | A paper tier for customers without a phone | Everyone has a phone, and the paper evidence is unreadable by anyone as built. All digital (D22). (Product owner's correction) |
+| An engagement object must be built to hold one customer and two Suchaks | It exists: `suchak_collaboration_requests` + `suchak_commission_agreements`, 1:1. Caught by the Phase 1 mapping, before code. The eleventh ruling of mine this document has had to reverse, and the third of that exact shape — assuming something is missing because it is filed under a different word (§6.1) |
 | Tiers gate marketplace visibility | Tiers must gate **money** too, or a ₹1,00,000 claim rests on a Suchak's word (§8) |
 | Masking protects the candidate from other Suchaks | Backwards. This is a matchmaker platform: too little information means no match can be made at all, and the photograph is the one item without which nobody can decide. The consent the candidate already signed says the profile may be **"forwarded to suitable and appropriate matches"** — showing it to another matchmaker is exactly that. Four defaults hidden, everything else shown, the Suchak overrides (D19a). (Product owner's correction) |
 | A declared ceiling on chargeable meetings protects the family | It protects nothing — a meeting only exists if the family approved it, one at a time — and it reads as a quota to be filled. How many people to meet is their decision alone. Replaced by a running total shown at approval (D17). (Product owner's correction) |
