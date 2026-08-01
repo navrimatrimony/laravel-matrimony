@@ -191,10 +191,12 @@ class SuchakCollaborationService
             ]);
 
             [$groomAccountId, $brideAccountId] = $this->agreementSideAccountIds(
+                (int) $collaboration->requesting_suchak_account_id,
+                (int) $collaboration->target_suchak_account_id,
                 $lockedRequestingRepresentation,
                 $lockedTargetRepresentation,
             );
-            $requesterAckColumn = $requestingAccount->id === $groomAccountId
+            $requesterAckColumn = (int) $requestingAccount->id === $groomAccountId
                 ? 'accepted_by_groom_suchak_at'
                 : 'accepted_by_bride_suchak_at';
 
@@ -933,34 +935,48 @@ class SuchakCollaborationService
     }
 
     /**
+     * Single owner of the groom/bride side rule. The candidate's gender decides which Suchak is
+     * labelled the groom side; the two account ids are supplied by the caller so an agreement can
+     * only ever name accounts that are actually party to the collaboration. Every path that
+     * writes groom_side_suchak_account_id / bride_side_suchak_account_id must come through here —
+     * a second implementation would silently record one Suchak's acceptance as the other's.
+     *
      * @return array{0: int, 1: int}
      */
     private function agreementSideAccountIds(
-        SuchakProfileRepresentation $requestingRepresentation,
-        SuchakProfileRepresentation $targetRepresentation,
+        int $requestingAccountId,
+        int $targetAccountId,
+        ?SuchakProfileRepresentation $requestingRepresentation,
+        ?SuchakProfileRepresentation $targetRepresentation,
     ): array {
-        $requestingGender = $requestingRepresentation->matrimonyProfile?->gender?->key;
-        $targetGender = $targetRepresentation->matrimonyProfile?->gender?->key;
+        $requestingGender = $requestingRepresentation?->matrimonyProfile?->gender?->key;
+        $targetGender = $targetRepresentation?->matrimonyProfile?->gender?->key;
 
         if ($requestingGender === 'female' && $targetGender === 'male') {
-            return [
-                (int) $targetRepresentation->suchak_account_id,
-                (int) $requestingRepresentation->suchak_account_id,
-            ];
+            return [$targetAccountId, $requestingAccountId];
         }
 
-        return [
-            (int) $requestingRepresentation->suchak_account_id,
-            (int) $targetRepresentation->suchak_account_id,
-        ];
+        return [$requestingAccountId, $targetAccountId];
     }
 
     private function createMissingAgreement(SuchakCollaborationRequest $collaboration): SuchakCommissionAgreement
     {
+        $collaboration->loadMissing([
+            'requestingRepresentation.matrimonyProfile.gender',
+            'targetRepresentation.matrimonyProfile.gender',
+        ]);
+
+        [$groomAccountId, $brideAccountId] = $this->agreementSideAccountIds(
+            (int) $collaboration->requesting_suchak_account_id,
+            (int) $collaboration->target_suchak_account_id,
+            $collaboration->requestingRepresentation,
+            $collaboration->targetRepresentation,
+        );
+
         return SuchakCommissionAgreement::query()->create([
             'collaboration_request_id' => $collaboration->id,
-            'groom_side_suchak_account_id' => $collaboration->requesting_suchak_account_id,
-            'bride_side_suchak_account_id' => $collaboration->target_suchak_account_id,
+            'groom_side_suchak_account_id' => $groomAccountId,
+            'bride_side_suchak_account_id' => $brideAccountId,
             'collector_suchak_account_id' => $collaboration->target_suchak_account_id,
             'agreement_type' => SuchakCommissionAgreement::TYPE_COLLABORATION_ACK,
             'split_type' => SuchakCommissionAgreement::SPLIT_TO_BE_DISCUSSED,
