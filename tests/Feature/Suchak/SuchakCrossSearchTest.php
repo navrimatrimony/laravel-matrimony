@@ -123,12 +123,19 @@ class SuchakCrossSearchTest extends TestCase
         // Label and reasons now come from the shared engine's own vocabulary
         // (lang/en/matching.php), not from the deleted local heuristic. The old
         // strings 'Strong preliminary fit' / 'Same caste.' / 'Same religion.'
-        // no longer exist anywhere in the codebase. This pair scores 66% —
-        // above the 45 "possible" floor, below the 70 "strong" cut — so the
-        // engine labels it a possible fit and explains why.
+        // no longer exist anywhere in the codebase. This pair lands above the 45
+        // "possible" floor and below the 70 "strong" cut, so the engine labels it
+        // a possible fit and explains why.
         $response->assertSee('Possible preliminary fit', false);
         $response->assertSee('Same caste', false);
-        $response->assertSee('Same city', false);
+        // BOTH candidates live at the same leaf (Pune City), and the engine used to
+        // say so — 'Same city', the full location weight for an exact location_id
+        // match. That is D19a's third leak in as many words: the card withholds the
+        // village of another Suchak's candidate, so the explanation printed beside
+        // it must not resolve finer than the card either. Capped, the exact tier
+        // collapses into the taluka tier both are already shown at.
+        $response->assertSee('Same taluka', false);
+        $response->assertDontSee('Same city', false);
         $response->assertSee('Details and request', false);
         $response->assertSee('name="target_representation_id"', false);
         $response->assertSee('name="requesting_representation_id"', false);
@@ -137,6 +144,19 @@ class SuchakCrossSearchTest extends TestCase
         $response->assertDontSee('id="modal_requesting_representation_id"', false);
         $response->assertDontSee('Selected Target Secret', false);
         $response->assertDontSee('Selected Target Secret Lane', false);
+
+        // ...AND THE CAP IS A CAP, NOT A DEMOTION. "Same city" is absent above because the village is
+        // withheld, not because the engine stopped being able to say it. The originating Suchak opens
+        // the village per candidate (D19a `shares_village`), the card then prints it, and the
+        // explanation beside the card is entitled to the same precision again.
+        $targetRepresentation->forceFill(['shares_village' => true])->save();
+
+        $revealed = $this->actingAs($actorUser)->get(route('suchak.search.index', [
+            'requesting_representation_id' => $selectedOwnRepresentation->id,
+        ]));
+
+        $revealed->assertOk();
+        $revealed->assertSee('Same city', false);
     }
 
     public function test_cross_search_uses_searchable_picker_for_large_own_profile_lists(): void

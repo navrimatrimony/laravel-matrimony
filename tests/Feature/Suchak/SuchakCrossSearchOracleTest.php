@@ -320,6 +320,31 @@ class SuchakCrossSearchOracleTest extends TestCase
         $this->assertSame('Shirur', $card['location']['city'] ?? null);
         $this->assertTrue($card['location']['is_broad'] ?? false);
 
+        // THE ATTACK IS RUN ON A WARM PROCESS, and that is not incidental — it is the second half of
+        // this oracle.
+        //
+        // Every component of the fit is memoised for the length of a PHP process, and a queue worker or
+        // an Octane instance IS one process across many requests. A memo whose key is the PROFILE ID
+        // rather than the fact it caches keeps answering with a candidate's OLD residence after they
+        // move, so two probes that are identical except in what the process happened to resolve earlier
+        // come back as two different signals — this same oracle re-opened sideways, by a component that
+        // knows nothing about D19a. That is exactly how it was found: run after another test class, the
+        // four signals split 53/53/55/55, because the re-used profile ids still carried that class's
+        // geography. A cold-process-only assertion passes in isolation and is how such a leak survives.
+        //
+        // So two of the four probes are scored once from ANOTHER district and then moved back to their
+        // villages. Nothing about either pair has changed; only the process has a history. The four
+        // must still collapse to one signal.
+        $elsewhere = $this->village('Panchale', $this->taluka('Sinnar', $this->district('Nashik')));
+        foreach (['Ranjangaon', 'Kendur'] as $warmed) {
+            $this->moveResidence($probes[$warmed], $elsewhere);
+            // A scored read, not an asserted one: all it has to do is make the process resolve this
+            // profile's geography once while the profile is somewhere else. Whether the far-apart pair
+            // still clears the surfacing floor is not what is being tested here.
+            $this->getJson('/api/v1/suchak/search?requesting_representation_id='.$probes[$warmed]->id)->assertOk();
+            $this->moveResidence($probes[$warmed], $villages[$warmed]);
+        }
+
         // THE ATTACK. One request per village; the answer read is the location component of the fit.
         $signals = [];
         foreach ($probes as $name => $probe) {
@@ -736,6 +761,25 @@ class SuchakCrossSearchOracleTest extends TestCase
         ]);
 
         return $representation->fresh();
+    }
+
+    /**
+     * Move a represented candidate's residence — the same write {@see self::profile()} uses to place
+     * them, so this is the product's own path and not a shortcut invented for the test.
+     */
+    private function moveResidence(SuchakProfileRepresentation $representation, int $leafId): void
+    {
+        $profile = $representation->matrimonyProfile;
+
+        if (Schema::hasColumn($profile->getTable(), 'location_id')) {
+            DB::table($profile->getTable())->where('id', $profile->id)->update(['location_id' => $leafId]);
+            $profile->refresh();
+
+            return;
+        }
+
+        ProfileCanonicalResidenceService::upsertSelfCurrent((int) $profile->id, $leafId, null, true, false);
+        $profile->refresh();
     }
 
     /**

@@ -64,22 +64,21 @@ class ProfilePreferenceMatchService
     private const AGGREGATE_EXCLUDED_ROW_IDS = [self::ROW_GUNAMILAN];
 
     /**
-     * Per-run memo for residence geography. A matching run compares up to 200 candidates in BOTH
-     * directions, and resolving a profile's district/state/country/taluka walks the address hierarchy
-     * — without this the same walk ran 400+ times. Flushed by
-     * {@see \App\Services\Matching\MatchingService::findMatchesForTab()} at the start of every run.
+     * Per-run memo for the residence display line, KEYED BY THE RESIDENCE LEAF — never by profile id.
      *
-     * @var array<int, array{district_id: int, state_id: int, country_id: int, taluka_id: int}>
-     */
-    private static array $residenceGeoCache = [];
-
-    /**
-     * Per-run memo for the residence display line. {@see build()} renders it for the VIEWER on every
-     * call, and a run builds both directions for every candidate — so the uncached line meant one
-     * `LocationFormatterService::formatLocation()` (leaf lookup + full ancestor chain hydration) per
-     * pair instead of one per profile.
+     * {@see build()} renders it for the VIEWER on every call, and a run builds both directions for
+     * every candidate — so the uncached line meant one `LocationFormatterService::formatLocation()`
+     * (leaf lookup + full ancestor chain hydration) per pair instead of one per residence.
      *
-     * @var array<int, string>
+     * The key is the whole of the reason this is safe. What is memoised is "how is address X written
+     * out", which is master data and cannot change while the process lives; "where does profile P
+     * live" can, and did: these statics are only flushed by
+     * {@see \App\Services\Matching\MatchingService::findMatchesForTab()}, an entry point the Suchak
+     * fit path never takes, so in any long-lived process (queue worker, Octane) a profile-id key kept
+     * serving a candidate's OLD residence after they moved — two candidates then differed in the fit
+     * explanation for a reason that was not about them. See {@see self::residenceGeoWithTaluka()}.
+     *
+     * @var array<int, string> addresses.id => display line
      */
     private static array $residenceDisplayCache = [];
 
@@ -121,7 +120,6 @@ class ProfilePreferenceMatchService
      */
     public static function flushRuntimeCaches(): void
     {
-        self::$residenceGeoCache = [];
         self::$residenceDisplayCache = [];
         self::$viewerDegreeIdCache = [];
         self::$masterLabelCache = [];
@@ -693,60 +691,58 @@ class ProfilePreferenceMatchService
     }
 
     /**
-     * Residence district/state/country (unchanged source: {@see MatrimonyProfile::residenceGeoAddressIds()})
-     * plus the taluka the district-level helper never returned, memoised per profile for the run.
-     *
-     * @return array{district_id: int, state_id: int, country_id: int, taluka_id: int}
-     */
-    /**
      * Same string {@see MatrimonyProfile::residenceLocationDisplayLineFor()} returns, resolved once per
-     * profile per run instead of once per compared pair.
+     * RESIDENCE LEAF per run instead of once per compared pair.
+     *
+     * Keyed by the leaf rather than by the profile on purpose — see {@see self::$residenceDisplayCache}.
+     * Two profiles in the same village share one line, and a profile that moves gets a different key
+     * instead of a stale hit.
      */
     private static function residenceDisplayLine(MatrimonyProfile $viewer): string
     {
-        $pid = (int) $viewer->getKey();
-        if ($pid <= 0) {
+        $leafId = (int) ($viewer->location_id ?? 0);
+        if ($leafId <= 0) {
             return MatrimonyProfile::residenceLocationDisplayLineFor($viewer);
         }
-        if (isset(self::$residenceDisplayCache[$pid])) {
-            return self::$residenceDisplayCache[$pid];
+        if (isset(self::$residenceDisplayCache[$leafId])) {
+            return self::$residenceDisplayCache[$leafId];
         }
 
-        return self::$residenceDisplayCache[$pid] = MatrimonyProfile::residenceLocationDisplayLineFor($viewer);
+        return self::$residenceDisplayCache[$leafId] = MatrimonyProfile::residenceLocationDisplayLineFor($viewer);
     }
 
+    /**
+     * Residence district / state / country / taluka as `addresses.id` values.
+     *
+     * This is a THIN SHAPE ADAPTER over {@see MatrimonyProfile::geoAddressIdsForLeaf()} — the one leaf
+     * → hierarchy resolver in the codebase, which already returns `taluka_id` under the same rule this
+     * used to re-derive ("the ancestor taluka, or the leaf itself when the leaf IS a taluka"). It only
+     * narrows the nullable bundle to the non-null int shape this file's callers expect.
+     *
+     * It used to keep its own memo keyed by PROFILE ID, and that key was the bug: the memo answers a
+     * question about an ADDRESS, but a profile can change address while the process lives. The statics
+     * here are flushed only by {@see \App\Services\Matching\MatchingService::findMatchesForTab()} — the
+     * member-feed entry point — so every other caller (the Suchak fit path, MatchingExplainService,
+     * RuleEngineService) inherited whatever an earlier run left behind. In a long-lived worker that
+     * meant a candidate kept scoring against their OLD taluka, which made the fit explanation depend on
+     * process history instead of on the pair, and made two candidates who differ only in that history
+     * distinguishable in a masked read. The resolver it now delegates to is memoised by `addresses.id`,
+     * which is master data and cannot go stale — the same reason that memo is documented as safe.
+     *
+     * @return array{district_id: int, state_id: int, country_id: int, taluka_id: int}
+     */
     private static function residenceGeoWithTaluka(MatrimonyProfile $viewer): array
     {
-        $pid = (int) $viewer->getKey();
-        if ($pid > 0 && isset(self::$residenceGeoCache[$pid])) {
-            return self::$residenceGeoCache[$pid];
-        }
+        $g = MatrimonyProfile::geoAddressIdsForLeaf(
+            $viewer->location_id !== null ? (int) $viewer->location_id : null,
+        );
 
-        $g = $viewer->residenceGeoAddressIds();
-        $out = [
+        return [
             'district_id' => (int) ($g['district_id'] ?? 0),
             'state_id' => (int) ($g['state_id'] ?? 0),
             'country_id' => (int) ($g['country_id'] ?? 0),
-            'taluka_id' => 0,
+            'taluka_id' => (int) ($g['taluka_id'] ?? 0),
         ];
-
-        if ($viewer->location_id && SchemaPresence::hasTable(Location::geoTable())) {
-            $hints = $viewer->residenceLocationHierarchyHints();
-            $out['taluka_id'] = (int) ($hints['taluka_id'] !== '' ? $hints['taluka_id'] : 0);
-            if ($out['taluka_id'] <= 0) {
-                // The residence leaf may itself be the taluka.
-                $leafHierarchy = DB::table(Location::geoTable())->where('id', (int) $viewer->location_id)->value('hierarchy');
-                if ($leafHierarchy === 'taluka') {
-                    $out['taluka_id'] = (int) $viewer->location_id;
-                }
-            }
-        }
-
-        if ($pid > 0) {
-            self::$residenceGeoCache[$pid] = $out;
-        }
-
-        return $out;
     }
 
     /**

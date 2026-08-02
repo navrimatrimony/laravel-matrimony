@@ -141,15 +141,6 @@ class MatchingService
     private array $skipExcludedCache = [];
 
     /**
-     * Residence district/state/country per profile id. {@see MatrimonyProfile::residenceGeoAddressIds()}
-     * walks the address hierarchy on every call and was being asked once per PAIR from both
-     * {@see self::locationProximityTier()} and {@see self::scoreLocationPart()}.
-     *
-     * @var array<int, array{district_id: int|null, state_id: int|null, country_id: int|null}>
-     */
-    private array $residenceGeoCache = [];
-
-    /**
      * Per-run memos for the education component. Both were resolved per PAIR: the degree id walks the
      * alias table (and can fall back to a LIKE scan), and the sort order was a `value()` per profile
      * per comparison. Both are properties of one profile / one degree, not of the pair.
@@ -297,7 +288,6 @@ class MatchingService
         $this->tierPoolCache = [];
         $this->candidateEvalCache = [];
         $this->skipExcludedCache = [];
-        $this->residenceGeoCache = [];
         $this->educationDegreeIdCache = [];
         $this->educationSortOrderCache = [];
         $this->activeTier = MatchRelaxationLadder::TIER_STRICT;
@@ -1321,25 +1311,25 @@ class MatchingService
     }
 
     /**
-     * Residence geography for one profile, resolved once per run.
+     * Residence geography for one profile.
      *
-     * {@see MatrimonyProfile::residenceGeoAddressIds()} re-walks the address hierarchy on every call
-     * (leaf lookup + ancestor chain), and the scorer asks for it twice per pair — once in
-     * {@see self::locationProximityTier()} and once in {@see self::scoreLocationPart()}.
+     * The scorer asks for this twice per pair — once in {@see self::locationProximityTier()} and once
+     * in {@see self::scoreLocationPart()} — so it must not re-walk the address hierarchy each time.
+     * It does not: {@see MatrimonyProfile::geoAddressIdsForLeaf()} memoises the walk BY `addresses.id`
+     * behind this call, which is the correct key (an address's ancestry is master data) and is shared
+     * by every profile living at the same leaf.
      *
-     * @return array{district_id: int|null, state_id: int|null, country_id: int|null}
+     * This method used to keep a second memo of its own, keyed by PROFILE ID, on top of that one. Two
+     * memos for one fact is the duplicate the field-ownership rule forbids, and the extra key was the
+     * wrong one: it answers "where does profile P live", which changes when P moves, while it was only
+     * ever cleared in {@see self::findMatchesForTab()} — so any other entry point (the Suchak fit path
+     * above all) could read a stale residence out of a re-used instance. Kept as a plain delegation.
+     *
+     * @return array{district_id: int|null, state_id: int|null, country_id: int|null, taluka_id: int|null, lat: float|null, lng: float|null}
      */
     private function residenceGeoFor(MatrimonyProfile $profile): array
     {
-        $pid = (int) $profile->getKey();
-        if ($pid <= 0) {
-            return $profile->residenceGeoAddressIds();
-        }
-        if (isset($this->residenceGeoCache[$pid])) {
-            return $this->residenceGeoCache[$pid];
-        }
-
-        return $this->residenceGeoCache[$pid] = $profile->residenceGeoAddressIds();
+        return $profile->residenceGeoAddressIds();
     }
 
     /**
