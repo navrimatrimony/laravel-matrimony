@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use InvalidArgumentException;
 use RuntimeException;
 
 class SuchakPipeline extends Model
@@ -33,8 +34,27 @@ class SuchakPipeline extends Model
 
     protected $table = 'suchak_pipelines';
 
+    /**
+     * Where a pipeline came from. Exactly one is set on any row; {@see assertExactlyOneOrigin()}
+     * enforces that on every save.
+     *
+     *  - `request_id`               a MEMBER approached a represented candidate and picked this
+     *                               Suchak (SuchakRequestPipelineService::createRequest).
+     *  - `collaboration_request_id` two SUCHAKS formed an engagement and the customer-owning side
+     *                               accepted it (…::openPipelineForEngagement). Blueprint 6.1 —
+     *                               the engagement IS SuchakCollaborationRequest +
+     *                               SuchakCommissionAgreement; there is no engagements table.
+     *
+     * @var list<string>
+     */
+    public const ORIGIN_COLUMNS = [
+        'request_id',
+        'collaboration_request_id',
+    ];
+
     protected $fillable = [
         'request_id',
+        'collaboration_request_id',
         'target_matrimony_profile_id',
         'requesting_matrimony_profile_id',
         'selected_suchak_account_id',
@@ -54,9 +74,58 @@ class SuchakPipeline extends Model
         'closed_at' => 'datetime',
     ];
 
+    /**
+     * A pipeline must name exactly one origin. Both halves matter: a row that names none is a
+     * funnel entry nobody can trace back to an act, and a row that names both would let a member's
+     * request and a Suchak engagement claim the same attribution lock over one pair.
+     *
+     * Lives on `saving` rather than in a CHECK constraint because MySQL and SQLite cannot both be
+     * given the same one through Laravel's schema builder — the same reason, and the same shape,
+     * as SuchakCollaborationStageEvent::assertOwnership().
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $pipeline): void {
+            $pipeline->assertExactlyOneOrigin();
+        });
+    }
+
+    public function assertExactlyOneOrigin(): void
+    {
+        $named = array_values(array_filter(
+            self::ORIGIN_COLUMNS,
+            fn (string $column): bool => $this->{$column} !== null,
+        ));
+
+        if ($named === []) {
+            throw new InvalidArgumentException(
+                'A Suchak pipeline must name where it came from; this one names neither a member request nor an engagement.'
+            );
+        }
+
+        if (count($named) > 1) {
+            throw new InvalidArgumentException(
+                'A Suchak pipeline comes from exactly one origin; this one names '.implode(' and ', $named).'.'
+            );
+        }
+    }
+
     public function request(): BelongsTo
     {
         return $this->belongsTo(SuchakProfileRequest::class, 'request_id');
+    }
+
+    /**
+     * The engagement this pipeline was opened for, or null on every member-born pipeline.
+     */
+    public function collaborationRequest(): BelongsTo
+    {
+        return $this->belongsTo(SuchakCollaborationRequest::class, 'collaboration_request_id');
+    }
+
+    public function isEngagementBorn(): bool
+    {
+        return $this->collaboration_request_id !== null;
     }
 
     public function targetMatrimonyProfile(): BelongsTo

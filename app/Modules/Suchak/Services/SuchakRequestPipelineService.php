@@ -6,6 +6,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\Message;
+use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakPipeline;
 use App\Models\SuchakPipelineEvent;
 use App\Models\SuchakFeatureSuspension;
@@ -16,6 +17,7 @@ use App\Services\Chat\ChatConversationService;
 use App\Services\Chat\ChatMessageService;
 use App\Services\CommunicationPolicyService;
 use App\Services\Interest\SuchakRoutedInterestService;
+use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -92,46 +94,41 @@ class SuchakRequestPipelineService
 
             $lockedAt = now();
 
-            $pipeline = SuchakPipeline::query()->create([
-                'request_id' => $request->id,
-                'target_matrimony_profile_id' => $request->target_matrimony_profile_id,
-                'requesting_matrimony_profile_id' => $request->requesting_matrimony_profile_id,
-                'selected_suchak_account_id' => $request->selected_suchak_account_id,
-                'representation_id' => $request->representation_id,
-                'pipeline_status' => SuchakPipeline::STATUS_PENDING,
-                'attribution_locked_at' => $lockedAt,
-                'lock_expires_at' => $lockedAt->copy()->addHours($this->requestSlaHours()),
-                'sla_status' => SuchakPipeline::SLA_WITHIN,
-            ]);
-
-            $event = $this->recordPipelineEvent(
-                $pipeline,
+            [$pipeline, $event] = $this->openPipeline(
+                [
+                    'request_id' => $request->id,
+                    'target_matrimony_profile_id' => $request->target_matrimony_profile_id,
+                    'requesting_matrimony_profile_id' => $request->requesting_matrimony_profile_id,
+                    'selected_suchak_account_id' => $request->selected_suchak_account_id,
+                    'representation_id' => $request->representation_id,
+                    'attribution_locked_at' => $lockedAt,
+                    'lock_expires_at' => $lockedAt->copy()->addHours($this->requestSlaHours()),
+                ],
                 SuchakPipelineEvent::EVENT_REQUEST_CREATED,
                 SuchakPipelineEvent::ACTOR_USER,
                 $requestingUser->id,
-            );
-
-            $this->activityLogger->record([
-                'suchak_account_id' => $request->selected_suchak_account_id,
-                'actor_user_id' => $requestingUser->id,
-                'actor_type' => SuchakActivityLog::ACTOR_USER,
-                'action_type' => SuchakActivityLog::ACTION_USER_REQUEST_CREATED,
-                'target_type' => 'suchak_profile_request',
-                'target_id' => $request->id,
-                'matrimony_profile_id' => $request->target_matrimony_profile_id,
-                'ip_address' => $ipAddress,
-                'user_agent' => Str::limit((string) $userAgent, 512, ''),
-                'metadata_json' => [
-                    'context' => 'request_created',
-                    'pipeline_id' => $pipeline->id,
-                    'requesting_matrimony_profile_id' => $request->requesting_matrimony_profile_id,
-                    'representation_id' => $request->representation_id,
-                    'request_status' => $request->request_status,
-                    'pipeline_status' => $pipeline->pipeline_status,
-                    'sla_status' => $pipeline->sla_status,
-                    'lock_expires_at' => $pipeline->lock_expires_at?->toIso8601String(),
+                fn (SuchakPipeline $opened): array => [
+                    'suchak_account_id' => $request->selected_suchak_account_id,
+                    'actor_user_id' => $requestingUser->id,
+                    'actor_type' => SuchakActivityLog::ACTOR_USER,
+                    'action_type' => SuchakActivityLog::ACTION_USER_REQUEST_CREATED,
+                    'target_type' => 'suchak_profile_request',
+                    'target_id' => $request->id,
+                    'matrimony_profile_id' => $request->target_matrimony_profile_id,
+                    'ip_address' => $ipAddress,
+                    'user_agent' => Str::limit((string) $userAgent, 512, ''),
+                    'metadata_json' => [
+                        'context' => 'request_created',
+                        'pipeline_id' => $opened->id,
+                        'requesting_matrimony_profile_id' => $request->requesting_matrimony_profile_id,
+                        'representation_id' => $request->representation_id,
+                        'request_status' => $request->request_status,
+                        'pipeline_status' => $opened->pipeline_status,
+                        'sla_status' => $opened->sla_status,
+                        'lock_expires_at' => $opened->lock_expires_at?->toIso8601String(),
+                    ],
                 ],
-            ]);
+            );
 
             $requestChatMessage = $this->storeInitialRequestMessageInExistingChat(
                 $request,
@@ -149,6 +146,201 @@ class SuchakRequestPipelineService
                 'event' => $event,
             ];
         });
+    }
+
+    /**
+     * THE ENGAGEMENT'S OWN ENTRANCE TO THE SAME FUNNEL — blueprint 5.1 / 6.1 / 6a.
+     *
+     * ── WHAT THIS FIXES ──────────────────────────────────────────────────────────────────────
+     *
+     * The meeting engine hangs entirely off `suchak_pipelines`
+     * (`suchak_visit_confirmations.pipeline_id` is its only anchor; that table carries no
+     * `collaboration_request_id`). Until this existed a pipeline had ONE creator —
+     * {@see createRequest()}, which runs when a MEMBER approaches a represented candidate — so an
+     * engagement between two Suchaks never got one, and section 6a's `meeting_scheduled` rung could
+     * be claimed with no meeting able to exist behind it.
+     *
+     * ── WHY IT LIVES HERE AND NOT IN SuchakCollaborationService ──────────────────────────────
+     *
+     * This service owns pipeline creation. Writing a second creator beside it is exactly the case
+     * the frozen no-duplicate rule exists for, so what the two entrances share —
+     * the row, its opening event and its activity trail — is {@see openPipeline()}, and the two
+     * differ only in the three things that genuinely differ: which row is locked, what "already
+     * exists" means, and who acted. {@see createRequest()}'s own body is otherwise untouched.
+     *
+     * The chat injection is deliberately NOT shared. It relays a MEMBER's opening message into the
+     * member↔candidate thread; an engagement has no member and no message, and posting one would
+     * put words in somebody's mouth.
+     *
+     * ── ROLE, NEVER DIRECTION ────────────────────────────────────────────────────────────────
+     *
+     * A pipeline's columns are role-shaped: `selected_suchak_account_id` is the Suchak who ACTS on
+     * it (SuchakVisitConfirmationService::assertOwnerCanManagePipeline, and the account
+     * meetingQuote() prices from), `representation_id` is that Suchak's mandate, and
+     * `target_matrimony_profile_id` is the candidate that mandate covers. An engagement stores its
+     * pair by DIRECTION, and in the marketplace direction no longer implies role — the Suchak
+     * answering a challenge becomes the requester (blueprint 5.2's direction note). So every column
+     * is filled from the engagement's ROLE accessors: the customer-owning side is the one who holds
+     * the agreement and the collection (M1), which is the side that arranges and charges meetings.
+     * On a marketplace engagement that happens to coincide with the target slot; on a direct
+     * collaboration where the requester owns the customer it does not, and copying the directional
+     * columns across would have produced a pipeline whose representation belongs to the other
+     * Suchak entirely.
+     *
+     * ── WHEN IT DOES NOTHING, AND WHY THAT IS NOT A GAP ──────────────────────────────────────
+     *
+     * The customer-owning role must be a RECORDED fact, never the `customer_owner_side` column
+     * default — that default is the forgery
+     * {@see SuchakCollaborationService::bindCustomerAgreement()} refuses to hang a money rule on.
+     * {@see SuchakCollaborationRequest::hasRecordedCustomerOwner()} is the one definition of that
+     * question, and it is the SAME gate every role-scoped ladder rung already passes. A marketplace
+     * engagement always clears it (the challenge proved the role before the engagement existed); a
+     * direct collaboration clears it once its owner bound his own agreement through
+     * linkCustomerAgreement(). Without it nothing knows who would collect or under which terms, so
+     * no pipeline is opened and null is returned. Acceptance itself is never blocked by this.
+     *
+     * ── IDEMPOTENT ───────────────────────────────────────────────────────────────────────────
+     *
+     * Re-entry returns the pipeline that already exists rather than throwing: the caller is an
+     * acceptance that may be retried. The read is taken under the engagement's row lock and the
+     * guarantee is the database's — `unique(collaboration_request_id)` — not this method's.
+     */
+    public function openPipelineForEngagement(
+        SuchakCollaborationRequest $engagement,
+        ?User $actor = null,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): ?SuchakPipeline {
+        $engagement->refresh();
+
+        if ($engagement->status !== SuchakCollaborationRequest::STATUS_ACCEPTED) {
+            throw new InvalidArgumentException('Only an accepted collaboration can open a Suchak pipeline.');
+        }
+
+        if (! $engagement->hasRecordedCustomerOwner()) {
+            return null;
+        }
+
+        $selectedAccountId = $engagement->customerOwnerSuchakAccountId();
+        $targetProfileId = $engagement->customerOwnerMatrimonyProfileId();
+        $requestingProfileId = $engagement->helpingMatrimonyProfileId();
+        $representationId = $engagement->customerOwnerRepresentationId();
+
+        if ($targetProfileId === null || $requestingProfileId === null || $representationId === null) {
+            return null;
+        }
+
+        return DB::transaction(function () use (
+            $engagement,
+            $actor,
+            $ipAddress,
+            $userAgent,
+            $selectedAccountId,
+            $targetProfileId,
+            $requestingProfileId,
+            $representationId,
+        ): SuchakPipeline {
+            /** @var SuchakCollaborationRequest $lockedEngagement */
+            $lockedEngagement = SuchakCollaborationRequest::query()
+                ->whereKey($engagement->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $existing = SuchakPipeline::query()
+                ->where('collaboration_request_id', $lockedEngagement->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing instanceof SuchakPipeline) {
+                return $existing;
+            }
+
+            [$pipeline] = $this->openPipeline(
+                [
+                    // No `suchak_profile_requests` row exists and none may be invented — a
+                    // fabricated request is a lie in the audit trail.
+                    'request_id' => null,
+                    'collaboration_request_id' => $lockedEngagement->id,
+                    'target_matrimony_profile_id' => $targetProfileId,
+                    'requesting_matrimony_profile_id' => $requestingProfileId,
+                    'selected_suchak_account_id' => $selectedAccountId,
+                    'representation_id' => $representationId,
+                    // The moment the pair's attribution actually locked: the acceptance.
+                    'attribution_locked_at' => $lockedEngagement->responded_at ?? now(),
+                    // No reply is pending — the acceptance IS the reply — so there is no clock. See
+                    // the migration for why a deadline here would lie to the SLA-risk board.
+                    'lock_expires_at' => null,
+                ],
+                SuchakPipelineEvent::EVENT_ENGAGEMENT_ACCEPTED,
+                SuchakPipelineEvent::ACTOR_SUCHAK,
+                $actor?->id,
+                fn (SuchakPipeline $opened): array => [
+                    'suchak_account_id' => $selectedAccountId,
+                    'actor_user_id' => $actor?->id,
+                    'actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
+                    // Reuses the existing pipeline action rather than minting a parallel one:
+                    // a pipeline reached a new state, which is what this action already means.
+                    'action_type' => SuchakActivityLog::ACTION_PIPELINE_STATUS_CHANGED,
+                    'target_type' => 'suchak_collaboration_request',
+                    'target_id' => $lockedEngagement->id,
+                    'matrimony_profile_id' => $targetProfileId,
+                    'ip_address' => $ipAddress,
+                    'user_agent' => Str::limit((string) $userAgent, 512, ''),
+                    'metadata_json' => [
+                        'context' => 'engagement_pipeline_opened',
+                        'pipeline_id' => $opened->id,
+                        'collaboration_request_id' => $lockedEngagement->id,
+                        'marketplace_challenge_id' => $lockedEngagement->marketplace_challenge_id,
+                        'customer_owner_side' => $lockedEngagement->customer_owner_side,
+                        'helping_suchak_account_id' => $lockedEngagement->helpingSuchakAccountId(),
+                        'requesting_matrimony_profile_id' => $requestingProfileId,
+                        'representation_id' => $representationId,
+                        'pipeline_status' => $opened->pipeline_status,
+                        'sla_status' => $opened->sla_status,
+                    ],
+                ],
+            );
+
+            return $pipeline;
+        });
+    }
+
+    /**
+     * THE ONE WRITER of a `suchak_pipelines` row, and of the two records that must exist beside it.
+     *
+     * Extracted 2026-08-05 when the engagement path arrived, so the two entrances could not drift
+     * into two dialects of "a pipeline was opened". A pipeline never exists without its opening
+     * event on the immutable pipeline trail and its row on `suchak_activity_logs` — that is the
+     * invariant this method is, and everything that differs between the callers is a parameter.
+     *
+     * Runs inside the caller's transaction and assumes the caller has already taken its own lock
+     * and run its own guards; those differ per entrance and belong with the entrance.
+     *
+     * The activity payload arrives as a closure because it names the pipeline id, which does not
+     * exist until the row is written.
+     *
+     * @param  array<string, mixed>  $columns
+     * @param  \Closure(SuchakPipeline): array<string, mixed>  $activity
+     * @return array{0: SuchakPipeline, 1: SuchakPipelineEvent}
+     */
+    private function openPipeline(
+        array $columns,
+        string $eventType,
+        string $actorType,
+        ?int $actorId,
+        Closure $activity,
+    ): array {
+        /** @var SuchakPipeline $pipeline */
+        $pipeline = SuchakPipeline::query()->create(array_merge([
+            'pipeline_status' => SuchakPipeline::STATUS_PENDING,
+            'sla_status' => SuchakPipeline::SLA_WITHIN,
+        ], $columns));
+
+        $event = $this->recordPipelineEvent($pipeline, $eventType, $actorType, $actorId);
+
+        $this->activityLogger->record($activity($pipeline));
+
+        return [$pipeline, $event];
     }
 
     public function expirePipelineIfPastSla(SuchakPipeline $pipeline): SuchakPipeline

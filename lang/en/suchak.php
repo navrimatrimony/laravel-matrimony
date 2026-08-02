@@ -994,6 +994,15 @@ return [
     ],
 
     'dashboard' => [
+        // Text the Suchak composes on his own screen and a family then reads in WhatsApp. It
+        // follows the SENDER's language — the Suchak's — so it is translated like everything else.
+        // `:number` is substituted, never formatted: digits stay Latin 0-9 in both languages.
+        'share_card_whatsapp_line' => 'WhatsApp: :number',
+        'share_card_tagline' => 'Trusted matchmaking service for arranging marriages. Get in touch for more details.',
+        'profile_request_reply_shown_to_family' => 'I will show this profile to the family. I will let you know as soon as they answer.',
+        'profile_request_reply_ask_contact' => 'Please send your contact number and a convenient time so I can share more about this profile.',
+        'profile_request_reply_under_discussion' => 'This profile is already under discussion. I will update you as soon as I know more.',
+
         'customer_list_title' => 'Customer list',
         'customer_list_intro' => 'All your customers in one place — photo, profile ID, basic details, and quick actions.',
         'customer_list_empty' => 'No customers yet. Add biodata or create a profile manually to get started.',

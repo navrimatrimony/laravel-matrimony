@@ -1056,17 +1056,38 @@ class SuchakVisitConfirmationService
      * other family entirely. Resolving off it named the wrong family, and the fee-bearing side
      * could not confirm at all.
      *
-     * The fallback is not a loosening: when a meeting names no customer context, nobody is being
-     * billed under an agreement through it, and the requesting member remains the only party the
-     * row identifies.
+     * SECOND ROLE SOURCE, ADDED 2026-08-05 — the ENGAGEMENT itself, when the pipeline came from one
+     * (`suchak_pipelines.collaboration_request_id`). Until an engagement could open a pipeline at
+     * all, the directional fallback below was harmless: every meeting was member-born, so the
+     * requesting profile WAS the member who asked. On a marketplace meeting it is the HELPER's
+     * candidate, and a marketplace meeting reaches this fallback whenever no platform payment
+     * context has been resolved on the pipeline — which is the ordinary case today, because nothing
+     * in the marketplace flow creates one. Without this the other family's own member login could
+     * confirm a meeting arranged for the customer, and the row would record their answer as the
+     * customer's. The engagement already names the customer-owning side as a recorded fact, so the
+     * answer is read from there rather than guessed from a column that no longer means role.
+     *
+     * The directional fallback survives beneath it, unchanged, for member-born meetings. It is not
+     * a loosening: when a meeting names neither a customer context nor an engagement, nobody is
+     * being billed under an agreement through it and the requesting member remains the only party
+     * the row identifies. Nothing here is widened at any step — the permitted set is always exactly
+     * one profile's own user.
      */
     public function customerSideMatrimonyProfileId(SuchakVisitConfirmation $visit): ?int
     {
-        $visit->loadMissing('customerContext');
+        $visit->loadMissing(['customerContext', 'pipeline.collaborationRequest.commissionAgreement']);
 
         $customerCandidateId = $visit->customerContext?->candidate_matrimony_profile_id;
         if ($customerCandidateId !== null) {
             return (int) $customerCandidateId;
+        }
+
+        $engagement = $visit->pipeline?->collaborationRequest;
+        if ($engagement !== null && $engagement->hasRecordedCustomerOwner()) {
+            $engagementCustomerId = $engagement->customerOwnerMatrimonyProfileId();
+            if ($engagementCustomerId !== null) {
+                return $engagementCustomerId;
+            }
         }
 
         return $visit->requesting_matrimony_profile_id === null

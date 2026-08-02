@@ -59,6 +59,7 @@ class SuchakCollaborationService
         private readonly SuchakCandidateMaskingService $maskingService,
         private readonly SuchakQualityControlService $qualityControlService,
         private readonly SuchakMatchFitService $matchFitService,
+        private readonly SuchakRequestPipelineService $requestPipelineService,
     ) {
     }
 
@@ -400,6 +401,30 @@ class SuchakCollaborationService
             $this->fulfilAnsweredChallenge($locked);
 
             $accepted = $locked->fresh(['commissionAgreement']);
+
+            /*
+             * THE MEETING ENGINE, OPENED ON THIS PAIR — blueprint 5.1 / 6a.
+             *
+             * `suchak_visit_confirmations` hangs off `suchak_pipelines` and nothing else, and until
+             * now only a MEMBER's request ever produced a pipeline. So an accepted engagement could
+             * reach section 6a's `meeting_scheduled` rung while no meeting could exist behind it.
+             * Acceptance is the honest moment to open it: it is where contact may be exchanged
+             * (canExchangeContact()) and therefore the first moment a meeting can be arranged at
+             * all — FIRST_STAGE_REQUIRING_ACCEPTED_ENGAGEMENT sits on exactly that line.
+             *
+             * SuchakRequestPipelineService owns pipeline creation and keeps owning it; this is the
+             * call, never a second creator. It is idempotent and returns null when the engagement
+             * has never recorded which side owns the customer — see that method. Inside this
+             * transaction on purpose: an engagement that is accepted but has no funnel entry is the
+             * exact half-state this change exists to remove.
+             */
+            $this->requestPipelineService->openPipelineForEngagement(
+                $accepted,
+                $actor,
+                $ipAddress,
+                $userAgent,
+            );
+
             $this->recordActivity(
                 SuchakActivityLog::ACTION_COLLABORATION_REQUEST_ACCEPTED,
                 $accepted,
@@ -1897,7 +1922,9 @@ class SuchakCollaborationService
 
         // Unconditional, and ABOVE the either-Suchak exit on purpose — see the docblock. A rung
         // whose terms are unnamed is a rung with nothing behind it, whichever Suchak is speaking.
-        if ($commissionAgreement?->customer_agreement_id === null) {
+        // The predicate itself lives on the model, because the pipeline door now asks the same
+        // question and two copies of "is the role recorded" are free to drift apart.
+        if (! $collaboration->hasRecordedCustomerOwner()) {
             throw new InvalidArgumentException(
                 'या सहकार्यात ग्राहकाचा सूचक कोण हे अजून नोंदवलेले नाही. आधी ग्राहक करार या सहकार्याशी जोडा, '
                 .'मग "'.$label.'" हा टप्पा नोंदवता येईल.'

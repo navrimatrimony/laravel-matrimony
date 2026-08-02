@@ -14,6 +14,16 @@ class SuchakPipelineEvent extends Model
     public const UPDATED_AT = null;
 
     public const EVENT_REQUEST_CREATED = 'request_created';
+
+    /**
+     * The opening event of an ENGAGEMENT-born pipeline — the customer-owning Suchak accepted a
+     * collaboration, and the pair got the funnel entry the meeting engine hangs off.
+     *
+     * Deliberately not filed as `request_created`: no `suchak_profile_requests` row exists on this
+     * path and none may be invented, so saying "a request was created" on the permanent trail
+     * would be the fabrication SuchakPipeline's nullable `request_id` exists to avoid.
+     */
+    public const EVENT_ENGAGEMENT_ACCEPTED = 'engagement_accepted';
     public const EVENT_SUCHAK_VIEWED = 'suchak_viewed';
     public const EVENT_SUCHAK_ACCEPTED = 'suchak_accepted';
     public const EVENT_SUCHAK_REPLIED = 'suchak_replied';
@@ -28,6 +38,7 @@ class SuchakPipelineEvent extends Model
 
     public const EVENTS = [
         self::EVENT_REQUEST_CREATED,
+        self::EVENT_ENGAGEMENT_ACCEPTED,
         self::EVENT_SUCHAK_VIEWED,
         self::EVENT_SUCHAK_ACCEPTED,
         self::EVENT_SUCHAK_REPLIED,

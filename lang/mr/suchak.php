@@ -879,6 +879,15 @@ return [
     ],
 
     'dashboard' => [
+        // Text the Suchak composes on his own screen and a family then reads in WhatsApp. It
+        // follows the SENDER's language — the Suchak's — so it is translated like everything else.
+        // `:number` is substituted, never formatted: digits stay Latin 0-9 in both languages.
+        'share_card_whatsapp_line' => 'WhatsApp: :number',
+        'share_card_tagline' => 'लग्न जुळवण्यासाठी विश्वासार्ह सूचक सेवा. अधिक माहितीसाठी संपर्क करा.',
+        'profile_request_reply_shown_to_family' => 'मी हे स्थळ संबंधित कुटुंबाला दाखवतो. उत्तर आले की तुम्हाला कळवतो.',
+        'profile_request_reply_ask_contact' => 'या स्थळाबद्दल अधिक माहिती देण्यासाठी कृपया तुमचा संपर्क क्रमांक आणि सोयीची वेळ पाठवा.',
+        'profile_request_reply_under_discussion' => 'हे स्थळ सध्या चर्चेत आहे. पुढील माहिती मिळताच तुम्हाला कळवतो.',
+
         'customer_list_title' => 'Customer list',
         'customer_list_intro' => 'सर्व customers एकाच ठिकाणी — photo, profile ID, मूलभूत माहिती आणि quick actions.',
         'customer_list_empty' => 'अजून customer नाही. Biodata add करा किंवा manual profile तयार करा.',

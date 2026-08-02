@@ -113,12 +113,32 @@
     $cardName = \App\Support\LocalizedText::column($suchakAccount, 'suchak_name');
     $cardOffice = \App\Support\LocalizedText::column($suchakAccount, 'office_name') ?: $suchakText::label($suchakAccount->business_type);
     $cardAddress = \App\Support\LocalizedText::column($suchakAccount, 'address_line');
-    $cardShareText = trim($cardName."\n".$cardOffice."\nWhatsApp: ".($suchakAccount->whatsapp_number ?: $suchakAccount->mobile_number)."\n".($cardAddress ?: '')."\n\nलग्न जुळवण्यासाठी विश्वासार्ह सूचक सेवा. अधिक माहितीसाठी संपर्क करा.");
+    /*
+     * RELAYED TEXT FOLLOWS THE SENDER'S LANGUAGE.
+     *
+     * The share card and the three reply templates are composed on the SUCHAK's screen and then
+     * read by a family in WhatsApp. Product owner's decision (2026-08-05): they follow the
+     * sender's locale — the Suchak's — which is the locale already resolved for this page by
+     * SetLocaleFromQuery. Both were hardcoded Marathi until now, so a Suchak working in English
+     * copied Marathi out of his own English screen.
+     *
+     * The number and the address are DATA and stay exactly as they are: `:number` is substituted,
+     * never formatted, so Latin digits survive whichever language is chosen.
+     */
+    $cardShareText = trim(
+        $cardName."\n"
+        .$cardOffice."\n"
+        .__('suchak.dashboard.share_card_whatsapp_line', [
+            'number' => $suchakAccount->whatsapp_number ?: $suchakAccount->mobile_number,
+        ])."\n"
+        .($cardAddress ?: '')."\n\n"
+        .__('suchak.dashboard.share_card_tagline')
+    );
     $cardWhatsappUrl = 'https://wa.me/?text='.rawurlencode($cardShareText);
     $profileRequestReplyTemplates = [
-        'मी हे स्थळ संबंधित कुटुंबाला दाखवतो. उत्तर आले की तुम्हाला कळवतो.',
-        'या स्थळाबद्दल अधिक माहिती देण्यासाठी कृपया तुमचा संपर्क क्रमांक आणि सोयीची वेळ पाठवा.',
-        'हे स्थळ सध्या चर्चेत आहे. पुढील माहिती मिळताच तुम्हाला कळवतो.',
+        __('suchak.dashboard.profile_request_reply_shown_to_family'),
+        __('suchak.dashboard.profile_request_reply_ask_contact'),
+        __('suchak.dashboard.profile_request_reply_under_discussion'),
     ];
     $profileRequestName = static fn ($profile, int $fallbackId): string => trim((string) ($profile?->full_name ?? '')) !== ''
         ? trim((string) $profile->full_name)

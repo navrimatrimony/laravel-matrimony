@@ -176,6 +176,29 @@ class SuchakCollaborationRequest extends Model
     }
 
     /**
+     * Is the customer-owning role a RECORDED FACT on this engagement, or still only the column
+     * default?
+     *
+     * `customer_owner_side` carries a default of `target` (2026_08_01_160000), so it is never null
+     * and reading it alone proves nothing — that default is exactly the forgery
+     * SuchakCollaborationService::bindCustomerAgreement() refuses to hang a money rule on. The
+     * proof is its partner column: `suchak_commission_agreements.customer_agreement_id` is written
+     * ONLY by that one binder, in the same act that writes the side, and it names the customer
+     * agreement revision the role rests on.
+     *
+     * The single definition of that question, because three things now depend on it and a second
+     * copy is free to drift: every role-scoped ladder rung (assertStageClaimant), the customer
+     * portal's door onto an engagement, and whether an accepted engagement opens a pipeline at all
+     * (SuchakRequestPipelineService::openPipelineForEngagement).
+     */
+    public function hasRecordedCustomerOwner(): bool
+    {
+        $this->loadMissing('commissionAgreement');
+
+        return $this->commissionAgreement?->customer_agreement_id !== null;
+    }
+
+    /**
      * The candidate profile sitting in one DIRECTIONAL slot.
      *
      * The one place a side label is turned into a profile column. Both role accessors below read
@@ -190,6 +213,38 @@ class SuchakCollaborationRequest extends Model
             : $this->target_matrimony_profile_id;
 
         return $profileId === null ? null : (int) $profileId;
+    }
+
+    /**
+     * The representation sitting in one DIRECTIONAL slot — the mandate half of
+     * {@see matrimonyProfileIdForSide()}, and the only other place a side label is turned into a
+     * column.
+     *
+     * Kept beside it because the two must agree: `*_representation_id` and
+     * `*_matrimony_profile_id` were written from the SAME representation by createRequest(), so
+     * reading one side's profile and the other side's mandate would name two different people.
+     */
+    public function representationIdForSide(string $side): ?int
+    {
+        $representationId = $side === self::SIDE_REQUESTING
+            ? $this->requesting_representation_id
+            : $this->target_representation_id;
+
+        return $representationId === null ? null : (int) $representationId;
+    }
+
+    /**
+     * The CUSTOMER-owning side's mandate over their own candidate.
+     *
+     * Role, never direction — the same reading as customerOwnerSuchakAccountId() and
+     * customerOwnerMatrimonyProfileId() beside it, and by construction it belongs to that account
+     * and covers that profile.
+     */
+    public function customerOwnerRepresentationId(): ?int
+    {
+        return $this->representationIdForSide(
+            $this->customer_owner_side === self::SIDE_REQUESTING ? self::SIDE_REQUESTING : self::SIDE_TARGET,
+        );
     }
 
     /**
