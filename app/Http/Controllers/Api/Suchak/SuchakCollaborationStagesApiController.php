@@ -9,6 +9,7 @@ use App\Models\SuchakCustomerAgreement;
 use App\Models\SuchakMarriageOutcome;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakCollaborationService;
+use App\Modules\Suchak\Services\SuchakStageLadderPresenter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -248,29 +249,17 @@ class SuchakCollaborationStagesApiController extends Controller
     }
 
     /**
+     * The rung shape, owned by {@see SuchakStageLadderPresenter} and NOT restated here.
+     *
+     * The collaborations LIST read now carries the same rungs (so a claimed-but-unconfirmed
+     * terminal rung survives an app restart), and a second copy of this shape beside it would be
+     * the duplicate the frozen rule forbids — the client would need two parsers for one fact.
+     *
      * @return array<string, mixed>
      */
     private function stagePayload(SuchakCollaborationStageEvent $event): array
     {
-        return [
-            'stage_event_id' => (int) $event->id,
-            'stage_key' => $event->stage_key,
-            'stage_label' => SuchakCollaborationStageEvent::stageLabel((string) $event->stage_key),
-            'owner' => $event->ownerColumn(),
-            'collaboration_id' => $event->collaboration_request_id === null
-                ? null
-                : (int) $event->collaboration_request_id,
-            'customer_agreement_id' => $event->customer_agreement_id === null
-                ? null
-                : (int) $event->customer_agreement_id,
-            'claimed_at' => $event->claimed_at?->toIso8601String(),
-            'confirmed_at' => $event->confirmed_at?->toIso8601String(),
-            // Who was entitled to write this rung. The app can grey the button out instead of
-            // guessing, and a stored row carries the rule it was written under.
-            'claimant' => SuchakCollaborationStageEvent::claimantFor((string) $event->stage_key),
-            'requires_confirmation' => SuchakCollaborationStageEvent::requiresConfirmation((string) $event->stage_key),
-            'is_settled' => $event->isSettled(),
-        ];
+        return app(SuchakStageLadderPresenter::class)->rung($event);
     }
 
     private function suchakUser(Request $request): User|JsonResponse

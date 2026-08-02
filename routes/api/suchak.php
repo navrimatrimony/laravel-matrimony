@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\Suchak\SuchakConsentRequestsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakConsentsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCrossSuchakObligationApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomerDetailApiController;
+use App\Http\Controllers\Api\Suchak\SuchakCustomerPaymentsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomerPlanApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomerShareCardApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomersApiController;
@@ -276,6 +277,22 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::get('/marketplace/challenges/{challenge}', [SuchakMarketplaceChallengeApiController::class, 'show'])
         ->whereNumber('challenge');
     Route::get('/payments', SuchakPaymentsApiController::class);
+    /*
+    | THE RECORDED CUSTOMER RECEIPTS — the missing READ half of the settle route above.
+    |
+    | POST …/success-fee-tranches/{tranche}/settlement takes a
+    | `suchak_customer_payments.id`, and no Suchak route ever listed that id space: /payments
+    | returns suchak_ledger_entries, /payment-requests returns suchak_payment_requests ids (a
+    | DIFFERENT space — sending one as a customer_payment_id would bind the wrong receipt to a
+    | family's instalment), and a customer_payment_id reached the app only in the one-shot body
+    | of mark-paid. So the settle half of the §7.4 ledger was unreachable.
+    |
+    | Scoped on `suchak_account_id` — the identical predicate the settle route applies to the
+    | row it is handed, so this list can only ever offer receipts that route would accept.
+    | Filterable by `customer_agreement_id` because settlement requires the receipt and the
+    | tranche to sit on the same agreement.
+    */
+    Route::get('/customer-payments', [SuchakCustomerPaymentsApiController::class, 'index']); // WHICH RECEIPT MAY BE BOUND TO AN INSTALMENT
     Route::get('/payment-identity', [SuchakPaymentIdentityApiController::class, 'show']);
     Route::post('/payment-identity', [SuchakPaymentIdentityApiController::class, 'update']);
     Route::get('/payment-requests', [SuchakPaymentRequestsApiController::class, 'index']);
