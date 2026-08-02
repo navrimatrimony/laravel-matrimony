@@ -7,6 +7,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakCommissionAgreement;
+use App\Models\SuchakCustomerContext;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakCollaborationService;
@@ -50,6 +51,18 @@ class SuchakCustomerDetailApiController extends Controller
                             'kind' => $row['kind'] ?? null,
                             'profile_id' => $row['profile_id'] ?? null,
                             'representation_id' => $row['representation_id'] ?? null,
+                            // D20's trail hangs off the CUSTOMER CONTEXT, not
+                            // the representation, and until now that id reached
+                            // a phone only inside the payment-request options —
+                            // so opening a family's history would have cost a
+                            // second, unrelated round trip to a money endpoint.
+                            // Null when this customer has no context yet, which
+                            // is a real state: the history is then genuinely
+                            // empty, not merely unreachable.
+                            'customer_context_id' => SuchakCustomerContext::query()
+                                ->where('suchak_account_id', $account->id)
+                                ->where('representation_id', $representation)
+                                ->value('id'),
                             'intake_id' => $row['intake_id'] ?? null,
                             'photo_url' => $row['photo_url'] ?? null,
                             'name' => $row['name'] ?? null,
