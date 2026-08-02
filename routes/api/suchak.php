@@ -21,7 +21,9 @@ use App\Http\Controllers\Api\Suchak\SuchakIntakeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakLoginApiController;
 use App\Http\Controllers\Api\Suchak\SuchakManualProfileApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMarketplaceChallengeApiController;
+use App\Http\Controllers\Api\Suchak\SuchakCustomerHistoryApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMarriageOutcomeApiController;
+use App\Http\Controllers\Api\Suchak\SuchakReputationApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMatchSuggestionsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeetingsApiController;
@@ -191,6 +193,31 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     */
     Route::get('/cross-suchak-obligations', [SuchakCrossSuchakObligationApiController::class, 'index']); // MY LEDGER, BOTH DIRECTIONS
     Route::get('/cross-suchak-obligations/ratio', [SuchakCrossSuchakObligationApiController::class, 'ownRatio']); // A7 — MY REALIZED-VS-DECLARED
+
+    /*
+    |--------------------------------------------------------------------------
+    | BEHAVIOURAL READERS — blueprint §11 phase 5, "the market can sort itself"
+    |--------------------------------------------------------------------------
+    |
+    | Pure reads over rows the engines already write. No score column, no
+    | rollup, no new table: a stored reputation goes stale the moment anything
+    | underneath it moves, and the no-duplicate rule forbids a second home for a
+    | fact the events already carry.
+    |
+    | The two are gated differently on purpose. A reputation is a DISCLOSURE —
+    | §9 shows it to every Suchak deciding whether to open his own customer to
+    | this one — and it therefore names no candidate, no family and no place. A
+    | customer's history is that family's trail and stays with the Suchak who
+    | owns them; anyone else gets a 404 and does not learn the family exists.
+    |
+    | `/reputation` is declared before `/reputation/{id}` or the literal would
+    | be swallowed by the parameter.
+    */
+    Route::get('/reputation', [SuchakReputationApiController::class, 'own']);
+    Route::get('/reputation/{suchakAccount}', [SuchakReputationApiController::class, 'show'])
+        ->whereNumber('suchakAccount'); // verified callers only (D18/A10)
+    Route::get('/customer-contexts/{customerContext}/history', [SuchakCustomerHistoryApiController::class, 'show'])
+        ->whereNumber('customerContext'); // D20 — owner only
     Route::get('/cross-suchak-obligations/ratio/{suchakAccount}', [SuchakCrossSuchakObligationApiController::class, 'declarerRatio'])
         ->whereNumber('suchakAccount'); // A7 — A DECLARER'S CARD, BEFORE A HELPER COMMITS
     Route::post('/cross-suchak-obligations/{obligation}/settle', [SuchakCrossSuchakObligationApiController::class, 'settle'])
