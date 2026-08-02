@@ -684,6 +684,203 @@ class SuchakCrossSuchakObligationTest extends TestCase
         $this->assertFalse($exposure['platform_enforces']);
     }
 
+    // ── The account ledger and the ratio must describe the same money the same way ───────────
+
+    /**
+     * Confirmed by hand on a real device against production data: the cross-Suchak screen showed
+     * "जाहीर: 3 · पूर्ण: 0 · उशीर: 2" in the ratio card and, an inch below it, "अजून एकही आंतर-सूचक
+     * नोंद नाही" in the list. Two contradictory statements about one Suchak's money, with two of the
+     * shares already overdue.
+     *
+     * It was never a rendering bug. `ledgerFor()` read `owedBy()` / `owedTo()` — stored rows only —
+     * while `declarerRatio()` counted those PLUS `derivedUnraisedObligations()`. So a marriage that
+     * is recorded and confirmed produced a real, overdue debt the ledger rendered as nothing: the
+     * payer had no row to raise, the payee had no row to chase, and the judged party could not act
+     * on the number judging him.
+     */
+    public function test_the_ledger_shows_the_derived_overdue_share_the_ratio_is_already_counting(): void
+    {
+        $fixture = $this->marriedMarketplaceEngagement(marriedDaysAgo: 40);
+
+        // Nobody pressed raise. This is exactly the production state that produced the screenshot.
+        $this->assertSame(0, SuchakCrossSuchakObligation::query()->count());
+
+        $ratio = $this->obligationService()->declarerRatio((int) $fixture['publisher']->id);
+        $ledger = $this->obligationService()->ledgerFor($fixture['publisher']);
+
+        // The ratio counts one overdue share…
+        $this->assertSame(1, $ratio['declared_obligation_count']);
+        $this->assertSame(1, $ratio['overdue_obligation_count']);
+
+        // …and the list no longer answers "nothing here". THE CONTRADICTION, closed.
+        $this->assertCount(1, $ledger['owed_by_me']['obligations']);
+
+        $row = $ledger['owed_by_me']['obligations'][0];
+        $this->assertTrue($row['is_overdue']);
+        $this->assertSame('₹30,000', $row['amount_display']);
+        $this->assertSame('days_after_recorded_marriage', $row['due_reason']);
+
+        // A read stays a read.
+        $this->assertSame(0, SuchakCrossSuchakObligation::query()->count());
+    }
+
+    public function test_a_derived_ledger_row_is_unmistakably_not_a_raised_one(): void
+    {
+        $fixture = $this->marriedMarketplaceEngagement(marriedDaysAgo: 40);
+
+        $derived = $this->obligationService()
+            ->ledgerFor($fixture['publisher'])['owed_by_me']['obligations'][0];
+
+        // They are not the same fact: one is a debt somebody committed to, the other is one the
+        // platform inferred and nobody has yet made real. Same `is_derived` key, same shape, as the
+        // per-engagement door already publishes — the client needs no second parser.
+        $this->assertTrue($derived['is_derived']);
+        // NO STORED ID, so nothing in this payload can address the settle route at all.
+        $this->assertSame(0, $derived['obligation_id']);
+        // Derived is unsettled by definition: settlement is a fact only the payee can record.
+        $this->assertFalse($derived['is_settled']);
+        $this->assertNull($derived['settled_at']);
+        // RAISE is the verb it answers to, and it is keyed on an id that is real.
+        $this->assertSame((int) $fixture['collaboration']->id, $derived['collaboration_request_id']);
+
+        $this->obligationService()->raise($fixture['collaboration'], $fixture['helper'], $fixture['helperUser']);
+
+        $raised = $this->obligationService()
+            ->ledgerFor($fixture['publisher']->fresh())['owed_by_me']['obligations'][0];
+
+        $this->assertFalse($raised['is_derived']);
+        $this->assertGreaterThan(0, $raised['obligation_id']);
+        // Same money, same slice — only its standing as a record changed.
+        $this->assertSame($derived['amount'], $raised['amount']);
+    }
+
+    public function test_a_derived_ledger_row_is_not_settleable_and_the_route_refuses_it(): void
+    {
+        $fixture = $this->marriedMarketplaceEngagement(marriedDaysAgo: 40);
+
+        // The PAYEE reads it — the only party who may ever settle anything — and still gets a row
+        // with no id to settle.
+        Sanctum::actingAs($fixture['helperUser']);
+        $this->getJson('/api/v1/suchak/cross-suchak-obligations')
+            ->assertOk()
+            ->assertJsonPath('data.owed_to_me.obligations.0.is_derived', true)
+            ->assertJsonPath('data.owed_to_me.obligations.0.obligation_id', 0)
+            ->assertJsonPath('data.owed_to_me.obligations.0.is_settled', false);
+
+        // The id a derived row carries addresses nothing — route-model binding cannot resolve 0.
+        $this->postJson('/api/v1/suchak/cross-suchak-obligations/0/settle')->assertNotFound();
+        $this->assertSame(0, SuchakCrossSuchakObligation::query()->count());
+
+        // Raising IS open to him — M3, suppressing the record must accelerate the obligation and
+        // never kill it — and it is what turns the derived row into one he can later settle.
+        $this->postJson(
+            '/api/v1/suchak/collaborations/'.$fixture['collaboration']->id.'/cross-suchak-obligations'
+        )->assertOk();
+        $this->assertSame(1, SuchakCrossSuchakObligation::query()->count());
+    }
+
+    public function test_the_payee_is_shown_the_share_he_is_owed_before_anybody_raises_it(): void
+    {
+        $fixture = $this->marriedMarketplaceEngagement(marriedDaysAgo: 40);
+
+        $ledger = $this->obligationService()->ledgerFor($fixture['helper']);
+
+        // The helper's own money, in the direction it belongs to. Deciding whether the marketplace
+        // was worth entering is what this list is FOR, and a helper who had earned ₹30,000 and never
+        // been paid was shown an empty screen.
+        $this->assertCount(1, $ledger['owed_to_me']['obligations']);
+        $this->assertSame([], $ledger['owed_by_me']['obligations']);
+
+        $row = $ledger['owed_to_me']['obligations'][0];
+        $this->assertTrue($row['is_derived']);
+        $this->assertSame((int) $fixture['publisher']->id, $row['payer_suchak_account_id']);
+        $this->assertSame((int) $fixture['helper']->id, $row['payee_suchak_account_id']);
+    }
+
+    public function test_the_ledger_totals_match_the_ratio_the_same_screen_prints(): void
+    {
+        // Two tranches, one released and one not, so the arithmetic has something to get wrong.
+        $fixture = $this->marriedMarketplaceEngagement(marriedDaysAgo: 40, tranchePlan: [
+            [SuchakCollaborationStageEvent::STAGE_ENGAGEMENT, '40.00', false],
+            [SuchakCollaborationStageEvent::STAGE_MARRIAGE, '60.00', true],
+        ]);
+
+        $ratio = $this->obligationService()->declarerRatio((int) $fixture['publisher']->id);
+        $totals = $this->obligationService()->ledgerFor($fixture['publisher'])['owed_by_me']['totals'];
+
+        // Card and list are computed from one set, so they can no longer disagree in front of a user.
+        $this->assertSame($ratio['declared_obligation_count'], $totals['declared_count']);
+        $this->assertSame($ratio['settled_obligation_count'], $totals['settled_count']);
+        $this->assertSame($ratio['overdue_obligation_count'], $totals['overdue_count']);
+        $this->assertSame($ratio['oldest_overdue_days'], $totals['oldest_overdue_days']);
+        $this->assertSame(
+            $ratio['by_currency'][0]['declared_amount_display'],
+            $totals['declared_amount_display'],
+        );
+    }
+
+    public function test_a_raised_row_and_its_derived_twin_are_never_both_counted_on_the_ledger(): void
+    {
+        $fixture = $this->marriedMarketplaceEngagement(marriedDaysAgo: 40, tranchePlan: [
+            [SuchakCollaborationStageEvent::STAGE_ENGAGEMENT, '40.00', false],
+            [SuchakCollaborationStageEvent::STAGE_MARRIAGE, '60.00', true],
+        ]);
+
+        $before = $this->obligationService()->ledgerFor($fixture['publisher'])['owed_by_me']['totals'];
+        $this->assertSame(2, $before['declared_count']);
+        $this->assertSame('₹30,000', $before['declared_amount_display']);
+
+        // Raising persists exactly the slices that were derived. If the twins survived beside them
+        // the declared sum would double to ₹60,000 — the number two businesses argue about,
+        // inflated by a read.
+        $this->obligationService()->raise($fixture['collaboration'], $fixture['helper'], $fixture['helperUser']);
+        $this->assertSame(2, SuchakCrossSuchakObligation::query()->count());
+
+        $payer = $this->obligationService()->ledgerFor($fixture['publisher']->fresh());
+        $this->assertSame(2, $payer['owed_by_me']['totals']['declared_count']);
+        $this->assertSame('₹30,000', $payer['owed_by_me']['totals']['declared_amount_display']);
+        foreach ($payer['owed_by_me']['obligations'] as $row) {
+            $this->assertFalse($row['is_derived']);
+        }
+
+        // The same, one row at a time, on the OTHER side of the same engagement.
+        $payee = $this->obligationService()->ledgerFor($fixture['helper']->fresh());
+        $this->assertSame(2, $payee['owed_to_me']['totals']['declared_count']);
+        $this->assertSame('₹30,000', $payee['owed_to_me']['totals']['declared_amount_display']);
+        foreach ($payee['owed_to_me']['obligations'] as $row) {
+            $this->assertFalse($row['is_derived']);
+        }
+    }
+
+    public function test_an_empty_ledger_and_the_new_badge_are_the_same_answer(): void
+    {
+        // The other half of the contract. When the list really is empty the ratio must be saying
+        // "new" — neither side may invent the other's story.
+        [, $account] = $this->verifiedSuchakActor();
+        $ledger = $this->obligationService()->ledgerFor($account);
+
+        $this->assertSame([], $ledger['owed_by_me']['obligations']);
+        $this->assertSame([], $ledger['owed_to_me']['obligations']);
+        $this->assertTrue($this->obligationService()->declarerRatio((int) $account->id)['is_new']);
+
+        // And an UNCONFIRMED marriage is the same honest empty, on both sides: the derivation runs
+        // `raise()`'s own gates because it IS `raise()`'s own routine. A claim is not a wedding, and
+        // a share of a fee that cannot be collected is a debt nobody owes.
+        $unconfirmed = $this->marriedMarketplaceEngagement(marriedDaysAgo: 40, confirmMarriage: false);
+
+        $this->assertSame(
+            [],
+            $this->obligationService()->ledgerFor($unconfirmed['publisher'])['owed_by_me']['obligations'],
+        );
+        $this->assertSame(
+            [],
+            $this->obligationService()->ledgerFor($unconfirmed['helper'])['owed_to_me']['obligations'],
+        );
+        $this->assertTrue(
+            $this->obligationService()->declarerRatio((int) $unconfirmed['publisher']->id)['is_new'],
+        );
+    }
+
     public function test_every_settlement_column_is_read_back_out(): void
     {
         $fixture = $this->marriedMarketplaceEngagement();

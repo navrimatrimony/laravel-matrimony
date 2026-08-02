@@ -47,6 +47,18 @@ use InvalidArgumentException;
  */
 class SuchakCrossSuchakObligationService
 {
+    /**
+     * WHICH SIDE of an engagement a derived slice is being asked about.
+     *
+     * NOT two derivations — one routine ({@see derivedUnraisedObligations()}) asked a different
+     * question. A7's ratio only ever asks the payer question, because a ratio is about a declarer's
+     * own promises; the account ledger asks both, because being owed a share nobody raised is just
+     * as real a fact as owing one.
+     */
+    private const DERIVED_FOR_PAYER = 'payer';
+
+    private const DERIVED_FOR_PAYEE = 'payee';
+
     public function __construct(
         private readonly SuchakCollaborationService $collaborationService,
         private readonly SuchakSuccessFeeTrancheService $trancheService,
@@ -311,14 +323,48 @@ class SuchakCrossSuchakObligationService
      * different facts about the same Suchak — what he owes decides his A7 ratio, what he is owed
      * decides whether the marketplace was worth entering.
      *
+     * ── DERIVE-THEN-RECORD, ON THE LEDGER TOO (fixed 2026-08-04) ─────────────────────────────
+     *
+     * This read used to return STORED ROWS ONLY while {@see declarerRatio()} — the card rendered
+     * directly above this list on the same screen — counted stored rows PLUS the ones
+     * {@see derivedUnraisedObligations()} computes. One screen therefore said "जाहीर: 3 · उशीर: 2"
+     * and, an inch below it, "अजून एकही आंतर-सूचक नोंद नाही", about the same Suchak's money. It was
+     * not a rendering bug: a marriage that is recorded, confirmed and paid produces a real, overdue
+     * cross-Suchak debt, and the ledger showed the payer nothing to raise and the payee nothing to
+     * chase. The judged party could not act on a number he was being judged by.
+     *
+     * So the SAME derivation now feeds both. Not a second copy of it — the identical private
+     * routine, asked once per direction, over the identical {@see collectibleSlices()} that
+     * `raise()` persists. A derived row is marked `is_derived` in {@see payload()} and carries
+     * `obligation_id = 0`, so nothing here can be mistaken for a debt somebody committed to.
+     *
      * @return array<string, mixed>
      */
     public function ledgerFor(SuchakAccount $account, ?Carbon $at = null): array
     {
         $at ??= now();
+        $accountId = (int) $account->id;
 
-        $owedByMe = $this->rows(SuchakCrossSuchakObligation::query()->owedBy((int) $account->id));
-        $owedToMe = $this->rows(SuchakCrossSuchakObligation::query()->owedTo((int) $account->id));
+        $recordedOwedByMe = $this->rows(SuchakCrossSuchakObligation::query()->owedBy($accountId));
+        $recordedOwedToMe = $this->rows(SuchakCrossSuchakObligation::query()->owedTo($accountId));
+
+        // ONE dedup baseline for BOTH directions — every stored row this account is named on. A
+        // derived slice is dropped the moment ANY stored row covers it, so a row and its derived
+        // twin can never both reach `totals()` and inflate a sum two businesses will argue about.
+        // Per-direction baselines would be enough today (a raised row's payer is the engagement's
+        // customer owner by `assertMatchesItsOrigin()`, so its twin always lands in the same list),
+        // but that holds only while `customer_owner_side` never moves after a raise. The union
+        // costs one array_merge and does not depend on that.
+        $recorded = array_merge($recordedOwedByMe, $recordedOwedToMe);
+
+        $owedByMe = array_merge(
+            $recordedOwedByMe,
+            $this->derivedUnraisedObligations($accountId, $recorded, self::DERIVED_FOR_PAYER),
+        );
+        $owedToMe = array_merge(
+            $recordedOwedToMe,
+            $this->derivedUnraisedObligations($accountId, $recorded, self::DERIVED_FOR_PAYEE),
+        );
 
         return [
             'suchak_account_id' => (int) $account->id,
@@ -381,7 +427,7 @@ class SuchakCrossSuchakObligationService
     {
         $at ??= now();
         $recorded = $this->rows(SuchakCrossSuchakObligation::query()->owedBy($suchakAccountId));
-        $derived = $this->derivedUnraisedObligations($suchakAccountId, $recorded);
+        $derived = $this->derivedUnraisedObligations($suchakAccountId, $recorded, self::DERIVED_FOR_PAYER);
         $rows = array_merge($recorded, $derived);
 
         $byCurrency = [];
@@ -475,14 +521,21 @@ class SuchakCrossSuchakObligationService
      * an unrecorded settlement is exactly what A7 is measuring the absence of.
      *
      * THE ROLE IS THE MODEL'S, NEVER THE QUERY'S. The SQL narrows by PARTICIPATION — the two
-     * directional account columns — and `isCustomerOwner()` then decides which of the two is the
-     * declarer. Reading `target_suchak_account_id` as "the payer" would be the §6.2 direction/role
-     * confusion one layer down, and on a challenge answered by proposing it is backwards.
+     * directional account columns — and the engagement's own role accessors then decide which of the
+     * two sides this account is on. Reading `target_suchak_account_id` as "the payer" would be the
+     * §6.2 direction/role confusion one layer down, and on a challenge answered by proposing it is
+     * backwards.
      *
-     * @param  list<SuchakCrossSuchakObligation>  $recorded
+     * $role is which side is being asked about, and it is the ONLY thing that differs between A7's
+     * ratio (always the payer — a ratio judges a declarer's own promises) and the account ledger,
+     * which asks both because a share nobody raised is owed to somebody as surely as it is owed by
+     * somebody. The arithmetic, the gates and the dedup grain are one and the same either way.
+     *
+     * @param  list<SuchakCrossSuchakObligation>  $recorded  the stored rows a derived slice must not duplicate
+     * @param  self::DERIVED_FOR_*  $role
      * @return list<SuchakCrossSuchakObligation>
      */
-    private function derivedUnraisedObligations(int $suchakAccountId, array $recorded): array
+    private function derivedUnraisedObligations(int $suchakAccountId, array $recorded, string $role): array
     {
         $alreadyRecorded = [];
         foreach ($recorded as $row) {
@@ -514,7 +567,17 @@ class SuchakCrossSuchakObligationService
         $derived = [];
         foreach ($outcomes as $outcome) {
             $collaboration = $outcome->collaborationRequest;
-            if ($collaboration === null || ! $collaboration->isCustomerOwner($suchakAccountId)) {
+            if ($collaboration === null) {
+                continue;
+            }
+
+            // The engagement's two ROLES, read from the engagement. Participation was already
+            // established by the query; this is which of the two seats the caller asked about.
+            $onTheSideAsked = $role === self::DERIVED_FOR_PAYER
+                ? $collaboration->isCustomerOwner($suchakAccountId)
+                : $collaboration->helpingSuchakAccountId() === $suchakAccountId;
+
+            if (! $onTheSideAsked) {
                 continue;
             }
 
@@ -870,6 +933,12 @@ class SuchakCrossSuchakObligationService
     private function payload(SuchakCrossSuchakObligation $obligation, Carbon $at): array
     {
         return [
+            // ZERO on a derived row — the model is unsaved, so `id` is null and the cast makes it 0.
+            // That is deliberate and is the second half of the settle guard: `is_derived` says what
+            // the row is, and a `0` here means there is no path to
+            // `POST /cross-suchak-obligations/{obligation}/settle` that could resolve to anything
+            // (it would 404 on route-model binding). RAISE is the verb a derived row answers to, and
+            // it is keyed on `collaboration_request_id`, which every row carries for real.
             'obligation_id' => (int) $obligation->id,
             // THE SENTENCE THIS TABLE EXISTS TO SAY.
             'payer_suchak_account_id' => (int) $obligation->payer_suchak_account_id,
