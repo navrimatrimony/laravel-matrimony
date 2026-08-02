@@ -83,7 +83,7 @@ class SuchakReputationApiController extends Controller
         }
 
         if (! $user->suchakAccount->isVerified()) {
-            return $this->error('पडताळणी झालेल्या सूचकांनाच ही माहिती पाहता येते.', 403);
+            return $this->error(__('suchak.api.errors.verified_suchaks_only'), 403);
         }
 
         return response()->json([
@@ -96,7 +96,7 @@ class SuchakReputationApiController extends Controller
     {
         $user = $request->user();
         if (! $user instanceof User || $user->suchakAccount === null) {
-            return $this->error('सूचक खाते आवश्यक आहे.', 403);
+            return $this->error(__('suchak.api.errors.suchak_account_required'), 403);
         }
 
         return $user;

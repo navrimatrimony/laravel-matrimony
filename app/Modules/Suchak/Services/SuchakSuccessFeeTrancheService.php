@@ -148,13 +148,13 @@ class SuchakSuccessFeeTrancheService
 
         foreach (array_values($input) as $position => $raw) {
             if (! is_array($raw)) {
-                throw new InvalidArgumentException('हप्त्यांची माहिती अपूर्ण आहे.');
+                throw new InvalidArgumentException(__('suchak.tranche.row_incomplete'));
             }
 
             $stageKey = is_string($raw['trigger_stage_key'] ?? null) ? trim($raw['trigger_stage_key']) : '';
 
             if (! SuchakCollaborationStageEvent::isValidStage($stageKey)) {
-                throw new InvalidArgumentException('हप्ता ज्या टप्प्यावर द्यायचा तो टप्पा वैध नाही.');
+                throw new InvalidArgumentException(__('suchak.tranche.invalid_stage'));
             }
 
             // §7.4's three releasing events, and nothing else. A rung outside the window either
@@ -163,14 +163,15 @@ class SuchakSuccessFeeTrancheService
             // about a couple, and both used to be accepted here.
             if (! self::isReleasingStage($stageKey)) {
                 throw new InvalidArgumentException(
-                    '"'.SuchakCollaborationStageEvent::stageLabel($stageKey).'" या टप्प्यावर हप्ता ठेवता येणार नाही. '
-                    .'यशस्वी विवाह शुल्काचा हप्ता फक्त ग्राहकाच्या दुजोऱ्यावर ठरणाऱ्या '
-                    .$this->releasingStageLabels().' या टप्प्यांवरच ठेवता येतो.'
+                    __('suchak.tranche.stage_not_releasable', [
+                        'stage' => SuchakCollaborationStageEvent::stageLabel($stageKey),
+                        'stages' => $this->releasingStageLabels(),
+                    ])
                 );
             }
 
             if (isset($seenStages[$stageKey])) {
-                throw new InvalidArgumentException('एकाच टप्प्यावर दोन हप्ते ठेवता येणार नाहीत.');
+                throw new InvalidArgumentException(__('suchak.tranche.duplicate_stage'));
             }
             $seenStages[$stageKey] = true;
 
@@ -179,7 +180,7 @@ class SuchakSuccessFeeTrancheService
             // and T2 and T4 both lose their subject.
             $ladderIndex = SuchakCollaborationStageEvent::stageIndex($stageKey);
             if ($ladderIndex <= $previousLadderIndex) {
-                throw new InvalidArgumentException('हप्त्यांचा क्रम टप्प्यांच्या क्रमाप्रमाणेच असावा.');
+                throw new InvalidArgumentException(__('suchak.tranche.order_mismatch'));
             }
             $previousLadderIndex = $ladderIndex;
 
@@ -217,11 +218,11 @@ class SuchakSuccessFeeTrancheService
         }
 
         if (count($flagged) > 1) {
-            throw new InvalidArgumentException('फक्त एकच हप्ता "उर्वरित रक्कम" असू शकतो.');
+            throw new InvalidArgumentException(__('suchak.tranche.one_remainder_only'));
         }
 
         if ($flagged !== [] && $flagged[0] !== $lastIndex) {
-            throw new InvalidArgumentException('"उर्वरित रक्कम" हा शेवटचाच हप्ता असला पाहिजे.');
+            throw new InvalidArgumentException(__('suchak.tranche.remainder_must_be_last'));
         }
 
         // Nobody flagged it: the blueprint leaves no choice about which row is the remainder,
@@ -248,8 +249,9 @@ class SuchakSuccessFeeTrancheService
 
         if ($totalBasisPoints !== 10000) {
             throw new InvalidArgumentException(
-                'हप्त्यांची टक्केवारी एकूण 100% असणे आवश्यक आहे. सध्या ती '
-                .$this->readablePercent($totalBasisPoints / 100).'% आहे.'
+                __('suchak.tranche.percent_must_total_100', [
+                    'percent' => $this->readablePercent($totalBasisPoints / 100),
+                ])
             );
         }
     }
@@ -294,7 +296,7 @@ class SuchakSuccessFeeTrancheService
         // T2 as a live assertion rather than a promise in a comment. If this ever trips, a
         // rupee has gone missing and no amount may be quoted to anyone.
         if (array_sum($paise) !== $totalPaise) {
-            throw new InvalidArgumentException('हप्त्यांची बेरीज एकूण शुल्काएवढी होत नाही.');
+            throw new InvalidArgumentException(__('suchak.tranche.sum_mismatch'));
         }
 
         return array_map(
@@ -328,7 +330,7 @@ class SuchakSuccessFeeTrancheService
         $smallest = min(array_map(static fn (array $row): float => (float) $row['share_percent'], $rows));
 
         if ($first > $smallest) {
-            return ['पहिला हप्ता सर्वात लहान ठेवणे योग्य — तो सर्वात कमी पुराव्यावर मिळतो.'];
+            return [__('suchak.tranche.first_should_be_smallest')];
         }
 
         return [];
@@ -369,7 +371,7 @@ class SuchakSuccessFeeTrancheService
         if ($package->post_marriage_fee_mode !== SuchakCustomerPlan::MODE_FIXED
             || $package->post_marriage_fee_amount === null
             || (float) $package->post_marriage_fee_amount <= 0.0) {
-            throw new InvalidArgumentException('ठरलेले यशस्वी विवाह शुल्क नसताना हप्ते ठरवता येणार नाहीत.');
+            throw new InvalidArgumentException(__('suchak.tranche.no_success_fee'));
         }
     }
 
@@ -415,7 +417,7 @@ class SuchakSuccessFeeTrancheService
 
             if ($replacement === null) {
                 throw new InvalidArgumentException(
-                    '"'.$label.'" या टप्प्याचा हप्ता आधीच लागू झाला आहे; तो नव्या विभागणीतून काढून टाकता येणार नाही.'
+                    __('suchak.tranche.released_cannot_remove', ['stage' => $label])
                 );
             }
 
@@ -425,8 +427,7 @@ class SuchakSuccessFeeTrancheService
 
             if (! $samePercent || ! $sameFinal) {
                 throw new InvalidArgumentException(
-                    '"'.$label.'" या टप्प्याचा हप्ता आधीच लागू झाला आहे; त्याची टक्केवारी आता बदलता येणार नाही. '
-                    .'पुढील न झालेले हप्ते बदलता येतील.'
+                    __('suchak.tranche.released_cannot_recut', ['stage' => $label])
                 );
             }
         }
@@ -562,32 +563,32 @@ class SuchakSuccessFeeTrancheService
                 // accepted revision 1 would otherwise release money under a revision 2 the family
                 // has not seen. Same predicate, different subject, and the gap between them is a
                 // customer being charged under terms they never accepted.
-                $blocked = 'ग्राहकाने करार स्वीकारेपर्यंत हा हप्ता लागू होत नाही.';
+                $blocked = __('suchak.tranche.blocked_terms_pending');
             } elseif (! self::isReleasingStage($stageKey)) {
                 // Written before the plan door refused it — and it can never fire, so the ledger
                 // has to SAY so. Silence here was the other half of the same defect: a tranche
                 // planned above the cap sat in the plan looking pending forever, with no reason
                 // attached and no screen able to explain it.
-                $blocked = '"'.SuchakCollaborationStageEvent::stageLabel($stageKey)
-                    .'" हा टप्पा ग्राहकाच्या दुजोऱ्यावर ठरणारा नाही, त्यामुळे या टप्प्यावरचा हप्ता कधीही लागू होणार नाही. '
-                    .'नव्या विभागणीत हा हप्ता '.$this->releasingStageLabels().' यापैकी एका टप्प्यावर हलवावा.';
+                $blocked = __('suchak.tranche.blocked_stage_never_releases', [
+                    'stage' => SuchakCollaborationStageEvent::stageLabel($stageKey),
+                    'stages' => $this->releasingStageLabels(),
+                ]);
             } elseif (isset($elsewhere[$stageKey])) {
                 // M9's narrower unit — one RUNG is owed once, see committedStagesOnOtherChains().
-                $blocked = 'याच ग्राहकाच्या दुसऱ्या योजनेत "'
-                    .SuchakCollaborationStageEvent::stageLabel($stageKey)
-                    .'" चा हप्ता आधीच लागू झाला आहे; तोच टप्पा दुसऱ्यांदा आकारला जाणार नाही.';
+                $blocked = __('suchak.tranche.blocked_stage_already_charged', [
+                    'stage' => SuchakCollaborationStageEvent::stageLabel($stageKey),
+                ]);
             } elseif ($claimedPaise + $this->paise($amount) > $allowancePaise) {
                 // M9's real unit — the family's MONEY. A tranche is atomic, so it either fits in
                 // what is left of the one agreed figure or it does not fire at all; there is no
                 // half instalment to release. Under-charging here is the safe direction, and the
                 // reason is published in rupees so the Suchak can see the arithmetic.
-                $blocked = 'या कुटुंबाच्या यशस्वी विवाह शुल्कापैकी '
-                    .MoneyFormat::amount($elsewhereMoneyPaise / 100, $currency)
-                    .' दुसऱ्या योजनेत आधीच आकारले आहे. या करारातील एकूण '
-                    .MoneyFormat::amount($total, $currency).' पैकी '
-                    .MoneyFormat::amount(max(0, $allowancePaise - $claimedPaise) / 100, $currency)
-                    .' शिल्लक असल्याने '.MoneyFormat::amount($amount, $currency)
-                    .' चा हा हप्ता लागू होणार नाही. यशस्वी विवाह शुल्क प्रत्येक ग्राहकाकडून एकदाच घेतले जाते.';
+                $blocked = __('suchak.tranche.blocked_family_allowance', [
+                    'committed' => MoneyFormat::amount($elsewhereMoneyPaise / 100, $currency),
+                    'total' => MoneyFormat::amount($total, $currency),
+                    'remaining' => MoneyFormat::amount(max(0, $allowancePaise - $claimedPaise) / 100, $currency),
+                    'amount' => MoneyFormat::amount($amount, $currency),
+                ]);
             } else {
                 $trigger = $this->firstRungAtOrAfter($settledRungs, $stageKey);
 
@@ -634,7 +635,7 @@ class SuchakSuccessFeeTrancheService
 
             if (! $entitlement['terms_satisfied']) {
                 throw new InvalidArgumentException(
-                    'ग्राहकाने करार स्वीकारेपर्यंत यशस्वी विवाह शुल्काचा कोणताही हप्ता लागू होत नाही.'
+                    __('suchak.tranche.blocked_no_tranche_until_accept')
                 );
             }
 
@@ -699,20 +700,20 @@ class SuchakSuccessFeeTrancheService
         $payment->refresh();
 
         if (! $tranche->isReleased()) {
-            throw new InvalidArgumentException('अजून लागू न झालेल्या हप्त्याची भरणा-नोंद करता येणार नाही.');
+            throw new InvalidArgumentException(__('suchak.tranche.settle_not_released'));
         }
 
         if ((int) $payment->customer_agreement_id !== (int) $tranche->customer_agreement_id) {
-            throw new InvalidArgumentException('हा भरणा या कराराचा नाही.');
+            throw new InvalidArgumentException(__('suchak.tranche.settle_payment_not_this_agreement'));
         }
 
         if ($payment->payment_status !== SuchakCustomerPayment::STATUS_PAID) {
-            throw new InvalidArgumentException('भरणा पूर्ण झाल्याची नोंद नसताना हप्ता भरला असे नोंदवता येणार नाही.');
+            throw new InvalidArgumentException(__('suchak.tranche.settle_payment_incomplete'));
         }
 
         if ($tranche->isSettled()) {
             if ((int) $tranche->customer_payment_id !== (int) $payment->id) {
-                throw new InvalidArgumentException('या हप्त्याची भरणा-नोंद आधीच दुसऱ्या भरण्याशी जोडलेली आहे.');
+                throw new InvalidArgumentException(__('suchak.tranche.settle_already_bound'));
             }
 
             return $tranche;
@@ -740,10 +741,11 @@ class SuchakSuccessFeeTrancheService
 
             if ($tranchePaise > $remainingPaise) {
                 throw new InvalidArgumentException(
-                    'या हप्त्याची रक्कम '.MoneyFormat::amount($tranchePaise / 100, $currency).' आहे; '
-                    .MoneyFormat::amount($receiptPaise / 100, $currency).' च्या या भरण्यातून '
-                    .MoneyFormat::amount(max(0, $remainingPaise) / 100, $currency).' शिल्लक आहे. '
-                    .'भरण्यापेक्षा मोठा हप्ता भरला असे नोंदवता येणार नाही.'
+                    __('suchak.tranche.settle_exceeds_receipt', [
+                        'tranche' => MoneyFormat::amount($tranchePaise / 100, $currency),
+                        'receipt' => MoneyFormat::amount($receiptPaise / 100, $currency),
+                        'remaining' => MoneyFormat::amount(max(0, $remainingPaise) / 100, $currency),
+                    ])
                 );
             }
 
@@ -1072,7 +1074,7 @@ class SuchakSuccessFeeTrancheService
 
         if ($boundId === null) {
             throw new InvalidArgumentException(
-                'या सहकार्याला ग्राहकाचा करार जोडलेला नाही, त्यामुळे कोणताही हप्ता लागू होऊ शकत नाही.'
+                __('suchak.tranche.no_agreement_linked')
             );
         }
 
@@ -1197,12 +1199,12 @@ class SuchakSuccessFeeTrancheService
     private function percent(mixed $value): string
     {
         if (! is_numeric($value)) {
-            throw new InvalidArgumentException('प्रत्येक हप्त्याची टक्केवारी लिहिणे आवश्यक आहे.');
+            throw new InvalidArgumentException(__('suchak.tranche.percent_required'));
         }
 
         $percent = (float) $value;
         if ($percent <= 0.0 || $percent > 100.0) {
-            throw new InvalidArgumentException('प्रत्येक हप्त्याची टक्केवारी 0 पेक्षा जास्त आणि 100 पर्यंत असावी.');
+            throw new InvalidArgumentException(__('suchak.tranche.percent_range'));
         }
 
         return number_format($percent, 2, '.', '');

@@ -22,6 +22,24 @@ class SuchakPublicAgreementAcceptanceTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * These tests assert MARATHI wording, so they ask for Marathi.
+     *
+     * They did not have to before: the sentences they pin were hardcoded
+     * Marathi literals, which read the same whatever the caller wanted — the
+     * defect, not the contract. Now the wording follows the request, so the
+     * language under test is stated rather than inherited from whatever the
+     * suite's default locale happens to be (Symfony's test client sends
+     * `Accept-Language: en-us`, so the default is English).
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        app()->setLocale('mr');
+        $this->withHeader('Accept-Language', 'mr');
+    }
+
     public function test_acceptance_token_columns_exist_and_token_is_stored_hashed(): void
     {
         foreach ([
@@ -93,7 +111,12 @@ class SuchakPublicAgreementAcceptanceTest extends TestCase
         ]);
         $link = app(SuchakAgreementService::class)->issueAcceptanceLink($agreement, $suchakUser);
 
-        $response = $this->get(route('suchak.agreements.public.show', ['token' => $link['raw_token']]));
+        // Served by the WEB group: its locale comes from `?locale=` / session,
+        // not from Accept-Language, so Marathi is asked for that way.
+        $response = $this->get(route('suchak.agreements.public.show', [
+            'token' => $link['raw_token'],
+            'locale' => 'mr',
+        ]));
 
         $response->assertOk();
         $response->assertSee('लग्न ठरल्यावर', false);

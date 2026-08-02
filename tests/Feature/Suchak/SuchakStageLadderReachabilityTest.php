@@ -411,9 +411,14 @@ class SuchakStageLadderReachabilityTest extends TestCase
         $this->assertSame(0, SuchakCollaborationStageEvent::query()->count());
 
         Sanctum::actingAs($helperUser);
-        $this->postJson('/api/v1/suchak/collaborations/'.$collaboration->id.'/stages', [
-            'stage_key' => SuchakCollaborationStageEvent::STAGE_SHARE_SETTLED,
-        ])
+        // `stage_label` follows Accept-Language now that the ladder's wording
+        // lives in lang/{en,mr}/suchak.php instead of a Marathi-only constant,
+        // so the language being asserted is stated rather than assumed.
+        $this->postJson(
+            '/api/v1/suchak/collaborations/'.$collaboration->id.'/stages',
+            ['stage_key' => SuchakCollaborationStageEvent::STAGE_SHARE_SETTLED],
+            ['Accept-Language' => 'mr'],
+        )
             ->assertCreated()
             ->assertJsonPath('data.claimant', SuchakCollaborationStageEvent::CLAIMANT_HELPER)
             ->assertJsonPath('data.stage_label', 'वाटा दिल्यावर');
@@ -692,6 +697,7 @@ class SuchakStageLadderReachabilityTest extends TestCase
         $response = $this->postJson(
             '/api/v1/suchak/customer-agreements/'.$agreement->id.'/stages',
             ['stage_key' => SuchakCollaborationStageEvent::STAGE_PUBLISHED_TO_MARKETPLACE],
+            ['Accept-Language' => 'mr'],
         );
 
         $response->assertCreated()

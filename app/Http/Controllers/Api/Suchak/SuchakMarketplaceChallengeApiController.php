@@ -86,7 +86,7 @@ class SuchakMarketplaceChallengeApiController extends Controller
             ->first();
 
         if ($representation === null) {
-            return $this->error('हे स्थळ तुमच्या खात्यात सापडले नाही.', 404);
+            return $this->error(__('suchak.api.errors.profile_not_found'), 404);
         }
 
         try {
@@ -104,7 +104,7 @@ class SuchakMarketplaceChallengeApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'आव्हान बाजारपेठेत प्रसिद्ध झाले.',
+            'message' => __('suchak.api.challenge.published'),
             'data' => $challengeService->listingPayload($challenge),
         ], 201);
     }
@@ -133,7 +133,7 @@ class SuchakMarketplaceChallengeApiController extends Controller
         // 404 rather than 403: a Suchak has no business learning that another Suchak's challenge
         // exists by the shape of the refusal. Browse is where other people's challenges are seen.
         if ((int) $challenge->suchak_account_id !== (int) $user->suchakAccount->id) {
-            return $this->error('हे आव्हान तुमच्या खात्यात सापडले नाही.', 404);
+            return $this->error(__('suchak.api.errors.challenge_not_found'), 404);
         }
 
         try {
@@ -151,7 +151,7 @@ class SuchakMarketplaceChallengeApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'आव्हान मागे घेतले.',
+            'message' => __('suchak.api.challenge.withdrawn'),
             'data' => [
                 'challenge_id' => (int) $withdrawn->id,
                 'status' => $withdrawn->status,
@@ -309,7 +309,7 @@ class SuchakMarketplaceChallengeApiController extends Controller
             ->first();
 
         if ($representation === null) {
-            return $this->error('हे स्थळ तुमच्या खात्यात सापडले नाही.', 404);
+            return $this->error(__('suchak.api.errors.profile_not_found'), 404);
         }
 
         try {
@@ -331,7 +331,7 @@ class SuchakMarketplaceChallengeApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'स्थळ सुचवले. आता प्रसिद्ध करणाऱ्या सूचकाच्या होकाराची वाट पाहा.',
+            'message' => __('suchak.api.challenge.proposal_sent'),
             'data' => [
                 'collaboration_id' => (int) $collaboration->id,
                 'challenge_id' => (int) $challenge->id,
@@ -453,7 +453,7 @@ class SuchakMarketplaceChallengeApiController extends Controller
         }
 
         if ((int) $challenge->suchak_account_id !== (int) $user->suchakAccount->id) {
-            return $this->error('हे आव्हान तुमच्या खात्यात सापडले नाही.', 404);
+            return $this->error(__('suchak.api.errors.challenge_not_found'), 404);
         }
 
         try {
@@ -524,7 +524,7 @@ class SuchakMarketplaceChallengeApiController extends Controller
     {
         $user = $request->user();
         if (! $user instanceof User || $user->suchakAccount === null) {
-            return $this->error('सूचक खाते आवश्यक आहे.', 403);
+            return $this->error(__('suchak.api.errors.suchak_account_required'), 403);
         }
 
         return $user;

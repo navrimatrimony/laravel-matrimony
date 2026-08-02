@@ -45,7 +45,7 @@ class SuchakMarketEconomicsApiController extends Controller
         if (! $user instanceof User || $user->suchakAccount === null) {
             return response()->json([
                 'success' => false,
-                'message' => 'सूचक खाते आवश्यक आहे.',
+                'message' => __('suchak.api.errors.suchak_account_required'),
             ], 403);
         }
 

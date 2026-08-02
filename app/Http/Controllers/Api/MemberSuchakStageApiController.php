@@ -80,7 +80,7 @@ class MemberSuchakStageApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'तुमचा दुजोरा नोंदवला.',
+            'message' => __('suchak.api.stage.family_confirmed'),
             'data' => [
                 'stage_event_id' => (int) $event->id,
                 'stage_key' => $event->stage_key,

@@ -75,7 +75,7 @@ class SuchakCrossSuchakObligationApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'जाहीर केलेल्या वाट्याची देय नोंद झाली.',
+            'message' => __('suchak.api.obligation.declared_due'),
             'data' => $obligationService->forEngagement($collaboration->fresh() ?? $collaboration),
         ]);
     }
@@ -152,7 +152,7 @@ class SuchakCrossSuchakObligationApiController extends Controller
         }
 
         if (! $user->suchakAccount->isVerified()) {
-            return $this->error('पडताळणी झालेल्या सूचकांनाच ही माहिती पाहता येते.', 403);
+            return $this->error(__('suchak.api.errors.verified_suchaks_only'), 403);
         }
 
         return response()->json([
@@ -183,7 +183,7 @@ class SuchakCrossSuchakObligationApiController extends Controller
             && (int) $obligation->payee_suchak_account_id !== $accountId) {
             // 404, not 403: whether two OTHER Suchaks owe each other money is not this caller's
             // business to learn, and "forbidden" confirms the row exists.
-            return $this->error('ही नोंद तुमच्या खात्यात सापडली नाही.', 404);
+            return $this->error(__('suchak.api.errors.obligation_not_found'), 404);
         }
 
         $validated = $request->validate([
@@ -209,7 +209,7 @@ class SuchakCrossSuchakObligationApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'वाटा मिळाल्याची नोंद झाली.',
+            'message' => __('suchak.api.obligation.settlement_recorded'),
             'data' => $collaboration === null
                 ? null
                 : $obligationService->forEngagement($collaboration),
@@ -220,7 +220,7 @@ class SuchakCrossSuchakObligationApiController extends Controller
     {
         $user = $request->user();
         if (! $user instanceof User || $user->suchakAccount === null) {
-            return $this->error('सूचक खाते आवश्यक आहे.', 403);
+            return $this->error(__('suchak.api.errors.suchak_account_required'), 403);
         }
 
         return $user;
@@ -240,7 +240,7 @@ class SuchakCrossSuchakObligationApiController extends Controller
         }
 
         if ($collaboration->sideForAccount((int) $user->suchakAccount->id) === null) {
-            return $this->error('हे सहकार्य तुमच्या खात्यात सापडले नाही.', 404);
+            return $this->error(__('suchak.api.errors.engagement_not_found'), 404);
         }
 
         return $user;

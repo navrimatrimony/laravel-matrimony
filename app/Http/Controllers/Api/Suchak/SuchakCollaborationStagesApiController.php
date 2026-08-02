@@ -70,7 +70,7 @@ class SuchakCollaborationStagesApiController extends Controller
             ->first();
 
         if ($agreement === null) {
-            return $this->error('हा करार तुमच्या खात्यात सापडला नाही.', 404);
+            return $this->error(__('suchak.api.errors.agreement_not_found'), 404);
         }
 
         try {
@@ -88,7 +88,7 @@ class SuchakCollaborationStagesApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'करार या सहकार्याशी जोडला.',
+            'message' => __('suchak.api.agreement.linked_to_engagement'),
             'data' => [
                 'collaboration_id' => (int) $linked->id,
                 'customer_owner_side' => $linked->customer_owner_side,
@@ -167,7 +167,7 @@ class SuchakCollaborationStagesApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'टप्पा नोंदवला.',
+            'message' => __('suchak.api.stage.recorded'),
             'data' => $this->stagePayload($event) + [
                 'marketplace_stage' => $collaboration->fresh()?->marketplace_stage,
             ],
@@ -208,7 +208,7 @@ class SuchakCollaborationStagesApiController extends Controller
             ->first();
 
         if ($model === null) {
-            return $this->error('हा करार तुमच्या खात्यात सापडला नाही.', 404);
+            return $this->error(__('suchak.api.errors.agreement_not_found'), 404);
         }
 
         try {
@@ -225,7 +225,7 @@ class SuchakCollaborationStagesApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'टप्पा नोंदवला.',
+            'message' => __('suchak.api.stage.recorded'),
             'data' => $this->stagePayload($event),
         ], 201);
     }
@@ -266,7 +266,7 @@ class SuchakCollaborationStagesApiController extends Controller
     {
         $user = $request->user();
         if (! $user instanceof User || $user->suchakAccount === null) {
-            return $this->error('सूचक खाते आवश्यक आहे.', 403);
+            return $this->error(__('suchak.api.errors.suchak_account_required'), 403);
         }
 
         return $user;

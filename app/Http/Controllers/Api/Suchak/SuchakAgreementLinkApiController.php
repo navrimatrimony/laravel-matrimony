@@ -39,7 +39,7 @@ class SuchakAgreementLinkApiController extends Controller
         if (! $user instanceof User || $user->suchakAccount === null) {
             return response()->json([
                 'success' => false,
-                'message' => 'सूचक खाते आवश्यक आहे.',
+                'message' => __('suchak.api.errors.suchak_account_required'),
             ], 403);
         }
 
@@ -52,7 +52,7 @@ class SuchakAgreementLinkApiController extends Controller
         if ($model === null) {
             return response()->json([
                 'success' => false,
-                'message' => 'हा करार तुमच्या खात्यात सापडला नाही.',
+                'message' => __('suchak.api.errors.agreement_not_found'),
             ], 404);
         }
 
@@ -84,7 +84,7 @@ class SuchakAgreementLinkApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'करार लिंक तयार झाली आहे.',
+            'message' => __('suchak.api.agreement.link_created'),
             'data' => [
                 'agreement_id' => (int) $fresh->id,
                 'agreement_revision' => (int) $fresh->agreement_revision,
@@ -104,13 +104,13 @@ class SuchakAgreementLinkApiController extends Controller
     {
         return match ($agreement->terms_status) {
             SuchakCustomerAgreement::TERMS_PENDING => null,
-            SuchakCustomerAgreement::TERMS_ACCEPTED => 'हा करार ग्राहकाने आधीच स्वीकारला आहे.',
-            SuchakCustomerAgreement::TERMS_SUPERSEDED => 'हा करार आता वापरात नाही. नवीन करार तयार करून पाठवा.',
-            SuchakCustomerAgreement::TERMS_DECLINED => 'ग्राहकाने हा करार नाकारला आहे. नवीन करार तयार करून पाठवा.',
-            SuchakCustomerAgreement::TERMS_EXPIRED => 'या कराराची मुदत संपली आहे. नवीन करार तयार करून पाठवा.',
+            SuchakCustomerAgreement::TERMS_ACCEPTED => __('suchak.api.agreement.already_accepted'),
+            SuchakCustomerAgreement::TERMS_SUPERSEDED => __('suchak.api.agreement.superseded'),
+            SuchakCustomerAgreement::TERMS_DECLINED => __('suchak.api.agreement.declined'),
+            SuchakCustomerAgreement::TERMS_EXPIRED => __('suchak.api.agreement.expired'),
             SuchakCustomerAgreement::TERMS_BYPASSED,
-            SuchakCustomerAgreement::TERMS_NOT_REQUIRED => 'या करारासाठी ग्राहकाच्या स्वीकाराची गरज नाही.',
-            default => 'या करारासाठी आता लिंक पाठवता येणार नाही.',
+            SuchakCustomerAgreement::TERMS_NOT_REQUIRED => __('suchak.api.agreement.not_required'),
+            default => __('suchak.api.agreement.cannot_send'),
         };
     }
 
@@ -125,13 +125,13 @@ class SuchakAgreementLinkApiController extends Controller
         $message = $exception->getMessage();
 
         if (str_contains($message, 'Suchak package changed')) {
-            return 'सेवा तपशील बदलले आहेत. नवीन करार तयार करून पाठवा.';
+            return __('suchak.api.agreement.services_changed');
         }
 
         if (str_contains($message, 'agreement terms')) {
-            return 'हा करार पाठवण्याची परवानगी तुम्हाला नाही.';
+            return __('suchak.api.agreement.not_permitted');
         }
 
-        return 'या करारासाठी आता लिंक पाठवता येणार नाही.';
+        return __('suchak.api.agreement.cannot_send');
     }
 }

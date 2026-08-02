@@ -16,6 +16,24 @@ class SuchakMarathiLocalizationTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * These tests assert MARATHI wording, so they ask for Marathi.
+     *
+     * They did not have to before: the sentences they pin were hardcoded
+     * Marathi literals, which read the same whatever the caller wanted — the
+     * defect, not the contract. Now the wording follows the request, so the
+     * language under test is stated rather than inherited from whatever the
+     * suite's default locale happens to be (Symfony's test client sends
+     * `Accept-Language: en-us`, so the default is English).
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        app()->setLocale('mr');
+        $this->withHeader('Accept-Language', 'mr');
+    }
+
     public function test_suchak_user_visible_tables_have_marathi_display_columns(): void
     {
         $this->assertTrue(Schema::hasColumn('suchak_accounts', 'suchak_name_mr'));

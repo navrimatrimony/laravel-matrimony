@@ -747,10 +747,11 @@ class SuchakPaymentSetupApiController extends Controller
      * on "आधीच स्वीकारले आहे" alone.
      *
      * Worded as the acceptance page words it — the same stage labels
-     * (SuchakCollaborationStageEvent::STAGE_LABELS_MR, the one label vocabulary)
-     * and the same "उर्वरित रक्कम" for the final tranche, which is what T2 makes
-     * it: a remainder, not a percentage. So the Suchak reads back the exact rows
-     * the family is looking at.
+     * (SuchakCollaborationStageEvent::stageLabel(), the one label vocabulary,
+     * now locale-aware) and the same `suchak.fees.final_tranche_remainder` for
+     * the final tranche, which is what T2 makes it: a remainder, not a
+     * percentage. So the Suchak reads back the exact rows the family is looking
+     * at, in the language he asked for.
      */
     private function acceptedTrancheChangeRefusal(
         SuchakSuccessFeeTrancheService $trancheService,
@@ -761,15 +762,15 @@ class SuchakPaymentSetupApiController extends Controller
             $rows[] = SuchakCollaborationStageEvent::stageLabel((string) $row['trigger_stage_key'])
                 .': '
                 .($row['is_final_tranche'] === true
-                    ? 'उर्वरित रक्कम'
+                    ? __('suchak.fees.final_tranche_remainder')
                     // Latin digits by construction, and no trailing ".00" — "10%" is
                     // what the Suchak typed.
                     : rtrim(rtrim((string) $row['share_percent'], '0'), '.').'%');
         }
 
-        return 'या ग्राहकाने या योजनेच्या अटी आधीच स्वीकारल्या आहेत, त्यामुळे यशस्वी विवाह शुल्काचे हप्ते बदलून तीच योजना पुन्हा पाठवता येणार नाही. ग्राहकाकडे सध्या असलेले हप्ते — '
-            .($rows === [] ? 'हप्ते ठरलेले नाहीत' : implode('; ', $rows))
-            .'. स्वीकारलेला करार जसाच्या तसा राहतो. नवीन हप्ते लागू करायचे असतील तर वेगळ्या नावाची योजना तयार करून पाठवा.';
+        return __('suchak.api.plan.tranche_change_refusal', [
+            'tranches' => $rows === [] ? __('suchak.api.plan.tranche_none') : implode('; ', $rows),
+        ]);
     }
 
     /**
@@ -792,35 +793,37 @@ class SuchakPaymentSetupApiController extends Controller
     private function acceptedTermsChangeRefusal(SuchakServicePackage $package, array $drift): string
     {
         $currency = (string) ($package->currency ?: 'INR');
-        $notQuoted = 'ठरलेले नाही';
-        // Same wording as the acceptance page's own fee table
-        // (resources/views/suchak/agreements/public.blade.php), so the Suchak
-        // reads back the exact row the customer is looking at.
-        $labels = [
-            'price_amount' => 'नोंदणी शुल्क',
-            'per_meeting_fee_amount' => 'प्रत्यक्ष भेटीचे शुल्क',
-            'per_meeting_online_fee_amount' => 'ऑनलाइन भेटीचे शुल्क',
-            'post_marriage_fee_amount' => 'विवाह ठरल्यानंतरचे शुल्क',
+        $notQuoted = __('suchak.fees.not_quoted');
+        // The fee vocabulary is shared with the acceptance page's own fee table
+        // (resources/views/suchak/agreements/public.blade.php) through
+        // `suchak.fees.*`, keyed by the column that drifted — so the Suchak
+        // reads back the exact row the customer is looking at, and the two
+        // surfaces cannot drift into two names for one fee.
+        $columns = [
+            'price_amount',
+            'per_meeting_fee_amount',
+            'per_meeting_online_fee_amount',
+            'post_marriage_fee_amount',
         ];
 
         $changes = [];
-        foreach ($labels as $column => $label) {
+        foreach ($columns as $column) {
             if (! array_key_exists($column, $drift)) {
                 continue;
             }
 
             $was = MoneyFormat::amount($package->getAttribute($column), $currency) ?? $notQuoted;
             $now = MoneyFormat::amount($drift[$column], $currency) ?? $notQuoted;
-            $changes[] = $label.': '.$was.' → '.$now;
+            $changes[] = __('suchak.fees.'.$column).': '.$was.' → '.$now;
         }
 
         if (array_key_exists('post_marriage_fee_mode', $drift)) {
-            $changes[] = 'विवाह ठरल्यानंतरच्या शुल्काचा प्रकार';
+            $changes[] = __('suchak.api.plan.post_marriage_mode_changed');
         }
 
-        return 'या ग्राहकाने या योजनेच्या अटी आधीच स्वीकारल्या आहेत, त्यामुळे शुल्क बदलून तीच योजना पुन्हा पाठवता येणार नाही ('
-            .implode('; ', $changes)
-            .'). स्वीकारलेला करार जसाच्या तसा राहतो. नवीन शुल्क लागू करायचे असेल तर वेगळ्या नावाची योजना तयार करून पाठवा.';
+        return __('suchak.api.plan.terms_change_refusal', [
+            'changes' => implode('; ', $changes),
+        ]);
     }
 
     /**
@@ -831,17 +834,23 @@ class SuchakPaymentSetupApiController extends Controller
      * acceptance, and the reason column is what a human reads months later when
      * asking why a fee was owed on an agreement the customer never opened.
      *
-     * Marathi, because the Suchak and the customer are the two people this
-     * sentence is ever shown to. The figure comes from MoneyFormat — the one
-     * money formatter — so the record names the amount that was declared agreed,
-     * in Latin digits by construction.
+     * In the DECLARING Suchak's language, because he and the customer are the
+     * two people this sentence is ever shown to. The figure comes from
+     * MoneyFormat — the one money formatter — so the record names the amount
+     * that was declared agreed, in Latin digits by construction.
+     *
+     * This string is STORED on the agreement rather than rendered per request,
+     * so it freezes the language it was written in. That is deliberate for an
+     * audit record — it says what was declared, when, in the words it was
+     * declared in — but it does mean this one column does not follow a later
+     * language switch the way every other sentence here does.
      */
     private function offlineAgreementReason(SuchakCustomerAgreement $agreement): string
     {
         $price = MoneyFormat::amount($agreement->price_amount, (string) ($agreement->currency ?: 'INR'));
 
-        return 'सूचकाने नोंदवले: ग्राहकाने हा करार प्रत्यक्ष भेटीत / ऑफलाइन मान्य केला आहे'
-            .($price === null ? '' : ' (सेवा शुल्क: '.$price.')')
-            .'. ग्राहकाने online acceptance link वापरलेली नाही.';
+        return $price === null
+            ? __('suchak.api.plan.offline_agreement_reason')
+            : __('suchak.api.plan.offline_agreement_reason_with_fee', ['fee' => $price]);
     }
 }

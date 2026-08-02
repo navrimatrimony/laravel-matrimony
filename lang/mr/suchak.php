@@ -466,7 +466,247 @@ return [
             'parsed' => 'माहिती वाचली',
             'error' => 'वाचता आले नाही',
         ],
+
+        /*
+         * SuchakCollaborationStageEvent::STAGE_LADDER — the marketplace stage
+         * vocabulary (blueprint 6a). Wording moved here verbatim from the
+         * model's old STAGE_LABELS_MR constant, so no Suchak sees a rung
+         * renamed by this move.
+         */
+        'stage_ladder' => [
+            'registration' => 'नोंदणी',
+            'agreement_proposed' => 'करार पाठवला',
+            'agreement_accepted' => 'करार स्वीकारला',
+            'published_to_marketplace' => 'बाजारपेठेत प्रसिद्ध',
+            'profile_suggested' => 'स्थळ सुचवले',
+            'viewed' => 'स्थळ पाहिले',
+            'interested' => 'पसंती दर्शवली',
+            'meeting_scheduled' => 'भेट ठरली',
+            'meeting_completed' => 'भेट झाली',
+            'meeting_confirmed' => 'भेटीला दुजोरा',
+            'marriage_settled' => 'लग्न ठरल्यावर',
+            'engagement' => 'साखरपुड्यानंतर',
+            'marriage' => 'विवाहानंतर',
+            'share_settled' => 'वाटा दिल्यावर',
+        ],
     ],
+    /*
+     * Every sentence the Suchak API says back to a caller. Marathi wording
+     * moved verbatim out of the controllers, so no Suchak sees a refusal or a
+     * confirmation reworded by this move.
+     */
+    'api' => [
+        'errors' => [
+            'suchak_account_required' => 'सूचक खाते आवश्यक आहे.',
+            'verified_suchaks_only' => 'पडताळणी झालेल्या सूचकांनाच ही माहिती पाहता येते.',
+            'agreement_not_found' => 'हा करार तुमच्या खात्यात सापडला नाही.',
+            'profile_not_found' => 'हे स्थळ तुमच्या खात्यात सापडले नाही.',
+            'engagement_not_found' => 'हे सहकार्य तुमच्या खात्यात सापडले नाही.',
+            'customer_not_found' => 'हा ग्राहक तुमच्या खात्यात सापडला नाही.',
+            'challenge_not_found' => 'हे आव्हान तुमच्या खात्यात सापडले नाही.',
+            'obligation_not_found' => 'ही नोंद तुमच्या खात्यात सापडली नाही.',
+            'payment_not_found' => 'हा भरणा तुमच्या खात्यात सापडला नाही.',
+            'tranche_not_found' => 'हा हप्ता या सहकार्याच्या करारात सापडला नाही.',
+            'marriage_outcome_not_found' => 'या सहकार्यासाठी विवाहाची नोंद अजून झालेली नाही.',
+            'customer_payment_owner_only' => 'ग्राहकाचा भरणा फक्त ग्राहकाच्या स्वतःच्या सूचकाला नोंदवता येतो.',
+        ],
+
+        'stage' => [
+            'recorded' => 'टप्पा नोंदवला.',
+            'family_confirmed' => 'तुमचा दुजोरा नोंदवला.',
+        ],
+
+        'agreement' => [
+            'linked_to_engagement' => 'करार या सहकार्याशी जोडला.',
+            'link_created' => 'करार लिंक तयार झाली आहे.',
+
+            'already_accepted' => 'हा करार ग्राहकाने आधीच स्वीकारला आहे.',
+            'superseded' => 'हा करार आता वापरात नाही. नवीन करार तयार करून पाठवा.',
+            'declined' => 'ग्राहकाने हा करार नाकारला आहे. नवीन करार तयार करून पाठवा.',
+            'expired' => 'या कराराची मुदत संपली आहे. नवीन करार तयार करून पाठवा.',
+            'not_required' => 'या करारासाठी ग्राहकाच्या स्वीकाराची गरज नाही.',
+            'services_changed' => 'सेवा तपशील बदलले आहेत. नवीन करार तयार करून पाठवा.',
+            'not_permitted' => 'हा करार पाठवण्याची परवानगी तुम्हाला नाही.',
+            'cannot_send' => 'या करारासाठी आता लिंक पाठवता येणार नाही.',
+        ],
+
+        'obligation' => [
+            'declared_due' => 'जाहीर केलेल्या वाट्याची देय नोंद झाली.',
+            'settlement_recorded' => 'वाटा मिळाल्याची नोंद झाली.',
+        ],
+
+        'challenge' => [
+            'published' => 'आव्हान बाजारपेठेत प्रसिद्ध झाले.',
+            'withdrawn' => 'आव्हान मागे घेतले.',
+            'proposal_sent' => 'स्थळ सुचवले. आता प्रसिद्ध करणाऱ्या सूचकाच्या होकाराची वाट पाहा.',
+        ],
+
+        'marriage' => [
+            'recorded' => 'विवाहाची नोंद झाली.',
+        ],
+
+        'meeting' => [
+            'dispute_recorded' => 'तक्रार नोंदवली. आढावा पूर्ण होईपर्यंत रक्कम रोखली आहे.',
+        ],
+
+        'success_fee' => [
+            'tranches_released' => 'यशस्वी विवाह शुल्काचे हप्ते ताज्या टप्प्यांप्रमाणे नोंदवले.',
+            'payment_recorded' => 'हप्त्याचा भरणा नोंदवला.',
+        ],
+
+        'plan' => [
+            'tranche_change_refusal' => 'या ग्राहकाने या योजनेच्या अटी आधीच स्वीकारल्या आहेत, त्यामुळे यशस्वी विवाह शुल्काचे हप्ते बदलून तीच योजना पुन्हा पाठवता येणार नाही. ग्राहकाकडे सध्या असलेले हप्ते — :tranches. स्वीकारलेला करार जसाच्या तसा राहतो. नवीन हप्ते लागू करायचे असतील तर वेगळ्या नावाची योजना तयार करून पाठवा.',
+            'tranche_none' => 'हप्ते ठरलेले नाहीत',
+            'terms_change_refusal' => 'या ग्राहकाने या योजनेच्या अटी आधीच स्वीकारल्या आहेत, त्यामुळे शुल्क बदलून तीच योजना पुन्हा पाठवता येणार नाही (:changes). स्वीकारलेला करार जसाच्या तसा राहतो. नवीन शुल्क लागू करायचे असेल तर वेगळ्या नावाची योजना तयार करून पाठवा.',
+            'post_marriage_mode_changed' => 'विवाह ठरल्यानंतरच्या शुल्काचा प्रकार',
+
+            'offline_agreement_reason' => 'सूचकाने नोंदवले: ग्राहकाने हा करार प्रत्यक्ष भेटीत / ऑफलाइन मान्य केला आहे. ग्राहकाने online acceptance link वापरलेली नाही.',
+            'offline_agreement_reason_with_fee' => 'सूचकाने नोंदवले: ग्राहकाने हा करार प्रत्यक्ष भेटीत / ऑफलाइन मान्य केला आहे (सेवा शुल्क: :fee). ग्राहकाने online acceptance link वापरलेली नाही.',
+        ],
+    ],
+
+    /*
+     * Success-fee installments (blueprint §7.4, T1–T4). Marathi wording moved
+     * verbatim out of SuchakSuccessFeeTrancheService.
+     */
+    'tranche' => [
+        'row_incomplete' => 'हप्त्यांची माहिती अपूर्ण आहे.',
+        'invalid_stage' => 'हप्ता ज्या टप्प्यावर द्यायचा तो टप्पा वैध नाही.',
+        'stage_not_releasable' => '":stage" या टप्प्यावर हप्ता ठेवता येणार नाही. यशस्वी विवाह शुल्काचा हप्ता फक्त ग्राहकाच्या दुजोऱ्यावर ठरणाऱ्या :stages या टप्प्यांवरच ठेवता येतो.',
+        'duplicate_stage' => 'एकाच टप्प्यावर दोन हप्ते ठेवता येणार नाहीत.',
+        'order_mismatch' => 'हप्त्यांचा क्रम टप्प्यांच्या क्रमाप्रमाणेच असावा.',
+        'one_remainder_only' => 'फक्त एकच हप्ता "उर्वरित रक्कम" असू शकतो.',
+        'remainder_must_be_last' => '"उर्वरित रक्कम" हा शेवटचाच हप्ता असला पाहिजे.',
+        'percent_must_total_100' => 'हप्त्यांची टक्केवारी एकूण 100% असणे आवश्यक आहे. सध्या ती :percent% आहे.',
+        'sum_mismatch' => 'हप्त्यांची बेरीज एकूण शुल्काएवढी होत नाही.',
+        'first_should_be_smallest' => 'पहिला हप्ता सर्वात लहान ठेवणे योग्य — तो सर्वात कमी पुराव्यावर मिळतो.',
+        'no_success_fee' => 'ठरलेले यशस्वी विवाह शुल्क नसताना हप्ते ठरवता येणार नाहीत.',
+
+        'released_cannot_remove' => '":stage" या टप्प्याचा हप्ता आधीच लागू झाला आहे; तो नव्या विभागणीतून काढून टाकता येणार नाही.',
+        'released_cannot_recut' => '":stage" या टप्प्याचा हप्ता आधीच लागू झाला आहे; त्याची टक्केवारी आता बदलता येणार नाही. पुढील न झालेले हप्ते बदलता येतील.',
+
+        'blocked_terms_pending' => 'ग्राहकाने करार स्वीकारेपर्यंत हा हप्ता लागू होत नाही.',
+        'blocked_stage_never_releases' => '":stage" हा टप्पा ग्राहकाच्या दुजोऱ्यावर ठरणारा नाही, त्यामुळे या टप्प्यावरचा हप्ता कधीही लागू होणार नाही. नव्या विभागणीत हा हप्ता :stages यापैकी एका टप्प्यावर हलवावा.',
+        'blocked_stage_already_charged' => 'याच ग्राहकाच्या दुसऱ्या योजनेत ":stage" चा हप्ता आधीच लागू झाला आहे; तोच टप्पा दुसऱ्यांदा आकारला जाणार नाही.',
+        'blocked_family_allowance' => 'या कुटुंबाच्या यशस्वी विवाह शुल्कापैकी :committed दुसऱ्या योजनेत आधीच आकारले आहे. या करारातील एकूण :total पैकी :remaining शिल्लक असल्याने :amount चा हा हप्ता लागू होणार नाही. यशस्वी विवाह शुल्क प्रत्येक ग्राहकाकडून एकदाच घेतले जाते.',
+        'blocked_no_tranche_until_accept' => 'ग्राहकाने करार स्वीकारेपर्यंत यशस्वी विवाह शुल्काचा कोणताही हप्ता लागू होत नाही.',
+        'no_agreement_linked' => 'या सहकार्याला ग्राहकाचा करार जोडलेला नाही, त्यामुळे कोणताही हप्ता लागू होऊ शकत नाही.',
+
+        'settle_not_released' => 'अजून लागू न झालेल्या हप्त्याची भरणा-नोंद करता येणार नाही.',
+        'settle_payment_not_this_agreement' => 'हा भरणा या कराराचा नाही.',
+        'settle_payment_incomplete' => 'भरणा पूर्ण झाल्याची नोंद नसताना हप्ता भरला असे नोंदवता येणार नाही.',
+        'settle_already_bound' => 'या हप्त्याची भरणा-नोंद आधीच दुसऱ्या भरण्याशी जोडलेली आहे.',
+        'settle_exceeds_receipt' => 'या हप्त्याची रक्कम :tranche आहे; :receipt च्या या भरण्यातून :remaining शिल्लक आहे. भरण्यापेक्षा मोठा हप्ता भरला असे नोंदवता येणार नाही.',
+
+        'percent_required' => 'प्रत्येक हप्त्याची टक्केवारी लिहिणे आवश्यक आहे.',
+        'percent_range' => 'प्रत्येक हप्त्याची टक्केवारी 0 पेक्षा जास्त आणि 100 पर्यंत असावी.',
+    ],
+
+    /*
+     * The fee vocabulary, shared by the customer's acceptance page and by the
+     * API's "you already accepted these terms" refusal — they must name a fee
+     * with the same words or the Suchak reads back a row the family cannot find.
+     * Keys are the agreement/package COLUMN names.
+     */
+    'fees' => [
+        'price_amount' => 'नोंदणी शुल्क',
+        'per_meeting_fee_amount' => 'प्रत्यक्ष भेटीचे शुल्क',
+        'per_meeting_online_fee_amount' => 'ऑनलाइन भेटीचे शुल्क',
+        'post_marriage_fee_amount' => 'विवाह ठरल्यानंतरचे शुल्क',
+
+        'final_tranche_remainder' => 'उर्वरित रक्कम',
+        'not_quoted' => 'ठरलेले नाही',
+    ],
+
+    /*
+     * The CUSTOMER-facing portal. Marathi wording moved verbatim out of
+     * resources/views/suchak/customer-portal/*.blade.php, so no family sees a
+     * sentence reworded by this move.
+     */
+    'customer_portal' => [
+        'stages' => [
+            'title' => 'तुमच्यासाठी सुचवलेली स्थळे',
+            'intro' => 'प्रत्येक स्थळाबाबत तुम्ही काय केले ते इथे नोंदवा. ही नोंद तुमचीच राहते — सूचक ती तुमच्या वतीने करू शकत नाही.',
+
+            'identify' => 'नोंद कोणी केली हे कळावे म्हणून आधी :link नोंदवा.',
+            'identify_link' => 'तुमचे नाव आणि नाते',
+            'link_user' => 'ही लिंक वापरणारे:',
+
+            'unnamed_profile' => 'सुचवलेले स्थळ',
+
+            'clause_binds' => 'हे स्थळ तुम्ही पाहिले आहे. :date पर्यंत या स्थळाशी लग्न झाल्यास तुमच्या सूचकाची ठरलेली विवाह-फी लागू राहते — सेवा मध्येच थांबवली तरीही.',
+            'clause_released_prior' => 'तुम्ही या कुटुंबाला आधीपासून ओळखता असे नोंदवले आहे, त्यामुळे या स्थळावर विवाह-फी लागू नाही.',
+
+            'help' => [
+                'viewed' => 'हे स्थळ तुम्ही पाहिले.',
+                'interested' => 'हे स्थळ तुम्हाला पसंत आहे.',
+                'meeting_confirmed' => 'ठरलेली भेट प्रत्यक्षात झाली.',
+            ],
+
+            'prior_acquaintance_label' => 'आम्ही या कुटुंबाला आधीपासून ओळखतो.',
+            'prior_acquaintance_help' => 'असे असल्यास या स्थळावर :months महिन्यांची विवाह-फी अट लागू होणार नाही.',
+
+            'empty' => 'सध्या तुमच्यासाठी नोंदवण्यासारखे स्थळ नाही.',
+
+            'link_proof_note' => 'या लिंकवरून केलेली नोंद "ही लिंक असलेल्या व्यक्तीने नोंद केली" एवढेच सांगते. लिंक इतर कोणाला देऊ नका.',
+        ],
+
+        'show' => [
+            'eyebrow' => 'सूचक ग्राहक पोर्टल',
+            'fallback_title' => 'ग्राहक सेवेचा तपशील',
+            'intro' => 'या सूचक ग्राहकाचे पॅकेज, अटी, भरणा, बीजक आणि पावतीची स्थिती इथे तपासा.',
+
+            'portal_status' => 'पोर्टलची स्थिती',
+            'terms' => 'अटी',
+            'payment_request' => 'भरणा विनंती',
+            'expires' => 'मुदत संपते',
+            'not_available' => 'उपलब्ध नाही',
+            'no_expiry' => 'मुदत ठरलेली नाही',
+
+            'stages_link' => 'तुमच्यासाठी सुचवलेली स्थळे आणि तुमची नोंद',
+
+            'package_terms_title' => 'पॅकेज आणि अटी',
+            'agreement_unavailable' => 'करार उपलब्ध नाही',
+            'revision' => 'आवृत्ती :number',
+            'amount_due' => 'देय रक्कम',
+            'to_be_confirmed' => 'निश्चित व्हायचे आहे',
+            'collector' => 'रक्कम घेणारा',
+
+            'payments_title' => 'भरणा आणि कागदपत्रे',
+            'direct_payment_warning' => 'व्यासपीठामार्फत भरणा करणाऱ्या ग्राहकांनी सूचकाला थेट पैसे देऊ नयेत. या पडताळलेल्या व्यासपीठाबाहेर कोणी सूचक पैसे मागत असेल, तर तुमच्या खात्यातून पुराव्यासह तक्रार नोंदवा.',
+            'status' => 'स्थिती',
+            'received' => 'मिळाले',
+            'balance' => 'बाकी',
+            'mode' => 'पद्धत',
+            'documents' => 'कागदपत्रे',
+            'issued_on' => 'दिनांक :date',
+            'verify_receipt' => 'पावती तपासा',
+            'no_payments' => 'या विनंतीवर अद्याप एकही भरणा नोंदवलेला नाही.',
+
+            'corrections_title' => 'दुरुस्त्या आणि सेवा कार्यवाही',
+            'financial_corrections' => 'आर्थिक दुरुस्त्या',
+            'no_corrections' => 'एकही दुरुस्ती नोंदवलेली नाही.',
+            'overdue_actions' => 'उशीर झालेल्या सेवा कार्यवाही',
+            'no_overdue_actions' => 'उशीर झालेली एकही सेवा कार्यवाही नाही.',
+
+            'family_title' => 'कुटुंब आणि भरणा करणारा',
+            'relationship' => 'नाते: :value',
+            'not_specified' => 'नोंदवलेले नाही',
+            'payer_role' => 'भरणा करणाऱ्याची भूमिका: :value',
+            'member_status' => 'स्थिती: :value',
+            'no_family' => 'अद्याप कोणत्याही कुटुंबातील व्यक्तीची नोंद जोडलेली नाही.',
+
+            'claim_title' => 'पोर्टल लिंक स्वतःच्या नावावर घ्या',
+            'claim_name' => 'नाव',
+            'claim_relationship' => 'नाते',
+            'claim_submit' => 'नोंदवा',
+
+            'revoke_title' => 'पोर्टल लिंक रद्द करा',
+            'revoke_reason' => 'कारण',
+            'revoke_submit' => 'प्रवेश रद्द करा',
+        ],
+    ],
+
     'dashboard' => [
         'customer_list_title' => 'Customer list',
         'customer_list_intro' => 'सर्व customers एकाच ठिकाणी — photo, profile ID, मूलभूत माहिती आणि quick actions.',

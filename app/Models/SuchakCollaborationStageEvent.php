@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Suchak\SuchakLocalizedText;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -47,41 +48,28 @@ class SuchakCollaborationStageEvent extends Model
     public const STAGE_SHARE_SETTLED = 'share_settled';
 
     /**
-     * What each stage is called when a person reads it.
+     * What each stage is called when a person reads it, IN THE READER'S OWN
+     * LANGUAGE.
      *
-     * The vocabulary and its wording live together on purpose: a second map
-     * elsewhere would be free to drift, and a success-fee installment shown to a
-     * customer under one name and to a Suchak under another is an argument
-     * waiting to happen. Marathi only for now — every surface that renders a
-     * stage today is Marathi-only, and inventing an English column nobody reads
-     * would be inventing a fact.
+     * The wording itself lives in `lang/{en,mr}/suchak.php` under
+     * `labels.stage_ladder`, read through the Suchak domain's existing label
+     * engine ({@see \App\Support\Suchak\SuchakLocalizedText::labelOrNull()}) —
+     * the same engine `representation`, `consent`, `lifecycle` and the rest of
+     * the Suchak enums already go through. Nothing about the vocabulary is
+     * hardcoded here: the ladder owns the KEYS, the lang files own the WORDS,
+     * and {@see \App\Http\Middleware\SetApiLocale} has already decided which
+     * language the caller asked for by the time any payload is built.
      *
-     * @var array<string, string>
-     */
-    public const STAGE_LABELS_MR = [
-        self::STAGE_REGISTRATION => 'नोंदणी',
-        self::STAGE_AGREEMENT_PROPOSED => 'करार पाठवला',
-        self::STAGE_AGREEMENT_ACCEPTED => 'करार स्वीकारला',
-        self::STAGE_PUBLISHED_TO_MARKETPLACE => 'बाजारपेठेत प्रसिद्ध',
-        self::STAGE_PROFILE_SUGGESTED => 'स्थळ सुचवले',
-        self::STAGE_VIEWED => 'स्थळ पाहिले',
-        self::STAGE_INTERESTED => 'पसंती दर्शवली',
-        self::STAGE_MEETING_SCHEDULED => 'भेट ठरली',
-        self::STAGE_MEETING_COMPLETED => 'भेट झाली',
-        self::STAGE_MEETING_CONFIRMED => 'भेटीला दुजोरा',
-        self::STAGE_MARRIAGE_SETTLED => 'लग्न ठरल्यावर',
-        self::STAGE_ENGAGEMENT => 'साखरपुड्यानंतर',
-        self::STAGE_MARRIAGE => 'विवाहानंतर',
-        self::STAGE_SHARE_SETTLED => 'वाटा दिल्यावर',
-    ];
-
-    /**
+     * This used to be a Marathi-only `STAGE_LABELS_MR` constant, which put
+     * Marathi sentences into every `stage_label` field of the API regardless of
+     * the caller's `Accept-Language`.
+     *
      * Falls back to the raw key rather than to an empty string: an unlabelled
      * stage on a screen is a bug someone can see and report, a blank one is not.
      */
     public static function stageLabel(string $stageKey): string
     {
-        return self::STAGE_LABELS_MR[$stageKey] ?? $stageKey;
+        return SuchakLocalizedText::labelOrNull($stageKey, 'stage_ladder') ?? $stageKey;
     }
 
     /**

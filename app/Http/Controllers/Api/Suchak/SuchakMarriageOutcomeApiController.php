@@ -86,7 +86,7 @@ class SuchakMarriageOutcomeApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'विवाहाची नोंद झाली.',
+            'message' => __('suchak.api.marriage.recorded'),
             'data' => $marriageOutcomeService->attribution($outcome),
         ], 201);
     }
@@ -110,7 +110,7 @@ class SuchakMarriageOutcomeApiController extends Controller
 
         $outcome = $marriageOutcomeService->outcomeFor($collaboration);
         if (! $outcome instanceof SuchakMarriageOutcome) {
-            return $this->error('या सहकार्यासाठी विवाहाची नोंद अजून झालेली नाही.', 404);
+            return $this->error(__('suchak.api.errors.marriage_outcome_not_found'), 404);
         }
 
         return response()->json([
@@ -133,11 +133,11 @@ class SuchakMarriageOutcomeApiController extends Controller
     ): User|JsonResponse {
         $user = $request->user();
         if (! $user instanceof User || $user->suchakAccount === null) {
-            return $this->error('सूचक खाते आवश्यक आहे.', 403);
+            return $this->error(__('suchak.api.errors.suchak_account_required'), 403);
         }
 
         if ($collaboration->sideForAccount((int) $user->suchakAccount->id) === null) {
-            return $this->error('हे सहकार्य तुमच्या खात्यात सापडले नाही.', 404);
+            return $this->error(__('suchak.api.errors.engagement_not_found'), 404);
         }
 
         return $user;

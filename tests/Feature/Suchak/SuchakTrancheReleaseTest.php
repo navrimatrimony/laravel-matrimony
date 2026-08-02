@@ -44,6 +44,24 @@ class SuchakTrancheReleaseTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * These tests assert MARATHI wording, so they ask for Marathi.
+     *
+     * They did not have to before: the sentences they pin were hardcoded
+     * Marathi literals, which read the same whatever the caller wanted — the
+     * defect, not the contract. Now the wording follows the request, so the
+     * language under test is stated rather than inherited from whatever the
+     * suite's default locale happens to be (Symfony's test client sends
+     * `Accept-Language: en-us`, so the default is English).
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        app()->setLocale('mr');
+        $this->withHeader('Accept-Language', 'mr');
+    }
+
     // ── M10: a later stage releases every earlier unpaid tranche with it ─────────────────────
 
     public function test_a_wedding_recorded_without_a_sakharpuda_releases_every_earlier_tranche(): void

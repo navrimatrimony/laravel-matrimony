@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Translation;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -34,9 +35,28 @@ class SetApiLocale
      */
     private const SUPPORTED = ['mr', 'en'];
 
+    /**
+     * Resolving the locale is only half of speaking the caller's language.
+     *
+     * Translations in this product are ADMIN-EDITABLE: `translations` rows
+     * override the `lang/` files, and {@see Translation::loadIntoTranslator()}
+     * is what puts them in front of the file values for a given locale. The web
+     * group has called it from {@see SetLocaleFromQuery} for a long time; this
+     * middleware set the locale and stopped there, so every `__()` on the api
+     * group silently read the FILE value and an admin's correction reached the
+     * website but never reached either Flutter app.
+     *
+     * Called here, on the same line of the request as `setLocale()`, because
+     * the two facts are one decision: the language a response is written in,
+     * and the wording that language currently uses. Splitting them is what
+     * produced the gap.
+     */
     public function handle(Request $request, Closure $next): Response
     {
-        app()->setLocale($this->resolve($request));
+        $locale = $this->resolve($request);
+
+        app()->setLocale($locale);
+        Translation::loadIntoTranslator($locale);
 
         return $next($request);
     }

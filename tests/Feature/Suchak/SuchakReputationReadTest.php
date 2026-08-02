@@ -41,6 +41,12 @@ class SuchakReputationReadTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Marathi wording is what this file asserts, so Marathi is what it asks
+        // for — the stage vocabulary now follows the request instead of being a
+        // Marathi-only constant.
+        app()->setLocale('mr');
+        $this->withHeader('Accept-Language', 'mr');
         $this->ensureRoutes();
     }
 

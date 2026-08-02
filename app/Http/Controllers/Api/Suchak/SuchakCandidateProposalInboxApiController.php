@@ -89,7 +89,7 @@ class SuchakCandidateProposalInboxApiController extends Controller
         // never learns the row exists), and the service's is the RULE, so a second entrance that
         // skips this controller still cannot read another Suchak's candidate's inbox.
         if ((int) $representation->suchak_account_id !== (int) $user->suchakAccount->id) {
-            return $this->error('हे स्थळ तुमच्या खात्यात सापडले नाही.', 404);
+            return $this->error(__('suchak.api.errors.profile_not_found'), 404);
         }
 
         try {
@@ -114,7 +114,7 @@ class SuchakCandidateProposalInboxApiController extends Controller
     {
         $user = $request->user();
         if (! $user instanceof User || $user->suchakAccount === null) {
-            return $this->error('सूचक खाते आवश्यक आहे.', 403);
+            return $this->error(__('suchak.api.errors.suchak_account_required'), 403);
         }
 
         return $user;

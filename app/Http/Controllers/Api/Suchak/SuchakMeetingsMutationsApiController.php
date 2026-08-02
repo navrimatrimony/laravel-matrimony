@@ -179,7 +179,7 @@ class SuchakMeetingsMutationsApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'तक्रार नोंदवली. आढावा पूर्ण होईपर्यंत रक्कम रोखली आहे.',
+            'message' => __('suchak.api.meeting.dispute_recorded'),
             'data' => [
                 'visit_id' => $updated->id,
                 'visit_status' => $updated->visit_status,

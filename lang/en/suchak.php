@@ -466,7 +466,315 @@ return [
             'parsed' => 'Details read',
             'error' => 'Could not read',
         ],
+
+        /*
+         * SuchakCollaborationStageEvent::STAGE_LADDER — the marketplace stage
+         * vocabulary (blueprint 6a), and the ONLY place its wording lives.
+         *
+         * Read through SuchakCollaborationStageEvent::stageLabel(), which every
+         * `stage_label` / `trigger_stage_label` / `evidence_stage_label` /
+         * `anchor_stage_label` / `released_by_stage_label` field in the Suchak
+         * API payloads goes through. The keys ARE the ladder keys, so a rung
+         * added to the ladder without wording here reports as its raw key —
+         * visible and reportable, never blank.
+         *
+         * The last four read as trigger points ("Once …", "After …") rather
+         * than as past events, because the same words label a success-fee
+         * installment's trigger as well as a rung. One vocabulary, so the
+         * wording has to carry both readings.
+         */
+        'stage_ladder' => [
+            'registration' => 'Registration',
+            'agreement_proposed' => 'Agreement sent',
+            'agreement_accepted' => 'Agreement accepted',
+            'published_to_marketplace' => 'Published to marketplace',
+            'profile_suggested' => 'Profile suggested',
+            'viewed' => 'Profile viewed',
+            'interested' => 'Interest shown',
+            'meeting_scheduled' => 'Meeting arranged',
+            'meeting_completed' => 'Meeting held',
+            'meeting_confirmed' => 'Meeting confirmed',
+            'marriage_settled' => 'Once the match is settled',
+            'engagement' => 'After the engagement',
+            'marriage' => 'After the marriage',
+            'share_settled' => 'Once the share is paid',
+        ],
     ],
+    /*
+     * Every sentence the Suchak API says back to a caller.
+     *
+     * These were Marathi string literals inside the controllers, so a Suchak
+     * whose app was in English still got Marathi refusals and confirmations —
+     * SetApiLocale had already worked out the caller's language and nothing
+     * used the answer. They also repeated: "सूचक खाते आवश्यक आहे." was written
+     * out ELEVEN times across eleven controllers, so the eleven copies were
+     * free to drift into eleven slightly different refusals for one rule.
+     * One key each, both languages, one place to correct the wording.
+     */
+    'api' => [
+        // Refusals. Each names WHY, never merely "not found", because a Suchak
+        // who cannot tell "does not exist" from "not yours" retries forever.
+        'errors' => [
+            'suchak_account_required' => 'A Suchak account is required.',
+            'verified_suchaks_only' => 'Only verified Suchaks can see this information.',
+            'agreement_not_found' => 'That agreement is not in your account.',
+            'profile_not_found' => 'That profile is not in your account.',
+            'engagement_not_found' => 'That collaboration is not in your account.',
+            'customer_not_found' => 'That customer is not in your account.',
+            'challenge_not_found' => 'That challenge is not in your account.',
+            'obligation_not_found' => 'That record is not in your account.',
+            'payment_not_found' => 'That payment is not in your account.',
+            'tranche_not_found' => 'That installment is not in this collaboration\'s agreement.',
+            'marriage_outcome_not_found' => 'No marriage has been recorded for this collaboration yet.',
+            'customer_payment_owner_only' => 'A customer\'s payment can only be recorded by that customer\'s own Suchak.',
+        ],
+
+        'stage' => [
+            'recorded' => 'Stage recorded.',
+            'family_confirmed' => 'Your confirmation has been recorded.',
+        ],
+
+        'agreement' => [
+            'linked_to_engagement' => 'Agreement linked to this collaboration.',
+            'link_created' => 'The agreement link is ready.',
+
+            // Why this agreement cannot be sent, by the state it is actually in.
+            'already_accepted' => 'The customer has already accepted this agreement.',
+            'superseded' => 'This agreement is no longer in use. Create and send a new one.',
+            'declined' => 'The customer declined this agreement. Create and send a new one.',
+            'expired' => 'This agreement has expired. Create and send a new one.',
+            'not_required' => 'This agreement does not need the customer\'s acceptance.',
+            'services_changed' => 'The service details have changed. Create and send a new agreement.',
+            'not_permitted' => 'You are not allowed to send this agreement.',
+            'cannot_send' => 'A link cannot be sent for this agreement right now.',
+        ],
+
+        'obligation' => [
+            'declared_due' => 'The declared share has been recorded as due.',
+            'settlement_recorded' => 'Receipt of the share has been recorded.',
+        ],
+
+        'challenge' => [
+            'published' => 'The challenge has been published to the marketplace.',
+            'withdrawn' => 'The challenge has been withdrawn.',
+            'proposal_sent' => 'Profile suggested. Now wait for the publishing Suchak to respond.',
+        ],
+
+        'marriage' => [
+            'recorded' => 'The marriage has been recorded.',
+        ],
+
+        'meeting' => [
+            'dispute_recorded' => 'Dispute recorded. The amount is held until the review is complete.',
+        ],
+
+        'success_fee' => [
+            'tranches_released' => 'Success-fee installments recorded against the latest stages.',
+            'payment_recorded' => 'The installment payment has been recorded.',
+        ],
+
+        /*
+         * Refusals for re-sending a plan whose terms the customer already
+         * accepted. Each names WHAT the customer is holding, because a Suchak
+         * looking at a WhatsApp message quoting a different figure cannot act
+         * on "already accepted" alone.
+         *
+         * Amounts arrive pre-formatted through MoneyFormat (Latin digits,
+         * Indian grouping) and are injected as :changes / :tranches, so the
+         * money formatting is decided in exactly one place and is the same in
+         * both languages.
+         */
+        'plan' => [
+            'tranche_change_refusal' => 'This customer has already accepted this plan\'s terms, so the same plan cannot be re-sent with different success-fee installments. The installments the customer currently holds — :tranches. The accepted agreement stays exactly as it is. To apply new installments, create and send a plan under a different name.',
+            'tranche_none' => 'no installments are set',
+            'terms_change_refusal' => 'This customer has already accepted this plan\'s terms, so the same plan cannot be re-sent with different fees (:changes). The accepted agreement stays exactly as it is. To apply new fees, create and send a plan under a different name.',
+            'post_marriage_mode_changed' => 'type of post-marriage fee',
+
+            /*
+             * What the bypass row will say happened. Written as a declaration
+             * BY the Suchak, never as the customer's act — that distinction is
+             * the entire reason this goes to bypass instead of acceptance.
+             *
+             * NOTE: unlike everything else here this string is STORED on the
+             * agreement, so it freezes the language the declaring Suchak's app
+             * was in. That is the right behaviour for an audit record — it says
+             * what was declared, at the time, in the words it was declared in —
+             * but it does mean the reason column will not follow a later
+             * language switch.
+             */
+            'offline_agreement_reason' => 'Recorded by the Suchak: the customer accepted this agreement in person / offline. The customer did not use the online acceptance link.',
+            'offline_agreement_reason_with_fee' => 'Recorded by the Suchak: the customer accepted this agreement in person / offline (service fee: :fee). The customer did not use the online acceptance link.',
+        ],
+    ],
+
+    /*
+     * Success-fee installments (blueprint §7.4, T1–T4).
+     *
+     * These MUST live here rather than in the service, and for a sharper reason
+     * than tidiness: most of them quote a stage name, and stage names are now
+     * locale-aware. A Marathi sentence with `stageLabel()` spliced into it
+     * produced things like `"Meeting held" या टप्प्यावर हप्ता ठेवता येणार नाही`
+     * — half English, half Marathi, in a refusal about money.
+     */
+    'tranche' => [
+        'row_incomplete' => 'The installment details are incomplete.',
+        'invalid_stage' => 'The stage the installment is tied to is not valid.',
+        'stage_not_releasable' => 'An installment cannot be placed on ":stage". A success-fee installment can only sit on the stages the customer confirms: :stages.',
+        'duplicate_stage' => 'Two installments cannot sit on the same stage.',
+        'order_mismatch' => 'Installments must follow the same order as the stages.',
+        'one_remainder_only' => 'Only one installment can be the remaining amount.',
+        'remainder_must_be_last' => 'The remaining-amount installment must be the last one.',
+        'percent_must_total_100' => 'The installment percentages must add up to 100%. They currently add up to :percent%.',
+        'sum_mismatch' => 'The installments do not add up to the total fee.',
+        'first_should_be_smallest' => 'It is better to keep the first installment the smallest — it is earned on the least evidence.',
+        'no_success_fee' => 'Installments cannot be set when no success fee has been agreed.',
+
+        'released_cannot_remove' => 'The installment for ":stage" has already been released; it cannot be dropped from a new split.',
+        'released_cannot_recut' => 'The installment for ":stage" has already been released; its percentage can no longer be changed. Later installments that have not been released can still be changed.',
+
+        'blocked_terms_pending' => 'This installment does not apply until the customer accepts the agreement.',
+        'blocked_stage_never_releases' => '":stage" is not a stage the customer confirms, so an installment on this stage will never be released. In a new split, move this installment to one of :stages.',
+        'blocked_stage_already_charged' => 'The installment for ":stage" has already been released under another plan for this same customer; the same stage will not be charged twice.',
+        'blocked_family_allowance' => ':committed of this family\'s success fee has already been charged under another plan. Of the :total on this agreement only :remaining is left, so this installment of :amount will not be released. A success fee is taken from each customer only once.',
+        'blocked_no_tranche_until_accept' => 'No success-fee installment applies until the customer accepts the agreement.',
+        'no_agreement_linked' => 'No customer agreement is linked to this collaboration, so no installment can be released.',
+
+        'settle_not_released' => 'A payment cannot be recorded against an installment that has not been released yet.',
+        'settle_payment_not_this_agreement' => 'This payment does not belong to this agreement.',
+        'settle_payment_incomplete' => 'An installment cannot be marked paid while the payment itself is not recorded as complete.',
+        'settle_already_bound' => 'This installment is already tied to another payment.',
+        'settle_exceeds_receipt' => 'This installment is :tranche; of the :receipt in this payment only :remaining is left. An installment larger than the payment cannot be recorded as paid.',
+
+        'percent_required' => 'Every installment must state its percentage.',
+        'percent_range' => 'Every installment percentage must be more than 0 and at most 100.',
+    ],
+
+    /*
+     * The fee vocabulary, shared on purpose.
+     *
+     * The customer's acceptance page (resources/views/suchak/agreements/
+     * public.blade.php) and the API's "you already accepted these terms"
+     * refusal have to name a fee with THE SAME WORDS, or a Suchak reads back a
+     * row the family cannot find on their own screen. They used to be two sets
+     * of literals in two files, kept identical by hand.
+     *
+     * Keys are the agreement/package COLUMN names, so the refusal builder can
+     * look a label up by the column that drifted.
+     */
+    'fees' => [
+        'price_amount' => 'Registration fee',
+        'per_meeting_fee_amount' => 'In-person meeting fee',
+        'per_meeting_online_fee_amount' => 'Online meeting fee',
+        'post_marriage_fee_amount' => 'Fee after the match is settled',
+
+        // T2 makes the last installment a REMAINDER, not a percentage.
+        'final_tranche_remainder' => 'Remaining amount',
+        'not_quoted' => 'not set',
+    ],
+
+    /*
+     * The CUSTOMER-facing portal — the only pages the FAMILY is ever sent.
+     *
+     * These were written straight into the blades in Marathi (stages) and in
+     * English (show), so the en/mr switcher on the layout changed nothing on
+     * either page. Both now read through __(), which means the family gets the
+     * language they asked for and an admin can correct the wording from the
+     * translations table without a deploy.
+     */
+    'customer_portal' => [
+        'stages' => [
+            'title' => 'Profiles suggested for you',
+            'intro' => 'Record what you did about each profile here. This record stays yours — your Suchak cannot make it on your behalf.',
+
+            // The link text is a phrase inside the sentence, so the sentence
+            // takes it as a placeholder: word order around it is not the same
+            // in both languages, and three glued fragments would fix Marathi's
+            // order onto English.
+            'identify' => 'So it is clear who made the record, first record :link.',
+            'identify_link' => 'your name and relationship',
+            'link_user' => 'Using this link:',
+
+            'unnamed_profile' => 'Suggested profile',
+
+            // D11 / D21 in the family's own words. Latin digits, no rupee
+            // figure — the amount lives on their payments screen (D17).
+            'clause_binds' => 'You have viewed this profile. If a marriage with this profile takes place on or before :date, your Suchak\'s agreed marriage fee still applies — even if the service is stopped in between.',
+            'clause_released_prior' => 'You have recorded that you already knew this family, so no marriage fee applies to this profile.',
+
+            // SuchakCollaborationStageEvent stage keys — what the family is
+            // actually being asked to confirm on each button.
+            'help' => [
+                'viewed' => 'You have seen this profile.',
+                'interested' => 'You like this profile.',
+                'meeting_confirmed' => 'The arranged meeting actually took place.',
+            ],
+
+            // 9a A6 — one tap, at view time, on the rung the clause binds at.
+            'prior_acquaintance_label' => 'We already knew this family.',
+            'prior_acquaintance_help' => 'If so, the :months-month marriage-fee condition will not apply to this profile.',
+
+            'empty' => 'There is nothing for you to record right now.',
+
+            // D23 / section 8 — said to the family, not only in the code.
+            'link_proof_note' => 'A record made through this link says only that "the person holding this link made the record". Do not give this link to anyone else.',
+        ],
+
+        'show' => [
+            'eyebrow' => 'Suchak Customer Portal',
+            'fallback_title' => 'Customer service context',
+            'intro' => 'Verify package, terms, payment, invoice, and receipt status for this Suchak customer context.',
+
+            'portal_status' => 'Portal status',
+            'terms' => 'Terms',
+            'payment_request' => 'Payment request',
+            'expires' => 'Expires',
+            'not_available' => 'Not available',
+            'no_expiry' => 'No expiry set',
+
+            'stages_link' => 'Profiles suggested for you, and your record',
+
+            'package_terms_title' => 'Package and terms',
+            'agreement_unavailable' => 'Agreement not available',
+            'revision' => 'Revision :number',
+            'amount_due' => 'Amount due',
+            'to_be_confirmed' => 'To be confirmed',
+            'collector' => 'Collector',
+
+            'payments_title' => 'Payments and documents',
+            'direct_payment_warning' => 'Platform-collected customers should not make direct Suchak payments. If any Suchak asks for payment outside this verified platform context, use your logged-in account to report it with evidence.',
+            'status' => 'Status',
+            'received' => 'Received',
+            'balance' => 'Balance',
+            'mode' => 'Mode',
+            'documents' => 'Documents',
+            'issued_on' => 'issued :date',
+            'verify_receipt' => 'Verify receipt',
+            'no_payments' => 'No payment record has been posted for this request yet.',
+
+            'corrections_title' => 'Corrections and service actions',
+            'financial_corrections' => 'Financial corrections',
+            'no_corrections' => 'No correction posted.',
+            'overdue_actions' => 'Overdue service actions',
+            'no_overdue_actions' => 'No overdue service action.',
+
+            'family_title' => 'Family and payer context',
+            'relationship' => 'Relationship: :value',
+            'not_specified' => 'Not specified',
+            'payer_role' => 'Payer role: :value',
+            'member_status' => 'Status: :value',
+            'no_family' => 'No shared family member context has been linked yet.',
+
+            'claim_title' => 'Claim portal link',
+            'claim_name' => 'Name',
+            'claim_relationship' => 'Relationship',
+            'claim_submit' => 'Claim',
+
+            'revoke_title' => 'Revoke portal link',
+            'revoke_reason' => 'Reason',
+            'revoke_submit' => 'Revoke access',
+        ],
+    ],
+
     'dashboard' => [
         'customer_list_title' => 'Customer list',
         'customer_list_intro' => 'All your customers in one place — photo, profile ID, basic details, and quick actions.',

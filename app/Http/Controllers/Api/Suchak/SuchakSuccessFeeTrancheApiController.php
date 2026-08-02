@@ -107,7 +107,7 @@ class SuchakSuccessFeeTrancheApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'यशस्वी विवाह शुल्काचे हप्ते ताज्या टप्प्यांप्रमाणे नोंदवले.',
+            'message' => __('suchak.api.success_fee.tranches_released'),
             'data' => $payload,
         ]);
     }
@@ -132,7 +132,7 @@ class SuchakSuccessFeeTrancheApiController extends Controller
         }
 
         if ((int) $collaboration->customerOwnerSuchakAccountId() !== (int) $user->suchakAccount->id) {
-            return $this->error('ग्राहकाचा भरणा फक्त ग्राहकाच्या स्वतःच्या सूचकाला नोंदवता येतो.', 403);
+            return $this->error(__('suchak.api.errors.customer_payment_owner_only'), 403);
         }
 
         $validated = $request->validate([
@@ -148,7 +148,7 @@ class SuchakSuccessFeeTrancheApiController extends Controller
         // The tranche must belong to THIS engagement's live ledger. Without it a Suchak could
         // settle another customer's instalment through an engagement he happens to be on.
         if ((int) $tranche->customer_agreement_id !== (int) $ledgerAgreement->id) {
-            return $this->error('हा हप्ता या सहकार्याच्या करारात सापडला नाही.', 404);
+            return $this->error(__('suchak.api.errors.tranche_not_found'), 404);
         }
 
         /** @var SuchakCustomerPayment|null $payment */
@@ -158,7 +158,7 @@ class SuchakSuccessFeeTrancheApiController extends Controller
             ->first();
 
         if (! $payment instanceof SuchakCustomerPayment) {
-            return $this->error('हा भरणा तुमच्या खात्यात सापडला नाही.', 404);
+            return $this->error(__('suchak.api.errors.payment_not_found'), 404);
         }
 
         try {
@@ -169,7 +169,7 @@ class SuchakSuccessFeeTrancheApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'हप्त्याचा भरणा नोंदवला.',
+            'message' => __('suchak.api.success_fee.payment_recorded'),
             'data' => $trancheService->ledgerPayload($collaboration),
         ]);
     }
@@ -187,11 +187,11 @@ class SuchakSuccessFeeTrancheApiController extends Controller
     ): User|JsonResponse {
         $user = $request->user();
         if (! $user instanceof User || $user->suchakAccount === null) {
-            return $this->error('सूचक खाते आवश्यक आहे.', 403);
+            return $this->error(__('suchak.api.errors.suchak_account_required'), 403);
         }
 
         if ($collaboration->sideForAccount((int) $user->suchakAccount->id) === null) {
-            return $this->error('हे सहकार्य तुमच्या खात्यात सापडले नाही.', 404);
+            return $this->error(__('suchak.api.errors.engagement_not_found'), 404);
         }
 
         return $user;

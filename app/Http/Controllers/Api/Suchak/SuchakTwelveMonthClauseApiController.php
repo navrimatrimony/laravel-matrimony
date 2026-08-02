@@ -64,7 +64,7 @@ class SuchakTwelveMonthClauseApiController extends Controller
         }
 
         if ((int) $customerContext->suchak_account_id !== (int) $user->suchakAccount->id) {
-            return $this->error('हा ग्राहक तुमच्या खात्यात सापडला नाही.', 404);
+            return $this->error(__('suchak.api.errors.customer_not_found'), 404);
         }
 
         return response()->json([
@@ -99,7 +99,7 @@ class SuchakTwelveMonthClauseApiController extends Controller
         }
 
         if ((int) $customerContext->suchak_account_id !== (int) $user->suchakAccount->id) {
-            return $this->error('हा ग्राहक तुमच्या खात्यात सापडला नाही.', 404);
+            return $this->error(__('suchak.api.errors.customer_not_found'), 404);
         }
 
         return response()->json([
@@ -115,7 +115,7 @@ class SuchakTwelveMonthClauseApiController extends Controller
     {
         $user = $request->user();
         if (! $user instanceof User || $user->suchakAccount === null) {
-            return $this->error('सूचक खाते आवश्यक आहे.', 403);
+            return $this->error(__('suchak.api.errors.suchak_account_required'), 403);
         }
 
         return $user;

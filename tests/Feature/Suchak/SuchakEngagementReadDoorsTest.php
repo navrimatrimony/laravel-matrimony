@@ -43,6 +43,24 @@ class SuchakEngagementReadDoorsTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * These tests assert MARATHI wording, so they ask for Marathi.
+     *
+     * They did not have to before: the sentences they pin were hardcoded
+     * Marathi literals, which read the same whatever the caller wanted — the
+     * defect, not the contract. Now the wording follows the request, so the
+     * language under test is stated rather than inherited from whatever the
+     * suite's default locale happens to be (Symfony's test client sends
+     * `Accept-Language: en-us`, so the default is English).
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        app()->setLocale('mr');
+        $this->withHeader('Accept-Language', 'mr');
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────────────────
     //  GAP 2 — the engagement's real state is readable
     // ─────────────────────────────────────────────────────────────────────────────────────────

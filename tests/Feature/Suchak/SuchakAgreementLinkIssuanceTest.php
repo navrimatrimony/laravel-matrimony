@@ -153,7 +153,15 @@ class SuchakAgreementLinkIssuanceTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->postJson("/api/v1/suchak/customer-agreements/{$agreement->id}/acceptance-link")
+        // Marathi is ASKED FOR, not assumed. This refusal used to be a Marathi
+        // literal in the controller, so it read the same whatever the caller
+        // wanted; now it follows Accept-Language, and this test says which
+        // language it is testing.
+        $this->postJson(
+            "/api/v1/suchak/customer-agreements/{$agreement->id}/acceptance-link",
+            [],
+            ['Accept-Language' => 'mr'],
+        )
             ->assertStatus(422)
             ->assertJsonPath('success', false)
             ->assertJsonPath('message', 'हा करार ग्राहकाने आधीच स्वीकारला आहे.');
@@ -177,7 +185,11 @@ class SuchakAgreementLinkIssuanceTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->postJson("/api/v1/suchak/customer-agreements/{$agreement->id}/acceptance-link")
+        $this->postJson(
+            "/api/v1/suchak/customer-agreements/{$agreement->id}/acceptance-link",
+            [],
+            ['Accept-Language' => 'mr'],
+        )
             ->assertStatus(422)
             ->assertJsonPath('message', 'हा करार आता वापरात नाही. नवीन करार तयार करून पाठवा.');
 

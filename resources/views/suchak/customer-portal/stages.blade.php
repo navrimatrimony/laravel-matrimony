@@ -3,30 +3,31 @@
 {{--
     The CUSTOMER's door onto the marketplace stage ladder (blueprint 6a, D11, D23).
 
-    Marathi only, Latin digits only. No money anywhere on this page on purpose: D17 says the screen
-    where a family is deciding about a person carries this meeting's fee alone and never a running
-    total, and this is not the approval screen at all — it is where they say what they did.
+    Latin digits only. No money anywhere on this page on purpose: D17 says the screen where a family
+    is deciding about a person carries this meeting's fee alone and never a running total, and this
+    is not the approval screen at all — it is where they say what they did.
 
     D27: every line here is something the reader acts on. What the link does and does not prove is
     the one exception, and it stays because it changes what the family should expect the record to
     be worth later.
+
+    LANGUAGE: every sentence comes from `suchak.customer_portal.stages.*`, so this page answers in
+    whatever language the reader asked for. It used to hold Marathi string literals with no __() at
+    all, which meant the layout's en/mr switcher changed nothing here — on the one page a family is
+    ever sent. Stage names come from SuchakCollaborationStageEvent::stageLabel(), the ladder's own
+    single label vocabulary, which is now locale-aware too.
 --}}
 
 @section('content')
 @php
     $stageEventModel = \App\Models\SuchakCollaborationStageEvent::class;
-    $stageHelp = [
-        $stageEventModel::STAGE_VIEWED => 'हे स्थळ तुम्ही पाहिले.',
-        $stageEventModel::STAGE_INTERESTED => 'हे स्थळ तुम्हाला पसंत आहे.',
-        $stageEventModel::STAGE_MEETING_CONFIRMED => 'ठरलेली भेट प्रत्यक्षात झाली.',
-    ];
 @endphp
 
 <div class="mx-auto max-w-3xl px-4 py-8">
     <div class="mb-6">
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">तुमच्यासाठी सुचवलेली स्थळे</h1>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ __('suchak.customer_portal.stages.title') }}</h1>
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-            प्रत्येक स्थळाबाबत तुम्ही काय केले ते इथे नोंदवा. ही नोंद तुमचीच राहते — सूचक ती तुमच्या वतीने करू शकत नाही.
+            {{ __('suchak.customer_portal.stages.intro') }}
         </p>
     </div>
 
@@ -43,14 +44,22 @@
     @endif
 
     @if ($portalLink->claimed_name === null)
+        {{--
+            The link text sits INSIDE the sentence, so the sentence takes it as a placeholder rather
+            than being glued together from fragments: the words either side of the link do not fall
+            in the same order in both languages.
+        --}}
+        @php
+            $identifyLink = '<a class="font-semibold underline" href="'
+                .e(route('suchak.customer-portal.show', ['token' => $token]))
+                .'">'.e(__('suchak.customer_portal.stages.identify_link')).'</a>';
+        @endphp
         <div class="mb-5 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
-            नोंद कोणी केली हे कळावे म्हणून आधी
-            <a class="font-semibold underline" href="{{ route('suchak.customer-portal.show', ['token' => $token]) }}">तुमचे नाव आणि नाते</a>
-            नोंदवा.
+            {!! __('suchak.customer_portal.stages.identify', ['link' => $identifyLink]) !!}
         </div>
     @else
         <p class="mb-5 text-sm text-gray-600 dark:text-gray-300">
-            ही लिंक वापरणारे: {{ $portalLink->claimed_name }}
+            {{ __('suchak.customer_portal.stages.link_user') }} {{ $portalLink->claimed_name }}
             @if ($portalLink->claimed_relationship_to_candidate)
                 ({{ $portalLink->claimed_relationship_to_candidate }})
             @endif
@@ -65,7 +74,7 @@
         @endphp
         <section class="mb-5 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                {{ $row['proposed_name'] ?: 'सुचवलेले स्थळ' }}
+                {{ $row['proposed_name'] ?: __('suchak.customer_portal.stages.unnamed_profile') }}
             </h2>
 
             {{--
@@ -77,13 +86,13 @@
             --}}
             @if ($clause !== null && $clause['binds'] === true)
                 <p class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
-                    हे स्थळ तुम्ही पाहिले आहे. {{ \Illuminate\Support\Carbon::parse($clause['binds_until'])->format('d M Y') }}
-                    पर्यंत या स्थळाशी लग्न झाल्यास तुमच्या सूचकाची ठरलेली विवाह-फी लागू राहते — सेवा
-                    मध्येच थांबवली तरीही.
+                    {{ __('suchak.customer_portal.stages.clause_binds', [
+                        'date' => \Illuminate\Support\Carbon::parse($clause['binds_until'])->format('d M Y'),
+                    ]) }}
                 </p>
             @elseif ($clause !== null && $clause['release_reason'] === \App\Modules\Suchak\Services\SuchakTwelveMonthClauseService::RELEASE_PRIOR_ACQUAINTANCE)
                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                    तुम्ही या कुटुंबाला आधीपासून ओळखता असे नोंदवले आहे, त्यामुळे या स्थळावर विवाह-फी लागू नाही.
+                    {{ __('suchak.customer_portal.stages.clause_released_prior') }}
                 </p>
             @endif
 
@@ -116,7 +125,16 @@
                         >
                             {{ $stageEventModel::stageLabel($stageKey) }}
                         </button>
-                        <span class="text-sm text-gray-600 dark:text-gray-300">{{ $stageHelp[$stageKey] ?? '' }}</span>
+                        {{--
+                            Keyed by the ladder's own stage key, so a rung with no help sentence
+                            prints nothing rather than printing the key at the family.
+                        --}}
+                        @php
+                            $helpKey = "suchak.customer_portal.stages.help.{$stageKey}";
+                        @endphp
+                        <span class="text-sm text-gray-600 dark:text-gray-300">
+                            {{ \Illuminate\Support\Facades\Lang::has($helpKey) ? __($helpKey) : '' }}
+                        </span>
 
                         {{--
                             9a A6 — ONE TAP, AT VIEW TIME, and only on the rung the clause binds at.
@@ -129,9 +147,11 @@
                             <label class="flex w-full items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
                                 <input type="checkbox" name="prior_acquaintance" value="1" class="mt-1 rounded border-gray-300">
                                 <span>
-                                    आम्ही या कुटुंबाला आधीपासून ओळखतो.
+                                    {{ __('suchak.customer_portal.stages.prior_acquaintance_label') }}
                                     <span class="text-gray-500 dark:text-gray-400">
-                                        असे असल्यास या स्थळावर {{ $clauseTerms['binding_months'] }} महिन्यांची विवाह-फी अट लागू होणार नाही.
+                                        {{ __('suchak.customer_portal.stages.prior_acquaintance_help', [
+                                            'months' => $clauseTerms['binding_months'],
+                                        ]) }}
                                     </span>
                                 </span>
                             </label>
@@ -142,7 +162,7 @@
         </section>
     @empty
         <p class="rounded-lg border border-gray-200 bg-white p-5 text-sm text-gray-600 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
-            सध्या तुमच्यासाठी नोंदवण्यासारखे स्थळ नाही.
+            {{ __('suchak.customer_portal.stages.empty') }}
         </p>
     @endforelse
 
@@ -152,7 +172,7 @@
         expects this to be proof of identity later would be wrong, and they should know now.
     --}}
     <p class="mt-6 text-xs text-gray-500 dark:text-gray-400">
-        या लिंकवरून केलेली नोंद "ही लिंक असलेल्या व्यक्तीने नोंद केली" एवढेच सांगते. लिंक इतर कोणाला देऊ नका.
+        {{ __('suchak.customer_portal.stages.link_proof_note') }}
     </p>
 </div>
 @endsection

@@ -39,6 +39,24 @@ class SuchakSuccessFeeTrancheWireTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * These tests assert MARATHI wording, so they ask for Marathi.
+     *
+     * They did not have to before: the sentences they pin were hardcoded
+     * Marathi literals, which read the same whatever the caller wanted — the
+     * defect, not the contract. Now the wording follows the request, so the
+     * language under test is stated rather than inherited from whatever the
+     * suite's default locale happens to be (Symfony's test client sends
+     * `Accept-Language: en-us`, so the default is English).
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        app()->setLocale('mr');
+        $this->withHeader('Accept-Language', 'mr');
+    }
+
     // ------------------------------------------------------------- end to end
 
     public function test_a_split_posted_with_the_send_reaches_the_page_the_family_accepts(): void
@@ -423,8 +441,14 @@ class SuchakSuccessFeeTrancheWireTest extends TestCase
             $agreement->suchakAccount->user,
         );
 
-        return $this->get(route('suchak.agreements.public.show', ['token' => $link['raw_token']]))
-            ->assertOk();
+            // This page is served by the WEB group, whose locale comes from
+            // `?locale=` / session (SetLocaleFromQuery) and NOT from
+            // Accept-Language — so Marathi is requested the way that page
+            // actually accepts it.
+        return $this->get(route('suchak.agreements.public.show', [
+            'token' => $link['raw_token'],
+            'locale' => 'mr',
+        ]))->assertOk();
     }
 
     /**
