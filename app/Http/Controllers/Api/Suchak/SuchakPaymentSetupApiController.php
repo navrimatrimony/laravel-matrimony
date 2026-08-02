@@ -131,7 +131,11 @@ class SuchakPaymentSetupApiController extends Controller
             // here is how one copy ends up wrong while the other keeps passing.
             'success_fee_tranches' => ['nullable', 'array'],
             'success_fee_tranches.*' => ['array'],
-            'success_fee_tranches.*.trigger_stage_key' => ['required', 'string', Rule::in(SuchakCollaborationStageEvent::STAGE_LADDER)],
+            // The RELEASING window, not the whole ladder. `STAGE_LADDER` here was a second, wider
+            // list of legal triggers than the one the service enforces: §7.4 names three releasing
+            // events, and every rung below them settles on ONE Suchak's claim. The set is derived
+            // from the ladder by its owner, so the door and the money agree by construction.
+            'success_fee_tranches.*.trigger_stage_key' => ['required', 'string', Rule::in(SuchakSuccessFeeTrancheService::releasingStages())],
             'success_fee_tranches.*.share_percent' => ['required', 'numeric'],
             'success_fee_tranches.*.is_final_tranche' => ['nullable', 'boolean'],
         ]);

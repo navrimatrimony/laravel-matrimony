@@ -655,14 +655,23 @@ class SuchakAgreementService
             return;
         }
 
-        // M9: the ledger follows the customer, not the revision. When the split is unchanged the
-        // previous revision's release and payment state moves with it, so a tranche already paid
-        // stays paid across a package edit and the family's total exposure never resets.
+        // M9: the ledger follows the CUSTOMER, not the revision. The previous revision's release
+        // and payment state moves forward rung by rung, so a tranche already released or already
+        // paid stays that way across a package edit and the family's total exposure never resets.
+        //
+        // KEYED BY RUNG, AND CARRIED UNCONDITIONALLY. The first version carried the state only
+        // when the whole plan was byte-identical, which meant one percent of difference anywhere
+        // in the schedule wrote every new row with all five ledger columns null — a clean slate,
+        // and the family exposed to the full success fee a second time. It was invisible because
+        // nothing could release a tranche; SuchakSuccessFeeTrancheService::release() ends that.
+        //
+        // Carrying it always is safe precisely because assertPlanChangeAllowed() has already run
+        // above: a committed rung must still be present in the new plan at the same share, so the
+        // row this state lands on is the same row it left. On an uncommitted rung the carried
+        // state is five nulls and the copy is a no-op either way.
         $carriedState = [];
-        if ($this->trancheService->snapshotPayload($supersededTranches) === $trancheRows) {
-            foreach ($supersededTranches as $tranche) {
-                $carriedState[(string) $tranche->trigger_stage_key] = $tranche;
-            }
+        foreach ($supersededTranches as $tranche) {
+            $carriedState[(string) $tranche->trigger_stage_key] = $tranche;
         }
 
         foreach ($trancheRows as $row) {

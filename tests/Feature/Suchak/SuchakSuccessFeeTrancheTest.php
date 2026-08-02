@@ -294,9 +294,19 @@ class SuchakSuccessFeeTrancheTest extends TestCase
         $this->assertTrue($revision->successFeeTranches->first()->isCommitted());
         $this->assertNull($revision->successFeeTranches->last()->settled_at);
 
-        // A new revision may not re-cut a split that has already been drawn on.
+        // A new revision may not re-cut a split that has already been drawn on. The proposed plan
+        // below deletes the PAID `marriage_settled` instalment outright, and that is what is
+        // refused.
+        //
+        // The refusal now NAMES the rung. It used to be one blanket sentence for the whole plan,
+        // which was harmless only while nothing could commit a tranche; once
+        // SuchakSuccessFeeTrancheService::release() exists, a whole-plan veto would also refuse
+        // the legitimate revision — re-shaping the instalments that have NOT happened — that §7.4
+        // explicitly allows ("the paid tranche stands, only the UNPAID tranches fire on the new
+        // match"). Same rule, applied per committed row, and phrased so a Suchak looking at three
+        // rows knows which one he may not touch.
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('एक हप्ता आधीच लागू झाला असल्याने हप्त्यांची विभागणी बदलता येणार नाही.');
+        $this->expectExceptionMessage('"लग्न ठरल्यावर" या टप्प्याचा हप्ता आधीच लागू झाला आहे; तो नव्या विभागणीतून काढून टाकता येणार नाही.');
 
         $service->createRevisionForPackageChange($revision, $suchakUser, [
             'agreement_title' => 'M9 exposure ceiling',

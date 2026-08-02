@@ -219,6 +219,44 @@ class SuchakMarketplaceChallenge extends Model
         return $currency !== '' ? $currency : 'INR';
     }
 
+    /**
+     * The declaration IN RUPEES — the one owner of "how much is this share worth", added 2026-08-04
+     * with the cross-Suchak obligation (blueprint M2), for the same reason
+     * {@see declaredShareCurrency()} above exists: two places computing it is how the listing and
+     * the debt end up quoting two different figures for one promise.
+     *
+     * A FIXED declaration is already a rupee figure. A PERCENT declaration is a percent OF the
+     * success fee, whose one owner is `suchak_service_packages.post_marriage_fee_amount` in
+     * `MODE_FIXED` — read here, never copied onto this row. NULL when that base does not exist
+     * (`as_wished` / `none` / a null amount): a percent of nothing is not a number, and returning
+     * 0 would print a promise of ₹0 to a browsing Suchak. Same refusal
+     * `SuchakSuccessFeeTrancheService::assertPackageCarriesFixedSuccessFee()` makes about a split.
+     *
+     * Returned as a float so the two callers can format it themselves — the listing through
+     * MoneyFormat, the obligation through the tranche allocator. No rounding decision is taken here
+     * beyond the two decimal places every money column in this domain already carries.
+     */
+    public function declaredShareTotal(): ?float
+    {
+        if ($this->declared_share_type === SuchakCommissionAgreement::SPLIT_FIXED_AMOUNT) {
+            return $this->declared_share_amount === null ? null : (float) $this->declared_share_amount;
+        }
+
+        if ($this->declared_share_percent === null) {
+            return null;
+        }
+
+        $this->loadMissing('customerAgreement.servicePackage');
+        $package = $this->customerAgreement?->servicePackage;
+
+        if ($package?->post_marriage_fee_mode !== SuchakCustomerPlan::MODE_FIXED
+            || $package->post_marriage_fee_amount === null) {
+            return null;
+        }
+
+        return round(((float) $package->post_marriage_fee_amount) * ((float) $this->declared_share_percent) / 100, 2);
+    }
+
     public function isOpen(): bool
     {
         return $this->status === self::STATUS_OPEN;

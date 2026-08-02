@@ -8,6 +8,7 @@ use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakCustomerAgreement;
 use App\Models\SuchakDispute;
+use App\Models\SuchakGrowthRewardRule;
 use App\Models\SuchakPaymentContext;
 use App\Models\SuchakPipeline;
 use App\Models\SuchakPipelineEvent;
@@ -17,6 +18,7 @@ use App\Models\SuchakVisitConfirmation;
 use App\Models\SuchakVisitConfirmationEvent;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Support\MoneyFormat;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -24,6 +26,15 @@ use InvalidArgumentException;
 
 class SuchakVisitConfirmationService
 {
+    /**
+     * How a qualified visit payout got its figure. Recorded on the payout's
+     * visit event and admin audit row so the answer survives the screen that
+     * produced it — see {@see self::boundPayoutAmount()}.
+     */
+    public const PAYOUT_AMOUNT_SOURCE_PLATFORM_RULE = 'platform_visit_reward_rule';
+
+    public const PAYOUT_AMOUNT_SOURCE_TYPED_UNDER_CEILING = 'admin_typed_under_platform_ceiling';
+
     public function __construct(
         private readonly SuchakAccessService $accessService,
         private readonly SuchakActivityLogger $activityLogger,
@@ -712,6 +723,7 @@ class SuchakVisitConfirmationService
         return DB::transaction(function () use ($visit, $admin, $attributes, $ipAddress, $userAgent): SuchakVisitConfirmation {
             $locked = $this->lockedVisit($visit);
             $this->assertEligibleForPayout($locked);
+            $this->assertPayoutActorAllowed($locked, $admin);
 
             $paymentContext = $locked->paymentContext;
             if (! $paymentContext instanceof SuchakPaymentContext) {
@@ -719,13 +731,12 @@ class SuchakVisitConfirmationService
             }
 
             $this->assertPlatformPaymentContext($paymentContext, $locked->pipeline);
-            $amount = $this->requiredAmount($attributes['amount'] ?? null);
-            // Defaults to the currency the meeting was QUOTED in, not to rupees.
-            // A payout for a meeting frozen in USD that silently settles as INR
-            // is the same defect as rendering it with a '₹'.
-            $currency = $this->currency($attributes['currency'] ?? $locked->fee_currency ?? 'INR');
+            $bound = $this->boundPayoutAmount($locked, $attributes);
+            $amount = $bound['amount'];
+            $currency = $bound['currency'];
             $note = $this->requiredPrivateSafeText($attributes['qualification_note'] ?? null, 'Suchak visit payout qualification note is required.', 1000);
             $fromStatus = $locked->visit_status;
+            $singleActor = $this->isSingleActorQualification($locked, $admin);
 
             $payout = $this->platformPayoutService->qualifyFromPlatformEvent(
                 $paymentContext,
@@ -744,13 +755,32 @@ class SuchakVisitConfirmationService
                 $userAgent,
             );
 
+            // WHERE THE FIGURE CAME FROM, AND WHETHER ONE PERSON DECIDED IT ALONE,
+            // travel with the money on the permanent trail. Both were unanswerable
+            // before: the payout recorded an amount with no source, and nothing
+            // anywhere compared the qualifier against the admin who confirmed.
+            $provenance = [
+                'amount_source' => $bound['amount_source'],
+                'reward_rule_key' => $bound['reward_rule_key'],
+                'reward_rule_id' => $bound['reward_rule_id'],
+                'typed_amount_ceiling' => $bound['typed_amount_ceiling'],
+                'single_actor_qualification' => $singleActor,
+                'admin_confirmed_by_user_id' => $locked->admin_confirmed_by_user_id,
+                'payout_qualified_by_user_id' => $admin->id,
+            ];
+
             $adminAuditLog = $this->writeAdminAuditLog(
                 $admin,
                 'suchak_visit_payout_qualified',
                 $locked,
                 $note,
                 ['visit_status' => $fromStatus, 'platform_payout_id' => null],
-                ['visit_status' => SuchakVisitConfirmation::STATUS_PAYOUT_QUALIFIED, 'platform_payout_id' => $payout->id],
+                array_merge([
+                    'visit_status' => SuchakVisitConfirmation::STATUS_PAYOUT_QUALIFIED,
+                    'platform_payout_id' => $payout->id,
+                    'amount' => $amount,
+                    'currency' => $currency,
+                ], $provenance),
             );
 
             $locked->forceFill([
@@ -768,7 +798,11 @@ class SuchakVisitConfirmationService
                 $fromStatus,
                 $fresh->visit_status,
                 $note,
-                ['platform_payout_id' => $payout->id],
+                array_merge([
+                    'platform_payout_id' => $payout->id,
+                    'payout_amount' => $amount,
+                    'payout_currency' => $currency,
+                ], $provenance),
             );
             $this->recordActivity(
                 $fresh,
@@ -1191,6 +1225,150 @@ class SuchakVisitConfirmationService
         if (! $this->confirmationPolicySatisfied($visit)) {
             throw new InvalidArgumentException('Suchak visit confirmation policy is not yet satisfied.');
         }
+    }
+
+    /**
+     * WHAT THE PAYOUT IS WORTH — and why the meeting's own fee is not the answer.
+     *
+     * `fee_amount` is the CUSTOMER-side quote the Suchak set for himself. This
+     * payout is PLATFORM money paid TO that Suchak. Binding them would hand the
+     * payee the platform's price list, which is the defect the empty form on
+     * `admin/suchak/visits` was an interim guard against. That interim is now
+     * over: `[required, numeric, min:0.01]` with no ceiling meant one admin
+     * could type any figure at all, and Phase 4 puts the same shape in front of
+     * an 80,000 - 1,00,000 success fee.
+     *
+     * TWO SOURCES, IN STRICT ORDER, AND THE ROW SAYS WHICH ONE RAN:
+     *
+     *  1. A PLATFORM-OWNED RULE. If a `platform_visit_confirmed` reward rule is
+     *     in force, the amount and the currency ARE the rule's. Nobody types
+     *     anything — exactly how `SuchakGrowthRewardService` has always sourced
+     *     `reward_amount`, reusing that engine rather than adding a second one.
+     *     A submitted figure that DISAGREES is refused rather than ignored: a
+     *     stale form and a deliberate override look identical from here, and
+     *     silence would let the second one through.
+     *
+     *  2. NO RULE PUBLISHED YET — the typed figure survives, under a
+     *     platform-owned ceiling ({@see SuchakPolicyService::visitPayoutMaxAmount()}).
+     *     Refusing outright instead would have been the tighter rule and it is
+     *     the wrong trade here: it would deadlock every meeting payout on a
+     *     production that has no rule row, to close a hole the ceiling already
+     *     bounds. The ceiling is beaten by a rule, never applied on top of one.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array{amount: string, currency: string, amount_source: string, reward_rule_key: ?string, reward_rule_id: ?int, typed_amount_ceiling: ?int}
+     */
+    private function boundPayoutAmount(SuchakVisitConfirmation $visit, array $attributes): array
+    {
+        $rule = SuchakGrowthRewardRule::visitRewardInForce();
+
+        if ($rule instanceof SuchakGrowthRewardRule) {
+            $amount = $this->requiredAmount($rule->reward_amount);
+            $currency = $this->currency($rule->reward_currency);
+            $submitted = $attributes['amount'] ?? null;
+            $submittedCurrency = $attributes['currency'] ?? null;
+
+            if ($submitted !== null && trim((string) $submitted) !== '' && $this->requiredAmount($submitted) !== $amount) {
+                throw new InvalidArgumentException(sprintf(
+                    'The platform visit reward is set by rule "%s" at %s; a different amount cannot be qualified.',
+                    $rule->rule_key,
+                    (string) MoneyFormat::amount($amount, $currency),
+                ));
+            }
+
+            if ($submittedCurrency !== null && trim((string) $submittedCurrency) !== '' && $this->currency($submittedCurrency) !== $currency) {
+                throw new InvalidArgumentException(sprintf(
+                    'The platform visit reward is set by rule "%s" in %s; a different currency cannot be qualified.',
+                    $rule->rule_key,
+                    $currency,
+                ));
+            }
+
+            return [
+                'amount' => $amount,
+                'currency' => $currency,
+                'amount_source' => self::PAYOUT_AMOUNT_SOURCE_PLATFORM_RULE,
+                'reward_rule_key' => $rule->rule_key,
+                'reward_rule_id' => (int) $rule->id,
+                'typed_amount_ceiling' => null,
+            ];
+        }
+
+        $amount = $this->requiredAmount($attributes['amount'] ?? null);
+        // Defaults to the currency the meeting was QUOTED in, not to rupees.
+        // A payout for a meeting frozen in USD that silently settles as INR
+        // is the same defect as rendering it with a '₹'.
+        $currency = $this->currency($attributes['currency'] ?? $visit->fee_currency ?? 'INR');
+        $ceiling = $this->policyService->visitPayoutMaxAmount();
+
+        // Compared as a bare number in whatever currency was frozen. The ceiling
+        // is INR-shaped and there is no conversion in this codebase, so a foreign
+        // currency is held to the same figure — which errs towards refusing, and
+        // refusing is the safe direction for an unpublished amount.
+        if ((float) $amount > (float) $ceiling) {
+            throw new InvalidArgumentException(sprintf(
+                'No platform visit reward rule is in force, so a typed payout cannot exceed %s. Publish a platform visit reward rule to qualify more than that.',
+                (string) MoneyFormat::amount($ceiling, $currency),
+            ));
+        }
+
+        return [
+            'amount' => $amount,
+            'currency' => $currency,
+            'amount_source' => self::PAYOUT_AMOUNT_SOURCE_TYPED_UNDER_CEILING,
+            'reward_rule_key' => null,
+            'reward_rule_id' => null,
+            'typed_amount_ceiling' => $ceiling,
+        ];
+    }
+
+    /**
+     * MAY THE ADMIN WHO CONFIRMED THE MEETING ALSO QUALIFY ITS PAYOUT?
+     *
+     * CHOSEN: yes by default, and never silently. Four-eyes is the obvious
+     * answer and it is available one policy row away
+     * (`suchak_visit_payout_requires_second_admin`), but defaulting it ON would
+     * deadlock this deployment outright — under the default `user_and_admin`
+     * policy an admin confirmation is REQUIRED before a payout can qualify, and
+     * there is one admin. The engine would refuse every meeting payout with no
+     * second person in existence to unblock it.
+     *
+     * WHAT MAKES THAT ACCEPTABLE IS THE OTHER HALF OF THIS CHANGE, not tolerance
+     * of the hole. With the amount bound to a platform-owned rule
+     * ({@see self::boundPayoutAmount()}), one admin doing both steps no longer
+     * gets to choose the sum — the residual risk is a fabricated confirmation,
+     * not an inflated figure, and a fabricated confirmation is what the
+     * customer-side confirmation and the 7.2 dispute clock already answer.
+     *
+     * THE COMPENSATING RECORD, so single-actor is auditable rather than
+     * invisible: every qualification writes `single_actor_qualification`,
+     * `admin_confirmed_by_user_id` and `payout_qualified_by_user_id` into BOTH
+     * the append-only `suchak_visit_confirmation_events` metadata and the
+     * `admin_audit_logs` new-values. `true` is the finding; `false` is the proof
+     * the check ran, which is why it is written either way. The meetings screen
+     * renders the flag on the row, so it is not a fact that only exists if
+     * somebody thinks to query for it.
+     *
+     * REJECTED: "require a second admin only when a second admin exists". It
+     * reads as free safety and is worse than nothing — the control disappears
+     * exactly when a deployment shrinks to one person, and no record says it
+     * did.
+     */
+    private function assertPayoutActorAllowed(SuchakVisitConfirmation $visit, User $admin): void
+    {
+        if (! $this->policyService->visitPayoutRequiresSecondAdmin()) {
+            return;
+        }
+
+        if ($this->isSingleActorQualification($visit, $admin)) {
+            throw new InvalidArgumentException('This meeting was admin-confirmed by you; platform policy requires a different admin to qualify its payout.');
+        }
+    }
+
+    private function isSingleActorQualification(SuchakVisitConfirmation $visit, User $admin): bool
+    {
+        return $visit->admin_confirmed_by_user_id !== null
+            && (int) $visit->admin_confirmed_by_user_id === (int) $admin->id;
     }
 
     /**

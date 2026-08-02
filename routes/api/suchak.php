@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\Suchak\SuchakCollaborationsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCollaborationsMutationsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakConsentRequestsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakConsentsApiController;
+use App\Http\Controllers\Api\Suchak\SuchakCrossSuchakObligationApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomerDetailApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomerPlanApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomerShareCardApiController;
@@ -19,6 +20,7 @@ use App\Http\Controllers\Api\Suchak\SuchakIntakeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakLoginApiController;
 use App\Http\Controllers\Api\Suchak\SuchakManualProfileApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMarketplaceChallengeApiController;
+use App\Http\Controllers\Api\Suchak\SuchakMarriageOutcomeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMatchSuggestionsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMeetingsApiController;
@@ -35,6 +37,7 @@ use App\Http\Controllers\Api\Suchak\SuchakPayuCheckoutApiController;
 use App\Http\Controllers\Api\Suchak\SuchakRegisterApiController;
 use App\Http\Controllers\Api\Suchak\SuchakRepresentedProfileApiController;
 use App\Http\Controllers\Api\Suchak\SuchakSearchApiController;
+use App\Http\Controllers\Api\Suchak\SuchakSuccessFeeTrancheApiController;
 use App\Http\Controllers\Api\Suchak\SuchakTwelveMonthClauseApiController;
 use Illuminate\Support\Facades\Route;
 
@@ -120,6 +123,79 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
         [SuchakCollaborationStagesApiController::class, 'linkCustomerAgreement'],
     ); // BIND THE ENGAGEMENT TO THE AGREEMENT REVISION IN FORCE (WRITE-ONCE)
     Route::post('/collaborations/{collaboration}/stages', [SuchakCollaborationStagesApiController::class, 'claimEngagementStage']); // CLAIM AN ENGAGEMENT-OWNED LADDER STAGE
+    /*
+    | THE MARRIAGE, AND THE ENGAGEMENT CREDITED WITH IT (blueprint 6.2, phase 4).
+    |
+    | Nothing in this codebase recorded that a candidate married:
+    | SuchakPipeline::STATUS_CONVERTED has no writer, `lifecycle_state` is a
+    | visibility state with no date and no counterparty, `profile_marriages` is
+    | the candidate's PREVIOUS marriage and `homepage_success_stories` is CMS
+    | copy. The only representation was a `stage_key = marriage` ladder row —
+    | a claim on an engagement, not an outcome on a person — whose `claimed_at`
+    | and `confirmed_at` are WHEN IT WAS REPORTED.
+    |
+    | So `marriage` is NOT claimable through the generic /stages route above; it
+    | is recorded here, where the WEDDING DATE is required. M3 keys the
+    | cross-Suchak share on "a fixed number of days after a recorded Marriage",
+    | and a rung with no wedding date is a marriage that clock cannot start on.
+    */
+    Route::post('/collaborations/{collaboration}/marriage', [SuchakMarriageOutcomeApiController::class, 'store']); // RECORD THE MARRIAGE + ITS DATE, AND ATTRIBUTE IT (6.2)
+    Route::get('/collaborations/{collaboration}/marriage', [SuchakMarriageOutcomeApiController::class, 'show']); // READ THE ATTRIBUTION BACK
+    /*
+    | THE SUCCESS-FEE LEDGER (blueprint 7.4, M9, M10 — phase 4).
+    |
+    | `suchak_success_fee_tranches` shipped with five ledger columns
+    | (released_by_collaboration_request_id, released_by_stage_event_id,
+    | released_at, customer_payment_id, settled_at) and NOTHING originated
+    | them: the only writer was the copy-forward in
+    | SuchakAgreementService::persistTranchePlan(), which moves state a
+    | previous revision already held. So isReleased(), isSettled() and
+    | isCommitted() could only ever return false, M10 had no mechanism at
+    | all, and M9's guard against re-cutting an accepted split returned
+    | early on every call ever made.
+    |
+    | The GET is not merely a read of what was written. Production may not
+    | run schedule:run and two queues have had no worker since 2026-06-17,
+    | so the ledger is DERIVED from the settled rungs every time it is
+    | asked and the release merely records that derivation — `released_at`
+    | is the instant the RUNG settled, never the instant the button was
+    | pressed. A row released by the ladder but not yet written down reads
+    | as is_released:true with is_recorded:false.
+    */
+    Route::get('/collaborations/{collaboration}/success-fee-tranches', [SuchakSuccessFeeTrancheApiController::class, 'index']); // READ THE LEDGER (DERIVED)
+    Route::post('/collaborations/{collaboration}/success-fee-tranches/release', [SuchakSuccessFeeTrancheApiController::class, 'release']); // RECORD WHAT THE SETTLED RUNGS EARNED (M10 CASCADES)
+    Route::post('/collaborations/{collaboration}/success-fee-tranches/{tranche}/settlement', [SuchakSuccessFeeTrancheApiController::class, 'settle'])
+        ->whereNumber('tranche'); // BIND A RECORDED CUSTOMER PAYMENT TO A RELEASED TRANCHE (M9's "paid")
+    /*
+    | "SUCHAK A OWES SUCHAK B" (blueprint M2, M3, 9a A7 — phase 4).
+    |
+    | Nothing in the schema could say it. suchak_platform_payouts is platform to
+    | ONE Suchak, suchak_customer_payments is customer to ONE Suchak,
+    | suchak_ledger_entries has the whole receivable vocabulary but one
+    | suchak_account_id, a NOT NULL matrimony_profile_id and a hand-typed
+    | entry_type chosen on two Blade forms, and suchak_commission_agreements is
+    | acceptance-only with no due/paid/settled anywhere. Not one of them has a
+    | payer column.
+    |
+    | RAISING IS OPEN TO BOTH SIDES AND IS IDEMPOTENT, and that is M3 at the
+    | door: "suppressing the record must ACCELERATE the obligation, never kill
+    | it". If only the payer could raise his own debt, doing nothing would erase
+    | it. The payee can already record the wedding (`marriage` is
+    | CLAIMANT_EITHER_SUCHAK); he can now raise the share that follows from it.
+    |
+    | THE RATIO IS A READ, NOT A SCREEN (A7). Before it, `grep -i realized` over
+    | app/ returned four comments and zero code, and STAGE_SHARE_SETTLED was
+    | claimable and read by nothing — settling the last obligation on an
+    | engagement now claims that rung, so the loop closes where 6a says it does.
+    */
+    Route::get('/cross-suchak-obligations', [SuchakCrossSuchakObligationApiController::class, 'index']); // MY LEDGER, BOTH DIRECTIONS
+    Route::get('/cross-suchak-obligations/ratio', [SuchakCrossSuchakObligationApiController::class, 'ownRatio']); // A7 — MY REALIZED-VS-DECLARED
+    Route::get('/cross-suchak-obligations/ratio/{suchakAccount}', [SuchakCrossSuchakObligationApiController::class, 'declarerRatio'])
+        ->whereNumber('suchakAccount'); // A7 — A DECLARER'S CARD, BEFORE A HELPER COMMITS
+    Route::post('/cross-suchak-obligations/{obligation}/settle', [SuchakCrossSuchakObligationApiController::class, 'settle'])
+        ->whereNumber('obligation'); // THE HELPER MARKS THE SHARE RECEIVED (A7 — helper only)
+    Route::post('/collaborations/{collaboration}/cross-suchak-obligations', [SuchakCrossSuchakObligationApiController::class, 'raise']); // TURN A DECLARED SHARE INTO A DEBT
+    Route::get('/collaborations/{collaboration}/cross-suchak-obligations', [SuchakCrossSuchakObligationApiController::class, 'forEngagement']); // OWED-VS-PAID FOR ONE ENGAGEMENT
     // The four PRE-ENGAGEMENT stages: they happen before any counterparty
     // exists, so they hang off the customer agreement, not off a collaboration.
     Route::post('/customer-agreements/{agreement}/stages', [SuchakCollaborationStagesApiController::class, 'claimCustomerStage'])

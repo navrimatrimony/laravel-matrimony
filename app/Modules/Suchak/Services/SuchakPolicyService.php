@@ -42,6 +42,8 @@ class SuchakPolicyService
     public const KEY_SUCHAK_TERMS_POLICY_MODE = 'suchak_terms_policy_mode';
     public const KEY_SUCHAK_PAYMENT_DETAIL_VISIBILITY_POLICY = 'suchak_payment_detail_visibility_policy';
     public const KEY_SUCHAK_VISIT_CONFIRMATION_POLICY_MODE = 'suchak_visit_confirmation_policy_mode';
+    public const KEY_SUCHAK_VISIT_PAYOUT_MAX_AMOUNT = 'suchak_visit_payout_max_amount';
+    public const KEY_SUCHAK_VISIT_PAYOUT_REQUIRES_SECOND_ADMIN = 'suchak_visit_payout_requires_second_admin';
     public const KEY_SUCHAK_LEAD_ALLOCATION_POLICY_MODE = 'suchak_lead_allocation_policy_mode';
     public const KEY_SUCHAK_LEAD_ALLOCATION_SLA_HOURS = 'suchak_lead_allocation_sla_hours';
     public const KEY_SUCHAK_LOYALTY_TIER_POLICY_JSON = 'suchak_loyalty_tier_policy_json';
@@ -175,6 +177,31 @@ class SuchakPolicyService
     public const DEFAULT_SUCHAK_TERMS_POLICY_MODE = 'strict';
     public const DEFAULT_SUCHAK_PAYMENT_DETAIL_VISIBILITY_POLICY = SuchakPaymentRequest::VISIBILITY_TERMS_SATISFIED_ONLY;
     public const DEFAULT_SUCHAK_VISIT_CONFIRMATION_POLICY_MODE = SuchakVisitConfirmation::POLICY_USER_AND_ADMIN;
+
+    /**
+     * THE CEILING ON A TYPED MEETING PAYOUT — the interim, not the answer.
+     *
+     * It only binds when NO platform visit-reward rule is in force
+     * ({@see \App\Models\SuchakGrowthRewardRule::visitRewardInForce()}); once a
+     * rule is published the figure is not typed at all and this number never
+     * looks at it. A published price is a decision with its own audit row, and
+     * capping it here would let an old default silently overrule a deliberate
+     * one.
+     *
+     * 7500 is derived, not picked: strictly above every meeting reward this
+     * codebase actually qualifies (the fixtures run 750 - 6000) and strictly
+     * below 10,000, which is tranche 1 of the 1,00,000 success fee in blueprint
+     * 7.4. So a Phase-4-sized figure cannot be typed into a meeting form even
+     * once, and an unpublished figure cannot quietly grow into one.
+     */
+    public const DEFAULT_SUCHAK_VISIT_PAYOUT_MAX_AMOUNT = 7500;
+
+    /**
+     * FOUR-EYES ON A MEETING PAYOUT, off by default — see
+     * {@see \App\Modules\Suchak\Services\SuchakVisitConfirmationService::assertPayoutActorAllowed()}
+     * for why, and for the record that is written instead when it is off.
+     */
+    public const DEFAULT_SUCHAK_VISIT_PAYOUT_REQUIRES_SECOND_ADMIN = false;
     public const DEFAULT_SUCHAK_LEAD_ALLOCATION_POLICY_MODE = SuchakPlatformLead::POLICY_AREA_COMMUNITY_ROTATION;
     public const DEFAULT_SUCHAK_LEAD_ALLOCATION_SLA_HOURS = 48;
     public const DEFAULT_SUCHAK_LOYALTY_TIER_POLICY = [
@@ -499,6 +526,22 @@ class SuchakPolicyService
         return in_array($mode, SuchakVisitConfirmation::POLICY_MODES, true)
             ? $mode
             : self::DEFAULT_SUCHAK_VISIT_CONFIRMATION_POLICY_MODE;
+    }
+
+    public function visitPayoutMaxAmount(): int
+    {
+        return $this->positiveInteger(
+            self::KEY_SUCHAK_VISIT_PAYOUT_MAX_AMOUNT,
+            self::DEFAULT_SUCHAK_VISIT_PAYOUT_MAX_AMOUNT,
+        );
+    }
+
+    public function visitPayoutRequiresSecondAdmin(): bool
+    {
+        return $this->boolean(
+            self::KEY_SUCHAK_VISIT_PAYOUT_REQUIRES_SECOND_ADMIN,
+            self::DEFAULT_SUCHAK_VISIT_PAYOUT_REQUIRES_SECOND_ADMIN,
+        );
     }
 
     public function leadAllocationPolicyMode(): string

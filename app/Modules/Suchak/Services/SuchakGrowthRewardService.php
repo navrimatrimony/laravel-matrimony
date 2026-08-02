@@ -281,6 +281,70 @@ class SuchakGrowthRewardService
     }
 
     /**
+     * THE ONLY WRITER THAT CAN SET `is_active` FALSE — and before this method there was none.
+     *
+     * `is_active` shipped with a reader on both consumers ({@see SuchakGrowthRewardRule::scopeInForce()},
+     * {@see assertRuleQualifies()}) and exactly one writer, `createRewardRule()`, which hard-codes
+     * `true`. So a published price could be superseded by a NEWER price but never WITHDRAWN: once
+     * the platform had said "a confirmed meeting is worth ₹500" there was no way left to say "the
+     * platform no longer pays for meetings at all". Publishing a ₹0.01 rule is not that sentence,
+     * and `createRewardRule()` refuses a zero one anyway.
+     *
+     * THIS IS NOT AN EDIT OF THE PRICE. `reward_amount`, `reward_currency`, the window and the key
+     * are untouched and remain unrewritable — a payout already qualified under this rule carries its
+     * `rule_key` on its own trail and reads back exactly as it did. What ends is the rule's
+     * STANDING, from now forward. Nor is it reversible: there is no re-activate, because "we
+     * withdrew it and then we did not" is a rewrite of history, and publishing a fresh rule is the
+     * honest way back — the same supersession discipline this table already runs on.
+     *
+     * `visitRewardInForce()` and `scopeInForce()` are only ever asked about NOW, so withdrawal
+     * cannot retro-void a past qualification by being un-timestamped.
+     */
+    public function withdrawRewardRule(
+        User $admin,
+        SuchakGrowthRewardRule $rule,
+        string $reason,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): SuchakGrowthRewardRule {
+        $this->accessService->assertAdmin($admin, 'Only admins can withdraw Suchak growth reward rules.');
+
+        $withdrawalReason = $this->requiredText($reason, 'A withdrawal reason is required.', 1000);
+
+        return DB::transaction(function () use ($admin, $rule, $withdrawalReason): SuchakGrowthRewardRule {
+            /** @var SuchakGrowthRewardRule $locked */
+            $locked = SuchakGrowthRewardRule::query()
+                ->whereKey($rule->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (! $locked->is_active) {
+                throw new InvalidArgumentException('Suchak growth reward rule is already withdrawn.');
+            }
+
+            $locked->forceFill(['is_active' => false])->save();
+
+            $this->writeAdminAuditLog(
+                $admin,
+                'suchak_growth_reward_rule_withdrawn',
+                $locked,
+                'Suchak growth reward rule withdrawn. '.$withdrawalReason,
+                ['is_active' => true],
+                [
+                    'is_active' => false,
+                    'rule_key' => $locked->rule_key,
+                    'reward_trigger' => $locked->reward_trigger,
+                ],
+            );
+
+            // NO `SuchakActivityLog` row, exactly as `createRewardRule()` writes none: that log is
+            // keyed to a `suchak_account_id` and a platform price list belongs to no Suchak. The
+            // admin audit trail above is where a platform-wide act is recorded.
+            return $locked->fresh(['createdByAdmin']) ?? $locked;
+        });
+    }
+
+    /**
      * @param  array<string, mixed>  $attributes
      */
     public function qualifyRewardFromPlatformPayment(
@@ -642,6 +706,12 @@ class SuchakGrowthRewardService
             throw new InvalidArgumentException('Inactive Suchak growth reward rules cannot qualify rewards.');
         }
 
+        // NOW LOAD-BEARING, where it used to be a tautology. `TRIGGERS` held one
+        // value, so this could only ever pass; it now also holds
+        // TRIGGER_PLATFORM_VISIT_CONFIRMED, and this line is what keeps a
+        // meeting-reward rule from being paid as a referral reward — a rule
+        // carries a `attribution_policy` value it has no business owning, and a
+        // visit rule has no attribution at all.
         if ($rule->reward_trigger !== SuchakGrowthRewardRule::TRIGGER_PLATFORM_PAYMENT_CONFIRMED) {
             throw new InvalidArgumentException('Suchak growth reward rule trigger must be platform payment confirmed.');
         }

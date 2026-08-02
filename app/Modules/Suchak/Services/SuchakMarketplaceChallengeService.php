@@ -1057,9 +1057,10 @@ class SuchakMarketplaceChallengeService
         $percent = $challenge->declared_share_percent === null ? null : (float) $challenge->declared_share_percent;
         $amount = $challenge->declared_share_amount === null ? null : (float) $challenge->declared_share_amount;
 
-        $estimated = $isPercent && $percent !== null && $successFee !== null
-            ? round($successFee * $percent / 100, 2)
-            : $amount;
+        // The rupee value of the declaration has ONE owner (2026-08-04): the arithmetic used to sit
+        // inline here, and the cross-Suchak obligation needs the identical answer to freeze — a
+        // listing quoting ₹30,000 and a debt quoting anything else is one promise with two numbers.
+        $estimated = $challenge->declaredShareTotal();
 
         return [
             'type' => $challenge->declared_share_type,

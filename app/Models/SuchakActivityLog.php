@@ -87,6 +87,30 @@ class SuchakActivityLog extends Model
      */
     public const ACTION_COLLABORATION_STAGE_CUSTOMER_RECORDED = 'collaboration_stage_customer_recorded';
 
+    /**
+     * A marriage was recorded and one engagement was credited with it (blueprint §6.2).
+     *
+     * Its own action, because nothing in this list can stand in: the collaboration actions describe
+     * the engagement's LIFECYCLE (created / accepted / rejected / expired) and a marriage is its
+     * OUTCOME, and `ACTION_PIPELINE_STATUS_CHANGED` names a status
+     * (`SuchakPipeline::STATUS_CONVERTED`) that has never had a writer. Filed under the
+     * CUSTOMER-OWNING Suchak — this is the row that says whose customer married and whose success
+     * fee just became attributable — with the recorder in the metadata, the same filing rule
+     * ACTION_MARKETPLACE_PROPOSAL_RECEIVED uses.
+     */
+    public const ACTION_MARRIAGE_OUTCOME_RECORDED = 'marriage_outcome_recorded';
+
+    /**
+     * An admin set a §6.2 attribution aside (SuchakMarriageOutcomeService::voidClaim) because a
+     * competing claim on the same candidate turned out to be the real one, or the claim was wrong.
+     *
+     * Its own action rather than a reuse: the payout and reward reversals name money that moved back,
+     * and nothing moves here — an UNCONFIRMED claim never released a tranche. What this records is
+     * that the platform withdrew its statement about who married whom, WITH the stated reason, and
+     * the metadata carries the claim being withdrawn so the trail reads without joining the row.
+     */
+    public const ACTION_MARRIAGE_OUTCOME_VOIDED = 'marriage_outcome_voided';
+
     public const ACTION_COMMISSION_AGREEMENT_UPDATED = 'commission_agreement_updated';
 
     /**
@@ -131,6 +155,26 @@ class SuchakActivityLog extends Model
      * the metadata.
      */
     public const ACTION_MARKETPLACE_PROPOSAL_RECEIVED = 'marketplace_proposal_received';
+
+    /**
+     * A recorded marriage turned a declared share into a DEBT between two Suchak accounts
+     * (blueprint M2). Its own action because no existing one can carry a payer: every money action
+     * above names one account and describes either the platform paying a Suchak or a customer
+     * paying a Suchak. `ACTION_LEDGER_ENTRY_CREATED` is the closest and is exactly wrong — that row
+     * is a Suchak's receivable against a PERSON, hand-typed on a Blade form.
+     *
+     * Filed under the PAYER, because this log is the declarer's record of what he promised, and A7
+     * judges him by it. Whoever pressed the button travels in the metadata — either Suchak may
+     * raise it, deliberately, so the payer cannot suppress his own obligation (M3).
+     */
+    public const ACTION_CROSS_SUCHAK_OBLIGATION_RAISED = 'cross_suchak_obligation_raised';
+
+    /**
+     * The HELPER marked a declared share received (A7 — markable only by him, for the same reason
+     * `STAGE_SHARE_SETTLED` is `CLAIMANT_HELPER`). Filed under the PAYER beside the row above, so
+     * one account's card carries both halves of the realized-vs-declared ratio.
+     */
+    public const ACTION_CROSS_SUCHAK_OBLIGATION_SETTLED = 'cross_suchak_obligation_settled';
 
     public const ACTION_CRM_NOTE_ADDED = 'crm_note_added';
 

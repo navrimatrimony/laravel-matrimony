@@ -2,19 +2,49 @@
 
 namespace App\Modules\Suchak\Services;
 
+use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakCollaborationStageEvent;
+use App\Models\SuchakCustomerAgreement;
+use App\Models\SuchakCustomerPayment;
 use App\Models\SuchakCustomerPlan;
 use App\Models\SuchakServicePackage;
 use App\Models\SuchakSuccessFeeTranche;
+use App\Support\MoneyFormat;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 
 /**
  * The ONE owner of blueprint section 7.4 — the success-fee split, its four arithmetic rules,
- * and the canonical shape that goes into the agreement snapshot digest.
+ * the canonical shape that goes into the agreement snapshot digest, AND the release ledger
+ * (M9, M10, §7.4's per-tranche attribution).
  *
  * Nothing else may compute a tranche amount. T2 ("the parts must sum to the whole, exactly")
  * is only true if a single routine does the rounding, and that routine is {@see amounts()}.
+ *
+ * ── THE LEDGER HALF ──────────────────────────────────────────────────────────────────────────
+ *
+ * `released_by_collaboration_request_id`, `released_by_stage_event_id`, `released_at`,
+ * `customer_payment_id` and `settled_at` shipped with the table and had NO ORIGINATOR: the only
+ * code that ever assigned them was the copy-forward in
+ * `SuchakAgreementService::persistTranchePlan()`, which moves state a previous revision already
+ * held. Nothing created that state, so `isReleased()`, `isSettled()` and `isCommitted()` could
+ * only ever return false and every rule that reads them was inert. {@see release()} and
+ * {@see settle()} are the originators.
+ *
+ * ── THE RELEASE IS ARITHMETIC, NOT AN EVENT ──────────────────────────────────────────────────
+ *
+ * Copied from Phase 3's discipline (see `SuchakVisitConfirmation::isClaimLapsed`): production may
+ * not run `schedule:run`, and the notifications and governance queues have had no worker since
+ * 2026-06-17, so nothing may depend on a job firing at the right moment.
+ *
+ * {@see entitlement()} therefore DERIVES the whole ledger from facts that are already recorded —
+ * the settled rungs of the engagement and the frozen split — and derives it identically whenever
+ * it is asked. {@see release()} writes that derivation down, and writing it down changes nothing
+ * about what it says: `released_at` is the instant the RUNG settled, never the instant the writer
+ * happened to run. A release recorded a year late carries the same date as one recorded the same
+ * afternoon, and a release never recorded at all still reads correctly through the GET door.
  *
  * Messages thrown from here are Marathi because a Suchak reads them on the screen where he
  * types the split. The English exceptions elsewhere in this module are internal invariants
@@ -23,6 +53,82 @@ use InvalidArgumentException;
  */
 class SuchakSuccessFeeTrancheService
 {
+    /**
+     * The last rung that may RELEASE a tranche — a position on the one ladder, never a second list.
+     *
+     * `share_settled` sits after `marriage` on STAGE_LADDER and is the HELPER'S OWN RECEIPT for the
+     * cross-Suchak share (§6a: "helper marks; closes the loop"; A7 makes it a money rule). It
+     * settles on the claim, carries no confirmation and needs no second party. The ladder does not
+     * enforce monotonic progress — `SuchakCollaborationService::claimStage()` checks the ENGAGEMENT's
+     * state and the rung's ACTOR, never that the rungs below it exist — so a helper can claim
+     * `share_settled` on an engagement that never reached a wedding. Were it allowed to release,
+     * M10's cascade below would then fire EVERY tranche in the plan, the largest sum in the system,
+     * on one unconfirmed tap by the party being paid.
+     *
+     * A receipt for money is not evidence about a couple. The cascade stops at the wedding.
+     */
+    public const LAST_RELEASING_STAGE = SuchakCollaborationStageEvent::STAGE_MARRIAGE;
+
+    /**
+     * The FIRST rung that may release a tranche — the floor the cap above was missing.
+     *
+     * §7.4 names exactly three releasing events: लग्न ठरले, साखरपुडा, विवाह. Without a floor,
+     * every rung below `marriage_settled` was a legal trigger, and `SuchakCollaborationStageEvent`
+     * settles all of them ON THE CLAIM — `isSettled()` needs `confirmed_at` only for the three
+     * CONFIRMABLE_STAGES (D26). So a plan of [`meeting_scheduled` 100%] released the WHOLE success
+     * fee on one tap by a single Suchak, with no customer confirmation anywhere: M4 ("no fee falls
+     * due without the customer's confirmation"), D25 (every rupee is earned by an event that has
+     * already happened) and §7.4's refund argument, all breached by the same missing constant.
+     * `assertPlanChangeAllowed()` then froze the row permanently, because it was committed.
+     *
+     * A position, exactly like the cap — the two together are a WINDOW on the one ladder, read by
+     * {@see releasingStages()}. The window comes out as CONFIRMABLE_STAGES and must: §7.4's three
+     * releasing events and D26's three claim-then-confirm rungs are the same three, and a test
+     * pins that so the two can never drift apart in silence.
+     */
+    public const FIRST_RELEASING_STAGE = SuchakCollaborationStageEvent::STAGE_MARRIAGE_SETTLED;
+
+    /**
+     * The rungs a tranche may be triggered by — DERIVED from the ladder between the two positions
+     * above, never a second hand-written list. Moving either constant moves this set with it.
+     *
+     * @return list<string>
+     */
+    public static function releasingStages(): array
+    {
+        $first = SuchakCollaborationStageEvent::stageIndex(self::FIRST_RELEASING_STAGE);
+        $last = SuchakCollaborationStageEvent::stageIndex(self::LAST_RELEASING_STAGE);
+
+        return array_values(array_filter(
+            SuchakCollaborationStageEvent::STAGE_LADDER,
+            static function (string $stageKey) use ($first, $last): bool {
+                $index = SuchakCollaborationStageEvent::stageIndex($stageKey);
+
+                return $index >= $first && $index <= $last;
+            },
+        ));
+    }
+
+    /**
+     * True when this rung may release money. Free text answers false rather than throwing, because
+     * the ledger reads stage keys off rows written long before this guard existed.
+     */
+    public static function isReleasingStage(?string $stageKey): bool
+    {
+        return $stageKey !== null && in_array($stageKey, self::releasingStages(), true);
+    }
+
+    /**
+     * The three, in Marathi, for a refusal a Suchak can act on — one derivation, one wording.
+     */
+    private function releasingStageLabels(): string
+    {
+        return implode(', ', array_map(
+            static fn (string $stageKey): string => '"'.SuchakCollaborationStageEvent::stageLabel($stageKey).'"',
+            self::releasingStages(),
+        ));
+    }
+
     /**
      * @param  array<int, mixed>  $input  raw rows: trigger_stage_key, share_percent, optional
      *                                    sort_order and is_final_tranche
@@ -49,6 +155,18 @@ class SuchakSuccessFeeTrancheService
 
             if (! SuchakCollaborationStageEvent::isValidStage($stageKey)) {
                 throw new InvalidArgumentException('हप्ता ज्या टप्प्यावर द्यायचा तो टप्पा वैध नाही.');
+            }
+
+            // §7.4's three releasing events, and nothing else. A rung outside the window either
+            // settles on one Suchak's own tap (everything below the floor) or is the helper's
+            // receipt for his own share (`share_settled`, above the cap) — neither is evidence
+            // about a couple, and both used to be accepted here.
+            if (! self::isReleasingStage($stageKey)) {
+                throw new InvalidArgumentException(
+                    '"'.SuchakCollaborationStageEvent::stageLabel($stageKey).'" या टप्प्यावर हप्ता ठेवता येणार नाही. '
+                    .'यशस्वी विवाह शुल्काचा हप्ता फक्त ग्राहकाच्या दुजोऱ्यावर ठरणाऱ्या '
+                    .$this->releasingStageLabels().' या टप्प्यांवरच ठेवता येतो.'
+                );
             }
 
             if (isset($seenStages[$stageKey])) {
@@ -256,31 +374,785 @@ class SuchakSuccessFeeTrancheService
     }
 
     /**
-     * M9's guard rail. Once a tranche has been released against a match or paid, the split is
-     * spent history: re-cutting it on a new revision would reset what the family already owes
-     * and let the same rupee be charged twice.
+     * M9's guard rail, applied PER COMMITTED ROW rather than to the plan as a whole.
+     *
+     * The rule it enforces is §7.4's own sentence: *"The paid tranche stands. Only the UNPAID
+     * tranches fire on the new match."* A tranche that has been released against a match — or
+     * paid — is spent history: removing it, re-cutting its share or demoting it from the
+     * remainder would reset what the family already owes and let the same rupee be charged twice.
+     * A tranche that has NOT fired is still only a plan, and re-cutting the part of the schedule
+     * that has not happened yet is exactly what a revision is for.
+     *
+     * WHY THIS IS NOW PER-ROW. The first version compared the two plans WHOLE and refused any
+     * difference the moment ANY row was committed. That was harmless only because nothing in the
+     * codebase could commit a row — `assertPlanChangeAllowed()` returned at the first `if` on
+     * every call this system has ever made. {@see release()} ends that, and a whole-plan
+     * comparison would then have started refusing every later revision, including the legitimate
+     * ones: a family whose settlement broke after the first tranche could never re-shape the two
+     * that had not happened, because the one that had would veto the whole document.
+     *
+     * The refusals name the rung in Marathi, because "the split may not be changed" leaves a
+     * Suchak staring at a screen with three rows on it and no idea which one is the problem.
      *
      * @param  iterable<int, SuchakSuccessFeeTranche>  $existing
      * @param  list<array<string, mixed>>  $rows
      */
     public function assertPlanChangeAllowed(iterable $existing, array $rows): void
     {
-        $committed = false;
-        $existingRows = [];
+        $proposed = [];
+        foreach ($this->planRows($rows) as $row) {
+            $proposed[(string) $row['trigger_stage_key']] = $row;
+        }
+
         foreach ($existing as $tranche) {
-            if ($tranche->isCommitted()) {
-                $committed = true;
+            if (! $tranche->isCommitted()) {
+                continue;
             }
-            $existingRows[] = $tranche;
+
+            $stageKey = (string) $tranche->trigger_stage_key;
+            $label = SuchakCollaborationStageEvent::stageLabel($stageKey);
+            $replacement = $proposed[$stageKey] ?? null;
+
+            if ($replacement === null) {
+                throw new InvalidArgumentException(
+                    '"'.$label.'" या टप्प्याचा हप्ता आधीच लागू झाला आहे; तो नव्या विभागणीतून काढून टाकता येणार नाही.'
+                );
+            }
+
+            $samePercent = number_format((float) $replacement['share_percent'], 2, '.', '')
+                === number_format((float) $tranche->share_percent, 2, '.', '');
+            $sameFinal = ((bool) $replacement['is_final_tranche']) === ((bool) $tranche->is_final_tranche);
+
+            if (! $samePercent || ! $sameFinal) {
+                throw new InvalidArgumentException(
+                    '"'.$label.'" या टप्प्याचा हप्ता आधीच लागू झाला आहे; त्याची टक्केवारी आता बदलता येणार नाही. '
+                    .'पुढील न झालेले हप्ते बदलता येतील.'
+                );
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+    //  THE LEDGER — what an engagement's settled rungs have actually earned (M9, M10, §7.4)
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * THE DERIVED TRUTH, and the only place the release rules live.
+     *
+     * Reads three things and nothing else: the settled rungs of this engagement, the agreement
+     * revision in force, and the frozen total through {@see amounts()}. Writes nothing. Called by
+     * {@see release()} to decide what to record, and by the read door to answer honestly even if
+     * the writer has never run — see the class docblock on why nothing here may depend on a job.
+     *
+     * WHAT RELEASES A TRANCHE. The rung named by `trigger_stage_key` must be SETTLED, and settled
+     * is `SuchakCollaborationStageEvent::isSettled()` — the split that model already encodes:
+     * `marriage_settled`, `engagement` and `marriage` (CONFIRMABLE_STAGES, D26) need
+     * `confirmed_at`; every other rung settles on the claim. That predicate is not restated here.
+     *
+     * M10 — "A later stage releases every earlier unpaid tranche with it. A wedding held without a
+     * साखरपुडा still owes the engagement tranche." Implemented as: each unreleased tranche looks
+     * for the EARLIEST settled rung at or after its own trigger. A plan of
+     * settled/engagement/marriage on an engagement whose only settled rung is the wedding
+     * therefore releases all three, and each row records the wedding as what released it — so the
+     * ledger says out loud that two of them fired on a rung that is not their own.
+     *
+     * WHY `released_at` IS THE RUNG'S INSTANT AND NOT `now()`. Run the writer after the लग्न ठरले
+     * and again after the wedding, or only once at the very end: both produce identical rows. The
+     * moment a tranche was earned is a property of the marriage, not of when someone pressed a
+     * button — and M3 already refuses to let a suppressed claim buy anybody time.
+     *
+     * FIRST WRITER WINS, and that is §7.4's attribution rule. "If helper A's match produced the
+     * settled tranche and helper B's match produced the wedding, attribution is recorded per
+     * tranche — A's declared share applies to the tranche A's work released, B's to B's." So a
+     * tranche already released keeps the engagement and the rung that released it, even when a
+     * later engagement re-derives an entitlement to the same row. Re-attributing it would hand B
+     * the fruit of A's work, which is the exact failure §7.4 names.
+     *
+     * @return array{
+     *     agreement: SuchakCustomerAgreement,
+     *     total_fee_amount: ?string,
+     *     currency: string,
+     *     terms_satisfied: bool,
+     *     other_chain_commitments: array<string, int>,
+     *     other_chain_committed_paise: int,
+     *     family_allowance_paise: int,
+     *     rows: list<array{
+     *         tranche: SuchakSuccessFeeTranche,
+     *         amount: ?string,
+     *         stage_event: ?SuchakCollaborationStageEvent,
+     *         released_at: ?Carbon,
+     *         is_recorded: bool,
+     *         blocked_reason: ?string
+     *     }>
+     * }
+     */
+    public function entitlement(SuchakCollaborationRequest $collaboration, bool $lock = false): array
+    {
+        $agreement = $this->ledgerAgreementFor($collaboration);
+        $agreement->loadMissing('servicePackage');
+
+        $query = SuchakSuccessFeeTranche::query()
+            ->where('customer_agreement_id', $agreement->id)
+            ->orderBy('sort_order')
+            ->orderBy('id');
+
+        if ($lock) {
+            $query->lockForUpdate();
         }
 
-        if (! $committed) {
-            return;
+        $tranches = $query->get();
+
+        $package = $agreement->servicePackage;
+        $total = $package?->post_marriage_fee_amount;
+        $currency = (string) ($agreement->currency ?: ($package?->currency ?: 'INR'));
+        $termsSatisfied = $agreement->isTermsSatisfied();
+        $elsewhere = $this->committedStagesOnOtherChains($agreement);
+        $elsewhereMoneyPaise = $this->committedMoneyOnOtherChains($agreement);
+
+        // Ordered identically to $tranches: planRows() sorts by sort_order and so does the query.
+        $amounts = $tranches->isEmpty() ? [] : $this->amounts($total, $tranches);
+
+        $settledRungs = $this->settledReleasingRungs($collaboration);
+
+        // M9 IN MONEY. This chain's own agreed total is the ceiling, and what the family already
+        // owes on their other chains is spent out of it before this ledger sees a rupee. On the
+        // ordinary customer — one plan, one chain — `$elsewhereMoneyPaise` is 0, the allowance is
+        // the whole fee, and the shares sum to exactly 100% of it, so nothing here can bind.
+        $allowancePaise = max(0, $this->paise($total) - $elsewhereMoneyPaise);
+
+        // Already-released rows are spent first, in one pass before the loop rather than as it
+        // goes: release order is not guaranteed to be plan order (a revision can leave a later
+        // instalment released and an earlier one not), and a newly-releasing row must never eat
+        // budget that a recorded one already holds.
+        $claimedPaise = 0;
+        foreach ($tranches->values()->all() as $index => $tranche) {
+            if ($tranche->isReleased()) {
+                $claimedPaise += $this->paise($amounts[$index] ?? null);
+            }
         }
 
-        if ($this->snapshotPayload($existingRows) !== $this->snapshotPayload($rows)) {
-            throw new InvalidArgumentException('एक हप्ता आधीच लागू झाला असल्याने हप्त्यांची विभागणी बदलता येणार नाही.');
+        $rows = [];
+        foreach ($tranches->values()->all() as $index => $tranche) {
+            $stageKey = (string) $tranche->trigger_stage_key;
+            $amount = $amounts[$index] ?? null;
+
+            if ($tranche->isReleased()) {
+                $rows[] = [
+                    'tranche' => $tranche,
+                    'amount' => $amount,
+                    'stage_event' => $tranche->releasedByStageEvent,
+                    'released_at' => $tranche->released_at,
+                    'is_recorded' => true,
+                    'blocked_reason' => null,
+                ];
+
+                continue;
+            }
+
+            $blocked = null;
+            $trigger = null;
+
+            if (! $termsSatisfied) {
+                // No tranche exists under terms nobody accepted.
+                //
+                // This is NOT a second copy of the ladder's own gate. `claimStage()` checks the
+                // terms of the revision the ENGAGEMENT is bound to, at the moment the rung is
+                // recorded. The ledger lives on the LATEST revision (see ledgerAgreementFor), and
+                // a fresh revision starts at `pending` — so rungs lawfully recorded under an
+                // accepted revision 1 would otherwise release money under a revision 2 the family
+                // has not seen. Same predicate, different subject, and the gap between them is a
+                // customer being charged under terms they never accepted.
+                $blocked = 'ग्राहकाने करार स्वीकारेपर्यंत हा हप्ता लागू होत नाही.';
+            } elseif (! self::isReleasingStage($stageKey)) {
+                // Written before the plan door refused it — and it can never fire, so the ledger
+                // has to SAY so. Silence here was the other half of the same defect: a tranche
+                // planned above the cap sat in the plan looking pending forever, with no reason
+                // attached and no screen able to explain it.
+                $blocked = '"'.SuchakCollaborationStageEvent::stageLabel($stageKey)
+                    .'" हा टप्पा ग्राहकाच्या दुजोऱ्यावर ठरणारा नाही, त्यामुळे या टप्प्यावरचा हप्ता कधीही लागू होणार नाही. '
+                    .'नव्या विभागणीत हा हप्ता '.$this->releasingStageLabels().' यापैकी एका टप्प्यावर हलवावा.';
+            } elseif (isset($elsewhere[$stageKey])) {
+                // M9's narrower unit — one RUNG is owed once, see committedStagesOnOtherChains().
+                $blocked = 'याच ग्राहकाच्या दुसऱ्या योजनेत "'
+                    .SuchakCollaborationStageEvent::stageLabel($stageKey)
+                    .'" चा हप्ता आधीच लागू झाला आहे; तोच टप्पा दुसऱ्यांदा आकारला जाणार नाही.';
+            } elseif ($claimedPaise + $this->paise($amount) > $allowancePaise) {
+                // M9's real unit — the family's MONEY. A tranche is atomic, so it either fits in
+                // what is left of the one agreed figure or it does not fire at all; there is no
+                // half instalment to release. Under-charging here is the safe direction, and the
+                // reason is published in rupees so the Suchak can see the arithmetic.
+                $blocked = 'या कुटुंबाच्या यशस्वी विवाह शुल्कापैकी '
+                    .MoneyFormat::amount($elsewhereMoneyPaise / 100, $currency)
+                    .' दुसऱ्या योजनेत आधीच आकारले आहे. या करारातील एकूण '
+                    .MoneyFormat::amount($total, $currency).' पैकी '
+                    .MoneyFormat::amount(max(0, $allowancePaise - $claimedPaise) / 100, $currency)
+                    .' शिल्लक असल्याने '.MoneyFormat::amount($amount, $currency)
+                    .' चा हा हप्ता लागू होणार नाही. यशस्वी विवाह शुल्क प्रत्येक ग्राहकाकडून एकदाच घेतले जाते.';
+            } else {
+                $trigger = $this->firstRungAtOrAfter($settledRungs, $stageKey);
+
+                if ($trigger !== null) {
+                    $claimedPaise += $this->paise($amount);
+                }
+            }
+
+            $rows[] = [
+                'tranche' => $tranche,
+                'amount' => $amount,
+                'stage_event' => $trigger['event'] ?? null,
+                'released_at' => $trigger['at'] ?? null,
+                'is_recorded' => false,
+                'blocked_reason' => $blocked,
+            ];
         }
+
+        return [
+            'agreement' => $agreement,
+            'total_fee_amount' => $total === null ? null : (string) $total,
+            'currency' => $currency,
+            'terms_satisfied' => $termsSatisfied,
+            'other_chain_commitments' => $elsewhere,
+            'other_chain_committed_paise' => $elsewhereMoneyPaise,
+            'family_allowance_paise' => $allowancePaise,
+            'rows' => $rows,
+        ];
+    }
+
+    /**
+     * THE WRITER — records the derivation above, and originates all three release columns.
+     *
+     * Idempotent by construction: it writes only rows whose stored state does not already match
+     * the derivation, and the `whereNull('released_at')` on the update makes the first writer win
+     * even when two callers race. Running it twice, or ten times, changes nothing after the first.
+     *
+     * @return array<string, mixed> the ledger payload, re-derived after the write
+     */
+    public function release(SuchakCollaborationRequest $collaboration): array
+    {
+        return DB::transaction(function () use ($collaboration): array {
+            $entitlement = $this->entitlement($collaboration, lock: true);
+
+            if (! $entitlement['terms_satisfied']) {
+                throw new InvalidArgumentException(
+                    'ग्राहकाने करार स्वीकारेपर्यंत यशस्वी विवाह शुल्काचा कोणताही हप्ता लागू होत नाही.'
+                );
+            }
+
+            foreach ($entitlement['rows'] as $row) {
+                if ($row['is_recorded'] || $row['released_at'] === null || $row['stage_event'] === null) {
+                    continue;
+                }
+
+                SuchakSuccessFeeTranche::query()
+                    ->whereKey($row['tranche']->id)
+                    ->whereNull('released_at')
+                    ->update([
+                        'released_by_collaboration_request_id' => $collaboration->id,
+                        'released_by_stage_event_id' => $row['stage_event']->id,
+                        'released_at' => $row['released_at'],
+                        'updated_at' => now(),
+                    ]);
+            }
+
+            return $this->ledgerPayload($collaboration);
+        });
+    }
+
+    /**
+     * THE OTHER TWO COLUMNS — the family actually paid this tranche.
+     *
+     * Release and settlement are two different facts and §7.4 keeps them apart on purpose:
+     * released means EARNED (a rung already happened, D25's whole answer to the refund question),
+     * settled means PAID. M9 turns on the second — "tranches already PAID count toward it
+     * whichever match triggered them" — and M10's cascade fires on every earlier UNPAID tranche.
+     *
+     * A tranche may not be settled before it is released. D25's argument is that every rupee is
+     * taken for an event that has already happened; money accepted against a tranche that has not
+     * fired is money taken for a future that may not arrive, which is the one thing this design
+     * removes.
+     *
+     * ── A RECEIPT IS A BUDGET, AND THAT IS BOTH HALVES OF THE RULE ────────────────────────────
+     *
+     * Every other check here is about WHETHER this payment may touch this tranche. None of them
+     * was about HOW MUCH, so a ₹1 receipt set `settled_at` on a ₹50,000 instalment and the ledger
+     * then read ₹50,000 settled. `settled_at` is M9's own paid predicate AND M3's half A, so that
+     * one rupee made the family read as paid and made the cross-Suchak share fall due at once.
+     *
+     * The opposite half was the rule written to stop it: "one payment, one tranche" refused a
+     * receipt that was ALREADY bound to another row — which made M10's headline case unsettleable.
+     * A wedding cascades three instalments, the family pays the whole ₹1,00,000 in one receipt,
+     * and exactly one of the three could ever be marked paid; the other two stayed unsettled
+     * forever, because no second receipt was ever going to arrive.
+     *
+     * Both are the same missing idea. `amount_received` is a budget: a tranche settles against it
+     * only if its own amount still fits in what that receipt has left, and what it has left is its
+     * total minus the tranches already bound to it. One receipt then settles exactly the cascade
+     * it paid for, and nothing it did not.
+     *
+     * SCOPED TO THIS AGREEMENT REVISION, because `persistTranchePlan()` copies `customer_payment_id`
+     * forward: an unscoped count of "rows bound to this payment" counts the same instalment once
+     * per revision of the chain and would exhaust a receipt that had never been spent.
+     */
+    public function settle(SuchakSuccessFeeTranche $tranche, SuchakCustomerPayment $payment): SuchakSuccessFeeTranche
+    {
+        $tranche->refresh();
+        $payment->refresh();
+
+        if (! $tranche->isReleased()) {
+            throw new InvalidArgumentException('अजून लागू न झालेल्या हप्त्याची भरणा-नोंद करता येणार नाही.');
+        }
+
+        if ((int) $payment->customer_agreement_id !== (int) $tranche->customer_agreement_id) {
+            throw new InvalidArgumentException('हा भरणा या कराराचा नाही.');
+        }
+
+        if ($payment->payment_status !== SuchakCustomerPayment::STATUS_PAID) {
+            throw new InvalidArgumentException('भरणा पूर्ण झाल्याची नोंद नसताना हप्ता भरला असे नोंदवता येणार नाही.');
+        }
+
+        if ($tranche->isSettled()) {
+            if ((int) $tranche->customer_payment_id !== (int) $payment->id) {
+                throw new InvalidArgumentException('या हप्त्याची भरणा-नोंद आधीच दुसऱ्या भरण्याशी जोडलेली आहे.');
+            }
+
+            return $tranche;
+        }
+
+        return DB::transaction(function () use ($tranche, $payment): SuchakSuccessFeeTranche {
+            [, $amountsById] = $this->pricedLedger((int) $tranche->customer_agreement_id, lock: true);
+
+            $tranchePaise = $amountsById[(int) $tranche->id] ?? 0;
+            $receiptPaise = $this->paise($payment->amount_received);
+
+            $spentPaise = 0;
+            $bound = SuchakSuccessFeeTranche::query()
+                ->where('customer_agreement_id', $tranche->customer_agreement_id)
+                ->where('customer_payment_id', $payment->id)
+                ->whereKeyNot($tranche->id)
+                ->pluck('id');
+
+            foreach ($bound as $boundId) {
+                $spentPaise += $amountsById[(int) $boundId] ?? 0;
+            }
+
+            $currency = (string) ($payment->currency ?: 'INR');
+            $remainingPaise = $receiptPaise - $spentPaise;
+
+            if ($tranchePaise > $remainingPaise) {
+                throw new InvalidArgumentException(
+                    'या हप्त्याची रक्कम '.MoneyFormat::amount($tranchePaise / 100, $currency).' आहे; '
+                    .MoneyFormat::amount($receiptPaise / 100, $currency).' च्या या भरण्यातून '
+                    .MoneyFormat::amount(max(0, $remainingPaise) / 100, $currency).' शिल्लक आहे. '
+                    .'भरण्यापेक्षा मोठा हप्ता भरला असे नोंदवता येणार नाही.'
+                );
+            }
+
+            // The instant the MONEY arrived, for the same reason `released_at` is the rung's instant.
+            $paidAt = $payment->payment_received_at ?? $payment->updated_at ?? now();
+
+            SuchakSuccessFeeTranche::query()
+                ->whereKey($tranche->id)
+                ->whereNull('settled_at')
+                ->update([
+                    'customer_payment_id' => $payment->id,
+                    'settled_at' => $paidAt,
+                    'updated_at' => now(),
+                ]);
+
+            return $tranche->fresh() ?? $tranche;
+        });
+    }
+
+
+    /**
+     * The ledger as a screen reads it. Amounts through MoneyFormat — the one money formatter, so
+     * Latin digits with Indian grouping, identical to the acceptance page the family accepted on.
+     *
+     * `released_by_stage_key` is the row that makes M10 visible: when it differs from
+     * `trigger_stage_key`, this tranche fired on somebody else's rung — a साखरपुडा instalment
+     * released by the wedding, which is precisely the case the rule exists for.
+     *
+     * @return array<string, mixed>
+     */
+    public function ledgerPayload(SuchakCollaborationRequest $collaboration): array
+    {
+        $entitlement = $this->entitlement($collaboration);
+        $agreement = $entitlement['agreement'];
+        $currency = $entitlement['currency'];
+
+        $releasedPaise = 0;
+        $settledPaise = 0;
+        $tranches = [];
+
+        foreach ($entitlement['rows'] as $row) {
+            /** @var SuchakSuccessFeeTranche $tranche */
+            $tranche = $row['tranche'];
+            $amount = $row['amount'];
+            $paise = $amount === null ? 0 : (int) round(((float) $amount) * 100);
+            $event = $row['stage_event'];
+            $releasedAt = $row['released_at'];
+
+            if ($releasedAt !== null) {
+                $releasedPaise += $paise;
+            }
+
+            if ($tranche->isSettled()) {
+                $settledPaise += $paise;
+            }
+
+            $tranches[] = [
+                'tranche_id' => (int) $tranche->id,
+                'sort_order' => (int) $tranche->sort_order,
+                'trigger_stage_key' => (string) $tranche->trigger_stage_key,
+                'trigger_stage_label' => SuchakCollaborationStageEvent::stageLabel((string) $tranche->trigger_stage_key),
+                'share_percent' => $this->readablePercent((float) $tranche->share_percent),
+                'is_final_tranche' => (bool) $tranche->is_final_tranche,
+                'amount' => $amount,
+                'amount_display' => $amount === null ? null : MoneyFormat::amount($amount, $currency),
+                'is_released' => $releasedAt !== null,
+                'released_at' => $releasedAt?->toIso8601String(),
+                // False means: this row IS released by the ladder, and nobody has written it down
+                // yet. The GET door is honest without the POST door ever having been called.
+                'is_recorded' => (bool) $row['is_recorded'],
+                'released_by_collaboration_request_id' => $event === null
+                    ? null
+                    : (int) ($tranche->released_by_collaboration_request_id ?? $collaboration->id),
+                'released_by_stage_event_id' => $event === null ? null : (int) $event->id,
+                'released_by_stage_key' => $event === null ? null : (string) $event->stage_key,
+                'released_by_stage_label' => $event === null
+                    ? null
+                    : SuchakCollaborationStageEvent::stageLabel((string) $event->stage_key),
+                // M10 in one boolean: this instalment fired on a rung that is not its own.
+                'released_by_later_stage' => $event !== null
+                    && (string) $event->stage_key !== (string) $tranche->trigger_stage_key,
+                'is_settled' => $tranche->isSettled(),
+                'settled_at' => $tranche->settled_at?->toIso8601String(),
+                'customer_payment_id' => $tranche->customer_payment_id === null
+                    ? null
+                    : (int) $tranche->customer_payment_id,
+                'blocked_reason' => $row['blocked_reason'],
+            ];
+        }
+
+        $outstandingPaise = $releasedPaise - $settledPaise;
+
+        return [
+            'collaboration_request_id' => (int) $collaboration->id,
+            'customer_agreement_id' => (int) $agreement->id,
+            'agreement_revision' => (int) $agreement->agreement_revision,
+            'terms_satisfied' => (bool) $entitlement['terms_satisfied'],
+            'currency' => $currency,
+            'success_fee_amount' => $entitlement['total_fee_amount'],
+            'success_fee_display' => MoneyFormat::amount($entitlement['total_fee_amount'], $currency),
+            'released_total_display' => MoneyFormat::amount($releasedPaise / 100, $currency),
+            'settled_total_display' => MoneyFormat::amount($settledPaise / 100, $currency),
+            'outstanding_total_display' => MoneyFormat::amount($outstandingPaise / 100, $currency),
+            'first_releasing_stage_key' => self::FIRST_RELEASING_STAGE,
+            'last_releasing_stage_key' => self::LAST_RELEASING_STAGE,
+            // M9 in money, published rather than hidden — the family's ceiling, what their other
+            // plans have already taken out of it, and what is therefore left on this chain. All
+            // three read ₹0 / the whole fee on every customer who was sent one plan.
+            'other_chain_committed_display' => MoneyFormat::amount(
+                $entitlement['other_chain_committed_paise'] / 100,
+                $currency,
+            ),
+            'family_allowance_display' => MoneyFormat::amount(
+                $entitlement['family_allowance_paise'] / 100,
+                $currency,
+            ),
+            'other_chain_commitments' => array_map(
+                static fn (string $stageKey, int $agreementId): array => [
+                    'trigger_stage_key' => $stageKey,
+                    'trigger_stage_label' => SuchakCollaborationStageEvent::stageLabel($stageKey),
+                    'customer_agreement_id' => $agreementId,
+                ],
+                array_keys($entitlement['other_chain_commitments']),
+                array_values($entitlement['other_chain_commitments']),
+            ),
+            'tranches' => $tranches,
+        ];
+    }
+
+    /**
+     * M9 AT THE CUSTOMER LEVEL — "the success fee is paid once per customer, IN TOTAL".
+     *
+     * The ledger hangs off `customer_agreement_id`, and an agreement chain is keyed by
+     * `service_package_id`. `suchak_service_packages.customer_context_id` has an index and NO
+     * unique, and payment-setup matches an existing package by `package_name` — so sending
+     * "Basic" and later "Premium" to one family builds two packages, two agreement chains and two
+     * independent tranche ledgers, EACH carrying a full 100% of a success fee. The refusal text on
+     * that endpoint even instructs the Suchak to do it ("वेगळ्या नावाची योजना तयार करून पाठवा"),
+     * and correctly: an accepted agreement must not be silently re-cut. Nothing about that is a
+     * schema mistake — but it left M9 with no expression at the customer-context level whatsoever.
+     *
+     * This is that expression, applied where money actually moves: a trigger rung already
+     * committed on ANOTHER package chain of the SAME customer context is not released a second
+     * time here. The family owes लग्न ठरले once, whichever plan the Suchak sent.
+     *
+     * TWO UNITS, BOTH NEEDED, AND THE SECOND ONE IS M9's.
+     *
+     * The stage key was the only unit here, and against disjoint plans it guards NOTHING. Basic
+     * [लग्न ठरले 10%, साखरपुडा 90%] and Premium [विवाह 100%], each quoting ₹1,00,000, share no
+     * trigger at all — so both chains released in full and one family was charged ₹2,00,000. M9
+     * does not say "each rung is charged once", it says *the success fee is paid once per
+     * customer, IN TOTAL*. The unit is the FAMILY'S MONEY.
+     *
+     * So {@see committedMoneyOnOtherChains()} is the rule, and the stage map stays beside it as a
+     * narrower one: even inside the family's total, one RUNG is owed once — §7.4 attributes per
+     * tranche, and charging लग्न ठरले twice for the same family under two package names is wrong
+     * however the arithmetic lands.
+     *
+     * WHAT THE MONEY IS COUNTED AGAINST, and why it is not a new owner: THIS chain's own agreed
+     * total, less what the family has already committed on every other chain. The figure is the
+     * one on the agreement in force for this ledger — the number the family accepted — so nothing
+     * new has to be invented to hold it.
+     *
+     * WHAT IS STILL MISSING, stated exactly rather than half-guarded: there is no owner of
+     * "this customer's success fee". Two chains may quote two DIFFERENT totals (₹1,00,000 on
+     * Basic, ₹1,50,000 on Premium), and then the family's ceiling depends on which chain is
+     * asked — each chain caps itself at its own figure minus the rest, so the family can reach
+     * the LARGER of the two but never the sum. Making the two figures one figure needs a
+     * `customer_context`-level success fee that nothing in the schema carries today, and inventing
+     * one silently here would be inventing a fact. Cross-SUCHAK is deliberately out of scope:
+     * `customer_context_id` is per Suchak account and M1 says each customer pays only their own.
+     *
+     * @return array<string, int> trigger stage key => the agreement that already committed it
+     */
+    public function committedStagesOnOtherChains(SuchakCustomerAgreement $agreement): array
+    {
+        $committed = [];
+
+        foreach ($this->siblingLedgerAgreements($agreement) as $sibling) {
+            foreach ($this->committedTranchesOf($sibling) as [$tranche]) {
+                $stageKey = (string) $tranche->trigger_stage_key;
+                $committed[$stageKey] ??= (int) $sibling->id;
+            }
+        }
+
+        return $committed;
+    }
+
+    /**
+     * M9's unit — every paisa of a success fee this FAMILY has already been committed to on some
+     * OTHER package chain of the same customer context.
+     *
+     * Priced through {@see amounts()}, the one arithmetic owner, against each sibling chain's own
+     * frozen total. Nothing is stored: the rupee figure of a tranche exists in exactly one place.
+     *
+     * @return int paise
+     */
+    public function committedMoneyOnOtherChains(SuchakCustomerAgreement $agreement): int
+    {
+        $paise = 0;
+
+        foreach ($this->siblingLedgerAgreements($agreement) as $sibling) {
+            foreach ($this->committedTranchesOf($sibling) as [, $amountPaise]) {
+                $paise += $amountPaise;
+            }
+        }
+
+        return $paise;
+    }
+
+    /**
+     * The LIVE ledger row of every OTHER package chain this family was sent.
+     *
+     * LATEST REVISION PER CHAIN, and that is load-bearing for the money unit in a way it never was
+     * for the stage map. `persistTranchePlan()` COPIES release and settlement state forward onto
+     * each new revision, so a committed tranche exists once per revision of its chain. A set of
+     * stage keys absorbs the duplicates silently; a SUM does not — counting every revision would
+     * report a family as having committed the same rupee twice, three times, once per package
+     * edit, and would then refuse instalments they had never been charged for.
+     *
+     * "Latest" is resolved as {@see ledgerAgreementFor()} resolves it: highest `agreement_revision`
+     * on a `service_package_id`. One definition, two callers.
+     *
+     * @return list<SuchakCustomerAgreement>
+     */
+    private function siblingLedgerAgreements(SuchakCustomerAgreement $agreement): array
+    {
+        if ($agreement->customer_context_id === null) {
+            return [];
+        }
+
+        $rows = SuchakCustomerAgreement::query()
+            ->where('customer_context_id', $agreement->customer_context_id)
+            ->where('service_package_id', '!=', $agreement->service_package_id)
+            ->with('servicePackage')
+            ->orderByDesc('agreement_revision')
+            ->orderByDesc('id')
+            ->get();
+
+        $latest = [];
+        foreach ($rows as $row) {
+            $latest[(int) $row->service_package_id] ??= $row;
+        }
+
+        return array_values($latest);
+    }
+
+    /**
+     * The committed rows of one agreement, each with the rupee figure it committed, in paise.
+     *
+     * @return list<array{0: SuchakSuccessFeeTranche, 1: int}>
+     */
+    private function committedTranchesOf(SuchakCustomerAgreement $agreement): array
+    {
+        [$tranches, $paise] = $this->pricedLedger((int) $agreement->id);
+
+        $committed = [];
+        foreach ($tranches as $tranche) {
+            if ($tranche->isCommitted()) {
+                $committed[] = [$tranche, $paise[(int) $tranche->id] ?? 0];
+            }
+        }
+
+        return $committed;
+    }
+
+    /**
+     * One agreement's tranche rows AND their rupee figures, in one place, through {@see amounts()}.
+     *
+     * Every caller that needs a tranche's amount comes through here — the M9 family cap, the
+     * settlement budget — so there is exactly one rounding and exactly one ordering assumption
+     * (`sort_order`, then `id`, matching what `planRows()` sorts by).
+     *
+     * @return array{0: list<SuchakSuccessFeeTranche>, 1: array<int, int>} rows, then id => paise
+     */
+    private function pricedLedger(int $agreementId, bool $lock = false): array
+    {
+        /** @var SuchakCustomerAgreement $agreement */
+        $agreement = SuchakCustomerAgreement::query()->with('servicePackage')->findOrFail($agreementId);
+
+        $query = SuchakSuccessFeeTranche::query()
+            ->where('customer_agreement_id', $agreementId)
+            ->orderBy('sort_order')
+            ->orderBy('id');
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        $tranches = $query->get()->values()->all();
+        if ($tranches === []) {
+            return [[], []];
+        }
+
+        $amounts = $this->amounts($agreement->servicePackage?->post_marriage_fee_amount, $tranches);
+
+        $paise = [];
+        foreach ($tranches as $index => $tranche) {
+            $paise[(int) $tranche->id] = $this->paise($amounts[$index] ?? null);
+        }
+
+        return [$tranches, $paise];
+    }
+
+    private function paise(int|float|string|null $amount): int
+    {
+        return $amount === null ? 0 : (int) round(((float) $amount) * 100);
+    }
+
+    /**
+     * The agreement revision whose tranche rows are the LIVE ledger for this engagement.
+     *
+     * The engagement is bound write-once to the revision in force when it was created
+     * (`suchak_commission_agreements.customer_agreement_id`, blueprint 6.1). Revisions after that
+     * carry the ledger forward row by row, so the rows that must be written are the LATEST
+     * revision's — releasing onto the bound one would write to a ledger nothing reads.
+     *
+     * "Latest" is resolved exactly as `SuchakAgreementService` already resolves it for
+     * supersession and for payment requests: highest `agreement_revision` on the same
+     * `service_package_id`. One definition, three callers.
+     */
+    public function ledgerAgreementFor(SuchakCollaborationRequest $collaboration): SuchakCustomerAgreement
+    {
+        $collaboration->loadMissing('commissionAgreement');
+        $boundId = $collaboration->commissionAgreement?->customer_agreement_id;
+
+        if ($boundId === null) {
+            throw new InvalidArgumentException(
+                'या सहकार्याला ग्राहकाचा करार जोडलेला नाही, त्यामुळे कोणताही हप्ता लागू होऊ शकत नाही.'
+            );
+        }
+
+        /** @var SuchakCustomerAgreement $bound */
+        $bound = SuchakCustomerAgreement::query()->findOrFail($boundId);
+
+        /** @var SuchakCustomerAgreement|null $latest */
+        $latest = SuchakCustomerAgreement::query()
+            ->where('service_package_id', $bound->service_package_id)
+            ->orderByDesc('agreement_revision')
+            ->orderByDesc('id')
+            ->first();
+
+        return $latest ?? $bound;
+    }
+
+    /**
+     * This engagement's SETTLED rungs, in ladder order, inside the releasing WINDOW —
+     * {@see FIRST_RELEASING_STAGE} through {@see LAST_RELEASING_STAGE}.
+     *
+     * The cap alone was not a guard. Everything below the floor settles on ONE Suchak's claim
+     * (`isSettled()` requires `confirmed_at` only for the three CONFIRMABLE_STAGES), so with no
+     * floor an `interested` or `meeting_scheduled` row was a settled rung that M10's cascade would
+     * then carry onto every tranche at or below it. The window is the guard; the cap is half of it.
+     *
+     * `isSettled()` is still the stage model's own predicate and is deliberately not restated.
+     *
+     * @return list<array{event: SuchakCollaborationStageEvent, index: int, at: Carbon}>
+     */
+    private function settledReleasingRungs(SuchakCollaborationRequest $collaboration): array
+    {
+        $settled = [];
+        $events = SuchakCollaborationStageEvent::query()
+            ->where('collaboration_request_id', $collaboration->id)
+            ->get();
+
+        foreach ($events as $event) {
+            $stageKey = (string) $event->stage_key;
+            if (! self::isReleasingStage($stageKey) || ! $event->isSettled()) {
+                continue;
+            }
+
+            $index = SuchakCollaborationStageEvent::stageIndex($stageKey);
+
+            $at = SuchakCollaborationStageEvent::requiresConfirmation($stageKey)
+                ? $event->confirmed_at
+                : $event->claimed_at;
+
+            if (! $at instanceof Carbon) {
+                continue;
+            }
+
+            $settled[] = ['event' => $event, 'index' => $index, 'at' => $at];
+        }
+
+        usort($settled, static fn (array $a, array $b): int => $a['index'] <=> $b['index']);
+
+        return array_values($settled);
+    }
+
+    /**
+     * M10's cascade, in one lookup: the EARLIEST settled rung at or after this tranche's trigger.
+     *
+     * Its own rung when that rung settled; otherwise the first later one that did — which is what
+     * "a wedding held without a साखरपुडा still owes the engagement tranche" means in code.
+     *
+     * @param  list<array{event: SuchakCollaborationStageEvent, index: int, at: Carbon}>  $settledRungs
+     * @return array{event: SuchakCollaborationStageEvent, index: int, at: Carbon}|null
+     */
+    private function firstRungAtOrAfter(array $settledRungs, string $triggerStageKey): ?array
+    {
+        $triggerIndex = SuchakCollaborationStageEvent::stageIndex($triggerStageKey);
+
+        foreach ($settledRungs as $rung) {
+            if ($rung['index'] >= $triggerIndex) {
+                return $rung;
+            }
+        }
+
+        return null;
     }
 
     /**

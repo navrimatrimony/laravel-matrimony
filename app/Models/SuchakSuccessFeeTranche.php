@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -102,5 +103,21 @@ class SuchakSuccessFeeTranche extends Model
     public function isCommitted(): bool
     {
         return $this->isReleased() || $this->isSettled();
+    }
+
+    /**
+     * {@see isCommitted()} as a query, so the two can never disagree.
+     *
+     * M9's customer-level check (SuchakSuccessFeeTrancheService::committedStagesOnOtherChains)
+     * has to ask "is anything committed on this family's OTHER agreement chain" across rows it
+     * has no reason to hydrate. Written as a second `whereNotNull` pair at the call site, that
+     * predicate would be free to drift from the model's — and the drift would be invisible until
+     * a family was charged the same rung twice.
+     */
+    public function scopeCommitted(Builder $query): Builder
+    {
+        return $query->where(static function (Builder $inner): void {
+            $inner->whereNotNull('released_at')->orWhereNotNull('settled_at');
+        });
     }
 }

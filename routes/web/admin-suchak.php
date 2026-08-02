@@ -72,6 +72,17 @@ Route::middleware(['auth', 'admin', 'admin.section'])
         | GET half of it.
         */
         Route::get('/visits', [VisitConfirmationController::class, 'index'])->name('visits.index');
+        // The platform's own price for a meeting reward. It is `visits.*` on
+        // purpose — that is the pattern AdminNavigationCatalog claims, so this
+        // route is gated by the same section check as the payout it feeds, and
+        // naming it anything else would re-open the fail-open hole the comment
+        // above describes.
+        Route::post('/visits/reward-rule', [VisitConfirmationController::class, 'storeRewardRule'])
+            ->name('visits.reward-rule.store');
+        // Withdrawal — the only way to say "the platform no longer pays for meetings".
+        // `visits.*` for the same fail-open reason as the publish route above.
+        Route::post('/visits/reward-rule/{rewardRule}/withdraw', [VisitConfirmationController::class, 'withdrawRewardRule'])
+            ->whereNumber('rewardRule')->name('visits.reward-rule.withdraw');
         Route::post('/visits/{visit}/confirm', [VisitConfirmationController::class, 'confirm'])
             ->whereNumber('visit')->name('visits.confirm');
         Route::post('/visits/{visit}/dispute', [VisitConfirmationController::class, 'dispute'])
