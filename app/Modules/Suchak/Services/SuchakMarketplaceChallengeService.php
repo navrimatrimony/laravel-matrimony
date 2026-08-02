@@ -1091,9 +1091,14 @@ class SuchakMarketplaceChallengeService
      * The audience values this viewer is admitted to, computed from the model's own rule so the
      * SQL filter and audienceAdmits() can never disagree.
      *
+     * PUBLIC since phase 5 (2026-08-05) for the same reason assertMarketplaceViewer() is: the
+     * market economics view has to count exactly the listings browse() would show this viewer, and
+     * a second `whereIn('audience', …)` written from the constant list would stop agreeing with
+     * audienceAdmits() the day a second audience exists.
+     *
      * @return list<string>
      */
-    private function audiencesAdmitting(SuchakAccount $viewer): array
+    public function audiencesAdmitting(SuchakAccount $viewer): array
     {
         $probe = new SuchakMarketplaceChallenge;
 
@@ -1138,8 +1143,16 @@ class SuchakMarketplaceChallengeService
      * The badge, and nothing else. Every marketplace surface that shows another Suchak's candidate
      * or forms an obligation against one passes through here: browse(), openListing(),
      * proposalsFor(), and — via assertMarketplaceActor() — publish() and proposeCandidate().
+     *
+     * PUBLIC since phase 5 (2026-08-05), and public rather than copied. The per-candidate proposal
+     * inbox ({@see SuchakCandidateProposalInboxService}) returns other Suchaks' candidates through
+     * the same masked payload proposalsFor() returns, and the market economics view
+     * ({@see SuchakMarketEconomicsService}) publishes the figure §9's visibility matrix grants to
+     * "other verified Suchaks" and to nobody else — so both need exactly this gate and neither may
+     * spell it a second time. The docblock above says the badge is spelled in one place; widening
+     * the visibility is how that stays true when a reader lands outside this class.
      */
-    private function assertMarketplaceViewer(SuchakAccount $viewer): void
+    public function assertMarketplaceViewer(SuchakAccount $viewer): void
     {
         if (! $viewer->isVerified()) {
             throw new InvalidArgumentException('बाजारपेठ फक्त पडताळणी झालेल्या सूचकांना दिसते.');

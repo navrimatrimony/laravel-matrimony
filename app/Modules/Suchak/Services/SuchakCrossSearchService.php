@@ -184,6 +184,28 @@ class SuchakCrossSearchService
     }
 
     /**
+     * The CROSS-SUCHAK filter rules, applied to a profile query this class did not build.
+     *
+     * Added for the per-candidate proposal inbox (phase 5), which filters a corpus of
+     * `suchak_collaboration_requests` rather than of representations and therefore cannot reach
+     * search() — but whose every row is another Suchak's candidate and must obey the identical
+     * rules: {@see self::OWN_BOOK_ONLY_FILTERS} refused silently, and a location id no deeper than
+     * {@see self::CROSS_SEARCH_NARROWEST_FILTERABLE_HIERARCHY}.
+     *
+     * A pass-through, deliberately: the alternative was a second copy of those two rules inside the
+     * inbox, which is the exact shape of the defect the frozen no-duplicate rule names. `$ownBook`
+     * is not a parameter here and must never become one — a caller reaching for the own-book
+     * behaviour is asking about its own rows and belongs in ownRepresentationsQuery().
+     *
+     * @param  Builder<MatrimonyProfile>  $query
+     * @param  array<string, mixed>  $filters
+     */
+    public function applyCrossSuchakProfileFilters(Builder $query, array $filters): void
+    {
+        $this->applyProfileFilters($query, $filters, false);
+    }
+
+    /**
      * THE one candidate-filter owner. Both the cross-Suchak search and the own-book reads run through
      * here, so a filter added for one is available to the other and the two can never disagree about
      * what `age_min` means.

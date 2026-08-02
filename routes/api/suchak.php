@@ -21,7 +21,9 @@ use App\Http\Controllers\Api\Suchak\SuchakIntakeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakLoginApiController;
 use App\Http\Controllers\Api\Suchak\SuchakManualProfileApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMarketplaceChallengeApiController;
+use App\Http\Controllers\Api\Suchak\SuchakCandidateProposalInboxApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomerHistoryApiController;
+use App\Http\Controllers\Api\Suchak\SuchakMarketEconomicsApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMarriageOutcomeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakReputationApiController;
 use App\Http\Controllers\Api\Suchak\SuchakMatchSuggestionsApiController;
@@ -213,6 +215,34 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     | `/reputation` is declared before `/reputation/{id}` or the literal would
     | be swallowed by the parameter.
     */
+    /*
+    | THE INBOX IS THE OTHER AXIS OF A READ THAT ALREADY EXISTS.
+    | `/marketplace/challenges/{challenge}/proposals` answers "who answered THIS
+    | challenge". This answers "who has answered for THIS CANDIDATE, ever" —
+    | across every challenge published for him, so the Suchak compares the
+    | answers he actually got instead of holding them in his head.
+    |
+    | Every row is another Suchak's candidate, so it goes through the one
+    | presenter and obeys the one narrowing rule. The filter allow-list is
+    | deliberately narrower than it looks useful: name and income are absent
+    | from the validator entirely, and a village id narrows nothing while a
+    | taluka id does — because a filter that resolves finer than the masked card
+    | is a way to binary-search the thing the card is hiding.
+    */
+    Route::get('/marketplace/candidates/{representation}/proposals', SuchakCandidateProposalInboxApiController::class)
+        ->whereNumber('representation');
+
+    /*
+    | WHAT THE MARKET LOOKS LIKE BEFORE YOU DECIDE WHAT TO ASK FOR.
+    | Takes no parameters, and that is the design: every filter is a way of
+    | narrowing an aggregate down onto one publisher. Each block is withheld
+    | until five observations from five distinct publishers stand behind it —
+    | "the typical share is 30%" over one Suchak is that Suchak's private terms
+    | printed on everyone's screen. Medians only, never a range or an extreme,
+    | because at five observations an endpoint IS somebody's exact figure.
+    */
+    Route::get('/marketplace/economics', SuchakMarketEconomicsApiController::class);
+
     Route::get('/reputation', [SuchakReputationApiController::class, 'own']);
     Route::get('/reputation/{suchakAccount}', [SuchakReputationApiController::class, 'show'])
         ->whereNumber('suchakAccount'); // verified callers only (D18/A10)
