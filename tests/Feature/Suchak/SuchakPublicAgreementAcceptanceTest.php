@@ -23,21 +23,28 @@ class SuchakPublicAgreementAcceptanceTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * These tests assert MARATHI wording, so they ask for Marathi.
+     * These tests assert MARATHI wording, so they ask for Marathi — the way
+     * this page is actually asked.
      *
-     * They did not have to before: the sentences they pin were hardcoded
-     * Marathi literals, which read the same whatever the caller wanted — the
-     * defect, not the contract. Now the wording follows the request, so the
-     * language under test is stated rather than inherited from whatever the
-     * suite's default locale happens to be (Symfony's test client sends
-     * `Accept-Language: en-us`, so the default is English).
+     * `Accept-Language` is the API's mechanism (SetApiLocale). Web routes go
+     * through SetLocaleFromQuery, which reads `?locale=` and the session and
+     * nothing else, so the header this file used to send was never what made
+     * the page Marathi. What made it Marathi was that every sentence on it was
+     * a hardcoded Devanagari literal — the defect, not the contract. Those
+     * literals are gone, so the language has to be requested for real.
+     *
+     * The session is the right lever here rather than `?locale=mr` on each
+     * call: it is what the layout's own switcher persists, and it carries
+     * across the POST submissions these tests make.
+     *
+     * @see SuchakPublicPageLanguageContractTest for the both-directions sweep.
      */
     protected function setUp(): void
     {
         parent::setUp();
 
         app()->setLocale('mr');
-        $this->withHeader('Accept-Language', 'mr');
+        $this->withSession(['locale' => 'mr']);
     }
 
     public function test_acceptance_token_columns_exist_and_token_is_stored_hashed(): void

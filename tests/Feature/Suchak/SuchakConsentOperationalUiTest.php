@@ -173,11 +173,17 @@ class SuchakConsentOperationalUiTest extends TestCase
             ->assertSee('नाही, मी संमती देत नाही', false)
             ->assertSee('मराठी', false);
 
+        // The GET above asked for Marathi, and SetLocaleFromQuery persists that
+        // in the session, so this POST is still a Marathi reader. The
+        // confirmation used to be an English literal in PublicConsentController
+        // — an English sentence landing on a Marathi consent page, which is the
+        // same half-translation defect the rest of this pass removed. It now
+        // comes from the key the page's own accepted-state banner reads.
         $this->post(route('suchak.consents.public.decision', ['token' => $token]), [
             'decision' => SuchakConsent::STATUS_ACCEPTED,
         ])
             ->assertOk()
-            ->assertSee('Consent accepted.', false)
+            ->assertSee('तुमची संमती नोंदवली आहे.', false)
             ->assertDontSee('Mobile verified', false);
 
         $accepted = $consent->fresh();

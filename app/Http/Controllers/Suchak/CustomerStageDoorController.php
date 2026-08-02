@@ -138,8 +138,15 @@ class CustomerStageDoorController extends Controller
 
         return redirect()
             ->route('suchak.customer-portal.stages.index', ['token' => $token])
-            ->with('success', 'तुमची नोंद झाली: '
-                .SuchakCollaborationStageEvent::stageLabel((string) $validated['stage_key']));
+            /*
+             * The stage name is locale-aware, so the sentence around it has to
+             * be too. As a Marathi literal this printed "…: Profile viewed" at
+             * an English-reading family — the same half-translated splice the
+             * agreement page's installment rows had.
+             */
+            ->with('success', __('suchak.customer_portal.stages.recorded', [
+                'stage' => SuchakCollaborationStageEvent::stageLabel((string) $validated['stage_key']),
+            ]));
     }
 
     /**

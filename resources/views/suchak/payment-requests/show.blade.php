@@ -1,5 +1,17 @@
 @extends('layouts.app')
 
+{{--
+    The page a family opens from a WhatsApp link to pay a Suchak.
+
+    Every line here used to carry BOTH languages glued together with a `·` —
+    the Marathi phrase, a middot, then its English translation. That is not
+    bilingual; it is two half-pages, and neither reader got a clean one. The
+    page now answers in the language the reader asked for, from
+    `suchak.public_pages.payment_request.*`.
+
+    Amounts stay Latin-digit with Indian grouping in both languages
+    (App\Support\MoneyFormat) — that is a product rule, not a language one.
+--}}
 @php
     use App\Support\LocalizedText;
     use App\Support\MoneyFormat;
@@ -40,9 +52,15 @@
     // Share-preview (Open Graph) values — override the site-wide default so a
     // WhatsApp link unfurl shows THIS request's scannable UPI QR plus who/how
     // much, instead of the generic homepage image.
-    $ogTitle = trim((!empty($candidateName) ? $candidateName.' साठी ' : '').'पेमेंट विनंती'
+    // The candidate's name sits INSIDE the sentence rather than being glued to
+    // the front of it. Marathi puts the name before the phrase and English
+    // after it, so a placeholder is the only thing that gets both right.
+    $ogTitle = trim((!empty($candidateName)
+        ? __('suchak.public_pages.payment_request.og_title_for_candidate', ['name' => $candidateName])
+        : __('suchak.public_pages.payment_request.og_title'))
         .($amountDisplay !== null ? ' — '.$amountDisplay : ''));
-    $ogDescription = trim(($planName !== '' ? $planName.' — ' : '').'UPI ने भरा');
+    $ogDescription = trim(($planName !== '' ? $planName.' — ' : '')
+        .__('suchak.public_pages.payment_request.og_description'));
     // Share-preview image: prefer THIS request's scannable UPI-intent QR — the
     // qr.png route renders it live from the Suchak's CURRENT UPI VPA, so it works
     // the moment the Suchak configures UPI. If there is no VPA but the Suchak did
@@ -79,14 +97,14 @@
                     <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                         <path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0L3.3 9.7a1 1 0 1 1 1.4-1.4l3.3 3.3 6.8-6.8a1 1 0 0 1 1.4 0Z" clip-rule="evenodd" />
                     </svg>
-                    पडताळणी झालेली · Verified
+                    {{ __('suchak.labels.common.verified') }}
                 </span>
             @endif
         </div>
 
         <div class="px-5 py-4">
-            <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">पैसे मागणारे सूचक · Requested by</p>
-            <h1 class="mt-1 text-xl font-bold text-gray-900 dark:text-gray-100">{{ $suchakName !== '' ? $suchakName : 'Suchak' }}</h1>
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{{ __('suchak.public_pages.payment_request.requested_by') }}</p>
+            <h1 class="mt-1 text-xl font-bold text-gray-900 dark:text-gray-100">{{ $suchakName !== '' ? $suchakName : __('profile.suchak_default_name') }}</h1>
             @if ($officeName !== '')
                 <p class="mt-0.5 text-sm text-gray-600 dark:text-gray-300">{{ $officeName }}</p>
             @endif
@@ -95,7 +113,7 @@
                 <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path fill-rule="evenodd" d="M10 1a5 5 0 0 0-5 5v2H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5Zm3 7V6a3 3 0 1 0-6 0v2h6Z" clip-rule="evenodd" />
                 </svg>
-                सुरक्षित पेमेंट · अधिकृत सूचक
+                {{ __('suchak.public_pages.payment_request.secure_payment') }}
             </div>
         </div>
     </section>
@@ -103,22 +121,22 @@
     {{-- 2. CANDIDATE + PLAN + AMOUNT --}}
     <section class="mt-4 rounded-2xl border border-gray-200 bg-white px-5 py-5 dark:border-gray-700 dark:bg-gray-800">
         @if (!empty($candidateName))
-            <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">उमेदवार · Candidate</p>
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{{ __('suchak.public_pages.payment_request.candidate') }}</p>
             <p class="mt-0.5 text-base font-semibold text-gray-900 dark:text-gray-100">{{ $candidateName }}</p>
         @endif
 
-        <p class="{{ !empty($candidateName) ? 'mt-4 ' : '' }}text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">योजना · Plan</p>
-        <p class="mt-0.5 text-lg font-bold text-gray-900 dark:text-gray-100">{{ $planName !== '' ? $planName : 'Service plan' }}</p>
+        <p class="{{ !empty($candidateName) ? 'mt-4 ' : '' }}text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{{ __('suchak.public_pages.payment_request.plan') }}</p>
+        <p class="mt-0.5 text-lg font-bold text-gray-900 dark:text-gray-100">{{ $planName !== '' ? $planName : __('suchak.public_pages.payment_request.plan_fallback') }}</p>
         @if ($planDescription !== '')
             <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ $planDescription }}</p>
         @endif
 
         <div class="mt-5 rounded-xl bg-gray-50 px-4 py-4 text-center dark:bg-gray-900/60">
-            <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">भरायची रक्कम · Amount to pay</p>
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{{ __('suchak.public_pages.payment_request.amount_to_pay') }}</p>
             @if ($amountDisplay !== null)
                 <p class="mt-1 text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">{{ $amountDisplay }}</p>
             @else
-                <p class="mt-1 text-xl font-semibold text-gray-500 dark:text-gray-400">रक्कम निश्चित होणे बाकी · To be confirmed</p>
+                <p class="mt-1 text-xl font-semibold text-gray-500 dark:text-gray-400">{{ __('suchak.labels.common.to_be_confirmed') }}</p>
             @endif
         </div>
 
@@ -129,8 +147,8 @@
 
     {{-- 3. WHAT YOU GET — the services list (these ARE the terms) --}}
     <section class="mt-4 rounded-2xl border border-gray-200 bg-white px-5 py-5 dark:border-gray-700 dark:bg-gray-800">
-        <h2 class="text-base font-bold text-gray-900 dark:text-gray-100">यात तुम्हाला मिळेल</h2>
-        <p class="text-xs font-medium text-gray-400 dark:text-gray-500">What you get</p>
+        {{-- Was an h2 in Marathi with the English translation as a sub-line under it. One heading now, in the reader's language. --}}
+        <h2 class="text-base font-bold text-gray-900 dark:text-gray-100">{{ __('suchak.public_pages.payment_request.what_you_get') }}</h2>
 
         @if ($hasServices)
             <ul class="mt-4 space-y-3">
@@ -167,7 +185,7 @@
         @elseif ($agreementBody !== '')
             <p class="mt-4 whitespace-pre-line text-sm leading-6 text-gray-700 dark:text-gray-200">{{ $agreementBody }}</p>
         @else
-            <p class="mt-4 text-sm text-gray-600 dark:text-gray-300">या योजनेतील सेवा सूचकांकडून थेट कळवल्या जातील. · The services in this plan will be confirmed directly by the Suchak.</p>
+            <p class="mt-4 text-sm text-gray-600 dark:text-gray-300">{{ __('suchak.public_pages.payment_request.services_confirmed_by_suchak') }}</p>
         @endif
 
         @if ($hasServices && $agreementBody !== '')
@@ -178,16 +196,16 @@
     {{-- 4. PAYMENT — one Suchak UPI, three ways to reach it --}}
     @if (!empty($showTrackAIdentity))
         <section class="mt-4 rounded-2xl border border-gray-200 bg-white px-5 py-5 dark:border-gray-700 dark:bg-gray-800">
-            <h2 class="text-base font-bold text-gray-900 dark:text-gray-100">पैसे कसे भरायचे</h2>
-            <p class="text-xs font-medium text-gray-400 dark:text-gray-500">How to pay · directly to this Suchak</p>
+            <h2 class="text-base font-bold text-gray-900 dark:text-gray-100">{{ __('suchak.public_pages.payment_request.how_to_pay') }}</h2>
+            <p class="text-xs font-medium text-gray-400 dark:text-gray-500">{{ __('suchak.public_pages.payment_request.how_to_pay_note') }}</p>
 
             @if ($identityConfigured)
                 @if ($qrUrl)
                     <div class="mt-4 flex flex-col items-center">
-                        <p class="text-sm font-medium text-gray-700 dark:text-gray-200">QR कोड स्कॅन करा · Scan the QR</p>
+                        <p class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('suchak.public_pages.payment_request.scan_qr') }}</p>
                         <img
                             src="{{ $qrUrl }}"
-                            alt="Suchak payment QR"
+                            alt="{{ __('suchak.public_pages.payment_request.qr_alt') }}"
                             class="mt-3 h-64 w-64 max-w-full rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-600"
                         >
                     </div>
@@ -195,33 +213,31 @@
 
                 @if ($upiVpa)
                     <div class="mt-5">
-                        <p class="text-sm font-medium text-gray-700 dark:text-gray-200">किंवा UPI ID वापरा · Or use the UPI ID</p>
+                        <p class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('suchak.public_pages.payment_request.or_use_upi') }}</p>
                         <div class="mt-2 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-900/60">
                             <span class="min-w-0 flex-1 break-all text-base font-semibold text-gray-900 dark:text-gray-100">{{ $upiVpa }}</span>
                             <button
                                 type="button"
                                 data-copy-upi="{{ $upiVpa }}"
-                                data-copied-text="कॉपी झाले ✓"
+                                data-copied-text="{{ __('suchak.public_pages.payment_request.copied') }}"
                                 class="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 dark:focus:ring-offset-gray-800"
                             >
                                 <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                     <path d="M7 3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V7.8a2 2 0 0 0-.6-1.4l-2.8-2.8A2 2 0 0 0 10.2 3H7Z" />
                                     <path d="M3 7a2 2 0 0 1 2-2v10h7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
                                 </svg>
-                                <span data-copy-label>कॉपी करा · Copy</span>
+                                <span data-copy-label>{{ __('suchak.public_pages.payment_request.copy') }}</span>
                             </button>
                         </div>
                     </div>
                 @endif
 
                 <p class="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:bg-gray-900/60 dark:text-gray-300">
-                    तुमच्या कोणत्याही UPI अ‍ॅपमधून (PhonePe, Google Pay, Paytm) वरील QR किंवा UPI ID वापरून पैसे भरता येतील.
-                    <span class="mt-1 block text-gray-500 dark:text-gray-400">You can pay using the QR or UPI ID above from any UPI app on your phone.</span>
+                    {{ __('suchak.public_pages.payment_request.any_upi_app') }}
                 </p>
             @else
                 <p class="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-                    या सूचकांनी अद्याप UPI ID किंवा QR प्रकाशित केलेला नाही. कृपया या पडताळणी झालेल्या संदर्भातूनच सूचकांशी संपर्क साधा किंवा अद्ययावत विनंतीची वाट पाहा.
-                    <span class="mt-1 block">This Suchak has not published a UPI ID or payment QR yet. Contact them using this verified request, or wait for an updated request.</span>
+                    {{ __('suchak.public_pages.payment_request.no_upi_published') }}
                 </p>
             @endif
         </section>
@@ -230,8 +246,7 @@
     {{-- 5. TERMS LINE — reviewing the plan + paying IS the acceptance (no checkbox) --}}
     <section class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 dark:border-emerald-900 dark:bg-emerald-950/30">
         <p class="text-sm leading-6 text-emerald-900 dark:text-emerald-100">
-            योजना व सेवा पाहून पैसे भरणे म्हणजे या सेवा-अटी मान्य करणे.
-            <span class="mt-1 block text-emerald-800 dark:text-emerald-200">Paying after reviewing the plan and services means accepting these service terms.</span>
+            {{ __('suchak.public_pages.payment_request.paying_accepts_terms') }}
         </p>
     </section>
 
@@ -242,12 +257,12 @@
         @endif
         <p>
             @if (empty($showTrackAIdentity))
-                ही पेमेंट प्लॅटफॉर्मकडून घेतली जाते; येथे थेट सूचक UPI/QR दाखवले जात नाही. · This customer is billed by the platform, so direct Suchak UPI/QR is not shown here.
+                {{ __('suchak.public_pages.payment_request.billed_by_platform') }}
             @else
-                वरील UPI / QR या सूचकांच्या ग्राहक-वसुलीसाठी आहेत — प्लॅटफॉर्म सबस्क्रिप्शन बिलिंगसाठी नाहीत. · The UPI / QR above are for this Suchak's customer collection only, not platform subscription billing.
+                {{ __('suchak.public_pages.payment_request.suchak_collection_only') }}
             @endif
         </p>
-        <p>कोणताही सूचक या पडताळणी झालेल्या पानाबाहेर पैसे मागत असल्यास, तुमच्या खात्यातून पुराव्यासह तक्रार नोंदवा. · If any Suchak asks for payment outside this verified page, report it with evidence from your account.</p>
+        <p>{{ __('suchak.public_pages.payment_request.report_outside_payment') }}</p>
     </div>
 </div>
 

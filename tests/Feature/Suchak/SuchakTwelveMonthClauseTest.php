@@ -409,6 +409,13 @@ class SuchakTwelveMonthClauseTest extends TestCase
     {
         $world = $this->world();
 
+        // This test pins MARATHI wording, so it has to ask for Marathi. It did
+        // not have to when the stages page was Devanagari literals — that page
+        // now reads through __(), and web routes resolve the locale from
+        // `?locale=` or the session (SetLocaleFromQuery), never from
+        // Accept-Language. Without this the page answers in English, correctly.
+        $this->withSession(['locale' => 'mr']);
+
         $this->get(route('suchak.customer-portal.stages.index', ['token' => $world['token']]))
             ->assertOk()
             ->assertSee('आम्ही या कुटुंबाला आधीपासून ओळखतो.', false)

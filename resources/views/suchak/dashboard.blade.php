@@ -53,15 +53,10 @@
 
         return substr($digits, 0, 2).str_repeat('x', max(2, strlen($digits) - 4)).substr($digits, -2);
     };
-    $consentRelationOptions = [
-        'candidate_self' => 'Candidate self',
-        'father' => 'Father',
-        'mother' => 'Mother',
-        'brother' => 'Brother',
-        'sister' => 'Sister',
-        'guardian' => 'Guardian',
-        'other_family' => 'Other family',
-    ];
+    // The consent-giver relation list has ONE owner: suchak.consent.relations.
+    // This used to be a hardcoded English copy of it, and the consent modal
+    // carried a third copy that silently overrode whatever was passed in here.
+    $consentRelationOptions = __('suchak.consent.relations');
     $noteTypeLabels = collect($noteTypeOptions)
         ->mapWithKeys(fn (string $type) => [$type => ucwords(str_replace('_', ' ', $type))])
         ->all();
@@ -1015,7 +1010,7 @@
                                                     'representationId' => $representation->id,
                                                     'modalKey' => 'manage-'.$representation->id,
                                                     'consentAction' => $consentAction,
-                                                    'buttonLabel' => $card['can_renew_consent'] ? 'Renew consent' : 'Get consent',
+                                                    'buttonLabel' => $card['can_renew_consent'] ? __('suchak.consent.modal.trigger_renew') : __('suchak.consent.modal.trigger'),
                                                     'buttonClass' => 'mt-3 w-full rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white',
                                                     'defaultConsentMobile' => $ownedProfile?->primary_contact_number,
                                                     'defaultConsentGiverName' => $ownedProfile?->full_name,

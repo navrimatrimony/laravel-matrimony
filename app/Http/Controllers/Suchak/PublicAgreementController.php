@@ -64,11 +64,12 @@ class PublicAgreementController extends Controller
                 $request->userAgent(),
             );
         } catch (InvalidArgumentException) {
-            // The service speaks English by house convention; this page does not.
-            // The state banner rebuilt below already names the real reason
-            // (expired, spent, no longer pending), so only the failure itself is
-            // reported here rather than the raw message.
-            $message = 'हा स्वीकार आता नोंदवता आला नाही.';
+            // The service speaks English by house convention; this page answers
+            // in whatever language the family asked for. The state banner
+            // rebuilt below already names the real reason (expired, spent, no
+            // longer pending), so only the failure itself is reported here
+            // rather than the raw message.
+            $message = __('suchak.public_pages.agreement.acceptance_failed');
             $agreement = $agreement->fresh(['suchakAccount', 'servicePackage']);
         }
 
@@ -159,8 +160,10 @@ class PublicAgreementController extends Controller
             'label' => SuchakCollaborationStageEvent::stageLabel((string) $tranche->trigger_stage_key),
             // The final tranche is the remainder, never a percentage (T2), so it
             // says so rather than printing a number the rules do not define.
+            // Same key the fee vocabulary already owns — this was a Marathi
+            // literal, so an English page printed Devanagari in a money column.
             'share' => $tranche->is_final_tranche
-                ? 'उर्वरित रक्कम'
+                ? __('suchak.fees.final_tranche_remainder')
                 : rtrim(rtrim(number_format((float) $tranche->share_percent, 2, '.', ''), '0'), '.').'%',
             'amount' => $amounts[$index] ?? null,
         ])->all();

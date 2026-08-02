@@ -44,7 +44,9 @@ class PublicConsentController extends Controller
                 'token' => $token,
                 'summary' => [],
                 'state' => 'invalid',
-                'message' => 'This link is invalid.',
+                // Same key the page's own invalid-state banner reads: one
+                // sentence, whether it arrives as a message or as a state.
+                'message' => __('suchak.public_pages.link_invalid'),
             ]);
         }
 
@@ -56,8 +58,8 @@ class PublicConsentController extends Controller
                 $request->userAgent(),
             );
             $message = $consent->consent_status === SuchakConsent::STATUS_ACCEPTED
-                ? 'Consent accepted.'
-                : 'Consent rejected.';
+                ? __('suchak.public_pages.consent.accepted')
+                : __('suchak.public_pages.consent.rejected');
         } catch (InvalidArgumentException $exception) {
             $message = $exception->getMessage();
         }
@@ -94,19 +96,30 @@ class PublicConsentController extends Controller
 
         return [
             'suchak' => [
-                'name' => $this->displayText($account?->suchak_name_mr, $account?->suchak_name, 'सूचक'),
+                'name' => $this->displayText(
+                    $account?->suchak_name_mr,
+                    $account?->suchak_name,
+                    __('profile.suchak_default_name'),
+                ),
                 'business_name' => $this->displayText($account?->office_name_mr, $account?->office_name),
                 'address' => $this->suchakAddress($account),
                 'masked_mobile' => $this->maskMobile($account?->mobile_number ?: $account?->whatsapp_number),
                 'photo_path' => trim((string) ($account?->profile_photo_path ?? '')),
             ],
             'profile' => [
-                'name_label' => match ($genderKey) {
-                    'female' => 'वधूचे नाव',
-                    'male' => 'वराचे नाव',
-                    default => 'उमेदवाराचे नाव',
+                /*
+                 * The KEY, not the wording. This used to be a Marathi literal,
+                 * so an English consent letter carried a Devanagari label above
+                 * the name of the person being asked to consent. The page owns
+                 * the wording (suchak.public_pages.consent.name_label.*); the
+                 * controller only knows which of the three applies.
+                 */
+                'name_label_key' => match ($genderKey) {
+                    'female' => 'bride',
+                    'male' => 'groom',
+                    default => 'candidate',
                 },
-                'name' => trim((string) ($profile->full_name ?? '')) ?: 'उपलब्ध नाही',
+                'name' => trim((string) ($profile->full_name ?? '')) ?: __('suchak.labels.common.not_available'),
                 'age' => $this->ageYears($profile->date_of_birth),
                 'photo_url' => (string) ($profile->profile_photo_url ?? ''),
             ],
@@ -141,17 +154,21 @@ class PublicConsentController extends Controller
 
     private function ageYears(mixed $dateOfBirth): string
     {
+        // Latin digits by product rule, whatever the locale — the only thing
+        // that follows the reader here is the "we do not have it" wording.
+        $unknown = __('suchak.labels.common.not_available');
+
         if ($dateOfBirth === null || $dateOfBirth === '') {
-            return 'उपलब्ध नाही';
+            return $unknown;
         }
 
         try {
             $age = Carbon::parse($dateOfBirth)->age;
         } catch (\Throwable) {
-            return 'उपलब्ध नाही';
+            return $unknown;
         }
 
-        return $age >= 18 && $age <= 100 ? (string) $age : 'उपलब्ध नाही';
+        return $age >= 18 && $age <= 100 ? (string) $age : $unknown;
     }
 
     private function maskMobile(?string $mobile): ?string

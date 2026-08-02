@@ -87,7 +87,9 @@
                                             'representationId' => $row['representation_id'],
                                             'modalKey' => 'customer-list-'.$row['representation_id'],
                                             'consentAction' => $row['consent_action_url'],
-                                            'buttonLabel' => 'Get consent',
+                                            // No `buttonLabel`: the partial's own default reads
+                                            // suchak.consent.modal.trigger. Passing an English
+                                            // literal here overrode the translation.
                                             'buttonClass' => 'mt-1 inline-flex w-fit rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700',
                                             'defaultConsentMobile' => $row['default_consent_mobile'],
                                             'defaultConsentGiverName' => $row['default_consent_giver_name'],

@@ -319,6 +319,50 @@ return [
         'mobile_required' => 'संमतीसाठी मोबाइल नंबर आवश्यक आहे.',
         'profile_missing' => 'या ग्राहकाची प्रोफाइल सापडली नाही.',
         'mobile_not_on_profile' => 'संमती फक्त या व्यक्तीच्या प्रोफाइलवर आधीच नोंदलेल्या नंबरवरच मागता येते. आधी तो नंबर प्रोफाइलमध्ये नोंदवा, मग संमती मागा.',
+
+        /*
+         * Who the consent is being asked of. Moved verbatim out of the Marathi
+         * array in resources/views/suchak/partials/consent-action-modal.blade.php,
+         * which was the third copy of this list.
+         */
+        'relations' => [
+            'candidate_self' => 'उमेदवार स्वतः',
+            'father' => 'वडील',
+            'mother' => 'आई',
+            'brother' => 'भाऊ',
+            'sister' => 'बहीण',
+            'guardian' => 'पालक / Guardian',
+            'other_family' => 'इतर कुटुंबीय',
+        ],
+
+        'modal' => [
+            'trigger' => 'संमती घ्या',
+            'trigger_renew' => 'संमती नव्याने घ्या',
+            'eyebrow' => 'संमती',
+            'title' => 'ग्राहक संमती विनंती तयार करा',
+            'intro' => 'Profile मधील mobile default आहे. पाठवण्यापूर्वी Suchak तो बदलू शकतो.',
+            'close' => 'बंद करा',
+            'consent_type' => 'Consent type',
+
+            'whatsapp_title' => 'WhatsApp वर पाठवा',
+            'whatsapp_body' => 'Platform secure consent link आणि message तयार करेल. Suchak आपल्या WhatsApp मधून customer/family ला तो message पाठवेल.',
+            'offline_title' => 'Signed proof upload करा',
+            'offline_body' => 'Customer/family ने आधीच signed/photo/PDF proof दिला असेल तेव्हाच हा पर्याय वापरा.',
+            'platform_title' => 'Platform-assisted consent',
+            'platform_body' => 'Platform secure consent request तयार करेल. Platform-side follow-up हवा असेल तेव्हा हा पर्याय वापरा.',
+
+            'giver_name' => 'Consent giver name',
+            'relation' => 'Relation',
+            'requested_mobile' => 'Requested mobile',
+            'mobile_help' => 'Profile मधील mobile default आहे. Suchak तो बदलू शकतो.',
+            'signed_file' => 'Signed proof file',
+            'declaration' => 'हा proof या represented profile साठी customer/family कडून मिळाला आहे याची मी खात्री देतो/देते.',
+
+            'send_whatsapp' => 'WhatsApp वर पाठवा',
+            'upload_proof' => 'Proof upload करा',
+            'create_request' => 'Request तयार करा',
+            'other_options' => 'इतर consent options',
+        ],
     ],
     'match_suggestions' => [
         'loaded' => 'जुळणारी स्थळे लोड झाली.',
@@ -373,6 +417,13 @@ return [
             'monthly_upload_limit' => 'Monthly biodata uploads',
             'no' => 'No',
             'none' => 'None',
+            /*
+             * Generic "nothing to show in this slot", promoted out of
+             * `customer_portal.show.*` so the public consent page,
+             * PublicConsentController and the portal all say it once.
+             */
+            'not_available' => 'उपलब्ध नाही',
+            'to_be_confirmed' => 'रक्कम निश्चित होणे बाकी',
             'not_requested' => 'Request केलेले नाही',
             'paid' => 'Paid',
             'payu_test_mode' => 'PayU test mode',
@@ -390,7 +441,9 @@ return [
             'suspended' => 'Suspended',
             'system' => 'System',
             'user' => 'User',
-            'verified' => 'Verified',
+            // Was 'Verified' — an English value in the Marathi file, which the
+            // public payment page could not use without losing its Marathi.
+            'verified' => 'पडताळणी झालेली',
             'whatsapp_copy' => 'WhatsApp copy',
             'whatsapp_deep_link' => 'WhatsApp deep link',
             'yes' => 'Yes',
@@ -646,6 +699,8 @@ return [
             'prior_acquaintance_label' => 'आम्ही या कुटुंबाला आधीपासून ओळखतो.',
             'prior_acquaintance_help' => 'असे असल्यास या स्थळावर :months महिन्यांची विवाह-फी अट लागू होणार नाही.',
 
+            'recorded' => 'तुमची नोंद झाली: :stage',
+
             'empty' => 'सध्या तुमच्यासाठी नोंदवण्यासारखे स्थळ नाही.',
 
             'link_proof_note' => 'या लिंकवरून केलेली नोंद "ही लिंक असलेल्या व्यक्तीने नोंद केली" एवढेच सांगते. लिंक इतर कोणाला देऊ नका.',
@@ -660,7 +715,8 @@ return [
             'terms' => 'अटी',
             'payment_request' => 'भरणा विनंती',
             'expires' => 'मुदत संपते',
-            'not_available' => 'उपलब्ध नाही',
+            // `not_available` / `to_be_confirmed` moved to
+            // `suchak.labels.common.*` — the public pages say the same thing.
             'no_expiry' => 'मुदत ठरलेली नाही',
 
             'stages_link' => 'तुमच्यासाठी सुचवलेली स्थळे आणि तुमची नोंद',
@@ -669,7 +725,6 @@ return [
             'agreement_unavailable' => 'करार उपलब्ध नाही',
             'revision' => 'आवृत्ती :number',
             'amount_due' => 'देय रक्कम',
-            'to_be_confirmed' => 'निश्चित व्हायचे आहे',
             'collector' => 'रक्कम घेणारा',
 
             'payments_title' => 'भरणा आणि कागदपत्रे',
@@ -704,6 +759,107 @@ return [
             'revoke_title' => 'पोर्टल लिंक रद्द करा',
             'revoke_reason' => 'कारण',
             'revoke_submit' => 'प्रवेश रद्द करा',
+        ],
+    ],
+
+    /*
+     * The tokenised pages a family opens from a link, with no login.
+     * Wording moved verbatim out of resources/views/suchak/{agreements,
+     * consents,payment-requests}/*.blade.php, so no family sees a sentence
+     * reworded by this move. Fee names come from `suchak.fees.*` and stage
+     * names arrive already translated — neither is repeated here.
+     */
+    'public_pages' => [
+        'link_invalid' => 'ही link योग्य नाही.',
+        'link_expired' => 'ही link expired झाली आहे. कृपया सूचकांकडून नवीन link मागा.',
+
+        'agreement' => [
+            'title' => 'शुल्क करार',
+            'og_description' => 'शुल्क तपासा आणि स्वीकारा.',
+            'intro' => 'कृपया खालील शुल्क तपासा आणि स्वीकारा.',
+
+            'fees_heading' => 'शुल्क',
+            'fee_per_meeting' => ':fee (प्रति भेट)',
+            'tranche_heading' => ':fee — कधी किती',
+
+            'success_fee_as_wished' => 'तुमच्या इच्छेनुसार',
+            'success_fee_none' => 'नाही',
+
+            'name_required' => 'कृपया स्वीकारणाऱ्या व्यक्तीचे नाव लिहा.',
+            'accepted' => 'तुमचा स्वीकार नोंदवला आहे. वरील रक्कम आता कायम झाल्या आहेत.',
+            'inactive' => 'हा करार आता active नाही.',
+            'acceptance_failed' => 'हा स्वीकार आता नोंदवता आला नाही.',
+
+            'freeze_note' => 'तुम्ही स्वीकारल्यानंतर वरील रक्कम कायम होतील. त्यानंतर सूचक त्या बदलू शकणार नाहीत.',
+            'evidence_note' => 'तुमचे नाव, स्वीकारण्याची वेळ, IP address आणि device ची तांत्रिक नोंद पुरावा म्हणून जतन केली जाईल. या पानावर OTP पडताळणी होत नाही.',
+
+            'accepted_by_name' => 'स्वीकारणाऱ्या व्यक्तीचे नाव',
+            'accept_button' => 'होय, मी ही शुल्क स्वीकारतो/स्वीकारते',
+        ],
+
+        'consent' => [
+            'title' => 'संमतीपत्र',
+            'og_description' => 'संमतीपत्र तपासा आणि होय किंवा नाही निवडा.',
+            'intro' => 'कृपया खालील माहिती तपासा आणि तुमचा निर्णय निवडा.',
+
+            'mobile' => 'मोबाईल',
+            'profile_card' => 'स्थळाचा थोडक्यात तपशील',
+            'age' => 'वय',
+
+            'name_label' => [
+                'bride' => 'वधूचे नाव',
+                'groom' => 'वराचे नाव',
+                'candidate' => 'उमेदवाराचे नाव',
+            ],
+
+            'consent_text' => 'तुमची संमती',
+            'consent_intro' => 'श्री. :suchak_name यांना तुमच्या विवाहाचे स्थळ योग्य आणि अनुरूप कुटुंबांपर्यंत पोहोचवण्यासाठी तुमच्या होकाराची गरज आहे.',
+            'if_yes' => "तुम्ही 'होय' निवडल्यास:",
+            'point_biodata' => ':suchak_name हे तुमचा बायोडाटा चांगल्या स्थळांच्या पालकांना सुरक्षितपणे दाखवू शकतील.',
+            'point_summary' => 'योग्य स्थळांशी चर्चा करण्यासाठी ते तुमच्या स्थळाची थोडक्यात माहिती वापरू शकतील.',
+            'point_contact' => 'पुढील बातचीत आणि परिचयासाठी ते तुमच्याशी किंवा तुमच्या पालकांशी संपर्क साधू शकतील.',
+            'privacy' => 'तुमची खाजगी माहिती तुमच्या परवानगीशिवाय कोणालाही दिली जाणार नाही, याची पूर्ण खात्री बाळगा.',
+            'evidence' => 'तुमचा निर्णय, वेळ आणि आवश्यक तांत्रिक नोंद सुरक्षित पुरावा म्हणून जतन केली जाईल.',
+
+            'yes' => 'होय, मी संमती देतो/देते',
+            'no' => 'नाही, मी संमती देत नाही',
+
+            'accepted' => 'तुमची संमती नोंदवली आहे.',
+            'rejected' => 'तुमचा नकार नोंदवला आहे.',
+            'inactive' => 'ही request आता active नाही.',
+        ],
+
+        'payment_request' => [
+            'og_title' => 'पेमेंट विनंती',
+            'og_title_for_candidate' => ':name साठी पेमेंट विनंती',
+            'og_description' => 'UPI ने भरा',
+
+            'requested_by' => 'पैसे मागणारे सूचक',
+            'secure_payment' => 'सुरक्षित पेमेंट · अधिकृत सूचक',
+
+            'candidate' => 'उमेदवार',
+            'plan' => 'योजना',
+            'plan_fallback' => 'सेवा योजना',
+            'amount_to_pay' => 'भरायची रक्कम',
+
+            'what_you_get' => 'यात तुम्हाला मिळेल',
+            'services_confirmed_by_suchak' => 'या योजनेतील सेवा सूचकांकडून थेट कळवल्या जातील.',
+
+            'how_to_pay' => 'पैसे कसे भरायचे',
+            'how_to_pay_note' => 'थेट या सूचकांना',
+            'scan_qr' => 'QR कोड स्कॅन करा',
+            'qr_alt' => 'सूचकांचा पेमेंट QR',
+            'or_use_upi' => 'किंवा UPI ID वापरा',
+            'copy' => 'कॉपी करा',
+            'copied' => 'कॉपी झाले ✓',
+            'any_upi_app' => 'तुमच्या कोणत्याही UPI अ‍ॅपमधून (PhonePe, Google Pay, Paytm) वरील QR किंवा UPI ID वापरून पैसे भरता येतील.',
+            'no_upi_published' => 'या सूचकांनी अद्याप UPI ID किंवा QR प्रकाशित केलेला नाही. कृपया या पडताळणी झालेल्या संदर्भातूनच सूचकांशी संपर्क साधा किंवा अद्ययावत विनंतीची वाट पाहा.',
+
+            'paying_accepts_terms' => 'योजना व सेवा पाहून पैसे भरणे म्हणजे या सेवा-अटी मान्य करणे.',
+
+            'billed_by_platform' => 'ही पेमेंट प्लॅटफॉर्मकडून घेतली जाते; येथे थेट सूचक UPI/QR दाखवले जात नाही.',
+            'suchak_collection_only' => 'वरील UPI / QR या सूचकांच्या ग्राहक-वसुलीसाठी आहेत — प्लॅटफॉर्म सबस्क्रिप्शन बिलिंगसाठी नाहीत.',
+            'report_outside_payment' => 'कोणताही सूचक या पडताळणी झालेल्या पानाबाहेर पैसे मागत असल्यास, तुमच्या खात्यातून पुराव्यासह तक्रार नोंदवा.',
         ],
     ],
 

@@ -319,6 +319,64 @@ return [
         'mobile_required' => 'A mobile number is required to request consent.',
         'profile_missing' => 'The profile for this customer could not be found.',
         'mobile_not_on_profile' => 'Consent can only be requested on a number already recorded on that person\'s profile. Add the number to the profile first, then request consent.',
+
+        /*
+         * Who the consent is being asked of.
+         *
+         * This list existed THREE times: an English array in
+         * resources/views/suchak/dashboard.blade.php, a second English array as
+         * the default in resources/views/suchak/partials/consent-action-modal.blade.php,
+         * and a Marathi array beside it in the same partial that overrode both.
+         * Keys are ConsentController::CONSENT_GIVER_RELATIONS, so the stored
+         * value and the label the Suchak picked always come from one list.
+         */
+        'relations' => [
+            'candidate_self' => 'Candidate themselves',
+            'father' => 'Father',
+            'mother' => 'Mother',
+            'brother' => 'Brother',
+            'sister' => 'Sister',
+            'guardian' => 'Guardian',
+            'other_family' => 'Other family member',
+        ],
+
+        /*
+         * The Suchak-side "get consent" modal. Suchak-facing rather than
+         * customer-facing, but it was carrying its own en/mr array literal —
+         * a second translation mechanism beside __(), which meant an admin
+         * could not correct this wording from the translations table.
+         */
+        'modal' => [
+            'trigger' => 'Get consent',
+            // Same button, one consent later.
+            'trigger_renew' => 'Renew consent',
+            'eyebrow' => 'Get consent',
+            'title' => 'Create customer consent request',
+            'intro' => 'Default mobile is editable before the request is created.',
+            'close' => 'Close',
+            'consent_type' => 'Consent type',
+
+            'whatsapp_title' => 'Send via WhatsApp',
+            'whatsapp_body' => 'Platform creates a secure consent link and ready message. Suchak sends it from their WhatsApp to the customer/family.',
+            // One key, because the card heading and the "other options" link
+            // were word-for-word identical in both languages.
+            'offline_title' => 'Upload signed proof',
+            'offline_body' => 'Use this only when the customer/family has already signed or provided offline proof for this profile.',
+            'platform_title' => 'Platform-assisted consent',
+            'platform_body' => 'Platform creates a secure consent request. Use this when platform-side follow-up is preferred.',
+
+            'giver_name' => 'Consent giver name',
+            'relation' => 'Relation',
+            'requested_mobile' => 'Requested mobile',
+            'mobile_help' => 'Defaults to the mobile kept for this profile. Suchak can change it.',
+            'signed_file' => 'Signed proof file',
+            'declaration' => 'I confirm this proof was given by the customer/family for this represented profile.',
+
+            'send_whatsapp' => 'Send on WhatsApp',
+            'upload_proof' => 'Upload signed proof',
+            'create_request' => 'Create request',
+            'other_options' => 'Other consent options',
+        ],
     ],
     'match_suggestions' => [
         'loaded' => 'Match suggestions loaded.',
@@ -373,6 +431,15 @@ return [
             'monthly_upload_limit' => 'Monthly biodata uploads',
             'no' => 'No',
             'none' => 'None',
+            /*
+             * Generic "we have nothing to show in this slot" wording.
+             * Promoted out of `customer_portal.show.*` when the public consent
+             * page and PublicConsentController needed the SAME two words: a
+             * per-page copy of "Not available" is exactly the duplication the
+             * frozen rule forbids.
+             */
+            'not_available' => 'Not available',
+            'to_be_confirmed' => 'To be confirmed',
             'not_requested' => 'Not requested',
             'paid' => 'Paid',
             'payu_test_mode' => 'PayU test mode',
@@ -713,6 +780,10 @@ return [
             'prior_acquaintance_label' => 'We already knew this family.',
             'prior_acquaintance_help' => 'If so, the :months-month marriage-fee condition will not apply to this profile.',
 
+            // The stage name arrives already translated, so the sentence
+            // around it takes it as a placeholder rather than being glued on.
+            'recorded' => 'Recorded: :stage',
+
             'empty' => 'There is nothing for you to record right now.',
 
             // D23 / section 8 — said to the family, not only in the code.
@@ -728,7 +799,9 @@ return [
             'terms' => 'Terms',
             'payment_request' => 'Payment request',
             'expires' => 'Expires',
-            'not_available' => 'Not available',
+            // `not_available` and `to_be_confirmed` used to live here. They now
+            // live in `suchak.labels.common.*` because the public consent and
+            // payment pages say the same thing — see the note there.
             'no_expiry' => 'No expiry set',
 
             'stages_link' => 'Profiles suggested for you, and your record',
@@ -737,7 +810,6 @@ return [
             'agreement_unavailable' => 'Agreement not available',
             'revision' => 'Revision :number',
             'amount_due' => 'Amount due',
-            'to_be_confirmed' => 'To be confirmed',
             'collector' => 'Collector',
 
             'payments_title' => 'Payments and documents',
@@ -772,6 +844,132 @@ return [
             'revoke_title' => 'Revoke portal link',
             'revoke_reason' => 'Reason',
             'revoke_submit' => 'Revoke access',
+        ],
+    ],
+
+    /*
+     * The tokenised pages a family opens from a link, with no login.
+     *
+     * All three were written as Devanagari string literals with no __() at all
+     * — the agreement page even declared `<html lang="mr">` — so the layout's
+     * en/mr switcher changed nothing on the pages where a family gives consent
+     * and agrees a price. The payment page was worse than untranslated: every
+     * line carried BOTH languages glued together with a `·`, so neither reader
+     * got a clean page.
+     *
+     * The damage that forced this: `stage_label` became locale-aware first, so
+     * the agreement page's installment rows started printing "Once the match is
+     * settled" inside Marathi prose. Half a translation is worse than none.
+     *
+     * Fee NAMES are not here. They belong to `suchak.fees.*`, which the API's
+     * "you already accepted these terms" refusal also reads — a family must be
+     * able to find on their own screen the row a Suchak reads back to them.
+     * Stage names are not here either: they come from
+     * SuchakCollaborationStageEvent::stageLabel() already translated.
+     */
+    'public_pages' => [
+        // Said by both the consent page and the agreement page, so said once.
+        'link_invalid' => 'This link is invalid.',
+        'link_expired' => 'This link has expired. Ask the Suchak for a new link.',
+
+        'agreement' => [
+            'title' => 'Fee agreement',
+            'og_description' => 'Review the fees and accept them.',
+            'intro' => 'Please review the fees below and accept them.',
+
+            'fees_heading' => 'Fees',
+            // The fee NAME comes from suchak.fees.*; this only adds the fact
+            // that the fee recurs, which a family reading a price agreement
+            // must not have to infer.
+            'fee_per_meeting' => ':fee (per meeting)',
+            'tranche_heading' => ':fee — when and how much',
+
+            // A success fee is a mode first and an amount second: quoting a
+            // rupee figure for either of these would invent a price.
+            'success_fee_as_wished' => 'As you wish',
+            'success_fee_none' => 'None',
+
+            'name_required' => 'Please enter the name of the person accepting.',
+            'accepted' => 'Your acceptance has been recorded. The amounts above are now fixed.',
+            'inactive' => 'This agreement is no longer active.',
+            'acceptance_failed' => 'This acceptance could not be recorded.',
+
+            'freeze_note' => 'Once you accept, the amounts above are fixed. The Suchak cannot change them afterwards.',
+            'evidence_note' => 'Your name, the time of acceptance, your IP address and basic technical details of your device will be stored as evidence. This page does not verify you by OTP.',
+
+            'accepted_by_name' => 'Name of the person accepting',
+            'accept_button' => 'Yes, I accept these fees',
+        ],
+
+        'consent' => [
+            'title' => 'Consent letter',
+            'og_description' => 'Review the profile summary and choose Yes or No.',
+            'intro' => 'Please review the details below and choose your response.',
+
+            'mobile' => 'Mobile',
+            'profile_card' => 'Profile summary',
+            'age' => 'Age',
+
+            // Whose name the summary is showing. The gendered wording is the
+            // point — a Marathi family reads "वधूचे नाव", not a neutral label.
+            'name_label' => [
+                'bride' => 'Bride\'s name',
+                'groom' => 'Groom\'s name',
+                'candidate' => 'Candidate name',
+            ],
+
+            'consent_text' => 'Your consent',
+            'consent_intro' => 'Mr./Ms. :suchak_name needs your consent to take this marriage profile to suitable families.',
+            'if_yes' => 'If you choose Yes:',
+            'point_biodata' => ':suchak_name can safely show your biodata to parents of suitable profiles.',
+            'point_summary' => 'They can use the short profile summary while discussing suitable matches.',
+            'point_contact' => 'They can contact you or your parents for further conversation and introductions.',
+            'privacy' => 'Your private information will not be shared with anyone without your permission.',
+            'evidence' => 'Your decision, time, and required technical record will be stored as secure evidence.',
+
+            'yes' => 'Yes, I give consent',
+            'no' => 'No, I do not give consent',
+
+            // Also the controller's post-decision message: one sentence, said
+            // once, whether it arrives as a banner or as a state.
+            'accepted' => 'Consent accepted.',
+            'rejected' => 'Consent rejected.',
+            'inactive' => 'This request is no longer active.',
+        ],
+
+        'payment_request' => [
+            'og_title' => 'Payment request',
+            'og_title_for_candidate' => 'Payment request for :name',
+            'og_description' => 'Pay by UPI',
+
+            'requested_by' => 'Requested by',
+            'secure_payment' => 'Secure payment · authorised Suchak',
+
+            'candidate' => 'Candidate',
+            'plan' => 'Plan',
+            'plan_fallback' => 'Service plan',
+            'amount_to_pay' => 'Amount to pay',
+
+            'what_you_get' => 'What you get',
+            'services_confirmed_by_suchak' => 'The services in this plan will be confirmed directly by the Suchak.',
+
+            'how_to_pay' => 'How to pay',
+            'how_to_pay_note' => 'Directly to this Suchak',
+            'scan_qr' => 'Scan the QR code',
+            'qr_alt' => 'Suchak payment QR',
+            'or_use_upi' => 'Or use the UPI ID',
+            'copy' => 'Copy',
+            'copied' => 'Copied ✓',
+            'any_upi_app' => 'You can pay using the QR or UPI ID above from any UPI app on your phone (PhonePe, Google Pay, Paytm).',
+            'no_upi_published' => 'This Suchak has not published a UPI ID or payment QR yet. Contact them using this verified request, or wait for an updated request.',
+
+            // Paying IS the acceptance here — there is no checkbox — so the
+            // sentence that says so has to be as plain as the amount above it.
+            'paying_accepts_terms' => 'Paying after reviewing the plan and services means accepting these service terms.',
+
+            'billed_by_platform' => 'This customer is billed by the platform, so direct Suchak UPI/QR is not shown here.',
+            'suchak_collection_only' => 'The UPI / QR above are for this Suchak\'s customer collection only, not platform subscription billing.',
+            'report_outside_payment' => 'If any Suchak asks for payment outside this verified page, report it with evidence from your account.',
         ],
     ],
 

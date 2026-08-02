@@ -43,11 +43,11 @@
             </div>
             <div>
                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{{ __('suchak.customer_portal.show.terms') }}</div>
-                <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $agreement ? $suchakText::label($agreement->terms_status) : __('suchak.customer_portal.show.not_available') }}</div>
+                <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $agreement ? $suchakText::label($agreement->terms_status) : __('suchak.labels.common.not_available') }}</div>
             </div>
             <div>
                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{{ __('suchak.customer_portal.show.payment_request') }}</div>
-                <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $paymentRequest ? $suchakText::label($paymentRequest->payment_status) : __('suchak.customer_portal.show.not_available') }}</div>
+                <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ $paymentRequest ? $suchakText::label($paymentRequest->payment_status) : __('suchak.labels.common.not_available') }}</div>
             </div>
             <div>
                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{{ __('suchak.customer_portal.show.expires') }}</div>
@@ -92,13 +92,13 @@
                     @elseif ($agreement && $agreement->price_amount !== null)
                         {{ $agreement->currency ?? 'INR' }} {{ $agreement->price_amount }}
                     @else
-                        {{ __('suchak.customer_portal.show.to_be_confirmed') }}
+                        {{ __('suchak.labels.common.to_be_confirmed') }}
                     @endif
                 </div>
             </div>
             <div>
                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{{ __('suchak.customer_portal.show.collector') }}</div>
-                <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ $localizedText::column($paymentRequest, 'collector_disclosure') ?: __('suchak.customer_portal.show.not_available') }}</div>
+                <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ $localizedText::column($paymentRequest, 'collector_disclosure') ?: __('suchak.labels.common.not_available') }}</div>
             </div>
         </div>
 
