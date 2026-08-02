@@ -8,6 +8,7 @@ use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakCollaborationStageEvent;
 use App\Models\SuchakCommissionAgreement;
 use App\Models\SuchakCustomerAgreement;
+use App\Models\SuchakCustomerContext;
 use App\Models\SuchakServicePackage;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakCollaborationService;
@@ -559,7 +560,14 @@ class SuchakStageLadderReachabilityTest extends TestCase
         [$owner, $ownerAccount] = $this->verifiedSuchakActor();
         [, $helperAccount] = $this->verifiedSuchakActor();
         $collaboration = $this->engagementBetween($ownerAccount, $helperAccount, SuchakCollaborationRequest::STATUS_ACCEPTED);
-        $agreement = $this->customerAgreement($ownerAccount, $owner, revision: 1);
+        // The owner is the REQUESTING side here, so his customer's candidate is the requesting
+        // profile — the fact the route now proves before it writes the role label.
+        $agreement = $this->customerAgreement(
+            $ownerAccount,
+            $owner,
+            revision: 1,
+            candidateProfileId: (int) $collaboration->requesting_matrimony_profile_id,
+        );
 
         Sanctum::actingAs($owner);
         $response = $this->postJson(
@@ -900,13 +908,26 @@ class SuchakStageLadderReachabilityTest extends TestCase
     /**
      * Makes the customer-owning side a RECORDED fact rather than the `customer_owner_side` column
      * default, the way production does it: the owner links his own customer agreement revision.
+     *
+     * The agreement's customer is the candidate SITTING ON THE OWNER'S SIDE of this engagement —
+     * derived here from the side the owner's account actually occupies, because that is the fact
+     * linkCustomerAgreement() now checks. An agreement about somebody who is on neither side is
+     * refused, and that refusal is the subject of SuchakCustomerDoorTest.
      */
     private function linkOwnerAgreement(
         SuchakCollaborationRequest $collaboration,
         SuchakAccount $ownerAccount,
         User $ownerUser,
     ): SuchakCustomerAgreement {
-        $agreement = $this->customerAgreement($ownerAccount, $ownerUser, revision: 1);
+        $ownerSide = $collaboration->sideForAccount((int) $ownerAccount->id);
+        $this->assertNotNull($ownerSide, 'The owner account must be a party to this engagement.');
+
+        $agreement = $this->customerAgreement(
+            $ownerAccount,
+            $ownerUser,
+            revision: 1,
+            candidateProfileId: $collaboration->matrimonyProfileIdForSide((string) $ownerSide),
+        );
 
         $linked = $this->service()->linkCustomerAgreement($collaboration, $ownerAccount, $ownerUser, $agreement);
         $this->assertSame((int) $ownerAccount->id, $linked->customerOwnerSuchakAccountId());
@@ -914,11 +935,18 @@ class SuchakStageLadderReachabilityTest extends TestCase
         return $agreement;
     }
 
+    /**
+     * Every agreement here names a customer context, because a customer agreement that names no
+     * customer cannot establish whose candidate an engagement is about. `$candidateProfileId` is
+     * supplied whenever the agreement will be linked to an engagement; otherwise the context gets
+     * a candidate of its own, which is what the pre-engagement ladder rungs run against.
+     */
     private function customerAgreement(
         SuchakAccount $account,
         User $user,
         int $revision,
         string $termsStatus = SuchakCustomerAgreement::TERMS_ACCEPTED,
+        ?int $candidateProfileId = null,
     ): SuchakCustomerAgreement {
         $package = SuchakServicePackage::query()->create([
             'suchak_account_id' => $account->id,
@@ -935,8 +963,20 @@ class SuchakStageLadderReachabilityTest extends TestCase
         $accepted = $termsStatus === SuchakCustomerAgreement::TERMS_ACCEPTED;
         $declined = $termsStatus === SuchakCustomerAgreement::TERMS_DECLINED;
 
+        $customerContext = SuchakCustomerContext::query()->create([
+            'suchak_account_id' => $account->id,
+            'candidate_matrimony_profile_id' => $candidateProfileId ?? MatrimonyProfile::factory()->create()->id,
+            'service_context' => SuchakCustomerContext::SERVICE_PROFILE_REPRESENTATION,
+            'source_owner' => SuchakCustomerContext::SOURCE_OWNER_SUCHAK,
+            'source_type' => SuchakCustomerContext::SOURCE_TYPE_MANUAL,
+            'customer_lifecycle_status' => SuchakCustomerContext::STATUS_ACTIVE_SERVICE,
+            'created_by_user_id' => $user->id,
+            'opened_at' => now(),
+        ]);
+
         return SuchakCustomerAgreement::query()->create([
             'suchak_account_id' => $account->id,
+            'customer_context_id' => $customerContext->id,
             'service_package_id' => $package->id,
             'agreement_revision' => $revision,
             'terms_status' => $termsStatus,

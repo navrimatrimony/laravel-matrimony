@@ -75,6 +75,18 @@ class SuchakActivityLog extends Model
 
     public const ACTION_COLLABORATION_REQUEST_EXPIRED = 'collaboration_request_expired';
 
+    /**
+     * The CUSTOMER recorded one of their own ladder rungs (`viewed` / `interested` /
+     * `meeting_confirmed`) over the portal link they were sent — blueprint 6a, D11, D23.
+     *
+     * Written with `actor_type = user` and `actor_user_id = NULL`: the customer is the family and
+     * usually has no login (section 2). This row is where the IP and user agent of that act live —
+     * they are deliberately NOT copied onto `suchak_collaboration_stage_events`, which names only
+     * the link. It records that a holder of the link acted; it does not claim WHO, because OTP does
+     * not exist yet (section 10 S4).
+     */
+    public const ACTION_COLLABORATION_STAGE_CUSTOMER_RECORDED = 'collaboration_stage_customer_recorded';
+
     public const ACTION_COMMISSION_AGREEMENT_UPDATED = 'commission_agreement_updated';
 
     /**
@@ -239,6 +251,13 @@ class SuchakActivityLog extends Model
 
     public const ACTION_PAYOUT_HOLD_OPENED = 'payout_hold_opened';
 
+    /**
+     * Covers both terminal hold statuses — `released` and `cancelled` — because
+     * which one it was is on the hold row, and a second action key would make
+     * "how did this hold end" a question you answer by joining two vocabularies.
+     */
+    public const ACTION_PAYOUT_HOLD_RELEASED = 'payout_hold_released';
+
     public const ACTION_PLATFORM_PAYOUT_QUALIFIED = 'platform_payout_qualified';
 
     public const ACTION_PLATFORM_PAYOUT_DETAILS_UPDATED = 'platform_payout_details_updated';
@@ -262,6 +281,12 @@ class SuchakActivityLog extends Model
     public const ACTION_VISIT_ADMIN_CONFIRMED = 'visit_admin_confirmed';
 
     public const ACTION_VISIT_DISPUTED = 'visit_disputed';
+
+    /**
+     * The dispute closed and the money answer landed on the meeting row. Paired
+     * with `visit_disputed`: one opens the freeze, this one ends it.
+     */
+    public const ACTION_VISIT_DISPUTE_SETTLED = 'visit_dispute_settled';
 
     public const ACTION_VISIT_PAYOUT_QUALIFIED = 'visit_payout_qualified';
 

@@ -20,8 +20,8 @@ use InvalidArgumentException;
  * "the customer confirms" was unimplementable.
  *
  * This lives on the member API and not on the Suchak API because the actor is
- * the member: `assertRequestingUserCanConfirm()` accepts exactly the user who
- * owns `requesting_matrimony_profile_id`. It follows
+ * the member: `assertCustomerSideUserCanConfirm()` accepts exactly the user who
+ * owns the meeting's CUSTOMER-side candidate profile. It follows
  * MemberSuchakRequestApiController — the same surface the member app already
  * uses for every other member-side Suchak action, over the same service the web
  * routes use, so nothing here is a second engine.
@@ -29,6 +29,16 @@ use InvalidArgumentException;
  * Authorisation is the service's, not this controller's. The ownership check
  * below is only about which HTTP status a stranger's meeting deserves: 404,
  * because a member has no business learning that someone else's meeting exists.
+ *
+ * WHO STILL CANNOT REACH THIS: a customer with no login — which blueprint
+ * section 2 says is the common case, because `users.mobile` is null whenever the
+ * number on file is a household number. Both routes need `$request->user()`.
+ * Their tokenised door records the LADDER rung `meeting_confirmed`
+ * (SuchakCollaborationService::recordCustomerStage) and deliberately does not
+ * touch `suchak_visit_confirmations`: giving the visit engine a second, tokenised
+ * confirmation path is a second confirmation engine, which section 12 forbids.
+ * Closing that gap properly means the visit row learning to name a portal link,
+ * and that is not this slice.
  */
 class MemberSuchakMeetingApiController extends Controller
 {
@@ -42,7 +52,7 @@ class MemberSuchakMeetingApiController extends Controller
         SuchakVisitConfirmation $visit,
         SuchakVisitConfirmationService $visitConfirmationService,
     ): JsonResponse {
-        $context = $this->viewerContext($request, $visit);
+        $context = $this->viewerContext($request, $visit, $visitConfirmationService);
         if ($context instanceof JsonResponse) {
             return $context;
         }
@@ -81,7 +91,7 @@ class MemberSuchakMeetingApiController extends Controller
         SuchakVisitConfirmation $visit,
         SuchakVisitConfirmationService $visitConfirmationService,
     ): JsonResponse {
-        $context = $this->viewerContext($request, $visit);
+        $context = $this->viewerContext($request, $visit, $visitConfirmationService);
         if ($context instanceof JsonResponse) {
             return $context;
         }
@@ -137,8 +147,21 @@ class MemberSuchakMeetingApiController extends Controller
         ];
     }
 
-    private function viewerContext(Request $request, SuchakVisitConfirmation $visit): User|JsonResponse
-    {
+    /**
+     * The customer side, resolved by the SERVICE — never re-derived here.
+     *
+     * This used to compare against `requesting_matrimony_profile_id`, which is a DIRECTION. On a
+     * marketplace meeting the Suchak answering a challenge becomes the requester (blueprint 5.2),
+     * so that column names the HELPER's candidate: the wrong family got the 200 and the fee-bearing
+     * family got a 404 on its own meeting. `customerSideMatrimonyProfileId()` is the one owner of
+     * "who is the customer on this meeting", and the service guard behind these two routes uses the
+     * same call — two copies of that question is how they drift apart again.
+     */
+    private function viewerContext(
+        Request $request,
+        SuchakVisitConfirmation $visit,
+        SuchakVisitConfirmationService $visitConfirmationService,
+    ): User|JsonResponse {
         $user = $request->user();
         if (! $user instanceof User) {
             return $this->error('Unauthenticated.', 401);
@@ -149,7 +172,7 @@ class MemberSuchakMeetingApiController extends Controller
             return $this->error(__('profile.suchak_request_not_found'), 404);
         }
 
-        if ((int) $visit->requesting_matrimony_profile_id !== (int) $viewerProfile->id) {
+        if ($visitConfirmationService->customerSideMatrimonyProfileId($visit) !== (int) $viewerProfile->id) {
             return $this->error(__('profile.suchak_request_not_found'), 404);
         }
 

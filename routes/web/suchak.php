@@ -9,6 +9,7 @@ use App\Http\Controllers\Suchak\ConsentController;
 use App\Http\Controllers\Suchak\CrmLedgerController;
 use App\Http\Controllers\Suchak\CrossSearchController;
 use App\Http\Controllers\Suchak\CustomerPortalController;
+use App\Http\Controllers\Suchak\CustomerStageDoorController;
 use App\Http\Controllers\Suchak\DashboardController;
 use App\Http\Controllers\Suchak\DirectPaymentComplaintController;
 use App\Http\Controllers\Suchak\ExportRetentionController;
@@ -81,6 +82,17 @@ Route::prefix('suchak')
             ->where('token', '[A-Za-z0-9]{64}')
             ->middleware('throttle:10,1')
             ->name('customer-portal.revoke');
+        // The CUSTOMER's door onto the marketplace stage ladder (blueprint 6a, D11, D23). Public and
+        // tokenised because the customer is the family and often has no login (section 2); it hangs
+        // off the customer portal link they already hold rather than minting a fifth token shape.
+        Route::get('/customer-portal/{token}/stages', [CustomerStageDoorController::class, 'index'])
+            ->where('token', '[A-Za-z0-9]{64}')
+            ->middleware('throttle:30,1')
+            ->name('customer-portal.stages.index');
+        Route::post('/customer-portal/{token}/stages/{collaboration}', [CustomerStageDoorController::class, 'record'])
+            ->where('token', '[A-Za-z0-9]{64}')
+            ->middleware('throttle:10,1')
+            ->name('customer-portal.stages.record');
         Route::get('/receipts/verify/{code}', [ReceiptVerificationController::class, 'show'])
             ->where('code', '[A-Za-z0-9]{32}')
             ->middleware('throttle:30,1')

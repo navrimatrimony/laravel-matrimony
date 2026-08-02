@@ -9,6 +9,7 @@ use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakCollaborationStageEvent;
 use App\Models\SuchakCommissionAgreement;
 use App\Models\SuchakCustomerAgreement;
+use App\Models\SuchakCustomerPortalLink;
 use App\Models\SuchakFeatureSuspension;
 use App\Models\SuchakMarketplaceChallenge;
 use App\Models\SuchakPaymentContext;
@@ -299,7 +300,27 @@ class SuchakCollaborationService
                  * Freezing the revision here is also what stops the HELPER from later calling
                  * linkCustomerAgreement() with an agreement of his own and appointing himself the
                  * customer-owning side: that method is write-once and this is the write.
+                 *
+                 * The role being a recorded fact still does not make the CANDIDATE one. The
+                 * challenge's agreement is resolved from `representation->customerContext`, a
+                 * hasOne on `representation_id` — which does not itself prove that context's
+                 * `candidate_matrimony_profile_id` is the representation's profile. Same check as
+                 * the direct path, for the same reason: a binding written wrong here is inherited
+                 * by the clause, the attribution and every tranche after it.
                  */
+                $challenge->loadMissing('customerAgreement');
+                $challengeAgreement = $challenge->customerAgreement;
+
+                if (! $challengeAgreement instanceof SuchakCustomerAgreement) {
+                    throw new InvalidArgumentException('या आव्हानाला ग्राहकाचा करार जोडलेला नाही.');
+                }
+
+                $this->assertCustomerCandidateSitsOnSide(
+                    $collaboration,
+                    $challengeAgreement,
+                    SuchakCollaborationRequest::SIDE_TARGET,
+                );
+
                 $this->bindCustomerAgreement(
                     $collaboration,
                     $agreement,
@@ -644,6 +665,13 @@ class SuchakCollaborationService
      * Name the customer-owning side of the engagement and freeze the customer agreement REVISION in
      * force (blueprint 6.1). The role is derived from whose agreement it is — it is never typed —
      * and the revision link is written once so a share stays claimable against the terms that applied.
+     *
+     * WHOSE AGREEMENT it is was the only question this asked, and it is not enough. An agreement
+     * belonging to this Suchak, on an engagement this Suchak is a party to, could still be about a
+     * completely different candidate — and every downstream fact reads the binding rather than
+     * re-deriving it, so the clause (D11), the share attribution (6.2) and the tranche release
+     * (D25) would all inherit the mismatch. assertCustomerCandidateSitsOnSide() closes it here too,
+     * against the side this call is about to write, so the door is never handed a bad row to catch.
      */
     public function linkCustomerAgreement(
         SuchakCollaborationRequest $collaboration,
@@ -680,6 +708,11 @@ class SuchakCollaborationService
             if ($linkedAgreementId !== null && $linkedAgreementId !== (int) $customerAgreement->id) {
                 throw new InvalidArgumentException('This engagement is already bound to another customer agreement revision.');
             }
+
+            // Under the row lock, against the side about to be written — the pair columns are
+            // immutable, but the check belongs beside the write so no future caller can reach
+            // bindCustomerAgreement() past it.
+            $this->assertCustomerCandidateSitsOnSide($locked, $customerAgreement, $ownerSide);
 
             $this->bindCustomerAgreement($locked, $agreement, (int) $customerAgreement->id, $ownerSide);
 
@@ -753,22 +786,7 @@ class SuchakCollaborationService
         $this->assertParticipantActor($collaboration, $account, $actor);
         $this->assertLadderStage($stageKey);
 
-        if (SuchakCollaborationStageEvent::isPreEngagementStage($stageKey)) {
-            throw new InvalidArgumentException(
-                'Marketplace stage "'.$stageKey.'" happens before any engagement exists; record it on the customer agreement.'
-            );
-        }
-
-        if (SuchakCollaborationStageEvent::requiresAcceptedEngagement($stageKey)) {
-            if ($collaboration->status !== SuchakCollaborationRequest::STATUS_ACCEPTED) {
-                throw new InvalidArgumentException(
-                    'Marketplace stage "'.$stageKey.'" can only be recorded on an accepted collaboration.'
-                );
-            }
-        } elseif (! $collaboration->isOpen()) {
-            throw new InvalidArgumentException('Marketplace stages can only be recorded on an open collaboration.');
-        }
-
+        $this->assertEngagementStateSupportsStage($collaboration, $stageKey);
         $this->assertStageClaimant($collaboration, $account, $stageKey);
 
         return DB::transaction(function () use ($collaboration, $account, $actor, $stageKey, $note): SuchakCollaborationStageEvent {
@@ -802,6 +820,343 @@ class SuchakCollaborationService
 
             return $event;
         });
+    }
+
+    /**
+     * THE CUSTOMER'S DOOR — the three rungs of blueprint 6a that the family alone can know:
+     * `viewed` (स्थळ पाहिले), `interested` (पसंती दर्शवली) and `meeting_confirmed` (भेटीला दुजोरा).
+     *
+     * Until this existed, STAGE_CLAIMANTS named the customer as the claimant of all three and
+     * assertStageClaimant() refused every Suchak, so ZERO rows could exist for any of them. D11
+     * attaches the 12-month anti-circumvention clause at `viewed`, and its anchor —
+     * `suchak_collaboration_stage_events.claimed_at` — was declared, indexed and unwritable. M4's
+     * "no fee falls due without the customer's confirmation" had the same problem from the other
+     * end: both member-side doors require `$request->user()`, and section 2 says the customer is the
+     * FAMILY and often has no login.
+     *
+     * ── WHY THE CUSTOMER PORTAL LINK, AND NOT A FIFTH TOKEN ──────────────────────────────────
+     *
+     * Four tokenised customer links already exist, all Str::random(64) with only the sha256 stored.
+     * Three of them cannot carry this: the agreement-acceptance token and the consent token are
+     * SINGLE USE and die on the first decision, and a payment-request token is one money artifact.
+     * These three rungs are three separate acts spread over weeks — a link that closes after one
+     * use cannot hold them.
+     *
+     * `suchak_customer_portal_links` is the only one that survives more than one visit
+     * (`opened_at`), records WHO in the family is holding it (`claimed_name`,
+     * `claimed_relationship_to_candidate`), can be revoked, and already carries its own append-only
+     * timeline. It is issued in production today alongside every payment request
+     * (SuchakPaymentRequestService::createAndSend), so it is the family's EXISTING durable identity
+     * with this Suchak. Binding to it rather than minting a parallel token is the no-duplicate rule
+     * applied to a token shape.
+     *
+     * ── WHAT THIS RECORDS, AND WHAT IT DOES NOT PROVE (D23, section 8) ───────────────────────
+     *
+     * Recorded: that somebody holding this link recorded this rung, at this time, from this IP and
+     * user agent (the last two on `suchak_activity_logs`, which already owns them), plus whatever
+     * name and relationship that person typed when they claimed the link.
+     *
+     * NOT recorded, and deliberately not implied: that the person was the candidate, the payer, or
+     * any particular family member. OTP does not exist on production (section 10 S4), so no
+     * `mobile_match`, no `*_verified`, no acceptance tier is written here. Section 8 names
+     * `recordPublicConsentDecision()` writing `mobile_match => true` unchecked as the one fiction
+     * already in this codebase; it is not repeated.
+     *
+     * The link is NOT re-authorised here — the caller opens it through
+     * SuchakCustomerPortalService::openPortalLink(), which owns "is this token live" (revoked,
+     * expired, Suchak able to operate) and writes the open event. What is checked here is the only
+     * question that service cannot answer: whether this link governs THIS engagement.
+     */
+    public function recordCustomerStage(
+        SuchakCollaborationRequest $collaboration,
+        SuchakCustomerPortalLink $portalLink,
+        string $stageKey,
+        ?string $note = null,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+        bool $priorAcquaintance = false,
+    ): SuchakCollaborationStageEvent {
+        $collaboration->refresh()->loadMissing('commissionAgreement.customerAgreement');
+        $portalLink->refresh();
+        $this->assertLadderStage($stageKey);
+
+        if (! SuchakCollaborationStageEvent::isCustomerClaimedStage($stageKey)) {
+            throw new InvalidArgumentException(
+                '"'.SuchakCollaborationStageEvent::stageLabel($stageKey).'" हा टप्पा सूचक नोंदवतो, ग्राहक नाही.'
+            );
+        }
+
+        // 9a A6, refused before the lock rather than inside it: "we already know them" releases the
+        // 12-month clause, so it only means anything on the rung that creates it. The model repeats
+        // this on `saving` because it is an invariant of the row, not of this path.
+        if ($priorAcquaintance && $stageKey !== SuchakCollaborationStageEvent::CLAUSE_ANCHOR_STAGE) {
+            throw new InvalidArgumentException(
+                '"आम्ही या कुटुंबाला आधीपासून ओळखतो" ही नोंद फक्त "'
+                .SuchakCollaborationStageEvent::stageLabel(SuchakCollaborationStageEvent::CLAUSE_ANCHOR_STAGE)
+                .'" या टप्प्यावर करता येते.'
+            );
+        }
+
+        $this->assertEngagementStateSupportsStage($collaboration, $stageKey);
+        $customerAgreement = $this->assertPortalLinkGovernsEngagement($collaboration, $portalLink);
+        $this->assertCustomerTermsSupportStage($customerAgreement, $stageKey);
+
+        $event = DB::transaction(function () use ($collaboration, $portalLink, $stageKey, $note, $priorAcquaintance): SuchakCollaborationStageEvent {
+            /** @var SuchakCollaborationRequest $locked */
+            $locked = SuchakCollaborationRequest::query()
+                ->whereKey($collaboration->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $existing = SuchakCollaborationStageEvent::query()
+                ->where('collaboration_request_id', $locked->id)
+                ->where('stage_key', $stageKey)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing !== null) {
+                throw new InvalidArgumentException(
+                    '"'.SuchakCollaborationStageEvent::stageLabel($stageKey).'" ही नोंद आधीच झाली आहे.'
+                );
+            }
+
+            $written = $this->writeStageEvent(
+                [SuchakCollaborationStageEvent::OWNER_COLUMN_COLLABORATION_REQUEST => $locked->id],
+                null,
+                null,
+                $stageKey,
+                $note,
+                $portalLink,
+                $priorAcquaintance,
+            );
+
+            // None of the three is confirmable (CONFIRMABLE_STAGES are the terminal rungs), so the
+            // customer's act settles the rung and moves the ladder on its own.
+            $this->advanceMarketplaceStage($locked, $stageKey);
+
+            return $written;
+        });
+
+        $this->recordCustomerStageActivity($collaboration, $portalLink, $event, $ipAddress, $userAgent);
+
+        return $event;
+    }
+
+    /**
+     * The engagements a customer portal link may record a rung against, newest first.
+     *
+     * The join is the only one that exists and it is deliberately narrow: the link names a customer
+     * context; a customer agreement revision names the same context; the engagement's commission
+     * agreement names that agreement revision (blueprint 6.1 — the engagement IS
+     * SuchakCollaborationRequest + SuchakCommissionAgreement). A proposal nobody linked to a
+     * customer agreement is invisible here, which is correct — without that link there is no
+     * recorded fact saying whose customer this is, and A2's forged-obligation attack is exactly
+     * someone asserting that link informally.
+     *
+     * @return Collection<int, SuchakCollaborationRequest>
+     */
+    public function customerEngagementsForPortalLink(SuchakCustomerPortalLink $portalLink): Collection
+    {
+        if ($portalLink->customer_context_id === null) {
+            return collect();
+        }
+
+        return SuchakCollaborationRequest::query()
+            ->whereIn('status', SuchakCollaborationRequest::OPEN_STATUSES)
+            ->whereHas(
+                'commissionAgreement.customerAgreement',
+                fn (Builder $query) => $query
+                    ->where('customer_context_id', $portalLink->customer_context_id)
+                    ->where('suchak_account_id', $portalLink->suchak_account_id),
+            )
+            ->with([
+                'commissionAgreement.customerAgreement',
+                'requestingMatrimonyProfile',
+                'targetMatrimonyProfile',
+                'stageEvents',
+            ])
+            ->orderByDesc('id')
+            ->get()
+            ->filter(fn (SuchakCollaborationRequest $collaboration): bool => $collaboration->isCustomerOwner(
+                (int) $portalLink->suchak_account_id,
+            ))
+            ->values();
+    }
+
+    /**
+     * Where the engagement must stand for a rung to be recordable at all — the same gate for the
+     * Suchak path and the customer path, because it is a fact about the ENGAGEMENT and not about
+     * who is asking.
+     *
+     * The acceptance line is a POSITION on STAGE_LADDER, never a second hand-written list. Section
+     * 6a runs `profile_suggested` -> `viewed` -> `interested` BEFORE acceptance, and a marketplace
+     * proposal is created `pending`; requiring acceptance for those made D11's clause — which binds
+     * at `viewed` — unrecordable at the exact moment it is supposed to bind.
+     */
+    private function assertEngagementStateSupportsStage(
+        SuchakCollaborationRequest $collaboration,
+        string $stageKey,
+    ): void {
+        if (SuchakCollaborationStageEvent::isPreEngagementStage($stageKey)) {
+            throw new InvalidArgumentException(
+                'Marketplace stage "'.$stageKey.'" happens before any engagement exists; record it on the customer agreement.'
+            );
+        }
+
+        if (SuchakCollaborationStageEvent::requiresAcceptedEngagement($stageKey)) {
+            if ($collaboration->status !== SuchakCollaborationRequest::STATUS_ACCEPTED) {
+                throw new InvalidArgumentException(
+                    'Marketplace stage "'.$stageKey.'" can only be recorded on an accepted collaboration.'
+                );
+            }
+
+            return;
+        }
+
+        if (! $collaboration->isOpen()) {
+            throw new InvalidArgumentException('Marketplace stages can only be recorded on an open collaboration.');
+        }
+    }
+
+    /**
+     * Does THIS link belong to the family this engagement is about?
+     *
+     * THREE conditions, and all three are needed. The link must have been issued by the Suchak the
+     * engagement records as the CUSTOMER-OWNING side (role, never direction — in the marketplace the
+     * responder is the requester); the customer agreement revision in force on the engagement must
+     * name the same customer context the link names; and that context's OWN candidate must be the
+     * profile sitting on the customer-owning side of this engagement. Without the first, a helper
+     * could hand his own customer a link and record the other family's rungs. Without the second,
+     * one Suchak's link would reach every engagement he has, including other families'.
+     *
+     * Without the THIRD, a Suchak could bind his own agreement to an engagement about two people
+     * neither of whom is his customer's candidate, hand the family their existing portal link, and
+     * their `viewed` tap would attach D11's twelve-month success fee to a stranger — the clause
+     * working against the family it exists to protect, on the largest sum in the system. Ownership
+     * and context both passed in that attack; only presence on the pair refuses it.
+     *
+     * Returns the agreement revision so the caller can apply the terms gate to it — no meeting,
+     * tranche or share exists under terms nobody accepted.
+     */
+    private function assertPortalLinkGovernsEngagement(
+        SuchakCollaborationRequest $collaboration,
+        SuchakCustomerPortalLink $portalLink,
+    ): SuchakCustomerAgreement {
+        $collaboration->loadMissing('commissionAgreement.customerAgreement');
+        $customerAgreement = $collaboration->commissionAgreement?->customerAgreement;
+
+        if (! $customerAgreement instanceof SuchakCustomerAgreement) {
+            throw new InvalidArgumentException(
+                'या सहकार्यात ग्राहकाचा करार अजून जोडलेला नाही, त्यामुळे ही नोंद करता येणार नाही.'
+            );
+        }
+
+        if (! $collaboration->isCustomerOwner((int) $portalLink->suchak_account_id)) {
+            throw new InvalidArgumentException('ही लिंक या स्थळाच्या नोंदीसाठी वैध नाही.');
+        }
+
+        if ($portalLink->customer_context_id === null
+            || (int) $customerAgreement->customer_context_id !== (int) $portalLink->customer_context_id) {
+            throw new InvalidArgumentException('ही लिंक या स्थळाच्या नोंदीसाठी वैध नाही.');
+        }
+
+        // Read from the ENGAGEMENT's stored role label, not from the link — the link has already
+        // been proved to name the same context, and re-deriving the side from the account id here
+        // would answer the question with the very thing under test.
+        $this->assertCustomerCandidateSitsOnSide(
+            $collaboration,
+            $customerAgreement,
+            (string) $collaboration->customer_owner_side,
+        );
+
+        return $customerAgreement;
+    }
+
+    /**
+     * THE THIRD QUESTION, asked at both ends: is the customer's own candidate actually the profile
+     * on the side of this engagement that owns them?
+     *
+     * The identity chain, and every hop is a recorded fact rather than a position:
+     *
+     *   customer agreement revision → `customer_context_id`
+     *     → customer context      → `candidate_matrimony_profile_id`   (the family's own candidate)
+     *   engagement                 → `customer_owner_side`             (which slot holds them)
+     *     → that slot's            → `*_matrimony_profile_id`          (the profile there)
+     *
+     * The two must be the same person. Nothing here infers "the other family" positionally —
+     * SuchakTwelveMonthClauseService::proposedCandidate() used to, and that is precisely how a
+     * candidate on neither side resolved to the requesting profile and got a clause bound to them.
+     *
+     * A context with no candidate is refused rather than waved through: "this customer has no
+     * candidate on file" cannot establish that they are on this pair, and a clause may not bind on
+     * an unanswered question.
+     */
+    private function assertCustomerCandidateSitsOnSide(
+        SuchakCollaborationRequest $collaboration,
+        SuchakCustomerAgreement $customerAgreement,
+        string $ownerSide,
+    ): void {
+        $customerAgreement->loadMissing('customerContext');
+        $ownCandidateId = $customerAgreement->customerContext?->candidate_matrimony_profile_id;
+
+        if ($ownCandidateId === null) {
+            throw new InvalidArgumentException(
+                'या ग्राहकाचे स्थळ अजून नोंदवलेले नाही, त्यामुळे ही नोंद करता येणार नाही.'
+            );
+        }
+
+        if ($collaboration->matrimonyProfileIdForSide($ownerSide) !== (int) $ownCandidateId) {
+            throw new InvalidArgumentException(
+                'या नोंदीत तुमच्या कुटुंबाचे स्थळ नाही, त्यामुळे ही नोंद करता येणार नाही.'
+            );
+        }
+    }
+
+    /**
+     * The IP, the user agent and the link the family acted through — recorded on
+     * `suchak_activity_logs`, which already owns those two columns for every Suchak-domain act.
+     * They are NOT copied onto the stage event: one fact, one home.
+     *
+     * `actor_type = user` with `actor_user_id = NULL` is the honest shape. A family with no login
+     * has no user id, and inventing one — or filing the act under the Suchak — would be the exact
+     * forgery this door exists to avoid.
+     */
+    private function recordCustomerStageActivity(
+        SuchakCollaborationRequest $collaboration,
+        SuchakCustomerPortalLink $portalLink,
+        SuchakCollaborationStageEvent $event,
+        ?string $ipAddress,
+        ?string $userAgent,
+    ): void {
+        $this->activityLogger->record([
+            'suchak_account_id' => $portalLink->suchak_account_id,
+            'actor_user_id' => null,
+            'actor_type' => SuchakActivityLog::ACTOR_USER,
+            'action_type' => SuchakActivityLog::ACTION_COLLABORATION_STAGE_CUSTOMER_RECORDED,
+            'target_type' => 'suchak_collaboration_stage_event',
+            'target_id' => $event->id,
+            'matrimony_profile_id' => $collaboration->target_matrimony_profile_id,
+            'ip_address' => $ipAddress,
+            'user_agent' => $userAgent === null ? null : Str::limit($userAgent, 512, ''),
+            'metadata_json' => [
+                'context' => 'collaboration_stage_customer_recorded',
+                'stage_key' => $event->stage_key,
+                // 9a A6. On the `viewed` rung this is the difference between a live 12-month clause
+                // and no clause at all, so the act that set it belongs in the trail, not only in the
+                // row it set.
+                'prior_acquaintance_declared' => (bool) $event->prior_acquaintance_declared,
+                'collaboration_request_id' => $collaboration->id,
+                'customer_portal_link_id' => $portalLink->id,
+                'customer_context_id' => $portalLink->customer_context_id,
+                'portal_status' => $portalLink->portal_status,
+                'portal_claimed_name' => $portalLink->claimed_name,
+                'portal_claimed_relationship_to_candidate' => $portalLink->claimed_relationship_to_candidate,
+                // Stated in the record itself so nobody reading it later mistakes a link for a
+                // verified identity. OTP is Phase 6 (D23); until it lands this is what we have.
+                'identity_verified' => false,
+                'verification_channel' => 'none',
+            ],
+        ]);
     }
 
     /**
@@ -1259,24 +1614,44 @@ class SuchakCollaborationService
     }
 
     /**
-     * The single writer of a stage-event row. Both claim paths come through here so the owner
-     * column is the only thing that differs between them — the actor, the timestamp and the note
-     * are recorded identically, and the model's exactly-one-owner guard is exercised on both.
+     * The single writer of a stage-event row. All THREE claim paths come through here so the owner
+     * column and the claim channel are the only things that differ between them — the stage, the
+     * timestamp and the note are recorded identically, and the model's exactly-one-owner and
+     * claim-channel guards are exercised on every one of them.
+     *
+     * A CUSTOMER claim (blueprint 6a's `viewed` / `interested` / `meeting_confirmed`) passes a
+     * portal link and NO account and NO user: the customer is the family and usually has no login
+     * at all (section 2). That is why `$account` and `$actor` are nullable here rather than a second
+     * writer existing — a second writer is a second place for the actor rules to drift.
+     *
+     * `claimed_at` is D11's anchor: the 12-month anti-circumvention clause runs from the `viewed`
+     * row's timestamp, so this is the one moment that value is set for that rung.
+     *
+     * `$priorAcquaintance` is 9a A6's release of that same clause, written in the SAME insert as the
+     * binding it releases. It is a parameter here rather than a later update on purpose: A6 says
+     * "at view time", and a release that could be applied afterwards would be a way to un-owe a
+     * success fee once the marriage was already in sight.
      *
      * @param  array<string, int>  $owner  exactly one SuchakCollaborationStageEvent::OWNER_COLUMNS entry
      */
     private function writeStageEvent(
         array $owner,
-        SuchakAccount $account,
-        User $actor,
+        ?SuchakAccount $account,
+        ?User $actor,
         string $stageKey,
         ?string $note,
+        ?SuchakCustomerPortalLink $portalLink = null,
+        bool $priorAcquaintance = false,
     ): SuchakCollaborationStageEvent {
         $event = SuchakCollaborationStageEvent::query()->create(array_merge($owner, [
             'stage_key' => $stageKey,
-            'claimed_by_actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
-            'claimed_by_suchak_account_id' => $account->id,
-            'claimed_by_user_id' => $actor->id,
+            'claimed_by_actor_type' => $portalLink instanceof SuchakCustomerPortalLink
+                ? SuchakActivityLog::ACTOR_USER
+                : SuchakActivityLog::ACTOR_SUCHAK,
+            'claimed_by_suchak_account_id' => $account?->id,
+            'claimed_by_user_id' => $actor?->id,
+            'claimed_via_customer_portal_link_id' => $portalLink?->id,
+            'prior_acquaintance_declared' => $priorAcquaintance,
             'claimed_at' => now(),
             'event_note' => $this->nullableLimitedString($note, 2000),
         ]));
@@ -1312,10 +1687,10 @@ class SuchakCollaborationService
      * Read STAGE_CLAIMANTS for the derivation. Three things are enforced here, in this order:
      *
      *  1. A rung the FAMILY owns (`viewed`, `interested`, `meeting_confirmed`) is refused to every
-     *     Suchak. The customer has no door yet — D23 defers OTP and §10 S4 records that the
-     *     delivery channel does not exist — and inventing one on the Suchak's side would not record
-     *     the customer's act, it would fake it. D11's clause binds at `viewed`, so that rung is
-     *     genuinely unrecordable today; saying so is the honest answer.
+     *     Suchak — still, and permanently. Letting a Suchak record it would not capture the
+     *     customer's act, it would fake it (9a A2/A3). The rung is no longer unrecordable, though:
+     *     recordCustomerStage() writes it from the family's own portal link, which is where D11's
+     *     12-month clause finally gets its anchor timestamp.
      *  2. A role-scoped rung needs the role to be a RECORDED FACT. `customer_owner_side` DEFAULTS to
      *     `target`, so on an unlinked engagement "helper" is a column default, not a finding —
      *     hanging A7's money rule off a default is the same forgery one step removed. The proof the
@@ -1336,8 +1711,8 @@ class SuchakCollaborationService
 
         if ($claimant === SuchakCollaborationStageEvent::CLAIMANT_CUSTOMER) {
             throw new InvalidArgumentException(
-                '"'.$label.'" हा टप्पा ग्राहक स्वतः नोंदवतो, सूचक नाही. ग्राहकासाठी स्वतंत्र प्रवेश अजून उपलब्ध नाही, '
-                .'त्यामुळे हा टप्पा सध्या नोंदवता येत नाही.'
+                '"'.$label.'" हा टप्पा ग्राहक स्वतः नोंदवतो, सूचक नाही. ग्राहकाला पाठवलेल्या पोर्टल लिंकवरून '
+                .'ही नोंद होते.'
             );
         }
 

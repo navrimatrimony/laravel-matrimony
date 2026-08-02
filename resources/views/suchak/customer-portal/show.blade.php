@@ -54,6 +54,20 @@
                 <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">{{ optional($portalLink->expires_at)->format('d M Y, h:i A') ?? 'No expiry set' }}</div>
             </div>
         </div>
+
+        {{--
+            The way in to the customer's own stage door (blueprint 6a). This page is the only thing
+            the family is ever sent, so without this line the door would exist and be unreachable —
+            which is the defect the door was built to fix in the first place.
+        --}}
+        <div class="mt-5 border-t border-gray-200 pt-4 dark:border-gray-700">
+            <a
+                class="text-sm font-semibold text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400"
+                href="{{ route('suchak.customer-portal.stages.index', ['token' => $token]) }}"
+            >
+                तुमच्यासाठी सुचवलेली स्थळे आणि तुमची नोंद
+            </a>
+        </div>
     </section>
 
     <section class="mb-6 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">

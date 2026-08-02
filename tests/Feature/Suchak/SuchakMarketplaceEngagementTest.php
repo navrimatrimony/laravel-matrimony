@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\Suchak;
 
+use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakCollaborationStageEvent;
 use App\Models\SuchakCommissionAgreement;
 use App\Models\SuchakCustomerAgreement;
+use App\Models\SuchakCustomerContext;
 use App\Models\SuchakServicePackage;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakCollaborationService;
@@ -100,7 +102,11 @@ class SuchakMarketplaceEngagementTest extends TestCase
         // Legacy default: the target side collects, so the target side owns the customer.
         $this->assertSame(SuchakCollaborationRequest::SIDE_TARGET, $collaboration->fresh()->customer_owner_side);
 
-        $agreement = $this->customerAgreement($ownerAccount, $ownerUser, revision: 1);
+        // The owner is the REQUESTING side of this pair, so his customer's candidate is the
+        // requesting profile — the identity linkCustomerAgreement() proves before it writes the role.
+        $ownCandidateId = (int) $collaboration->requesting_matrimony_profile_id;
+
+        $agreement = $this->customerAgreement($ownerAccount, $ownerUser, revision: 1, candidateProfileId: $ownCandidateId);
         $service = $this->service();
 
         $linked = $service->linkCustomerAgreement($collaboration, $ownerAccount, $ownerUser, $agreement);
@@ -119,7 +125,9 @@ class SuchakMarketplaceEngagementTest extends TestCase
         $this->assertSame(1, (int) $commission->customerAgreement->agreement_revision);
 
         // A later revision is a different row; the engagement stays bound to the one in force.
-        $laterRevision = $this->customerAgreement($ownerAccount, $ownerUser, revision: 2);
+        // Same customer, same candidate — so the refusal below is the write-once revision rule and
+        // not the candidate rule standing in for it.
+        $laterRevision = $this->customerAgreement($ownerAccount, $ownerUser, revision: 2, candidateProfileId: $ownCandidateId);
         $this->expectException(InvalidArgumentException::class);
         $service->linkCustomerAgreement($linked, $ownerAccount, $ownerUser, $laterRevision);
     }
@@ -127,7 +135,12 @@ class SuchakMarketplaceEngagementTest extends TestCase
     public function test_the_helping_suchak_cannot_bind_the_owner_customer_agreement(): void
     {
         [$ownerUser, $ownerAccount, $helperUser, $helperAccount, $collaboration] = $this->acceptedEngagement();
-        $agreement = $this->customerAgreement($ownerAccount, $ownerUser, revision: 1);
+        $agreement = $this->customerAgreement(
+            $ownerAccount,
+            $ownerUser,
+            revision: 1,
+            candidateProfileId: (int) $collaboration->requesting_matrimony_profile_id,
+        );
 
         $this->expectException(InvalidArgumentException::class);
         $this->service()->linkCustomerAgreement($collaboration, $helperAccount, $helperUser, $agreement);
@@ -306,7 +319,15 @@ class SuchakMarketplaceEngagementTest extends TestCase
         SuchakAccount $ownerAccount,
         User $ownerUser,
     ): SuchakCustomerAgreement {
-        $agreement = $this->customerAgreement($ownerAccount, $ownerUser, revision: 1);
+        $ownerSide = $collaboration->sideForAccount((int) $ownerAccount->id);
+        $this->assertNotNull($ownerSide, 'The owner account must be a party to this engagement.');
+
+        $agreement = $this->customerAgreement(
+            $ownerAccount,
+            $ownerUser,
+            revision: 1,
+            candidateProfileId: $collaboration->matrimonyProfileIdForSide((string) $ownerSide),
+        );
         $this->service()->linkCustomerAgreement($collaboration, $ownerAccount, $ownerUser, $agreement);
 
         return $agreement;
@@ -330,8 +351,19 @@ class SuchakMarketplaceEngagementTest extends TestCase
         return [$user, $account];
     }
 
-    private function customerAgreement(SuchakAccount $account, User $user, int $revision): SuchakCustomerAgreement
-    {
+    /**
+     * Every agreement names a customer context, because an agreement that names no customer cannot
+     * establish whose candidate an engagement is about — linkCustomerAgreement() now refuses one.
+     * `$candidateProfileId` is the profile on the OWNER'S side of the engagement it will be bound
+     * to; two revisions of the same customer's terms share it, which is what keeps the write-once
+     * revision rule the thing under test below rather than the candidate rule.
+     */
+    private function customerAgreement(
+        SuchakAccount $account,
+        User $user,
+        int $revision,
+        ?int $candidateProfileId = null,
+    ): SuchakCustomerAgreement {
         $package = SuchakServicePackage::query()->create([
             'suchak_account_id' => $account->id,
             'package_name' => 'Marketplace engagement fixture '.$revision,
@@ -344,8 +376,20 @@ class SuchakMarketplaceEngagementTest extends TestCase
             'published_at' => now(),
         ]);
 
+        $customerContext = SuchakCustomerContext::query()->create([
+            'suchak_account_id' => $account->id,
+            'candidate_matrimony_profile_id' => $candidateProfileId ?? MatrimonyProfile::factory()->create()->id,
+            'service_context' => SuchakCustomerContext::SERVICE_PROFILE_REPRESENTATION,
+            'source_owner' => SuchakCustomerContext::SOURCE_OWNER_SUCHAK,
+            'source_type' => SuchakCustomerContext::SOURCE_TYPE_MANUAL,
+            'customer_lifecycle_status' => SuchakCustomerContext::STATUS_ACTIVE_SERVICE,
+            'created_by_user_id' => $user->id,
+            'opened_at' => now(),
+        ]);
+
         return SuchakCustomerAgreement::query()->create([
             'suchak_account_id' => $account->id,
+            'customer_context_id' => $customerContext->id,
             'service_package_id' => $package->id,
             'agreement_revision' => $revision,
             'terms_status' => 'accepted',

@@ -149,6 +149,19 @@ class SuchakCollaborationStageEvent extends Model
     public const FIRST_STAGE_REQUIRING_ACCEPTED_ENGAGEMENT = self::STAGE_MEETING_SCHEDULED;
 
     /**
+     * The rung the 12-month anti-circumvention clause binds at — D11, in one constant:
+     *
+     *   "The 12-month anti-circumvention clause binds from **Viewed**, never from merely Suggested"
+     *
+     * Declared here, on the ladder, because the ladder is what D11 names, and read from here by
+     * SuchakTwelveMonthClauseService — which owns the rest of the clause (its length, its releases
+     * and the question "is a share owed"). This constant is only WHERE it attaches, and the anchor
+     * timestamp is this row's `claimed_at`. Nothing else in the codebase may hard-code `viewed` for
+     * that purpose: move this and the clause moves with it.
+     */
+    public const CLAUSE_ANCHOR_STAGE = self::STAGE_VIEWED;
+
+    /**
      * WHO may write each rung (blueprint 6a names an actor per stage; A7 makes one of them a money
      * rule). Four values, and each of them is a role the engagement can already name — no new
      * column, no second copy of an account id:
@@ -157,9 +170,12 @@ class SuchakCollaborationStageEvent extends Model
      *                    (SuchakCollaborationRequest::customerOwnerSuchakAccountId()).
      *  - HELPER          the other side (…::helpingSuchakAccountId()).
      *  - EITHER_SUCHAK   D26: either Suchak may raise the claim; the customer then confirms.
-     *  - CUSTOMER        the family itself. There is no customer door yet (D23 defers OTP, §10 S4),
-     *                    so these rungs are refused to everyone rather than handed to a Suchak.
-     *                    An honest gap beats a forged record.
+     *  - CUSTOMER        the family itself, acting over the customer portal link they were sent
+     *                    (SuchakCustomerPortalLink). Still refused to EVERY Suchak — a Suchak
+     *                    writing "the family looked at this" is the forgery 9a A2/A3 exist to stop.
+     *                    What the link proves is bounded and stated in assertClaimChannel(): a
+     *                    holder of that link acted at that time. Not who they were — OTP does not
+     *                    exist yet (D23, §10 S4).
      */
     public const CLAIMANT_CUSTOMER_OWNER = 'customer_owner_suchak';
     public const CLAIMANT_HELPER = 'helping_suchak';
@@ -258,10 +274,16 @@ class SuchakCollaborationStageEvent extends Model
     /**
      * Actor vocabulary is the Suchak domain's existing one — bound, not re-declared.
      *
+     * ACTOR_USER is the CUSTOMER's own claim, arriving over a customer portal link with no login
+     * behind it (blueprint section 2 — the customer is the family and `users.mobile` is null
+     * whenever the number on file is a household number). It is the only actor type that leaves
+     * both `claimed_by_suchak_account_id` and `claimed_by_user_id` null.
+     *
      * @var list<string>
      */
     public const CLAIM_ACTOR_TYPES = [
         SuchakActivityLog::ACTOR_SUCHAK,
+        SuchakActivityLog::ACTOR_USER,
         SuchakActivityLog::ACTOR_ADMIN,
         SuchakActivityLog::ACTOR_SYSTEM,
     ];
@@ -281,6 +303,8 @@ class SuchakCollaborationStageEvent extends Model
         'claimed_by_actor_type',
         'claimed_by_suchak_account_id',
         'claimed_by_user_id',
+        'claimed_via_customer_portal_link_id',
+        'prior_acquaintance_declared',
         'claimed_at',
         'confirmed_by_actor_type',
         'confirmed_by_user_id',
@@ -291,6 +315,7 @@ class SuchakCollaborationStageEvent extends Model
     protected $casts = [
         'claimed_at' => 'datetime',
         'confirmed_at' => 'datetime',
+        'prior_acquaintance_declared' => 'boolean',
     ];
 
     /**
@@ -302,6 +327,8 @@ class SuchakCollaborationStageEvent extends Model
     {
         static::saving(function (self $event): void {
             $event->assertOwnership();
+            $event->assertClaimChannel();
+            $event->assertPriorAcquaintanceRelease();
         });
     }
 
@@ -384,13 +411,28 @@ class SuchakCollaborationStageEvent extends Model
     }
 
     /**
-     * True for the rungs the FAMILY alone can know. Nobody can record these today: the customer has
-     * no door of their own (D23/S4), and handing them to a Suchak is precisely the forgery A7 and
-     * §7.2 exist to prevent.
+     * True for the rungs the FAMILY alone can know. Still refused to every Suchak — handing them to
+     * one is precisely the forgery A7 and §7.2 exist to prevent. They are recorded by the customer
+     * themselves, over the portal link they were sent, through
+     * SuchakCollaborationService::recordCustomerStage().
      */
     public static function isCustomerClaimedStage(string $stageKey): bool
     {
         return self::claimantFor($stageKey) === self::CLAIMANT_CUSTOMER;
+    }
+
+    /**
+     * The rungs the customer's own door may record, in ladder order — DERIVED from STAGE_CLAIMANTS,
+     * never a second hand-written list. Re-assigning a rung's actor moves this set with it.
+     *
+     * @return list<string>
+     */
+    public static function customerClaimedStages(): array
+    {
+        return array_values(array_filter(
+            self::STAGE_LADDER,
+            static fn (string $stageKey): bool => self::isCustomerClaimedStage($stageKey),
+        ));
     }
 
     /**
@@ -453,6 +495,88 @@ class SuchakCollaborationStageEvent extends Model
         }
     }
 
+    /**
+     * A rung must be claimed through the channel its ACTOR actually has, and through no other.
+     *
+     * Runs after assertOwnership() on purpose: "this row belongs to nothing" is the more basic
+     * complaint and must be the one a writer hears first.
+     *
+     * Two directions, and both matter:
+     *
+     *  - A CUSTOMER rung (`viewed`, `interested`, `meeting_confirmed`) must name the portal link the
+     *    family acted through and must NOT name a claiming Suchak. Without the first half a customer
+     *    rung would carry no claimer at all — `claimed_by_suchak_account_id` and `claimed_by_user_id`
+     *    are both null for a family with no login (section 2) — and a row written by nobody is not
+     *    evidence in a dispute a year later. Without the second half a Suchak could write the
+     *    family's own rung and stamp a link onto it.
+     *  - A SUCHAK rung must not name a portal link. A customer link cannot make a claim that is the
+     *    Suchak's to make; allowing it would let the strongest-looking channel be attached to the
+     *    weakest-evidenced act.
+     *
+     * WHAT A NAMED LINK IS WORTH, stated here because this is the guard everything else trusts:
+     * that somebody holding that link acted, at that time. Nothing more. OTP does not exist on
+     * production (D23, §10 S4), so it is NOT proof of WHO acted, and no `*_match` / `*_verified`
+     * flag is set anywhere on this path.
+     */
+    public function assertClaimChannel(): void
+    {
+        $stageKey = (string) $this->stage_key;
+        $isCustomerRung = self::isCustomerClaimedStage($stageKey);
+        $label = self::stageLabel($stageKey);
+
+        if ($isCustomerRung) {
+            if ($this->claimed_via_customer_portal_link_id === null) {
+                throw new InvalidArgumentException(
+                    'Marketplace stage "'.$label.'" is the customer\'s own; it must name the customer portal link it was recorded through.'
+                );
+            }
+
+            if ($this->claimed_by_suchak_account_id !== null) {
+                throw new InvalidArgumentException(
+                    'Marketplace stage "'.$label.'" is the customer\'s own; no Suchak may be recorded as its claimer.'
+                );
+            }
+
+            return;
+        }
+
+        if ($this->claimed_via_customer_portal_link_id !== null) {
+            throw new InvalidArgumentException(
+                'Marketplace stage "'.$label.'" is not the customer\'s to record, so it may not be claimed through a customer portal link.'
+            );
+        }
+    }
+
+    /**
+     * 9a A6 — "we already know them" is a release of the 12-month clause, so it may only sit on the
+     * rung that CREATES that clause (CLAUSE_ANCHOR_STAGE, D11's `viewed`).
+     *
+     * On any other rung the flag would be a release with nothing to release: `interested` and
+     * `meeting_confirmed` create no binding, and no rule reads the value there. A column that can
+     * hold a meaningless value eventually holds one, and the first person to find it will read it
+     * as "this family knew them" on a rung where nobody asked.
+     *
+     * WHO may set it is not restated here and deliberately so: `viewed` is a CUSTOMER rung
+     * (STAGE_CLAIMANTS), so assertClaimChannel() has already refused every Suchak on this row
+     * before this method runs. The release inherits that guard instead of copying it — a Suchak who
+     * could tick this box would be deleting his own obligation, and one who could untick it would
+     * be manufacturing one.
+     */
+    public function assertPriorAcquaintanceRelease(): void
+    {
+        if (! (bool) $this->prior_acquaintance_declared) {
+            return;
+        }
+
+        $stageKey = (string) $this->stage_key;
+        if ($stageKey !== self::CLAUSE_ANCHOR_STAGE) {
+            throw new InvalidArgumentException(
+                '"आम्ही या कुटुंबाला आधीपासून ओळखतो" ही नोंद फक्त "'
+                .self::stageLabel(self::CLAUSE_ANCHOR_STAGE).'" या टप्प्यावर करता येते.'
+            );
+        }
+    }
+
     public static function requiresConfirmation(string $stageKey): bool
     {
         return in_array($stageKey, self::CONFIRMABLE_STAGES, true);
@@ -510,6 +634,16 @@ class SuchakCollaborationStageEvent extends Model
     public function claimedByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'claimed_by_user_id');
+    }
+
+    /**
+     * The customer portal link a family-owned rung was recorded through, or null on every rung a
+     * Suchak claimed. The link — not this row — carries who in the family claimed it
+     * (`claimed_name`, `claimed_relationship_to_candidate`) and its own append-only timeline.
+     */
+    public function claimedViaCustomerPortalLink(): BelongsTo
+    {
+        return $this->belongsTo(SuchakCustomerPortalLink::class, 'claimed_via_customer_portal_link_id');
     }
 
     public function confirmedByUser(): BelongsTo

@@ -175,6 +175,50 @@ class SuchakCollaborationRequest extends Model
         return $this->customerOwnerSuchakAccountId() === $suchakAccountId;
     }
 
+    /**
+     * The candidate profile sitting in one DIRECTIONAL slot.
+     *
+     * The one place a side label is turned into a profile column. Both role accessors below read
+     * it, and so does the link-time gate that must answer "is this family on this engagement?"
+     * BEFORE `customer_owner_side` has been written — a second switch there would be the same
+     * positional guess this pair of methods exists to remove.
+     */
+    public function matrimonyProfileIdForSide(string $side): ?int
+    {
+        $profileId = $side === self::SIDE_REQUESTING
+            ? $this->requesting_matrimony_profile_id
+            : $this->target_matrimony_profile_id;
+
+        return $profileId === null ? null : (int) $profileId;
+    }
+
+    /**
+     * The CUSTOMER's own candidate on this engagement — the profile on the customer-owning side.
+     *
+     * Role, never direction, exactly like customerOwnerSuchakAccountId() beside it: in the
+     * marketplace the responder is the requester, so `requesting_matrimony_profile_id` is the
+     * HELPER's candidate on every challenge-answered engagement. This is the value a customer
+     * context's `candidate_matrimony_profile_id` must equal for the engagement to be about that
+     * family at all.
+     */
+    public function customerOwnerMatrimonyProfileId(): ?int
+    {
+        return $this->matrimonyProfileIdForSide(
+            $this->customer_owner_side === self::SIDE_REQUESTING ? self::SIDE_REQUESTING : self::SIDE_TARGET,
+        );
+    }
+
+    /**
+     * The candidate being PROPOSED to that family — the helping side's profile, and the person
+     * D11's twelve-month clause is about.
+     */
+    public function helpingMatrimonyProfileId(): ?int
+    {
+        return $this->matrimonyProfileIdForSide(
+            $this->customer_owner_side === self::SIDE_REQUESTING ? self::SIDE_TARGET : self::SIDE_REQUESTING,
+        );
+    }
+
     public function isHelpingSuchak(int $suchakAccountId): bool
     {
         return $this->helpingSuchakAccountId() === $suchakAccountId;
