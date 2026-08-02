@@ -101,6 +101,10 @@ return [
     'suchak_fit_strong' => 'Strong preliminary fit',
     'suchak_fit_possible' => 'Possible preliminary fit',
     'suchak_fit_review' => 'Review carefully',
+    // NOT a rejection. The engine returned no score at all — the pair is ineligible (same gender, a
+    // hard preference conflict) or it fell under the surfacing floor. The candidate is still
+    // proposable, so the label says "no signal", never "no".
+    'suchak_fit_none' => 'No fit signal',
     'suchak_weak_signal' => ':field needs review',
     'suchak_fit_signals' => '{1} :n matched signal|[2,*] :n matched signals',
     'suchak_fit_notes' => '{1} :n review note|[2,*] :n review notes',

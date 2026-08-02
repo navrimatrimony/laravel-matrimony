@@ -21,12 +21,21 @@ use Illuminate\Support\Collection;
  * This replaced three separate boolean heuristics (same caste / same district / age gap <= 8) that
  * previously lived in SuchakCrossSearchService, SuchakDailyOpportunityService and
  * SuchakCollaborationService. Do not reintroduce one.
+ *
+ * IT IS ALSO THE D19a BOUNDARY FOR SCORING, and that is why the boundary is here and not in the
+ * engine. MatchingService is shared with the MEMBER feed, and D19b says in as many words that the
+ * member surface is NOT covered by D19a — a member choosing for themselves must keep the exact
+ * village tier. So the engine only offers the cap as a parameter; the DECISION to use it is taken
+ * here, on the Suchak side of the fence, from the one owner of the reveal rule
+ * ({@see SuchakCandidateMaskingService::revealsVillage()}). Nothing in the member path reaches this
+ * class, so nothing in the member path can be degraded by it.
  */
 class SuchakMatchFitService
 {
     public function __construct(
         private readonly MatchingService $matching,
         private readonly MatchingConfigService $matchingConfig,
+        private readonly SuchakCandidateMaskingService $masking,
     ) {}
 
     /**
@@ -45,9 +54,32 @@ class SuchakMatchFitService
      *
      * ADDITIVE ONLY — two Flutter apps consume this shape. `gunamilan` and the new `gunamilan` entry
      * inside `match_field_points` are new keys; nothing existing was renamed, retyped or removed.
+     *
+     * @param  SuchakProfileRepresentation|null  $maskedSideRepresentation
+     *   The representation of whichever side of this pair the reader sees THROUGH THE MASK — i.e. the
+     *   one that was passed to {@see SuchakCandidateMaskingService::maskedSummary()} for the card this
+     *   explanation is printed beside. Usually the candidate; on the marketplace's own-candidate
+     *   picker it is the SEEKER (the challenge's candidate), because there it is the seeker that
+     *   belongs to another Suchak.
+     *
+     *   It exists because the explanation was confirming the very village the card withholds: an
+     *   exact `location_id` match scored the full location weight and said "same city", a taluka-only
+     *   match scored 90% and said "same taluka", so one probe candidate per village under the shown
+     *   taluka read D19a's hidden value straight out of `match_field_points['location']`. The fix is
+     *   NOT to remove the location signal — D19a's whole argument is that a matchmaker who cannot see
+     *   enough cannot propose a match — it is to stop the signal resolving finer than the card. The
+     *   exact-match tier collapses into the taluka tier; where `shares_village` is set the village is
+     *   on the card anyway and full precision is correct and kept.
+     *
+     *   NULL means nothing is revealed (an unrepresented platform member, or a caller that did not
+     *   say). The default is therefore the SAFE answer, not the precise one — a future caller that
+     *   forgets this argument loses precision, it does not leak.
      */
-    public function fit(MatrimonyProfile $seeker, MatrimonyProfile $candidate): ?array
-    {
+    public function fit(
+        MatrimonyProfile $seeker,
+        MatrimonyProfile $candidate,
+        ?SuchakProfileRepresentation $maskedSideRepresentation = null,
+    ): ?array {
         if (! $this->matching->isEligiblePair($seeker, $candidate)) {
             return null;
         }
@@ -57,7 +89,14 @@ class SuchakMatchFitService
         // The candidate-intrinsic quality delta (verified / photo / complete / recently touched) still
         // applies — see {@see MatchingService::computeMatchBreakdown()} — because it describes the
         // candidate, not the actor, and a Suchak must not see an empty card tied with a verified one.
-        $breakdown = $this->matching->computeMatchBreakdown($seeker, $candidate, false);
+        // The reveal rule is READ, never restated: SuchakCandidateMaskingService is the one place
+        // `shares_village` is interpreted, and the card and the score now take the same answer from it.
+        $breakdown = $this->matching->computeMatchBreakdown(
+            $seeker,
+            $candidate,
+            false,
+            ! $this->masking->revealsVillage($maskedSideRepresentation),
+        );
 
         $score = (int) ($breakdown['final_score'] ?? 0);
         if ($score < $this->matchingConfig->suchakMinFitScore()) {
@@ -197,6 +236,11 @@ class SuchakMatchFitService
      * Best-scoring pairing between the Suchak's own represented candidates and one target
      * representation. Unlike the heuristic it replaces, this ranks rather than taking the first hit.
      *
+     * The target IS the masked side — both callers (SuchakCollaborationService,
+     * SuchakDailyOpportunityService) draw it with `where suchak_account_id != <caller>` — so its
+     * representation is what governs the location precision of every comparison below. Nothing to
+     * decide here; the row is already in hand.
+     *
      * @param  Collection<int, SuchakProfileRepresentation>|iterable<SuchakProfileRepresentation>  $ownRepresentations
      * @return array<string, mixed>|null  The {@see self::fit()} payload plus `own_representation`.
      */
@@ -218,7 +262,7 @@ class SuchakMatchFitService
                 continue;
             }
 
-            $fit = $this->fit($ownProfile, $candidateProfile);
+            $fit = $this->fit($ownProfile, $candidateProfile, $candidate);
             if ($fit === null) {
                 continue;
             }

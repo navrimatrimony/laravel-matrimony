@@ -40,6 +40,52 @@ class IncomeEngineService
     ];
 
     /**
+     * The ONE annual rupee figure a candidate may be COMPARED on — filtered by, sorted by, or shown
+     * beside the filter that produced them. Not a new fact and not a new column: a resolution rule
+     * over the two columns that already hold this fact, stated once so a filter and the number
+     * printed next to it can never disagree.
+     *
+     * Why a resolution rule is needed at all. `income_normalized_annual_amount` is the income
+     * engine's output and is what MEMBER search filters on
+     * ({@see \App\Services\MatrimonyProfileSearchQueryService}); `annual_income` is the flat column
+     * the engine derives from it. The two are NOT interchangeable per corpus, and the direction of
+     * the derivation is one-way:
+     *
+     *  - `MatrimonyProfileApiController::mobileIncomeEngineCoreFromApi()` writes
+     *    `annual_income = request('annual_income') ?: $normalized` — so a client that sends the flat
+     *    figure alone leaves `income_normalized_annual_amount` NULL.
+     *  - The Suchak app sends exactly that (`annual_income` only, 2026-07-25, to stop sending one
+     *    fact twice), so EVERY Suchak-created candidate has a NULL normalized column.
+     *
+     * A Suchak income filter written against the normalized column alone would therefore have
+     * returned an empty list for the entire corpus it exists to search, and would have looked like
+     * "nobody earns that much" rather than like a bug. COALESCE covers both write paths, prefers the
+     * engine's answer when the engine ran, and agrees with member search whenever both columns are
+     * populated.
+     */
+    public function comparableAnnualSql(string $table = 'matrimony_profiles'): string
+    {
+        return 'COALESCE('.$table.'.income_normalized_annual_amount, '.$table.'.annual_income)';
+    }
+
+    /**
+     * The read half of {@see self::comparableAnnualSql()} — the same rule, on a loaded row, so the
+     * number a Suchak sees on a card is the number his filter compared.
+     */
+    public function comparableAnnualAmount(mixed $profile): ?float
+    {
+        foreach (['income_normalized_annual_amount', 'annual_income'] as $column) {
+            $value = is_array($profile) ? ($profile[$column] ?? null) : ($profile->{$column} ?? null);
+
+            if ($value !== null && $value !== '' && is_numeric($value)) {
+                return (float) $value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Compute normalized annual amount for matching.
      * - exact/approximate: single amount × period multiplier.
      * - range: midpoint(min, max) × period multiplier.

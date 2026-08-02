@@ -10,11 +10,16 @@ use App\Models\SuchakCommissionAgreement;
 use App\Models\SuchakCustomerAgreement;
 use App\Models\SuchakCustomerPlan;
 use App\Models\SuchakMarketplaceChallenge;
+use App\Models\MatrimonyProfile;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
+use App\Services\Image\ProfilePhotoUrlService;
+use App\Services\IncomeEngineService;
 use App\Support\MoneyFormat;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Pagination\LengthAwarePaginator as Paginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -83,10 +88,21 @@ class SuchakMarketplaceChallengeService
     /** The one refusal sentence for a typed currency. Read by the validator and by the guard. */
     public const REFUSAL_CURRENCY_IS_THE_AGREEMENTS = 'वाट्याचे चलन ग्राहकाच्या करारातून येते; ते वेगळे देता येत नाही.';
 
+    /**
+     * D7a: "a working Suchak may hold two hundred candidates." The ranked set is capped at well over
+     * twice that, and the cap exists to bound the scoring loop, NOT to slice the corpus the way
+     * suggestedOpportunities() does — see ownCandidatesFor() for why the difference matters.
+     */
+    public const MAX_RANKED_OWN_CANDIDATES = 500;
+
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakCandidateMaskingService $maskingService,
         private readonly SuchakCollaborationService $collaborationService,
+        private readonly SuchakCrossSearchService $crossSearchService,
+        private readonly SuchakMatchFitService $matchFitService,
+        private readonly IncomeEngineService $incomeEngine,
+        private readonly SuchakClaimSilenceService $claimSilenceService,
     ) {
     }
 
@@ -274,6 +290,24 @@ class SuchakMarketplaceChallengeService
         $this->assertMarketplaceCandidate($helperAccount, $helperRepresentation);
         $this->assertNoDeclaredTerms($input);
 
+        /*
+         * THE STOP-LOSS (§7.2 clause 3). "A helper may not accept a new challenge from the same
+         * originating Suchak while 2 claims, or ₹5,000, sit past their window."
+         *
+         * D7 makes proposing a candidate the ONLY way to accept a challenge — there is no bare
+         * accept on this service — so this is the one door the rule needs, and it is enforced here
+         * rather than in a controller for the same reason every other guard is.
+         *
+         * Deliberately BEFORE the transaction: the gate sweeps the originating Suchak's overdue
+         * claims first (there may be no scheduler on this production), and that sweep writes rows
+         * of its own. Running it inside the challenge lock would nest one write transaction inside
+         * another for no benefit and would take the visit-row locks in a new order.
+         *
+         * It is a protection FOR the helper, not a punishment of him — which is why the refusal
+         * names the other Suchak's numbers rather than his own.
+         */
+        $this->claimSilenceService->assertHelperMayAcceptChallengeFrom($this->publisherAccount($challenge));
+
         $message = $this->nullableLimitedString($input['message'] ?? null, 2000);
 
         $proposal = DB::transaction(function () use (
@@ -441,12 +475,270 @@ class SuchakMarketplaceChallengeService
         ];
     }
 
+    // ── The helper's own candidates, searchable and ranked (D7a) ──────────────────────────────
+
+    /**
+     * WHICH OF MY CANDIDATES SHOULD ANSWER THIS CHALLENGE — the read D7 has no meaning without.
+     *
+     * D7 says a helper must select a specific candidate to propose. D7a says that selection needs
+     * search and filters, not a list, because a working Suchak may hold two hundred candidates and
+     * scrolling is not a selection mechanism. Until this method existed, both readers of a Suchak's
+     * own candidates took NO filters at all, so proposing meant scrolling two hundred names beside a
+     * challenge whose candidate you had to keep in your head.
+     *
+     * FOUR things this method refuses to own:
+     *
+     *  - The filters. SuchakCrossSearchService::ownRepresentationsQuery() applies them through the
+     *    one filter owner, so `age_min` means the same thing here and on /suchak/search, and the
+     *    three D7a filters this feature added (name, location, income) landed there rather than as a
+     *    private marketplace copy.
+     *  - The score. SuchakMatchFitService::fit() is the real engine (→ MatchingService), the same one
+     *    suggestedOpportunities() and the member feed use. No second matcher.
+     *  - The badge. assertMarketplaceViewer(), spelled in exactly one place across the marketplace.
+     *  - Answerability. assertChallengeAcceptsProposals() — the SAME gate proposeCandidate() runs, so
+     *    a candidate this list offers is a candidate the propose call will accept. A list that can
+     *    show you a choice the next request refuses is worse than no list.
+     *
+     * THE RANKING SLAB, and why it does not bite here. suggestedOpportunities() pre-slices with
+     * `limit(max($limit * 10, 30))` ordered by id and then ranks what it drew, so it ranks a slab
+     * rather than the corpus — a real limitation, in a method whose corpus is every other Suchak's
+     * candidate on the platform and therefore unbounded. It is not inherited, because this method
+     * does not call it: what is reused is the RANKING (fit()), which is the part suggestedOpportunities()
+     * itself delegates, and the slab belongs to that method's own corpus query. Here the corpus is
+     * ONE Suchak's own book, already narrowed by the filters, and D7a's stated worst case is two
+     * hundred — so the whole filtered set is scored and the page is taken AFTER sorting, never
+     * before. Ranking a page instead of the corpus is exactly the bug that would put the best match
+     * on page four. MAX_RANKED_OWN_CANDIDATES bounds the loop at 500; a Suchak past it must filter,
+     * and the filters are the point of this endpoint.
+     *
+     * MASKING: NONE, and that is deliberate. Masking is what one Suchak may see of ANOTHER Suchak's
+     * candidate (D19a). These are the caller's own — his own names, his own villages, his own phone
+     * numbers, already on his own customer list. No cross-Suchak row can enter the list either:
+     * ownRepresentationsQuery() is scoped `where suchak_account_id = <caller>` and the challenge's
+     * own candidate belongs, by assertNotOwnChallenge(), to a different account.
+     *
+     * @param  array<string, mixed>  $filters  see SuchakCrossSearchService::applyProfileFilters()
+     * @return LengthAwarePaginator<int, array<string, mixed>>
+     */
+    public function ownCandidatesFor(
+        SuchakMarketplaceChallenge $challenge,
+        SuchakAccount $helperAccount,
+        array $filters = [],
+        int $perPage = 20,
+        int $page = 1,
+    ): LengthAwarePaginator {
+        $helperAccount->refresh();
+        $challenge->refresh();
+
+        $this->assertMarketplaceViewer($helperAccount);
+        $this->assertNotOwnChallenge($challenge, $helperAccount);
+        $this->assertChallengeAcceptsProposals($challenge, $helperAccount);
+
+        $challengeRepresentation = $this->challengeRepresentation($challenge);
+        $challengeRepresentation->loadMissing([
+            'matrimonyProfile.gender',
+            'matrimonyProfile.maritalStatus',
+            'matrimonyProfile.religion',
+            'matrimonyProfile.caste',
+            'matrimonyProfile.location.parent.parent.parent',
+            'matrimonyProfile.occupationMaster',
+        ]);
+        $challengeProfile = $challengeRepresentation->matrimonyProfile;
+
+        if (! $challengeProfile instanceof MatrimonyProfile) {
+            throw new InvalidArgumentException('या आव्हानाचे स्थळ सापडले नाही.');
+        }
+
+        $alreadyProposed = $this->alreadyProposedRepresentationIds($challenge);
+
+        $ranked = $this->crossSearchService
+            ->ownRepresentationsQuery($helperAccount, $filters)
+            ->limit(self::MAX_RANKED_OWN_CANDIDATES)
+            ->get()
+            ->map(function (SuchakProfileRepresentation $representation) use (
+                $challengeProfile,
+                $challengeRepresentation,
+                $alreadyProposed,
+            ): ?array {
+                $profile = $representation->matrimonyProfile;
+
+                if (! $profile instanceof MatrimonyProfile) {
+                    return null;
+                }
+
+                /*
+                 * SEEKER = the challenge's candidate, CANDIDATE = the row being ranked. The score is
+                 * directional, and the question this screen asks is the publisher's: "how well does
+                 * this candidate of mine answer his need?" It is also the shape every existing call
+                 * already uses — the row being ranked is always fit()'s second argument, in
+                 * SuchakCrossSearchService::fitSummary() and in bestFitAmong() alike.
+                 *
+                 * A null fit (ineligible pair — same gender, self, a hard preference conflict — or a
+                 * score under the surfacing floor) is scored 0 and KEPT, never dropped. The propose
+                 * call applies no fit floor, so dropping the row would hide a candidate the Suchak is
+                 * entitled to propose behind a filter he was never shown and cannot turn off.
+                 */
+                /*
+                 * THE MASKED SIDE HERE IS THE SEEKER, not the candidate — the inverse of every other
+                 * fit() call, and the reason the argument names the masked side rather than "the
+                 * candidate". The rows being ranked are the helper's OWN (unmasked, see above); it is
+                 * the CHALLENGE's candidate that belongs to another Suchak. Without this the picker
+                 * was the cheapest oracle of the three: the helper's own candidates already sit in
+                 * villages he chose, so reading which of them scored "same city" instead of "same
+                 * taluka" named the challenge candidate's village in a single page load, no probing.
+                 */
+                $fit = $this->matchFitService->fit($challengeProfile, $profile, $challengeRepresentation);
+
+                return $this->ownCandidatePayload(
+                    $representation,
+                    $profile,
+                    $fit,
+                    isset($alreadyProposed[(int) $representation->id]),
+                );
+            })
+            ->filter()
+            /*
+             * Best first, then representation id ascending so equal scores have ONE order and page 2
+             * never repeats a row from page 1.
+             *
+             * An explicit COMPARATOR, not sortBy([...]). Collection::sortBy() with an array treats a
+             * callable element as a two-argument comparator rather than as a key extractor, so a
+             * one-argument `fn ($row) => -$row['match_score']` is silently called as `$fn($a, $b)`
+             * and its return value used as the comparison — which is not antisymmetric and produced
+             * an order that depended on which row uasort() happened to pass first. It put a 31 above
+             * a 57. Caught by the ranking test.
+             */
+            ->sort(static fn (array $a, array $b): int => [
+                (int) $b['match_score'],
+                (int) $a['representation_id'],
+            ] <=> [
+                (int) $a['match_score'],
+                (int) $b['representation_id'],
+            ])
+            ->values();
+
+        return $this->paginateRanked($ranked, $perPage, $page);
+    }
+
+    /**
+     * The representations already standing against this challenge, in ONE query.
+     *
+     * Status-blind, exactly like assertNotAlreadyProposed(), because that guard is what the flag
+     * exists to predict: a rejected proposal is still refused if re-sent, so a card that showed it as
+     * available would be lying about what the next request will do. D7a's whole point is that the
+     * Suchak picks rather than discovers by failing.
+     *
+     * @return array<int, true>
+     */
+    private function alreadyProposedRepresentationIds(SuchakMarketplaceChallenge $challenge): array
+    {
+        return SuchakCollaborationRequest::query()
+            ->where('marketplace_challenge_id', $challenge->id)
+            ->pluck('requesting_representation_id')
+            ->filter()
+            ->mapWithKeys(static fn ($id): array => [(int) $id => true])
+            ->all();
+    }
+
+    /**
+     * One own-candidate row. NOT SuchakCandidateMaskingService::maskedSummary() — see
+     * ownCandidatesFor() on why, and note that the three shared reads it does use (age, the location
+     * walk, the master label) are that service's, so the two presentations state the same facts the
+     * same way.
+     *
+     * `income_display` and `annual_income` are the SAME figure, resolved by
+     * IncomeEngineService::comparableAnnualAmount() — the read half of the rule the income filter
+     * compares on. A card that printed one column while the filter compared another would send a
+     * Suchak to argue with his own search.
+     *
+     * @param  array<string, mixed>|null  $fit
+     * @return array<string, mixed>
+     */
+    private function ownCandidatePayload(
+        SuchakProfileRepresentation $representation,
+        MatrimonyProfile $profile,
+        ?array $fit,
+        bool $alreadyProposed,
+    ): array {
+        $income = $this->incomeEngine->comparableAnnualAmount($profile);
+        $photoPath = trim((string) ($profile->profile_photo ?? ''));
+
+        return [
+            'representation_id' => (int) $representation->id,
+            'candidate_profile_id' => (int) $profile->id,
+            'display_name' => trim((string) ($profile->full_name ?? '')) ?: null,
+            'age' => $this->maskingService->ageYears($profile->date_of_birth),
+            'gender' => $this->maskingService->masterLabel($profile->gender),
+            'district' => $this->maskingService->locationNameOfType($profile->location, 'district'),
+            'taluka' => $this->maskingService->locationNameOfType($profile->location, 'taluka'),
+            'education' => trim((string) ($profile->highest_education ?? '')) ?: null,
+            'annual_income' => $income,
+            // MoneyFormat is the ONE money formatter: Latin digits, Indian grouping, null in / null
+            // out so an undisclosed income never prints as ₹0. The currency is the candidate's own
+            // (matrimony_profiles.income_currency_id), never assumed — a ₹ glyph in front of a USD
+            // figure is the same class of defect as the challenge's refused `share_currency`.
+            'income_display' => MoneyFormat::amount(
+                $income,
+                strtoupper(trim((string) ($profile->incomeCurrency?->code ?? ''))) ?: 'INR',
+            ),
+            // NULL when there is no photograph, rather than a placeholder URL: the client picks its
+            // own placeholder, and "no photo" is a fact a Suchak acts on (D19a — a matchmaker who
+            // cannot see a face cannot propose a match).
+            'photo_url' => $photoPath === ''
+                ? null
+                : app(ProfilePhotoUrlService::class)->publicUrl($photoPath, $profile),
+            'match_score' => (int) ($fit['match_score'] ?? 0),
+            'fit_label' => $fit['fit_label'] ?? __('matching.suchak_fit_none'),
+            'reasons' => array_values($fit['reasons'] ?? []),
+            'already_proposed' => $alreadyProposed,
+        ];
+    }
+
+    /**
+     * Page a ranked, in-memory list. The sort is over the whole filtered corpus and the slice is
+     * taken from it — the ordering is never re-decided per page.
+     *
+     * @param  Collection<int, array<string, mixed>>  $ranked
+     * @return LengthAwarePaginator<int, array<string, mixed>>
+     */
+    private function paginateRanked(Collection $ranked, int $perPage, int $page): LengthAwarePaginator
+    {
+        $perPage = max(1, $perPage);
+        $page = max(1, $page);
+
+        return new Paginator(
+            $ranked->slice(($page - 1) * $perPage, $perPage)->values()->all(),
+            $ranked->count(),
+            $perPage,
+            $page,
+        );
+    }
+
     /**
      * The challenge's own candidate, as the TARGET of the reversed engagement.
      *
      * Loaded from the challenge rather than accepted as a parameter, so a helper can never name
      * which candidate he is answering: he answers the one the challenge is for, or nothing.
      */
+    /**
+     * The ORIGINATING Suchak behind a challenge — the party §7.2 says must answer helper claims.
+     *
+     * Loaded from the row rather than accepted as a parameter, for the same reason
+     * challengeRepresentation() is: a caller must never be able to name which Suchak's record the
+     * stop-loss is checked against.
+     */
+    private function publisherAccount(SuchakMarketplaceChallenge $challenge): SuchakAccount
+    {
+        $challenge->loadMissing('suchakAccount');
+        $account = $challenge->suchakAccount;
+
+        if (! $account instanceof SuchakAccount) {
+            throw new InvalidArgumentException('या आव्हानाचा सूचक सापडला नाही.');
+        }
+
+        return $account;
+    }
+
     private function challengeRepresentation(SuchakMarketplaceChallenge $challenge): SuchakProfileRepresentation
     {
         $challenge->loadMissing('representation');
@@ -648,7 +940,23 @@ class SuchakMarketplaceChallengeService
             ['viewer_suchak_account_id' => (int) $viewer->id],
         );
 
-        return $this->listingPayload($challenge);
+        /*
+         * §7.2 clause 2 — "publish an immediate, raw counter on his card: '6 helper claims
+         * unanswered, oldest 91 days'".
+         *
+         * On THIS read and not on browse(): this is the single-listing open a helper performs
+         * before deciding (D19 — a commitment made on partial information is a bad one), and
+         * clause 3 will refuse him here if the counter is over. Putting it on the twelve-card
+         * browse would be twelve extra counts per scroll for a figure nobody is acting on yet.
+         *
+         * It is a fact about the publisher, computed from records, never typed by anyone — the
+         * same rule D20 sets for customer history.
+         */
+        return $this->listingPayload($challenge) + [
+            'unanswered_claims' => $this->claimSilenceService->unansweredClaimSummaryAfterSweep(
+                $this->publisherAccount($challenge),
+            ),
+        ];
     }
 
     /**
@@ -661,6 +969,12 @@ class SuchakMarketplaceChallengeService
         $account->refresh();
         $this->expireDue($account);
 
+        // His OWN counter, computed once for the whole page — every row on it belongs to this one
+        // account, so calling it inside the closure would be the same query N times. He sees what
+        // a helper opening his listing sees, which is the point: §7.2 clause 3 will stop his next
+        // helper, and a Suchak who cannot see why cannot fix it.
+        $unansweredClaims = $this->claimSilenceService->unansweredClaimSummaryAfterSweep($account);
+
         return SuchakMarketplaceChallenge::query()
             ->where('suchak_account_id', $account->id)
             ->with($this->listingRelations())
@@ -671,6 +985,7 @@ class SuchakMarketplaceChallengeService
                 'withdrawn_at' => $challenge->withdrawn_at?->toIso8601String(),
                 'withdrawn_reason' => $challenge->withdrawn_reason,
                 'fulfilled_at' => $challenge->fulfilled_at?->toIso8601String(),
+                'unanswered_claims' => $unansweredClaims,
             ]);
     }
 

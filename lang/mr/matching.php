@@ -100,6 +100,8 @@ return array_merge(require __DIR__.'/../en/matching.php', [
     'suchak_fit_strong' => 'प्राथमिक जुळणी मजबूत',
     'suchak_fit_possible' => 'प्राथमिक जुळणी संभाव्य',
     'suchak_fit_review' => 'काळजीपूर्वक तपासा',
+    // नकार नाही — इंजिनकडून गुण मिळालेच नाहीत. स्थळ सुचवता येते.
+    'suchak_fit_none' => 'जुळणीचा संकेत नाही',
     'suchak_weak_signal' => ':field तपासणे आवश्यक',
     'suchak_fit_signals' => '{1} :n जुळलेला मुद्दा|[2,*] :n जुळलेले मुद्दे',
     'suchak_fit_notes' => '{1} :n तपासणी नोंद|[2,*] :n तपासणी नोंदी',

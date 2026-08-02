@@ -1343,6 +1343,45 @@ class MatchingService
     }
 
     /**
+     * The same residence geography, re-resolved from the COARSEST NODE THE READER WAS SHOWN when the
+     * caller says the village is not revealed.
+     *
+     * The ids in the bundle (district / state / country / taluka) are already at or above the taluka,
+     * so they were never the problem. `lat` / `lng` were: {@see MatrimonyProfile::leafGeoBundle()}
+     * takes the position from the LEAF first, so on a village leaf the nearby-taluka tier measured
+     * village-to-village and printed the kilometres in its reason — three probe candidates placed in
+     * a neighbouring district trilaterate a position D19a hides, which is the exact-match oracle
+     * again with arithmetic instead of a boolean. Measuring between taluka centres keeps the signal
+     * the reason has always claimed to describe ("nearby taluka") and stops it resolving below the
+     * level the card prints.
+     *
+     * Reuses {@see MatrimonyProfile::geoAddressIdsForLeaf()} — the one leaf → hierarchy resolver,
+     * memoised by address id — rather than walking the chain a second time here. When nothing at or
+     * above the taluka resolves at all, the position is dropped instead of falling back to the leaf's:
+     * a null distance is already handled by the ladder and means "cannot rank by distance", never
+     * "far away".
+     *
+     * @return array{district_id: int|null, state_id: int|null, country_id: int|null, taluka_id: int|null, lat: float|null, lng: float|null}
+     */
+    private function visibleResidenceGeoFor(MatrimonyProfile $profile, bool $capAtTaluka): array
+    {
+        $geo = $this->residenceGeoFor($profile);
+        if (! $capAtTaluka) {
+            return $geo;
+        }
+
+        $visibleNode = $geo['taluka_id'] ?? $geo['district_id'] ?? null;
+        if ($visibleNode === null) {
+            return array_merge($geo, ['lat' => null, 'lng' => null]);
+        }
+
+        return array_merge($geo, array_intersect_key(
+            MatrimonyProfile::geoAddressIdsForLeaf((int) $visibleNode),
+            ['lat' => null, 'lng' => null],
+        ));
+    }
+
+    /**
      * Batch-loaded target preferences for callers outside the feed, keyed by profile id and shaped
      * exactly like {@see ProfilePreferenceMatchService::build()}'s `$targetPreferencesOverride`.
      *
@@ -1636,9 +1675,17 @@ class MatchingService
     /**
      * @return list<array{points: int, reasons: list<string>}>
      */
-    private function scoreParts(MatrimonyProfile $a, MatrimonyProfile $b): array
+    /**
+     * @param  bool  $capLocationAtTaluka  see {@see self::scoreLocationPart()} — it is part of the
+     *                                     CACHE KEY, because the same pair is legitimately scored both
+     *                                     ways inside one request (a member feed and a Suchak read) and
+     *                                     a key that ignored it would serve the precise components to
+     *                                     the masked reader.
+     */
+    private function scoreParts(MatrimonyProfile $a, MatrimonyProfile $b, bool $capLocationAtTaluka = false): array
     {
-        $cacheKey = $a->id < $b->id ? $a->id.'|'.$b->id : $b->id.'|'.$a->id;
+        $cacheKey = ($a->id < $b->id ? $a->id.'|'.$b->id : $b->id.'|'.$a->id)
+            .($capLocationAtTaluka ? '|taluka' : '');
         if (isset($this->componentsCache[$cacheKey])) {
             return $this->componentsCache[$cacheKey];
         }
@@ -1648,7 +1695,7 @@ class MatchingService
 
         $parts = [
             $this->scoreAgePart($ab, $ba),
-            $this->scoreLocationPart($a, $b),
+            $this->scoreLocationPart($a, $b, $capLocationAtTaluka),
             $this->scoreEducationPart($a, $b),
             $this->scoreOccupationPart($a, $b),
             $this->scoreCommunityPart($a, $b),
@@ -1818,16 +1865,34 @@ class MatchingService
         return 6371.0 * 2 * asin(min(1.0, sqrt($h)));
     }
 
-    private function scoreLocationPart(MatrimonyProfile $a, MatrimonyProfile $b): array
+    /**
+     * @param  bool  $capAtTaluka  Resolve this pair's geography NO FINER THAN THE TALUKA. Off for the
+     *                             member feed, which is the whole of D19b: a member choosing for
+     *                             themselves is not a matchmaker sourcing candidates, and their own
+     *                             matching must keep the exact-village tier. It is switched on only by
+     *                             {@see \App\Modules\Suchak\Services\SuchakMatchFitService}, which
+     *                             asks {@see \App\Modules\Suchak\Services\SuchakCandidateMaskingService::revealsVillage()}
+     *                             — this method never decides WHEN to cap, only HOW.
+     *
+     *                             Two things are capped, because the component leaks at two depths:
+     *                             the exact `location_id` tier below, and the lat/lng the nearby-taluka
+     *                             tier measures with (see {@see self::residenceGeoFor()} call sites).
+     */
+    private function scoreLocationPart(MatrimonyProfile $a, MatrimonyProfile $b, bool $capAtTaluka = false): array
     {
         $lidA = (int) ($a->location_id ?? 0);
         $lidB = (int) ($b->location_id ?? 0);
-        if ($lidA > 0 && $lidA === $lidB) {
+        // THE COLLAPSE. Capped, this tier is skipped outright and the ladder below runs — so two
+        // candidates in the same taluka score the taluka tier whether they share a village or not,
+        // and whether their residence leaf IS the taluka or a village under it. Keeping full points
+        // for a taluka-leaf candidate would be a finer fact than the card prints and therefore the
+        // same bug one rung up; there is no second ladder here, only one rung fewer.
+        if (! $capAtTaluka && $lidA > 0 && $lidA === $lidB) {
             return ['points' => $this->weight('location', self::WEIGHT_LOCATION), 'reasons' => [__('matching.reason_same_city')]];
         }
 
-        $geoA = $this->residenceGeoFor($a);
-        $geoB = $this->residenceGeoFor($b);
+        $geoA = $this->visibleResidenceGeoFor($a, $capAtTaluka);
+        $geoB = $this->visibleResidenceGeoFor($b, $capAtTaluka);
         $weight = $this->weight('location', self::WEIGHT_LOCATION);
 
         // A residence that was never filled in scores 0 exactly like a genuine
@@ -2158,6 +2223,11 @@ class MatchingService
     /**
      * Structured breakdown for {@see MatchingExplainService} (does not mutate long-lived scorer caches).
      *
+     * `$capLocationAtTaluka` defaults to FALSE, which is what keeps the member surface out of D19a
+     * (D19b): {@see MatchingExplainService}, {@see \App\Services\ContactVisibilityPolicyService} and
+     * {@see \App\Services\RuleEngineService} all call this without it and keep the exact-village tier.
+     * Only the Suchak fit layer turns it on. See {@see self::scoreLocationPart()}.
+     *
      * @return array{
      *   field_parts: list<array{points: int, reasons: list<string>}>,
      *   preferred_penalties: list<array{reason: string, impact: int}>,
@@ -2172,6 +2242,7 @@ class MatchingService
         MatrimonyProfile $seeker,
         MatrimonyProfile $candidate,
         bool $withActorAdjustments = true,
+        bool $capLocationAtTaluka = false,
     ): array {
         // Same reasoning as {@see self::isEligiblePair()}: scoreParts() and the preference builds it
         // rests on are pure functions of the pair, so this reuses whatever the current run already
@@ -2179,7 +2250,7 @@ class MatchingService
         // so there is no longer a save/restore pair around this body.
         $this->ensureTargetPreferencesLoaded([(int) $seeker->id, (int) $candidate->id]);
 
-        $parts = $this->scoreParts($seeker, $candidate);
+        $parts = $this->scoreParts($seeker, $candidate, $capLocationAtTaluka);
         $fieldParts = [];
         $sumBase = 0;
         $fieldPoints = [

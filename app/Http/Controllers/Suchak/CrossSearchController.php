@@ -21,14 +21,20 @@ class CrossSearchController extends Controller
             abort(403, 'Only verified Suchak accounts can use masked search.');
         }
 
+        // Same list as SuchakSearchApiController — one search, two entrances. `name` and the income
+        // bounds are deliberately absent on both (SuchakCrossSearchService::OWN_BOOK_ONLY_FILTERS):
+        // neither value is readable on a masked card, so neither may be narrowed by.
         $filters = $request->validate([
             'q' => ['nullable', 'string', 'max:80'],
+            'education' => ['nullable', 'string', 'max:80'],
             'age_min' => ['nullable', 'integer', 'min:18', 'max:100'],
             'age_max' => ['nullable', 'integer', 'min:18', 'max:100'],
             'gender_id' => ['nullable', 'integer', 'min:1'],
             'caste_id' => ['nullable', 'integer', 'min:1'],
             'religion_id' => ['nullable', 'integer', 'min:1'],
             'marital_status_id' => ['nullable', 'integer', 'min:1'],
+            'district_id' => ['nullable', 'integer', 'min:1'],
+            'taluka_id' => ['nullable', 'integer', 'min:1'],
             'requesting_representation_id' => ['nullable', 'integer', 'exists:suchak_profile_representations,id'],
         ]);
         $ownRepresentationOptions = $searchService->ownRepresentationOptions($account);

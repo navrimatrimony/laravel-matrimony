@@ -273,8 +273,11 @@ class SuchakMarketplaceChallengeApiController extends Controller
      *      READ FROM THE CHALLENGE, so the helper sees the terms he has just accepted.
      *
      * 422 covers: not verified (D18/A10), own challenge (A2), the same candidate proposed twice
-     * (A10), a withdrawn / fulfilled / expired challenge, a lapsed consent on either candidate, and
-     * the open-request quota. 404 covers a representation that is not the caller's.
+     * (A10), a withdrawn / fulfilled / expired challenge, a lapsed consent on either candidate, the
+     * open-request quota, and — added 2026-08-03 — §7.2's STOP-LOSS: the ORIGINATING Suchak has 2
+     * or more meeting claims, or ₹5,000 or more, sitting unanswered past their window. That last
+     * one is the only 422 here that is not about the caller at all, and its sentence says so by
+     * naming the other Suchak's numbers. 404 covers a representation that is not the caller's.
      */
     public function propose(
         Request $request,
@@ -343,6 +346,87 @@ class SuchakMarketplaceChallengeApiController extends Controller
                 'declared_share' => $challengeService->listingPayload($challenge->fresh() ?? $challenge)['declared_share'],
             ],
         ], 201);
+    }
+
+    /**
+     * GET /api/v1/suchak/marketplace/challenges/{challenge}/my-candidates
+     *
+     * WHICH OF MY CANDIDATES SHOULD ANSWER THIS CHALLENGE (D7a). The other half of accept-by-
+     * proposing: `propose` takes a `representation_id`, and without this read the only way to obtain
+     * one was to scroll an unfiltered list of every candidate the Suchak holds.
+     *
+     * Query: `q` (NAME, partial — see below), `age_min`, `age_max`, `district_id`, `taluka_id`,
+     * `income_min`, `income_max`, `education` (partial), `page`, `per_page` (1–50, default 20).
+     *
+     * `q` here is the NAME. On GET /suchak/search the same key is education-or-occupation free text,
+     * and that is the fixed client contract for both — so it is mapped to the filter owner's explicit
+     * `name` key HERE rather than by giving `q` two meanings inside the owner. A helper reading only
+     * the owner would otherwise find no `q`-means-name rule anywhere.
+     *
+     * 200: `{ success, data: { candidates: [...], meta: { total, page, per_page } } }`, ranked by
+     * `match_score` DESC against the challenge's candidate. `already_proposed` is true for a
+     * candidate that already answers THIS challenge — the pair guard refuses those, so the app greys
+     * them out instead of letting the Suchak find out by failing.
+     *
+     * Own candidates are NOT masked; masking is for other Suchaks' candidates (D19a).
+     *
+     * 422 when the caller lacks the marketplace badge (D18), owns the challenge (A2 — a Suchak
+     * cannot answer his own), or the challenge no longer accepts proposals. Same gates as `propose`,
+     * so a candidate this list offers is one `propose` will accept.
+     */
+    public function myCandidates(
+        Request $request,
+        SuchakMarketplaceChallenge $challenge,
+        SuchakMarketplaceChallengeService $challengeService,
+    ): JsonResponse {
+        $user = $this->suchakUser($request);
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:80'],
+            'education' => ['nullable', 'string', 'max:80'],
+            'age_min' => ['nullable', 'integer', 'min:18', 'max:100'],
+            'age_max' => ['nullable', 'integer', 'min:18', 'max:100'],
+            'district_id' => ['nullable', 'integer', 'min:1'],
+            'taluka_id' => ['nullable', 'integer', 'min:1'],
+            'income_min' => ['nullable', 'numeric', 'min:0'],
+            'income_max' => ['nullable', 'numeric', 'min:0'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        // `q` is TRANSLATED to the owner's `name`, never forwarded as `q`. Forwarding it as well ran
+        // the owner's education/occupation free-text filter over a person's name and returned an
+        // empty list for every search — the first thing the test caught.
+        $filters = $validated;
+        unset($filters['q']);
+        $filters['name'] = $validated['q'] ?? null;
+
+        try {
+            $candidates = $challengeService->ownCandidatesFor(
+                $challenge,
+                $user->suchakAccount,
+                $filters,
+                $this->perPage($request, 20, 50),
+                max(1, (int) ($validated['page'] ?? 1)),
+            );
+        } catch (InvalidArgumentException $exception) {
+            return $this->error($exception->getMessage(), 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'candidates' => $candidates->items(),
+                'meta' => [
+                    'total' => $candidates->total(),
+                    'page' => $candidates->currentPage(),
+                    'per_page' => $candidates->perPage(),
+                ],
+            ],
+        ]);
     }
 
     /**

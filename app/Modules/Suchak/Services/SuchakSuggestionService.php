@@ -99,7 +99,11 @@ class SuchakSuggestionService
                     return null;
                 }
 
-                $fit = $this->matchFitService->fit($seeker, $candidate);
+                // Same representation the card is built from two lines down, so the score and the
+                // card agree about how precisely this candidate may be placed. It is passed for OWN
+                // candidates too: this list masks every row (maskedSummary() below is unconditional),
+                // so the explanation must obey the same mask the row was rendered with.
+                $fit = $this->matchFitService->fit($seeker, $candidate, $candidateRepresentation);
                 if ($fit === null) {
                     return null;
                 }

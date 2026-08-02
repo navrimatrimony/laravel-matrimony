@@ -9,6 +9,16 @@ use App\Models\SuchakProfileRepresentation;
 use App\Support\CandidateNameMask;
 use Illuminate\Support\Carbon;
 
+/**
+ * The cross-Suchak presenter: what one Suchak may see of another Suchak's candidate (D19a).
+ *
+ * Three methods on it are PUBLIC and are not masking decisions — {@see self::ageYears()},
+ * {@see self::locationNameOfType()} and {@see self::masterLabel()}. They are the Suchak domain's one
+ * age rule, one location walk and one lookup-label rule, and they are public because the
+ * marketplace's OWN-candidate list (D7a) renders the same three facts UNMASKED and must not grow a
+ * second copy of any of them. A private helper duplicated into the caller that needed it second is
+ * exactly the defect the frozen no-duplicate rule names; a shared reader is not.
+ */
 class SuchakCandidateMaskingService
 {
     /**
@@ -33,17 +43,17 @@ class SuchakCandidateMaskingService
             'display_name' => $this->displayName($profile, $representation),
             'basic' => [
                 'gender_id' => $profile->gender_id,
-                'gender' => $this->lookupLabel($profile->gender),
+                'gender' => $this->masterLabel($profile->gender),
                 'marital_status_id' => $profile->marital_status_id,
-                'marital_status' => $this->lookupLabel($profile->maritalStatus),
+                'marital_status' => $this->masterLabel($profile->maritalStatus),
                 'age_years' => $this->ageYears($profile->date_of_birth),
                 'age_range' => $this->ageRange($profile->date_of_birth),
                 'height_feet_inches' => $this->heightFeetInches($profile->height_cm),
                 'height_range' => $this->heightRange($profile->height_cm),
             ],
             'community' => [
-                'religion' => $this->lookupLabel($profile->religion),
-                'caste' => $this->lookupLabel($profile->caste),
+                'religion' => $this->masterLabel($profile->religion),
+                'caste' => $this->masterLabel($profile->caste),
                 'is_policy_limited' => false,
             ],
             'location' => $this->locationSlot($profile, $representation),
@@ -51,7 +61,7 @@ class SuchakCandidateMaskingService
                 'highest' => $this->safeText($profile->highest_education),
             ],
             'occupation' => [
-                'broad' => $this->lookupLabel($profile->occupationMaster),
+                'broad' => $this->masterLabel($profile->occupationMaster),
             ],
             'representation' => [
                 'id' => $representation?->id,
@@ -96,7 +106,11 @@ class SuchakCandidateMaskingService
         return 'masked-'.substr(hash('sha256', (string) $source), 0, 12);
     }
 
-    private function ageYears(mixed $dateOfBirth): ?int
+    /**
+     * Exact age in years, or null when the date of birth is missing or outside the marriageable band
+     * this product records. Shared: masked cards and own-book cards state an age the same way.
+     */
+    public function ageYears(mixed $dateOfBirth): ?int
     {
         if ($dateOfBirth === null || $dateOfBirth === '') {
             return null;
@@ -227,6 +241,25 @@ class SuchakCandidateMaskingService
     }
 
     /**
+     * THE reveal question for the village: may this reader be placed at village level at all?
+     *
+     * Public, and the only place `shares_village` is read. It was already the rule behind
+     * {@see self::locationSlot()}; it is public now because the FIT EXPLANATION has to obey the same
+     * answer as the card it is printed beside — {@see SuchakMatchFitService::fit()} asks here rather
+     * than reading the column a second time. A masked card that prints the taluka while the score
+     * beside it distinguishes the village is not a partial disclosure, it is the whole disclosure
+     * with an extra request in front of it.
+     *
+     * Null representation — an unrepresented platform member in a Suchak list — reveals nothing, so
+     * the default is closed. That is deliberate: a caller that forgets to pass the representation
+     * gets the SAFE answer, never the precise one.
+     */
+    public function revealsVillage(?SuchakProfileRepresentation $representation): bool
+    {
+        return $representation?->shares_village === true;
+    }
+
+    /**
      * How precisely another Suchak may place this candidate.
      *
      * `city` was never a city: locationNameForCitySlot() walks up to the
@@ -243,7 +276,7 @@ class SuchakCandidateMaskingService
         MatrimonyProfile $profile,
         ?SuchakProfileRepresentation $representation,
     ): array {
-        $revealVillage = $representation?->shares_village === true;
+        $revealVillage = $this->revealsVillage($representation);
         $district = $this->locationNameOfType($profile->location, 'district');
 
         $city = $revealVillage
@@ -273,7 +306,14 @@ class SuchakCandidateMaskingService
         return null;
     }
 
-    private function locationNameOfType(?Location $location, string $type): ?string
+    /**
+     * Walk UP the `addresses` chain to the named level and return its localized name.
+     *
+     * The one walk. `country > state > district > taluka > village` is a parent chain, not a set of
+     * columns, so "which district is this candidate in" is answered by walking and never by reading a
+     * `district_id` that does not exist on the profile.
+     */
+    public function locationNameOfType(?Location $location, string $type): ?string
     {
         $current = $location;
         while ($current !== null) {
@@ -286,7 +326,12 @@ class SuchakCandidateMaskingService
         return null;
     }
 
-    private function lookupLabel(mixed $model): ?string
+    /**
+     * The display label of a master lookup row, in the order the schema actually fills them.
+     * Shared with the own-book reads so one gender is never "Female" on one screen and "female" on
+     * the next.
+     */
+    public function masterLabel(mixed $model): ?string
     {
         if (! $model) {
             return null;

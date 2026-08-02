@@ -324,6 +324,22 @@
                     @endforeach
                 </select>
             </div>
+            {{--
+                D7a's education filter. It lives in the ONE filter owner
+                (SuchakCrossSearchService::applyProfileFilters), so this form and the marketplace's
+                own-candidate search compare the same way.
+
+                There is deliberately NO name input and NO income input here, and both DO exist on the
+                marketplace own-candidate picker. This page reads OTHER Suchaks' candidates: D19a hides
+                the name, and the masked card prints no income at all, so a filter on either would let
+                the result count read back what the card withheld — a name confirmed one letter at a
+                time, an income binary-searched from the row count. See
+                SuchakCrossSearchService::OWN_BOOK_ONLY_FILTERS.
+            --}}
+            <div>
+                <label for="education" class="block text-xs font-semibold text-gray-600 dark:text-gray-300">Education</label>
+                <input id="education" name="education" value="{{ $filters['education'] ?? '' }}" maxlength="80" placeholder="e.g. B.Ed" class="mt-1 h-10 w-full rounded-md border-gray-300 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+            </div>
         </div>
 
         @if ($ownRepresentationOptions->isEmpty())
