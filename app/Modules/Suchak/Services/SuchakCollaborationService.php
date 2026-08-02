@@ -1259,12 +1259,43 @@ class SuchakCollaborationService
      * evidence and is not deleted, it simply cannot settle until somebody records the wedding date
      * and the engagement credited with it. `SuchakMarriageOutcomeService::record()` attaches to a
      * standing rung for precisely this case.
+     *
+     * ── THE LOGIN-LESS FAMILY, AND WHY THIS IS ONE WRITE AND NOT TWO ─────────────────────────
+     *
+     * `$confirmedBy` is either a User or the family's own SuchakCustomerPortalLink. Blueprint §2 says
+     * the customer is the FAMILY and usually has no login at all, so the party D26 names as the
+     * confirmer could not reach either existing door: both the member route and the admin route are
+     * typed on a `users` row. The whole success fee therefore released only when an ADMIN stood in or
+     * when a family member happened to hold a member login AND to be one of the two candidates.
+     *
+     * The portal link joins THIS method rather than getting one of its own. Confirming is a single
+     * write — the UPDATE below, on a row some Suchak already claimed — and a second settle path would
+     * be a second confirmation engine, which §12 forbids and which would put the marriage-attribution
+     * refusal, the already-confirmed refusal and the ladder advance in two places that could drift.
+     * What changes with the channel is only WHO is recorded and HOW: a user id, or a link id with the
+     * user id left null. {@see SuchakCollaborationStageEvent::assertConfirmChannel()} is the invariant
+     * that keeps those two shapes from mixing, which is why the write below goes through the model
+     * rather than the query builder — a query-builder update fires no model events, and a rule that
+     * does not run is not a rule.
+     *
+     * WHAT A LINK-BORNE CONFIRMATION PROVES: that somebody holding that link confirmed, at that time,
+     * from that IP and user agent. NOT who they were — OTP does not exist on production (D23, §10 S4)
+     * — and the page the family reads says exactly that and no more. The claim half of this table has
+     * said the same thing since `claimed_via_customer_portal_link_id` landed; this is that sentence
+     * applied to the act that moves money.
+     *
+     * A SUCHAK IS STILL REFUSED, through both channels. On the user channel
+     * {@see confirmationActorType()} turns away a participating Suchak's own user; on the link
+     * channel the door itself does it ({@see \App\Http\Controllers\Suchak\CustomerStageDoorController::confirm()}),
+     * and CONFIRM_ACTOR_TYPES has never admitted ACTOR_SUCHAK at all.
      */
     public function confirmStage(
         SuchakCollaborationRequest $collaboration,
-        User $confirmingUser,
+        User|SuchakCustomerPortalLink $confirmedBy,
         string $stageKey,
         ?string $note = null,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
     ): SuchakCollaborationStageEvent {
         $collaboration->refresh();
         $this->assertLadderStage($stageKey);
@@ -1273,9 +1304,21 @@ class SuchakCollaborationService
             throw new InvalidArgumentException('This marketplace stage does not carry a confirmation.');
         }
 
-        $actorType = $this->confirmationActorType($collaboration, $confirmingUser);
+        if ($confirmedBy instanceof SuchakCustomerPortalLink) {
+            $confirmedBy->refresh();
+            // The only question openPortalLink() cannot answer — it owns "is this token live", this
+            // owns "does it govern THIS engagement". The same three-condition check the family's
+            // CLAIM path runs, reused rather than restated: link issued by the customer-owning
+            // Suchak, same customer context on the agreement revision in force, and that context's
+            // own candidate actually sitting on the customer-owning side of this pair.
+            $this->assertPortalLinkGovernsEngagement($collaboration, $confirmedBy);
+        }
 
-        return DB::transaction(function () use ($collaboration, $confirmingUser, $stageKey, $note, $actorType): SuchakCollaborationStageEvent {
+        $actorType = $confirmedBy instanceof SuchakCustomerPortalLink
+            ? SuchakActivityLog::ACTOR_USER
+            : $this->confirmationActorType($collaboration, $confirmedBy);
+
+        $event = DB::transaction(function () use ($collaboration, $confirmedBy, $stageKey, $note, $actorType): SuchakCollaborationStageEvent {
             /** @var SuchakCollaborationRequest $locked */
             $locked = SuchakCollaborationRequest::query()
                 ->whereKey($collaboration->id)
@@ -1290,29 +1333,86 @@ class SuchakCollaborationService
                 ->first();
 
             if ($event === null) {
-                throw new InvalidArgumentException('This marketplace stage has not been claimed yet.');
+                // Translated, unlike the row invariants below the service: the family reads these
+                // two on the customer portal's confirm door, and both are ordinary situations —
+                // a stale page, or a second press.
+                throw new InvalidArgumentException(__('suchak.api.stage.not_claimed_yet'));
             }
 
             if ($event->confirmed_at !== null) {
-                throw new InvalidArgumentException('This marketplace stage is already confirmed.');
+                throw new InvalidArgumentException(__('suchak.api.stage.already_confirmed'));
             }
 
             $this->assertMarriageRungIsAttributed($locked, $stageKey);
 
-            SuchakCollaborationStageEvent::query()
-                ->whereKey($event->id)
-                ->update([
-                    'confirmed_by_actor_type' => $actorType,
-                    'confirmed_by_user_id' => $confirmingUser->id,
-                    'confirmed_at' => now(),
-                    'event_note' => $this->nullableLimitedString($note, 2000) ?? $event->event_note,
-                    'updated_at' => now(),
-                ]);
+            $event->forceFill([
+                'confirmed_by_actor_type' => $actorType,
+                'confirmed_by_user_id' => $confirmedBy instanceof User ? $confirmedBy->id : null,
+                'confirmed_via_customer_portal_link_id' => $confirmedBy instanceof SuchakCustomerPortalLink
+                    ? $confirmedBy->id
+                    : null,
+                'confirmed_at' => now(),
+                'event_note' => $this->nullableLimitedString($note, 2000) ?? $event->event_note,
+            ])->save();
 
             $this->advanceMarketplaceStage($locked, $stageKey);
 
             return $event->fresh() ?? $event;
         });
+
+        if ($confirmedBy instanceof SuchakCustomerPortalLink) {
+            $this->recordCustomerStageConfirmationActivity($collaboration, $confirmedBy, $event, $ipAddress, $userAgent);
+        }
+
+        return $event;
+    }
+
+    /**
+     * The IP, the user agent and the link the family confirmed through — on `suchak_activity_logs`,
+     * which already owns those two columns for every Suchak-domain act. They are NOT copied onto the
+     * stage event: one fact, one home.
+     *
+     * Its own action rather than the claim's: `collaboration_stage_customer_recorded` describes the
+     * family recording a rung that is theirs to record, and this is the family answering a rung
+     * SOMEBODY ELSE claimed. A trail that could not tell those two apart could not answer the only
+     * question a dispute asks — who said the marriage happened, and who agreed.
+     *
+     * `actor_type = user` with `actor_user_id = NULL` is the honest shape, exactly as on the claim
+     * side: a family with no login has no user id, and inventing one — or filing the act under the
+     * Suchak who benefits from it — is the forgery D26 exists to prevent.
+     */
+    private function recordCustomerStageConfirmationActivity(
+        SuchakCollaborationRequest $collaboration,
+        SuchakCustomerPortalLink $portalLink,
+        SuchakCollaborationStageEvent $event,
+        ?string $ipAddress,
+        ?string $userAgent,
+    ): void {
+        $this->activityLogger->record([
+            'suchak_account_id' => $portalLink->suchak_account_id,
+            'actor_user_id' => null,
+            'actor_type' => SuchakActivityLog::ACTOR_USER,
+            'action_type' => SuchakActivityLog::ACTION_COLLABORATION_STAGE_CUSTOMER_CONFIRMED,
+            'target_type' => 'suchak_collaboration_stage_event',
+            'target_id' => $event->id,
+            'matrimony_profile_id' => $collaboration->target_matrimony_profile_id,
+            'ip_address' => $ipAddress,
+            'user_agent' => $userAgent === null ? null : Str::limit($userAgent, 512, ''),
+            'metadata_json' => [
+                'context' => 'collaboration_stage_customer_confirmed',
+                'stage_key' => $event->stage_key,
+                'collaboration_request_id' => $collaboration->id,
+                'customer_portal_link_id' => $portalLink->id,
+                'customer_context_id' => $portalLink->customer_context_id,
+                'portal_status' => $portalLink->portal_status,
+                'portal_claimed_name' => $portalLink->claimed_name,
+                'portal_claimed_relationship_to_candidate' => $portalLink->claimed_relationship_to_candidate,
+                // Stated in the record itself so nobody reading it later mistakes a link for a
+                // verified identity. OTP is Phase 6 (D23); until it lands this is what we have.
+                'identity_verified' => false,
+                'verification_channel' => 'none',
+            ],
+        ]);
     }
 
     /**

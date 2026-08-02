@@ -11,6 +11,13 @@
     the one exception, and it stays because it changes what the family should expect the record to
     be worth later.
 
+    TWO KINDS OF ACT live on this page and they are not the same thing. The buttons at the top of a
+    card record the three rungs the family alone can know (`viewed`, `interested`,
+    `meeting_confirmed`). The block below them answers D26's three — `marriage_settled`,
+    `engagement`, `marriage` — which a SUCHAK claimed and only the family can confirm, and which are
+    the rungs SuchakSuccessFeeTrancheService releases on. They used to appear here as plain "recorded"
+    lines with a date and no control at all.
+
     LANGUAGE: every sentence comes from `suchak.customer_portal.stages.*`, so this page answers in
     whatever language the reader asked for. It used to hold Marathi string literals with no __() at
     all, which meant the layout's en/mr switcher changed nothing here — on the one page a family is
@@ -70,6 +77,8 @@
         @php
             $collaboration = $row['collaboration'];
             $recorded = $row['recorded'];
+            $awaitingConfirmation = $row['awaiting_confirmation'] ?? [];
+            $confirmed = $row['confirmed'] ?? [];
             $clause = $row['clause'] ?? null;
         @endphp
         <section class="mb-5 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -96,15 +105,96 @@
                 </p>
             @endif
 
-            @if ($recorded !== [])
+            {{--
+                The rungs that are simply DONE. The three of D26 are held back from this list and
+                given their own block below: on those three a claim is not a settled fact, it is one
+                party's statement waiting for the family's answer, and printing it here beside the
+                rungs the family recorded themselves is what made it read as already agreed.
+            --}}
+            @php
+                $settledRows = collect($recorded)->reject(
+                    fn ($claimedAt, $stageKey) => in_array($stageKey, $confirmableStageKeys, true),
+                );
+            @endphp
+            @if ($settledRows->isNotEmpty())
                 <ul class="mt-3 space-y-1 text-sm text-gray-700 dark:text-gray-300">
-                    @foreach ($recorded as $stageKey => $claimedAt)
+                    @foreach ($settledRows as $stageKey => $claimedAt)
                         <li>
                             {{ $stageEventModel::stageLabel($stageKey) }} —
                             {{ optional($claimedAt)->format('d M Y') }}
                         </li>
                     @endforeach
                 </ul>
+            @endif
+
+            {{--
+                D26 — CLAIMED, THEN CONFIRMED. The family's answer to the three rungs that release the
+                success fee. Each one names who is asking (their Suchak), what he says happened and
+                when, so the family is agreeing with a statement rather than pressing an unlabelled
+                button.
+
+                No money here either (D17, and the page comment above): confirming is what makes the
+                agreed marriage fee due, and the family is told that in words — the figure lives on
+                their payments screen, which is where they approve it.
+            --}}
+            @if ($awaitingConfirmation !== [] || $confirmed !== [])
+                <div class="mt-4 space-y-3 rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
+                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        {{ __('suchak.customer_portal.stages.confirm_title') }}
+                    </p>
+
+                    @foreach ($confirmed as $stageKey => $confirmedAt)
+                        <p class="text-sm text-gray-700 dark:text-gray-300">
+                            {{ __('suchak.customer_portal.stages.confirm_done', [
+                                'stage' => $stageEventModel::stageLabel($stageKey),
+                                'date' => optional($confirmedAt)->format('d M Y'),
+                            ]) }}
+                        </p>
+                    @endforeach
+
+                    @foreach ($awaitingConfirmation as $stageKey => $claimedAt)
+                        <form
+                            method="POST"
+                            action="{{ route('suchak.customer-portal.stages.confirm', ['token' => $token, 'collaboration' => $collaboration->id]) }}"
+                            class="flex flex-wrap items-center gap-3"
+                        >
+                            @csrf
+                            <input type="hidden" name="stage_key" value="{{ $stageKey }}">
+                            <span class="w-full text-sm text-gray-700 dark:text-gray-300">
+                                {{ __('suchak.customer_portal.stages.confirm_claim', [
+                                    'stage' => $stageEventModel::stageLabel($stageKey),
+                                    'date' => optional($claimedAt)->format('d M Y'),
+                                ]) }}
+                            </span>
+                            <button
+                                type="submit"
+                                class="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                            >
+                                {{ __('suchak.customer_portal.stages.confirm_submit') }}
+                            </button>
+                        </form>
+                    @endforeach
+
+                    @if ($awaitingConfirmation !== [])
+                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                            {{ __('suchak.customer_portal.stages.confirm_consequence') }}
+                        </p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                            {{ __('suchak.customer_portal.stages.confirm_disagree') }}
+                        </p>
+                        {{--
+                            D23 / section 8, repeated HERE and not left to the page footer alone —
+                            and it is the SAME KEY, not a second sentence written for confirmations.
+                            This is the act that releases money, so the family must read what the
+                            record will be worth at the moment they make it rather than several
+                            screens down. One string, said where it matters; a second wording would
+                            be a second promise to keep in step.
+                        --}}
+                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                            {{ __('suchak.customer_portal.stages.link_proof_note') }}
+                        </p>
+                    @endif
+                </div>
             @endif
 
             <div class="mt-4 flex flex-col gap-3">

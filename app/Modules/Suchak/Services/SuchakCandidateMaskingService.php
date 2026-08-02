@@ -12,12 +12,13 @@ use Illuminate\Support\Carbon;
 /**
  * The cross-Suchak presenter: what one Suchak may see of another Suchak's candidate (D19a).
  *
- * Three methods on it are PUBLIC and are not masking decisions — {@see self::ageYears()},
- * {@see self::locationNameOfType()} and {@see self::masterLabel()}. They are the Suchak domain's one
- * age rule, one location walk and one lookup-label rule, and they are public because the
- * marketplace's OWN-candidate list (D7a) renders the same three facts UNMASKED and must not grow a
- * second copy of any of them. A private helper duplicated into the caller that needed it second is
- * exactly the defect the frozen no-duplicate rule names; a shared reader is not.
+ * Four methods on it are PUBLIC and are not masking decisions — {@see self::ageYears()},
+ * {@see self::locationNameOfType()}, {@see self::locationNameForCitySlot()} and
+ * {@see self::masterLabel()}. They are the Suchak domain's one age rule, two location walks and one
+ * lookup-label rule, and they are public because the marketplace's OWN-candidate reads (D7a, and the
+ * publisher's own challenge list) render the same facts UNMASKED and must not grow a second copy of
+ * any of them. A private helper duplicated into the caller that needed it second is exactly the
+ * defect the frozen no-duplicate rule names; a shared reader is not.
  */
 class SuchakCandidateMaskingService
 {
@@ -293,7 +294,16 @@ class SuchakCandidateMaskingService
         ];
     }
 
-    private function locationNameForCitySlot(?Location $location): ?string
+    /**
+     * Walk UP to the VILLAGE-tagged node — the deepest place this product records a candidate at.
+     *
+     * Public for the same reason {@see self::locationNameOfType()} is: the reads that show a Suchak
+     * HIS OWN candidate place him exactly this precisely, and a second copy of the walk in the caller
+     * that needed it is the duplicate the frozen rule names. Making it public reveals nothing on its
+     * own — {@see self::locationSlot()} still asks {@see self::revealsVillage()} before calling it, so
+     * every CROSS-Suchak read is unchanged.
+     */
+    public function locationNameForCitySlot(?Location $location): ?string
     {
         $current = $location;
         while ($current !== null) {

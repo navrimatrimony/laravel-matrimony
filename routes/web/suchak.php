@@ -93,6 +93,14 @@ Route::prefix('suchak')
             ->where('token', '[A-Za-z0-9]{64}')
             ->middleware('throttle:10,1')
             ->name('customer-portal.stages.record');
+        // D26's second half: the family CONFIRMS a terminal rung a Suchak claimed (marriage settled,
+        // engagement, marriage). Those three are what SuchakSuccessFeeTrancheService releases on, and
+        // until this route existed only an admin — or a family member who happened to hold a member
+        // login — could answer them, so the login-less family this portal exists for never could.
+        Route::post('/customer-portal/{token}/stages/{collaboration}/confirm', [CustomerStageDoorController::class, 'confirm'])
+            ->where('token', '[A-Za-z0-9]{64}')
+            ->middleware('throttle:10,1')
+            ->name('customer-portal.stages.confirm');
         Route::get('/receipts/verify/{code}', [ReceiptVerificationController::class, 'show'])
             ->where('code', '[A-Za-z0-9]{32}')
             ->middleware('throttle:30,1')

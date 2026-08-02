@@ -10,14 +10,17 @@ use App\Models\SuchakCollaborationStageEvent;
 use App\Models\SuchakCommissionAgreement;
 use App\Models\SuchakCustomerAgreement;
 use App\Models\SuchakCustomerContext;
+use App\Models\SuchakCustomerPlan;
 use App\Models\SuchakCustomerPortalLink;
 use App\Models\SuchakPipeline;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakProfileRequest;
 use App\Models\SuchakServicePackage;
+use App\Models\SuchakSuccessFeeTranche;
 use App\Models\SuchakVisitConfirmation;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakCollaborationService;
+use App\Modules\Suchak\Services\SuchakSuccessFeeTrancheService;
 use App\Modules\Suchak\Services\SuchakTwelveMonthClauseService;
 use App\Modules\Suchak\Services\SuchakVisitConfirmationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -509,11 +512,271 @@ class SuchakCustomerDoorTest extends TestCase
         );
     }
 
+    // ── D26: the family confirms the three rungs that release the money ──────────────────────
+
+    /**
+     * THE DEFECT. `marriage_settled`, `engagement` and `marriage` are claimed by either Suchak and
+     * confirmed by the CUSTOMER (D26), and for those three `isSettled()` means `confirmed_at` — which
+     * is what SuchakSuccessFeeTrancheService releases on. The page offered the family three CLAIM
+     * buttons and no confirm control at all, so the only confirmers were an admin standing in or a
+     * family member who happened to hold a member login AND to be one of the two candidates. The
+     * login-less family this portal exists for (§2) could never answer.
+     */
+    public function test_the_family_confirms_a_terminal_rung_over_its_own_portal_link(): void
+    {
+        $world = $this->terminalClaimWorld();
+
+        $this->post($this->confirmUrl($world['token'], $world['collaboration']), [
+            'stage_key' => SuchakCollaborationStageEvent::STAGE_MARRIAGE_SETTLED,
+        ])->assertRedirect(route('suchak.customer-portal.stages.index', ['token' => $world['token']]));
+
+        $event = $world['event']->fresh();
+
+        $this->assertNotNull($event->confirmed_at);
+        $this->assertTrue($event->isSettled());
+
+        // The ladder moves on the CONFIRMATION, not on the claim — the claim alone left it behind.
+        $this->assertSame(
+            SuchakCollaborationStageEvent::STAGE_MARRIAGE_SETTLED,
+            $world['collaboration']->fresh()->marketplace_stage,
+        );
+    }
+
+    /**
+     * The evidentiary claim, and it is exactly the one the page prints — no more. A family with no
+     * login has no user id, so the row names the CHANNEL instead; nothing writes a `*_verified` flag
+     * or an acceptance tier, because OTP does not exist on production (D23, §10 S4).
+     */
+    public function test_the_confirmation_claims_only_that_a_link_holder_confirmed(): void
+    {
+        $world = $this->terminalClaimWorld();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.7'])
+            ->post(
+                $this->confirmUrl($world['token'], $world['collaboration']),
+                ['stage_key' => SuchakCollaborationStageEvent::STAGE_MARRIAGE_SETTLED],
+                ['User-Agent' => 'CustomerConfirmTest/1.0'],
+            )->assertRedirect();
+
+        $event = $world['event']->fresh();
+
+        $this->assertSame(SuchakActivityLog::ACTOR_USER, $event->confirmed_by_actor_type);
+        $this->assertNull($event->confirmed_by_user_id);
+        $this->assertSame(
+            (int) $world['portalLink']->id,
+            (int) $event->confirmed_via_customer_portal_link_id,
+        );
+
+        // The CLAIM half is untouched: the Suchak who raised it is still the one on record. A
+        // confirmation answers a claim, it does not overwrite who made it.
+        $this->assertSame(SuchakActivityLog::ACTOR_SUCHAK, $event->claimed_by_actor_type);
+        $this->assertSame((int) $world['ownerAccount']->id, (int) $event->claimed_by_suchak_account_id);
+
+        /** @var SuchakActivityLog $log */
+        $log = SuchakActivityLog::query()
+            ->where('action_type', SuchakActivityLog::ACTION_COLLABORATION_STAGE_CUSTOMER_CONFIRMED)
+            ->sole();
+
+        // Its own action: "the family recorded a rung of their own" and "the family agreed with a
+        // Suchak's claim" are the two questions a dispute asks, and one action could answer neither.
+        $this->assertSame(SuchakActivityLog::ACTOR_USER, $log->actor_type);
+        $this->assertNull($log->actor_user_id);
+        $this->assertSame('198.51.100.7', $log->ip_address);
+        $this->assertSame('CustomerConfirmTest/1.0', $log->user_agent);
+        $this->assertSame(false, $log->metadata_json['identity_verified']);
+        $this->assertSame('none', $log->metadata_json['verification_channel']);
+
+        // The page says to the family exactly what the row records, in their own language.
+        $this->get(route('suchak.customer-portal.stages.index', ['token' => $world['token']]))
+            ->assertOk()
+            ->assertSee(__('suchak.customer_portal.stages.link_proof_note'));
+    }
+
+    /**
+     * D26 exists because the party who BENEFITS from a terminal rung must not be the party who
+     * ATTESTS to it — both Suchaks do benefit, so both are turned away, and so is any other Suchak
+     * account the platform can see holding this link.
+     */
+    public function test_a_suchak_holding_the_link_is_refused_this_door(): void
+    {
+        foreach (['ownerUser', 'helperUser'] as $suchakUserKey) {
+            $world = $this->terminalClaimWorld();
+
+            $this->actingAs($world[$suchakUserKey])
+                ->post($this->confirmUrl($world['token'], $world['collaboration']), [
+                    'stage_key' => SuchakCollaborationStageEvent::STAGE_MARRIAGE_SETTLED,
+                ])
+                ->assertSessionHasErrors('customer_stage');
+
+            $this->assertNull($world['event']->fresh()->confirmed_at, $suchakUserKey.' must not confirm.');
+            $this->post(route('logout'));
+        }
+    }
+
+    /**
+     * The whole point of the door: a confirmed rung is a SETTLED rung, and a settled rung releases
+     * the instalment planned against it (§7.4). Before the family answered, the same ledger call
+     * released nothing.
+     */
+    public function test_the_confirmed_rung_releases_the_success_fee_tranche(): void
+    {
+        $world = $this->terminalClaimWorld(successFee: '100000.00');
+
+        /** @var SuchakSuccessFeeTranche $tranche */
+        $tranche = SuchakSuccessFeeTranche::query()->create([
+            'customer_agreement_id' => $world['agreement']->id,
+            'sort_order' => 10,
+            'trigger_stage_key' => SuchakCollaborationStageEvent::STAGE_MARRIAGE_SETTLED,
+            'share_percent' => '100.00',
+            'is_final_tranche' => true,
+        ]);
+
+        $trancheService = $this->app->make(SuchakSuccessFeeTrancheService::class);
+
+        // Claimed but unconfirmed: `isSettled()` is false for a CONFIRMABLE stage, so nothing fires.
+        $trancheService->release($world['collaboration']->fresh());
+        $this->assertNull($tranche->fresh()->released_at, 'A claim alone must not release money.');
+
+        $this->post($this->confirmUrl($world['token'], $world['collaboration']), [
+            'stage_key' => SuchakCollaborationStageEvent::STAGE_MARRIAGE_SETTLED,
+        ])->assertRedirect();
+
+        $trancheService->release($world['collaboration']->fresh());
+
+        $released = $tranche->fresh();
+        $this->assertNotNull($released->released_at, 'The family\'s confirmation must release the tranche.');
+        $this->assertSame((int) $world['event']->id, (int) $released->released_by_stage_event_id);
+        $this->assertSame((int) $world['collaboration']->id, (int) $released->released_by_collaboration_request_id);
+    }
+
+    /**
+     * The confirm door is the same door, reached the same way, and it is on the page the family is
+     * actually sent — a capability whose only caller is a test is the defect this repository keeps
+     * shipping.
+     */
+    public function test_the_confirm_control_is_on_the_page_and_the_route_exists(): void
+    {
+        $world = $this->terminalClaimWorld();
+
+        $this->get(route('suchak.customer-portal.stages.index', ['token' => $world['token']]))
+            ->assertOk()
+            ->assertSee(__('suchak.customer_portal.stages.confirm_submit'))
+            ->assertSee(__('suchak.customer_portal.stages.confirm_consequence'))
+            ->assertSee(route('suchak.customer-portal.stages.confirm', [
+                'token' => $world['token'],
+                'collaboration' => $world['collaboration']->id,
+            ]));
+
+        $routes = collect(Route::getRoutes()->getRoutes())
+            ->map(fn ($route): string => strtoupper(implode('|', $route->methods())).' /'.ltrim($route->uri(), '/'))
+            ->all();
+
+        $this->assertContains(
+            'POST /suchak/customer-portal/{token}/stages/{collaboration}/confirm',
+            $routes,
+            'The family\'s confirmation has no route.',
+        );
+    }
+
+    /**
+     * The link must govern THIS engagement on the confirm path exactly as it does on the claim path —
+     * the same three-condition check, reused rather than restated.
+     */
+    public function test_another_familys_link_cannot_confirm_this_engagements_rung(): void
+    {
+        $world = $this->terminalClaimWorld();
+        $other = $this->marketplaceWorld();
+
+        $this->post($this->confirmUrl($other['token'], $world['collaboration']), [
+            'stage_key' => SuchakCollaborationStageEvent::STAGE_MARRIAGE_SETTLED,
+        ])->assertSessionHasErrors('customer_stage');
+
+        $this->assertNull($world['event']->fresh()->confirmed_at);
+    }
+
+    /**
+     * The row-level invariant, so a future writer inherits it instead of re-deriving it: a
+     * confirmation names exactly one channel, and a link-borne one is the family's own act.
+     */
+    public function test_a_confirmation_must_name_exactly_one_channel(): void
+    {
+        $world = $this->terminalClaimWorld();
+        $event = $world['event'];
+
+        try {
+            $event->fresh()->forceFill([
+                'confirmed_by_actor_type' => SuchakActivityLog::ACTOR_USER,
+                'confirmed_at' => now(),
+            ])->save();
+            $this->fail('A confirmation naming nobody must be refused.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertStringContainsString('confirmed by nobody', $exception->getMessage());
+        }
+
+        try {
+            $event->fresh()->forceFill([
+                'confirmed_by_actor_type' => SuchakActivityLog::ACTOR_SUCHAK,
+                'confirmed_via_customer_portal_link_id' => $world['portalLink']->id,
+                'confirmed_at' => now(),
+            ])->save();
+            $this->fail('A Suchak may never be recorded as a confirmer.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertStringContainsString('may only be confirmed by', $exception->getMessage());
+        }
+
+        $this->assertNull($event->fresh()->confirmed_at);
+    }
+
     // ── fixtures ─────────────────────────────────────────────────────────────────────────────
 
     private function collaborationService(): SuchakCollaborationService
     {
         return $this->app->make(SuchakCollaborationService::class);
+    }
+
+    private function confirmUrl(string $token, SuchakCollaborationRequest $collaboration): string
+    {
+        return route('suchak.customer-portal.stages.confirm', [
+            'token' => $token,
+            'collaboration' => $collaboration->id,
+        ]);
+    }
+
+    /**
+     * A marketplace engagement standing at a TERMINAL claim: accepted, and with `marriage_settled`
+     * already claimed by the customer-owning Suchak (D26 — either Suchak may raise it). What is
+     * missing is exactly the thing this defect was about: the family's answer.
+     *
+     * @return array<string, mixed>
+     */
+    private function terminalClaimWorld(?string $successFee = null): array
+    {
+        $world = $this->marketplaceWorld();
+
+        $world['collaboration']->forceFill([
+            'status' => SuchakCollaborationRequest::STATUS_ACCEPTED,
+            'responded_at' => now(),
+        ])->save();
+
+        if ($successFee !== null) {
+            SuchakServicePackage::query()
+                ->whereKey($world['agreement']->service_package_id)
+                ->update([
+                    'post_marriage_fee_mode' => SuchakCustomerPlan::MODE_FIXED,
+                    'post_marriage_fee_amount' => $successFee,
+                ]);
+        }
+
+        $world['event'] = $this->collaborationService()->claimStage(
+            $world['collaboration']->fresh(),
+            $world['ownerAccount'],
+            $world['ownerUser'],
+            SuchakCollaborationStageEvent::STAGE_MARRIAGE_SETTLED,
+        );
+
+        $world['collaboration'] = $world['collaboration']->fresh(['commissionAgreement']);
+
+        return $world;
     }
 
     private function recordUrl(string $token, SuchakCollaborationRequest $collaboration): string

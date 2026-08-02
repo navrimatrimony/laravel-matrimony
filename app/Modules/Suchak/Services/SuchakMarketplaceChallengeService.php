@@ -962,6 +962,26 @@ class SuchakMarketplaceChallengeService
     /**
      * The publisher's own challenges — the door through which he finds the id he withdraws.
      *
+     * ── HIS OWN CANDIDATE IS NOT MASKED FROM HIM ─────────────────────────────────────────────
+     *
+     * This list used to hand every row to {@see self::listingPayload()}, whose `candidate` block is
+     * {@see SuchakCandidateMaskingService::maskedSummary()} — the CROSS-Suchak presenter, whose entire
+     * purpose is D19a's four defaults, "what one Suchak may see of ANOTHER Suchak's candidate". The
+     * viewer here is the publisher. So the "My challenges" tab printed his own customer as
+     * "राजश्री ग." with her village withheld: he could not tell two of his own candidates apart when
+     * they share a first name, and the platform was hiding a family's village from the man who
+     * visited their house.
+     *
+     * The fix is which rows go through the mask, not the mask. `browse()`, `openListing()`,
+     * `proposalPayload()` and every other cross-Suchak read still call `listingPayload()` unchanged,
+     * and `maskedSummary()` itself is untouched — it remains the single cross-Suchak presenter, with
+     * exactly the same four defaults and the same per-candidate reveals on top.
+     *
+     * The precedent is the proposal INBOX, which is this same situation one screen along: it
+     * publishes the OWNER's candidate unmasked ("MY candidate, unmasked, because he is mine") while
+     * masking every candidate proposed TO him, and strips the masked copy out of the listing payload
+     * rather than printing both. {@see self::ownCandidateSummary()} is that rule applied here.
+     *
      * @return LengthAwarePaginator<int, array<string, mixed>>
      */
     public function published(SuchakAccount $account, int $perPage = 20): LengthAwarePaginator
@@ -981,12 +1001,71 @@ class SuchakMarketplaceChallengeService
             ->orderByDesc('published_at')
             ->orderByDesc('id')
             ->paginate($perPage)
-            ->through(fn (SuchakMarketplaceChallenge $challenge): array => $this->listingPayload($challenge) + [
+            /*
+             * `['candidate' => …]` FIRST, because `+` keeps the left operand's value on a duplicate
+             * key: the row is the listing verbatim with exactly one block replaced. Nothing else
+             * about the payload moves, so the client that renders this tab keeps every key it reads.
+             */
+            ->through(fn (SuchakMarketplaceChallenge $challenge): array => [
+                'candidate' => $this->ownCandidateSummary($challenge),
+            ] + $this->listingPayload($challenge) + [
                 'withdrawn_at' => $challenge->withdrawn_at?->toIso8601String(),
                 'withdrawn_reason' => $challenge->withdrawn_reason,
                 'fulfilled_at' => $challenge->fulfilled_at?->toIso8601String(),
                 'unanswered_claims' => $unansweredClaims,
             ]);
+    }
+
+    /**
+     * The publisher's OWN candidate, in the listing's own shape, with D19a's hidden facts restored.
+     *
+     * ── WHY THIS COMPOSES RATHER THAN REBUILDS ───────────────────────────────────────────────
+     *
+     * D19a hides exactly four things from ANOTHER Suchak: name, village, detailed address and
+     * mobile. Every OTHER fact on the card — age, height, religion, caste, education, occupation,
+     * representation state, photograph — is identical whoever is reading, and
+     * {@see SuchakCandidateMaskingService::maskedSummary()} is the one place that states them. A
+     * second full presenter here would be forty lines of the same shape, free to drift key by key,
+     * which is precisely the duplicate the frozen rule names. So the shared facts are read from the
+     * one presenter and only the hidden ones are answered for an OWNER:
+     *
+     *  - `display_name` — his own customer's real name. `CandidateNameMask` and the typed
+     *    `shared_display_name` are answers to "what may ANOTHER Suchak call her"; neither is an
+     *    answer to what she is called.
+     *  - `location` — the village he visited, the exact address, and `is_broad` reporting FALSE
+     *    because that flag must always say what was actually sent (§10 S5: a flag claiming "broad"
+     *    while carrying a village is a bug whatever the policy is).
+     *
+     * ── WHAT IS DELIBERATELY *NOT* CHANGED HERE ──────────────────────────────────────────────
+     *
+     * `contact` stays masked. D19a's fourth default is the mobile, and `shares_mobile` has no reader
+     * anywhere in this codebase today — the number is never released to any Suchak through this
+     * presenter, own candidate or not. Wiring the contact-number model into a marketplace listing is
+     * a different question with its own owner, and this defect does not ask it.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function ownCandidateSummary(SuchakMarketplaceChallenge $challenge): ?array
+    {
+        $challenge->loadMissing($this->listingRelations());
+        $representation = $challenge->representation;
+        $profile = $representation?->matrimonyProfile;
+
+        if (! $profile instanceof MatrimonyProfile) {
+            return null;
+        }
+
+        $summary = $this->maskingService->maskedSummary($profile, $representation);
+
+        $summary['display_name'] = trim((string) ($profile->full_name ?? '')) ?: $summary['display_name'];
+        $summary['location'] = [
+            'city' => $this->maskingService->locationNameForCitySlot($profile->location),
+            'district' => $this->maskingService->locationNameOfType($profile->location, 'district'),
+            'is_broad' => false,
+            'exact_address' => trim((string) ($profile->address_line ?? '')) ?: null,
+        ];
+
+        return $summary;
     }
 
     /**

@@ -599,6 +599,12 @@ return [
         'stage' => [
             'recorded' => 'Stage recorded.',
             'family_confirmed' => 'Your confirmation has been recorded.',
+
+            // Both refusals a CONFIRMER can actually run into, and the family reads them on the
+            // customer portal now that the portal has a confirm door — so they cannot stay English
+            // literals in the service the way the developer-facing row invariants do.
+            'not_claimed_yet' => 'Nobody has recorded this stage yet, so there is nothing to confirm.',
+            'already_confirmed' => 'This stage has already been confirmed.',
         ],
 
         'agreement' => [
@@ -783,6 +789,20 @@ return [
             // The stage name arrives already translated, so the sentence
             // around it takes it as a placeholder rather than being glued on.
             'recorded' => 'Recorded: :stage',
+
+            // D26 — the last three rungs are claimed by a Suchak and confirmed by the family. The
+            // stage name and the date arrive already formatted, so both sentences take them as
+            // placeholders rather than being glued together from fragments.
+            'confirm_title' => 'Recorded by your Suchak — your confirmation is needed',
+            'confirm_claim' => 'Your Suchak says: :stage — :date.',
+            'confirm_submit' => 'This is correct, I confirm',
+            'confirm_done' => 'You confirmed: :stage — :date.',
+            // D27 — a sentence the reader acts on. No rupee figure: the amount lives on their
+            // payments screen (D17), which is where they approve it.
+            'confirm_consequence' => 'Once you confirm, the agreed marriage fee for this stage becomes due.',
+            'confirm_disagree' => 'If this is not correct, do not confirm — speak to your Suchak first.',
+            'confirm_refused_suchak' => 'Only the family can give this confirmation. A Suchak cannot confirm his own claim.',
+            'confirmed' => 'Your confirmation is recorded: :stage',
 
             'empty' => 'There is nothing for you to record right now.',
 

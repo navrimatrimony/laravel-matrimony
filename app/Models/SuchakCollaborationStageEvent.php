@@ -276,7 +276,27 @@ class SuchakCollaborationStageEvent extends Model
         SuchakActivityLog::ACTOR_SYSTEM,
     ];
 
-    /** @var list<string> */
+    /**
+     * Who may CONFIRM a terminal rung (D26 — the customer confirms; an admin may stand in).
+     *
+     * ACTOR_USER covers both shapes the customer can arrive in, and they are told apart by the
+     * CHANNEL columns rather than by a third actor type:
+     *
+     *  - a candidate's own member login (`confirmed_by_user_id` set, no portal link), and
+     *  - the login-less FAMILY acting over the customer portal link they were sent
+     *    (`confirmed_via_customer_portal_link_id` set, `confirmed_by_user_id` null) — the same
+     *    honest shape the claim half already uses for `viewed` / `interested` /
+     *    `meeting_confirmed`, and the same one blueprint §2 forces: the customer is the family and
+     *    `users.mobile` is null whenever the number on file is a household number.
+     *
+     * A Suchak is absent from this list and must stay absent: D26 exists because the party who
+     * benefits from a terminal rung must not be the party who attests to it.
+     *
+     * Read by {@see assertConfirmChannel()}, which is what makes this constant a rule rather than a
+     * comment.
+     *
+     * @var list<string>
+     */
     public const CONFIRM_ACTOR_TYPES = [
         SuchakActivityLog::ACTOR_USER,
         SuchakActivityLog::ACTOR_ADMIN,
@@ -296,6 +316,7 @@ class SuchakCollaborationStageEvent extends Model
         'claimed_at',
         'confirmed_by_actor_type',
         'confirmed_by_user_id',
+        'confirmed_via_customer_portal_link_id',
         'confirmed_at',
         'event_note',
     ];
@@ -316,6 +337,7 @@ class SuchakCollaborationStageEvent extends Model
         static::saving(function (self $event): void {
             $event->assertOwnership();
             $event->assertClaimChannel();
+            $event->assertConfirmChannel();
             $event->assertPriorAcquaintanceRelease();
         });
     }
@@ -536,6 +558,80 @@ class SuchakCollaborationStageEvent extends Model
     }
 
     /**
+     * A confirmation must be worth exactly what its CHANNEL is worth, and must name one.
+     *
+     * The mirror of {@see assertClaimChannel()}, on the half of the row where money turns: for the
+     * three CONFIRMABLE_STAGES `isSettled()` reads `confirmed_at`, and
+     * SuchakSuccessFeeTrancheService releases on settled rungs. Four things, and each closes a
+     * different way of writing a confirmation nobody made:
+     *
+     *  1. Only a rung that CARRIES a confirmation may hold one. `viewed` settles on the family's own
+     *     claim; a `confirmed_at` on it would be a second, unasked-for act nothing reads.
+     *  2. The actor must be one CONFIRM_ACTOR_TYPES names — never a Suchak. D26 exists because the
+     *     party who benefits from a terminal rung must not be the party who attests to it, and
+     *     `share_settled`'s A7 argument is the same one a step further on.
+     *  3. A confirmation must name exactly one identity: a user id (a member's own login, or an
+     *     admin standing in) or a customer portal link (the login-less family, §2). Both would be
+     *     two answers to one question; neither is a row confirmed by nobody, which is precisely what
+     *     the evidentiary trail of a dispute a year later cannot contain.
+     *  4. A link-borne confirmation is ACTOR_USER and nothing else. ACTOR_ADMIN over a customer link
+     *     would file an administrator's stand-in act as the family's own act.
+     *
+     * WHAT A NAMED LINK IS WORTH, stated here for the same reason assertClaimChannel() states it:
+     * that somebody holding that link confirmed, at that time. Nothing more. OTP does not exist on
+     * production (D23, §10 S4), so it is NOT proof of WHO confirmed, and no `*_match` / `*_verified`
+     * flag is set anywhere on this path.
+     */
+    public function assertConfirmChannel(): void
+    {
+        if ($this->confirmed_at === null) {
+            return;
+        }
+
+        $stageKey = (string) $this->stage_key;
+        $label = self::stageLabel($stageKey);
+
+        if (! self::requiresConfirmation($stageKey)) {
+            throw new InvalidArgumentException(
+                'Marketplace stage "'.$label.'" carries no confirmation; it settles on the claim.'
+            );
+        }
+
+        if (! in_array((string) $this->confirmed_by_actor_type, self::CONFIRM_ACTOR_TYPES, true)) {
+            throw new InvalidArgumentException(
+                'Marketplace stage "'.$label.'" may only be confirmed by '
+                .implode(' or ', self::CONFIRM_ACTOR_TYPES).'; "'.(string) $this->confirmed_by_actor_type.'" is not one of them.'
+            );
+        }
+
+        $named = array_values(array_filter([
+            'confirmed_by_user_id' => $this->confirmed_by_user_id,
+            'confirmed_via_customer_portal_link_id' => $this->confirmed_via_customer_portal_link_id,
+        ], static fn ($value): bool => $value !== null));
+
+        if ($named === []) {
+            throw new InvalidArgumentException(
+                'Marketplace stage "'.$label.'" was confirmed by nobody; a confirmation must name the '
+                .'user who made it or the customer portal link it came through.'
+            );
+        }
+
+        if (count($named) > 1) {
+            throw new InvalidArgumentException(
+                'Marketplace stage "'.$label.'" names two confirmers; a confirmation comes through exactly one channel.'
+            );
+        }
+
+        if ($this->confirmed_via_customer_portal_link_id !== null
+            && (string) $this->confirmed_by_actor_type !== SuchakActivityLog::ACTOR_USER) {
+            throw new InvalidArgumentException(
+                'Marketplace stage "'.$label.'" was confirmed over a customer portal link, so it is the '
+                .'family\'s own act and may only be recorded as "'.SuchakActivityLog::ACTOR_USER.'".'
+            );
+        }
+    }
+
+    /**
      * 9a A6 — "we already know them" is a release of the 12-month clause, so it may only sit on the
      * rung that CREATES that clause (CLAUSE_ANCHOR_STAGE, D11's `viewed`).
      *
@@ -637,6 +733,17 @@ class SuchakCollaborationStageEvent extends Model
     public function confirmedByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'confirmed_by_user_id');
+    }
+
+    /**
+     * The customer portal link a family-borne CONFIRMATION came through, or null when a member's own
+     * login or an admin standing in named a user instead. Like the claim-side link, this row does not
+     * carry who in the family acted — the link does (`claimed_name`,
+     * `claimed_relationship_to_candidate`), along with its own append-only timeline.
+     */
+    public function confirmedViaCustomerPortalLink(): BelongsTo
+    {
+        return $this->belongsTo(SuchakCustomerPortalLink::class, 'confirmed_via_customer_portal_link_id');
     }
 
     public function delete(): ?bool

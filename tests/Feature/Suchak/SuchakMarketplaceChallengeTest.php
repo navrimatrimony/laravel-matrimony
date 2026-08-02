@@ -448,6 +448,76 @@ class SuchakMarketplaceChallengeTest extends TestCase
         $this->assertTrue($listing['expires_never']);
     }
 
+    /**
+     * THE DEFECT. `published()` — the "My challenges" tab — built its rows with `listingPayload()`,
+     * whose `candidate` block is SuchakCandidateMaskingService's CROSS-Suchak output. The viewer
+     * there is the PUBLISHER, so the platform printed his own customer back to him as "Sunita G."
+     * with her village withheld: he could not tell two of his own candidates apart when they share a
+     * first name, and her village was hidden from the man who visited the house.
+     *
+     * The masking service is not weakened — the very next assertion browses the SAME challenge as
+     * another Suchak and finds every default still in place.
+     */
+    public function test_the_publisher_sees_his_own_candidate_unmasked_while_another_suchak_does_not(): void
+    {
+        [$publisherUser, $publisher] = $this->verifiedSuchakActor();
+        [, $viewer] = $this->verifiedSuchakActor();
+        [$representation] = $this->publishableCandidate($publisher, $publisherUser);
+        $service = $this->service();
+
+        $service->publish($publisher, $publisherUser, $representation, $this->percentTerms(30));
+
+        $mine = $service->published($publisher)->items()[0];
+
+        // His own book: the real name, the real village, and `is_broad` telling the truth about what
+        // was sent (§10 S5 — the flag must never claim "broad" while carrying a village).
+        $this->assertSame('Sunita Gaikwad', $mine['candidate']['display_name']);
+        $this->assertSame('Ranjangaon', $mine['candidate']['location']['city']);
+        $this->assertFalse($mine['candidate']['location']['is_broad']);
+
+        // Everything that is NOT one of D19a's hidden four is the same fact for both readers,
+        // because it comes from the same presenter.
+        $this->assertSame('Pune', $mine['candidate']['location']['district']);
+        $this->assertArrayHasKey('photo', $mine['candidate']);
+        $this->assertSame('30%', $mine['declared_share']['display']);
+
+        // And the cross-Suchak read of the SAME challenge is untouched.
+        $browsed = $service->browse($viewer)->items()[0];
+        $this->assertSame('Sunita G.', $browsed['candidate']['display_name']);
+        $this->assertSame('Shirur', $browsed['candidate']['location']['city']);
+        $this->assertTrue($browsed['candidate']['location']['is_broad']);
+        $this->assertNull($browsed['candidate']['location']['exact_address']);
+    }
+
+    /** The same split at the HTTP doors, so the fix is not reachable only from a service call. */
+    public function test_the_mine_route_unmasks_and_the_browse_route_still_masks(): void
+    {
+        [$publisherUser, $publisher] = $this->verifiedSuchakActor();
+        [$viewerUser] = $this->verifiedSuchakActor();
+        [$representation] = $this->publishableCandidate($publisher, $publisherUser);
+
+        $challenge = $this->service()->publish($publisher, $publisherUser, $representation, $this->percentTerms(30));
+
+        Sanctum::actingAs($publisherUser);
+        $this->getJson('/api/v1/suchak/marketplace/challenges/mine')
+            ->assertOk()
+            ->assertJsonPath('data.0.challenge_id', (int) $challenge->id)
+            ->assertJsonPath('data.0.candidate.display_name', 'Sunita Gaikwad')
+            ->assertJsonPath('data.0.candidate.location.city', 'Ranjangaon')
+            ->assertJsonPath('data.0.candidate.location.is_broad', false)
+            // The withdrawal fields the browse listing has no reason to carry are still here: the
+            // candidate block is replaced, the rest of the row is not.
+            ->assertJsonPath('data.0.withdrawn_at', null);
+
+        Sanctum::actingAs($viewerUser);
+        $this->getJson('/api/v1/suchak/marketplace/challenges')
+            ->assertOk()
+            ->assertJsonPath('data.0.challenge_id', (int) $challenge->id)
+            ->assertJsonPath('data.0.candidate.display_name', 'Sunita G.')
+            ->assertJsonPath('data.0.candidate.location.city', 'Shirur')
+            ->assertJsonPath('data.0.candidate.location.is_broad', true);
+    }
+
     public function test_the_marketplace_is_closed_to_the_unverified_and_to_the_publisher_himself(): void
     {
         [$publisherUser, $publisher] = $this->verifiedSuchakActor();

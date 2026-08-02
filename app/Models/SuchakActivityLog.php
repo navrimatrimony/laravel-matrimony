@@ -88,6 +88,23 @@ class SuchakActivityLog extends Model
     public const ACTION_COLLABORATION_STAGE_CUSTOMER_RECORDED = 'collaboration_stage_customer_recorded';
 
     /**
+     * The customer CONFIRMED a terminal rung somebody else claimed — `marriage_settled`, `engagement`
+     * or `marriage` (D26) — over the portal link they were sent.
+     *
+     * Its own action, and not the one above, because the two acts answer different questions. The
+     * `_recorded` row says the family recorded a rung that is theirs alone to record (`viewed`,
+     * `interested`, `meeting_confirmed`); this row says the family AGREED with a claim one of the two
+     * Suchaks raised — the act that makes `isSettled()` true and releases a success-fee tranche. A
+     * dispute a year later asks exactly that pair of questions, and a trail that used one action for
+     * both could answer neither.
+     *
+     * Written with `actor_type = user` and `actor_user_id = NULL`, and carrying the IP and user agent
+     * of the act, on the same reasoning as the claim row. It records that a holder of the link
+     * confirmed; it does not claim WHO, because OTP does not exist yet (§10 S4).
+     */
+    public const ACTION_COLLABORATION_STAGE_CUSTOMER_CONFIRMED = 'collaboration_stage_customer_confirmed';
+
+    /**
      * A marriage was recorded and one engagement was credited with it (blueprint §6.2).
      *
      * Its own action, because nothing in this list can stand in: the collaboration actions describe
