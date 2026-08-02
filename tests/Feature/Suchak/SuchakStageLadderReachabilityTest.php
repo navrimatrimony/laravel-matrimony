@@ -352,6 +352,15 @@ class SuchakStageLadderReachabilityTest extends TestCase
         [$attacker, $attackerAccount] = $this->verifiedSuchakActor();
         [, $otherAccount] = $this->verifiedSuchakActor();
         $collaboration = $this->engagementBetween($attackerAccount, $otherAccount, SuchakCollaborationRequest::STATUS_ACCEPTED);
+        // The attacker links HIS OWN customer agreement, so he is the customer-owning Suchak by a
+        // recorded fact — the strongest position one party can hold alone — and the three helper /
+        // customer rungs below are still not his to write.
+        //
+        // The link is now a precondition of `meeting_scheduled` too: phase 4 moved the "this
+        // engagement names no agreement revision" refusal ABOVE the CLAIMANT_EITHER_SUCHAK early
+        // return, so without it the first POST would 422 for the wrong reason and the walk-alone
+        // attack would go untested.
+        $this->linkOwnerAgreement($collaboration, $attackerAccount, $attacker);
 
         Sanctum::actingAs($attacker);
 
@@ -516,8 +525,15 @@ class SuchakStageLadderReachabilityTest extends TestCase
         }
 
         $accepted = $this->engagement($account, SuchakCollaborationRequest::STATUS_ACCEPTED);
+        // The agreement link is now required for EVERY Suchak-claimable rung, either-Suchak ones
+        // included (blueprint 6.2 / phase 4): `meeting_scheduled` used to slip past it through the
+        // CLAIMANT_EITHER_SUCHAK early return, while `meeting_completed` — the very next rung —
+        // always demanded it, so a meeting could be scheduled under terms that made completing it
+        // impossible. Acceptance is still the property under test here; this only supplies the
+        // second precondition that was always meant to be there.
+        $this->linkOwnerAgreement($accepted, $account, $user);
         $event = $service->claimStage(
-            $accepted,
+            $accepted->fresh(),
             $account,
             $user,
             SuchakCollaborationStageEvent::STAGE_MEETING_SCHEDULED,
@@ -801,9 +817,13 @@ class SuchakStageLadderReachabilityTest extends TestCase
         [$owner, $ownerAccount] = $this->verifiedSuchakActor();
         [, $helperAccount] = $this->verifiedSuchakActor();
         $collaboration = $this->engagementBetween($ownerAccount, $helperAccount, SuchakCollaborationRequest::STATUS_ACCEPTED);
+        // A terminal rung now requires the engagement to NAME the customer agreement revision it is
+        // claimed under (phase 4, blueprint 6.2). Without it there are no accepted terms, no frozen
+        // success fee and no tranche shares — nothing for a confirmation to settle.
+        $this->linkOwnerAgreement($collaboration, $ownerAccount, $owner);
 
         $this->service()->claimStage(
-            $collaboration,
+            $collaboration->fresh(),
             $ownerAccount,
             $owner,
             SuchakCollaborationStageEvent::STAGE_MARRIAGE_SETTLED,
@@ -832,14 +852,22 @@ class SuchakStageLadderReachabilityTest extends TestCase
         );
     }
 
+    /**
+     * The 404 here is the CONTROLLER's privacy answer — a member has no business learning that
+     * someone else's engagement exists. Phase 4 additionally moved the ownership rule itself into
+     * `SuchakCollaborationService::confirmationActorType()`, which used to admit every
+     * authenticated non-participant as ACTOR_USER; `SuchakMarriageOutcomeTest` pins that half at
+     * the service level, so the two layers are now tested for the two different things they do.
+     */
     public function test_a_stranger_cannot_confirm_someone_elses_terminal_stage(): void
     {
         [$owner, $ownerAccount] = $this->verifiedSuchakActor();
         [, $helperAccount] = $this->verifiedSuchakActor();
         $collaboration = $this->engagementBetween($ownerAccount, $helperAccount, SuchakCollaborationRequest::STATUS_ACCEPTED);
+        $this->linkOwnerAgreement($collaboration, $ownerAccount, $owner);
 
         $this->service()->claimStage(
-            $collaboration,
+            $collaboration->fresh(),
             $ownerAccount,
             $owner,
             SuchakCollaborationStageEvent::STAGE_MARRIAGE_SETTLED,

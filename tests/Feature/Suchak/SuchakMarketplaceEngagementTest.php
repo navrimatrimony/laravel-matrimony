@@ -149,11 +149,17 @@ class SuchakMarketplaceEngagementTest extends TestCase
     public function test_either_suchak_may_claim_a_terminal_stage_and_the_customer_confirms_it(): void
     {
         [$ownerUser, $ownerAccount, $helperUser, $helperAccount, $collaboration] = $this->acceptedEngagement();
+        // D26 says WHICH Suchak may speak; it never said the engagement could have no terms behind
+        // it. Phase 4 (blueprint 6.2) moved the "this engagement names no agreement revision"
+        // refusal above the CLAIMANT_EITHER_SUCHAK early return, so the three terminal rungs — the
+        // ones that release the largest tranches in the system — are no longer the only rungs
+        // exempt from it.
+        $this->linkOwnerAgreement($collaboration, $ownerAccount, $ownerUser);
         $service = $this->service();
 
         // D26: either Suchak may raise the claim — here the helping side does.
         $claim = $service->claimStage(
-            $collaboration,
+            $collaboration->fresh(),
             $helperAccount,
             $helperUser,
             SuchakCollaborationStageEvent::STAGE_MARRIAGE_SETTLED,
@@ -169,7 +175,11 @@ class SuchakMarketplaceEngagementTest extends TestCase
         // A claim alone does not move the engagement's ladder position.
         $this->assertNull($collaboration->fresh()->marketplace_stage);
 
-        $customer = User::factory()->create();
+        // The confirming party must be one of the two CANDIDATES on the engagement. Until phase 4
+        // the service admitted any authenticated user here and the ownership rule lived only in
+        // MemberSuchakStageApiController, so a bare `User::factory()` stood in for "the customer"
+        // — which is exactly the hole that let a stranger settle somebody else's marriage claim.
+        $customer = $this->candidateUser($collaboration);
         $confirmed = $service->confirmStage(
             $collaboration,
             $customer,
@@ -191,10 +201,11 @@ class SuchakMarketplaceEngagementTest extends TestCase
     public function test_a_participating_suchak_cannot_confirm_their_own_stage_claim(): void
     {
         [$ownerUser, $ownerAccount, $helperUser, $helperAccount, $collaboration] = $this->acceptedEngagement();
+        $this->linkOwnerAgreement($collaboration, $ownerAccount, $ownerUser);
         $service = $this->service();
 
         $service->claimStage(
-            $collaboration,
+            $collaboration->fresh(),
             $ownerAccount,
             $ownerUser,
             SuchakCollaborationStageEvent::STAGE_ENGAGEMENT,
@@ -255,27 +266,29 @@ class SuchakMarketplaceEngagementTest extends TestCase
     public function test_free_text_stage_keys_and_repeat_claims_are_refused(): void
     {
         [$ownerUser, $ownerAccount, , , $collaboration] = $this->acceptedEngagement();
+        $this->linkOwnerAgreement($collaboration, $ownerAccount, $ownerUser);
         $service = $this->service();
 
         try {
-            $service->claimStage($collaboration, $ownerAccount, $ownerUser, 'sakharpuda_done');
+            $service->claimStage($collaboration->fresh(), $ownerAccount, $ownerUser, 'sakharpuda_done');
             $this->fail('Free text stage keys must be refused.');
         } catch (InvalidArgumentException $exception) {
             $this->assertStringContainsString('Unknown marketplace stage key', $exception->getMessage());
         }
 
-        $service->claimStage($collaboration, $ownerAccount, $ownerUser, SuchakCollaborationStageEvent::STAGE_MEETING_SCHEDULED);
+        $service->claimStage($collaboration->fresh(), $ownerAccount, $ownerUser, SuchakCollaborationStageEvent::STAGE_MEETING_SCHEDULED);
 
         $this->expectException(InvalidArgumentException::class);
-        $service->claimStage($collaboration, $ownerAccount, $ownerUser, SuchakCollaborationStageEvent::STAGE_MEETING_SCHEDULED);
+        $service->claimStage($collaboration->fresh(), $ownerAccount, $ownerUser, SuchakCollaborationStageEvent::STAGE_MEETING_SCHEDULED);
     }
 
     public function test_stage_events_cannot_be_deleted(): void
     {
         [$ownerUser, $ownerAccount, , , $collaboration] = $this->acceptedEngagement();
+        $this->linkOwnerAgreement($collaboration, $ownerAccount, $ownerUser);
 
         $event = $this->service()->claimStage(
-            $collaboration,
+            $collaboration->fresh(),
             $ownerAccount,
             $ownerUser,
             SuchakCollaborationStageEvent::STAGE_MEETING_SCHEDULED,
@@ -288,6 +301,20 @@ class SuchakMarketplaceEngagementTest extends TestCase
     private function service(): SuchakCollaborationService
     {
         return $this->app->make(SuchakCollaborationService::class);
+    }
+
+    /**
+     * The user behind the CUSTOMER-OWNING side's candidate — D26's "the customer confirms", as the
+     * service now spells it. Any other logged-in user is refused inside
+     * `SuchakCollaborationService::confirmationActorType()` since phase 4.
+     */
+    private function candidateUser(SuchakCollaborationRequest $collaboration): User
+    {
+        /** @var MatrimonyProfile $profile */
+        $profile = MatrimonyProfile::query()
+            ->findOrFail($collaboration->fresh()->customerOwnerMatrimonyProfileId());
+
+        return User::query()->findOrFail($profile->user_id);
     }
 
     /**

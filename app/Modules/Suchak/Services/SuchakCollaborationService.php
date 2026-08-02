@@ -12,6 +12,7 @@ use App\Models\SuchakCustomerAgreement;
 use App\Models\SuchakCustomerPortalLink;
 use App\Models\SuchakFeatureSuspension;
 use App\Models\SuchakMarketplaceChallenge;
+use App\Models\SuchakMarriageOutcome;
 use App\Models\SuchakPaymentContext;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
@@ -1239,8 +1240,25 @@ class SuchakCollaborationService
     }
 
     /**
-     * Confirm a claimed terminal stage (D26). The customer confirms; an admin may confirm in their place.
-     * Neither participating Suchak's own user may confirm their side's claim.
+     * Confirm a claimed terminal stage (D26). The customer confirms; an admin may confirm in their
+     * place — through the admin door, which now exists (see {@see confirmationActorType()} for what
+     * that sentence used to be worth). Neither participating Suchak's own user may confirm their
+     * side's claim.
+     *
+     * ── THE `marriage` RUNG MAY NOT SETTLE WITHOUT ITS §6.2 ROW ──────────────────────────────
+     *
+     * Confirmation is the moment a terminal claim turns into money: `SuchakSuccessFeeTrancheService`
+     * releases on SETTLED rungs, M10 cascades every earlier unpaid tranche onto the wedding, and
+     * none of it reads `suchak_marriage_outcomes` at all. So a `marriage` rung with no live
+     * attribution behind it is the whole success fee with nobody named as having earned it — which
+     * is exactly what a half-written recording used to leave behind, and what an admin's correction
+     * leaves behind on purpose.
+     *
+     * The refusal here is the second half of that invariant, and it is deliberately placed on
+     * CONFIRMATION rather than on the claim: a rung claimed before the marriage door existed is real
+     * evidence and is not deleted, it simply cannot settle until somebody records the wedding date
+     * and the engagement credited with it. `SuchakMarriageOutcomeService::record()` attaches to a
+     * standing rung for precisely this case.
      */
     public function confirmStage(
         SuchakCollaborationRequest $collaboration,
@@ -1279,6 +1297,8 @@ class SuchakCollaborationService
                 throw new InvalidArgumentException('This marketplace stage is already confirmed.');
             }
 
+            $this->assertMarriageRungIsAttributed($locked, $stageKey);
+
             SuchakCollaborationStageEvent::query()
                 ->whereKey($event->id)
                 ->update([
@@ -1293,6 +1313,35 @@ class SuchakCollaborationService
 
             return $event->fresh() ?? $event;
         });
+    }
+
+    /**
+     * §6.2 at the moment it starts to matter — see the `confirmStage()` docblock for why the rule
+     * sits on confirmation. Reads the LIVE attribution only: the model's global scope hides rows an
+     * admin set aside, and a withdrawn claim must not settle anything.
+     *
+     * Only the `marriage` rung is asked. `marriage_settled` and `engagement` carry tranches too, but
+     * neither has a §6.2 row of its own — the attribution names the WEDDING, and M10 is what carries
+     * it back onto the earlier instalments.
+     */
+    private function assertMarriageRungIsAttributed(SuchakCollaborationRequest $collaboration, string $stageKey): void
+    {
+        if ($stageKey !== SuchakMarriageOutcome::EVIDENCE_STAGE) {
+            return;
+        }
+
+        $attributed = SuchakMarriageOutcome::query()
+            ->where('collaboration_request_id', $collaboration->id)
+            ->exists();
+
+        if ($attributed) {
+            return;
+        }
+
+        throw new InvalidArgumentException(
+            'या सहकार्यासाठी विवाहाची नोंद (विवाहाची तारीख आणि श्रेय) झालेली नाही, त्यामुळे या टप्प्याला '
+            .'दुजोरा देता येणार नाही. आधी विवाहाची नोंद करा.'
+        );
     }
 
     private function assertCanCreate(
@@ -1697,9 +1746,31 @@ class SuchakCollaborationService
      *     side was written deliberately is the customer agreement link that linkCustomerAgreement()
      *     writes in the same breath, and only the owning Suchak can supply his own agreement, so a
      *     Suchak cannot appoint himself the other role.
-     *  3. Where the engagement already names the customer agreement in force, that agreement's own
-     *     state must support the rung — the same gate the pre-engagement path applies, for the same
-     *     reason: no meeting, tranche or share exists under terms nobody accepted.
+     *  3. EVERY Suchak-claimable rung needs the engagement to NAME the customer agreement revision
+     *     in force, and that agreement's own state must support it — the same gate the
+     *     pre-engagement path applies, for the same reason: no meeting, tranche or share exists
+     *     under terms nobody accepted.
+     *
+     * ── THE FAIL-OPEN THAT WAS HERE, AND WHY IT WAS THE WORST ONE ────────────────────────────
+     *
+     * CLAIMANT_EITHER_SUCHAK used to return EARLY, above the `customer_agreement_id is null`
+     * refusal. D26's "either Suchak may raise the claim" is a rule about WHICH of the two Suchaks
+     * may speak; it was being read as "and about nothing else", so the four either-Suchak rungs —
+     * `meeting_scheduled` and the three TERMINAL ones, `marriage_settled`, `engagement`,
+     * `marriage` — could be claimed on an engagement whose commission agreement named no customer
+     * agreement at all. Every rung with a NARROWER claimant already passed through that refusal, so
+     * the rungs that release the largest tranches in the system were the only ones exempt from it.
+     *
+     * What that produced: a §6.2 marriage attribution with nothing to attribute — no revision, so
+     * no frozen success fee, no tranche shares, no rate the customer ever accepted (§4, A1) — and
+     * `customer_owner_side` still on its column DEFAULT, so "the customer's own Suchak" and "the
+     * helper" were positions nobody had recorded. The share, the tranche and the twelve-month
+     * clause all hang off that pair.
+     *
+     * The refusal is now unconditional for every non-customer rung, which also makes
+     * `suchak_marriage_outcomes.customer_agreement_id` NOT NULL possible — the two are one change.
+     * `meeting_scheduled` is inside it deliberately: `meeting_completed`, the very next rung, always
+     * required the link, so scheduling was reachable under terms that made completing it impossible.
      */
     private function assertStageClaimant(
         SuchakCollaborationRequest $collaboration,
@@ -1724,15 +1795,17 @@ class SuchakCollaborationService
             $this->assertCustomerTermsSupportStage($linkedCustomerAgreement, $stageKey);
         }
 
-        if ($claimant === SuchakCollaborationStageEvent::CLAIMANT_EITHER_SUCHAK) {
-            return;
-        }
-
+        // Unconditional, and ABOVE the either-Suchak exit on purpose — see the docblock. A rung
+        // whose terms are unnamed is a rung with nothing behind it, whichever Suchak is speaking.
         if ($commissionAgreement?->customer_agreement_id === null) {
             throw new InvalidArgumentException(
                 'या सहकार्यात ग्राहकाचा सूचक कोण हे अजून नोंदवलेले नाही. आधी ग्राहक करार या सहकार्याशी जोडा, '
                 .'मग "'.$label.'" हा टप्पा नोंदवता येईल.'
             );
+        }
+
+        if ($claimant === SuchakCollaborationStageEvent::CLAIMANT_EITHER_SUCHAK) {
+            return;
         }
 
         if ($claimant === SuchakCollaborationStageEvent::CLAIMANT_CUSTOMER_OWNER
@@ -1795,6 +1868,46 @@ class SuchakCollaborationService
 
     /**
      * The customer confirms; an admin may stand in. A participating Suchak's own user may not.
+     *
+     * ── THE SECOND FAIL-OPEN, AND WHERE ITS GUARD USED TO LIVE ───────────────────────────────
+     *
+     * This method used to map admin to ACTOR_ADMIN, throw for a participating Suchak's user, and
+     * let EVERY OTHER AUTHENTICATED USER THROUGH as ACTOR_USER. The check that actually made
+     * confirmation safe — "you must be one of the two candidates on this engagement" — lived in
+     * MemberSuchakStageApiController, not here. So the service's guarantee was "not a participating
+     * Suchak", which is not a guarantee at all: any member with a login could confirm a stranger's
+     * `marriage` claim and settle the rung that releases the largest tranche in the system. The
+     * only thing standing between that and production was one `in_array()` in one controller.
+     *
+     * The protection is MOVED, not copied. §12 forbids a second confirmation engine, and a rule
+     * enforced in a controller is a rule the next controller does not have — this repository has
+     * shipped eight capabilities with a missing door and the mirror-image defect is a door with a
+     * missing rule. The service now REFUSES WHAT IT CANNOT VERIFY: an actor who is neither an admin
+     * nor the user behind one of the two candidate profiles is turned away here, so every present
+     * and future door inherits it.
+     *
+     * The controller's own check STAYS, and is now a PRIVACY shape rather than the security
+     * boundary: it answers 404 so a stranger never learns that someone else's engagement exists,
+     * where this method's refusal would surface as a 422 that confirms it does. Two different
+     * questions, answered in the two places that can answer them.
+     *
+     * The order of the two refusals matters and is unchanged: a participating Suchak is turned away
+     * FIRST, so a Suchak who happens to also be a candidate on his own engagement cannot confirm
+     * his own claim through the candidate door.
+     *
+     * ── "AN ADMIN MAY CONFIRM IN THEIR PLACE" WAS NOT TRUE WHEN IT WAS WRITTEN ────────────────
+     *
+     * This branch was UNREACHABLE. The only door onto `confirmStage()` was
+     * `MemberSuchakStageApiController`, whose `viewerContext()` 404s anybody whose own matrimony
+     * profile is not one of the engagement's two candidates — and an admin is not a candidate. So
+     * the sentence described a capability that existed in tests and nowhere else, while §2's family
+     * with no login had NOBODY who could confirm at all: their helper's tranche could never settle,
+     * for the whole life of the engagement.
+     *
+     * `SuchakAdminTerminalStageApiController` is the door that makes the sentence true, behind the
+     * `admin` middleware. It is a stand-in and is recorded as one — ACTOR_ADMIN, never ACTOR_USER —
+     * so the activity trail always says whether the family spoke or somebody spoke for them. The
+     * candidate door is untouched and stays the normal path.
      */
     private function confirmationActorType(SuchakCollaborationRequest $collaboration, User $confirmingUser): string
     {
@@ -1813,6 +1926,22 @@ class SuchakCollaborationService
 
         if (in_array((int) $confirmingUser->id, $participantUserIds, true)) {
             throw new InvalidArgumentException('A participating Suchak cannot confirm their own marketplace stage claim.');
+        }
+
+        $candidateUserIds = MatrimonyProfile::query()
+            ->whereKey([
+                $collaboration->requesting_matrimony_profile_id,
+                $collaboration->target_matrimony_profile_id,
+            ])
+            ->whereNotNull('user_id')
+            ->pluck('user_id')
+            ->map(fn ($userId): int => (int) $userId)
+            ->all();
+
+        if (! in_array((int) $confirmingUser->id, $candidateUserIds, true)) {
+            throw new InvalidArgumentException(
+                'या टप्प्याला दुजोरा फक्त या सहकार्यातील उमेदवार स्वतः देऊ शकतात.'
+            );
         }
 
         return SuchakActivityLog::ACTOR_USER;

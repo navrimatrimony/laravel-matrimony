@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\SuchakCollaborationRequest;
 use App\Models\SuchakCollaborationStageEvent;
 use App\Models\SuchakCustomerAgreement;
+use App\Models\SuchakMarriageOutcome;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakCollaborationService;
 use Illuminate\Http\JsonResponse;
@@ -113,9 +114,21 @@ class SuchakCollaborationStagesApiController extends Controller
      *                                                          today, because the customer has no
      *                                                          door yet (D23, §10 S4)
      *
-     * All ten stay in the validation list on purpose. `viewed` IS a real engagement stage; the
-     * reason it is refused is the actor, not the vocabulary, and a 422 that says so in Marathi
-     * tells the Suchak something true, where "the selected stage_key is invalid" would not.
+     * `viewed`, `interested` and `meeting_confirmed` stay in the validation list on purpose. They
+     * ARE real engagement stages; the reason they are refused is the actor, not the vocabulary, and
+     * a 422 that says so in Marathi tells the Suchak something true, where "the selected stage_key
+     * is invalid" would not.
+     *
+     * `marriage` is the ONE exception and is removed from the list outright (blueprint 6.2, phase
+     * 4). It is not an actor refusal — either Suchak may claim it — it is that this route cannot
+     * carry the fact the rung is worthless without: THE DATE OF THE WEDDING. `claimed_at` and
+     * `confirmed_at` are when it was REPORTED, and M3 keys the cross-Suchak share on "a fixed
+     * number of days after a recorded Marriage", so a rung claimed here would start no clock and
+     * produce no §6.2 attribution row. It is recorded through
+     * POST /suchak/collaborations/{collaboration}/marriage instead
+     * (SuchakMarriageOutcomeApiController), which requires the date and writes both rows together.
+     * The exclusion is DERIVED from SuchakMarriageOutcome::EVIDENCE_STAGE rather than spelled here,
+     * so moving that constant moves this list with it.
      *
      * `profile_suggested` is claimable on a PENDING engagement (a marketplace proposal is created
      * pending); everything from `meeting_scheduled` onward needs the engagement accepted.
@@ -135,7 +148,7 @@ class SuchakCollaborationStagesApiController extends Controller
         }
 
         $validated = $request->validate([
-            'stage_key' => ['required', 'string', Rule::in(SuchakCollaborationStageEvent::engagementStages())],
+            'stage_key' => ['required', 'string', Rule::in($this->claimableEngagementStages())],
             'event_note' => ['nullable', 'string', 'max:2000'],
         ]);
 
@@ -214,6 +227,24 @@ class SuchakCollaborationStagesApiController extends Controller
             'message' => 'टप्पा नोंदवला.',
             'data' => $this->stagePayload($event),
         ], 201);
+    }
+
+    /**
+     * The engagement-owned rungs this route accepts: the ladder's engagement half MINUS the one
+     * rung that has a door of its own.
+     *
+     * Derived, never hand-written. `SuchakMarriageOutcome::EVIDENCE_STAGE` is the single name of the
+     * rung a marriage is evidenced by; if it ever moves, this list moves with it instead of silently
+     * re-opening the door this exclusion exists to close.
+     *
+     * @return list<string>
+     */
+    private function claimableEngagementStages(): array
+    {
+        return array_values(array_diff(
+            SuchakCollaborationStageEvent::engagementStages(),
+            [SuchakMarriageOutcome::EVIDENCE_STAGE],
+        ));
     }
 
     /**
