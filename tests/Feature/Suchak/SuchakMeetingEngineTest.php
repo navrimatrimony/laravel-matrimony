@@ -118,7 +118,7 @@ class SuchakMeetingEngineTest extends TestCase
         $this->assertScheduleRefused($fixture);
 
         // disputed
-        $disputed = $service->disputeVisit($completed, $fixture['requestingUser'], [
+        $disputed = $service->disputeVisit($completed, $fixture['customerUser'], [
             'dispute_reason' => 'The family says this meeting never took place.',
         ]);
         $this->assertSame(SuchakVisitConfirmation::STATUS_DISPUTED, $disputed->visit_status);
@@ -146,7 +146,7 @@ class SuchakMeetingEngineTest extends TestCase
         $completed = $service->markSuchakCompleted($first, $fixture['suchakUser'], [
             'completion_note' => 'First meeting held at the family home.',
         ]);
-        $confirmed = $service->confirmByUser($completed, $fixture['requestingUser'], [
+        $confirmed = $service->confirmByUser($completed, $fixture['customerUser'], [
             'confirmation_note' => 'The family confirms the first meeting happened.',
         ]);
         $this->assertSame(SuchakVisitConfirmation::STATUS_CONFIRMED, $confirmed->visit_status);
@@ -406,7 +406,7 @@ class SuchakMeetingEngineTest extends TestCase
 
         // The family answers, and only now does the meeting settle. The admin's
         // confirmation is still required — the mode is honoured, not discarded.
-        $confirmed = $service->confirmByUser($adminConfirmed, $fixture['requestingUser'], [
+        $confirmed = $service->confirmByUser($adminConfirmed, $fixture['customerUser'], [
             'confirmation_note' => 'The family confirms the meeting took place.',
         ]);
         $this->assertSame(SuchakVisitConfirmation::STATUS_CONFIRMED, $confirmed->visit_status);
@@ -469,9 +469,10 @@ class SuchakMeetingEngineTest extends TestCase
         ]);
 
         // M5 gives the family `dispute`, not a quiet cancellation of a meeting
-        // the Suchak arranged.
+        // the Suchak arranged — so the actor here is the family that HAS that
+        // right (the customer), or the contrast the test draws is empty.
         try {
-            $service->cancelVisit($visit, $fixture['requestingUser'], [
+            $service->cancelVisit($visit, $fixture['customerUser'], [
                 'cancellation_reason' => 'The member tries to cancel the Suchak\'s meeting.',
             ]);
             $this->fail('The member must not be able to cancel an arranged meeting.');
@@ -549,7 +550,10 @@ class SuchakMeetingEngineTest extends TestCase
             ['completion_note' => 'Suchak marked this meeting complete.'],
         );
 
-        Sanctum::actingAs($fixture['requestingUser']);
+        // "Their own" meeting is the one they are BILLED for, and the route
+        // resolves that through the service's customer-side accessor — never
+        // through `requesting_matrimony_profile_id`, which is a direction.
+        Sanctum::actingAs($fixture['customerUser']);
 
         $response = $this->postJson("/api/v1/suchak-meetings/{$visit->id}/confirm", [
             'confirmation_note' => 'We met the family on Sunday as arranged.',
@@ -590,7 +594,10 @@ class SuchakMeetingEngineTest extends TestCase
             'dispute_reason' => 'A stranger should never learn this meeting exists.',
         ])->assertNotFound();
 
-        Sanctum::actingAs($fixture['requestingUser']);
+        // The billed family — the only member the route admits. A member on the
+        // far side of the same meeting owes this Suchak nothing (M1) and is a
+        // stranger to this row for exactly the reason above.
+        Sanctum::actingAs($fixture['customerUser']);
         $this->postJson("/api/v1/suchak-meetings/{$visit->id}/dispute", [
             'dispute_reason' => 'No such meeting was ever arranged with our family.',
         ])->assertOk()->assertJsonPath('data.visit_status', SuchakVisitConfirmation::STATUS_DISPUTED);
@@ -613,7 +620,7 @@ class SuchakMeetingEngineTest extends TestCase
             $fixture['suchakUser'],
             ['completion_note' => 'Suchak marked this meeting complete.'],
         );
-        $service->confirmByUser($visit, $fixture['requestingUser'], [
+        $service->confirmByUser($visit, $fixture['customerUser'], [
             'confirmation_note' => 'The family confirms the meeting happened.',
         ]);
 
@@ -725,6 +732,21 @@ class SuchakMeetingEngineTest extends TestCase
      * A pipeline whose customer has an ACCEPTED agreement quoting ₹3,000 offline
      * and ₹5,000 online, so the fee actually has somewhere to resolve from.
      *
+     * TWO members sit in this world and they are not interchangeable:
+     *
+     *  - `customerUser` owns `targetProfile`, which is the candidate
+     *    `customerContext` names. Every figure below is quoted off THAT
+     *    context's agreement, so this is the family the fee falls on — the
+     *    party M4 means by "the customer", and the only one who may confirm or
+     *    dispute (SuchakVisitConfirmationService::customerSideMatrimonyProfileId).
+     *  - `requestingUser` owns `requestingProfile` and is only the DIRECTION the
+     *    request travelled. M1 says each customer pays their own Suchak, so a
+     *    member on the far side of this meeting owes this Suchak nothing and has
+     *    no standing on this row. (Blueprint 5.2 makes direction useless as a
+     *    role marker outright: a Suchak answering a challenge becomes the
+     *    requester, so `requesting_matrimony_profile_id` can be the OTHER
+     *    family's candidate.)
+     *
      * @param  array<string, array<string, mixed>>  $overrides
      * @return array<string, mixed>
      */
@@ -733,6 +755,10 @@ class SuchakMeetingEngineTest extends TestCase
         $admin = User::factory()->create(['is_admin' => true, 'admin_role' => 'super_admin']);
         $suchakUser = User::factory()->create();
         $requestingUser = User::factory()->create();
+        // The family the arranging Suchak SERVES, and therefore the one M1/M4
+        // bill: every fee below is quoted off `customerContext`'s agreement, and
+        // that context names the represented candidate — not the requester.
+        $customerUser = User::factory()->create();
 
         $account = SuchakAccount::factory()->create([
             'user_id' => $suchakUser->id,
@@ -747,6 +773,7 @@ class SuchakMeetingEngineTest extends TestCase
             'is_suspended' => false,
         ]);
         $targetProfile = MatrimonyProfile::factory()->create([
+            'user_id' => $customerUser->id,
             'full_name' => 'Meeting Engine Candidate',
             'date_of_birth' => '1997-04-02',
             'lifecycle_state' => 'draft',
@@ -841,6 +868,7 @@ class SuchakMeetingEngineTest extends TestCase
             'admin' => $admin,
             'suchakUser' => $suchakUser,
             'requestingUser' => $requestingUser,
+            'customerUser' => $customerUser,
             'account' => $account,
             'package' => $package,
             'agreement' => $agreement,

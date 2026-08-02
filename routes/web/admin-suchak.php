@@ -32,6 +32,20 @@ Route::middleware(['auth', 'admin', 'admin.section'])
         Route::post('/safety/disputes/{dispute}/review', [SafetyController::class, 'reviewDispute'])->name('safety.disputes.review');
         Route::post('/safety/disputes/{dispute}/close', [SafetyController::class, 'closeDispute'])->name('safety.disputes.close');
         Route::post('/safety/disputes/{dispute}/payment-freeze', [SafetyController::class, 'freezePaymentAbility'])->name('safety.disputes.payment-freeze');
+        /*
+        | The ONLY way a payout hold is ever lifted by hand. Its statuses and its
+        | three release columns had no writer anywhere in app/ until 2026-08-03,
+        | so a hold — which blocks every later platform payout for that
+        | Suchak/context — was permanent once opened.
+        |
+        | The name stays inside `admin.suchak.safety.*`, which
+        | AdminNavigationCatalog already claims for the Suchak Network module's
+        | Safety tab, so EnsureAdminSectionAccess gates it. A name outside that
+        | pattern would fall through the middleware's "no module claims this
+        | route" branch and be reachable by any admin.
+        */
+        Route::post('/safety/payout-holds/{payoutHold}/release', [SafetyController::class, 'releasePayoutHold'])
+            ->whereNumber('payoutHold')->name('safety.payout-holds.release');
         Route::post('/safety/accounts/{suchakAccount}/freeze', [SafetyController::class, 'freezeAccount'])->name('safety.accounts.freeze');
         Route::post('/safety/accounts/{suchakAccount}/unfreeze', [SafetyController::class, 'unfreezeAccount'])->name('safety.accounts.unfreeze');
         Route::post('/safety/accounts/{suchakAccount}/pause', [SafetyController::class, 'pauseAccount'])->name('safety.accounts.pause');

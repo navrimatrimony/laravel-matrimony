@@ -356,6 +356,26 @@
                                         <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-100">Payout hold</span>
                                     @endif
                                 </div>
+                                {{--
+                                    Manual release for every hold still active on this case. Closing
+                                    the case releases these automatically (rejected → released,
+                                    resolved/closed → cancelled); this is the lever for a hold whose
+                                    case stays open, and it is the only hand-operated way a hold has
+                                    ever been liftable.
+                                --}}
+                                @foreach ($dispute->payoutHolds->where('hold_status', \App\Models\SuchakPayoutHold::STATUS_ACTIVE) as $activeHold)
+                                    <form method="POST" action="{{ route('admin.suchak.safety.payout-holds.release', $activeHold) }}" class="mt-3 space-y-2 rounded-md border border-amber-200 p-2 dark:border-amber-800">
+                                        @csrf
+                                        <div class="text-xs font-semibold text-gray-700 dark:text-gray-200">Payout hold #{{ $activeHold->id }} · {{ $label($activeHold->hold_scope) }}</div>
+                                        <select name="release_status" required class="w-full rounded-md border-gray-300 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                                            @foreach (\App\Models\SuchakPayoutHold::RELEASE_STATUSES as $releaseStatus)
+                                                <option value="{{ $releaseStatus }}">{{ $label($releaseStatus) }}</option>
+                                            @endforeach
+                                        </select>
+                                        <textarea name="release_reason" rows="2" required minlength="10" maxlength="1000" placeholder="Why this hold is being lifted" class="w-full rounded-md border-gray-300 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"></textarea>
+                                        <button type="submit" class="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">Release payout hold</button>
+                                    </form>
+                                @endforeach
                                 @if (in_array($dispute->status, [\App\Models\SuchakDispute::STATUS_OPEN, \App\Models\SuchakDispute::STATUS_UNDER_REVIEW], true))
                                     <div class="mt-3 space-y-3">
                                         @if (! $hasActiveFreeze)

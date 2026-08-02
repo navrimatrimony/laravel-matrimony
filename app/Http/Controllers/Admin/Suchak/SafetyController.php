@@ -161,6 +161,43 @@ class SafetyController extends Controller
         );
     }
 
+    /**
+     * THE DOOR FOR THE PAYOUT HOLD RELEASE.
+     *
+     * `suchak_payout_holds` shipped with `released`/`cancelled` statuses and
+     * three release columns on 2026-06-10, and nothing in the application wrote
+     * any of them — an active hold blocks every later platform payout for that
+     * Suchak/context, so once created it was permanent. Closing the dispute a
+     * hold hangs off now cascades automatically; this is the manual lever for
+     * everything else — a `direct_payment_risk` hold whose case stays open, or
+     * one raised on facts that turned out wrong.
+     *
+     * Authorisation, the active-hold check and the audit rows are the service's,
+     * exactly like every other action on this controller.
+     */
+    public function releasePayoutHold(
+        Request $request,
+        SuchakPayoutHold $payoutHold,
+        SuchakSafetyService $safetyService
+    ): RedirectResponse {
+        $validated = $request->validate([
+            'release_status' => ['required', 'string', Rule::in(SuchakPayoutHold::RELEASE_STATUSES)],
+            'release_reason' => ['required', 'string', 'min:10', 'max:1000'],
+        ]);
+
+        return $this->runSafetyAction(
+            fn () => $safetyService->releasePayoutHold(
+                $payoutHold,
+                $request->user(),
+                $validated['release_status'],
+                $validated['release_reason'],
+                $request->ip(),
+                $this->userAgent($request),
+            ),
+            'Suchak payout hold released.'
+        );
+    }
+
     public function freezeAccount(
         Request $request,
         SuchakAccount $suchakAccount,

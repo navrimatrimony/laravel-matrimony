@@ -70,6 +70,10 @@ class SuchakScheduledJobsConsolidationTest extends TestCase
             SuchakScheduledJobRun::JOB_FOLLOW_UP_REMINDERS,
             SuchakScheduledJobRun::JOB_MONTHLY_REPORTS,
             SuchakScheduledJobRun::JOB_LOYALTY_RECALCULATION,
+            // Blueprint §7.2 (2026-08-03). Pinned LAST on purpose: runTrackedJob() re-throws and
+            // aborts every sub-job after the one that failed, so the money sweep must have nothing
+            // behind it. Moving it up this list is the regression this assertion catches.
+            SuchakScheduledJobRun::JOB_CLAIM_SILENCE_SWEEP,
         ], SuchakScheduledJobRun::JOBS);
 
         $run = SuchakScheduledJobRun::query()->create([
@@ -114,7 +118,7 @@ class SuchakScheduledJobsConsolidationTest extends TestCase
             '--at' => $now->toDateTimeString(),
             '--month' => '2026-06',
         ])
-            ->expectsOutput('Suchak scheduled jobs completed: 8')
+            ->expectsOutput('Suchak scheduled jobs completed: 9')
             ->assertExitCode(0);
 
         $this->assertSame(SuchakPaymentRequest::STATUS_EXPIRED, $dueRequest->fresh()->payment_status);
@@ -154,7 +158,7 @@ class SuchakScheduledJobsConsolidationTest extends TestCase
             $this->assertStringNotContainsString($profile->full_name, $reminder->message_copy);
         });
 
-        $this->assertSame(8, SuchakScheduledJobRun::query()->count());
+        $this->assertSame(9, SuchakScheduledJobRun::query()->count());
         foreach (SuchakScheduledJobRun::JOBS as $jobKey) {
             $this->assertTrue(
                 SuchakScheduledJobRun::query()
@@ -175,10 +179,10 @@ class SuchakScheduledJobsConsolidationTest extends TestCase
             '--at' => $now->toDateTimeString(),
             '--month' => '2026-06',
         ])
-            ->expectsOutput('Suchak scheduled jobs completed: 8')
+            ->expectsOutput('Suchak scheduled jobs completed: 9')
             ->assertExitCode(0);
 
-        $this->assertSame(8, SuchakScheduledJobRun::query()->count());
+        $this->assertSame(9, SuchakScheduledJobRun::query()->count());
         $this->assertSame(1, SuchakGrowthReward::query()->count());
         $this->assertSame(1, SuchakPlatformPayoutSettlement::query()->count());
         $this->assertSame(1, SuchakMonthlyValueReport::query()->count());

@@ -18,6 +18,13 @@ class SuchakVisitConfirmationEvent extends Model
     public const EVENT_USER_CONFIRMED = 'user_confirmed';
     public const EVENT_ADMIN_CONFIRMED = 'admin_confirmed';
     public const EVENT_DISPUTED = 'disputed';
+
+    /**
+     * The dispute that froze this meeting was closed, and the money answer that
+     * came with it was written onto the row. One event key for all three
+     * closing outcomes — `metadata_json.refund_review_status` carries which.
+     */
+    public const EVENT_DISPUTE_SETTLED = 'dispute_settled';
     public const EVENT_PAYOUT_QUALIFIED = 'payout_qualified';
     public const EVENT_CANCELLED = 'cancelled';
 
@@ -27,6 +34,7 @@ class SuchakVisitConfirmationEvent extends Model
         self::EVENT_USER_CONFIRMED,
         self::EVENT_ADMIN_CONFIRMED,
         self::EVENT_DISPUTED,
+        self::EVENT_DISPUTE_SETTLED,
         self::EVENT_PAYOUT_QUALIFIED,
         self::EVENT_CANCELLED,
     ];

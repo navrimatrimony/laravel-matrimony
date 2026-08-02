@@ -312,9 +312,15 @@ class SuchakVisitConfirmationService
     ): SuchakVisitConfirmation {
         return DB::transaction(function () use ($visit, $user, $attributes, $ipAddress, $userAgent): SuchakVisitConfirmation {
             $locked = $this->lockedVisit($visit);
-            $this->assertRequestingUserCanConfirm($locked, $user);
+            $this->assertCustomerSideUserCanConfirm($locked, $user);
             $this->assertCompletedBeforeConfirmation($locked);
             $this->assertNotDisputedOrPayoutQualified($locked);
+
+            // §7.2 clause 4 — before the answer is written, not after. This is the exact event
+            // that used to erase the lapse: the confirmation landed, `isClaimAnswered()` went
+            // true, and the claim stopped being lapsed retroactively. The family keeps the right
+            // to answer late; what they no longer do is undo the 90 days by answering.
+            $this->recordClaimLapseIfDue($locked);
 
             if ($locked->user_confirmation_status === SuchakVisitConfirmation::CONFIRMATION_NOT_REQUIRED) {
                 throw new InvalidArgumentException('User confirmation is not required by the active visit confirmation policy.');
@@ -439,9 +445,21 @@ class SuchakVisitConfirmationService
             $actorType = $this->visitDisputeActorType($locked, $actor);
             $this->assertNotPayoutQualified($locked);
 
-            if ($locked->visit_status === SuchakVisitConfirmation::STATUS_DISPUTED) {
+            if ($locked->hasOpenDispute() || $locked->visit_status === SuchakVisitConfirmation::STATUS_DISPUTED) {
                 throw new InvalidArgumentException('Suchak visit confirmation is already disputed.');
             }
+
+            // §7.2 clause 4 — a closed dispute is "never revivable". Unfreezing a
+            // settled meeting (the fix above) would otherwise hand back the
+            // permanent veto through the back door: contest, lose, contest again.
+            // One meeting gets one contest, whichever way it went.
+            if ($locked->refund_review_status !== SuchakVisitConfirmation::REFUND_NOT_REQUESTED) {
+                throw new InvalidArgumentException('This Suchak visit was already disputed once and settled; a settled dispute cannot be reopened.');
+            }
+
+            // §7.2 clause 4 — a contest is an answer too, so it gets the same treatment as a late
+            // confirmation: the lapse is written down first and survives it.
+            $this->recordClaimLapseIfDue($locked);
 
             $reason = $this->requiredPrivateSafeText($attributes['dispute_reason'] ?? null, 'Suchak visit dispute reason is required.', 1000);
             $adminAuditLog = $actorType === SuchakActivityLog::ACTOR_ADMIN
@@ -455,72 +473,228 @@ class SuchakVisitConfirmationService
                 )
                 : null;
 
-            $dispute = SuchakDispute::query()->create([
-                'suchak_account_id' => $locked->suchak_account_id,
-                'matrimony_profile_id' => $locked->target_matrimony_profile_id,
-                'representation_id' => $locked->representation_id,
-                'customer_context_id' => $locked->customer_context_id,
-                'payment_context_id' => $locked->payment_context_id,
-                'opened_by_user_id' => $actor->id,
-                'assigned_admin_user_id' => $actorType === SuchakActivityLog::ACTOR_ADMIN ? $actor->id : null,
-                'dispute_type' => SuchakDispute::TYPE_VISIT_CONFIRMATION,
-                'status' => SuchakDispute::STATUS_OPEN,
-                'priority' => SuchakDispute::PRIORITY_HIGH,
-                'risk_source' => SuchakDispute::RISK_SOURCE_VISIT_CONFIRMATION_DISPUTE,
-                'summary' => $reason,
-                'evidence_summary' => 'Visit completion dispute recorded for structured Suchak visit confirmation #'.$locked->id.'.',
-                'resolution_note' => null,
-                'opened_at' => now(),
-                'resolved_at' => null,
-            ]);
-
-            $hold = SuchakPayoutHold::query()->create([
-                'suchak_dispute_id' => $dispute->id,
-                'suchak_account_id' => $locked->suchak_account_id,
-                'customer_context_id' => $locked->customer_context_id,
-                'payment_context_id' => $locked->payment_context_id,
-                'hold_scope' => SuchakPayoutHold::SCOPE_VISIT_CONFIRMATION_DISPUTE,
-                'hold_status' => SuchakPayoutHold::STATUS_ACTIVE,
-                'hold_reason' => 'Visit confirmation is disputed; platform visit payout is held.',
-                'created_by_user_id' => $actor->id,
-            ]);
-
-            $fromStatus = $locked->visit_status;
-            $locked->forceFill([
-                'visit_status' => SuchakVisitConfirmation::STATUS_DISPUTED,
-                'user_confirmation_status' => $actorType === SuchakActivityLog::ACTOR_USER
-                    ? SuchakVisitConfirmation::CONFIRMATION_DISPUTED
-                    : $locked->user_confirmation_status,
-                'dispute_id' => $dispute->id,
-                'payout_hold_id' => $hold->id,
-                'refund_review_status' => SuchakVisitConfirmation::REFUND_PENDING_REVIEW,
-                'refund_review_note' => 'Refund/dispute review required before payout qualification.',
-            ])->save();
-
-            $fresh = $locked->fresh($this->relations());
-            $this->recordVisitEvent(
-                $fresh,
-                SuchakVisitConfirmationEvent::EVENT_DISPUTED,
-                $actorType === SuchakActivityLog::ACTOR_ADMIN ? SuchakVisitConfirmationEvent::ACTOR_ADMIN : SuchakVisitConfirmationEvent::ACTOR_USER,
-                $actor,
-                $fromStatus,
-                $fresh->visit_status,
-                $reason,
-                ['dispute_id' => $dispute->id, 'payout_hold_id' => $hold->id],
-            );
-            $this->recordActivity(
-                $fresh,
-                $actor,
+            return $this->applyVisitDispute(
+                $locked,
                 $actorType,
-                SuchakActivityLog::ACTION_VISIT_DISPUTED,
-                'visit_disputed',
+                $actor,
+                $reason,
+                SuchakDispute::PRIORITY_HIGH,
+                'Visit completion dispute recorded for structured Suchak visit confirmation #'.$locked->id.'.',
+                'Visit confirmation is disputed; platform visit payout is held.',
+                [],
+                $adminAuditLog,
                 $ipAddress,
                 $userAgent,
-                $adminAuditLog,
             );
-
-            return $fresh;
         });
+    }
+
+    /**
+     * SEVEN SILENT DAYS OPEN A DISPUTE — §7.2, M4, M5, D26.
+     *
+     * The claim was made (the Suchak marked the meeting complete), the family did not answer
+     * inside {@see SuchakVisitConfirmation::CLAIM_SILENCE_WINDOW_DAYS} days, and this is what
+     * happens next. Not a zero, and not a payment: M5 is absolute, and both of the tempting
+     * shortcuts are refused here by construction —
+     *
+     *  - the fee is NOT written off. `refund_review_status` goes to `pending_review`, which is
+     *    open, not a finding, and clause 4's lapse later lands on `closed_no_finding` — also not
+     *    a finding.
+     *  - the fee is NOT granted. `user_confirmation_status` is left exactly as it was, PENDING.
+     *    Stamping it `disputed` would be putting a refusal in the family's mouth that they never
+     *    gave, exactly as writing a confirmation there on an admin's finding would put a yes in it
+     *    ({@see SuchakVisitConfirmation::isComplaintDismissedByReview()}).
+     *    `confirmationPolicySatisfied()` therefore still reads false, and no payout can qualify.
+     *
+     * THE ACTOR IS THE SYSTEM. Nobody acted; a date arrived — the actor vocabulary this domain
+     * already uses for exactly that ({@see SuchakVisitConfirmationEvent::ACTOR_SYSTEM},
+     * `SuchakMarketplaceChallengeService::expireDue()`). No user is fabricated: `opened_by_user_id`
+     * on the dispute, `created_by_user_id` on the hold, `actor_user_id` on the trail and on the
+     * activity log are all nullable and are all left null. A silence dispute is not somebody's
+     * allegation and must not be recorded as one.
+     *
+     * PRIORITY IS NORMAL, not HIGH like a human's claim. Every unanswered meeting reaches this
+     * path; if they all arrived HIGH the admin queue would be entirely HIGH inside a week and the
+     * word would stop meaning anything. What gives this teeth is not the label, it is the payout
+     * hold on the ARRANGING Suchak (§7.3) — the party who must chase the family for an answer is
+     * the party whose money is frozen until he gets one.
+     *
+     * IDEMPOTENT. Re-entering on a row that already carries `claim_unanswered_since`, an open
+     * dispute or a closed review returns the row untouched instead of throwing, because the two
+     * callers are a daily sweep and a lazy read-path sweep that will both legitimately see the
+     * same row twice.
+     */
+    public function openSilenceDispute(
+        SuchakVisitConfirmation $visit,
+        ?Carbon $at = null,
+    ): SuchakVisitConfirmation {
+        $at ??= now();
+
+        return DB::transaction(function () use ($visit, $at): SuchakVisitConfirmation {
+            $locked = $this->lockedVisit($visit);
+
+            if (! $this->isSilenceDisputeDue($locked, $at)) {
+                return $locked->fresh($this->relations());
+            }
+
+            $reason = 'भेट झाल्याचा दावा नोंदवला गेला आणि '
+                .SuchakVisitConfirmation::CLAIM_SILENCE_WINDOW_DAYS
+                .' दिवसांत कुटुंबाकडून उत्तर आले नाही. §7.2 प्रमाणे शुल्क आपोआप शून्य होत नाही आणि आपोआप देयही होत नाही — तक्रार उघडली आहे.';
+
+            return $this->applyVisitDispute(
+                $locked,
+                SuchakActivityLog::ACTOR_SYSTEM,
+                null,
+                $reason,
+                SuchakDispute::PRIORITY_NORMAL,
+                'No customer answer within the '.SuchakVisitConfirmation::CLAIM_SILENCE_WINDOW_DAYS
+                    .'-day confirmation window for Suchak visit confirmation #'.$locked->id.'.',
+                'Meeting claim unanswered past its window; platform visit payout is held until it is answered.',
+                [
+                    // §7.2 clause 5 — the family's window and the originating Suchak's run in
+                    // PARALLEL from delivery, so they expire together. One timestamp is therefore
+                    // both "the family went silent" and "this claim now counts against the
+                    // originating Suchak" (clause 3). Written once; never cleared.
+                    'claim_unanswered_since' => $locked->claimSilenceDueAt(),
+                ],
+                null,
+                null,
+                null,
+            );
+        });
+    }
+
+    /**
+     * Is this row's silence window closed, with nothing having happened since?
+     *
+     * Every clause is a refusal that matters:
+     *  - a claim must EXIST (`claimDeliveredAt()`), and its window must have passed;
+     *  - the family must not already have answered;
+     *  - the money must be real. An unpriced meeting has nothing to dispute, and freezing a
+     *    Suchak's payouts over a ₹0 row would be leverage applied to nothing (M4 is a rule about
+     *    fees). `isFeeBearing()` is the existing owner of that question;
+     *  - no dispute may already be open, and no review may already have run;
+     *  - `claim_unanswered_since` must be null, which is what makes a second sweep a no-op.
+     */
+    private function isSilenceDisputeDue(SuchakVisitConfirmation $visit, Carbon $at): bool
+    {
+        $dueAt = $visit->claimSilenceDueAt();
+
+        return $dueAt !== null
+            && $dueAt->lessThanOrEqualTo($at)
+            && $visit->claim_unanswered_since === null
+            && $visit->isFeeBearing()
+            && $visit->visit_status === SuchakVisitConfirmation::STATUS_COMPLETED
+            && $visit->user_confirmation_status === SuchakVisitConfirmation::CONFIRMATION_PENDING
+            && $visit->refund_review_status === SuchakVisitConfirmation::REFUND_NOT_REQUESTED
+            && $visit->dispute_id === null;
+    }
+
+    /**
+     * THE ONE WRITER of a visit dispute — the row, the SuchakDispute, the SuchakPayoutHold and
+     * both trails, in one transaction.
+     *
+     * Extracted 2026-08-03 when the silence timer arrived, so the machine path and the three human
+     * paths could not drift into two dialects of "a meeting is disputed". Everything that differs
+     * between them is a parameter; nothing about the freeze itself is.
+     *
+     * Runs inside the caller's transaction and assumes the row is already locked and already
+     * guarded — the guards differ per caller and belong with the caller.
+     *
+     * @param  array<string, mixed>  $extraColumns
+     */
+    private function applyVisitDispute(
+        SuchakVisitConfirmation $locked,
+        string $actorType,
+        ?User $actor,
+        string $reason,
+        string $priority,
+        string $evidenceSummary,
+        string $holdReason,
+        array $extraColumns,
+        ?AdminAuditLog $adminAuditLog,
+        ?string $ipAddress,
+        ?string $userAgent,
+    ): SuchakVisitConfirmation {
+        $dispute = SuchakDispute::query()->create([
+            'suchak_account_id' => $locked->suchak_account_id,
+            'matrimony_profile_id' => $locked->target_matrimony_profile_id,
+            'representation_id' => $locked->representation_id,
+            'customer_context_id' => $locked->customer_context_id,
+            'payment_context_id' => $locked->payment_context_id,
+            'opened_by_user_id' => $actor?->id,
+            'assigned_admin_user_id' => $actorType === SuchakActivityLog::ACTOR_ADMIN ? $actor?->id : null,
+            'dispute_type' => SuchakDispute::TYPE_VISIT_CONFIRMATION,
+            'status' => SuchakDispute::STATUS_OPEN,
+            'priority' => $priority,
+            'risk_source' => SuchakDispute::RISK_SOURCE_VISIT_CONFIRMATION_DISPUTE,
+            'summary' => $reason,
+            'evidence_summary' => $evidenceSummary,
+            'resolution_note' => null,
+            'opened_at' => now(),
+            'resolved_at' => null,
+        ]);
+
+        $hold = SuchakPayoutHold::query()->create([
+            'suchak_dispute_id' => $dispute->id,
+            'suchak_account_id' => $locked->suchak_account_id,
+            'customer_context_id' => $locked->customer_context_id,
+            'payment_context_id' => $locked->payment_context_id,
+            'hold_scope' => SuchakPayoutHold::SCOPE_VISIT_CONFIRMATION_DISPUTE,
+            'hold_status' => SuchakPayoutHold::STATUS_ACTIVE,
+            'hold_reason' => $holdReason,
+            'created_by_user_id' => $actor?->id,
+        ]);
+
+        $fromStatus = $locked->visit_status;
+        $locked->forceFill(array_merge([
+            'visit_status' => SuchakVisitConfirmation::STATUS_DISPUTED,
+            // Only the FAMILY's own contest writes the family's own column. A Suchak's claim, an
+            // admin's, and the silence timer's all leave it exactly as they found it.
+            'user_confirmation_status' => $actorType === SuchakActivityLog::ACTOR_USER
+                ? SuchakVisitConfirmation::CONFIRMATION_DISPUTED
+                : $locked->user_confirmation_status,
+            'dispute_id' => $dispute->id,
+            'payout_hold_id' => $hold->id,
+            'refund_review_status' => SuchakVisitConfirmation::REFUND_PENDING_REVIEW,
+            'refund_review_note' => 'Refund/dispute review required before payout qualification.',
+        ], $extraColumns))->save();
+
+        $fresh = $locked->fresh($this->relations());
+        $this->recordVisitEvent(
+            $fresh,
+            SuchakVisitConfirmationEvent::EVENT_DISPUTED,
+            // Four actors now, so the old two-way ternary would have filed a helping Suchak's
+            // claim — and the timer's — under `user`. The event trail is the only place a
+            // stop-loss counter can ever learn WHO claimed.
+            match ($actorType) {
+                SuchakActivityLog::ACTOR_ADMIN => SuchakVisitConfirmationEvent::ACTOR_ADMIN,
+                SuchakActivityLog::ACTOR_SUCHAK => SuchakVisitConfirmationEvent::ACTOR_SUCHAK,
+                SuchakActivityLog::ACTOR_SYSTEM => SuchakVisitConfirmationEvent::ACTOR_SYSTEM,
+                default => SuchakVisitConfirmationEvent::ACTOR_USER,
+            },
+            $actor,
+            $fromStatus,
+            $fresh->visit_status,
+            $reason,
+            [
+                'dispute_id' => $dispute->id,
+                'payout_hold_id' => $hold->id,
+                'claim_unanswered_since' => $fresh->claim_unanswered_since?->toIso8601String(),
+            ],
+        );
+        $this->recordActivity(
+            $fresh,
+            $actor,
+            $actorType,
+            SuchakActivityLog::ACTION_VISIT_DISPUTED,
+            'visit_disputed',
+            $ipAddress,
+            $userAgent,
+            $adminAuditLog,
+        );
+
+        return $fresh;
     }
 
     /**
@@ -609,6 +783,119 @@ class SuchakVisitConfirmationService
 
             return $fresh;
         });
+    }
+
+    /**
+     * A dispute closed — write what that means for every meeting it froze.
+     *
+     * THE DOOR THIS CLOSES. `SuchakSafetyService::transitionDispute()` moved a
+     * dispute to a closing status and stopped there; `refund_review_status` had
+     * no writer in the whole application, so `pending_review` was terminal and
+     * the meeting stayed frozen even when the case went the Suchak's way. This
+     * is that writer, and it lives HERE because `suchak_visit_confirmations` has
+     * exactly one owner (docs/FIELD-OWNERSHIP-MAP.md) — the safety service calls
+     * in rather than reaching into the table.
+     *
+     * Pushed on close, not swept lazily on read: the money answer must exist the
+     * moment the admin decides, and nothing else reads these rows often enough
+     * to be a reliable sweep point. There is no timer and no queued job — a
+     * Phase-3 timer written as a queued job would silently never fire on this
+     * production (notifications/governance queues have had no worker since
+     * 2026-06-17).
+     *
+     * Runs inside the caller's transaction. Returns how many meetings it moved.
+     */
+    public function settleDisputedVisits(
+        SuchakDispute $dispute,
+        User $admin,
+        string $closingStatus,
+        string $resolutionNote,
+        ?AdminAuditLog $adminAuditLog = null,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): int {
+        $this->accessService->assertAdmin($admin, 'Only admins can settle Suchak visit disputes.');
+
+        $outcome = SuchakVisitConfirmation::DISPUTE_CLOSE_REFUND_OUTCOME[$closingStatus] ?? null;
+        if ($outcome === null) {
+            throw new InvalidArgumentException('Invalid Suchak dispute closing status for visit settlement.');
+        }
+
+        $note = $this->privateSafeText($resolutionNote, 1000);
+        $settled = 0;
+
+        $visitIds = SuchakVisitConfirmation::query()
+            ->where('dispute_id', $dispute->id)
+            ->whereNotIn('refund_review_status', SuchakVisitConfirmation::REFUND_REVIEW_CLOSED_STATUSES)
+            ->orderBy('id')
+            ->pluck('id');
+
+        foreach ($visitIds as $visitId) {
+            /** @var SuchakVisitConfirmation $locked */
+            $locked = SuchakVisitConfirmation::query()
+                ->whereKey($visitId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            // Re-read under the lock: a concurrent close of the same dispute
+            // must settle each meeting once, not twice.
+            if (in_array($locked->refund_review_status, SuchakVisitConfirmation::REFUND_REVIEW_CLOSED_STATUSES, true)) {
+                continue;
+            }
+
+            // §7.2 clause 4 — a finding is an answer, so the lapse is written down before it. An
+            // adjudication landing on day 8 finds nothing to stamp and settles the case normally;
+            // one landing on day 100 arrives after the claim already terminated, and "never
+            // revivable" makes no exception for the adjudicator. The lapse sweep itself comes
+            // through here too (as `closed` → `closed_no_finding`), which is how a swept claim
+            // gets its fact recorded.
+            $this->recordClaimLapseIfDue($locked);
+
+            $fromStatus = $locked->visit_status;
+            $locked->forceFill([
+                'refund_review_status' => $outcome,
+                'refund_review_note' => $note,
+            ])->save();
+
+            // `dispute_id` and `payout_hold_id` are deliberately left in place.
+            // The trail has to outlive the case; what changed is whether the
+            // case is still GOVERNING, and that is the review status alone.
+            $fresh = $this->refreshVisitStatus($locked);
+
+            $this->recordVisitEvent(
+                $fresh,
+                SuchakVisitConfirmationEvent::EVENT_DISPUTE_SETTLED,
+                SuchakVisitConfirmationEvent::ACTOR_ADMIN,
+                $admin,
+                $fromStatus,
+                $fresh->visit_status,
+                $note,
+                [
+                    'dispute_id' => $dispute->id,
+                    'dispute_status' => $closingStatus,
+                    'refund_review_status' => $outcome,
+                    // The money answer AFTER this settlement, not a claim that the settlement
+                    // itself made the fee due. A dismissal leaves this false until the family
+                    // confirms — M4.
+                    'fee_payable' => $this->isFeeDueOnVisit($fresh),
+                    'claim_lapsed_at' => $fresh->claim_lapsed_at?->toIso8601String(),
+                ],
+            );
+            $this->recordActivity(
+                $fresh,
+                $admin,
+                SuchakActivityLog::ACTOR_ADMIN,
+                SuchakActivityLog::ACTION_VISIT_DISPUTE_SETTLED,
+                'visit_dispute_settled',
+                $ipAddress,
+                $userAgent,
+                $adminAuditLog,
+            );
+
+            $settled++;
+        }
+
+        return $settled;
     }
 
     /**
@@ -716,12 +1003,59 @@ class SuchakVisitConfirmationService
         }
     }
 
-    private function assertRequestingUserCanConfirm(SuchakVisitConfirmation $visit, User $user): void
+    /**
+     * WHICH candidate profile's own user is the CUSTOMER on this meeting — the fee-bearing side.
+     *
+     * Public because the HTTP door in front of confirmByUser() / disputeVisit() has to answer the
+     * same question to decide whether a viewer may see the meeting at all, and two copies of "who
+     * is the customer here" is exactly how the wrong family ends up confirming.
+     *
+     * ROLE FIRST, DIRECTION ONLY AS A FALLBACK. `customer_context_id` is written at schedule time
+     * from the payment context of the ARRANGING Suchak (`pipeline.selected_suchak_account_id`), so
+     * the customer context's candidate is by construction the family whose Suchak arranged the
+     * meeting and whose agreement `fee_amount` was quoted from. That is the party M4 means by "the
+     * customer".
+     *
+     * `requesting_matrimony_profile_id` is a DIRECTION, and in the marketplace direction no longer
+     * implies role: the Suchak answering a challenge becomes the requester (blueprint 5.2 direction
+     * note), so on a marketplace meeting the requesting profile is the HELPER's candidate — the
+     * other family entirely. Resolving off it named the wrong family, and the fee-bearing side
+     * could not confirm at all.
+     *
+     * The fallback is not a loosening: when a meeting names no customer context, nobody is being
+     * billed under an agreement through it, and the requesting member remains the only party the
+     * row identifies.
+     */
+    public function customerSideMatrimonyProfileId(SuchakVisitConfirmation $visit): ?int
     {
-        $visit->loadMissing('requestingMatrimonyProfile');
-        if (! $visit->requestingMatrimonyProfile instanceof MatrimonyProfile
-            || (int) $visit->requestingMatrimonyProfile->user_id !== (int) $user->id) {
-            throw new InvalidArgumentException('Only the requesting user can confirm this Suchak visit.');
+        $visit->loadMissing('customerContext');
+
+        $customerCandidateId = $visit->customerContext?->candidate_matrimony_profile_id;
+        if ($customerCandidateId !== null) {
+            return (int) $customerCandidateId;
+        }
+
+        return $visit->requesting_matrimony_profile_id === null
+            ? null
+            : (int) $visit->requesting_matrimony_profile_id;
+    }
+
+    /**
+     * Exactly one party may confirm or dispute a meeting, and it is the one who pays for it.
+     * Re-pointed from direction to role — see customerSideMatrimonyProfileId(). Nothing was widened:
+     * the set is still a single profile's own user.
+     */
+    private function assertCustomerSideUserCanConfirm(SuchakVisitConfirmation $visit, User $user): void
+    {
+        $profileId = $this->customerSideMatrimonyProfileId($visit);
+        if ($profileId === null) {
+            throw new InvalidArgumentException('This Suchak meeting names no customer, so nobody can confirm it.');
+        }
+
+        /** @var MatrimonyProfile|null $profile */
+        $profile = MatrimonyProfile::query()->find($profileId);
+        if (! $profile instanceof MatrimonyProfile || (int) $profile->user_id !== (int) $user->id) {
+            throw new InvalidArgumentException('Only the customer this meeting was arranged for can confirm it.');
         }
     }
 
@@ -754,11 +1088,29 @@ class SuchakVisitConfirmationService
         }
     }
 
+    /**
+     * `dispute_id !== null` used to be the test here. It froze the row for
+     * good: `SuchakSafetyService::transitionDispute()` closes a dispute and
+     * never clears `dispute_id` (correctly — the trail must survive), so a
+     * dispute settled IN THE SUCHAK'S FAVOUR left the meeting unchangeable and
+     * unpayable forever. The question is whether a dispute is still OPEN, and
+     * {@see SuchakVisitConfirmation::hasOpenDispute()} is where that is asked.
+     */
     private function assertNotDisputedOrPayoutQualified(SuchakVisitConfirmation $visit): void
     {
         $this->assertNotPayoutQualified($visit);
-        if ($visit->visit_status === SuchakVisitConfirmation::STATUS_DISPUTED || $visit->dispute_id !== null) {
+
+        if ($visit->hasOpenDispute()) {
             throw new InvalidArgumentException('Disputed Suchak visit confirmations cannot be changed.');
+        }
+
+        // An upheld complaint is the end of this meeting, not a pause in it.
+        // Without this a settled-against meeting sits at `cancelled` while
+        // `suchak_completion_status` still reads `suchak_marked_completed`, and
+        // confirmByUser()/confirmByAdmin() would happily confirm a meeting whose
+        // fee was already refused.
+        if ($visit->isFeeRefusedByReview()) {
+            throw new InvalidArgumentException('This Suchak visit dispute was settled against the claim; the meeting is closed and cannot be changed.');
         }
     }
 
@@ -775,8 +1127,29 @@ class SuchakVisitConfirmationService
             throw new InvalidArgumentException('Suchak visit payout is already qualified.');
         }
 
-        if ($visit->visit_status === SuchakVisitConfirmation::STATUS_DISPUTED || $visit->dispute_id !== null) {
+        if ($visit->hasOpenDispute()) {
             throw new InvalidArgumentException('Disputed Suchak visit confirmations cannot qualify platform payout.');
+        }
+
+        // Terminal, and deliberately separate from the open-dispute refusal
+        // above: this one never becomes payable, whatever arrives later.
+        if ($visit->isFeeRefusedByReview()) {
+            throw new InvalidArgumentException('This Suchak visit dispute was settled against the claim; its fee can never qualify for platform payout.');
+        }
+
+        // §7.2 clause 4 — the claim lapsed at 90 days: "never revivable, never due". This is the
+        // money boundary, and the lapse reaching it now survives a late answer:
+        //
+        //  - `isClaimLapsed()` reads the RECORDED FACT `claim_lapsed_at` first, so a confirmation
+        //    arriving on day 99 cannot unmake it. It used to be a pure predicate over the answer
+        //    columns, and a late answer therefore erased the lapse and paid the claim;
+        //  - it falls back to arithmetic on `claim_unanswered_since`, so "never due" still holds
+        //    on a production where `schedule:run` never fires and nothing ever stamped the row;
+        //  - it sits here and not on `confirmByUser()`, so a family who finally answers on day 120
+        //    is still allowed to put their answer on the record. History is not falsified to
+        //    enforce a deadline; only the payout is refused.
+        if ($visit->isClaimLapsed()) {
+            throw new InvalidArgumentException('This Suchak meeting claim went unanswered past its lapse window; its fee can never qualify for platform payout.');
         }
 
         $hasActiveHold = SuchakPayoutHold::query()
@@ -799,16 +1172,100 @@ class SuchakVisitConfirmationService
             throw new InvalidArgumentException('Suchak visit payout is held because an active payout hold exists.');
         }
 
+        // M4, AND THE ONE LINE THAT USED TO BREAK IT. This read
+        // `! confirmationPolicySatisfied($visit) && ! $visit->isFeeAllowedByReview()`, so a
+        // dismissed complaint qualified the payout ON ITS OWN — reachable with one admin form
+        // post to `POST admin/suchak/safety/disputes/{dispute}/close` carrying
+        // `resolution_status = rejected`, with the customer nowhere in the transaction. M4 admits
+        // no exception: *no fee falls due without the customer's confirmation*. Closing a dispute
+        // is an admin deciding a dispute; it is not the customer confirming.
+        //
+        // The old branch existed to stop a dispute becoming a free permanent veto on the fee, and
+        // that concern was real — but the answer to it is not to pay without the family. It is
+        // that a dismissal UNFREEZES the meeting (see
+        // {@see SuchakVisitConfirmation::isComplaintDismissedByReview()}): the hold is released,
+        // the row leaves `disputed`, and `confirmByUser()` accepts a family whose column still
+        // reads `disputed`. So the family that lost its contest can confirm, and their own act
+        // moves the money. If they never answer, §7.2 clause 4 ends the claim at 90 days with
+        // nothing owed — an outcome the blueprint states outright rather than an oversight.
         if (! $this->confirmationPolicySatisfied($visit)) {
             throw new InvalidArgumentException('Suchak visit confirmation policy is not yet satisfied.');
         }
+    }
+
+    /**
+     * The money answer for ONE meeting, as a boolean.
+     *
+     * Mirrors the meeting-side half of {@see assertEligibleForPayout()} — deliberately the same
+     * four questions in the same order, four lines above, because the guard has to name WHICH
+     * refusal it hit and a boolean cannot. What it excludes is the payout-side conditions (a
+     * payout already qualified, an active hold elsewhere on the account), which are not facts
+     * about this meeting.
+     *
+     * It exists so the settlement audit row reports the truth. That row used to record
+     * `fee_payable => isFeeAllowedByReview()`, which asserted a fee was due the moment a dispute
+     * was dismissed — the same false equation as the guard above, written into the permanent
+     * trail.
+     */
+    private function isFeeDueOnVisit(SuchakVisitConfirmation $visit): bool
+    {
+        return ! $visit->hasOpenDispute()
+            && ! $visit->isFeeRefusedByReview()
+            && ! $visit->isClaimLapsed()
+            && $this->confirmationPolicySatisfied($visit);
+    }
+
+    /**
+     * §7.2 CLAUSE 4 — WRITE THE LAPSE DOWN BEFORE ANYTHING CAN ERASE IT.
+     *
+     * The lapse is a thing that happened, not a shape the row currently has. Every path that can
+     * record an ANSWER calls this first, so the fact is on the row before the answer that would
+     * otherwise have unmade it. Called from `confirmByUser()` (a late confirmation),
+     * `disputeVisit()` (a late contest) and `settleDisputedVisits()` (a late finding) — the three
+     * writers that can move {@see SuchakVisitConfirmation::isClaimAnswered()}. `confirmByAdmin()`
+     * is not among them because an admin's column is not an answer to the family's claim.
+     *
+     * Stamped with `claimLapsesAt()`, the instant the window actually closed — never `now()`. A
+     * fact noticed late is still a fact that happened on time, and dating it by observation would
+     * let the record drift by however long nobody looked.
+     *
+     * Nothing about the money depends on this having run: `isClaimLapsed()` falls back to
+     * arithmetic. This is what makes the fact SURVIVE, not what makes it true.
+     */
+    private function recordClaimLapseIfDue(SuchakVisitConfirmation $locked): void
+    {
+        if ($locked->claim_lapsed_at !== null || ! $locked->isClaimLapsed()) {
+            return;
+        }
+
+        $locked->forceFill(['claim_lapsed_at' => $locked->claimLapsesAt()])->save();
     }
 
     private function refreshVisitStatus(SuchakVisitConfirmation $visit): SuchakVisitConfirmation
     {
         $status = match (true) {
             $visit->platform_payout_id !== null => SuchakVisitConfirmation::STATUS_PAYOUT_QUALIFIED,
-            $visit->dispute_id !== null || $visit->visit_status === SuchakVisitConfirmation::STATUS_DISPUTED => SuchakVisitConfirmation::STATUS_DISPUTED,
+            $visit->hasOpenDispute() => SuchakVisitConfirmation::STATUS_DISPUTED,
+            // An upheld complaint has to land on a status OUTSIDE
+            // `OPEN_STATUSES`, or the meeting whose fee was just refused would
+            // block the pair from ever meeting again — a settled case cannot go
+            // on holding the pipeline hostage. `cancelled` is the existing
+            // terminal value and reads correctly: the claimed meeting does not
+            // stand. `dispute_id` and `refund_review_status` are still on the
+            // row, so why it was cancelled is never lost.
+            $visit->isFeeRefusedByReview() => SuchakVisitConfirmation::STATUS_CANCELLED,
+            // §7.2 clause 4 — a lapsed claim is over, and it has to land somewhere TERMINAL. On
+            // `completed` (which is where a lapsed row otherwise falls, since nobody confirmed) it
+            // would sit inside `OPEN_STATUSES` forever and block the pair from ever meeting again:
+            // the claim can never be answered into payability and can never be disputed again, so
+            // nothing would ever move it. `cancelled` is the existing terminal value and reads
+            // correctly — the claimed meeting does not stand. `claim_unanswered_since`,
+            // `claim_lapsed_at`, `dispute_id` and the family's own column all stay on the row, so
+            // a late confirmation is still recorded and why it ended is never lost.
+            //
+            // Ordered ABOVE the confirmation check on purpose: a family answering on day 99 must
+            // not produce a row that reads `confirmed`, which is the status a payable meeting has.
+            $visit->isClaimLapsed() => SuchakVisitConfirmation::STATUS_CANCELLED,
             $this->confirmationPolicySatisfied($visit) => SuchakVisitConfirmation::STATUS_CONFIRMED,
             $visit->suchak_completion_status === SuchakVisitConfirmation::COMPLETION_SUCHAK_MARKED => SuchakVisitConfirmation::STATUS_COMPLETED,
             default => SuchakVisitConfirmation::STATUS_SCHEDULED,
@@ -1094,15 +1551,76 @@ class SuchakVisitConfirmationService
         );
     }
 
+    /**
+     * WHO MAY CONTEST A MEETING.
+     *
+     * Three doors, and the order matters because the member check throws.
+     *
+     * 1. An admin.
+     * 2. The HELPING Suchak — the one named in `helper_suchak_account_id`,
+     *    i.e. whose candidate was met. Added 2026-08-03: §7.2's entire
+     *    stop-loss premise is UNANSWERED HELPER CLAIMS, and the party that
+     *    protects had no way to open a claim at all. The hold `disputeVisit()`
+     *    raises sits on `suchak_account_id` — the ARRANGING Suchak — which is
+     *    exactly the leverage §7.2 describes: the Suchak who must answer is the
+     *    one whose payouts freeze while he does not.
+     * 3. The requesting member (the customer side).
+     *
+     * The ARRANGING Suchak is still refused, deliberately. He is the claimant:
+     * letting him contest his own fee claim is not a resolution route, it is a
+     * claimant withdrawing a claim after the family was already asked to answer
+     * it, and `cancelVisit()` already refuses that once the meeting is marked
+     * complete for the same reason. D26's "either Suchak may raise the claim" is
+     * about the STAGE LADDER, not about a visit dispute — see
+     * docs/FIELD-OWNERSHIP-MAP.md.
+     *
+     * `helper_suchak_account_id` is the only link consulted. A visit row carries
+     * no `collaboration_request_id`, and `suchak_collaboration_requests.customer_owner_side`
+     * names a SIDE (requesting/target), not an account — resolving an account
+     * through it would be a second authorisation path over a table this service
+     * does not own. A Suchak with nothing to do with the meeting matches
+     * neither column and falls through to the member check, which throws.
+     */
     private function visitDisputeActorType(SuchakVisitConfirmation $visit, User $actor): string
     {
         if ($this->accessService->isAdmin($actor)) {
             return SuchakActivityLog::ACTOR_ADMIN;
         }
 
-        $this->assertRequestingUserCanConfirm($visit, $actor);
+        if ($this->isHelperSuchakOnVisit($visit, $actor)) {
+            $visit->loadMissing('helperSuchakAccount');
+            $this->accessService->assertOwnerCanOperate(
+                $visit->helperSuchakAccount,
+                $actor,
+                'Only the helping Suchak on this meeting can dispute it.',
+                'Helping Suchak must be verified to dispute this meeting.',
+            );
+
+            return SuchakActivityLog::ACTOR_SUCHAK;
+        }
+
+        $this->assertCustomerSideUserCanConfirm($visit, $actor);
 
         return SuchakActivityLog::ACTOR_USER;
+    }
+
+    /**
+     * Is this actor the helper named on THIS meeting?
+     *
+     * Cheap, non-throwing, and account-scoped rather than user-scoped, so a
+     * Suchak with no account or with somebody else's account simply does not
+     * match and goes on to the member check.
+     */
+    private function isHelperSuchakOnVisit(SuchakVisitConfirmation $visit, User $actor): bool
+    {
+        if ($visit->helper_suchak_account_id === null) {
+            return false;
+        }
+
+        $actorAccount = $actor->suchakAccount;
+
+        return $actorAccount instanceof SuchakAccount
+            && (int) $actorAccount->id === (int) $visit->helper_suchak_account_id;
     }
 
     private function recordPipelineEvent(SuchakPipeline $pipeline, string $eventType, string $actorType, User $actor): void
@@ -1124,7 +1642,7 @@ class SuchakVisitConfirmationService
         SuchakVisitConfirmation $visit,
         string $eventType,
         string $actorType,
-        User $actor,
+        ?User $actor,
         ?string $fromStatus,
         ?string $toStatus,
         ?string $eventNote,
@@ -1136,7 +1654,10 @@ class SuchakVisitConfirmationService
             'suchak_account_id' => $visit->suchak_account_id,
             'event_type' => $eventType,
             'actor_type' => $actorType,
-            'actor_user_id' => $actor->id,
+            // NULL when the actor is the SYSTEM — nobody acted, a date arrived. The column is
+            // nullable and `ACTOR_SYSTEM` already exists; inventing a user to fill it would put a
+            // person's name on a machine's act.
+            'actor_user_id' => $actor?->id,
             'from_status' => $fromStatus,
             'to_status' => $toStatus,
             'event_note' => $eventNote,
@@ -1166,7 +1687,7 @@ class SuchakVisitConfirmationService
 
     private function recordActivity(
         SuchakVisitConfirmation $visit,
-        User $actor,
+        ?User $actor,
         string $actorType,
         string $actionType,
         string $context,
@@ -1176,7 +1697,7 @@ class SuchakVisitConfirmationService
     ): void {
         $this->activityLogger->record([
             'suchak_account_id' => $visit->suchak_account_id,
-            'actor_user_id' => $actor->id,
+            'actor_user_id' => $actor?->id,
             'actor_type' => $actorType,
             'action_type' => $actionType,
             'target_type' => 'suchak_visit_confirmation',

@@ -31,7 +31,162 @@ class SuchakSafetyService
     public function __construct(
         private readonly SuchakActivityLogger $activityLogger,
         private readonly SuchakAccessService $accessService,
+        // `suchak_visit_confirmations` has exactly one owner
+        // (docs/FIELD-OWNERSHIP-MAP.md), so closing a dispute calls INTO that
+        // service rather than writing the meeting rows here. No cycle: the visit
+        // service depends on Access/Logger/Policy/PlatformPayout, none of which
+        // reach back to this one.
+        private readonly SuchakVisitConfirmationService $visitConfirmationService,
     ) {
+    }
+
+    /**
+     * LIFT A PAYOUT HOLD. The only writer of the three release columns.
+     *
+     * `released_by_user_id`, `released_at` and `release_reason` shipped with the
+     * table on 2026-06-10 and nothing in app/ ever wrote one of them, so a hold
+     * — which blocks EVERY subsequent platform payout for that Suchak/context
+     * ({@see SuchakPlatformPayoutService::hasActiveHold()}) — was permanent once
+     * created. That made the platform's real leverage (§7.3) a one-way ratchet.
+     *
+     * WHO: an admin, and only an admin. Never the Suchak whose money it is —
+     * they are the beneficiary — and never the customer, who has no standing
+     * over another party's payouts. Same gate every other method on this service
+     * uses.
+     *
+     * WHAT IT REQUIRES: an active hold and a written reason. A hold that is
+     * already `released`/`cancelled` is refused rather than re-written, so the
+     * first decision and its author survive.
+     *
+     * WHAT IT WRITES: the four hold columns, an `AdminAuditLog` row, and a
+     * `SuchakActivityLog` row bound to that audit id — the logger REFUSES an
+     * admin-actor row without one, which is what makes this an audited act
+     * rather than a silent update.
+     */
+    public function releasePayoutHold(
+        SuchakPayoutHold $hold,
+        User $admin,
+        string $releaseStatus,
+        string $reason,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+    ): SuchakPayoutHold {
+        $this->accessService->assertAdmin($admin, 'Only admins can release Suchak payout holds.');
+        $this->assertAllowedValue($releaseStatus, SuchakPayoutHold::RELEASE_STATUSES, 'Invalid Suchak payout hold release status.');
+        $reason = $this->requiredText($reason, 'Suchak payout hold release reason is required.', 1000);
+
+        return DB::transaction(fn (): SuchakPayoutHold => $this->applyHoldRelease(
+            $hold->id,
+            $admin,
+            $releaseStatus,
+            $reason,
+            $ipAddress,
+            $userAgent,
+        ));
+    }
+
+    /**
+     * The single write. Shared by the admin door above and by the cascade a
+     * dispute close performs — one release path, so a hold can never end up
+     * with `hold_status` moved and no audit row behind it.
+     */
+    private function applyHoldRelease(
+        int $holdId,
+        User $admin,
+        string $releaseStatus,
+        string $reason,
+        ?string $ipAddress,
+        ?string $userAgent,
+    ): SuchakPayoutHold {
+        /** @var SuchakPayoutHold $locked */
+        $locked = SuchakPayoutHold::query()
+            ->whereKey($holdId)
+            ->lockForUpdate()
+            ->firstOrFail();
+
+        if ($locked->hold_status !== SuchakPayoutHold::STATUS_ACTIVE) {
+            throw new InvalidArgumentException('Only active Suchak payout holds can be released.');
+        }
+
+        $adminAuditLog = $this->writeAdminAuditLog(
+            $admin,
+            'suchak_payout_hold_released',
+            $locked,
+            $reason,
+            ['hold_status' => $locked->hold_status],
+            ['hold_status' => $releaseStatus],
+        );
+
+        $locked->forceFill([
+            'hold_status' => $releaseStatus,
+            'released_by_user_id' => $admin->id,
+            'released_at' => now(),
+            'release_reason' => $reason,
+        ])->save();
+
+        $fresh = $locked->fresh(['dispute', 'suchakAccount', 'customerContext', 'paymentContext', 'releasedByUser']);
+
+        $this->activityLogger->record([
+            'suchak_account_id' => $fresh->suchak_account_id,
+            'actor_user_id' => $admin->id,
+            'actor_type' => SuchakActivityLog::ACTOR_ADMIN,
+            'action_type' => SuchakActivityLog::ACTION_PAYOUT_HOLD_RELEASED,
+            'target_type' => 'suchak_payout_hold',
+            'target_id' => $fresh->id,
+            'matrimony_profile_id' => $fresh->dispute?->matrimony_profile_id,
+            'admin_audit_log_id' => $adminAuditLog->id,
+            'ip_address' => $ipAddress,
+            'user_agent' => Str::limit((string) $userAgent, 512, ''),
+            'metadata_json' => [
+                'context' => 'payout_hold_released',
+                'dispute_id' => $fresh->suchak_dispute_id,
+                'customer_context_id' => $fresh->customer_context_id,
+                'payment_context_id' => $fresh->payment_context_id,
+                'hold_scope' => $fresh->hold_scope,
+                'hold_status' => $fresh->hold_status,
+            ],
+        ]);
+
+        return $fresh;
+    }
+
+    /**
+     * Every hold this dispute opened, ended with the dispute.
+     *
+     * Without this the dead-end fix would be hollow: the meeting un-freezes but
+     * the hold created alongside it goes on blocking that Suchak's every payout,
+     * so nothing actually moves. `released` vs `cancelled` is not cosmetic —
+     * see {@see SuchakPayoutHold::DISPUTE_CLOSE_HOLD_OUTCOME}.
+     *
+     * Holds attached to some OTHER dispute are untouched: this closes one case,
+     * not a Suchak's whole file. That is what the admin door above is for.
+     */
+    private function releaseHoldsForClosedDispute(
+        SuchakDispute $dispute,
+        User $admin,
+        string $closingStatus,
+        string $reason,
+        ?string $ipAddress,
+        ?string $userAgent,
+    ): int {
+        $releaseStatus = SuchakPayoutHold::DISPUTE_CLOSE_HOLD_OUTCOME[$closingStatus] ?? null;
+        if ($releaseStatus === null) {
+            return 0;
+        }
+
+        $holdIds = SuchakPayoutHold::query()
+            ->where('suchak_dispute_id', $dispute->id)
+            ->where('hold_status', SuchakPayoutHold::STATUS_ACTIVE)
+            ->orderBy('id')
+            ->pluck('id');
+
+        $released = 0;
+        foreach ($holdIds as $holdId) {
+            $this->applyHoldRelease($holdId, $admin, $releaseStatus, $reason, $ipAddress, $userAgent);
+            $released++;
+        }
+
+        return $released;
     }
 
     /**
@@ -494,6 +649,33 @@ class SuchakSafetyService
             ])->save();
 
             $freshDispute = $lockedDispute->fresh(['suchakAccount', 'representation']);
+
+            // A CLOSING status is not just a label change — it is the moment the
+            // money answer exists. Until 2026-08-03 nothing happened here, so a
+            // closed dispute went on freezing its meeting and its payout hold
+            // for good, whichever way the case had gone.
+            $settledVisits = 0;
+            $releasedHolds = 0;
+            if (in_array($newStatus, SuchakDispute::CLOSING_STATUSES, true)) {
+                $settledVisits = $this->visitConfirmationService->settleDisputedVisits(
+                    $freshDispute,
+                    $admin,
+                    $newStatus,
+                    $reason,
+                    $adminAuditLog,
+                    $ipAddress,
+                    $userAgent,
+                );
+                $releasedHolds = $this->releaseHoldsForClosedDispute(
+                    $freshDispute,
+                    $admin,
+                    $newStatus,
+                    $reason,
+                    $ipAddress,
+                    $userAgent,
+                );
+            }
+
             $this->recordAdminActivity(
                 $freshDispute,
                 $admin,
@@ -507,6 +689,8 @@ class SuchakSafetyService
                     'dispute_type' => $freshDispute->dispute_type,
                     'priority' => $freshDispute->priority,
                     'has_resolution_note' => $freshDispute->resolution_note !== null,
+                    'settled_visit_count' => $settledVisits,
+                    'released_payout_hold_count' => $releasedHolds,
                 ],
             );
 

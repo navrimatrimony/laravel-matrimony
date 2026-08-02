@@ -131,6 +131,65 @@ class SuchakMeetingsMutationsApiController extends Controller
         ]);
     }
 
+    /**
+     * THE HELPING SUCHAK'S DOOR TO A DISPUTE.
+     *
+     * `disputeVisit()` admitted only an admin or the requesting member, so the
+     * party §7.2's stop-loss exists to protect — the helper, whose claims go
+     * unanswered — had no way to open a claim at all. D26 says either Suchak may
+     * raise a claim; on a visit, the helper is the one who needs it, because the
+     * dispute's payout hold lands on the ARRANGING Suchak's account and that is
+     * precisely the leverage §7.2 describes.
+     *
+     * Only the helper. The arranging Suchak is refused by the service (he is the
+     * claimant, not a contestant), and this route deliberately does not check
+     * ownership itself — `visitDisputeActorType()` owns that decision, so there
+     * is one authorisation path, not two. The 404 below only decides which
+     * status a meeting a Suchak has nothing to do with deserves.
+     */
+    public function dispute(
+        Request $request,
+        SuchakVisitConfirmation $visit,
+        SuchakVisitConfirmationService $visitConfirmationService,
+    ): JsonResponse {
+        $user = $request->user();
+        if (! $user instanceof User || $user->suchakAccount === null) {
+            return response()->json(['success' => false, 'message' => 'Suchak account is required.'], 403);
+        }
+
+        if ((int) $visit->helper_suchak_account_id !== (int) $user->suchakAccount->id) {
+            return response()->json(['success' => false, 'message' => 'Visit not found for this account.'], 404);
+        }
+
+        $validated = $request->validate([
+            'dispute_reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $updated = $visitConfirmationService->disputeVisit(
+                $visit,
+                $user,
+                $validated,
+                $request->ip(),
+                $request->userAgent(),
+            );
+        } catch (InvalidArgumentException $exception) {
+            return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'तक्रार नोंदवली. आढावा पूर्ण होईपर्यंत रक्कम रोखली आहे.',
+            'data' => [
+                'visit_id' => $updated->id,
+                'visit_status' => $updated->visit_status,
+                'dispute_id' => $updated->dispute_id,
+                'payout_hold_id' => $updated->payout_hold_id,
+                'refund_review_status' => $updated->refund_review_status,
+            ],
+        ]);
+    }
+
     public function complete(
         Request $request,
         SuchakVisitConfirmation $visit,

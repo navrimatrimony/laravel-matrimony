@@ -20,6 +20,16 @@ class SuchakScheduledJobRun extends Model
     public const JOB_MONTHLY_REPORTS = 'monthly_reports';
     public const JOB_LOYALTY_RECALCULATION = 'loyalty_recalculation';
 
+    /**
+     * Blueprint §7.2 — the seven-day silence, and the 90-day lapse behind it.
+     *
+     * The ninth job, and the first that moves MONEY on a clock. It lives here, inside the one
+     * Suchak timer that demonstrably runs (`suchak:scheduled-jobs`, synchronous, no `ShouldQueue`
+     * on the path), because a queued job would silently never fire on this production — the
+     * notifications and governance queues have had no worker since 2026-06-17.
+     */
+    public const JOB_CLAIM_SILENCE_SWEEP = 'claim_silence_sweep';
+
     public const JOBS = [
         self::JOB_OVERDUE_PAYMENTS,
         self::JOB_PAYOUT_CYCLES,
@@ -29,6 +39,7 @@ class SuchakScheduledJobRun extends Model
         self::JOB_FOLLOW_UP_REMINDERS,
         self::JOB_MONTHLY_REPORTS,
         self::JOB_LOYALTY_RECALCULATION,
+        self::JOB_CLAIM_SILENCE_SWEEP,
     ];
 
     public const STATUS_RUNNING = 'running';

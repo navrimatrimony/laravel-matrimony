@@ -35,6 +35,7 @@ use App\Http\Controllers\Api\Suchak\SuchakPayuCheckoutApiController;
 use App\Http\Controllers\Api\Suchak\SuchakRegisterApiController;
 use App\Http\Controllers\Api\Suchak\SuchakRepresentedProfileApiController;
 use App\Http\Controllers\Api\Suchak\SuchakSearchApiController;
+use App\Http\Controllers\Api\Suchak\SuchakTwelveMonthClauseApiController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -124,6 +125,31 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::post('/customer-agreements/{agreement}/stages', [SuchakCollaborationStagesApiController::class, 'claimCustomerStage'])
         ->whereNumber('agreement'); // CLAIM A PRE-ENGAGEMENT LADDER STAGE
     /*
+    | THE 12-MONTH ANTI-CIRCUMVENTION CLAUSE (D11, D21, phase 3) — the READ.
+    |
+    | "A marriage within 12 months to a profile the customer VIEWED still owes
+    | the success fee, however the later contact happened, and even if the
+    | engagement ended." The binding is created by the family's own `viewed` rung
+    | (SuchakCollaborationStageEvent::CLAUSE_ANCHOR_STAGE); these two routes are
+    | the only way to ASK about it, and a clause nobody can query is a clause
+    | nobody can enforce.
+    |
+    | Keyed on the CUSTOMER CONTEXT, not on the agreement and not on the
+    | engagement: D21 makes the clause outlive both, so keying it on either would
+    | lose exactly the case the clause exists for. The context id is already
+    | published by GET /customers/{representation}/payment-request-options.
+    |
+    | Read-only. Whether the fee is collected is phase 4.
+    */
+    Route::get(
+        '/customer-contexts/{customerContext}/twelve-month-clause',
+        [SuchakTwelveMonthClauseApiController::class, 'index'],
+    )->whereNumber('customerContext'); // EVERY BINDING THIS CUSTOMER CARRIES
+    Route::get(
+        '/customer-contexts/{customerContext}/twelve-month-clause/{candidate}',
+        [SuchakTwelveMonthClauseApiController::class, 'show'],
+    )->whereNumber(['customerContext', 'candidate']); // IS A SHARE OWED ON THIS PAIR, AND UNTIL WHEN
+    /*
     | THE CHALLENGE OBJECT (blueprint D4 / D18, phase 2).
     |
     | "I hold this customer; I will pay X to whoever brings the match." Published
@@ -164,6 +190,12 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
         ->whereNumber('challenge'); // PROPOSE A NAMED CANDIDATE + WRITE profile_suggested ON THE LADDER
     Route::get('/marketplace/challenges/{challenge}/proposals', [SuchakMarketplaceChallengeApiController::class, 'proposals'])
         ->whereNumber('challenge'); // THE PUBLISHER'S INBOX FOR ONE CHALLENGE — masked candidates
+    // D7a: the helper's OWN candidates, searchable, filterable and ranked against this challenge's
+    // candidate. The other half of the POST above — that route takes a representation_id, and
+    // without this read the only way to find one was to scroll every candidate the Suchak holds.
+    // Own candidates, so NOT masked; the badge and the not-your-own-challenge gates still run.
+    Route::get('/marketplace/challenges/{challenge}/my-candidates', [SuchakMarketplaceChallengeApiController::class, 'myCandidates'])
+        ->whereNumber('challenge');
     // Opening ONE listing is logged and shown to the originating Suchak (D18).
     Route::get('/marketplace/challenges/{challenge}', [SuchakMarketplaceChallengeApiController::class, 'show'])
         ->whereNumber('challenge');
@@ -196,6 +228,12 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     Route::post('/meetings', [SuchakMeetingsMutationsApiController::class, 'schedule']);
     Route::post('/meetings/{visit}/complete', [SuchakMeetingsMutationsApiController::class, 'complete']);
     Route::post('/meetings/{visit}/cancel', [SuchakMeetingsMutationsApiController::class, 'cancel']);
+    // The HELPING Suchak contests a meeting arranged on his candidate (§7.2
+    // stop-loss, D26). Members dispute on the member API
+    // (`POST /api/v1/suchak-meetings/{visit}/dispute`) and admins on the admin
+    // web surface; all three enter the same `disputeVisit()`, which decides who
+    // the actor is. The arranging Suchak is refused there — he is the claimant.
+    Route::post('/meetings/{visit}/dispute', [SuchakMeetingsMutationsApiController::class, 'dispute']);
     Route::post('/intakes', [SuchakIntakeApiController::class, 'store']);
     Route::get('/manual-profiles/meta', [SuchakManualProfileApiController::class, 'meta']);
     Route::post('/manual-profiles/duplicate-check', [SuchakManualProfileApiController::class, 'duplicateCheck']);

@@ -35,6 +35,7 @@ class SuchakScheduledJobsConsolidationService
         private readonly SuchakPlatformPayoutService $platformPayoutService,
         private readonly SuchakGrowthRewardService $growthRewardService,
         private readonly SuchakRetentionCampaignService $retentionCampaignService,
+        private readonly SuchakClaimSilenceService $claimSilenceService,
     ) {
     }
 
@@ -115,6 +116,54 @@ class SuchakScheduledJobsConsolidationService
                 $account,
                 fn (): array => $this->recalculateLoyalty($admin, $account, $month),
             ),
+            /*
+             * LAST ON PURPOSE (blueprint §7.2).
+             *
+             * runTrackedJob() RE-THROWS on failure, which aborts every sub-job after it in the
+             * same run. A money sweep added in the middle of this list could therefore have taken
+             * out payout cycles, monthly reports and loyalty snapshots on a bad row. Two things
+             * are done about that, and both were needed:
+             *
+             *  1. It is placed last, so there is nothing after it to abort.
+             *  2. It does not throw. SuchakClaimSilenceService catches per row, counts the
+             *     failures and names them in the metrics, so a single malformed meeting cannot
+             *     end the sweep either — the remaining claims are still processed.
+             *
+             * The 500-row cap is respected rather than raised: the sweep orders OLDEST FIRST and
+             * reports `due_total` beside `processed`, so an overflow drains FIFO and is visible in
+             * `metrics_json` instead of silently vanishing. And the money conclusions do not
+             * depend on this job at all — the stop-loss sweeps lazily at its own gate, and the
+             * 90-day lapse is computed arithmetic on the payout guard.
+             */
+            SuchakScheduledJobRun::JOB_CLAIM_SILENCE_SWEEP => $this->runTrackedJob(
+                SuchakScheduledJobRun::JOB_CLAIM_SILENCE_SWEEP,
+                $at,
+                null,
+                $admin,
+                $account,
+                fn (): array => $this->sweepClaimSilence($admin, $account, $at),
+            ),
+        ];
+    }
+
+    /**
+     * §7.2 — seven silent days open a dispute; ninety unanswered days lapse it.
+     *
+     * Both halves in ONE tracked job, and the silence half runs even when the run has no admin.
+     * Splitting them into two job keys would have made the whole thing skip for want of an admin
+     * (the `adminMissingMetrics()` shape the three admin-governed jobs above use), and the silence
+     * half is the money-critical one: it needs no admin, because nobody acts — a date arrives.
+     * Only the lapse's tidy-up (closing the case, lifting the hold) is an audited admin act, and
+     * it reports its own `admin_required` inside these metrics instead of skipping the job.
+     *
+     * @return array<string, mixed>
+     */
+    private function sweepClaimSilence(?User $admin, ?SuchakAccount $account, Carbon $at): array
+    {
+        return [
+            'evaluated_at' => $at->toIso8601String(),
+            'silence' => $this->claimSilenceService->sweepSilenceDue($account, $at, self::PER_JOB_LIMIT),
+            'lapse' => $this->claimSilenceService->sweepLapsedClaims($admin, $account, $at, self::PER_JOB_LIMIT),
         ];
     }
 

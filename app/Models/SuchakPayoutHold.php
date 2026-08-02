@@ -19,6 +19,22 @@ class SuchakPayoutHold extends Model
         self::SCOPE_VISIT_CONFIRMATION_DISPUTE,
     ];
 
+    /**
+     * An ACTIVE hold blocks every subsequent platform payout for this
+     * Suchak/context ({@see \App\Modules\Suchak\Services\SuchakPlatformPayoutService::hasActiveHold()}),
+     * which is the platform's real leverage (§7.3) — and until 2026-08-03
+     * nothing in app/ wrote either terminal status, so the leverage could only
+     * be applied, never lifted.
+     *
+     * The two terminal values are NOT synonyms:
+     * - `released`  — the reason for the hold was examined and did not stand.
+     *                 The withheld money is freed on a finding.
+     * - `cancelled` — the hold no longer applies, but nothing was found for the
+     *                 Suchak (the case was withdrawn, lapsed, or closed with the
+     *                 complaint upheld). The block on the Suchak's OTHER payouts
+     *                 goes, and nothing is asserted about the disputed item —
+     *                 that answer lives on the item's own row.
+     */
     public const STATUS_ACTIVE = 'active';
     public const STATUS_RELEASED = 'released';
     public const STATUS_CANCELLED = 'cancelled';
@@ -27,6 +43,32 @@ class SuchakPayoutHold extends Model
         self::STATUS_ACTIVE,
         self::STATUS_RELEASED,
         self::STATUS_CANCELLED,
+    ];
+
+    /**
+     * The statuses an admin may move an ACTIVE hold to. `active` is not one of
+     * them: a hold is never re-armed, a new one is opened instead, so the
+     * history of what was held and why can never be overwritten.
+     */
+    public const RELEASE_STATUSES = [
+        self::STATUS_RELEASED,
+        self::STATUS_CANCELLED,
+    ];
+
+    /**
+     * Dispute closing status → what happens to the holds that dispute opened.
+     *
+     * `resolved` (complaint stood) and `closed` (nobody adjudicated) both
+     * CANCEL: neither is a finding for the Suchak, so neither may read as
+     * "the money was cleared" — but neither may keep freezing every unrelated
+     * payout for a case that is over either.
+     *
+     * @var array<string, string>
+     */
+    public const DISPUTE_CLOSE_HOLD_OUTCOME = [
+        SuchakDispute::STATUS_RESOLVED => self::STATUS_CANCELLED,
+        SuchakDispute::STATUS_REJECTED => self::STATUS_RELEASED,
+        SuchakDispute::STATUS_CLOSED => self::STATUS_CANCELLED,
     ];
 
     protected $table = 'suchak_payout_holds';

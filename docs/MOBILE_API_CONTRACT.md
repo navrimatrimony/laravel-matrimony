@@ -2718,6 +2718,29 @@ Body: `dispute_reason` (required, max 1000). Same payload shape;
 payout hold** (blueprint 7.2). Silence is never an automatic zero, and neither
 is a refusal.
 
+**One contest per meeting.** Once an admin closes the case the meeting unfreezes
+— which way it unfreezes depends on the closing status — and it can never be
+disputed again (§7.2: a closed dispute is never revivable). A second attempt is
+a 422.
+
+### New: POST `/api/v1/suchak/meetings/{visit}/dispute` (Suchak app)
+
+The **helping** Suchak's door to the same engine — the account named in the
+meeting's `helper_suchak_account_id`, i.e. whose candidate was met. §7.2's
+stop-loss is built on unanswered helper claims and the helper previously had no
+way to raise one.
+
+Body: `dispute_reason` (required, max 1000). 200 returns
+`{ visit_id, visit_status, dispute_id, payout_hold_id, refund_review_status }`.
+
+- The **arranging** Suchak is refused with a **404**, not a 403 — he is the
+  claimant on the fee, not a contestant. So is any Suchak not named on the row.
+- The payout hold this opens lands on the **arranging** Suchak's account, not on
+  the helper's. That asymmetry is the point: the party who has to answer is the
+  one whose payouts freeze while he does not.
+- Members still dispute on `/api/v1/suchak-meetings/{visit}/dispute` above.
+  Three surfaces, one engine, one authorisation path.
+
 ### Changed: POST `/api/v1/suchak/meetings` (Suchak app)
 
 Two optional new inputs, and three new response keys:
@@ -2766,10 +2789,98 @@ revealed them, **photograph always shown** (D19a).
 | Route | Purpose |
 |---|---|
 | `POST /api/v1/suchak/marketplace/challenges/{challenge}/proposals` | Answer a challenge by NAMING one of my own candidates. Body: `representation_id` (mine), `message` (optional, max 2000). |
+| `GET /api/v1/suchak/marketplace/challenges/{challenge}/my-candidates` | **Where that `representation_id` comes from (D7a).** My OWN candidates, searchable, filterable and ranked against this challenge's candidate. |
 | `GET /api/v1/suchak/marketplace/challenges/{challenge}/proposals` | The publisher's inbox for one challenge, with each proposed candidate masked. `per_page` 1–50, default 20. |
 
 **There is no bare-accept endpoint and there must never be one.** Naming the
 candidate IS the acceptance (D7).
+
+**The stop-loss (§7.2 clause 3), added 2026-08-03.** `POST .../proposals` returns
+**422** with a Marathi sentence when the ORIGINATING Suchak has **2 or more**
+meeting claims, or **₹5,000 or more**, sitting unanswered past their 7-day
+window. The sentence names the count, the amount and the age of the oldest, so
+the helper can see why. Nothing about his own account causes it.
+
+The same figure is readable before he commits, on the two listing reads that
+show a single publisher — `GET .../challenges/{challenge}` (open one listing)
+and `GET .../challenges/mine` (my own card) — as:
+
+```json
+"unanswered_claims": {
+  "claims": 2, "amount": "1000.00", "amount_display": "₹1,000",
+  "currency": "INR", "oldest_days": 91,
+  "oldest_since": "2026-05-02T09:00:00+05:30",
+  "blocked": true, "reasons": ["claim_count"]
+}
+```
+
+Facts derived from records, never typed by anyone (D20's rule). It is **not** on
+the twelve-card browse: that is a scroll, not a decision. A lapsed claim (90
+days, §7.2 clause 4) stays in these numbers permanently — "still counted" — so
+the figure never falls just because a Suchak waited.
+
+#### `GET .../my-candidates` — the selection screen (D7a)
+
+D7a: *"that selection needs search and filters, not a list. A working Suchak may
+hold two hundred candidates; scrolling is not a selection mechanism."*
+
+Query: `q` (**name**, partial), `age_min`, `age_max`, `district_id`, `taluka_id`,
+`income_min`, `income_max`, `education` (partial), `page`, `per_page` (1–50,
+default 20).
+
+> `q` is the NAME here and education-or-occupation free text on
+> `GET /api/v1/suchak/search`. Two screens, two questions, one key — stated here
+> because the server maps it explicitly and a reader of the filter owner would
+> otherwise find no such rule.
+
+200 → `{ success, data: { candidates: [ … ], meta: { total, page, per_page } } }`.
+Each candidate carries `representation_id`, `candidate_profile_id`,
+`display_name`, `age`, `gender`, `district`, `taluka`, `education`,
+`annual_income`, `income_display` (may be null), `photo_url` (**null when there is
+no photograph** — the client picks its own placeholder), `match_score` (0–100),
+`fit_label`, `reasons[]` and `already_proposed`.
+
+- **Ranked by `match_score` DESC** against the challenge's candidate, over the
+  whole filtered set — the sort happens before the page is taken, never within it.
+  A candidate the engine scores at 0 (ineligible pair, or under the surfacing
+  floor) is **kept**, labelled "no fit signal", never dropped: `propose` applies no
+  fit floor, so hiding it would be a filter the Suchak cannot turn off.
+- **`already_proposed: true`** means this candidate already answers THIS challenge
+  and `propose` will refuse him (422). Grey the card out; do not let the Suchak
+  discover it by failing. The flag is status-blind — a *rejected* proposal still
+  reads `true`, because re-sending it is still refused.
+- **These are the caller's own candidates, so they are NOT masked.** Masking is
+  what one Suchak may see of *another* Suchak's candidate (D19a). No cross-Suchak
+  row can appear in this list.
+- 422 on: no marketplace badge (D18), your own challenge (A2), or a challenge that
+  no longer accepts proposals — the same gates `propose` runs, so anything this
+  list offers is something `propose` accepts.
+
+#### `GET /api/v1/suchak/search` gained only the filters it may have
+
+The filters above live in ONE owner (`SuchakCrossSearchService::applyProfileFilters`),
+so the cross-Suchak masked search also accepts **`education`**, **`district_id`**
+and **`taluka_id`** alongside its existing `q` (education/occupation free text),
+`age_min`, `age_max`, `gender_id`, `caste_id`, `religion_id`,
+`marital_status_id`, `requesting_representation_id` and `page`.
+
+**`name`, `income_min` and `income_max` are NOT accepted there, deliberately** —
+they exist only on the own-book picker above. A filter over masked rows does not
+show a value, it CONFIRMS one: the result count is a read channel. `name=sun`,
+then `name=suni`, peels the name D19a hides one letter at a time; and because a
+masked card prints **no income at all**, a walk over `income_min` recovers an
+exact salary in ~20 requests. A value that is not readable on this surface is not
+filterable on it. On the caller's own book both are granted — nothing there is
+masked, and he typed the figures himself.
+
+**`district_id` / `taluka_id` are accepted, but only at those levels.** The masked
+card already prints the district and (in the `city` slot) the taluka, so filtering
+by either discloses nothing new. The village below them is one of D19a's four
+hidden items, and `whereResidenceUnderAncestor()` accepts an ancestor at any
+depth — so an `addresses` id **below taluka** sent under either key is refused and
+simply filters nothing (no 422; the error itself would answer the prober). The
+level is read from `addresses.hierarchy` via `Location::defaultLevelForHierarchy()`.
+The own-book picker takes a village id normally.
 
 `split_type`, `groom_side_share`, `bride_side_share`, `fixed_amount`,
 `declared_share_*`, `currency` and `share_currency` are all **prohibited** on the
@@ -2815,3 +2926,56 @@ same two routes but their terms are frozen and cannot be re-quoted.
 same candidate proposed to the same challenge twice in any status (A10), a
 withdrawn / fulfilled / expired challenge, a lapsed consent on either candidate,
 and the open-collaboration quota — which the **helper** pays, since he initiated.
+
+### The 12-month anti-circumvention clause — the READ (D11, D21)
+
+**The rule the app is displaying:** when the FAMILY records `viewed` on a
+candidate proposed through their Suchak, a marriage to that candidate within
+**12 months** of that view still owes that Suchak the success fee — however the
+later contact happened (A13), and **even if the engagement, the agreement or the
+whole relationship ended** (D21) — unless the family declared at view time that
+they already knew that family (A6).
+
+| Route | Purpose |
+|---|---|
+| `GET /api/v1/suchak/customer-contexts/{customerContext}/twelve-month-clause` | Every binding this customer carries. `data.terms` + `data.bindings[]`. |
+| `GET /api/v1/suchak/customer-contexts/{customerContext}/twelve-month-clause/{candidate}` | One pair: is a share owed on this candidate, and until when. |
+
+Both are **read-only** and gated on the customer-owning Suchak — a context on
+another account answers **404**, not 403. `{customerContext}` is the
+`customer_context_id` already published by
+`GET /customers/{representation}/payment-request-options`. `{candidate}` is a
+`matrimony_profile_id`.
+
+Each binding row: `candidate_matrimony_profile_id`, `candidate_name`,
+`collaboration_request_id`, `customer_agreement_id`,
+`owed_to_suchak_account_id`, `viewed_at`, `binds_until`, `binds` (bool),
+`release_reason`, `days_remaining`, `binding_view_ordinal_in_month`,
+`success_fee` (already formatted — Latin digits, Indian grouping) and
+`success_fee_mode`. `data.terms` carries `anchor_stage`, `binding_months` (12),
+`binding_views_per_calendar_month` and `survives_engagement_end`.
+
+`release_reason` ∈ `prior_acquaintance` (A6 — the family said they already knew
+them), `monthly_cap` (A5 — past the monthly cap on **binding** views; the view is
+still recorded), `lapsed` (the 12 months ran out), `never_viewed` (no `viewed`
+row exists — the single-pair route answers **200 with `binds: false`**, never
+404, so "no" and "I have no record" cannot arrive as the same response).
+
+**Released rows are returned, not filtered out.** A dispute a year later has to be
+able to read *"she viewed him, and it did not bind, because they already knew each
+other"*; dropping those rows would make the record look as though the view never
+happened.
+
+**Do not cache these responses.** Lapse is computed on the read — there is no
+timer behind the clause — so a cached `binds: true` outlives the binding.
+
+**The family's own side** is the public, tokenised portal page, not an app
+screen: `GET /suchak/customer-portal/{token}/stages` shows each proposal's
+binding date, and the `viewed` button on that page carries the one-tap
+`prior_acquaintance` checkbox (A6). That checkbox is the ONLY writer of the
+release, it is sent in the same request as the view, and no Suchak route can set
+or clear it.
+
+**Not in this phase:** whether the fee is actually collected. The marriage
+outcome, success attribution and the owed-vs-paid ledger are Phase 4;
+`success_fee` here is the frozen figure the clause is *about*, not a debt.
