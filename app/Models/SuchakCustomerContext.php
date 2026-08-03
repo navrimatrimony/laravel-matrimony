@@ -103,6 +103,26 @@ class SuchakCustomerContext extends Model
         'closed_at' => 'datetime',
     ];
 
+    /**
+     * THE ONE DEFINITION of "this customer relationship is over, so no new money
+     * hangs off it".
+     *
+     * It was stated inline inside {@see \App\Modules\Suchak\Services\SuchakPaymentCollectorResolver::optionalCustomerContext()}
+     * and is now needed a second time by the meeting engine, which prices a
+     * meeting from this customer's agreement. Two copies of a money rule drift,
+     * and the frozen no-duplicate rule is exactly about this: one fact, one
+     * owner. `cancelled` and `closed` are terminal; `paused` and `completed`
+     * deliberately are NOT — a paused customer may resume and a completed one
+     * may still owe for work already agreed.
+     */
+    public function isClosedForPayment(): bool
+    {
+        return in_array($this->customer_lifecycle_status, [
+            self::STATUS_CANCELLED,
+            self::STATUS_CLOSED,
+        ], true);
+    }
+
     public function suchakAccount(): BelongsTo
     {
         return $this->belongsTo(SuchakAccount::class);

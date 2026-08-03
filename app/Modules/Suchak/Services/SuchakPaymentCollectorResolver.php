@@ -207,10 +207,10 @@ class SuchakPaymentCollectorResolver
             throw new InvalidArgumentException('Suchak customer context candidate profile mismatch.');
         }
 
-        if (in_array($context->customer_lifecycle_status, [
-            SuchakCustomerContext::STATUS_CANCELLED,
-            SuchakCustomerContext::STATUS_CLOSED,
-        ], true)) {
+        // The rule itself now lives on the model, because the meeting engine has
+        // to ask the same question when it prices a meeting from this customer's
+        // agreement. Same statuses, same meaning — one owner.
+        if ($context->isClosedForPayment()) {
             throw new InvalidArgumentException('Suchak customer context is closed for payment collection.');
         }
 

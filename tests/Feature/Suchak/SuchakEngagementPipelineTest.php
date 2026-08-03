@@ -170,9 +170,15 @@ class SuchakEngagementPipelineTest extends TestCase
      * helper's.
      *
      * `requesting_matrimony_profile_id` is a DIRECTION and on this path it holds the HELPER's
-     * candidate. Nothing in the marketplace flow resolves a platform payment context on the
-     * pipeline, so `customer_context_id` is null and the directional fallback is exactly what a
-     * real meeting reaches — which is why the engagement is consulted before it.
+     * candidate, so the directional fallback would name the wrong family — which is why the
+     * engagement is consulted before it.
+     *
+     * UPDATED 2026-08-06. This used to assert `customer_context_id` was NULL, because the only
+     * route to a customer was a pipeline-keyed payment context and nothing in the marketplace flow
+     * makes one. `scheduleVisit()` now falls back to the pipeline's representation, which owns at
+     * most one customer, so the column is populated on this very path — and BOTH role sources now
+     * agree. That agreement is the assertion worth holding: the family that confirms is the family
+     * that is billed, resolved from one context rather than two.
      */
     public function test_the_confirm_door_on_an_engagement_meeting_names_the_customers_family(): void
     {
@@ -185,8 +191,11 @@ class SuchakEngagementPipelineTest extends TestCase
             'helper_suchak_account_id' => $helper->id,
         ]);
 
-        // The ordinary shape today: no platform payment context was ever resolved on this pipeline.
-        $this->assertNull($visit->customer_context_id);
+        // Resolved off the representation — no payment context was ever created on this pipeline.
+        $this->assertNotNull($visit->customer_context_id);
+        $this->assertNull($visit->payment_context_id);
+        // Still null, and for the RIGHT reason now: this fixture's package quotes a post-marriage
+        // fee and no per-meeting rate at all. Nothing was agreed for a meeting, so nothing is due.
         $this->assertNull($visit->fee_amount);
 
         $this->assertSame(

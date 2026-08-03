@@ -2748,12 +2748,46 @@ Two optional new inputs, and three new response keys:
 | Field | Meaning |
 |---|---|
 | `meeting_mode` (in) | `offline` \| `online`. Defaults to `offline`. Picks which per-meeting rate freezes onto the meeting — the two rates are fully independent amounts (D2). |
-| `helper_suchak_account_id` (in) | Whose candidate was met, on a marketplace meeting. Must not be the arranging Suchak's own account. |
+| `helper_suchak_account_id` (in) | Whose candidate was met, on a marketplace meeting. Must not be the arranging Suchak's own account. **Optional since 2026-08-06:** omit it on an engagement-born pipeline and the server fills it from the engagement. A sent value still wins. Clients scheduling from `awaiting_first_meeting[]` send nothing here — that payload publishes the other Suchak's name, not his id. |
 | `meeting_sequence`, `meeting_mode`, `fee_amount`, `fee_display` (out) | As above. |
 
 A second meeting is refused while one is still open — `scheduled`,
 completed-but-unconfirmed, or `disputed` — with a 422. Once the first is
 `confirmed` (or payout-qualified, or cancelled) the pair may meet again.
+
+**`fee_amount` is now resolved for an ordinary pipeline (2026-08-06).** It used
+to be quoted only from a `suchak_payment_contexts` row keyed on the pipeline, and
+nothing in production writes one — so every meeting the app could schedule froze
+a NULL fee. The pipeline's `representation_id` → the representation's single
+customer (`unique(representation_id)`) is now the fallback, which is the same
+customer `GET /customers/{representation}/payment-request-options` resolves. NULL
+is still a real answer (no customer record, no accepted agreement, or a rate the
+Suchak never quoted for that mode) and clients must say so plainly rather than
+printing ₹0 or nothing at all.
+
+### Changed: GET `/api/v1/suchak/meetings` (Suchak app)
+
+New alongside `visits[]`: **`awaiting_first_meeting[]`** — the pairs this Suchak
+may schedule a FIRST meeting for. Without it no read this app makes handed out a
+`pipeline_id` for a pipeline with no meeting, so `POST /suchak/meetings` was
+unreachable for a first meeting and the meetings list could never become
+non-empty from the meetings screen.
+
+| Field | Meaning |
+|---|---|
+| `pipeline_id` | What `POST /suchak/meetings` requires. |
+| `representation_id` | The id `GET /customers/{representation}/payment-request-options` accepts, for the "which agreed plan prices this meeting" question. |
+| `source` | `request` \| `engagement` — where the pair came from. An enum; the client owns the wording. |
+| `customer_name` | The caller's OWN represented candidate. |
+| `member_name` | The member who approached. `request` source only. |
+| `helper_suchak_name` | The other Suchak. `engagement` source only — an engagement-born pair's other side is **another Suchak's candidate** and is never named (D19a). |
+| `opened_at` | When the pipeline opened. |
+
+Scoped on `selected_suchak_account_id` and on the two pipeline statuses
+`assertOpenPipeline()` admits, so the client is never offered a pair the schedule
+endpoint would refuse. A pipeline leaves this list the moment it holds ANY
+meeting row — including a cancelled one, whose `visits[]` card offers the next
+meeting instead. One pair, one door.
 
 ## Suchak marketplace — challenges and accept-by-proposing (blueprint phase 2)
 

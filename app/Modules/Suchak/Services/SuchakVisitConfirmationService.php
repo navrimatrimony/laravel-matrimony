@@ -7,6 +7,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
 use App\Models\SuchakActivityLog;
 use App\Models\SuchakCustomerAgreement;
+use App\Models\SuchakCustomerContext;
 use App\Models\SuchakDispute;
 use App\Models\SuchakGrowthRewardRule;
 use App\Models\SuchakPaymentContext;
@@ -90,9 +91,12 @@ class SuchakVisitConfirmationService
             $scheduledFor = $this->nullableDateTime($attributes['scheduled_for'] ?? null, 'Suchak visit scheduled date is invalid.');
             $meetingMode = $this->meetingMode($attributes['meeting_mode'] ?? null);
             $helperSuchakAccountId = $this->helperSuchakAccountId($attributes['helper_suchak_account_id'] ?? null, $lockedPipeline);
+            $customerContextId = $paymentContext?->customer_context_id === null
+                ? $this->pipelineCustomerContextId($lockedPipeline)
+                : (int) $paymentContext->customer_context_id;
             $quote = $this->meetingQuote(
                 (int) $lockedPipeline->selected_suchak_account_id,
-                $paymentContext?->customer_context_id === null ? null : (int) $paymentContext->customer_context_id,
+                $customerContextId,
                 $meetingMode,
                 $attributes['customer_agreement_id'] ?? null,
             );
@@ -118,7 +122,7 @@ class SuchakVisitConfirmationService
                 'target_matrimony_profile_id' => $lockedPipeline->target_matrimony_profile_id,
                 'requesting_matrimony_profile_id' => $lockedPipeline->requesting_matrimony_profile_id,
                 'payment_context_id' => $paymentContext?->id,
-                'customer_context_id' => $paymentContext?->customer_context_id,
+                'customer_context_id' => $customerContextId,
                 'customer_agreement_id' => $quote['customer_agreement_id'],
                 'visit_status' => SuchakVisitConfirmation::STATUS_SCHEDULED,
                 'confirmation_policy_mode' => $policyMode,
@@ -1045,10 +1049,13 @@ class SuchakVisitConfirmationService
      * is the customer here" is exactly how the wrong family ends up confirming.
      *
      * ROLE FIRST, DIRECTION ONLY AS A FALLBACK. `customer_context_id` is written at schedule time
-     * from the payment context of the ARRANGING Suchak (`pipeline.selected_suchak_account_id`), so
-     * the customer context's candidate is by construction the family whose Suchak arranged the
-     * meeting and whose agreement `fee_amount` was quoted from. That is the party M4 means by "the
-     * customer".
+     * from the ARRANGING Suchak's own customer (`pipeline.selected_suchak_account_id`) — from the
+     * pipeline-keyed payment context where one exists, otherwise from the pipeline's
+     * representation, which owns at most one customer ({@see self::pipelineCustomerContextId()}).
+     * Either way the customer context's candidate is by construction the family whose Suchak
+     * arranged the meeting and whose agreement `fee_amount` was quoted from. That is the party M4
+     * means by "the customer", and the party who confirms is therefore always the party who is
+     * billed — the two are read off the SAME context, never off two different ones.
      *
      * `requesting_matrimony_profile_id` is a DIRECTION, and in the marketplace direction no longer
      * implies role: the Suchak answering a challenge becomes the requester (blueprint 5.2 direction
@@ -1060,9 +1067,10 @@ class SuchakVisitConfirmationService
      * (`suchak_pipelines.collaboration_request_id`). Until an engagement could open a pipeline at
      * all, the directional fallback below was harmless: every meeting was member-born, so the
      * requesting profile WAS the member who asked. On a marketplace meeting it is the HELPER's
-     * candidate, and a marketplace meeting reaches this fallback whenever no platform payment
-     * context has been resolved on the pipeline — which is the ordinary case today, because nothing
-     * in the marketplace flow creates one. Without this the other family's own member login could
+     * candidate, and a marketplace meeting reaches this fallback whenever the arranging Suchak's
+     * own customer cannot be resolved at all — no payment context on the pipeline AND no customer
+     * on its representation, i.e. a Suchak who never opened a customer record for the candidate he
+     * represents. Without this the other family's own member login could
      * confirm a meeting arranged for the customer, and the row would record their answer as the
      * customer's. The engagement already names the customer-owning side as a recorded fact, so the
      * answer is read from there rather than guessed from a column that no longer means role.
@@ -1548,6 +1556,69 @@ class SuchakVisitConfirmationService
         }
     }
 
+    /**
+     * WHICH CUSTOMER THIS PIPELINE IS ABOUT, when no payment context answers.
+     *
+     * ── THE HOLE THIS CLOSES ─────────────────────────────────────────────────────────────────
+     *
+     * A meeting is priced from the customer's accepted agreement, and the ONLY route to that
+     * customer used to be `suchak_payment_contexts.customer_context_id` on a row keyed to this
+     * pipeline. **Nothing in production writes such a row.** Neither pipeline creator makes one
+     * ({@see SuchakRequestPipelineService::createRequest()} and `openPipelineForEngagement()`
+     * write no payment context at all), `SuchakPaymentCollectorResolver` only creates one when a
+     * Suchak records a manual ledger payment, and `SuchakLeadAllocationService` creates one with
+     * a NULL `pipeline_id`, which this pipeline-keyed lookup can never see.
+     *
+     * So every meeting scheduled through the app froze `fee_amount = NULL`: the Suchak could
+     * schedule it, complete it and have the family confirm it, and D17's approval screen would
+     * show no figure, no fee would fall due under M4/M5, and the work would have earned nothing.
+     * A meeting that silently earns nothing is worse than no meeting, and the app is the only
+     * door a first meeting has — so the gap had to close in the same change that opened the door.
+     *
+     * ── WHY THE REPRESENTATION, AND WHY IT CANNOT BE AMBIGUOUS ───────────────────────────────
+     *
+     * `suchak_pipelines.representation_id` is the arranging Suchak's mandate over the candidate
+     * this pair is about, and `suchak_customer_contexts.representation_id` carries
+     * `unique(representation_id)` (`suchak_customer_repr_unique`) — a representation has AT MOST
+     * ONE customer. There is nothing to guess between, which is what makes this safe where
+     * {@see self::soleAgreementInForce()} has to refuse: that one faces two agreed PLANS, and the
+     * Suchak answers it with `customer_agreement_id`. Here the database has already answered.
+     *
+     * It is also the SAME context `GET /customers/{representation}/payment-request-options`
+     * resolves, which is where the app reads the plans it offers the Suchak by name. Before this,
+     * the app named a plan from the representation's customer while the server priced from the
+     * payment context's — two different customers on a good day, and a flat refusal
+     * ("agreement must belong to this Suchak account and customer") on a bad one.
+     *
+     * ── WHAT IS NOT WIDENED ──────────────────────────────────────────────────────────────────
+     *
+     * The account must match: a representation is owned by one Suchak account and the pipeline
+     * names the account that arranges, so a mismatch means the pipeline's mandate moved and no
+     * assumption may be made about who is owed. And a customer whose relationship has ENDED
+     * ({@see SuchakCustomerContext::isClosedForPayment()}) prices nothing — the same refusal
+     * `SuchakPaymentCollectorResolver` already makes before collecting money from that customer.
+     * Both cases return null, which `meetingQuote()` already treats as "nothing was agreed for
+     * this meeting" — a real answer that the app now states out loud rather than leaving blank.
+     *
+     * The payment context stays FIRST and is never overridden. This is a fallback, not a
+     * replacement: where one exists it is the explicit, recorded answer.
+     */
+    private function pipelineCustomerContextId(SuchakPipeline $pipeline): ?int
+    {
+        $pipeline->loadMissing('representation.customerContext');
+        $context = $pipeline->representation?->customerContext;
+
+        if (! $context instanceof SuchakCustomerContext) {
+            return null;
+        }
+
+        if ((int) $context->suchak_account_id !== (int) $pipeline->selected_suchak_account_id) {
+            return null;
+        }
+
+        return $context->isClosedForPayment() ? null : (int) $context->id;
+    }
+
     private function meetingMode(mixed $value): string
     {
         $mode = trim((string) ($value ?? ''));
@@ -1566,11 +1637,26 @@ class SuchakVisitConfirmationService
      * Whose candidate was met. Null on an ordinary meeting; on a marketplace one
      * it names the OTHER Suchak, which is why it may not be the arranging
      * account — that value would make the column say something untrue.
+     *
+     * DERIVED WHEN NOTHING IS SENT, since 2026-08-06 — and this is a disclosure, because it is a
+     * column the caller used to own outright. The app now schedules the FIRST meeting on an
+     * engagement-born pipeline, and it sends no helper: it has no id to send, because the
+     * `awaiting_first_meeting` payload deliberately publishes the other Suchak's NAME and not his
+     * key. Left null, `visitDisputeActorType()` would match nobody, and §7.2's stop-loss — whose
+     * entire premise is UNANSWERED HELPER CLAIMS — would attach to no marketplace meeting the app
+     * can create. Round-tripping the id through the client to fix that would be a fact travelling
+     * out and back for no reason; the engagement already records it.
+     *
+     * Nothing is widened: `visitDisputeActorType()` already admits the helper, and this only makes
+     * the column it reads say who that is. An explicitly sent value still wins, and both routes
+     * pass the same refusal below. `helpingSuchakAccountId()` is read off `customer_owner_side`,
+     * which on any engagement-born pipeline is a RECORDED fact rather than the column default —
+     * `openPipelineForEngagement()` opens no pipeline at all without `hasRecordedCustomerOwner()`.
      */
     private function helperSuchakAccountId(mixed $value, SuchakPipeline $pipeline): ?int
     {
         if ($value === null || $value === '') {
-            return null;
+            return $this->engagementHelperSuchakAccountId($pipeline);
         }
 
         $accountId = (int) $value;
@@ -1583,6 +1669,29 @@ class SuchakVisitConfirmationService
         }
 
         return $accountId;
+    }
+
+    /**
+     * The helping Suchak this pipeline's own engagement names, or null on a member-born pipeline.
+     *
+     * The equality guard is belt-and-braces rather than an expected case: `helpingSuchakAccountId()`
+     * is by construction the side `customerOwnerSuchakAccountId()` is not, and the pipeline's
+     * `selected_suchak_account_id` was filled from that same accessor. If they ever coincided the
+     * engagement would be naming one account as both parties, and writing that into the column the
+     * dispute door reads is worse than writing nothing.
+     */
+    private function engagementHelperSuchakAccountId(SuchakPipeline $pipeline): ?int
+    {
+        $pipeline->loadMissing('collaborationRequest');
+        $engagement = $pipeline->collaborationRequest;
+
+        if ($engagement === null) {
+            return null;
+        }
+
+        $helperId = $engagement->helpingSuchakAccountId();
+
+        return $helperId === (int) $pipeline->selected_suchak_account_id ? null : $helperId;
     }
 
     /**
