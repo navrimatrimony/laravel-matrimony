@@ -910,4 +910,67 @@ return [
         'customer_manage' => 'Manage',
         'customer_review' => 'Review',
     ],
+
+    /*
+     * सूचकाची रोजची पहिली स्क्रीन — daily worklist
+     * ({@see \App\Modules\Suchak\Services\SuchakDailyOpportunityService}).
+     * See lang/en/suchak.php for the three rules this group enforces.
+     *
+     * तारखा आधीच format करून :parameter म्हणून येतात — आकडे नेहमी Latin 0-9.
+     * रक्कम {@see \App\Support\MoneyFormat} कडून येते (Indian comma grouping).
+     */
+    'worklist' => [
+        'follow_up_due' => [
+            'label' => 'पाठपुरावा बाकी',
+            'reason_named' => ':name यांचा पाठपुरावा :due पासून बाकी आहे.',
+            'reason' => 'तुम्ही ठरवलेला पाठपुरावा :due पासून बाकी आहे.',
+            'action' => 'डॅशबोर्ड उघडा',
+        ],
+
+        'consent_expiring' => [
+            'label' => 'संमती संपत आहे',
+            'reason_named' => ':name यांची संमती :due रोजी संपते. त्याआधी नूतनीकरण करा, नाहीतर हे प्रोफाइल दाखवणे थांबेल.',
+            'reason' => 'या ग्राहकाची संमती :due रोजी संपते. त्याआधी नूतनीकरण करा, नाहीतर हे प्रोफाइल दाखवणे थांबेल.',
+            'action' => 'हा ग्राहक उघडा',
+        ],
+
+        'pdf_missing' => [
+            'label' => 'बायोडेटा PDF नाही',
+            'reason_named' => ':name यांचा बायोडेटा PDF अजून तयार केलेला नाही.',
+            'reason' => 'या ग्राहकाचा बायोडेटा PDF अजून तयार केलेला नाही.',
+            'action' => 'बायोडेटा तयार करा',
+        ],
+
+        'sla_risk' => [
+            'label' => 'मुदत संपत आहे',
+            'reason_request_named' => ':name यांच्यासाठी आलेली ग्राहक-विनंती तुमच्या उत्तराची वाट पाहत आहे. तुमची मुदत :due वाजता संपते.',
+            'reason_request' => 'एक ग्राहक-विनंती तुमच्या उत्तराची वाट पाहत आहे. तुमची मुदत :due वाजता संपते.',
+            'reason_lead' => 'प्लॅटफॉर्मने पाठवलेली एक लीड तुमच्या उत्तराची वाट पाहत आहे. तिची मुदत :due वाजता संपते.',
+            'action_request' => 'ही विनंती उघडा',
+            'action_lead' => 'ही लीड उघडा',
+        ],
+
+        'payment_due' => [
+            'label' => 'येणे बाकी',
+            'reason_ledger_named' => ':name यांच्याकडून :amount ची रक्कम :date रोजी येणे बाकी आहे.',
+            'reason_ledger' => ':amount ची रक्कम :date रोजी येणे बाकी आहे.',
+            'reason_ledger_named_no_amount' => ':name यांच्याकडून :date रोजी एक रक्कम येणे बाकी आहे.',
+            'reason_ledger_no_amount' => ':date रोजीची एक रक्कम येणे बाकी आहे.',
+            'reason_request_expiring' => ':amount ची पेमेंट विनंती अजून भरलेली नाही; तिची मुदत :due रोजी संपते.',
+            'reason_request' => ':amount ची पेमेंट विनंती अजून भरलेली नाही.',
+            'reason_request_expiring_no_amount' => 'एक पेमेंट विनंती अजून भरलेली नाही; तिची मुदत :due रोजी संपते.',
+            'reason_request_no_amount' => 'एक पेमेंट विनंती अजून भरलेली नाही.',
+            'action_ledger' => 'जमा-खर्च वही उघडा',
+            'action_request' => 'ही पेमेंट विनंती उघडा',
+        ],
+
+        'collaboration_opportunity' => [
+            'label' => 'सहकार्याची संधी',
+            // :fit हे engine चे fit summary — ते आधीच `matching.*` मधून
+            // भाषांतरित होऊन येते, म्हणून ते parameter म्हणूनच वापरले आहे.
+            'reason_named' => ':fit — तुमचे ग्राहक :name यांच्यासाठी हे संभाव्य स्थळ आहे.',
+            'reason' => ':fit — तुमच्या एका ग्राहकासाठी हे संभाव्य स्थळ आहे.',
+            'action' => 'मार्केटप्लेस उघडा',
+        ],
+    ],
 ];

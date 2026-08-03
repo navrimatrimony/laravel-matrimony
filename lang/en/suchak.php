@@ -1025,4 +1025,91 @@ return [
         'customer_manage' => 'Manage',
         'customer_review' => 'Review',
     ],
+
+    /*
+     * The Suchak's first screen, every day: the deterministic daily worklist
+     * ({@see \App\Modules\Suchak\Services\SuchakDailyOpportunityService}).
+     *
+     * Three rules this group exists to enforce, all three broken before it:
+     *
+     *  1. EVERY card word is a key. The whole feed used to be English string
+     *     literals, so a Marathi app showed "Collaboration opportunity" and
+     *     "Follow-up due" in English on the very first screen.
+     *  2. ONE key per SENTENCE. The collaboration reason used to be a translated
+     *     fit summary concatenated with an English tail, which is why a Marathi
+     *     Suchak read "… 3 तपासणी नोंदी against your representation." Anything
+     *     already localised (the fit summary) enters as a :parameter, never as a
+     *     glued fragment — the sentence is worded whole in each language.
+     *  3. NO internal identifier in prose. The card used to print
+     *     "Reference: masked-def044cc4c1d" (and elsewhere "note #47",
+     *     "representation #12") at a human. A Suchak cannot act on a hash or a
+     *     row id or say it to a family. Where the card is about one of HIS OWN
+     *     consented customers he is told the NAME — he already sees that name on
+     *     his customer list, it is not a cross-Suchak disclosure — and the
+     *     `_named` variant is used. The plain variant is the honest fallback for
+     *     a record with no own-customer behind it; nothing is ever half-filled.
+     *
+     * Dates are substituted pre-formatted (`Y-m-d H:i`), never re-formatted here:
+     * digits stay Latin 0-9 in both languages. Money comes from
+     * {@see \App\Support\MoneyFormat}, which owns Indian comma grouping.
+     */
+    'worklist' => [
+        'follow_up_due' => [
+            'label' => 'Follow-up due',
+            'reason_named' => 'Follow-up with :name was due on :due.',
+            'reason' => 'A follow-up you scheduled was due on :due.',
+            'action' => 'Open dashboard',
+        ],
+
+        'consent_expiring' => [
+            'label' => 'Consent expiring',
+            'reason_named' => 'Consent for :name ends on :due. Renew it before then, or this profile stops being shown.',
+            'reason' => 'This customer\'s consent ends on :due. Renew it before then, or this profile stops being shown.',
+            'action' => 'Open this customer',
+        ],
+
+        'pdf_missing' => [
+            'label' => 'Biodata PDF missing',
+            'reason_named' => 'No biodata PDF has been prepared for :name yet.',
+            'reason' => 'No biodata PDF has been prepared for this customer yet.',
+            'action' => 'Prepare biodata',
+        ],
+
+        'sla_risk' => [
+            'label' => 'Time limit closing',
+            'reason_request_named' => 'A customer request for :name is waiting for your reply. Your hold on it ends at :due.',
+            'reason_request' => 'A customer request is waiting for your reply. Your hold on it ends at :due.',
+            'reason_lead' => 'A lead the platform sent you is waiting for your reply. It expires at :due.',
+            'action_request' => 'Open this request',
+            'action_lead' => 'Open this lead',
+        ],
+
+        'payment_due' => [
+            'label' => 'Payment due',
+            // Ledger: money the Suchak is owed. `amount` is nullable on the
+            // table, so "no amount recorded" gets its own whole sentence rather
+            // than a blank where a number should be.
+            'reason_ledger_named' => ':amount is due from :name on :date.',
+            'reason_ledger' => ':amount is due on :date.',
+            'reason_ledger_named_no_amount' => 'A payment from :name is due on :date.',
+            'reason_ledger_no_amount' => 'A payment is due on :date.',
+            // Payment requests: a request already sent to a family and not paid.
+            'reason_request_expiring' => 'A payment request of :amount is still unpaid and expires on :due.',
+            'reason_request' => 'A payment request of :amount is still unpaid.',
+            'reason_request_expiring_no_amount' => 'A payment request is still unpaid and expires on :due.',
+            'reason_request_no_amount' => 'A payment request is still unpaid.',
+            'action_ledger' => 'Open payment record book',
+            'action_request' => 'Open this payment request',
+        ],
+
+        'collaboration_opportunity' => [
+            'label' => 'Collaboration opportunity',
+            // :fit is the engine's own fit summary — already localised by
+            // `matching.suchak_fit_*` / `matching.score_percent`. It enters as a
+            // parameter so this sentence is worded whole in each language.
+            'reason_named' => ':fit — a possible match for your customer :name.',
+            'reason' => ':fit — a possible match for one of your customers.',
+            'action' => 'Open marketplace',
+        ],
+    ],
 ];

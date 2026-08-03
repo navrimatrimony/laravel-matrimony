@@ -32,6 +32,17 @@ class SuchakDailyOpportunityEngineTest extends TestCase
         ProfileCanonicalResidenceService::forgetCachedMasters();
     }
 
+    /**
+     * The Day-48 completion gate, and it is about CONTACT: "private contact
+     * remains masked". Which is not the same rule as "nobody is ever named".
+     *
+     * The distinction is load-bearing and this test used to blur it. A Suchak's
+     * OWN consented customer is named in full on his customer list, so a card
+     * about that customer names them too — a feed that says "representation #12"
+     * or "masked-def044cc4c1d" at the person who signed them up is unusable, not
+     * private. What must never appear is another Suchak's candidate, a profile
+     * he merely touched, or anything out of a private note or ledger line.
+     */
     public function test_daily_worklist_collects_deterministic_due_items_without_private_contact(): void
     {
         $now = now()->setSeconds(0);
@@ -41,7 +52,7 @@ class SuchakDailyOpportunityEngineTest extends TestCase
         $account = $this->suchakAccount();
         // The real matching engine requires an opposite-gender pair, so the fixture must state genders.
         $ownProfile = $this->activeProfile([
-            'full_name' => 'Private Candidate Day48',
+            'full_name' => 'Own Consented Candidate Day48',
             'gender_id' => $this->genderId('male'),
             'religion_id' => $religion->id,
             'caste_id' => $caste->id,
@@ -75,7 +86,7 @@ class SuchakDailyOpportunityEngineTest extends TestCase
 
         $otherAccount = $this->suchakAccount();
         $otherProfile = $this->activeProfile([
-            'full_name' => 'Outside Private Candidate Day48',
+            'full_name' => 'Outside Bureau Candidate Day48',
             'gender_id' => $this->genderId('female'),
             'religion_id' => $religion->id,
             'caste_id' => $caste->id,
@@ -106,10 +117,29 @@ class SuchakDailyOpportunityEngineTest extends TestCase
 
         $encodedItems = json_encode($items->all(), JSON_THROW_ON_ERROR);
 
+        // Private contact and free text a Suchak typed: never republished.
         $this->assertStringNotContainsString('9876543210', $encodedItems);
-        $this->assertStringNotContainsString('Private Candidate Day48', $encodedItems);
-        $this->assertStringNotContainsString('Outside Private Candidate Day48', $encodedItems);
         $this->assertStringNotContainsString('Collect from', $encodedItems);
+        $this->assertStringNotContainsString('Call private number', $encodedItems);
+
+        // Another Suchak's candidate: masked, never named.
+        $this->assertStringNotContainsString('Outside Bureau Candidate Day48', $encodedItems);
+
+        // A profile this Suchak merely holds a note / ledger line against, with
+        // no consented representation of his own, is not his to name either.
+        $this->assertStringNotContainsString('Private Note Candidate Day48', $encodedItems);
+
+        // His OWN consented customer, however, is named — that is the whole
+        // point of the card, and the hash that used to sit here instead
+        // ("Reference: masked-…") told him nothing he could act on.
+        $this->assertStringContainsString('Own Consented Candidate Day48', $encodedItems);
+
+        // And no internal reference survives in anything a human reads.
+        foreach ($items as $item) {
+            foreach (['label', 'reason', 'action_label'] as $field) {
+                $this->assertStringNotContainsString('masked-', (string) $item[$field]);
+            }
+        }
     }
 
     public function test_suchak_dashboard_renders_daily_worklist_without_leaking_private_contact(): void
@@ -121,7 +151,7 @@ class SuchakDailyOpportunityEngineTest extends TestCase
         $user = User::factory()->create();
         $account = $this->suchakAccount(['user_id' => $user->id]);
         $profile = $this->activeProfile([
-            'full_name' => 'Dashboard Private Candidate Day48',
+            'full_name' => 'Dashboard Own Candidate Day48',
             'religion_id' => $religion->id,
             'caste_id' => $caste->id,
         ]);
@@ -144,11 +174,16 @@ class SuchakDailyOpportunityEngineTest extends TestCase
             ->assertSee('Daily Opportunities', false)
             ->assertSee('Follow-up due', false)
             ->assertSee('Consent expiring', false)
-            ->assertSee('PDF missing', false)
+            ->assertSee('Biodata PDF missing', false)
+            // The masked handle keeps its own field on the card — it is the
+            // machine-side key, not the sentence.
             ->assertSee('masked-', false)
+            // His own consented customer is named on his own dashboard.
+            ->assertSee('Dashboard Own Candidate Day48', false)
             ->assertDontSee('9876543210', false)
-            ->assertDontSee('Dashboard Private Candidate Day48', false)
-            ->assertDontSee('Dashboard private', false);
+            // The note's text, and the person behind an unrepresented note, stay out.
+            ->assertDontSee('Dashboard private', false)
+            ->assertDontSee('Dashboard Note Candidate Day48', false);
     }
 
     /**
