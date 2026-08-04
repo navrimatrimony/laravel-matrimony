@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\Payu\MemberPayuActivationService;
 use App\Services\RevenueOrchestratorService;
 use App\Services\SubscriptionService;
 use App\Support\PayuHasher;
@@ -14,7 +14,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Throwable;
@@ -26,7 +25,7 @@ use Throwable;
  */
 class MobilePayuNativeApiController extends Controller
 {
-    public const PENDING_CACHE_PREFIX = 'payu_subscription:';
+    public const PENDING_CACHE_PREFIX = MemberPayuActivationService::PENDING_CACHE_PREFIX;
 
     private const PENDING_TTL_MINUTES = 60;
 
@@ -95,13 +94,15 @@ class MobilePayuNativeApiController extends Controller
         $udf5 = '';
 
         $amount = number_format($finalAmount, 2, '.', '');
+        $expiresAt = now()->addMinutes(self::PENDING_TTL_MINUTES);
         $pending = $subscriptions->buildPayuPendingPayload($user, $plan, $resolved, $amount);
         $pending['checkout_channel'] = 'checkoutpro_native';
+        $pending['pending_expires_at'] = $expiresAt->toIso8601String();
 
         Cache::put(
             self::PENDING_CACHE_PREFIX.$txnid,
             $pending,
-            now()->addMinutes(self::PENDING_TTL_MINUTES),
+            $expiresAt,
         );
 
         $environment = $this->payuSdkEnvironment();
@@ -160,7 +161,7 @@ class MobilePayuNativeApiController extends Controller
         ]);
     }
 
-    public function hash(Request $request): JsonResponse
+    public function hash(Request $request, MemberPayuActivationService $activation): JsonResponse
     {
         $user = $request->user();
         if (! $user instanceof User) {
@@ -172,7 +173,7 @@ class MobilePayuNativeApiController extends Controller
             'hashString' => ['required', 'string', 'max:4000'],
             'hashType' => ['nullable', 'string', 'max:40'],
             'postSalt' => ['nullable', 'string', 'max:2000'],
-            'txnid' => ['nullable', 'string', 'max:40'],
+            'txnid' => ['required', 'string', 'max:40'],
         ]);
 
         $salt = (string) config('payu.merchant_salt', '');
@@ -180,12 +181,20 @@ class MobilePayuNativeApiController extends Controller
             return $this->error('Payment gateway is not configured. Please contact support.', 422, 'payment_config_missing');
         }
 
-        $txnid = trim((string) ($data['txnid'] ?? ''));
-        if ($txnid !== '') {
-            $pending = Cache::get(self::PENDING_CACHE_PREFIX.$txnid);
-            if (! is_array($pending) || (int) ($pending['user_id'] ?? 0) !== (int) $user->id) {
-                return $this->error('Checkout session not found.', 422, 'checkout_session_missing');
-            }
+        $txnid = trim((string) $data['txnid']);
+        $pending = Cache::get(self::PENDING_CACHE_PREFIX.$txnid);
+        if (! is_array($pending)) {
+            return $this->error('Checkout session not found or expired.', 422, 'checkout_session_missing');
+        }
+
+        if ((int) ($pending['user_id'] ?? 0) !== (int) $user->id) {
+            return $this->error('Checkout session mismatch.', 403, 'checkout_user_mismatch');
+        }
+
+        if ($activation->pendingExpired($pending)) {
+            Cache::forget(self::PENDING_CACHE_PREFIX.$txnid);
+
+            return $this->error('Checkout session expired.', 422, 'checkout_session_expired');
         }
 
         try {
@@ -208,14 +217,13 @@ class MobilePayuNativeApiController extends Controller
             'message' => 'Hash generated.',
             'hashName' => $hashName,
             'hash' => $hash,
-            // CheckoutPro expects { hashName: hashValue }
             'hashResponse' => [
                 $hashName => $hash,
             ],
         ]);
     }
 
-    public function verify(Request $request, SubscriptionService $subscriptions): JsonResponse
+    public function verify(Request $request, MemberPayuActivationService $activation): JsonResponse
     {
         $user = $request->user();
         if (! $user instanceof User) {
@@ -270,26 +278,6 @@ class MobilePayuNativeApiController extends Controller
             ]);
         }
 
-        $existing = $this->findSuccessfulPayment($txnid, (int) $user->id);
-        if ($existing instanceof Payment) {
-            $subscription = Subscription::query()
-                ->where('user_id', $user->id)
-                ->where('plan_id', $existing->plan_id)
-                ->orderByDesc('id')
-                ->first();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Payment already verified.',
-                'payment' => [
-                    'txnid' => $txnid,
-                    'status' => 'success',
-                    'activated' => $subscription instanceof Subscription,
-                    'plan_id' => (int) $existing->plan_id,
-                ],
-            ]);
-        }
-
         $payuPayload = array_merge(
             is_array($data['sdk_response'] ?? null) ? $data['sdk_response'] : [],
             [
@@ -311,50 +299,8 @@ class MobilePayuNativeApiController extends Controller
             ],
         );
 
-        $postedHash = strtolower(trim((string) ($payuPayload['hash'] ?? '')));
-        if ($postedHash !== '') {
-            if (! $this->responseHashMatches($payuPayload)) {
-                return $this->error('Payment signature mismatch.', 422, 'response_hash_mismatch');
-            }
-        }
-
-        $pending = Cache::pull(self::PENDING_CACHE_PREFIX.$txnid);
-        if (! is_array($pending)) {
-            // SURL may have finalized already; re-check payment.
-            $existing = $this->findSuccessfulPayment($txnid, (int) $user->id);
-            if ($existing instanceof Payment) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Payment already verified.',
-                    'payment' => [
-                        'txnid' => $txnid,
-                        'status' => 'success',
-                        'activated' => true,
-                        'plan_id' => (int) $existing->plan_id,
-                    ],
-                ]);
-            }
-
-            return $this->error('Checkout session expired. If money was deducted, contact support with txnid '.$txnid.'.', 422, 'checkout_session_missing');
-        }
-
-        if ((int) ($pending['user_id'] ?? 0) !== (int) $user->id) {
-            return $this->error('Checkout session mismatch.', 403, 'checkout_user_mismatch');
-        }
-
-        $plan = Plan::query()->find((int) ($pending['plan_id'] ?? 0));
-        if (! $plan instanceof Plan) {
-            return $this->error(__('subscriptions.subscribe_failed'), 422, 'plan_missing');
-        }
-
         try {
-            $subscription = $subscriptions->finalizePayuSubscription(
-                $user,
-                $plan,
-                $pending,
-                $txnid,
-                $payuPayload,
-            );
+            $result = $activation->activateSuccessfulPayment($payuPayload, $user);
         } catch (HttpException $exception) {
             return $this->error($exception->getMessage(), $this->httpStatus($exception), 'finalize_failed');
         } catch (Throwable $exception) {
@@ -363,61 +309,28 @@ class MobilePayuNativeApiController extends Controller
             return $this->error(__('subscriptions.subscribe_failed'), 422, 'finalize_failed');
         }
 
+        $subscription = $result['subscription'] ?? null;
+        $payment = $result['payment'] ?? null;
+        $planId = $payment?->plan_id ?? ($subscription instanceof Subscription ? $subscription->plan_id : null);
+
         return response()->json([
             'success' => true,
-            'message' => 'Payment verified and subscription activated.',
+            'message' => $result['already_activated']
+                ? 'Payment already verified.'
+                : 'Payment verified and subscription activated.',
             'payment' => [
                 'txnid' => $txnid,
                 'status' => 'success',
-                'activated' => true,
-                'plan_id' => (int) $plan->id,
-                'subscription_id' => (int) $subscription->id,
+                'activated' => $subscription instanceof Subscription,
+                'plan_id' => $planId !== null ? (int) $planId : null,
+                'subscription_id' => $subscription instanceof Subscription ? (int) $subscription->id : null,
+            ],
+            'verify_payment' => [
+                'configured' => (bool) ($result['verify_payment']['configured'] ?? false),
+                'skipped' => (bool) ($result['verify_payment']['skipped'] ?? true),
+                'ok' => (bool) ($result['verify_payment']['ok'] ?? true),
             ],
         ]);
-    }
-
-    private function responseHashMatches(array $data): bool
-    {
-        $salt = (string) config('payu.merchant_salt', '');
-        $expectedKey = (string) config('payu.merchant_key', '');
-        $key = trim((string) ($data['key'] ?? ''));
-        $postedHash = strtolower(trim((string) ($data['hash'] ?? '')));
-
-        if ($salt === '' || $expectedKey === '' || $key !== $expectedKey || $postedHash === '') {
-            return false;
-        }
-
-        $computed = PayuHasher::paymentResponseHash(
-            $salt,
-            (string) ($data['status'] ?? ''),
-            trim((string) ($data['email'] ?? '')),
-            trim((string) ($data['firstname'] ?? '')),
-            trim((string) ($data['productinfo'] ?? '')),
-            trim((string) ($data['amount'] ?? '')),
-            trim((string) ($data['txnid'] ?? '')),
-            $key,
-            (string) ($data['udf1'] ?? ''),
-            (string) ($data['udf2'] ?? ''),
-            (string) ($data['udf3'] ?? ''),
-            (string) ($data['udf4'] ?? ''),
-            (string) ($data['udf5'] ?? ''),
-        );
-
-        return hash_equals($computed, $postedHash);
-    }
-
-    private function findSuccessfulPayment(string $txnid, int $userId): ?Payment
-    {
-        return Payment::query()
-            ->where('user_id', $userId)
-            ->where('payment_status', 'success')
-            ->where(function ($q) use ($txnid) {
-                $q->where('txnid', $txnid);
-                if (Schema::hasColumn('payments', 'payu_txnid')) {
-                    $q->orWhere('payu_txnid', $txnid);
-                }
-            })
-            ->first();
     }
 
     private function isMobileBuyablePlan(User $user, Plan $plan): bool
