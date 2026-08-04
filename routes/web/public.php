@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\MobilePayuSdkReturnController;
 use App\Http\Controllers\Payments\PayuController;
 use App\Http\Controllers\PublicProfileShareController;
 use App\Http\Controllers\SubscriptionController;
@@ -37,6 +38,10 @@ Route::post('/payment/failure', [PayuController::class, 'failure'])->name('payme
 Route::post('/payments/payu/success', [SubscriptionController::class, 'success'])->name('payu.success');
 Route::post('/payments/payu/failure', [SubscriptionController::class, 'failure'])->name('payu.failure');
 Route::post('/payments/payu/webhook', [PayuController::class, 'webhook'])->name('payu.webhook');
+
+// CheckoutPro SDK surl/furl — must emit PayU.onSuccess / PayU.onFailure JS (not web redirects).
+Route::post('/payments/payu/sdk/success', [MobilePayuSdkReturnController::class, 'success'])->name('payu.sdk.success');
+Route::post('/payments/payu/sdk/failure', [MobilePayuSdkReturnController::class, 'failure'])->name('payu.sdk.failure');
 
 /*
 |--------------------------------------------------------------------------

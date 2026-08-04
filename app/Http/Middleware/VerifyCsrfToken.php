@@ -20,6 +20,8 @@ class VerifyCsrfToken extends ValidateCsrfToken
         'payments/payu/success',
         'payments/payu/failure',
         'payments/payu/webhook',
+        'payments/payu/sdk/success',
+        'payments/payu/sdk/failure',
         'suchak/plans/payu/success',
         'suchak/plans/payu/failure',
         'suchak/plans/payu/webhook',

@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\MemberSuchakStageApiController;
 use App\Http\Controllers\Api\MobileBiodataExportApiController;
 use App\Http\Controllers\Api\MobileChatApiController;
 use App\Http\Controllers\Api\MobileNotificationApiController;
+use App\Http\Controllers\Api\MobilePayuNativeApiController;
 use App\Http\Controllers\Api\MobilePlanApiController;
 use App\Http\Controllers\Api\MobileProfileListApiController;
 use App\Http\Controllers\Api\MobileProfilePhotoApiController;
@@ -88,6 +89,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/plans/current', [MobilePlanApiController::class, 'current']); // CURRENT PLAN + CONTACT QUOTA
     Route::get('/plans', [MobilePlanApiController::class, 'index']); // MOBILE PLAN CATALOG
     Route::post('/plans/{plan}/checkout', [MobilePlanApiController::class, 'checkout']); // START WEB CHECKOUT BRIDGE
+    Route::post('/plans/{plan}/checkout/native', [MobilePayuNativeApiController::class, 'checkoutNative']); // CHECKOUTPRO NATIVE START
+    Route::post('/payments/payu/hash', [MobilePayuNativeApiController::class, 'hash']); // CHECKOUTPRO DYNAMIC HASH
+    Route::post('/payments/payu/verify', [MobilePayuNativeApiController::class, 'verify']); // CHECKOUTPRO VERIFY + FINALIZE
     Route::get('/biodata/export-options', [MobileBiodataExportApiController::class, 'options']); // BIODATA EXPORT OPTIONS
     Route::post('/biodata/export', [MobileBiodataExportApiController::class, 'export']); // CREATE SIGNED BIODATA EXPORT LINK
     Route::get('/notifications', [MobileNotificationApiController::class, 'index']); // MOBILE NOTIFICATIONS LIST

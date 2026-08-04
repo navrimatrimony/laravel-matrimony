@@ -189,4 +189,47 @@ final class PayuHasher
 
         return strtolower(hash('sha512', $seq));
     }
+
+    /**
+     * CheckoutPro SDK dynamic hash (server-side only).
+     *
+     * PayU SDK supplies {@code $hashString} without salt. Algorithms:
+     * - V2: HMAC-SHA256(hashString, salt) → lowercase hex
+     * - mcpLookup: HMAC-SHA1(hashString, merchantSecret) → lowercase hex
+     * - postSalt: SHA-512(hashString + salt + postSalt) → lowercase hex
+     * - default (V1): SHA-512(hashString + salt) → lowercase hex
+     *
+     * @see https://docs.payu.in/docs/generate-dynamic-hash-flutter
+     * @see https://docs.payu.in/docs/hash-generation-for-checkoutpro-sdk
+     */
+    public static function checkoutProDynamicHash(
+        string $hashStringWithoutSalt,
+        string $salt,
+        ?string $hashType = null,
+        ?string $hashName = null,
+        ?string $postSalt = null,
+        ?string $merchantSecret = null,
+    ): string {
+        $hashTypeNorm = strtoupper(trim((string) $hashType));
+        $hashNameNorm = trim((string) $hashName);
+
+        if ($hashTypeNorm === 'V2') {
+            return hash_hmac('sha256', $hashStringWithoutSalt, $salt);
+        }
+
+        if ($hashNameNorm === 'mcpLookup') {
+            $secret = trim((string) $merchantSecret);
+            if ($secret === '') {
+                throw new \InvalidArgumentException('PayU merchant secret is required for mcpLookup hash.');
+            }
+
+            return hash_hmac('sha1', $hashStringWithoutSalt, $secret);
+        }
+
+        if ($postSalt !== null && $postSalt !== '') {
+            return strtolower(hash('sha512', $hashStringWithoutSalt.$salt.$postSalt));
+        }
+
+        return strtolower(hash('sha512', $hashStringWithoutSalt.$salt));
+    }
 }
