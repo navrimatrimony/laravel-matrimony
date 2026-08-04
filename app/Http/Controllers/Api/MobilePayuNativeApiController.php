@@ -42,10 +42,15 @@ class MobilePayuNativeApiController extends Controller
 
         $data = $request->validate([
             'plan_term_id' => ['nullable', 'integer'],
+            'coupon_code' => ['nullable', 'string', 'max:64'],
         ]);
         $planTermId = array_key_exists('plan_term_id', $data) && $data['plan_term_id'] !== null
             ? (int) $data['plan_term_id']
             : null;
+        $couponCode = isset($data['coupon_code']) ? trim((string) $data['coupon_code']) : '';
+        if ($couponCode === '') {
+            $couponCode = null;
+        }
 
         $plan->loadMissing(['features', 'terms', 'quotaPolicies']);
         if (! $this->isMobileBuyablePlan($user, $plan)) {
@@ -62,7 +67,8 @@ class MobilePayuNativeApiController extends Controller
         }
 
         try {
-            $prepared = $revenue->prepareCheckout($user, $plan, $planTermId, null);
+            // Coupon already owned by CouponService / resolvePaidPlanCheckout — bind only.
+            $prepared = $revenue->prepareCheckout($user, $plan, $planTermId, $couponCode);
         } catch (HttpException $exception) {
             return $this->error($exception->getMessage(), $this->httpStatus($exception), 'checkout_validation_failed');
         } catch (Throwable $exception) {
@@ -128,13 +134,23 @@ class MobilePayuNativeApiController extends Controller
                 'plan_id' => (int) $plan->id,
                 'plan_term_id' => isset($resolved['plan_term_id']) ? (int) $resolved['plan_term_id'] : null,
                 'plan_name' => (string) ($plan->name ?? ''),
+                'coupon_code' => $resolved['coupon_code'] ?? $couponCode,
                 'amount' => [
                     'currency' => 'INR',
                     'base_amount' => isset($resolved['base_amount']) ? round((float) $resolved['base_amount'], 2) : null,
                     'final_amount' => round((float) $finalAmount, 2),
                     'amount_string' => $amount,
+                    'coupon_discount' => isset($pending['coupon_discount'])
+                        ? round((float) $pending['coupon_discount'], 2)
+                        : 0.0,
+                    'referral_checkout_discount' => isset($pending['referral_checkout_discount'])
+                        ? round((float) $pending['referral_checkout_discount'], 2)
+                        : 0.0,
                 ],
                 'duration_days' => isset($resolved['duration_days']) ? (int) $resolved['duration_days'] : null,
+                'duration_days_total' => isset($pending['duration_days_total'])
+                    ? (int) $pending['duration_days_total']
+                    : (isset($resolved['duration_days']) ? (int) $resolved['duration_days'] : null),
                 'payu' => [
                     'key' => $merchantKey,
                     'txnid' => $txnid,
