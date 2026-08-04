@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\AdminSetting;
 use App\Models\Plan;
 use App\Models\PlanTerm;
 use App\Models\Subscription;
@@ -76,6 +75,11 @@ class MobilePlanApiController extends Controller
             return $this->error('Unauthenticated.', 401);
         }
 
+        // Member mobile catalog: include free + paid visible rows, always gender-filtered
+        // (male → male/+all, female → female/+all). Website still uses the admin toggle.
+        $enforceGenderSpecificPlans = true;
+        $user->loadMissing('matrimonyProfile.gender');
+
         $plans = Plan::query()
             ->where('is_active', true)
             ->where('is_visible', true)
@@ -83,16 +87,8 @@ class MobilePlanApiController extends Controller
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get()
-            ->filter(fn (Plan $plan): bool => ! Plan::isFreeCatalogSlug((string) $plan->slug))
+            ->filter(fn (Plan $plan): bool => Plan::profileGenderAllowsPlan($user, $plan))
             ->values();
-
-        $enforceGenderSpecificPlans = AdminSetting::getBool('plans_enforce_gender_specific_visibility', true);
-        $user->loadMissing('matrimonyProfile.gender');
-        if ($enforceGenderSpecificPlans) {
-            $plans = $plans
-                ->filter(fn (Plan $plan): bool => Plan::profileGenderAllowsPlan($user, $plan))
-                ->values();
-        }
 
         return response()->json([
             'success' => true,
@@ -394,10 +390,19 @@ class MobilePlanApiController extends Controller
 
     private function isCurrentPlanForUser(User $user, Plan $plan): bool
     {
-        $subscription = $this->activePlanResolver->getActiveSubscription($user);
+        if (! $plan->exists || $plan->id === null) {
+            return false;
+        }
 
-        return $subscription instanceof Subscription
-            && (int) $subscription->plan_id === (int) $plan->id;
+        $subscription = $this->activePlanResolver->getActiveSubscription($user);
+        if ($subscription instanceof Subscription && (int) $subscription->plan_id === (int) $plan->id) {
+            return true;
+        }
+
+        // Free / effective plan when there is no paid subscription row.
+        $effective = $this->activePlanResolver->get($user);
+
+        return $effective->exists && (int) $effective->id === (int) $plan->id;
     }
 
     private function isMobileBuyablePlan(User $user, Plan $plan): bool
