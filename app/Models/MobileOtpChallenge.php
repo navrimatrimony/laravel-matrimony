@@ -10,6 +10,8 @@ class MobileOtpChallenge extends Model
         'challenge_id',
         'mobile',
         'channel',
+        /** Firebase uid when `channel` is `firebase`; null for OTP challenges. */
+        'provider_uid',
         'purpose',
         'otp_hash',
         'attempts',

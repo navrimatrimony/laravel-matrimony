@@ -104,10 +104,21 @@ class SuchakRegistrationService
     /**
      * Goal 4 staged native start: mobile-first minimal Suchak (cannot operate until complete).
      *
+     * @param  bool  $mobileAlreadyVerified  Set ONLY by a server-side proof —
+     *                                       today that means a Firebase ID token
+     *                                       whose signature this server checked
+     *                                       (see SuchakFirebasePhoneAuthService).
+     *                                       It is never derived from a request
+     *                                       field, and no OTP is issued when it
+     *                                       is true.
      * @return array{user: User, account: SuchakAccount, delivery: string, otp: string|null}
      */
-    public function startMobileRegistration(string $mobile, ?string $ipAddress = null, ?string $userAgent = null): array
-    {
+    public function startMobileRegistration(
+        string $mobile,
+        ?string $ipAddress = null,
+        ?string $userAgent = null,
+        bool $mobileAlreadyVerified = false,
+    ): array {
         $mobile = $this->normalizeRequiredMobile($mobile, 'whatsapp_number');
 
         if (User::query()->where('mobile', $mobile)->exists()) {
@@ -116,11 +127,12 @@ class SuchakRegistrationService
             ]);
         }
 
-        [$user, $account] = DB::transaction(function () use ($mobile, $ipAddress, $userAgent): array {
+        [$user, $account] = DB::transaction(function () use ($mobile, $ipAddress, $userAgent, $mobileAlreadyVerified): array {
             $user = User::query()->create([
                 'name' => 'Suchak',
                 'email' => null,
                 'mobile' => $mobile,
+                'mobile_verified_at' => $mobileAlreadyVerified ? now() : null,
                 'password' => Hash::make(Str::random(40)),
                 'registering_for' => 'other',
             ]);
@@ -142,7 +154,9 @@ class SuchakRegistrationService
                 'verification_status' => SuchakAccount::VERIFICATION_PENDING,
                 'public_status' => SuchakAccount::PUBLIC_HIDDEN,
                 'registration_completed_at' => null,
-                'onboarding_step' => 'otp',
+                // A Firebase-verified start has already cleared the OTP step,
+                // so it must not land the Suchak back on an OTP screen.
+                'onboarding_step' => $mobileAlreadyVerified ? 'identity' : 'otp',
             ]);
 
             $this->activityLogger->record([
@@ -155,14 +169,30 @@ class SuchakRegistrationService
                 'ip_address' => $ipAddress,
                 'user_agent' => Str::limit((string) $userAgent, 512, ''),
                 'metadata_json' => [
-                    'source' => 'native_suchak_registration_start',
-                    'mobile_verification_required' => true,
+                    'source' => $mobileAlreadyVerified
+                        ? 'native_suchak_registration_start_firebase'
+                        : 'native_suchak_registration_start',
+                    'mobile_verification_required' => ! $mobileAlreadyVerified,
+                    'mobile_verification_channel' => $mobileAlreadyVerified ? 'firebase' : null,
                     'staged' => true,
                 ],
             ]);
 
             return [$user, $account];
         });
+
+        if ($mobileAlreadyVerified) {
+            // No code was sent and none may be requested — the proof already
+            // happened. Returning a delivery channel of 'firebase' keeps the
+            // response shape identical for older clients while making it
+            // impossible for one to sit waiting for an SMS.
+            return [
+                'user' => $user,
+                'account' => $account,
+                'delivery' => SuchakFirebasePhoneAuthService::CHANNEL,
+                'otp' => null,
+            ];
+        }
 
         $otp = $this->issueOtp($user, $mobile);
 

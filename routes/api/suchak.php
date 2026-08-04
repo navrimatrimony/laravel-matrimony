@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\Suchak\SuchakCustomerShareCardApiController;
 use App\Http\Controllers\Api\Suchak\SuchakCustomersApiController;
 use App\Http\Controllers\Api\Suchak\SuchakDashboardApiController;
 use App\Http\Controllers\Api\Suchak\SuchakDeviceTokenApiController;
+use App\Http\Controllers\Api\Suchak\SuchakFirebaseAuthApiController;
 use App\Http\Controllers\Api\Suchak\SuchakIntakeApiController;
 use App\Http\Controllers\Api\Suchak\SuchakLoginApiController;
 use App\Http\Controllers\Api\Suchak\SuchakManualProfileApiController;
@@ -44,6 +45,7 @@ use App\Http\Controllers\Api\Suchak\SuchakRepresentedProfileApiController;
 use App\Http\Controllers\Api\Suchak\SuchakSearchApiController;
 use App\Http\Controllers\Api\Suchak\SuchakSuccessFeeTrancheApiController;
 use App\Http\Controllers\Api\Suchak\SuchakTwelveMonthClauseApiController;
+use App\Http\Middleware\EnsureSuchakLegacyOtpEnabled;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -55,19 +57,41 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('suchak')->group(function () {
     Route::get('/app-config', SuchakAppConfigApiController::class);
 
-    Route::post('/login/otp/send', [SuchakLoginApiController::class, 'sendOtp']);
-    Route::post('/login/otp/verify', [SuchakLoginApiController::class, 'verifyOtp']);
+    /*
+    | Real phone verification (Firebase Phone Auth). Registration and login are
+    | two entry points onto ONE verifier — see SuchakFirebasePhoneAuthService.
+    |
+    | Throttled: blueprint §10 S2 records that the member OTP send route shipped
+    | with no throttle at all, and this route is the one that will guard money.
+    */
+    Route::get('/auth/firebase/status', [SuchakFirebaseAuthApiController::class, 'status']);
+    Route::middleware('throttle:10,1')->group(function () {
+        Route::post('/auth/firebase/login', [SuchakFirebaseAuthApiController::class, 'login']);
+        Route::post('/auth/firebase/register', [SuchakFirebaseAuthApiController::class, 'register']);
+    });
+
+    /*
+    | Legacy code-based sign-in. Kept switchable for the owner's own testing and
+    | OFF by default in production — see EnsureSuchakLegacyOtpEnabled.
+    */
+    Route::middleware(EnsureSuchakLegacyOtpEnabled::class)->group(function () {
+        Route::post('/login/otp/send', [SuchakLoginApiController::class, 'sendOtp']);
+        Route::post('/login/otp/verify', [SuchakLoginApiController::class, 'verifyOtp']);
+        Route::post('/register/start', [SuchakRegisterApiController::class, 'startMobile']);
+    });
+
     Route::post('/login/password', [SuchakLoginApiController::class, 'loginWithPassword']);
     Route::post('/login/google', [SuchakLoginApiController::class, 'loginWithGoogle']);
 
     Route::post('/register', [SuchakRegisterApiController::class, 'store']);
-    Route::post('/register/start', [SuchakRegisterApiController::class, 'startMobile']);
     Route::post('/register/resolve-location', [SuchakRegisterApiController::class, 'resolveLocation']);
 });
 
 Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(function () {
-    Route::post('/register/otp/resend', [SuchakRegisterApiController::class, 'resendOtp']);
-    Route::post('/register/otp/verify', [SuchakRegisterApiController::class, 'verifyOtp']);
+    Route::middleware(EnsureSuchakLegacyOtpEnabled::class)->group(function () {
+        Route::post('/register/otp/resend', [SuchakRegisterApiController::class, 'resendOtp']);
+        Route::post('/register/otp/verify', [SuchakRegisterApiController::class, 'verifyOtp']);
+    });
     Route::post('/register/identity', [SuchakRegisterApiController::class, 'updateIdentity']);
     Route::post('/register/location', [SuchakRegisterApiController::class, 'updateLocation']);
     Route::post('/register/password', [SuchakRegisterApiController::class, 'setPassword']);

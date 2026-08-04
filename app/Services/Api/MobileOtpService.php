@@ -401,7 +401,12 @@ class MobileOtpService
         return $this->resolveDeliveryMode() === 'dev';
     }
 
-    private function persistConsents(User $user, MobileOtpChallenge $challenge): void
+    /**
+     * Public so the Firebase Phone Auth path can record consent through THIS
+     * writer instead of growing a second one — the challenge row it hands over
+     * carries the same terms/privacy versions and metadata.
+     */
+    public function persistConsents(User $user, MobileOtpChallenge $challenge): void
     {
         $now = now();
         foreach ([
