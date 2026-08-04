@@ -43,6 +43,194 @@ return [
         'array' => 'The :attribute must contain :size items.',
     ],
 
-    'attributes' => [],
+    /*
+    |--------------------------------------------------------------------------
+    | Attribute names
+    |--------------------------------------------------------------------------
+    |
+    | Without an entry here Laravel prints the raw request field with its
+    | underscores swapped for spaces — which is how the Suchak app answered
+    | `POST /api/v1/suchak/login/otp/send` with "terms accepted स्वीकारणे
+    | आवश्यक आहे.": the sentence was translated, the field name was not.
+    |
+    | Every field a Suchak-facing request validates is named here and in
+    | `lang/mr/validation.php`. Keys stay FLAT (dotted / `*` keys included) —
+    | `Arr::get()` checks the literal key before walking segments, so a flat
+    | `services.*.name` resolves while `services` itself stays a plain string.
+    | Add a row here AND in the Marathi file whenever a new field is validated.
+    |
+    */
+
+    'attributes' => [
+
+        // Identity, sign-in and consent.
+        'mobile' => 'mobile number',
+        'intended_mobile' => 'mobile number',
+        'whatsapp_number' => 'WhatsApp number',
+        'candidate_mobile' => "candidate's mobile number",
+        'consent_mobile_number' => 'consent mobile number',
+        'otp' => 'OTP',
+        'challenge_id' => 'OTP request',
+        'channel' => 'delivery channel',
+        'purpose' => 'purpose',
+        'login' => 'mobile number or email address',
+        'password' => 'password',
+        'email' => 'email address',
+        'candidate_email' => "candidate's email address",
+        'id_token' => 'Google sign-in token',
+        'firebase_id_token' => 'Firebase sign-in token',
+        'token' => 'device token',
+        'app' => 'app',
+        'platform' => 'device platform',
+        'locale' => 'language',
+        'terms_accepted' => 'Terms of Service',
+        'privacy_accepted' => 'Privacy Policy',
+        'terms_version' => 'Terms of Service version',
+        'privacy_version' => 'Privacy Policy version',
+        'whatsapp_alerts_opt_in' => 'consent for WhatsApp alerts',
+
+        // Suchak registration.
+        'suchak_name' => 'Suchak name',
+        'office_name' => 'office name',
+        'business_type' => 'business type',
+        'employee_count' => 'team size',
+        'verification_type' => 'verification type',
+        'document' => 'document',
+        'address_line' => 'address',
+        'location_id' => 'location',
+        'location_input' => 'location',
+        'lat' => 'latitude',
+        'lon' => 'longitude',
+        'step' => 'step',
+
+        // Candidates and represented profiles.
+        'candidate_name' => "candidate's name",
+        'candidate_gender' => "candidate's gender",
+        'candidate_name_affirmed' => 'confirmation of the candidate name',
+        'date_of_birth' => 'date of birth',
+        'registering_for' => 'who this profile is for',
+        'relation' => 'relation',
+        'relationship_to_candidate' => 'relationship to the candidate',
+        'owner_name' => "profile owner's name",
+        'use_existing_profile' => 'existing profile',
+        'data' => 'profile details',
+        'force_regenerate' => 'regenerate',
+        'representation_id' => 'candidate',
+        'requesting_representation_id' => 'your candidate',
+        'target_representation_id' => "the other Suchak's candidate",
+        'raw_text' => 'biodata text',
+        'file' => 'file',
+
+        // Search, filters and paging.
+        'gender_id' => 'gender',
+        'religion_id' => 'religion',
+        'caste_id' => 'caste',
+        'marital_status_id' => 'marital status',
+        'district_id' => 'district',
+        'taluka_id' => 'taluka',
+        'education' => 'education',
+        'age_min' => 'minimum age',
+        'age_max' => 'maximum age',
+        'income_min' => 'minimum income',
+        'income_max' => 'maximum income',
+        'q' => 'search text',
+        'search' => 'search text',
+        'page' => 'page',
+        'per_page' => 'results per page',
+        'limit' => 'limit',
+        'sort' => 'sort order',
+        'order' => 'order',
+        'order.*' => 'entry in the order',
+        'filter' => 'filter',
+        'status' => 'status',
+        'include_seen' => 'include already seen',
+        'include_basic' => 'include basic services',
+        'is_visible' => 'visibility',
+
+        // Candidate consent.
+        'consent_type' => 'consent type',
+        'consent_method' => 'consent method',
+        'consent_channel' => 'consent channel',
+        'consent_given_by_name' => 'name of the person giving consent',
+        'consent_giver_relation' => 'relation of the person giving consent',
+        'evidence_note' => 'evidence note',
+
+        // Notes, messages and reasons.
+        'note' => 'note',
+        'note_text' => 'note',
+        'note_type' => 'note type',
+        'private_note' => 'private note',
+        'publisher_note' => 'note',
+        'event_note' => 'note',
+        'schedule_note' => 'note',
+        'completion_note' => 'completion note',
+        'settlement_note' => 'settlement note',
+        'settlement_reference' => 'settlement reference',
+        'message' => 'message',
+        'body_text' => 'message',
+        'reply_message' => 'reply',
+        'follow_up_at' => 'follow-up date',
+        'reason' => 'reason',
+        'reference' => 'reference',
+        'cancellation_reason' => 'cancellation reason',
+        'dispute_reason' => 'dispute reason',
+        'rejection_reason_code' => 'rejection reason',
+        'withdrawn_reason' => 'withdrawal reason',
+        'decision' => 'decision',
+
+        // Meetings, stages and the collaboration pipeline.
+        'meeting_mode' => 'meeting mode',
+        'scheduled_for' => 'meeting date and time',
+        'stage_key' => 'stage',
+        'pipeline_id' => 'pipeline',
+        'helper_suchak_account_id' => 'helping Suchak',
+        'customer_agreement_id' => 'agreement',
+        'married_on' => 'marriage date',
+        'expires_at' => 'expiry date',
+
+        // Money, plans and service packages.
+        'amount' => 'amount',
+        'currency' => 'currency',
+        'price_amount' => 'price',
+        'original_price_amount' => 'original price',
+        'fixed_amount' => 'fixed amount',
+        'payment_mode' => 'payment mode',
+        'payment_context_id' => 'payment',
+        'customer_payment_id' => 'payment',
+        'paid_at' => 'payment date',
+        'payment_qr' => 'payment QR code',
+        'clear_payment_qr' => 'removal of the payment QR code',
+        'upi_vpa' => 'UPI ID',
+        'plan_key' => 'plan',
+        'package_name' => 'package name',
+        'service_package_id' => 'service package',
+        'agreement_title' => 'agreement title',
+        'offline_agreement_recorded' => 'offline agreement',
+        'duration' => 'duration',
+        'name' => 'name',
+        'name_mr' => 'name (Marathi)',
+        'services' => 'services',
+        'services.*' => 'service',
+        'services.*.name' => 'service name',
+        'services.*.name_mr' => 'service name (Marathi)',
+        'per_meeting_fee_amount' => 'fee per meeting',
+        'per_meeting_online_fee_amount' => 'fee per online meeting',
+        'post_marriage_fee_amount' => 'post-marriage fee',
+        'post_marriage_fee_mode' => 'post-marriage fee type',
+        'success_fee_tranches' => 'success fee instalments',
+        'success_fee_tranches.*' => 'success fee instalment',
+        'success_fee_tranches.*.share_percent' => 'share of the success fee instalment',
+        'success_fee_tranches.*.trigger_stage_key' => 'stage of the success fee instalment',
+        'success_fee_tranches.*.is_final_tranche' => 'final success fee instalment',
+        'request_title' => 'request title',
+        'request_title_mr' => 'request title (Marathi)',
+        'commission_ack' => 'commission acknowledgement',
+        'split_type' => 'split type',
+        'bride_side_share' => "bride side's share",
+        'groom_side_share' => "groom side's share",
+        'declared_share_type' => 'declared share type',
+        'declared_share_percent' => 'declared share percentage',
+        'declared_share_amount' => 'declared share amount',
+    ],
 ];
 
