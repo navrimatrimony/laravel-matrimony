@@ -96,6 +96,11 @@ failures so a notification can never break the business action.
 - Meeting timeout is fully handled by `SuchakClaimSilenceService`: a 7-day silence clock, a
   stop-loss counter and a 90-day lapse. A meeting the customer never answers is not an open
   problem.
+- **Who cancelled a meeting is already known.** `visitCancelActorType()` returns `ACTOR_ADMIN` or
+  `ACTOR_SUCHAK` and the value is written to `suchak_activity_logs`. **Never add actor tracking to
+  cancellations.** Only a Suchak or an admin can cancel at all — `assertCancellable()` additionally
+  refuses once a meeting is marked completed. **The customer cannot cancel**, so any rule assuming
+  they can is wrong.
 
 ---
 
@@ -339,23 +344,47 @@ breaks.
 
 ---
 
-## U7 — Record who cancelled a meeting and why
+## U7 — Make the cancellation record honest, and stop charging it to the wrong Suchak
 
-**Goal** A cancellation stops being anonymous, so reputation can eventually be fair.
-**Scope** Write into the existing append-only events table. **No new columns.**
+**Goal** A Suchak is no longer penalised for a cancellation they did not make.
+**Scope** Exactly three things. Nothing else.
 
-**Reuse** `suchak_visit_confirmation_events.metadata_json` · `EVENT_CANCELLED` (exists)
+1. Capture the cancellation **reason** (if not already stored).
+2. Capture the **attendance outcome** (if not already stored).
+3. **Exclude admin-cancelled meetings** from `cancelled_rate`.
+
+**Do not add actor tracking.** `SuchakVisitConfirmationService::visitCancelActorType()` is already
+the runtime source of truth — it returns `ACTOR_ADMIN` or `ACTOR_SUCHAK` and the value is already
+written to `suchak_activity_logs`. Duplicating it would breach the no-duplicate rule.
+
+**Why item 3 belongs here** Two implemented rules contradict each other today.
+`visitCancelActorType()` always knows who cancelled, while
+`SuchakReputationService::cancelled_rate` counts every cancellation against the Suchak — including
+the ones an admin made on safety grounds or as the outcome of a dispute. The published number then
+answers *"how often does a meeting he arranged never happen?"* with events he had no part in. The
+data to fix it already exists; only the query does not use it.
+
+**Reuse** `suchak_visit_confirmation_events.metadata_json` · `EVENT_CANCELLED` ·
+`visitCancelActorType()` · `suchak_activity_logs.actor_type`
 
 **Files** `app/Modules/Suchak/Services/SuchakVisitConfirmationService.php` ·
-`tests/Feature/Suchak/SuchakMeetingEngineTest.php`
+`app/Modules/Suchak/Services/SuchakReputationService.php` ·
+`tests/Feature/Suchak/SuchakMeetingEngineTest.php` ·
+`tests/Feature/Suchak/SuchakReputationReadTest.php`
 
-**Behaviour** On cancel, write actor id, actor type, reason and attendance into `metadata_json`.
+**Behaviour** On cancel, write reason and attendance into `metadata_json`. In
+`SuchakReputationService`, exclude cancellations whose actor was an admin from the `cancelled_rate`
+numerator. The denominator (`total`) is unchanged — every meeting arranged still counts.
 
-**Tests** Cancelling records actor and reason · the event row stays immutable.
+**Tests** Cancelling records reason and attendance · the event row stays immutable · **an
+admin-cancelled meeting does not raise the Suchak's `cancelled_rate`** · a Suchak-cancelled one
+still does.
 
-**Rollback** `git revert <sha>`.
+**Runtime verification** `php artisan test tests/Feature/Suchak/SuchakMeetingEngineTest.php tests/Feature/Suchak/SuchakReputationReadTest.php`
 
-**Time** 50 min
+**Rollback** `git revert <sha>`. No schema change.
+
+**Time** 65 min
 
 ---
 
@@ -458,15 +487,15 @@ the publishing service · new test
 
 | Unit | Time | Depends on |
 |---|---|---|
-| U1 · U2 · U3 | 3 h 00 | — (closes a 2026-08-05 defect) |
+| U1 · U2 · U3 | 3 h 30 | — (closes a 2026-08-05 defect) |
 | U4 · U5 · U6 | 1 h 25 | — |
-| U7 | 50 min | — |
-| U8 | 60 min | — |
+| U7 | 1 h 05 | — |
+| U8 | 1 h 00 | — |
 | U9 → U10 → U11 | 3 h 30 | U9 first |
-| U12 | 60 min | — |
-| **Total** | **~10 h** | |
+| U12 | 1 h 00 | — |
+| **Total** | **11 h 30** | |
 
-Only U10 and U11 depend on anything, and only on U9.
+Every unit is at or under two hours. Only U10 and U11 depend on anything, and only on U9.
 
 ---
 
@@ -485,8 +514,22 @@ Overall, execution is done when U1–U12 are committed. At that point:
 - A customer can see, confirm and dispute their meetings, and is told when one needs them.
 - A Suchak is told when a proposal arrives.
 
-**Anything not listed in §6 is out of scope.** If implementation discovers a contradiction in §1,
-stop and report it — that is the only condition that reopens planning.
+**Anything not listed in §6 is out of scope.**
+
+## Changing the plan after this point
+
+A newly discovered issue may change the plan **only if it satisfies both**:
+
+1. It produces incorrect runtime behaviour **today**, and
+2. It cannot be safely fixed inside the execution unit currently being implemented.
+
+Otherwise **fix it inside the active unit**. Do not reopen planning, do not write a document, do
+not add a unit. Discovering something interesting is not a reason to stop building.
+
+Planning was reopened four times to reach this list, and each pass returned less: a journey audit,
+a matrix audit, a scenario audit, a transition audit and a business-rule audit between them found
+one real defect that changed the plan. The rule above exists so the next discovery is absorbed
+rather than escalated.
 
 **Self-containment test:** every unit above names its files, its reused services, its tests, its
 verification command and its rollback. No unit requires remembering a conversation.
