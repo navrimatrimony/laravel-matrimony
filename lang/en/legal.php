@@ -974,7 +974,8 @@ return [
             [
                 'heading' => '9. If you are a Suchak',
                 'body' => [
-                    'Suchak accounts are different, because a Suchak holds profiles belonging to other families. Deleting a Suchak account is not covered by this page — write to :support_email and we will handle it individually, so that no candidate loses their data because their Suchak left.',
+                    'You can close your Suchak account from the Suchak application: Profile, then Delete account. Your account is hidden immediately and your candidates stop being routed to you; your own account and personal details are erased after :deletion_days days, the same as any member.',
+                    'Your candidates do not lose their profiles when you leave. Their profiles remain, and their contact details are protected until they choose another Suchak or manage their own profile — nobody can reach them without their approval in the meantime.',
                     'If your profile was created for you by a Suchak, you can still delete it yourself. It is your data, and you do not need your Suchak\'s permission.',
                 ],
             ],
