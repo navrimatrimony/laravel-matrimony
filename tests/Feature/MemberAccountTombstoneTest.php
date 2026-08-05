@@ -110,6 +110,58 @@ class MemberAccountTombstoneTest extends TestCase
         $this->assertSame(1, User::query()->where('mobile', '9000000001')->count());
     }
 
+    /**
+     * The cross-feature half of leaving: the Suchak stops counting the departed
+     * member as a customer, but the representation row itself survives — it is
+     * undeletable by design and the marriage/consent history hangs off it.
+     */
+    public function test_purging_a_represented_member_deactivates_the_representation_and_wipes_the_alias(): void
+    {
+        $leaver = $this->makeMember('Represented Leaver', '9000000004');
+        $other = $this->makeMember('Represented Stayer', '9000000005');
+
+        $suchakUser = User::factory()->create(['is_admin' => false]);
+        $account = \App\Models\SuchakAccount::factory()->create([
+            'user_id' => $suchakUser->id,
+            'verification_status' => \App\Models\SuchakAccount::VERIFICATION_VERIFIED,
+            'public_status' => \App\Models\SuchakAccount::PUBLIC_ACTIVE,
+            'verified_at' => now(),
+            'registration_completed_at' => now(),
+        ]);
+
+        $makeRepresentation = function (MatrimonyProfile $profile) use ($account) {
+            return \App\Models\SuchakProfileRepresentation::query()->create([
+                'suchak_account_id' => $account->id,
+                'matrimony_profile_id' => $profile->id,
+                'representation_status' => \App\Models\SuchakProfileRepresentation::STATUS_ACTIVE,
+                'representation_mode' => \App\Models\SuchakProfileRepresentation::MODE_MANUAL_FORM_BY_SUCHAK,
+                'consent_status' => \App\Models\SuchakProfileRepresentation::CONSENT_ACCEPTED,
+                'consent_verified_at' => now(),
+                'shared_display_name' => 'Sunita G. (Lakhandur)',
+            ]);
+        };
+        $leaverRep = $makeRepresentation($leaver);
+        $otherRep = $makeRepresentation($other);
+
+        UserAccountDatabasePurger::purgeUserAccount(
+            $leaver->user()->first(),
+            keepCounterpartConversations: true
+        );
+
+        $leaverRow = DB::table('suchak_profile_representations')->where('id', $leaverRep->id)->first();
+        $this->assertNotNull($leaverRow, 'the representation must survive — it is undeletable history');
+        $this->assertNotNull($leaverRow->candidate_deactivated_at);
+        $this->assertNull(
+            $leaverRow->shared_display_name,
+            'the display alias is PII and must not outlive the erasure promise'
+        );
+
+        // The neighbouring customer is untouched.
+        $otherRow = DB::table('suchak_profile_representations')->where('id', $otherRep->id)->first();
+        $this->assertNull($otherRow->candidate_deactivated_at);
+        $this->assertSame('Sunita G. (Lakhandur)', $otherRow->shared_display_name);
+    }
+
     public function test_a_showcase_profile_is_still_erased_outright(): void
     {
         $showcase = $this->makeMember('Showcase Person', '9000000003');

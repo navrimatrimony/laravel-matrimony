@@ -122,6 +122,52 @@ class MemberAccountDeletionFlowTest extends TestCase
             ->assertJsonPath('deletion.state', 'active');
     }
 
+    /**
+     * The sweep materialises its list before iterating, so it must re-verify
+     * each user under lock at purge time. This pins the observable half: a
+     * cancellation that lands before the purge always wins.
+     */
+    public function test_a_cancelled_account_is_never_purged(): void
+    {
+        $user = $this->member();
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/account/deletion', ['confirmation' => 'delete', 'reason_key' => 'other'])->assertOk();
+        $this->travel(MemberAccountDeletionService::GRACE_DAYS + 1)->days();
+
+        $this->deleteJson('/api/v1/account/deletion')->assertOk();
+
+        $this->assertSame(
+            ['purged' => 0, 'failed' => 0],
+            app(MemberAccountDeletionService::class)->purgeDue(),
+            'a cancel landing before the sweep must always win'
+        );
+        $this->assertNull(DB::table('users')->where('id', $user->id)->value('account_deleted_at'));
+    }
+
+    public function test_cancel_after_purge_is_a_refusing_noop(): void
+    {
+        $user = $this->member();
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/account/deletion', ['confirmation' => 'delete', 'reason_key' => 'other'])->assertOk();
+        $this->travel(MemberAccountDeletionService::GRACE_DAYS + 1)->days();
+        app(MemberAccountDeletionService::class)->purgeDue();
+
+        $this->assertNotNull(DB::table('users')->where('id', $user->id)->value('account_deleted_at'));
+
+        // A request that authenticated just before the purge commit lands here.
+        app(MemberAccountDeletionService::class)->cancelDeletion($user->fresh());
+
+        $row = DB::table('users')->where('id', $user->id)->first();
+        $this->assertNotNull($row->account_deleted_at, 'a tombstone must never be half-revived');
+        $this->assertSame(
+            'archived',
+            DB::table('matrimony_profiles')->where('user_id', $user->id)->value('lifecycle_state'),
+            'the tombstoned profile must not come back to active'
+        );
+    }
+
     public function test_the_sweep_erases_only_accounts_past_the_window(): void
     {
         $due = $this->member();

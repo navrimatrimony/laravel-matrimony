@@ -54,6 +54,8 @@ final class MatrimonyProfileDatabasePurger
     {
         $pid = (int) $profile->id;
 
+        self::closeSuchakSideForDepartedCandidate($pid);
+
         if (Schema::hasTable('biodata_intakes')) {
             $intakeIds = DB::table('biodata_intakes')->where('matrimony_profile_id', $pid)->pluck('id');
             self::deleteOcrAndIntakesByIntakeIds($intakeIds);
@@ -184,6 +186,63 @@ final class MatrimonyProfileDatabasePurger
         }
 
         $profile->forceDelete();
+    }
+
+    /**
+     * The AUTO_CLOSE half of a candidate leaving: their Suchak stops counting
+     * them, and anything pending stops waiting for an answer that will never
+     * come. Nothing here deletes — representations cannot be deleted at all
+     * ({@see \App\Models\SuchakProfileRepresentation::delete()} throws), and the
+     * event/log tables beside them are immutable history.
+     *
+     * `candidate_deactivated_at` is the column three readers already honour
+     * (SuchakConsentService, SuchakCustomerListService, DashboardController);
+     * this is deliberately its only writer.
+     *
+     * `shared_display_name` is nulled because it is a runtime display alias a
+     * Suchak typed — no snapshot or hash carries it, and its only reader
+     * returns early once `full_name` is wiped — so after a purge it would be
+     * nothing but stored PII contradicting the published erasure promise.
+     */
+    private static function closeSuchakSideForDepartedCandidate(int $pid): void
+    {
+        if (Schema::hasTable('suchak_profile_representations')) {
+            // Two statements, not a COALESCE(NOW()) — the test suite runs on
+            // SQLite, where NOW() does not exist. An already-deactivated stamp
+            // is preserved; the alias is wiped regardless.
+            DB::table('suchak_profile_representations')
+                ->where('matrimony_profile_id', $pid)
+                ->whereNull('candidate_deactivated_at')
+                ->update(['candidate_deactivated_at' => now()]);
+
+            DB::table('suchak_profile_representations')
+                ->where('matrimony_profile_id', $pid)
+                ->update(['shared_display_name' => null, 'updated_at' => now()]);
+        }
+
+        if (Schema::hasTable('suchak_profile_requests')) {
+            DB::table('suchak_profile_requests')
+                ->where(function ($q) use ($pid) {
+                    $q->where('target_matrimony_profile_id', $pid)
+                        ->orWhere('requesting_matrimony_profile_id', $pid);
+                })
+                ->whereNotIn('request_status', ['closed', 'expired', 'cancelled'])
+                ->update(['request_status' => 'cancelled', 'updated_at' => now()]);
+        }
+
+        if (Schema::hasTable('suchak_pipelines')) {
+            DB::table('suchak_pipelines')
+                ->where(function ($q) use ($pid) {
+                    $q->where('target_matrimony_profile_id', $pid)
+                        ->orWhere('requesting_matrimony_profile_id', $pid);
+                })
+                ->where('pipeline_status', 'pending')
+                ->update([
+                    'pipeline_status' => 'cancelled',
+                    'closed_at' => now(),
+                    'updated_at' => now(),
+                ]);
+        }
     }
 
     /**

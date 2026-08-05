@@ -94,6 +94,14 @@ final class MemberAccountDeletionService
      */
     public function cancelDeletion(User $user): void
     {
+        // A cancel racing the purge commit must not half-revive a tombstone:
+        // once the erase has run there is nothing left to restore, and writing
+        // to the shell would tell the member "cancelled" about an account that
+        // no longer exists.
+        if ($user->account_deleted_at !== null) {
+            return;
+        }
+
         if ($user->deletion_requested_at === null) {
             return;
         }
@@ -190,7 +198,31 @@ final class MemberAccountDeletionService
 
         foreach ($this->dueForPurge($graceDays) as $user) {
             try {
-                UserAccountDatabasePurger::purgeUserAccount($user, keepCounterpartConversations: true);
+                // The list above was materialised before this iteration, so a
+                // cancellation landing mid-sweep is invisible to the query. The
+                // purge itself must therefore re-read under lock and stand down
+                // if the member changed their mind — deadline day is exactly
+                // when people cancel, and an erase after a successful cancel
+                // would break the grace period's whole promise.
+                $stillDue = DB::transaction(function () use ($user, $graceDays): bool {
+                    $fresh = User::query()->whereKey($user->id)->lockForUpdate()->first();
+
+                    if ($fresh === null
+                        || $fresh->account_deleted_at !== null
+                        || $fresh->deletion_requested_at === null
+                        || $fresh->deletion_requested_at->gt(now()->subDays($graceDays))) {
+                        return false;
+                    }
+
+                    UserAccountDatabasePurger::purgeUserAccount($fresh, keepCounterpartConversations: true);
+
+                    return true;
+                });
+
+                if (! $stillDue) {
+                    continue;
+                }
+
                 $purged++;
                 Log::info('account.deletion_purged', ['user_id' => $user->id]);
             } catch (\Throwable $e) {
