@@ -19,9 +19,11 @@ use App\Models\User;
 use App\Modules\Suchak\Services\SuchakAccessService;
 use App\Modules\Suchak\Services\SuchakCollaborationService;
 use App\Modules\Suchak\Services\SuchakMarketplaceChallengeService;
+use App\Notifications\MarketplaceProposalReceivedNotification;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
@@ -102,6 +104,43 @@ class SuchakAcceptByProposingTest extends TestCase
             'target_type' => 'suchak_marketplace_challenge',
             'target_id' => $challenge->id,
         ]);
+    }
+
+    public function test_u12_publisher_is_notified_once_and_proposer_is_not(): void
+    {
+        [$publisherUser, $publisher] = $this->verifiedSuchakActor();
+        [$helperUser, $helper] = $this->verifiedSuchakActor();
+        $helper->forceFill(['suchak_name' => 'U12 Helper Suchak'])->save();
+        $challenge = $this->openChallenge($publisher, $publisherUser);
+        $helperCandidate = $this->helperCandidate($helper);
+
+        Notification::fake();
+
+        $this->challengeService()->proposeCandidate(
+            $challenge,
+            $helper,
+            $helperUser,
+            $helperCandidate,
+            ['message' => 'U12 proposal.'],
+        );
+
+        Notification::assertSentTo(
+            $publisherUser,
+            MarketplaceProposalReceivedNotification::class,
+            function (MarketplaceProposalReceivedNotification $notification) use ($challenge): bool {
+                return $notification->challengeId === (int) $challenge->id
+                    && $notification->proposerSuchakName === 'U12 Helper Suchak';
+            },
+        );
+        Notification::assertSentToTimes(
+            $publisherUser,
+            MarketplaceProposalReceivedNotification::class,
+            1,
+        );
+        Notification::assertNotSentTo(
+            $helperUser,
+            MarketplaceProposalReceivedNotification::class,
+        );
     }
 
     public function test_the_proposal_records_profile_suggested_through_the_one_stage_writer(): void

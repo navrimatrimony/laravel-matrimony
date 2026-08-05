@@ -341,6 +341,17 @@ final class PushTypeRegistry
             'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => true,
         ],
+        /*
+        | Suchak publisher alert when a helper proposes on their challenge (U12).
+        */
+        'marketplace_proposal_received' => [
+            'notification' => \App\Notifications\MarketplaceProposalReceivedNotification::class,
+            'group' => 'account',
+            'target' => 'notifications',
+            'data_keys' => ['challenge_id', 'proposer_suchak_name'],
+            'apps' => [DeviceToken::APP_SUCHAK],
+            'default_push' => true,
+        ],
     ];
 
     /**

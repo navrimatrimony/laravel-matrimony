@@ -2,6 +2,7 @@
 
 return [
     'meeting_completion_marked' => ':date रोजी ठरलेली भेट पूर्ण झाली आहे. कृपया confirm किंवा dispute करा.',
+    'marketplace_proposal_received' => ':name यांनी तुमच्या marketplace challenge वर उमेदवार प्रस्तावित केला.',
     'nav' => [
         'centre' => 'सूचक केंद्र',
         'dashboard' => 'सूचक dashboard',

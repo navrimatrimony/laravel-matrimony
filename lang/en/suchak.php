@@ -2,6 +2,7 @@
 
 return [
     'meeting_completion_marked' => 'A meeting scheduled for :date was marked complete. Please confirm or dispute it.',
+    'marketplace_proposal_received' => ':name proposed a candidate on your marketplace challenge.',
     'nav' => [
         'centre' => 'Suchak Centre',
         'dashboard' => 'Suchak Dashboard',

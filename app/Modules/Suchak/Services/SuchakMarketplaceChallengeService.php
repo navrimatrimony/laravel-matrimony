@@ -13,9 +13,11 @@ use App\Models\SuchakMarketplaceChallenge;
 use App\Models\MatrimonyProfile;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
+use App\Notifications\MarketplaceProposalReceivedNotification;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\IncomeEngineService;
 use App\Support\MoneyFormat;
+use App\Support\SafeNotifier;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
@@ -395,7 +397,38 @@ class SuchakMarketplaceChallengeService
             ],
         );
 
+        // U12: tell the publisher a proposal arrived (RT-11 fires where the activity is logged).
+        $this->notifyPublisherProposalReceived($challenge, $helperAccount);
+
         return $proposal;
+    }
+
+    /**
+     * U12: database+push to the publishing Suchak only — never the proposer (RT-4/5/14).
+     */
+    private function notifyPublisherProposalReceived(
+        SuchakMarketplaceChallenge $challenge,
+        SuchakAccount $helperAccount,
+    ): void {
+        $publisher = $this->publisherAccount($challenge);
+        $publisher->loadMissing('user');
+        $user = $publisher->user;
+        if (! $user instanceof User) {
+            return;
+        }
+
+        // Proposer must never be notified of their own action.
+        if ((int) $publisher->id === (int) $helperAccount->id) {
+            return;
+        }
+
+        SafeNotifier::notify(
+            $user,
+            new MarketplaceProposalReceivedNotification(
+                (int) $challenge->id,
+                (string) ($helperAccount->suchak_name ?: 'Suchak'),
+            ),
+        );
     }
 
     /**

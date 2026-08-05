@@ -223,6 +223,12 @@ return [
             'title' => 'Meeting awaits you',
             'body' => 'A meeting scheduled for :scheduled_date was marked complete.',
         ],
+        'marketplace_proposal_received' => [
+            'label' => 'Marketplace proposal',
+            'description' => 'When another Suchak proposes a candidate on your challenge.',
+            'title' => 'New proposal',
+            'body' => ':proposer_suchak_name proposed a candidate on your challenge.',
+        ],
 
     ],
 

@@ -213,6 +213,12 @@ return [
             'title' => 'भेट तुमची वाट पाहते',
             'body' => ':scheduled_date रोजी ठरलेली भेट पूर्ण झाली आहे.',
         ],
+        'marketplace_proposal_received' => [
+            'label' => 'Marketplace प्रस्ताव',
+            'description' => 'दुसऱ्या सूचकाने तुमच्या challenge वर उमेदवार प्रस्तावित केला.',
+            'title' => 'नवीन प्रस्ताव',
+            'body' => ':proposer_suchak_name यांनी तुमच्या challenge वर प्रस्ताव दिला.',
+        ],
 
     ],
 
