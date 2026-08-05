@@ -62,6 +62,11 @@ complete: 61 routes. Challenge, tranche, marriage-outcome, obligation tables all
   - `POST /api/v1/suchak-meetings/{visit}/confirm`
   - `POST /api/v1/suchak-meetings/{visit}/dispute`
   - `POST /api/v1/suchak-engagements/{collaboration}/stages/confirm`
+- **Those are the ONLY member meeting endpoints.** `MemberSuchakMeetingApiController` has exactly
+  two methods; **no list route exists**, so nothing can hand the app a visit id until U9a builds it.
+- `shared_display_name` is a **runtime display alias** with no evidentiary role — no snapshot or
+  hash carries it, and its only reader (`SuchakCandidateMaskingService::displayName()`) returns
+  early once `full_name` is wiped. It is erased at purge (U1); do not treat it as a legal record.
 - **Throttling is two lines wide** across ~35 marketplace routes.
 - `POST /api/v1/auth/mobile-otp/send` has **no throttle**.
 - `SuchakRegistrationService::issueOtp()` reads `AdminSetting('mobile_verification_mode')`
@@ -196,32 +201,46 @@ Run **U1–U3 first** — they close a defect shipped on 2026-08-05.
 
 ---
 
-## U1 — Deactivate Suchak representations when a member is purged
+## U1 — Deactivate Suchak representations when a member is purged, and make the purge race-safe
 
-**Goal** A member who deletes their account stops being an active customer of their Suchak.
-**Scope** The AUTO_CLOSE group only. No notifications; no BLOCKER logic.
+**Goal** A member who deletes their account stops being an active customer of their Suchak — and a
+member who *cancels* can never be purged by a sweep that had already loaded them.
+**Scope** The AUTO_CLOSE group, the erasure of the display alias, and the purge race guard.
+No notifications; no BLOCKER logic.
 
 **Reuse** `MatrimonyProfileDatabasePurger::purge()` · `suchak_profile_representations.candidate_deactivated_at`
-(exists, already read in three places, written nowhere).
+(exists, already read in three places, written nowhere) · `MemberAccountDeletionService::purgeDue()`
 
 **Files** `app/Services/Maintenance/MatrimonyProfileDatabasePurger.php` ·
-`tests/Feature/MemberAccountTombstoneTest.php`
+`app/Services/Account/MemberAccountDeletionService.php` ·
+`tests/Feature/MemberAccountTombstoneTest.php` · `tests/Feature/MemberAccountDeletionFlowTest.php`
 
-**Behaviour** In `purge()`, before the tombstone/forceDelete branch: set
-`candidate_deactivated_at = now()` on every representation for that profile where it is null.
-Also close pending `suchak_profile_requests` / `suchak_pipelines` rows to their existing
-`expired`/`cancelled` state. **Do not delete anything.** Representations cannot be deleted —
-`SuchakProfileRepresentation::delete()` throws.
+**Behaviour**
 
-**Tests** A purged member's representation has `candidate_deactivated_at` set and still exists ·
-the Suchak's customer list no longer counts them · a representation belonging to another member is
-untouched.
+1. In `purge()`, before the tombstone/forceDelete branch: on every representation of that profile,
+   set `candidate_deactivated_at = now()` where null **and null `shared_display_name`** — it is a
+   runtime display alias with no evidentiary role (verified: no snapshot or hash carries it, and
+   its only reader returns early once `full_name` is wiped), so leaving it stored would break the
+   published erasure promise. Also close pending `suchak_profile_requests` / `suchak_pipelines`
+   rows to their existing `expired`/`cancelled` state. **Do not delete anything** —
+   `SuchakProfileRepresentation::delete()` throws.
+2. In `purgeDue()`: re-load each user **inside the per-user transaction with `lockForUpdate()`**
+   and skip unless `deletion_requested_at` is still set, still past the window, and
+   `account_deleted_at` is still null. The sweep materialises its list before iterating, so a
+   cancellation landing mid-sweep must be seen by the purge itself, not only by the query.
+3. In `cancelDeletion()`: refuse (no-op) when `account_deleted_at` is already set, so a cancel
+   racing the commit cannot half-revive a tombstone.
 
-**Runtime verification** `php artisan test tests/Feature/MemberAccountTombstoneTest.php`
+**Tests** A purged member's representation has `candidate_deactivated_at` set,
+`shared_display_name` null, and still exists · the Suchak's customer list no longer counts them ·
+a representation belonging to another member is untouched · a user who cancelled is not purged by
+a subsequent sweep · `cancelDeletion()` after purge is a no-op.
+
+**Runtime verification** `php artisan test tests/Feature/MemberAccountTombstoneTest.php tests/Feature/MemberAccountDeletionFlowTest.php`
 
 **Rollback** `git revert <sha>`. No schema change, so no data risk.
 
-**Time** 60 min
+**Time** 95 min
 
 ---
 
@@ -407,10 +426,40 @@ undiscoverable.
 
 ---
 
-## U9 — Member app: my meetings list (read-only)
+## U9a — Member API: my meetings list endpoint
+
+**Goal** The customer can enumerate their own meetings. Without this, no app screen can exist —
+`MemberSuchakMeetingApiController` has exactly two methods (`confirm`, `dispute`) and **no list
+route exists anywhere**, so the app has no way to obtain a visit id.
+
+**Scope** One GET route, authorization, tests. Laravel only.
+
+**Reuse** `MemberSuchakMeetingApiController` (same controller, same `viewerContext()` guard family) ·
+`SuchakVisitConfirmationService`
+
+**Files** `app/Http/Controllers/Api/MemberSuchakMeetingApiController.php` ·
+`routes/api/member.php` · new test
+
+**Behaviour** `GET /api/v1/suchak-meetings` returns only meetings whose customer side is the
+caller — the same person `assertCustomerSideUserCanConfirm()` accepts. Each row carries what the
+confirm/dispute actions need: id, status, scheduled time, Suchak display name.
+
+**Tests** The caller sees their own meetings · another member sees none of them · an
+unauthenticated call is refused.
+
+**Runtime verification** `php artisan test --filter=MemberSuchakMeeting` ·
+`php artisan route:list --path=suchak-meetings` shows GET.
+
+**Rollback** `git revert <sha>`.
+
+**Time** 40 min
+
+---
+
+## U9b — Member app: my meetings list (read-only)
 
 **Goal** The customer can see their meetings. No actions yet.
-**Scope** `flutter-apk` only. Read-only.
+**Scope** `flutter-apk` only. Read-only, over the U9a endpoint.
 
 **Reuse** existing `ApiClient` helpers · the member Suchak-requests screen as the entry point ·
 existing ARB pattern (**insert strings as text; a JSON round-trip corrupts empty placeholder maps
@@ -425,7 +474,7 @@ and reformats the whole file**).
 
 **Rollback** `git revert <sha>`.
 
-**Time** 90 min
+**Time** 90 min · **depends on U9a**
 
 ---
 
@@ -444,7 +493,7 @@ one sentence.
 
 **Rollback** `git revert <sha>`.
 
-**Time** 60 min · **depends on U9**
+**Time** 60 min · **depends on U9b**
 
 ---
 
@@ -461,7 +510,7 @@ one sentence.
 
 **Rollback** `git revert <sha>`.
 
-**Time** 60 min · **depends on U9**
+**Time** 60 min · **depends on U9b**
 
 ---
 
@@ -487,15 +536,15 @@ the publishing service · new test
 
 | Unit | Time | Depends on |
 |---|---|---|
-| U1 · U2 · U3 | 3 h 30 | — (closes a 2026-08-05 defect) |
+| U1 · U2 · U3 | 4 h 05 | — (closes a 2026-08-05 defect) |
 | U4 · U5 · U6 | 1 h 25 | — |
 | U7 | 1 h 05 | — |
 | U8 | 1 h 00 | — |
-| U9 → U10 → U11 | 3 h 30 | U9 first |
+| U9a → U9b → U10 → U11 | 4 h 10 | chain, U9a first |
 | U12 | 1 h 00 | — |
-| **Total** | **11 h 30** | |
+| **Total** | **12 h 45** | |
 
-Every unit is at or under two hours. Only U10 and U11 depend on anything, and only on U9.
+Every unit is at or under two hours. The only dependency chain is U9a → U9b → U10/U11.
 
 ---
 
