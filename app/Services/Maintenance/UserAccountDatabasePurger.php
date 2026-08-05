@@ -13,14 +13,23 @@ use Illuminate\Support\Facades\Schema;
  */
 final class UserAccountDatabasePurger
 {
-    public static function purgeUserAccount(User $user): void
+    /**
+     * @param  bool  $keepCounterpartConversations  Leave other members' chat threads standing.
+     *
+     * Passed by a member's own account deletion, where the people they talked to
+     * keep their side of the conversation. The user row then survives as a
+     * tombstone rather than being force-deleted, because the profile row it owns
+     * has to survive for those threads and `matrimony_profiles.user_id` is NOT
+     * NULL. Nothing identifying is left on it — see {@see reduceUserToTombstone}.
+     */
+    public static function purgeUserAccount(User $user, bool $keepCounterpartConversations = false): void
     {
-        DB::transaction(function () use ($user): void {
+        DB::transaction(function () use ($user, $keepCounterpartConversations): void {
             $uid = (int) $user->id;
             $email = (string) $user->email;
 
             foreach (MatrimonyProfile::withTrashed()->where('user_id', $uid)->cursor() as $profile) {
-                MatrimonyProfileDatabasePurger::purge($profile);
+                MatrimonyProfileDatabasePurger::purge($profile, $keepCounterpartConversations);
             }
 
             if (Schema::hasTable('biodata_intakes')) {
@@ -68,7 +77,55 @@ final class UserAccountDatabasePurger
                 DB::table('password_reset_tokens')->where('email', $email)->delete();
             }
 
+            if ($keepCounterpartConversations) {
+                self::reduceUserToTombstone($user);
+
+                return;
+            }
+
             $user->forceDelete();
         });
+    }
+
+    /**
+     * Blanks every identifying value on the user row.
+     *
+     * `email`, `mobile` and `referral_code` are nulled rather than scrambled
+     * because each carries a UNIQUE index: nulling releases them, so the same
+     * person can sign up again tomorrow with the same number. Scrambled values
+     * would hold those identifiers hostage forever.
+     *
+     * `password` is nulled and every token and session is already gone by this
+     * point, so the shell cannot be authenticated into.
+     */
+    private static function reduceUserToTombstone(User $user): void
+    {
+        $update = [
+            'name' => null,
+            'email' => null,
+            'mobile' => null,
+            'password' => null,
+            'email_verified_at' => null,
+            'mobile_verified_at' => null,
+            'account_deleted_at' => now(),
+            'deletion_requested_at' => null,
+            'updated_at' => now(),
+        ];
+
+        foreach ([
+            'mobile_backup',
+            'referral_code',
+            'notification_preferences',
+            'preferred_locale',
+            'registering_for',
+            'deletion_reason_key',
+            'deletion_reason_note',
+        ] as $column) {
+            if (Schema::hasColumn('users', $column)) {
+                $update[$column] = null;
+            }
+        }
+
+        DB::table('users')->where('id', $user->id)->update($update);
     }
 }

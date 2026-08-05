@@ -37,7 +37,20 @@ final class MatrimonyProfileDatabasePurger
         DB::table('biodata_intakes')->whereIn('id', $ids)->delete();
     }
 
-    public static function purge(MatrimonyProfile $profile): void
+    /**
+     * @param  bool  $keepCounterpartConversations  Leave the other member's chat thread standing.
+     *
+     * Only a real member's own deletion passes true. A showcase profile or a
+     * stress-test row has no counterpart whose record is worth preserving, so
+     * those callers keep the full erase.
+     *
+     * True cannot mean "delete the profile anyway": conversations.profile_one_id
+     * / profile_two_id and messages.sender/receiver_profile_id are NOT NULL with
+     * RESTRICT foreign keys, so the row has to survive for the thread to. It
+     * survives as a tombstone — every column wiped, soft-deleted, owning no
+     * personal data — and the counterpart sees a member who is simply gone.
+     */
+    public static function purge(MatrimonyProfile $profile, bool $keepCounterpartConversations = false): void
     {
         $pid = (int) $profile->id;
 
@@ -46,19 +59,21 @@ final class MatrimonyProfileDatabasePurger
             self::deleteOcrAndIntakesByIntakeIds($intakeIds);
         }
 
-        $conversationIds = DB::table('conversations')
-            ->where('profile_one_id', $pid)
-            ->orWhere('profile_two_id', $pid)
-            ->pluck('id')
-            ->map(fn ($v) => (int) $v)
-            ->all();
+        if (! $keepCounterpartConversations) {
+            $conversationIds = DB::table('conversations')
+                ->where('profile_one_id', $pid)
+                ->orWhere('profile_two_id', $pid)
+                ->pluck('id')
+                ->map(fn ($v) => (int) $v)
+                ->all();
 
-        if ($conversationIds !== []) {
-            if (Schema::hasTable('message_participant_states')) {
-                DB::table('message_participant_states')->whereIn('conversation_id', $conversationIds)->delete();
+            if ($conversationIds !== []) {
+                if (Schema::hasTable('message_participant_states')) {
+                    DB::table('message_participant_states')->whereIn('conversation_id', $conversationIds)->delete();
+                }
+                DB::table('messages')->whereIn('conversation_id', $conversationIds)->delete();
+                DB::table('conversations')->whereIn('id', $conversationIds)->delete();
             }
-            DB::table('messages')->whereIn('conversation_id', $conversationIds)->delete();
-            DB::table('conversations')->whereIn('id', $conversationIds)->delete();
         }
 
         if (Schema::hasTable('message_policy_cooldowns')) {
@@ -162,6 +177,65 @@ final class MatrimonyProfileDatabasePurger
             DB::table('mutation_log')->where('profile_id', $pid)->delete();
         }
 
+        if ($keepCounterpartConversations) {
+            self::reduceProfileToTombstone($profile);
+
+            return;
+        }
+
         $profile->forceDelete();
+    }
+
+    /**
+     * Columns a tombstone may keep. Everything else on the row is wiped.
+     *
+     * Deliberately an allow-list: a column added to matrimony_profiles next
+     * month is erased by default rather than surviving because nobody
+     * remembered to add it to a deny-list. Privacy fails safe here.
+     *
+     * - `user_id` stays because the column is NOT NULL and the user row is
+     *   itself reduced to a tombstone by {@see UserAccountDatabasePurger}.
+     * - `lifecycle_state` stays so the row keeps a legal enum value.
+     * - `is_showcase` stays so showcase reporting is not skewed by deletions.
+     */
+    private const TOMBSTONE_KEEP_COLUMNS = [
+        'id',
+        'user_id',
+        'is_showcase',
+        'lifecycle_state',
+        'created_at',
+        'updated_at',
+        'deleted_at',
+    ];
+
+    /**
+     * Strips every identifying value from the profile row and soft-deletes it,
+     * leaving only the foreign-key anchor the counterpart's conversation needs.
+     */
+    private static function reduceProfileToTombstone(MatrimonyProfile $profile): void
+    {
+        $update = [];
+
+        // Schema::getColumns() rather than SHOW COLUMNS: the latter is MySQL-only
+        // and the test suite runs on SQLite.
+        foreach (Schema::getColumns('matrimony_profiles') as $column) {
+            $name = (string) $column['name'];
+            if (in_array($name, self::TOMBSTONE_KEEP_COLUMNS, true)) {
+                continue;
+            }
+
+            // A NOT NULL column cannot simply be nulled, so fall back to the
+            // column's own default — the emptiest legal value the schema itself
+            // defines.
+            $update[$name] = ($column['nullable'] ?? true)
+                ? null
+                : ($column['default'] ?? '');
+        }
+
+        $update['lifecycle_state'] = 'archived';
+        $update['updated_at'] = now();
+
+        DB::table('matrimony_profiles')->where('id', $profile->id)->update($update);
+        DB::table('matrimony_profiles')->where('id', $profile->id)->update(['deleted_at' => now()]);
     }
 }
