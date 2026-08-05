@@ -327,7 +327,8 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     */
     Route::get('/marketplace/challenges', [SuchakMarketplaceChallengeApiController::class, 'index']); // BROWSE (verified only, masked candidates)
     Route::get('/marketplace/challenges/mine', [SuchakMarketplaceChallengeApiController::class, 'mine']); // OWN CHALLENGES — where the withdraw id comes from
-    Route::post('/marketplace/challenges', [SuchakMarketplaceChallengeApiController::class, 'store']); // PUBLISH + WRITE published_to_marketplace ON THE LADDER
+    Route::post('/marketplace/challenges', [SuchakMarketplaceChallengeApiController::class, 'store']) // PUBLISH + WRITE published_to_marketplace ON THE LADDER
+        ->middleware('throttle:10,1'); // U6
     Route::post('/marketplace/challenges/{challenge}/withdraw', [SuchakMarketplaceChallengeApiController::class, 'withdraw'])
         ->whereNumber('challenge');
     /*
@@ -350,7 +351,8 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
     | would have handed the split to the helper.
     */
     Route::post('/marketplace/challenges/{challenge}/proposals', [SuchakMarketplaceChallengeApiController::class, 'propose'])
-        ->whereNumber('challenge'); // PROPOSE A NAMED CANDIDATE + WRITE profile_suggested ON THE LADDER
+        ->whereNumber('challenge') // PROPOSE A NAMED CANDIDATE + WRITE profile_suggested ON THE LADDER
+        ->middleware('throttle:10,1'); // U6
     Route::get('/marketplace/challenges/{challenge}/proposals', [SuchakMarketplaceChallengeApiController::class, 'proposals'])
         ->whereNumber('challenge'); // THE PUBLISHER'S INBOX FOR ONE CHALLENGE — masked candidates
     // D7a: the helper's OWN candidates, searchable, filterable and ranked against this challenge's
