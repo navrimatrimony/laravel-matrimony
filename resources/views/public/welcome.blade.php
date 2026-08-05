@@ -1276,7 +1276,7 @@
         </main>
 
         <footer class="bg-zinc-950 px-4 py-10 text-sm text-zinc-400 sm:px-6">
-            <div class="mx-auto grid max-w-7xl gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="mx-auto grid max-w-7xl gap-8 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                     <p class="font-devanagari text-lg font-bold text-white">{{ $siteIdentitySettings['company_name'] ?: $siteName }}</p>
                     <p class="{{ $devanagariClass }} mt-2 max-w-md text-xs leading-6 text-zinc-500">{{ __('homepage.footer_disclaimer') }}</p>
@@ -1316,6 +1316,12 @@
                     @if (Route::has('register'))
                         <a href="{{ route('register') }}" class="text-white hover:underline">{{ __('homepage.register') }}</a>
                     @endif
+                </div>
+                <div class="flex flex-col gap-2">
+                    <span class="text-xs font-bold uppercase text-zinc-500">{{ __('homepage.footer_legal') }}</span>
+                    @foreach (\App\Support\LegalDocument::links() as $legalLink)
+                        <a href="{{ $legalLink['url'] }}" class="{{ $devanagariClass }} text-white hover:underline">{{ $legalLink['label'] }}</a>
+                    @endforeach
                 </div>
             </div>
             @php

@@ -58,6 +58,7 @@ return [
     'footer_disclaimer' => 'हा प्लॅटफॉर्म केवळ विवाहासाठी आहे. सदस्य स्वतःची पडताळणी आणि निर्णय घेतात.',
     'footer_contact' => 'संपर्क',
     'footer_navigate' => 'नेव्हिगेट',
+    'footer_legal' => 'कायदेशीर',
     'footer_partner_search' => 'जोडीदार शोध',
     'footer_suchak' => 'सूचकांसाठी',
     'footer_plans' => 'योजना',

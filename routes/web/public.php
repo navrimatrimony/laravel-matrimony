@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\LegalPageController;
 use App\Http\Controllers\MobilePayuSdkReturnController;
 use App\Http\Controllers\Payments\PayuController;
 use App\Http\Controllers\PublicProfileShareController;
@@ -142,6 +143,21 @@ Route::get('/', function () {
 Route::get('/share/profile/{id}', [PublicProfileShareController::class, 'show'])
     ->whereNumber('id')
     ->name('profile.share.public');
+
+/*
+|--------------------------------------------------------------------------
+| Legal documents (public, no auth, no throttle)
+|--------------------------------------------------------------------------
+| Meta (WhatsApp Business), PayU merchant KYC and Google Play Console all
+| fetch these URLs directly during review, so they must stay reachable to a
+| logged-out stranger and their URIs must not change once submitted.
+| The list of documents lives once, in config/legal.php.
+*/
+foreach ((array) config('legal.documents', []) as $legalDocumentKey => $legalDocumentDefinition) {
+    Route::get('/'.$legalDocumentDefinition['uri'], [LegalPageController::class, 'show'])
+        ->defaults('document', $legalDocumentKey)
+        ->name($legalDocumentDefinition['route']);
+}
 
 Route::get('/register/biodata/{token}', [\App\Http\Controllers\BulkIntakePublicRegistrationController::class, 'show'])
     ->name('bulk-intake.register.show');

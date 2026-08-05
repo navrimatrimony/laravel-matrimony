@@ -58,6 +58,7 @@ return [
     'footer_disclaimer' => 'This platform is intended solely for matrimonial matchmaking. Members are responsible for their own verification and decisions.',
     'footer_contact' => 'Contact',
     'footer_navigate' => 'Navigate',
+    'footer_legal' => 'Legal',
     'footer_partner_search' => 'Partner search',
     'footer_suchak' => 'For Suchaks',
     'footer_plans' => 'Plans',
