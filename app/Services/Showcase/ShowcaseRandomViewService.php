@@ -2,6 +2,7 @@
 
 namespace App\Services\Showcase;
 
+use App\Jobs\ProcessDelayedShowcaseRandomView;
 use App\Models\AdminSetting;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
@@ -18,6 +19,19 @@ use Illuminate\Support\Collection;
  */
 final class ShowcaseRandomViewService
 {
+    /**
+     * Naturalness controls (admin-tunable). Without them a whole hourly batch lands on the
+     * same second and a member sees "4 people viewed you" at one timestamp, which reads as fake.
+     */
+    public const KEY_MAX_PER_REAL_PER_RUN = 'showcase_random_view_max_per_real_per_run';
+
+    public const KEY_MIN_GAP_HOURS_PER_REAL = 'showcase_random_view_min_gap_hours_per_real';
+
+    public const KEY_JITTER_MAX_MINUTES = 'showcase_random_view_jitter_max_minutes';
+
+    /**
+     * @return int views started this run (written now, or queued when jitter is on)
+     */
     public function run(): int
     {
         if (! AdminSetting::getBool('showcase_random_view_enabled', false)) {
@@ -28,6 +42,10 @@ final class ShowcaseRandomViewService
         if ($batchTotal === 0) {
             return 0;
         }
+
+        $maxPerRealPerRun = self::maxPerRealPerRun();
+        $minGapHours = self::minGapHoursPerReal();
+        $jitterMaxMinutes = self::jitterMaxMinutes();
 
         $showcases = MatrimonyProfile::query()
             ->whereShowcase()
@@ -49,6 +67,9 @@ final class ShowcaseRandomViewService
         $showcases = $showcases->shuffle();
         $created = 0;
 
+        /** @var array<int, int> real profile id => times already picked in this run */
+        $claimedThisRun = [];
+
         foreach ($showcases as $showcase) {
             if ($created >= $batchTotal) {
                 break;
@@ -61,20 +82,76 @@ final class ShowcaseRandomViewService
                 continue;
             }
 
-            $real = $this->pickTargetProfile($showcase);
+            $real = $this->pickTargetProfile($showcase, $claimedThisRun, $maxPerRealPerRun, $minGapHours);
             if ($real === null) {
                 continue;
             }
 
-            ViewTrackingService::recordShowcaseRandomProfileView($showcase, $real);
+            $claimedThisRun[(int) $real->id] = ($claimedThisRun[(int) $real->id] ?? 0) + 1;
+
+            if ($jitterMaxMinutes > 0) {
+                ProcessDelayedShowcaseRandomView::dispatch((int) $showcase->id, (int) $real->id)
+                    ->delay(now()->addMinutes(random_int(0, $jitterMaxMinutes)));
+            } else {
+                ViewTrackingService::recordShowcaseRandomProfileView($showcase, $real);
+            }
+
             $created++;
         }
 
         return $created;
     }
 
-    public function pickTargetProfile(MatrimonyProfile $showcase): ?MatrimonyProfile
+    /**
+     * How many showcase views one member may collect from a single run. 1 keeps the
+     * "3 people viewed you at once" cluster from ever being built.
+     */
+    public static function maxPerRealPerRun(): int
     {
+        return max(1, (int) AdminSetting::getValue(self::KEY_MAX_PER_REAL_PER_RUN, '1'));
+    }
+
+    /** Minimum hours between any two showcase views landing on the same member. 0 = off. */
+    public static function minGapHoursPerReal(): int
+    {
+        return max(0, (int) AdminSetting::getValue(self::KEY_MIN_GAP_HOURS_PER_REAL, '4'));
+    }
+
+    /** Random 0..N minute delay applied to each view so a batch is not written on one second. 0 = off. */
+    public static function jitterMaxMinutes(): int
+    {
+        return max(0, (int) AdminSetting::getValue(self::KEY_JITTER_MAX_MINUTES, '55'));
+    }
+
+    /**
+     * The one definition of the per-member gap rule — used both when the batch is planned and
+     * again inside {@see ProcessDelayedShowcaseRandomView} when a jittered view finally fires.
+     * Counts every showcase→member view (random engine and view-back alike), because the member
+     * experiences them identically.
+     */
+    public static function minGapSatisfiedForReal(int $realProfileId, ?int $minGapHours = null): bool
+    {
+        $minGapHours ??= self::minGapHoursPerReal();
+        if ($minGapHours <= 0) {
+            return true;
+        }
+
+        return ! ProfileView::query()
+            ->where('viewed_profile_id', $realProfileId)
+            ->where('created_at', '>', now()->subHours($minGapHours))
+            ->whereHas('viewerProfile', fn ($q) => $q->where('is_showcase', true))
+            ->exists();
+    }
+
+    /**
+     * @param  array<int, int>  $claimedThisRun  real profile id => times already picked in this run
+     */
+    public function pickTargetProfile(
+        MatrimonyProfile $showcase,
+        array $claimedThisRun = [],
+        int $maxPerRealPerRun = 0,
+        int $minGapHours = 0
+    ): ?MatrimonyProfile {
         $oppositeGenderId = $this->oppositeGenderId((int) $showcase->gender_id);
         if ($oppositeGenderId === null) {
             return null;
@@ -147,8 +224,19 @@ final class ShowcaseRandomViewService
             $sinceWeek,
             $sinceMonth,
             $maxPerWeek,
-            $maxPerMonth
+            $maxPerMonth,
+            $claimedThisRun,
+            $maxPerRealPerRun,
+            $minGapHours
         ): bool {
+            if ($maxPerRealPerRun > 0 && ($claimedThisRun[(int) $real->id] ?? 0) >= $maxPerRealPerRun) {
+                return false;
+            }
+
+            if (! self::minGapSatisfiedForReal((int) $real->id, $minGapHours)) {
+                return false;
+            }
+
             if ($this->realFailsShowcaseViewCaps($real, $sinceWeek, $sinceMonth, $maxPerWeek, $maxPerMonth)) {
                 return false;
             }

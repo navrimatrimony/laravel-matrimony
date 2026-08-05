@@ -95,6 +95,29 @@
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Runs via <code class="text-xs">php artisan showcase:random-views</code> (scheduled hourly).</p>
         </div>
 
+        <div class="rounded-md border border-gray-200 dark:border-gray-700 p-4">
+            <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Make views feel natural</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-3">Without these, a whole hourly batch lands on the same second and a member sees several showcase profiles view them at one timestamp — which reads as fake.</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Views per member, per run</label>
+                    <input type="number" name="showcase_random_view_max_per_real_per_run" min="1" max="50" value="{{ $randomViewMaxPerRealPerRun }}" required class="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+                    <p class="text-xs text-gray-500 mt-1"><span class="text-green-700 dark:text-green-400">What the member sees:</span> at 1, one run can never produce “3 people viewed you” at the same moment.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Minimum gap per member (hours)</label>
+                    <input type="number" name="showcase_random_view_min_gap_hours_per_real" min="0" max="168" value="{{ $randomViewMinGapHoursPerReal }}" required class="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+                    <p class="text-xs text-gray-500 mt-1"><span class="text-green-700 dark:text-green-400">What the member sees:</span> the next showcase view arrives no sooner than this, so views spread across the day. Counts view-backs too. 0 = off.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Spread views over (minutes)</label>
+                    <input type="number" name="showcase_random_view_jitter_max_minutes" min="0" max="1440" value="{{ $randomViewJitterMaxMinutes }}" required class="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+                    <p class="text-xs text-gray-500 mt-1"><span class="text-green-700 dark:text-green-400">What the member sees:</span> each view lands at a random time within this window instead of exactly on the hour. Needs the queue worker. 0 = off.</p>
+                </div>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Revisit gap (same showcase → same real)</label>
@@ -105,6 +128,7 @@
                     <option value="30d" {{ $randomViewRevisitMode === '30d' ? 'selected' : '' }}>1 month (30 days)</option>
                     <option value="random" {{ $randomViewRevisitMode === 'random' ? 'selected' : '' }}>Random days (min–max below, rolled once per candidate check)</option>
                 </select>
+                <p class="text-xs text-gray-500 mt-1"><span class="text-green-700 dark:text-green-400">What the member sees:</span> how long before the same showcase face can appear in their viewer list again. This is the “don’t show me the same profile twice” control — raise it before adding any new one.</p>
             </div>
             <div class="flex gap-4">
                 <div class="flex-1">

@@ -15,6 +15,7 @@ use App\Services\ProfileCompletenessService;
 use App\Services\Push\PushTypeRegistry;
 use App\Services\SettingService;
 use App\Services\Showcase\ShowcaseInterestPolicyService;
+use App\Services\Showcase\ShowcaseRandomViewService;
 use App\Services\NotificationPlatformSettingsService;
 use App\Services\SiteIdentityService;
 use App\Services\WhoViewed\WhoViewedTeaserPolicy;
@@ -56,6 +57,9 @@ class AdminSettingsController extends Controller
             'randomViewRevisitRandomMinDays' => $rvMin,
             'randomViewRevisitRandomMaxDays' => $rvMax,
             'randomViewBatchPerRun' => max(0, (int) AdminSetting::getValue('showcase_random_view_batch_per_run', '15')),
+            'randomViewMaxPerRealPerRun' => ShowcaseRandomViewService::maxPerRealPerRun(),
+            'randomViewMinGapHoursPerReal' => ShowcaseRandomViewService::minGapHoursPerReal(),
+            'randomViewJitterMaxMinutes' => ShowcaseRandomViewService::jitterMaxMinutes(),
             'randomViewCandidatePool' => max(30, (int) AdminSetting::getValue('showcase_random_view_candidate_pool', '120')),
             'maxPerShowcasePerDay' => max(0, (int) AdminSetting::getValue('showcase_to_real_max_per_showcase_per_day', '20')),
             'randomViewMaxPerRealWeek' => max(0, (int) AdminSetting::getValue('showcase_random_view_max_per_real_per_week', '5')),
@@ -123,6 +127,9 @@ class AdminSettingsController extends Controller
             'showcase_random_view_revisit_random_min_days' => 'required|integer|min:1|max:365',
             'showcase_random_view_revisit_random_max_days' => 'required|integer|min:1|max:365',
             'showcase_random_view_batch_per_run' => 'required|integer|min:0|max:500',
+            'showcase_random_view_max_per_real_per_run' => 'required|integer|min:1|max:50',
+            'showcase_random_view_min_gap_hours_per_real' => 'required|integer|min:0|max:168',
+            'showcase_random_view_jitter_max_minutes' => 'required|integer|min:0|max:1440',
             'showcase_random_view_candidate_pool' => 'required|integer|min:30|max:500',
             'showcase_to_real_max_per_showcase_per_day' => 'required|integer|min:0|max:9999',
             'showcase_random_view_max_per_real_per_week' => 'required|integer|min:0|max:999',
@@ -150,6 +157,9 @@ class AdminSettingsController extends Controller
         AdminSetting::setValue('showcase_random_view_revisit_random_min_days', (string) $minRand);
         AdminSetting::setValue('showcase_random_view_revisit_random_max_days', (string) $maxRand);
         AdminSetting::setValue('showcase_random_view_batch_per_run', (string) $request->input('showcase_random_view_batch_per_run'));
+        AdminSetting::setValue(ShowcaseRandomViewService::KEY_MAX_PER_REAL_PER_RUN, (string) $request->input('showcase_random_view_max_per_real_per_run'));
+        AdminSetting::setValue(ShowcaseRandomViewService::KEY_MIN_GAP_HOURS_PER_REAL, (string) $request->input('showcase_random_view_min_gap_hours_per_real'));
+        AdminSetting::setValue(ShowcaseRandomViewService::KEY_JITTER_MAX_MINUTES, (string) $request->input('showcase_random_view_jitter_max_minutes'));
         AdminSetting::setValue('showcase_random_view_candidate_pool', (string) $request->input('showcase_random_view_candidate_pool'));
         AdminSetting::setValue('showcase_to_real_max_per_showcase_per_day', (string) max(0, (int) $request->input('showcase_to_real_max_per_showcase_per_day', 20)));
         AdminSetting::setValue('showcase_random_view_max_per_real_per_week', (string) $request->input('showcase_random_view_max_per_real_per_week'));
