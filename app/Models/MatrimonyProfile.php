@@ -79,7 +79,11 @@ class MatrimonyProfile extends Model
         'conflict_pending' => ['active'],
         'active' => ['suspended', 'archived', 'archived_due_to_marriage', 'conflict_pending'],
         'suspended' => ['active', 'archived'],
-        'archived' => [],
+        // Archiving is reversible on purpose: a member who pauses their profile,
+        // or who asks to delete and changes their mind inside the grace window,
+        // has to be able to come back. Marriage stays a dead end — that one is
+        // not a pause.
+        'archived' => ['active'],
         'archived_due_to_marriage' => [],
     ];
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\Account\MemberAccountDeletionService;
 use App\Services\Account\MemberPasswordService;
 use App\Services\Api\MobileOtpService;
 use Illuminate\Http\JsonResponse;
@@ -98,6 +99,89 @@ class MobileAccountController extends Controller
             'success' => true,
             'user' => $otpService->userPayload($user),
             'account_state' => $otpService->accountStateFor($user),
+        ]);
+    }
+
+    /**
+     * Where the member's own account stands: live, paused, or counting down to
+     * erase. The app polls this to decide whether to show the cancel banner.
+     */
+    public function deletionStatus(Request $request, MemberAccountDeletionService $deletions): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'deletion' => $deletions->status($request->user()),
+            'reasons' => MemberAccountDeletionService::REASONS,
+            'grace_days' => MemberAccountDeletionService::GRACE_DAYS,
+        ]);
+    }
+
+    /**
+     * Starts the 30-day countdown.
+     *
+     * `confirmation` must be the literal word "delete", typed by the member.
+     * It is checked server-side and not only in the app, so the destructive
+     * call cannot be reached by a stray tap or a replayed request.
+     */
+    public function requestDeletion(Request $request, MemberAccountDeletionService $deletions): JsonResponse
+    {
+        $validated = $request->validate([
+            'confirmation' => ['required', 'string'],
+            'reason_key' => ['required', 'string', Rule::in(MemberAccountDeletionService::REASONS)],
+            'reason_note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        if (Str::lower(trim($validated['confirmation'])) !== 'delete') {
+            return response()->json([
+                'success' => false,
+                'message' => __('account.deletion_confirmation_mismatch'),
+            ], 422);
+        }
+
+        $deletions->requestDeletion(
+            $request->user(),
+            $validated['reason_key'],
+            $validated['reason_note'] ?? null
+        );
+
+        return response()->json([
+            'success' => true,
+            'deletion' => $deletions->status($request->user()->fresh()),
+        ]);
+    }
+
+    /** Called when the member changes their mind inside the grace window. */
+    public function cancelDeletion(Request $request, MemberAccountDeletionService $deletions): JsonResponse
+    {
+        $deletions->cancelDeletion($request->user());
+
+        return response()->json([
+            'success' => true,
+            'deletion' => $deletions->status($request->user()->fresh()),
+        ]);
+    }
+
+    /**
+     * The softer option, offered before deletion: hide the profile, erase
+     * nothing, reversible whenever they want.
+     */
+    public function pause(Request $request, MemberAccountDeletionService $deletions): JsonResponse
+    {
+        $deletions->pause($request->user());
+
+        return response()->json([
+            'success' => true,
+            'deletion' => $deletions->status($request->user()->fresh()),
+        ]);
+    }
+
+    public function resume(Request $request, MemberAccountDeletionService $deletions): JsonResponse
+    {
+        $deletions->resume($request->user());
+
+        return response()->json([
+            'success' => true,
+            'deletion' => $deletions->status($request->user()->fresh()),
         ]);
     }
 }

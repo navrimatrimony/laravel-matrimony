@@ -14,6 +14,13 @@ Schedule::job(new \App\Jobs\NightlyOcrLearningJob)->dailyAt('02:00');
 Schedule::command('showcase:random-views')->hourly();
 Schedule::command('admin:evaluate-action-effects')->hourly();
 
+// Irreversible, so it runs once a day on one server and never overlaps itself.
+Schedule::command('account:purge-due-deletions')
+    ->dailyAt('03:40')
+    ->name('account-purge-due-deletions')
+    ->withoutOverlapping(60)
+    ->onOneServer();
+
 Schedule::command('intake:purge-old-files')->dailyAt('03:00');
 Schedule::command('subscriptions:expire')->daily();
 Schedule::command('engagement:inactive-reminders')->dailyAt('09:15')->withoutOverlapping(120)->onOneServer();

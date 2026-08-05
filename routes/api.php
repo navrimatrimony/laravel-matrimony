@@ -92,6 +92,13 @@ Route::prefix('v1')->group(function () {
     Route::patch('/account/details', [MobileAccountController::class, 'update'])
         ->middleware('auth:sanctum');
     Route::middleware('auth:sanctum')->group(function () {
+        // Member self-service account deletion (Google Play data-deletion policy).
+        Route::get('/account/deletion', [MobileAccountController::class, 'deletionStatus']);
+        Route::post('/account/deletion', [MobileAccountController::class, 'requestDeletion']);
+        Route::delete('/account/deletion', [MobileAccountController::class, 'cancelDeletion']);
+        Route::post('/account/pause', [MobileAccountController::class, 'pause']);
+        Route::post('/account/resume', [MobileAccountController::class, 'resume']);
+
         Route::post('/account/email/google', [MobileEmailVerificationController::class, 'verifyGoogle']);
         Route::post('/account/email-otp/send', [MobileEmailVerificationController::class, 'sendOtp']);
         Route::post('/account/email-otp/verify', [MobileEmailVerificationController::class, 'verifyOtp']);
