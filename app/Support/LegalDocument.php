@@ -138,7 +138,7 @@ class LegalDocument
             ':website' => (string) config('legal.entity.website'),
             ':domain' => (string) config('legal.entity.domain'),
             ':llpin' => (string) config('legal.entity.llpin'),
-            ':gstin' => (string) config('legal.entity.gstin'),
+            ':incorporated_on' => (string) config('legal.entity.incorporated_on'),
             ':registered_address' => $registeredAddress,
             ':jurisdiction_city' => (string) config('legal.entity.jurisdiction_city'),
             ':jurisdiction_state' => (string) config('legal.entity.jurisdiction_state'),

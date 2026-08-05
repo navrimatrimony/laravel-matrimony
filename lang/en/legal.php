@@ -43,7 +43,7 @@ return [
                 'heading' => '1. Who we are',
                 'body' => [
                     ':legal_name ("we", "us", the "Company") operates the matrimonial matchmaking platform published at :website and delivered through two Android applications: a member application for people seeking a marriage partner, and a Suchak application for matchmakers who assist families.',
-                    'The Company is a Limited Liability Partnership registered in India (LLPIN :llpin) with its registered office at :registered_address. It was incorporated approximately 12 years ago, remained dormant for several years, and has now resumed operations. GSTIN: :gstin.',
+                    'The Company is a Limited Liability Partnership registered in India (LLPIN :llpin) with its registered office at :registered_address. It was incorporated on :incorporated_on, remained dormant for several years, and has now resumed operations. The Company is not registered under GST.',
                     'Together, the website and both applications are referred to in these Terms as the "Platform".',
                 ],
             ],

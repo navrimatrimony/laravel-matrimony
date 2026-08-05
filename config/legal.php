@@ -40,11 +40,18 @@ return [
         'website' => 'https://navrimilenavryala.com',
         'domain' => 'navrimilenavryala.com',
 
-        // Placeholders — the product owner must fill these in.
-        'llpin' => '[[LLPIN]]',
-        'registered_address' => '[[REGISTERED_ADDRESS]]',
-        'gstin' => '[[GSTIN]]',
-        'jurisdiction_city' => '[[JURISDICTION_CITY]]',
+        // From the MCA Form 16 Certificate of Incorporation, 18 March 2016,
+        // Registrar of Companies, Pune. The address below is the LLP's own
+        // mailing address on the Registrar's record — NOT the "Pune PMT
+        // Building, Deccan Gymkhana, 411004" line that also appears on the
+        // certificate, which is the Registrar's own office.
+        'llpin' => 'AAF-9862',
+        'incorporated_on' => '18 March 2016',
+        'registered_address' => '473, Fugewadi, Panjabi Chawl, Opp. Mega Mart, Pune, Maharashtra 411012, India',
+        // No `gstin` key on purpose: the LLP is not GST-registered (confirmed
+        // 2026-08-05). Do not reintroduce it with a blank or invented value —
+        // add it back only against a real registration certificate.
+        'jurisdiction_city' => 'Pune',
         'jurisdiction_state' => 'Maharashtra',
     ],
 
@@ -59,7 +66,7 @@ return [
     'contact' => [
         'mobile' => '91284 92284',
         'mobile_tel' => '+919128492284',
-        'support_email' => '[[SUPPORT_EMAIL]]',
+        'support_email' => 'navrimatrimony@gmail.com',
     ],
 
     /*
@@ -71,11 +78,12 @@ return [
     | Timelines below are the statutory maximums; do not raise them.
     */
     'grievance' => [
-        'officer_name' => '[[GRIEVANCE_OFFICER_NAME]]',
-        'officer_designation' => '[[GRIEVANCE_OFFICER_DESIGNATION]]',
-        'officer_email' => '[[GRIEVANCE_OFFICER_EMAIL]]',
+        // Rule 3(2) requires the officer's real name, not a role alone.
+        'officer_name' => 'Shankar Pawar',
+        'officer_designation' => 'Designated Partner',
+        'officer_email' => 'navrimatrimony@gmail.com',
         'officer_phone' => '91284 92284',
-        'officer_address' => '[[REGISTERED_ADDRESS]]',
+        'officer_address' => '473, Fugewadi, Panjabi Chawl, Opp. Mega Mart, Pune, Maharashtra 411012, India',
         'officer_hours' => '10:00 - 18:00 IST, Monday to Saturday',
 
         'acknowledgement_hours' => 24,
