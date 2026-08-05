@@ -88,6 +88,14 @@ failures so a notification can never break the business action.
 - `suchak_profile_representations.candidate_deactivated_at` **exists and is already read** by
   `SuchakConsentService`, `SuchakCustomerListService` and `DashboardController`. **Nothing writes
   it.**
+- **Expiry is lazy by design, not missing.** `SuchakMarketplaceChallengeService::expireDue()` runs
+  on browse; `SuchakCollaborationService::expireForAccount()` / `expireIfPastDue()` do the same for
+  proposals. The code says so in as many words: *"instead of waiting for a scheduler."* A challenge
+  nobody browses stays `open`, which cannot matter — an unbrowsed board is not a market. **Do not
+  add a scheduler for either.**
+- Meeting timeout is fully handled by `SuchakClaimSilenceService`: a 7-day silence clock, a
+  stop-loss counter and a 90-day lapse. A meeting the customer never answers is not an open
+  problem.
 
 ---
 
@@ -212,10 +220,15 @@ untouched.
 
 ---
 
-## U2 — Tell the Suchak their customer is leaving
+## U2 — Tell the Suchak their customer is leaving, and if they stay
 
-**Goal** The Suchak learns at the start of the 30-day window, not on day 31.
-**Scope** One notification. No UI.
+**Goal** The Suchak learns at the start of the 30-day window, not on day 31 — and learns just as
+promptly if the member changes their mind.
+**Scope** Two notifications, both directions. No UI.
+
+**Why both** A one-way notification is worse than none: a Suchak told "your customer is leaving"
+and never told "they stayed" will strike a live customer off their list. The reverse is not a
+follow-up; it is the other half of this unit.
 
 **Reuse** `SendPushForDatabaseNotification` (already turns any database notification into a push) ·
 `PushTypeRegistry` · `SafeNotifier::notify()` · `MemberAccountDeletionService::requestDeletion()`
@@ -225,17 +238,19 @@ untouched.
 `lang/{en,mr}/account.php` · new test
 
 **Behaviour** On `requestDeletion()`, for each Suchak with a live representation of that profile,
-notify once. **Copy carries no personal data beyond the customer name the Suchak already holds** —
-name the customer and the date, nothing else.
+notify once. On `cancelDeletion()`, notify the same Suchaks that the customer stayed. **Copy
+carries no personal data beyond the customer name the Suchak already holds** — name the customer
+and the date, nothing else.
 
 **Tests** Requesting deletion notifies each representing Suchak exactly once · a member with no
-Suchak notifies nobody · cancelling deletion does not notify again.
+Suchak notifies nobody · **cancelling notifies the same Suchaks once** · requesting twice notifies
+once.
 
 **Runtime verification** `php artisan test --filter=SuchakCustomerLeaving`
 
 **Rollback** `git revert <sha>`.
 
-**Time** 75 min
+**Time** 105 min
 
 ---
 
