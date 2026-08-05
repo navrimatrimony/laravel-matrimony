@@ -43,6 +43,70 @@ use InvalidArgumentException;
 class MemberSuchakMeetingApiController extends Controller
 {
     /**
+     * GET /api/v1/suchak-meetings
+     * U9a / RT-9: hand the member app visit ids for meetings they are the customer of.
+     */
+    public function index(
+        Request $request,
+        SuchakVisitConfirmationService $visitConfirmationService,
+    ): JsonResponse {
+        $user = $request->user();
+        if (! $user instanceof User) {
+            return $this->error('Unauthenticated.', 401);
+        }
+
+        $viewerProfile = $user->matrimonyProfile;
+        if (! $viewerProfile instanceof MatrimonyProfile) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Suchak meetings loaded.',
+                'data' => ['meetings' => []],
+            ]);
+        }
+
+        $profileId = (int) $viewerProfile->id;
+
+        // Broad candidate set, then the SAME customer-side resolver confirm/dispute use
+        // (RT-9 / assertCustomerSideUserCanConfirm family). Never re-derive ownership here.
+        $meetings = SuchakVisitConfirmation::query()
+            ->with(['suchakAccount:id,suchak_name', 'customerContext', 'pipeline.collaborationRequest'])
+            ->where(function ($query) use ($profileId): void {
+                $query
+                    ->where('requesting_matrimony_profile_id', $profileId)
+                    ->orWhere('target_matrimony_profile_id', $profileId)
+                    ->orWhereHas(
+                        'customerContext',
+                        static fn ($context) => $context->where('candidate_matrimony_profile_id', $profileId),
+                    );
+            })
+            ->latest('id')
+            ->limit(100)
+            ->get()
+            ->filter(static function (SuchakVisitConfirmation $visit) use ($visitConfirmationService, $profileId): bool {
+                return $visitConfirmationService->customerSideMatrimonyProfileId($visit) === $profileId;
+            })
+            ->take(50)
+            ->values()
+            ->map(static function (SuchakVisitConfirmation $visit): array {
+                return [
+                    'id' => (int) $visit->id,
+                    'visit_status' => $visit->visit_status,
+                    'scheduled_for' => $visit->scheduled_for?->toIso8601String(),
+                    'suchak_display_name' => (string) ($visit->suchakAccount?->suchak_name ?? ''),
+                ];
+            })
+            ->all();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Suchak meetings loaded.',
+            'data' => [
+                'meetings' => $meetings,
+            ],
+        ]);
+    }
+
+    /**
      * POST /api/v1/suchak-meetings/{visit}/confirm
      * The member confirms the meeting actually happened. No fee falls due
      * without this (M4).

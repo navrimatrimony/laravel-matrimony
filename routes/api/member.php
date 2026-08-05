@@ -67,7 +67,9 @@ Route::middleware('auth:sanctum')->group(function () {
     | blueprint 7.2: a meeting the member disputes opens a dispute and a payout
     | hold instead of quietly falling due. Same SuchakVisitConfirmationService
     | the Suchak app schedules and completes through; only the actor differs.
+    | U9a: GET list must be declared before /{visit} or the binding swallows it.
     */
+    Route::get('/suchak-meetings', [MemberSuchakMeetingApiController::class, 'index']); // MY MEETINGS (CUSTOMER SIDE)
     Route::post('/suchak-meetings/{visit}/confirm', [MemberSuchakMeetingApiController::class, 'confirm'])
         ->whereNumber('visit'); // MEMBER CONFIRMS THE MEETING HAPPENED
     Route::post('/suchak-meetings/{visit}/dispute', [MemberSuchakMeetingApiController::class, 'dispute'])
