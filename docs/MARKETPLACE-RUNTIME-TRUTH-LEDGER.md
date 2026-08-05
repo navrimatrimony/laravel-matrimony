@@ -4,8 +4,15 @@ Permanent memory for marketplace discoveries that changed implementation or plan
 otherwise be re-derived (or worse, re-argued) in a future session. **Not an SSOT** — the
 implementation authority is `EXECUTION-SSOT.md`. Nothing here creates work.
 
-Rule for adding entries: runtime-impacting · proven from code · changed something · likely to be
-forgotten. Anything already in `EXECUTION-SSOT.md` is referenced, not repeated.
+**Growth rule — this ledger must stay short.** A new entry is admitted only when BOTH hold:
+
+1. it **changes implementation**, and
+2. it **cannot be derived** from an existing entry or a documented runtime truth.
+
+An interesting fact that changes nothing is not a truth worth a row. If the ledger ever needs a
+table of contents, it has already failed.
+
+Anything already in `MARKETPLACE-MASTER-EXECUTION-SSOT.md` is referenced, not repeated.
 
 ---
 
