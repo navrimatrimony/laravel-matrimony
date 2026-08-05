@@ -186,6 +186,7 @@ class LegalDocument
             ':refund_url' => (string) (self::url('refund') ?? ''),
             ':disclaimer_url' => (string) (self::url('disclaimer') ?? ''),
             ':grievance_url' => (string) (self::url('grievance') ?? ''),
+            ':delete_account_url' => (string) (self::url('delete_account') ?? ''),
         ];
     }
 

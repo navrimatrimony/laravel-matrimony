@@ -437,9 +437,10 @@ return [
             [
                 'heading' => '13. Deleting your account and your profile',
                 'body' => [
-                    'We want to be straightforward about how this works today rather than describe something we have not built.',
-                    'There is currently no self-service "delete my account" button in the applications or on the website. To close your account and have your profile removed, send a request to :officer_email, or telephone :officer_phone, or write to :officer_address. Please send the request from, or quote, the mobile number registered with us.',
-                    'On receiving a verified request we act within :deletion_days days. We withdraw your profile from search, from every match query and from every Suchak\'s view, and we mark it deleted so that it is no longer served to any user.',
+                    'You can delete your account yourself, from the member application: Settings, then Account, then Delete account. Step-by-step instructions are at :delete_account_url. If you cannot use the application, write to :officer_email, telephone :officer_phone, or write to :officer_address, quoting the mobile number registered with us.',
+                    'Your profile stops being visible the moment you confirm. Nothing is erased for :deletion_days days, so that you can cancel and get everything back exactly as it was. After that window the erase runs and cannot be undone by you, by us, or by support.',
+                    'One consequence is worth stating plainly. Messages you sent to another member stay in that member\'s conversation, because that conversation is their record as much as yours. You are removed from it: your name, photograph and profile disappear from their view and your profile can no longer be opened, so you cannot be identified from what remains.',
+                    'Similarly, a contact number another member unlocked before you left is already on their device. We erase it from our systems, but we cannot retrieve it from theirs.',
                     'What we keep, and why:',
                 ],
                 'list' => [
@@ -863,6 +864,129 @@ return [
                     'Mobile' => ':contact_mobile',
                     'Email' => ':support_email',
                     'Website' => ':website',
+                ],
+            ],
+        ],
+    ],
+
+    /*
+    | Account deletion — Google Play requires a public, no-login URL describing
+    | it. Not a consent document: nothing in the apps records agreement to it.
+    */
+    'delete_account' => [
+        'title' => 'How to delete your account',
+        'summary' => 'How to delete your :brand_name account and everything on it, what happens during the :deletion_days-day recovery window, what is erased, and the little that law requires us to keep.',
+        'sections' => [
+            [
+                'heading' => '1. Deleting from the app',
+                'body' => [
+                    'You can delete your account yourself. You do not need to email anyone or wait for approval.',
+                ],
+                'list' => [
+                    'Open the Navri Mile Navryala app.',
+                    'Go to Settings, then Account.',
+                    'Tap Delete account.',
+                    'Choose whether you want to pause instead — pausing hides your profile and erases nothing.',
+                    'If you still want to delete, pick a reason, type the word delete to confirm, and submit.',
+                ],
+                'after' => [
+                    'Your profile stops being visible to anyone the moment you confirm.',
+                ],
+            ],
+            [
+                'heading' => '2. If you cannot use the app',
+                'body' => [
+                    'Write to :support_email from the email address on your account, or send a message to :contact_mobile, and ask for your account to be deleted. Tell us the mobile number you registered with so we can find the right account.',
+                    'We will confirm it is really you before we act, because otherwise anyone could delete somebody else\'s account.',
+                ],
+            ],
+            [
+                'heading' => '3. The :deletion_days-day recovery window',
+                'body' => [
+                    'Deleting is not instant, and that is deliberate. For :deletion_days days after you confirm:',
+                ],
+                'list' => [
+                    'Your profile is hidden from every other member and from search.',
+                    'Nothing is erased. Your photos, messages and preferences are all still there.',
+                    'You can cancel from the app and get everything back exactly as it was.',
+                ],
+                'after' => [
+                    'On the day after the window ends, the erase runs. From that moment it cannot be undone by you, by us, or by support. There is no backup we will restore from.',
+                ],
+            ],
+            [
+                'heading' => '4. What is erased',
+                'body' => [
+                    'When the window ends we permanently delete:',
+                ],
+                'list' => [
+                    'Your name, date of birth, gender, religion, caste and mother tongue.',
+                    'Your mobile number and email address.',
+                    'Every photo you uploaded, including ones awaiting approval.',
+                    'Your address and location details.',
+                    'Education, profession and income details.',
+                    'Family details, including any relatives\' contact numbers you entered.',
+                    'Marital history and details of children.',
+                    'Horoscope and birth details.',
+                    'Your partner preferences.',
+                    'Interests you sent and received, shortlists, blocks and profile views.',
+                    'Any biodata documents you uploaded and everything extracted from them.',
+                ],
+                'after' => [
+                    'Your mobile number is released, so you can register again later with the same number if you want to. It will be a new account with nothing carried over.',
+                ],
+            ],
+            [
+                'heading' => '5. Messages you already sent',
+                'body' => [
+                    'This is the one place where deletion cannot be complete, and we would rather say so plainly.',
+                    'If you chatted with another member, the messages you sent are in their conversation too. That conversation is their record as much as yours, so we do not delete it from their side.',
+                    'What we do remove is you. Your name, photo and profile disappear from their view, your profile can no longer be opened, and they are shown only that the member is no longer on the platform. They cannot identify you from what remains.',
+                ],
+            ],
+            [
+                'heading' => '6. Information already shared with others',
+                'body' => [
+                    'If another member unlocked your contact number before you deleted your account, that number is already on their phone. We remove it from our systems, but we cannot reach into someone else\'s device, notebook or messaging app and take it back.',
+                    'The same is true of anything you told another member during a conversation.',
+                ],
+            ],
+            [
+                'heading' => '7. What we keep, and why',
+                'body' => [
+                    'A small amount of information survives deletion because the law requires it, not because we want it:',
+                ],
+                'list' => [
+                    'Records of payments you made, kept for :financial_years years to satisfy tax and audit law. These hold the transaction, not your profile.',
+                    'Records we are specifically ordered to preserve by a court or a lawful authority.',
+                ],
+                'after' => [
+                    'Nothing in this category is used to contact you, to show you to other members, or for any other purpose.',
+                ],
+            ],
+            [
+                'heading' => '8. Pausing instead',
+                'body' => [
+                    'If you only want a break, pause your profile rather than deleting it. Pausing hides you from search and from other members, stops the messages, and erases nothing. You can come back whenever you like and everything is where you left it.',
+                    'Pausing is offered first when you tap Delete account, so you can change your mind before anything is scheduled.',
+                ],
+            ],
+            [
+                'heading' => '9. If you are a Suchak',
+                'body' => [
+                    'Suchak accounts are different, because a Suchak holds profiles belonging to other families. Deleting a Suchak account is not covered by this page — write to :support_email and we will handle it individually, so that no candidate loses their data because their Suchak left.',
+                    'If your profile was created for you by a Suchak, you can still delete it yourself. It is your data, and you do not need your Suchak\'s permission.',
+                ],
+            ],
+            [
+                'heading' => '10. Questions or complaints',
+                'facts' => [
+                    'Entity' => ':legal_name',
+                    'Registered office' => ':registered_address',
+                    'Mobile' => ':contact_mobile',
+                    'Email' => ':support_email',
+                    'Escalation' => 'Grievance Officer — see :grievance_url',
+                    'Privacy policy' => ':privacy_url',
                 ],
             ],
         ],

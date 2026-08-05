@@ -114,6 +114,9 @@ return [
         'refund' => '2026-06-24',
         'disclaimer' => '2026-06-24',
         'grievance' => '2026-06-24',
+        // Not a consent document — nothing in the apps records agreement to it,
+        // so it carries its own date and does not need the signup version bump.
+        'delete_account' => '2026-08-05',
     ],
 
     'effective_from' => '2026-06-24',
@@ -141,7 +144,9 @@ return [
     |--------------------------------------------------------------------------
     */
     'retention' => [
-        'deletion_request_days' => 30,
+        // Read from the engine rather than restated, so the number a member is
+        // promised on the page can never drift from the number the sweep uses.
+        'deletion_request_days' => \App\Services\Account\MemberAccountDeletionService::GRACE_DAYS,
         'financial_records_years' => 8,
         'inactive_account_months' => 24,
     ],
@@ -159,5 +164,8 @@ return [
         'refund' => ['uri' => 'refund-policy', 'route' => 'legal.refund'],
         'disclaimer' => ['uri' => 'disclaimer', 'route' => 'legal.disclaimer'],
         'grievance' => ['uri' => 'grievance', 'route' => 'legal.grievance'],
+        // Google Play requires a public, no-login URL describing account
+        // deletion, separate from the in-app path. Same renderer as the rest.
+        'delete_account' => ['uri' => 'delete-account', 'route' => 'legal.delete-account'],
     ],
 ];
