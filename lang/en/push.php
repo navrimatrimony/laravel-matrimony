@@ -199,6 +199,18 @@ return [
             'title' => 'Referral reward',
             'body' => 'You have received a referral reward.',
         ],
+        'suchak_customer_deletion_requested' => [
+            'label' => 'Customer leaving',
+            'description' => 'When a customer you represent requests account deletion.',
+            'title' => 'Customer leaving',
+            'body' => ':customer_full_name requested account deletion on :event_date.',
+        ],
+        'suchak_customer_deletion_cancelled' => [
+            'label' => 'Customer stayed',
+            'description' => 'When a customer you represent cancels a pending account deletion.',
+            'title' => 'Customer stayed',
+            'body' => ':customer_full_name cancelled account deletion on :event_date.',
+        ],
 
     ],
 

@@ -18,4 +18,8 @@ return [
         'hard_to_use' => 'ॲप वापरणे अवघड वाटले',
         'other' => 'दुसरे कारण',
     ],
+
+    // Suchak push/database copy for U2 — placeholders :name and :date (Latin digits).
+    'suchak_customer_deletion_requested' => ':name यांनी :date रोजी खाते हटवण्याची विनंती केली.',
+    'suchak_customer_deletion_cancelled' => ':name यांनी :date रोजी खाते हटवण्याची विनंती रद्द केली.',
 ];

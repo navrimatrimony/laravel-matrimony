@@ -3,9 +3,13 @@
 namespace App\Services\Account;
 
 use App\Models\MatrimonyProfile;
+use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
+use App\Notifications\SuchakCustomerDeletionCancelledNotification;
+use App\Notifications\SuchakCustomerDeletionRequestedNotification;
 use App\Services\Maintenance\UserAccountDatabasePurger;
 use App\Services\ProfileLifecycleService;
+use App\Support\SafeNotifier;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -67,25 +71,49 @@ final class MemberAccountDeletionService
             $reasonKey = 'other';
         }
 
-        if ($user->deletion_requested_at !== null) {
+        $noteValue = $reasonKey === 'other' ? $note : null;
+        $requestedAt = now();
+        $affected = 0;
+
+        // RT-7: notify only when this atomic null→value flip wins exactly one row.
+        DB::transaction(function () use ($user, $reasonKey, $noteValue, $requestedAt, &$affected): void {
+            $affected = User::query()
+                ->whereKey($user->id)
+                ->whereNull('deletion_requested_at')
+                ->whereNull('account_deleted_at')
+                ->update([
+                    'deletion_requested_at' => $requestedAt,
+                    'deletion_reason_key' => $reasonKey,
+                    'deletion_reason_note' => $noteValue,
+                ]);
+
+            if ($affected !== 1) {
+                return;
+            }
+
+            $user->refresh();
+            $this->hideProfile($user);
+        });
+
+        if ($affected !== 1) {
             return;
         }
 
-        DB::transaction(function () use ($user, $reasonKey, $note): void {
-            $this->hideProfile($user);
-
-            $user->forceFill([
-                'deletion_requested_at' => now(),
-                'deletion_reason_key' => $reasonKey,
-                'deletion_reason_note' => $reasonKey === 'other' ? $note : null,
-            ])->save();
-        });
+        $user->refresh();
 
         Log::info('account.deletion_requested', [
             'user_id' => $user->id,
             'reason' => $reasonKey,
             'purge_after' => $this->purgeDueAt($user)?->toDateTimeString(),
         ]);
+
+        $this->notifyRepresentingSuchaks(
+            $user,
+            fn (): SuchakCustomerDeletionRequestedNotification => new SuchakCustomerDeletionRequestedNotification(
+                $this->customerDisplayName($user),
+                $requestedAt->toDateString(),
+            ),
+        );
     }
 
     /**
@@ -102,21 +130,44 @@ final class MemberAccountDeletionService
             return;
         }
 
-        if ($user->deletion_requested_at === null) {
-            return;
-        }
+        $cancelledAt = now();
+        $affected = 0;
 
-        DB::transaction(function () use ($user): void {
-            $user->forceFill([
-                'deletion_requested_at' => null,
-                'deletion_reason_key' => null,
-                'deletion_reason_note' => null,
-            ])->save();
+        // RT-7: notify only when this atomic value→null flip wins exactly one row.
+        DB::transaction(function () use ($user, &$affected): void {
+            $affected = User::query()
+                ->whereKey($user->id)
+                ->whereNotNull('deletion_requested_at')
+                ->whereNull('account_deleted_at')
+                ->update([
+                    'deletion_requested_at' => null,
+                    'deletion_reason_key' => null,
+                    'deletion_reason_note' => null,
+                ]);
 
+            if ($affected !== 1) {
+                return;
+            }
+
+            $user->refresh();
             $this->restoreProfile($user);
         });
 
+        if ($affected !== 1) {
+            return;
+        }
+
+        $user->refresh();
+
         Log::info('account.deletion_cancelled', ['user_id' => $user->id]);
+
+        $this->notifyRepresentingSuchaks(
+            $user,
+            fn (): SuchakCustomerDeletionCancelledNotification => new SuchakCustomerDeletionCancelledNotification(
+                $this->customerDisplayName($user),
+                $cancelledAt->toDateString(),
+            ),
+        );
     }
 
     /** Hide the profile with no deletion attached — the softer option offered first. */
@@ -259,5 +310,46 @@ final class MemberAccountDeletionService
         if (ProfileLifecycleService::canTransitionTo($profile, 'active')) {
             ProfileLifecycleService::transitionTo($profile, 'active', $user);
         }
+    }
+
+    /**
+     * Distinct Suchak users with valid consent to represent this member's profile (RT-6).
+     *
+     * @param  callable(): \Illuminate\Notifications\Notification  $makeNotification
+     */
+    private function notifyRepresentingSuchaks(User $member, callable $makeNotification): void
+    {
+        $profile = $member->matrimonyProfile;
+        if (! $profile instanceof MatrimonyProfile) {
+            return;
+        }
+
+        $suchakUserIds = SuchakProfileRepresentation::query()
+            ->withValidConsent()
+            ->where('matrimony_profile_id', (int) $profile->id)
+            ->with('suchakAccount:id,user_id')
+            ->get()
+            ->map(static fn (SuchakProfileRepresentation $row): ?int => $row->suchakAccount?->user_id !== null
+                ? (int) $row->suchakAccount->user_id
+                : null)
+            ->filter(static fn (?int $id): bool => $id !== null && $id > 0)
+            ->unique()
+            ->values();
+
+        if ($suchakUserIds->isEmpty()) {
+            return;
+        }
+
+        $receivers = User::query()->whereIn('id', $suchakUserIds->all())->get();
+        foreach ($receivers as $receiver) {
+            SafeNotifier::notify($receiver, $makeNotification());
+        }
+    }
+
+    private function customerDisplayName(User $user): string
+    {
+        $name = trim((string) ($user->matrimonyProfile?->full_name ?? ''));
+
+        return $name !== '' ? $name : 'Customer';
     }
 }

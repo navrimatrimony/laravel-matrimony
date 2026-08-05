@@ -296,6 +296,27 @@ final class PushTypeRegistry
             'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => true,
         ],
+        /*
+        | Suchak-only marketplace account alerts (U2). Database row is audit
+        | (MRT-03); push is best-effort. Target `notifications` is already
+        | handled by both apps; Suchak has no dedicated inbox.
+        */
+        'suchak_customer_deletion_requested' => [
+            'notification' => \App\Notifications\SuchakCustomerDeletionRequestedNotification::class,
+            'group' => 'account',
+            'target' => 'notifications',
+            'data_keys' => ['customer_full_name', 'event_date'],
+            'apps' => [DeviceToken::APP_SUCHAK],
+            'default_push' => true,
+        ],
+        'suchak_customer_deletion_cancelled' => [
+            'notification' => \App\Notifications\SuchakCustomerDeletionCancelledNotification::class,
+            'group' => 'account',
+            'target' => 'notifications',
+            'data_keys' => ['customer_full_name', 'event_date'],
+            'apps' => [DeviceToken::APP_SUCHAK],
+            'default_push' => true,
+        ],
     ];
 
     /**

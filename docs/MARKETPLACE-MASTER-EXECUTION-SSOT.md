@@ -60,7 +60,10 @@ Implementation → Tests → Regression → next unit.
 Status: **U1 COMPLETE** (`a1e0bf1e`) — representations deactivated + alias wiped on purge, purge
 race-safe, cancel-after-purge refused. 10+4 tests green.
 
-Remaining: U2–U8, U9a→U9b→U10/U11, U12. Only dependency chain: U9a→U9b→U10/U11.
+**U2 COMPLETE** — Suchak notified on customer deletion request/cancel (atomic flips, `withValidConsent()`,
+database+push registry). See latest commit on `main`.
+
+Remaining: U3–U8, U9a→U9b→U10/U11, U12. Only dependency chain: U9a→U9b→U10/U11.
 
 ---
 
@@ -198,10 +201,10 @@ publishing Suchak's user. RT-4/5/13/14. Proposer never notified of their own act
 
 Planning documents archived: **8** → `docs/archive/marketplace-planning/`
 Master document: `docs/MARKETPLACE-MASTER-EXECUTION-SSOT.md`
-Implementation units: **13** (U1 complete; U2–U12 remaining)
-Estimated implementation time: **~11 h 10 remaining** (12 h 45 total − U1)
+Implementation units: **13** (U1–U2 complete; U3–U12 remaining)
+Estimated implementation time: **~9 h 25 remaining** (12 h 45 total − U1 − U2)
 Known out-of-scope decisions: **12** — meeting reschedule · customer meeting-cancel ·
 suspension/deletion/Suchak-switch vs live engagements · chargeable ceiling · suggestion Viewed
 semantics · marketplace email · event-log retention · `failed_jobs` alerting · ranking ·
 web-vs-app stage confirmation · proposal withdrawal (MRT-08) · marketplace consent text (MRT-10)
-Next unit: **U2**
+Next unit: **U3**
