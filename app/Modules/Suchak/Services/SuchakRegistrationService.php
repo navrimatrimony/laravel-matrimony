@@ -457,9 +457,11 @@ class SuchakRegistrationService
         ], self::OTP_TTL_SECONDS);
 
         if ($mode === 'dev_show') {
+            // U5: AdminSetting `dev_show` alone must never emit plaintext OTP in production
+            // (mirror MobileOtpService environment awareness via isProduction()).
             return [
                 'delivery' => 'dev_show',
-                'otp' => $otp,
+                'otp' => app()->isProduction() ? null : $otp,
             ];
         }
 
