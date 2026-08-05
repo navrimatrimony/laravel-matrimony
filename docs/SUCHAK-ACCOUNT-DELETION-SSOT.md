@@ -132,7 +132,12 @@ actor's own matrimony profile, which is a different thing from closing a Suchak 
 
 Play requires an in-app path. Copy the member-app screen shipped on 2026-08-05 and cut it down:
 no pause option (a Suchak business account has no pause), reason optional, typed `delete`
-confirmation kept, 30-day copy kept.
+confirmation kept.
+
+The grace period is read from the server via the existing `GET /account/deletion`, which needs
+only a session and already returns `grace_days`. Not compiled in: this screen must not be able to
+promise a window different from the one the sweep enforces. Until it loads there is nothing to
+show, so the screen waits and offers a retry rather than guessing.
 
 Entry point: a plain row in `lib/features/profile/profile_screen.dart`, styled like the existing
 rows.
@@ -179,8 +184,24 @@ daily sweep already selects any user with `deletion_requested_at` (A3), and tomb
 sidesteps the `restrictOnDelete` foreign key (A4). V1 is the orchestration between three services
 that already exist, plus one screen.
 
-## Known gap accepted at V1
+## Known limitations at V1
 
-Candidates are not proactively told their Suchak has left. Their contact is blocked the moment it
-happens, so nothing is exposed, and they can already choose a new Suchak in-app. Notification
-ships when Meta approval lands.
+1. **Candidates are not proactively told their Suchak has left.** Their contact is blocked the
+   moment it happens, so nothing is exposed, and they can already choose a new Suchak in-app.
+   Notification ships when Meta approval lands.
+
+2. **Cancelling inside the notice period does not restore the account to `verified`.**
+   `SuchakAccountLifecycleService::reactivate()` returns a suspended account to `verified`, but an
+   *archived* one lands on `pending` — found during the RC2 device test, where the restored
+   account had to be corrected by hand. A Suchak who changes their mind therefore needs
+   re-verification. Existing behaviour, not introduced here, and no V1 code depends on it.
+
+3. **A Suchak with pending agreements will not be purged on day 31.** `restrictOnDelete` blocks
+   it, `purgeDue()` catches and logs the failure, and it stays stuck until someone reads the log.
+   No admin queue in V1.
+
+4. **Candidates mid-process get no special handling.** A Suchak leaving while a meeting or an
+   agreement stage is in flight is treated like any other. Revisit before the first real one.
+
+5. **Revoked representations stay revoked on cancellation** (decision B4). The account comes back;
+   the customers do not. No UI says so.
