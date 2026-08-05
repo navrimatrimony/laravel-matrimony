@@ -1,392 +1,186 @@
-# Suchak Account Deletion — SSOT
+# Suchak Account Deletion — SSOT (V1 only)
 
-**Status:** blueprint accepted, implementation blocked pending Product Owner decisions.
-**Basis:** Runtime Truth Audit (2026-08-05). Every claim below marked VERIFIED was read out of
-the code, not inferred.
+**Scope:** the smallest change that makes the Suchak app compliant with Google Play's
+account-deletion policy without breaking any existing business rule.
 
-**Hard constraints agreed before this document was written:**
+**Hard limit:** total implementation under one hour, one developer.
 
-- No new tables.
-- No new columns.
-- No new lifecycle states, enums or ownership model.
-- No duplicated state — derive it.
-- No new service where an existing one can be extended or composed.
-- Existing routing and contact-visibility behaviour must not change.
+**Basis:** Runtime Truth Audit, 2026-08-05. Facts below were read out of the code, not inferred.
 
-Each section is tagged:
-
-| Tag | Meaning |
-|---|---|
-| **VERIFIED** | Confirmed against the code. Treat as fact. |
-| **PO DECISION** | Blocked. Needs the Product Owner's explicit answer. |
-| **IMPLEMENTATION** | Future work, unblocked only once the decisions above it are approved. |
+Everything is classified **REQUIRED FOR V1** / **NOT REQUIRED FOR V1** / **FUTURE VERSION**.
+Anything not required for V1 is stated once and then absent from the plan.
 
 ---
 
 # A. VERIFIED FACTS
 
-## A1. Who manages a candidate is already derived — VERIFIED
+Only the four that V1 actually depends on. The rest of the audit is history, not requirements.
 
-`SuchakProfileRepresentation::scopeWithValidConsent()` (`app/Models/SuchakProfileRepresentation.php:283`):
+## A1. Archiving the Suchak account stops contact routing by itself — VERIFIED
 
-```
-representation_status = 'active'
-AND consent_status    = 'accepted'
-AND revoked_at IS NULL
-AND candidate_deactivated_at IS NULL
-AND (consent_valid_until IS NULL OR consent_valid_until >= now())
-```
+`SuchakProfileRepresentation::scopePubliclyRoutable()` (`app/Models/SuchakProfileRepresentation.php:350`)
+requires the Suchak account to be `VERIFICATION_VERIFIED` **and** `PUBLIC_ACTIVE`.
 
-`scopePubliclyRoutable()` (`:350`) adds: the Suchak account must be
-`VERIFICATION_VERIFIED` **and** `PUBLIC_ACTIVE`.
-
-**Consequence:** archiving a Suchak account makes every one of its representations
-non-routable automatically. No per-representation action is needed to stop contact
-routing. This cascade is the single most important fact in this document.
-
-`scopeWithCandidateGivenConsent()` (`:310`) additionally requires
-`consent_is_suchak_declared = false` — a Suchak cannot declare consent on a
-candidate's behalf and use it to block another Suchak.
-
-## A2. The profile is platform-owned; the Suchak owns only the link — VERIFIED
-
-- `matrimony_profiles` has **no** `suchak_account_id`. Ownership is not expressible in the schema.
-- The relationship lives only in `suchak_profile_representations`,
-  `unique(suchak_account_id, matrimony_profile_id)`.
-- `SuchakProfileRepresentation::delete()` (`:358`) **throws**:
-  `'Suchak profile representations cannot be deleted.'`
-
-Revocation is the only exit. History is preserved by design, not by convention.
-
-## A3. Candidate contact and Suchak contact never mix — VERIFIED
-
-- Candidate: `profile_contacts` where `is_primary = true`, read by
-  `MatrimonyProfile::getPrimaryContactNumberAttribute()` (`:363`), falling back to `user.mobile`.
-- Suchak: `suchak_accounts` → `contactNumbers`, a separate relation.
-- `ManualProfileController:71` makes `candidate_mobile` **required** when a Suchak creates a
-  candidate, and that number is what lands in `profile_contacts`.
-- `ContactAccessService::consumeRoutedContactReveal()` (`:458`) is documented as
-  *"intentionally does not read the candidate's profile contact payload."*
-
-**Consequence:** there is no risk of a departed Suchak's number sitting on a candidate profile.
-Validating this needs a query, not a schema change.
-
-## A4. Representation history is already recorded — VERIFIED
-
-`suchak_activity_logs` carries `matrimony_profile_id`, `suchak_account_id`, `actor_user_id`,
-`action_type`, `metadata_json`, `occurred_at`.
-
-Existing action types sufficient to rebuild a full timeline:
-
-```
-representation_created · representation_status_changed
-representation_candidate_deactivated
-consent_requested · consent_otp_sent · consent_verified
-consent_rejected · consent_expired · consent_renewed
-```
-
-Plus row-level timestamps on the representation: `first_uploaded_at`, `consent_verified_at`,
-`revoked_at`, `candidate_deactivated_at`.
-
-A "Representation History" view is a **read**, not a new table.
-
-## A5. Contact is already blocked after archive — VERIFIED
-
-`ContactActionApiController:55`:
-
-```
-if (SuchakContactRouting::isRouted($profile)) {
-    return $this->revealSuchakContact(...);   // Suchak's business number
-}
-// otherwise → profile_visibility_settings → ContactRevealPolicyService
-```
-
-`isRouted()` (`SuchakContactRouting:36`) is built on `publiclyRoutable()`. Once the Suchak
-account is archived it returns false, and the code falls through to the candidate's own
-visibility settings, where `ContactRevealPolicyService` enforces visibility case, premium
-viewer, accepted interest, quota and plan.
-
-Safe default for Suchak-created profiles is `SHOW_CONTACT_NO_ONE`
+`SuchakContactRouting::isRouted()` (`app/Support/Suchak/SuchakContactRouting.php:36`) is built on
+that scope. `ContactActionApiController:55` branches on it and otherwise falls through to the
+candidate's own `profile_visibility_settings`, where `ContactRevealPolicyService` enforces the
+existing gates. Safe default for Suchak-created profiles is `SHOW_CONTACT_NO_ONE`
 (`ProfileVisibilitySettingsDefaultsService:61`).
 
-**Consequence:** "profile visible, contact blocked" is an emergent property of `archive()`.
-It must not be built.
+**Consequence:** "profile stays visible, contact is blocked" needs no code. It is what
+`archive()` already causes.
 
-## A6. Every required lifecycle state exists — VERIFIED
-
-| Layer | States |
-|---|---|
-| Representation | `pending`, `consent_pending`, `active`, `revoked`, `expired`, `rejected`, `suspended`, `candidate_deactivated` |
-| Consent | `not_requested`, `requested`, `accepted`, `rejected`, `expired`, `revoked` |
-| Suchak account | `pending`, `verified`, `rejected`, `suspended`, `archived` × `hidden`, `active`, `inactive` |
-| Profile | `draft` … `active`, `suspended`, `archived`, `archived_due_to_marriage` |
-
-"Awaiting representation" = all representations revoked and none active — **derived**.
-"Managed by Suchak" = a `publiclyRoutable()` row exists — **derived**.
-
-## A7. `archive()` does not require an admin — VERIFIED
+## A2. `archive()` does not require an admin — VERIFIED
 
 `SuchakAccountLifecycleService::archive(SuchakAccount $account, User $admin, string $reason, …)`
-(`:110`). The parameter is named `$admin` but is typed plain `User` and is used only for audit
-attribution (`transition()` → `writeAdminAuditLog`, `actor_user_id`). No `isAdmin()` assertion
-exists anywhere in the service.
+(`:110`). `$admin` is typed plain `User` and used only for audit attribution; no `isAdmin()`
+assertion exists in the service. The Suchak's own `User` can be the actor.
 
-The Suchak's own `User` can therefore be passed as the actor. The only real guard is the
-precondition: `verification_status` must be `verified` or `suspended` (`:114`).
+Precondition: `verification_status` ∈ {`verified`, `suspended`} (`:114`).
 
-## A8. The candidate-chooses-a-Suchak flow already exists — VERIFIED
+## A3. The existing sweep already covers Suchaks — VERIFIED
 
-`MemberSuchakRequestApiController` → `SuchakRequestPipelineService::createRequest()`
-(`app/Modules/Suchak/Services/SuchakRequestPipelineService.php:50`), routed at
-`routes/api/member.php` as *"CREATE SUCHAK REQUEST"* and *"CANDIDATE ANSWERS"*.
+`MemberAccountDeletionService::dueForPurge()` (`:168`) selects **every** `User` with
+`deletion_requested_at` set. A Suchak account is owned by a `User`, so setting that one column
+puts the Suchak into the sweep that already runs daily at `03:40`.
 
-Phase 5's transfer path is an existing flow, not a new one.
+**Consequence:** zero scheduler work.
 
-## A9. Non-WhatsApp consent channels already exist — VERIFIED
+## A4. Tombstone mode does not trip the Suchak foreign key — VERIFIED
 
-`SuchakConsent::CHANNELS` (`app/Models/SuchakConsent.php:72-85`):
+`suchak_accounts.user_id → users` is `restrictOnDelete`
+(`2026_06_09_120000_create_suchak_account_foundation_tables.php:42`), which would normally block
+a purge. It does not, because `purgeDue()` calls
+`purgeUserAccount(..., keepCounterpartConversations: true)`, and that path ends in
+`reduceUserToTombstone()` — an UPDATE, never a delete. The row survives wiped, so the FK is never
+violated.
 
-```
-whatsapp_deep_link · sms_otp · voice_otp
-offline_proof · admin_assisted
-suchak_relayed_link · offline_signed_proof
-```
-
-`admin_assisted` and `offline_signed_proof` are already valid, already validated by
-`SuchakConsentService::assertAllowedValue()`. A WhatsApp outage or a pending Meta approval does
-not require new architecture — it requires choosing a different existing channel.
-
-## A10. Money is not the platform's — VERIFIED
-
-`suchak_customer_agreements.suchak_account_id` with `restrictOnDelete`
-(`2026_06_10_103000_create_suchak_customer_agreement_tables.php:59`). The agreement binds the
-Suchak and the family; the platform is not a party. Published Terms clause 7 says the same.
-
-The FK means the database itself refuses to delete a Suchak account while agreements exist.
-That is a safety net, not a bug.
+**Consequence:** zero purger work.
 
 ---
 
-# B. PRODUCT OWNER DECISIONS
+# B. WHAT V1 IS NOT
 
-**Implementation is blocked until every decision below is explicitly approved.**
+Stated once, then gone from this document.
 
-## B1. Does the account archive immediately on request, or on confirmation? — PO DECISION
-
-- **Option 1 — archive immediately.** Contact stops the moment the Suchak confirms.
-  Matches the member deletion flow already shipped (profile hides at once, erase at day 31).
-- **Option 2 — stay active for 30 days.** The Suchak keeps working during notice.
-
-Evidence bearing on it: archiving is what makes representations non-routable (A1, A5). Under
-option 2, nothing protective happens for 30 days, and candidates are notified about a departure
-that has not yet taken effect.
-
-**Recommendation:** Option 1 — consistent with member deletion, and the protective effect is the
-point of the notice period.
-
-## B2. Are the four candidate options final? — PO DECISION
-
-Self Managed · Choose Another Suchak · Archive Profile · Delete Account.
-
-All four map onto existing services (see C3). No new mode is required for any of them.
-
-**Awaiting confirmation that this list is closed.**
-
-## B3. Is "no response" the final default? — PO DECISION
-
-Proposed default: profile stays visible · contact stays blocked · no representation exists.
-
-Per A5 this is what the runtime already does with zero code. The alternative — treating silence
-as consent to become self-managed — is weak under DPDP.
-
-**Awaiting confirmation.**
-
-## B4. On cancellation during notice, do revoked representations stay revoked? — PO DECISION
-
-- **Option 1 — stay revoked.** Candidates were already told their Suchak was leaving and some
-  have already decided. Silently restoring would reverse a decision they made.
-- **Option 2 — automatic restoration.** Reverses candidate decisions without asking them.
-
-**Recommendation:** Option 1. The Suchak's account returns; their customers do not return
-automatically. Re-consent is required, through the existing consent flow.
-
-## B5. Do pending agreements block deletion, or route to admin review? — PO DECISION
-
-- **Option 1 — block.** `restrictOnDelete` already enforces this at the database level.
-- **Option 2 — admin review queue.** Purge is attempted, failure is caught, the case is surfaced.
-
-Note these are not exclusive: the FK blocks regardless, so option 2 is really *"how the block is
-surfaced"*.
-
-**Recommendation:** treat the FK as the block and add an admin queue for visibility, so a stuck
-deletion is never silent.
-
-## B6. Confirm the platform never participates in pricing — PO DECISION
-
-Proposed: the platform never negotiates, never arbitrates, never transfers money. A receiving
-Suchak must state their own terms directly to the candidate **before** any representation is
-granted. The frozen figures in `suchak_customer_agreements` may be displayed as information only.
-
-**Awaiting explicit confirmation**, because this is a commercial policy, not a technical one.
-
-## B7. OTP fallback while Meta approval is pending — PO DECISION
-
-Candidate activation currently needs an OTP, and production OTP delivery is WhatsApp-only
-(`config/otp.php`: production always uses `whatsapp`). Meta approval is outstanding and the
-contact number goes live in ~3 days.
-
-Existing channels that need no new architecture (A9):
-
-| Fallback | Cost | Note |
+| Item | Class | Why not in V1 |
 |---|---|---|
-| `admin_assisted` | manual effort | Already a valid channel; admin verifies identity and records consent |
-| `offline_signed_proof` | manual effort | Already valid; for families who cannot use a phone flow |
-| `sms_otp` | needs a gateway | **No SMS provider is configured today** (verified) |
-
-**Recommendation:** `admin_assisted` as the interim channel, switching to
-`whatsapp_deep_link` once Meta approves. Volume will be low at launch, so manual handling is
-tolerable and no code changes when the switch happens.
-
-**Awaiting confirmation** that manual admin handling is acceptable at launch volume.
+| Proactive candidate notification | FUTURE VERSION | Needs OTP delivery, which needs Meta approval. Contact is already blocked without it, so nothing is exposed while it waits. |
+| Consent landing page | FUTURE VERSION | Nothing links to it until notification exists. |
+| Transfer to another Suchak | NOT REQUIRED FOR V1 | Already shipped: `MemberSuchakRequestApiController` → `SuchakRequestPipelineService::createRequest()`. A candidate can already pick a new Suchak unaided. |
+| Admin deletion queue | NOT REQUIRED FOR V1 | `restrictOnDelete` on `suchak_customer_agreements` blocks the purge and `purgeDue()` already logs the failure. Read the log. |
+| Impact summary screen | NOT REQUIRED FOR V1 | Nice to have. Not a Play requirement, not a business rule. |
+| Representation history screen | FUTURE VERSION | Data is already in `suchak_activity_logs`. A view can be added any time. |
+| New `action_type` | NOT REQUIRED FOR V1 | `archive()` already writes `suchak_account_archived`; representation changes reuse `representation_status_changed`. |
+| Pending-meeting special handling | FUTURE VERSION | Real, but no Suchak has a pending meeting at launch. Revisit before the first one does. |
 
 ---
 
-# C. IMPLEMENTATION PLAN
+# C. PRODUCT OWNER DECISIONS
 
-**Do not start until every item in section B is approved.**
+Only the ones that change V1 code. The rest were removed with the features that needed them.
 
-## C1. Phase 1 — Suchak initiates deletion — IMPLEMENTATION
+## C1. Does V1 ship without telling candidates? — PO DECISION
 
-- Precondition: `verification_status` ∈ {`verified`, `suspended`} (A7).
-- Idempotent: a second request must not restart the clock — same rule as
-  `MemberAccountDeletionService::requestDeletion()`.
-- Notice period read from `MemberAccountDeletionService::GRACE_DAYS`. **No second constant.**
-- Impact summary shown before confirming, all derived: routable candidates,
-  agreements by `terms_status`, pending meetings.
-- No read-only flag. `archive()` produces read-only as a side effect (A1).
+V1 revokes representations and blocks contact, but sends no message. The candidate can already
+see who manages their profile (`MemberSuchakRequestApiController::showForProfile`) and can
+already request a different Suchak, so they are not stranded — they are simply not told
+proactively.
 
-## C2. Phase 2 — Orchestrator — IMPLEMENTATION
+**Recommendation:** yes. The protective action happens immediately; only the courtesy is
+deferred, and it is deferred because Meta approval is not in our hands.
 
-One new service, `SuchakAccountDeletionService`. It **calls; it does not decide**.
+## C2. Does the Suchak's account archive immediately on request? — PO DECISION
 
-1. Validate (C1).
-2. `SuchakAccountLifecycleService::archive($account, $suchakUser, $reason)` — actor is the
-   Suchak's own `User` (A7). **Contact routing stops here** (A5).
-3. Collect `publiclyRoutable()` candidates → set `revoked_at` + `representation_status = revoked`.
-4. Notify candidates (C3), **paid customers first** (`terms_status`), free candidates after.
-5. Set `User.deletion_requested_at` — existing column.
-6. Log via `SuchakActivityLogger`.
+V1 assumes yes, matching the member flow shipped on 2026-08-05.
 
-## C3. Phases 3-5 — Notification, decision, transfer — IMPLEMENTATION
+**Recommendation:** yes. Archiving is the mechanism that blocks contact (A1); deferring it means
+30 days of no protection.
 
-**Notification:** `SuchakConsentService` secure link + OTP + `consent_text_snapshot`
-+ `consent_text_version`, unchanged. New copy and a landing page only. Channel per B7.
+## C3. Confirm the platform never participates in pricing — PO DECISION
 
-**Decision mapping — every one an existing service:**
+No V1 code depends on this, but it is the standing policy the deferred transfer flow will be
+built against.
 
-| Decision | Service |
+**No implementation blocked by this.**
+
+---
+
+# D. IMPLEMENTATION PLAN — V1
+
+Three commits. Each compiles, passes tests, and is independently deployable.
+
+## D1 — Suchak deletion orchestrator + endpoint — REQUIRED FOR V1 — **25 min**
+
+One service, `SuchakAccountDeletionService`, with one method. It calls; it decides nothing:
+
+1. Assert `verification_status` ∈ {`verified`, `suspended`} (A2).
+2. Return early if `deletion_requested_at` is already set — idempotent, no clock restart.
+3. `SuchakAccountLifecycleService::archive($account, $suchakUser, $reason)` — **contact stops here** (A1).
+4. Set `revoked_at` + `representation_status = revoked` on that account's representations.
+5. Set `User.deletion_requested_at = now()` — the existing sweep takes it from there (A3, A4).
+
+One `POST /api/v1/suchak/account/deletion` endpoint calling it, guarded by the existing
+`suchak.account` middleware.
+
+One feature test: archive happened, representations revoked, `isRouted()` false, `deletion_requested_at` set.
+
+*Deliberately not calling `MemberAccountDeletionService::requestDeletion()` — that archives the
+actor's own matrimony profile, which is a different thing from closing a Suchak business account.*
+
+## D2 — Suchak app: Settings → Delete account — REQUIRED FOR V1 — **20 min**
+
+Play requires an in-app path. Copy the member-app screen shipped on 2026-08-05 and cut it down:
+no pause option (a Suchak business account has no pause), reason optional, typed `delete`
+confirmation kept, 30-day copy kept.
+
+Entry point: a plain row in `lib/features/profile/profile_screen.dart`, styled like the existing
+rows.
+
+*Reuses the member screen's structure and strings pattern; no new design.*
+
+## D3 — Correct the public page — REQUIRED FOR V1 — **5 min**
+
+`/delete-account` section 9 currently tells Suchaks to email support. Once D2 ships that is
+false. Replace with the in-app steps, both locales, in `lang/{en,mr}/legal.php`.
+
+Same class of bug as the privacy-policy sentence corrected on 2026-08-05: a page describing a
+product we no longer have.
+
+---
+
+# E. TOTAL
+
+| Task | Time |
 |---|---|
-| Self Managed | none; representation already revoked, `isRouted()` false, candidate's own gates apply. Log only. |
-| Choose another Suchak | `SuchakRequestPipelineService::createRequest()` (A8) |
-| Archive profile | `ProfileLifecycleService::transitionTo($profile, 'archived', $user)` |
-| Delete account | `MemberAccountDeletionService::requestDeletion()` |
+| D1 orchestrator + endpoint + test | 25 min |
+| D2 Suchak app screen | 20 min |
+| D3 public page copy | 5 min |
+| **Total** | **50 min** |
 
-**Transfer, privacy-safe order:**
-
-```
-candidate picks from a list   (candidate chooses; the platform never assigns)
-   → receiving Suchak sees SuchakCandidateMaskingService::maskedSummary() only
-   → Suchak expresses interest
-   → receiving Suchak discloses their own terms (B6)
-   → SuchakConsentService → OTP → candidate's explicit consent
-   → representation active + consent_accepted → full identity
-```
-
-`scopeWithCandidateGivenConsent()` already prevents a Suchak-declared consent from counting (A1).
-
-## C4. Phase 6 — Contact behaviour — IMPLEMENTATION
-
-**Nothing to build.** Profile stays visible; `isRouted()` false; reveal falls through to
-`profile_visibility_settings`; default `SHOW_CONTACT_NO_ONE`; premium, accepted-interest, quota
-and plan gates unchanged (A5).
-
-## C5. Phase 7 — Final deletion — IMPLEMENTATION
-
-Extend the existing `account:purge-due-deletions` command and its daily `03:40` schedule.
-**No second scheduler.**
-
-Per due Suchak: confirm representations are revoked →
-`UserAccountDatabasePurger::purgeUserAccount($suchakUser, keepCounterpartConversations: true)`
-→ log. A purge blocked by `restrictOnDelete` (B5) is caught and surfaced, never silent.
-
-## C6. Phase 8 — Activity log — IMPLEMENTATION
-
-**Exactly one new `action_type`:** `representation_candidate_decision`, with the chosen option in
-`metadata_json`. Everything else reuses existing action types (A4). No new logging system.
-
-## C7. Phase 9 — UI — IMPLEMENTATION
-
-| Surface | Screen | Reuse | New |
-|---|---|---|---|
-| Laravel | Consent landing page | `SuchakConsentService` link machinery | four-option page |
-| Laravel | `/delete-account` | existing legal page | Suchak section |
-| Suchak app | Settings → Delete account | member-app flow shipped 2026-08-05 | impact summary |
-| Member app | Who manages my profile | `showForProfile` (exists) | decision buttons |
-| Member app | Choose a Suchak | `MemberSuchakRequestApiController` | list screen |
-| Admin | Deletion queue | existing admin layout | queue view |
-
-## C8. Phase 10 — Edge cases — IMPLEMENTATION
-
-| Case | Handling |
-|---|---|
-| Pending meetings | Never batch. Route to admin queue — a marriage in progress must not be archived. |
-| Pending contact requests | Existing `ContactRequestService` expiry. No new rule. |
-| Active Suchak subscription | The Suchak's own; `restrictOnDelete` blocks; admin resolves. |
-| Showcase profiles | Never held by a Suchak. Untouched. |
-| Already archived account | `archive()` precondition fails; go straight to the 30-day clock. |
-| Repeated delete request | Idempotent; the clock does not restart. |
-| Cancellation in notice | `cancelDeletion()` + `reactivate()`, subject to B4. |
-
-## C9. Phase 11 — End-to-end sequence — IMPLEMENTATION
+## Footprint
 
 ```
-Suchak → Delete account
-   ↓ validate + impact summary
-archive()  ─────────────►  publiclyRoutable = false
-   ↓                        contact blocked at this instant
-representations → revoked
-   ↓
-deletion_requested_at = now()        [30-day clock]
-   ↓
-notify candidates    (paid first → free after)
-   SuchakConsentService: secure link + OTP
-   ↓
-candidate decision
-   ├─ self managed        → log only
-   ├─ another Suchak      → masked → interest → terms → consent → full
-   ├─ archive profile     → ProfileLifecycleService
-   └─ delete account      → MemberAccountDeletionService
-   ↓
-no response → profile visible, contact blocked   (automatic)
-   ↓
-day 31: account:purge-due-deletions
-   ↓
-UserAccountDatabasePurger (tombstone mode)
-   ↓
-SuchakActivityLogger
+new tables            0
+new columns           0
+new lifecycle states  0
+new action_types      0
+new schedulers        0
+new purger logic      0
+new services          1   (orchestration only)
+new screens           1   (Suchak app)
+new pages             0
 ```
 
-## C10. Total footprint — IMPLEMENTATION
+## Why it is this small
 
-| | |
-|---|---|
-| New tables | 0 |
-| New columns | 0 |
-| New lifecycle states | 0 |
-| New services | 1 (`SuchakAccountDeletionService`, orchestration only) |
-| New `action_type` | 1 |
-| New pages/screens | landing page + 5 UI surfaces |
-| Extended | `account:purge-due-deletions` |
+Three audit findings removed most of the work: `archive()` blocks contact on its own (A1), the
+daily sweep already selects any user with `deletion_requested_at` (A3), and tombstone mode
+sidesteps the `restrictOnDelete` foreign key (A4). V1 is the orchestration between three services
+that already exist, plus one screen.
 
-**External blocker:** C3 depends on the consent channel chosen in B7. Every other phase is
-independent of Meta.
+## Known gap accepted at V1
+
+Candidates are not proactively told their Suchak has left. Their contact is blocked the moment it
+happens, so nothing is exposed, and they can already choose a new Suchak in-app. Notification
+ships when Meta approval lands.
