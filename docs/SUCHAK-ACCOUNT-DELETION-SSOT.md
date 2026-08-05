@@ -1,5 +1,27 @@
 # Suchak Account Deletion — SSOT (V1 only)
 
+## Status
+
+**COMPLETE** — closed 2026-08-05.
+
+Shipped as `c5ae88fb` (orchestrator, endpoint, tests), `cfd68a09` (public page) and
+`0649550` (Suchak app UI, on `feature/suchak-delete-account` off `main`). Verified on a real
+device against production: the account archived, its representations revoked, the candidate's
+contact stopped being routed, and no new routed representation was possible afterwards.
+
+Four things were discussed during this work and are **not part of it**. They are separate
+features and must be scoped on their own rather than reopened here:
+
+- Candidate notification
+- Meta WhatsApp approval
+- Admin deletion queue
+- D4 — candidate in-app notice
+
+Nothing below is a backlog. The limitations section records what this feature does not do, so a
+future reader is not misled — not to schedule work.
+
+---
+
 **Scope:** the smallest change that makes the Suchak app compliant with Google Play's
 account-deletion policy without breaking any existing business rule.
 
