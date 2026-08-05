@@ -57,6 +57,21 @@
 
         <main class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
 
+            @php
+                // Unfilled [[TOKEN]] warning. Shown ONLY to an admin or in a non-production
+                // environment — a public reviewer at Meta, PayU or Google must never see it.
+                $unfilledLegalPlaceholders = (auth()->user()?->is_admin || ! app()->environment('production'))
+                    ? \App\Support\LegalDocument::unfilledPlaceholders()
+                    : [];
+            @endphp
+            @if (! empty($unfilledLegalPlaceholders))
+                <div class="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-xs leading-6 text-amber-900">
+                    <strong>Admin notice — not shown to the public.</strong>
+                    These placeholders are still unfilled in <code>config/legal.php</code> and are rendering
+                    literally on this page: <code>{{ implode('  ', $unfilledLegalPlaceholders) }}</code>
+                </div>
+            @endif
+
             <nav class="mb-6 text-xs text-zinc-500">
                 <a href="{{ url('/') }}" class="hover:underline">{{ __('legal.common.home') }}</a>
                 <span class="mx-1">/</span>

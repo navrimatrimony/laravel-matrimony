@@ -95,26 +95,35 @@ class LegalDocument
     {
         $site = app(SiteIdentityService::class);
 
-        $prefer = static function (?string $adminValue, string $fallback): string {
+        // config/legal.php is authoritative. The DB-backed Site Identity setting is
+        // consulted ONLY to fill a placeholder the product owner has not filled in
+        // yet, so the two stores can never contradict each other on a published page.
+        $resolve = static function (string $configValue, ?string $adminValue): string {
+            if (! self::isUnfilled($configValue)) {
+                return $configValue;
+            }
+
             $adminValue = trim((string) $adminValue);
 
-            return $adminValue !== '' ? $adminValue : $fallback;
+            return $adminValue !== '' ? $adminValue : $configValue;
         };
 
-        $supportEmail = $prefer(
-            $site->get('support_email'),
-            (string) config('legal.contact.support_email')
+        $supportEmail = $resolve(
+            (string) config('legal.contact.support_email'),
+            $site->get('support_email')
         );
 
-        $contactMobile = $prefer(
-            $site->get('primary_phone'),
-            (string) config('legal.contact.mobile')
+        $contactMobile = $resolve(
+            (string) config('legal.contact.mobile'),
+            $site->get('primary_phone')
         );
 
-        $registeredAddress = $prefer(
-            $site->get('address'),
-            (string) config('legal.entity.registered_address')
-        );
+        // Deliberately NOT resolved from SiteIdentityService::get('address'). That
+        // setting is a free-form display address for the marketing footer; this one
+        // is the LLP's statutory registered office. They are different facts, and
+        // letting a display string stand in for a registered office would publish a
+        // fabricated statutory address on five legal pages.
+        $registeredAddress = (string) config('legal.entity.registered_address');
 
         // The officer sits at the registered address unless config names a different one.
         $configuredOfficerAddress = (string) config('legal.grievance.officer_address');
@@ -178,6 +187,14 @@ class LegalDocument
             ':disclaimer_url' => (string) (self::url('disclaimer') ?? ''),
             ':grievance_url' => (string) (self::url('grievance') ?? ''),
         ];
+    }
+
+    /**
+     * True when a configured value is still an unfilled [[TOKEN]] placeholder.
+     */
+    public static function isUnfilled(string $value): bool
+    {
+        return (bool) preg_match('/\[\[[A-Z0-9_]+\]\]/', $value);
     }
 
     /**
