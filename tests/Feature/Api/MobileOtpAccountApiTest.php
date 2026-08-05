@@ -292,4 +292,25 @@ class MobileOtpAccountApiTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonStructure(['token']);
     }
+
+    public function test_u4_route_throttle_allows_tenth_send_and_rejects_eleventh_in_a_minute(): void
+    {
+        RateLimiter::clear('mobile-otp-send:ip:'.sha1('127.0.0.1'));
+
+        for ($i = 0; $i < 10; $i++) {
+            $mobile = sprintf('987650%04d', $i);
+            RateLimiter::clear('mobile-otp-send:mobile:'.sha1($mobile));
+
+            $this
+                ->postJson('/api/v1/auth/mobile-otp/send', $this->validSendPayload(['mobile' => $mobile]))
+                ->assertOk();
+        }
+
+        $eleventh = '9876500010';
+        RateLimiter::clear('mobile-otp-send:mobile:'.sha1($eleventh));
+
+        $this
+            ->postJson('/api/v1/auth/mobile-otp/send', $this->validSendPayload(['mobile' => $eleventh]))
+            ->assertStatus(429);
+    }
 }

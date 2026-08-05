@@ -83,7 +83,8 @@ Route::prefix('v1')->group(function () {
     // One route for "sign in with Google" and "sign up with Google" — the app
     // cannot tell which it is, so the server decides from the verified address.
     Route::post('/auth/google', [AuthController::class, 'google']);
-    Route::post('/auth/mobile-otp/send', [MobileOtpController::class, 'send']);
+    Route::post('/auth/mobile-otp/send', [MobileOtpController::class, 'send'])
+        ->middleware('throttle:10,1');
     Route::post('/auth/mobile-otp/verify', [MobileOtpController::class, 'verify']);
     Route::post('/auth/password/forgot', [PasswordResetApiController::class, 'forgot']);
     Route::post('/auth/password/reset', [PasswordResetApiController::class, 'reset']);
