@@ -7,7 +7,7 @@ use App\Models\FieldRegistry;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Services\Core\ConflictPolicy;
-use App\Services\LocationService;
+use App\Services\Location\LocationService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use App\Services\Profile\ProfileTypedSelfAddressService;
 

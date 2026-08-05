@@ -6,7 +6,7 @@ use App\Models\AdminSetting;
 use App\Models\Interest;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
-use App\Services\LocationService;
+use App\Services\Location\LocationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Schema;
 
