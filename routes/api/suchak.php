@@ -92,6 +92,11 @@ Route::middleware(['auth:sanctum', 'suchak.account'])->prefix('suchak')->group(f
         Route::post('/register/otp/resend', [SuchakRegisterApiController::class, 'resendOtp']);
         Route::post('/register/otp/verify', [SuchakRegisterApiController::class, 'verifyOtp']);
     });
+    // Google Play requires an in-app deletion path for any app that can create
+    // an account in-app. Archives the account immediately, which is what stops
+    // contact routing; the erase runs on day 31 through the existing sweep.
+    Route::post('/account/deletion', [\App\Http\Controllers\Api\Suchak\SuchakAccountDeletionApiController::class, 'store']);
+
     Route::post('/register/identity', [SuchakRegisterApiController::class, 'updateIdentity']);
     Route::post('/register/location', [SuchakRegisterApiController::class, 'updateLocation']);
     Route::post('/register/password', [SuchakRegisterApiController::class, 'setPassword']);
