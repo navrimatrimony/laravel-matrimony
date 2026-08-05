@@ -317,6 +317,18 @@ final class PushTypeRegistry
             'apps' => [DeviceToken::APP_SUCHAK],
             'default_push' => true,
         ],
+        /*
+        | Admin alert when a dispute party requests deletion (U3). NOTIFY_ONLY —
+        | dispute lifecycle is untouched. Member-app devices for admin users.
+        */
+        'dispute_party_deletion_requested' => [
+            'notification' => \App\Notifications\DisputePartyDeletionRequestedNotification::class,
+            'group' => 'account',
+            'target' => 'notifications',
+            'data_keys' => ['customer_full_name', 'event_date', 'open_dispute_count'],
+            'apps' => [DeviceToken::APP_MEMBER],
+            'default_push' => true,
+        ],
     ];
 
     /**

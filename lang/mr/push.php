@@ -201,6 +201,12 @@ return [
             'title' => 'ग्राहक राहिला',
             'body' => ':customer_full_name यांनी :event_date रोजी खाते हटवण्याची विनंती रद्द केली.',
         ],
+        'dispute_party_deletion_requested' => [
+            'label' => 'Dispute पक्ष जात आहे',
+            'description' => 'खुल्या dispute मधील सदस्याने खाते हटवण्याची विनंती केली.',
+            'title' => 'Dispute पक्ष जात आहे',
+            'body' => ':customer_full_name यांनी :event_date रोजी हटवण्याची विनंती केली (:open_dispute_count खुले dispute).',
+        ],
 
     ],
 

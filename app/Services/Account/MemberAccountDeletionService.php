@@ -3,8 +3,10 @@
 namespace App\Services\Account;
 
 use App\Models\MatrimonyProfile;
+use App\Models\SuchakDispute;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
+use App\Notifications\DisputePartyDeletionRequestedNotification;
 use App\Notifications\SuchakCustomerDeletionCancelledNotification;
 use App\Notifications\SuchakCustomerDeletionRequestedNotification;
 use App\Services\Maintenance\UserAccountDatabasePurger;
@@ -114,6 +116,8 @@ final class MemberAccountDeletionService
                 $requestedAt->toDateString(),
             ),
         );
+
+        $this->notifyAdminsIfOpenDisputeParty($user, $requestedAt->toDateString());
     }
 
     /**
@@ -351,5 +355,45 @@ final class MemberAccountDeletionService
         $name = trim((string) ($user->matrimonyProfile?->full_name ?? ''));
 
         return $name !== '' ? $name : 'Customer';
+    }
+
+    /**
+     * U3 NOTIFY_ONLY: if this member's profile is on an open/under_review dispute,
+     * tell each admin once. Dispute rows are never mutated.
+     */
+    private function notifyAdminsIfOpenDisputeParty(User $member, string $eventDate): void
+    {
+        $profile = $member->matrimonyProfile;
+        if (! $profile instanceof MatrimonyProfile) {
+            return;
+        }
+
+        $openCount = SuchakDispute::query()
+            ->where('matrimony_profile_id', (int) $profile->id)
+            ->whereIn('status', [
+                SuchakDispute::STATUS_OPEN,
+                SuchakDispute::STATUS_UNDER_REVIEW,
+            ])
+            ->count();
+
+        if ($openCount < 1) {
+            return;
+        }
+
+        $admins = User::query()
+            ->where('is_admin', true)
+            ->get();
+
+        if ($admins->isEmpty()) {
+            return;
+        }
+
+        $name = $this->customerDisplayName($member);
+        foreach ($admins as $admin) {
+            SafeNotifier::notify(
+                $admin,
+                new DisputePartyDeletionRequestedNotification($name, $eventDate, $openCount),
+            );
+        }
     }
 }

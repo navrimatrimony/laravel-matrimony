@@ -22,4 +22,7 @@ return [
     // Suchak push/database copy for U2 — placeholders :name and :date (Latin digits).
     'suchak_customer_deletion_requested' => ':name requested account deletion on :date.',
     'suchak_customer_deletion_cancelled' => ':name cancelled account deletion on :date.',
+
+    // Admin alert for U3 — :name, :date, :count (Latin digits).
+    'dispute_party_deletion_requested' => ':name requested account deletion on :date and is a party to :count open dispute(s).',
 ];

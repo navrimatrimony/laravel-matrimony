@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Models\City;
 use App\Models\MatrimonyProfile;
 use App\Models\SuchakAccount;
+use App\Models\SuchakDispute;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\User;
+use App\Notifications\DisputePartyDeletionRequestedNotification;
 use App\Notifications\SuchakCustomerDeletionCancelledNotification;
 use App\Notifications\SuchakCustomerDeletionRequestedNotification;
 use App\Services\Account\MemberAccountDeletionService;
@@ -412,5 +414,105 @@ class MemberAccountDeletionFlowTest extends TestCase
                 return true;
             }
         );
+    }
+
+    public function test_u3_open_dispute_notifies_each_admin_once_and_leaves_dispute_unchanged(): void
+    {
+        Notification::fake();
+
+        $adminA = User::factory()->create(['is_admin' => true, 'mobile' => '9333300001']);
+        $adminB = User::factory()->create(['is_admin' => true, 'mobile' => '9333300002']);
+        $user = $this->member();
+
+        $dispute = SuchakDispute::factory()->create([
+            'matrimony_profile_id' => $user->matrimonyProfile->id,
+            'status' => SuchakDispute::STATUS_OPEN,
+            'summary' => 'Open dispute must stay open.',
+        ]);
+        $before = $dispute->fresh()->toArray();
+
+        Sanctum::actingAs($user);
+        $this->postJson('/api/v1/account/deletion', [
+            'confirmation' => 'delete',
+            'reason_key' => 'privacy_concern',
+        ])->assertOk();
+
+        Notification::assertSentToTimes($adminA, DisputePartyDeletionRequestedNotification::class, 1);
+        Notification::assertSentToTimes($adminB, DisputePartyDeletionRequestedNotification::class, 1);
+
+        $after = $dispute->fresh()->toArray();
+        $this->assertSame($before['status'], $after['status']);
+        $this->assertSame($before['summary'], $after['summary']);
+        $this->assertSame($before['priority'], $after['priority']);
+        $this->assertSame($before['assigned_admin_user_id'], $after['assigned_admin_user_id']);
+        $this->assertSame($before['resolved_at'], $after['resolved_at']);
+    }
+
+    public function test_u3_under_review_dispute_also_notifies_admins(): void
+    {
+        Notification::fake();
+
+        $admin = User::factory()->create(['is_admin' => true, 'mobile' => '9333300003']);
+        $user = $this->member();
+
+        SuchakDispute::factory()->create([
+            'matrimony_profile_id' => $user->matrimonyProfile->id,
+            'status' => SuchakDispute::STATUS_UNDER_REVIEW,
+        ]);
+
+        Sanctum::actingAs($user);
+        $this->postJson('/api/v1/account/deletion', [
+            'confirmation' => 'delete',
+            'reason_key' => 'other',
+        ])->assertOk();
+
+        Notification::assertSentToTimes($admin, DisputePartyDeletionRequestedNotification::class, 1);
+    }
+
+    public function test_u3_resolved_or_closed_dispute_notifies_no_admins(): void
+    {
+        Notification::fake();
+
+        $admin = User::factory()->create(['is_admin' => true, 'mobile' => '9333300004']);
+        $user = $this->member();
+
+        SuchakDispute::factory()->create([
+            'matrimony_profile_id' => $user->matrimonyProfile->id,
+            'status' => SuchakDispute::STATUS_RESOLVED,
+            'resolved_at' => now(),
+        ]);
+        SuchakDispute::factory()->create([
+            'matrimony_profile_id' => $user->matrimonyProfile->id,
+            'status' => SuchakDispute::STATUS_CLOSED,
+            'resolved_at' => now(),
+        ]);
+
+        Sanctum::actingAs($user);
+        $this->postJson('/api/v1/account/deletion', [
+            'confirmation' => 'delete',
+            'reason_key' => 'other',
+        ])->assertOk();
+
+        Notification::assertNotSentTo($admin, DisputePartyDeletionRequestedNotification::class);
+    }
+
+    public function test_u3_second_deletion_request_does_not_notify_admins_again(): void
+    {
+        Notification::fake();
+
+        $admin = User::factory()->create(['is_admin' => true, 'mobile' => '9333300005']);
+        $user = $this->member();
+
+        SuchakDispute::factory()->create([
+            'matrimony_profile_id' => $user->matrimonyProfile->id,
+            'status' => SuchakDispute::STATUS_OPEN,
+        ]);
+
+        Sanctum::actingAs($user);
+        $payload = ['confirmation' => 'delete', 'reason_key' => 'hard_to_use'];
+        $this->postJson('/api/v1/account/deletion', $payload)->assertOk();
+        $this->postJson('/api/v1/account/deletion', $payload)->assertOk();
+
+        Notification::assertSentToTimes($admin, DisputePartyDeletionRequestedNotification::class, 1);
     }
 }

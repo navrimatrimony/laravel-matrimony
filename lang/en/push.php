@@ -211,6 +211,12 @@ return [
             'title' => 'Customer stayed',
             'body' => ':customer_full_name cancelled account deletion on :event_date.',
         ],
+        'dispute_party_deletion_requested' => [
+            'label' => 'Dispute party leaving',
+            'description' => 'When a member in an open dispute requests account deletion.',
+            'title' => 'Dispute party leaving',
+            'body' => ':customer_full_name requested deletion on :event_date (:open_dispute_count open dispute(s)).',
+        ],
 
     ],
 
