@@ -436,6 +436,7 @@ class SuchakMeetingEngineTest extends TestCase
 
         $cancelled = $service->cancelVisit($first, $fixture['suchakUser'], [
             'cancellation_reason' => 'Neither family reached the meeting point; calling it off.',
+            'attendance' => SuchakVisitConfirmation::ATTENDANCE_NONE,
         ]);
 
         $this->assertSame(SuchakVisitConfirmation::STATUS_CANCELLED, $cancelled->visit_status);
@@ -447,7 +448,19 @@ class SuchakMeetingEngineTest extends TestCase
         $this->assertNotNull($event);
         $this->assertSame(SuchakVisitConfirmation::STATUS_SCHEDULED, $event->from_status);
         $this->assertSame((int) $fixture['suchakUser']->id, (int) $event->actor_user_id);
+        $this->assertSame(
+            'Neither family reached the meeting point; calling it off.',
+            $event->metadata_json['cancellation_reason'] ?? null,
+        );
+        $this->assertSame(SuchakVisitConfirmation::ATTENDANCE_NONE, $event->metadata_json['attendance'] ?? null);
         $this->assertStringContainsString('never turned up', (string) $cancelled->events->firstWhere('event_type', 'scheduled')?->event_note);
+
+        try {
+            $event->forceFill(['event_note' => 'tampered'])->save();
+            $this->fail('Cancelled visit events must remain immutable.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('immutable', $exception->getMessage());
+        }
 
         $next = $service->scheduleVisit(
             $fixture['pipeline']->fresh(['selectedSuchakAccount', 'request', 'representation']),
@@ -474,6 +487,7 @@ class SuchakMeetingEngineTest extends TestCase
         try {
             $service->cancelVisit($visit, $fixture['customerUser'], [
                 'cancellation_reason' => 'The member tries to cancel the Suchak\'s meeting.',
+                'attendance' => SuchakVisitConfirmation::ATTENDANCE_NONE,
             ]);
             $this->fail('The member must not be able to cancel an arranged meeting.');
         } catch (InvalidArgumentException $exception) {
@@ -489,6 +503,7 @@ class SuchakMeetingEngineTest extends TestCase
         try {
             $service->cancelVisit($completed, $fixture['suchakUser'], [
                 'cancellation_reason' => 'Suchak tries to withdraw a completed meeting.',
+                'attendance' => SuchakVisitConfirmation::ATTENDANCE_BOTH,
             ]);
             $this->fail('A completed meeting must not be cancellable.');
         } catch (InvalidArgumentException $exception) {

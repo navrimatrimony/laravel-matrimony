@@ -8,6 +8,7 @@ use App\Models\SuchakCollaborationStageEvent;
 use App\Models\SuchakMarketplaceChallenge;
 use App\Models\SuchakMarriageOutcome;
 use App\Models\SuchakVisitConfirmation;
+use App\Models\SuchakVisitConfirmationEvent;
 use App\Support\PercentDisplay;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -183,6 +184,25 @@ class SuchakReputationService
             ->selectRaw('COUNT(*) as total')
             ->selectRaw($this->countIf("visit_status = ?", 'scheduled_open'), [SuchakVisitConfirmation::STATUS_SCHEDULED])
             ->selectRaw($this->countIf("visit_status = ?", 'cancelled'), [SuchakVisitConfirmation::STATUS_CANCELLED])
+            // U7 / RT-8: admin cancellations must not raise cancelled_rate. Numerator
+            // counts only cancel events the arranging Suchak authored; denominator
+            // stays every meeting arranged (see meetingsPayload).
+            ->selectRaw(
+                $this->countIf(
+                    'visit_status = ? AND EXISTS (
+                        SELECT 1 FROM suchak_visit_confirmation_events e
+                        WHERE e.visit_confirmation_id = suchak_visit_confirmations.id
+                          AND e.event_type = ?
+                          AND e.actor_type = ?
+                    )',
+                    'cancelled_by_suchak'
+                ),
+                [
+                    SuchakVisitConfirmation::STATUS_CANCELLED,
+                    SuchakVisitConfirmationEvent::EVENT_CANCELLED,
+                    SuchakVisitConfirmationEvent::ACTOR_SUCHAK,
+                ],
+            )
             ->selectRaw($this->countIf("visit_status = ?", 'payout_qualified'), [SuchakVisitConfirmation::STATUS_PAYOUT_QUALIFIED])
             ->selectRaw($this->countIf('suchak_completion_status = ?', 'claims_made'), [SuchakVisitConfirmation::COMPLETION_SUCHAK_MARKED])
             ->selectRaw($this->countIf('user_confirmation_status = ?', 'confirmed_by_customer'), [SuchakVisitConfirmation::CONFIRMATION_CONFIRMED])
@@ -195,7 +215,7 @@ class SuchakReputationService
 
         $totals = [];
         foreach ([
-            'total', 'scheduled_open', 'cancelled', 'payout_qualified', 'claims_made',
+            'total', 'scheduled_open', 'cancelled', 'cancelled_by_suchak', 'payout_qualified', 'claims_made',
             'confirmed_by_customer', 'refused_by_customer', 'disputed', 'repeat_meetings', 'online',
         ] as $key) {
             $totals[$key] = (int) ($row[$key] ?? 0);
@@ -236,8 +256,9 @@ class SuchakReputationService
             // 100% and is not published as one.
             'disputed_rate' => $this->rate($totals['disputed'], $totals['claims_made']),
             // "How often does a meeting he arranged never happen?" Denominator is every meeting
-            // arranged, because a cancellation can only ever be one of those.
-            'cancelled_rate' => $this->rate($totals['cancelled'], $totals['total']),
+            // arranged, because a cancellation can only ever be one of those. Numerator excludes
+            // admin-actor cancellations (U7 / RT-8) so safety/admin closures do not penalise him.
+            'cancelled_rate' => $this->rate($totals['cancelled_by_suchak'], $totals['total']),
         ];
     }
 

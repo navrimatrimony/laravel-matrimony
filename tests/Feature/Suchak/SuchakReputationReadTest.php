@@ -12,6 +12,7 @@ use App\Models\SuchakPipeline;
 use App\Models\SuchakProfileRepresentation;
 use App\Models\SuchakProfileRequest;
 use App\Models\SuchakVisitConfirmation;
+use App\Models\SuchakVisitConfirmationEvent;
 use App\Models\User;
 use App\Modules\Suchak\Services\SuchakClaimSilenceService;
 use App\Modules\Suchak\Services\SuchakCrossSuchakObligationService;
@@ -192,6 +193,36 @@ class SuchakReputationReadTest extends TestCase
         $this->assertSame(5, $meetings['claims_made']);
         $this->assertSame('100', $meetings['confirmed_rate']['percent']);
         $this->assertSame(5, $meetings['confirmed_rate']['denominator']);
+    }
+
+    public function test_u7_admin_cancellation_does_not_raise_cancelled_rate_but_suchak_cancellation_does(): void
+    {
+        $world = $this->world();
+
+        $suchakCancelled = $this->meeting($world, 1, [
+            'visit_status' => SuchakVisitConfirmation::STATUS_CANCELLED,
+        ]);
+        $this->cancelEvent($suchakCancelled, SuchakVisitConfirmationEvent::ACTOR_SUCHAK, $world['user']->id);
+
+        $adminCancelled = $this->meeting($world, 2, [
+            'visit_status' => SuchakVisitConfirmation::STATUS_CANCELLED,
+        ]);
+        $this->cancelEvent($adminCancelled, SuchakVisitConfirmationEvent::ACTOR_ADMIN, null);
+
+        // Three more arranged meetings so the rate crosses the publish threshold of five.
+        for ($sequence = 3; $sequence <= 5; $sequence++) {
+            $this->meeting($world, $sequence);
+        }
+
+        Sanctum::actingAs($world['user']);
+        $meetings = $this->getJson('/api/v1/suchak/reputation')->assertOk()
+            ->json('data.meetings_arranged');
+
+        $this->assertSame(5, $meetings['total']);
+        $this->assertSame(2, $meetings['cancelled']);
+        $this->assertSame(1, $meetings['cancelled_rate']['numerator']);
+        $this->assertSame(5, $meetings['cancelled_rate']['denominator']);
+        $this->assertSame('20', $meetings['cancelled_rate']['percent']);
     }
 
     // ── bound, never recomputed ──────────────────────────────────────────────────────────────
@@ -493,6 +524,30 @@ class SuchakReputationReadTest extends TestCase
         ], $overrides));
 
         return $visit;
+    }
+
+    private function cancelEvent(
+        SuchakVisitConfirmation $visit,
+        string $actorType,
+        ?int $actorUserId,
+    ): void {
+        SuchakVisitConfirmationEvent::query()->create([
+            'visit_confirmation_id' => $visit->id,
+            'pipeline_id' => $visit->pipeline_id,
+            'suchak_account_id' => $visit->suchak_account_id,
+            'event_type' => SuchakVisitConfirmationEvent::EVENT_CANCELLED,
+            'actor_type' => $actorType,
+            'actor_user_id' => $actorUserId,
+            'from_status' => SuchakVisitConfirmation::STATUS_SCHEDULED,
+            'to_status' => SuchakVisitConfirmation::STATUS_CANCELLED,
+            'event_note' => 'U7 cancel fixture',
+            'metadata_json' => [
+                'cancellation_reason' => 'U7 cancel fixture',
+                'attendance' => SuchakVisitConfirmation::ATTENDANCE_NONE,
+            ],
+            'occurred_at' => now(),
+            'created_at' => now(),
+        ]);
     }
 
     /**

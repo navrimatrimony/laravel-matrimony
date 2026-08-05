@@ -68,6 +68,22 @@ class SuchakVisitConfirmation extends Model
         self::MODE_ONLINE,
     ];
 
+    /**
+     * Attendance outcome recorded on cancel into event `metadata_json` (U7) —
+     * no dedicated column; the append-only trail is the home.
+     */
+    public const ATTENDANCE_NONE = 'none';
+
+    public const ATTENDANCE_PARTIAL = 'partial';
+
+    public const ATTENDANCE_BOTH = 'both';
+
+    public const ATTENDANCES = [
+        self::ATTENDANCE_NONE,
+        self::ATTENDANCE_PARTIAL,
+        self::ATTENDANCE_BOTH,
+    ];
+
     public const COMPLETION_PENDING = 'pending';
     public const COMPLETION_SUCHAK_MARKED = 'suchak_marked_completed';
 

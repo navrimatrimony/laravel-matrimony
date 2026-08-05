@@ -267,6 +267,7 @@ class SuchakVisitConfirmationService
             $this->assertCancellable($locked);
 
             $reason = $this->requiredPrivateSafeText($attributes['cancellation_reason'] ?? null, 'Suchak meeting cancellation reason is required.', 1000);
+            $attendance = $this->requiredCancellationAttendance($attributes['attendance'] ?? null);
             $fromStatus = $locked->visit_status;
             $adminAuditLog = $actorType === SuchakActivityLog::ACTOR_ADMIN
                 ? $this->writeAdminAuditLog(
@@ -297,6 +298,12 @@ class SuchakVisitConfirmationService
                 $fromStatus,
                 $fresh->visit_status,
                 $reason,
+                // U7: reason + attendance live on the append-only event metadata
+                // (no cancellation/attendance columns beside the visit row).
+                [
+                    'cancellation_reason' => $reason,
+                    'attendance' => $attendance,
+                ],
             );
             $this->recordActivity(
                 $fresh,
@@ -1142,6 +1149,18 @@ class SuchakVisitConfirmationService
             || $visit->suchak_completion_status === SuchakVisitConfirmation::COMPLETION_SUCHAK_MARKED) {
             throw new InvalidArgumentException('Only a meeting that has not been marked completed can be cancelled.');
         }
+    }
+
+    private function requiredCancellationAttendance(mixed $value): string
+    {
+        $attendance = is_string($value) ? trim($value) : '';
+        if (! in_array($attendance, SuchakVisitConfirmation::ATTENDANCES, true)) {
+            throw new InvalidArgumentException(
+                'Suchak meeting cancellation attendance must be one of: '.implode(', ', SuchakVisitConfirmation::ATTENDANCES).'.'
+            );
+        }
+
+        return $attendance;
     }
 
     private function assertCompletedBeforeConfirmation(SuchakVisitConfirmation $visit): void

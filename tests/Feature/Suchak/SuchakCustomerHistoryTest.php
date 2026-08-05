@@ -142,7 +142,10 @@ class SuchakCustomerHistoryTest extends TestCase
         $this->app->make(SuchakVisitConfirmationService::class)->cancelVisit(
             $visit,
             $world['ownerUser'],
-            ['cancellation_reason' => 'कुटुंबाने तारीख पुढे ढकलली.'],
+            [
+                'cancellation_reason' => 'कुटुंबाने तारीख पुढे ढकलली.',
+                'attendance' => SuchakVisitConfirmation::ATTENDANCE_NONE,
+            ],
         );
 
         Sanctum::actingAs($world['ownerUser']);
@@ -176,7 +179,10 @@ class SuchakCustomerHistoryTest extends TestCase
         $this->app->make(SuchakVisitConfirmationService::class)->cancelVisit(
             $visit,
             $candidateUser,
-            ['cancellation_reason' => 'आम्हाला जमणार नाही.'],
+            [
+                'cancellation_reason' => 'आम्हाला जमणार नाही.',
+                'attendance' => SuchakVisitConfirmation::ATTENDANCE_NONE,
+            ],
         );
     }
 

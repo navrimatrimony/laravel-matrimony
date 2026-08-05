@@ -106,6 +106,7 @@ class SuchakMeetingsMutationsApiController extends Controller
 
         $validated = $request->validate([
             'cancellation_reason' => ['required', 'string', 'max:1000'],
+            'attendance' => ['required', 'string', 'in:'.implode(',', \App\Models\SuchakVisitConfirmation::ATTENDANCES)],
         ]);
 
         try {
