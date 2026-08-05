@@ -81,6 +81,9 @@ class User extends Authenticatable implements MustVerifyEmail
         'mobile_verified_at' => 'datetime',
         'referral_rewards_frozen_at' => 'datetime',
         'referral_code_disabled_at' => 'datetime',
+        // Kept out of $fillable on purpose: a deletion request is only ever set
+        // by MemberAccountDeletionService, never by mass assignment.
+        'deletion_requested_at' => 'datetime',
         'referral_monthly_cap_override' => 'integer',
         'notification_preferences' => 'array',
         'last_seen_at' => 'datetime',
