@@ -217,6 +217,12 @@ return [
             'title' => 'Dispute party leaving',
             'body' => ':customer_full_name requested deletion on :event_date (:open_dispute_count open dispute(s)).',
         ],
+        'suchak_meeting_completion_marked' => [
+            'label' => 'Meeting awaiting confirmation',
+            'description' => 'When a Suchak marks a meeting complete and your confirmation is needed.',
+            'title' => 'Meeting awaits you',
+            'body' => 'A meeting scheduled for :scheduled_date was marked complete.',
+        ],
 
     ],
 

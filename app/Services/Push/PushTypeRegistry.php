@@ -329,6 +329,18 @@ final class PushTypeRegistry
             'apps' => [DeviceToken::APP_MEMBER],
             'default_push' => true,
         ],
+        /*
+        | Member alert when a Suchak marks a meeting complete (U8). Without this,
+        | U9–U11 meetings list/actions stay undiscoverable.
+        */
+        'suchak_meeting_completion_marked' => [
+            'notification' => \App\Notifications\SuchakMeetingCompletionMarkedNotification::class,
+            'group' => 'account',
+            'target' => 'notifications',
+            'data_keys' => ['visit_id', 'scheduled_date'],
+            'apps' => [DeviceToken::APP_MEMBER],
+            'default_push' => true,
+        ],
     ];
 
     /**

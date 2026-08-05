@@ -207,6 +207,12 @@ return [
             'title' => 'Dispute पक्ष जात आहे',
             'body' => ':customer_full_name यांनी :event_date रोजी हटवण्याची विनंती केली (:open_dispute_count खुले dispute).',
         ],
+        'suchak_meeting_completion_marked' => [
+            'label' => 'भेट पुष्टीकरणाची वाट पाहते',
+            'description' => 'सूचकाने भेट पूर्ण म्हणून नोंदवल्यावर तुमचे confirm/dispute आवश्यक असते.',
+            'title' => 'भेट तुमची वाट पाहते',
+            'body' => ':scheduled_date रोजी ठरलेली भेट पूर्ण झाली आहे.',
+        ],
 
     ],
 

@@ -18,8 +18,10 @@ use App\Models\SuchakPayoutHold;
 use App\Models\SuchakVisitConfirmation;
 use App\Models\SuchakVisitConfirmationEvent;
 use App\Models\User;
+use App\Notifications\SuchakMeetingCompletionMarkedNotification;
 use App\Services\AuditLogService;
 use App\Support\MoneyFormat;
+use App\Support\SafeNotifier;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -178,7 +180,7 @@ class SuchakVisitConfirmationService
         ?string $ipAddress = null,
         ?string $userAgent = null,
     ): SuchakVisitConfirmation {
-        return DB::transaction(function () use ($visit, $suchakUser, $attributes, $ipAddress, $userAgent): SuchakVisitConfirmation {
+        $fresh = DB::transaction(function () use ($visit, $suchakUser, $attributes, $ipAddress, $userAgent): SuchakVisitConfirmation {
             $locked = $this->lockedVisit($visit);
             $this->assertOwnerCanManageVisit($locked, $suchakUser);
             $this->assertNotDisputedOrPayoutQualified($locked);
@@ -220,6 +222,11 @@ class SuchakVisitConfirmationService
 
             return $fresh->fresh($this->relations());
         });
+
+        // U8: fire after the visit_completion_marked trail is durable (RT-11).
+        $this->notifyCustomerMeetingCompletionMarked($fresh);
+
+        return $fresh;
     }
 
     /**
@@ -1161,6 +1168,33 @@ class SuchakVisitConfirmationService
         }
 
         return $attendance;
+    }
+
+    /**
+     * U8: tell the customer-side user a meeting awaits confirmation (RT-4/5/11/14).
+     */
+    private function notifyCustomerMeetingCompletionMarked(SuchakVisitConfirmation $visit): void
+    {
+        $profileId = $this->customerSideMatrimonyProfileId($visit);
+        if ($profileId === null) {
+            return;
+        }
+
+        /** @var MatrimonyProfile|null $profile */
+        $profile = MatrimonyProfile::query()->find($profileId);
+        $customer = $profile?->user;
+        if (! $customer instanceof User) {
+            return;
+        }
+
+        $scheduledDate = $visit->scheduled_for instanceof \Illuminate\Support\Carbon
+            ? $visit->scheduled_for->toDateString()
+            : (string) ($visit->scheduled_for ?? now()->toDateString());
+
+        SafeNotifier::notify(
+            $customer,
+            new SuchakMeetingCompletionMarkedNotification((int) $visit->id, $scheduledDate),
+        );
     }
 
     private function assertCompletedBeforeConfirmation(SuchakVisitConfirmation $visit): void

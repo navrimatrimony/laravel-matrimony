@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'meeting_completion_marked' => 'A meeting scheduled for :date was marked complete. Please confirm or dispute it.',
     'nav' => [
         'centre' => 'Suchak Centre',
         'dashboard' => 'Suchak Dashboard',
