@@ -237,7 +237,8 @@ class PlanTerm extends Model
     }
 
     /**
-     * Replace all {@see PlanTerm} rows for a plan: delete existing rows, then insert request order (deterministic).
+     * Upsert admin-submitted {@see PlanTerm} rows by immutable {@code billing_key} (keeps term ids).
+     * Keys omitted from {@code $rows} are hidden ({@code is_visible=false}), never deleted.
      *
      * @param  list<array{billing_key: string, price: float|int|string, selling_price: float|int|string, quota_bonus_percent?: mixed, is_visible?: bool}>  $rows
      */
@@ -249,27 +250,16 @@ class PlanTerm extends Model
             return;
         }
 
-        $existingIds = static::query()->where('plan_id', $plan->id)->pluck('id');
-        foreach ($existingIds as $tid) {
-            if (static::hasSubscriptionReferences((int) $tid)) {
-                throw ValidationException::withMessages([
-                    'plan_terms' => [__('subscriptions.plan_term_replace_blocked_in_use')],
-                ]);
-            }
-        }
-
-        static::query()->where('plan_id', $plan->id)->delete();
-
-        $insertedKeys = [];
+        $seen = [];
         foreach ($rows as $index => $row) {
             $key = (string) ($row['billing_key'] ?? '');
             if ($key === '' || ! in_array($key, self::presetBillingKeys(), true)) {
                 continue;
             }
-            if (isset($insertedKeys[$key])) {
+            if (isset($seen[$key])) {
                 continue;
             }
-            $insertedKeys[$key] = true;
+            $seen[$key] = true;
 
             $price = PlanPricing::normalizeMoney($row['price'] ?? 0);
             $selling = array_key_exists('selling_price', $row)
@@ -285,19 +275,26 @@ class PlanTerm extends Model
             $visible = filter_var($row['is_visible'] ?? true, FILTER_VALIDATE_BOOLEAN)
                 || (string) ($row['is_visible'] ?? '') === '1';
 
-            static::query()->create([
-                'plan_id' => $plan->id,
-                'billing_key' => $key,
-                'duration_days' => self::durationDaysFor($key),
-                'price' => $price,
-                'selling_price' => $selling,
-                'discount_percent' => PlanPricing::deprecatedDiscountColumnValue($price, $selling),
-                'quota_bonus_percent' => $quotaBonus,
-                'is_visible' => $visible,
-                'sort_order' => ((int) $index + 1) * 10,
-            ]);
+            static::query()->updateOrCreate(
+                ['plan_id' => $plan->id, 'billing_key' => $key],
+                [
+                    'duration_days' => self::durationDaysFor($key),
+                    'price' => $price,
+                    'selling_price' => $selling,
+                    'discount_percent' => PlanPricing::deprecatedDiscountColumnValue($price, $selling),
+                    'quota_bonus_percent' => $quotaBonus,
+                    'is_visible' => $visible,
+                    'sort_order' => ((int) $index + 1) * 10,
+                ]
+            );
         }
 
+        $plan->loadMissing('terms');
+        foreach ($plan->terms as $term) {
+            if (! isset($seen[(string) $term->billing_key]) && (bool) $term->is_visible) {
+                $term->update(['is_visible' => false]);
+            }
+        }
     }
 
     public function plan(): BelongsTo
