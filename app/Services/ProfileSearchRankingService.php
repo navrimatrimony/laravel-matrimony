@@ -26,9 +26,9 @@ class ProfileSearchRankingService
 
         $driver = $query->getConnection()->getDriverName();
         $graceExpr = match ($driver) {
-            'mysql', 'mariadb' => 'DATE_ADD(s.ends_at, INTERVAL COALESCE(p.grace_period_days, 0) DAY)',
-            'sqlite' => "datetime(s.ends_at, '+' || COALESCE(p.grace_period_days, 0) || ' days')",
-            'pgsql' => "s.ends_at + (COALESCE(p.grace_period_days, 0) || ' days')::interval",
+            'mysql', 'mariadb' => 'DATE_ADD(s.ends_at, INTERVAL COALESCE(s.grace_period_days, 0) DAY)',
+            'sqlite' => "datetime(s.ends_at, '+' || COALESCE(s.grace_period_days, 0) || ' days')",
+            'pgsql' => "s.ends_at + (COALESCE(s.grace_period_days, 0) || ' days')::interval",
             default => 's.ends_at',
         };
         $activePeriod = '(s.ends_at IS NULL OR s.ends_at > ? OR (s.ends_at IS NOT NULL AND s.ends_at <= ? AND '.$graceExpr.' > ?))';

@@ -28,12 +28,16 @@ class Subscription extends Model
         'starts_at',
         'ends_at',
         'status',
+        'grace_period_days',
+        'leftover_quota_carry_window_days',
         'meta',
     ];
 
     protected $casts = [
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
+        'grace_period_days' => 'integer',
+        'leftover_quota_carry_window_days' => 'integer',
         'meta' => 'array',
     ];
 
@@ -60,7 +64,7 @@ class Subscription extends Model
     }
 
     /**
-     * Paid period active OR within plan-specific grace after ends_at.
+     * Paid period active OR within this subscription's frozen grace after ends_at.
      *
      * @param  Builder<Subscription>  $query
      * @return Builder<Subscription>
@@ -80,9 +84,9 @@ class Subscription extends Model
     {
         $driver = $query->getConnection()->getDriverName();
         $graceExpr = match ($driver) {
-            'mysql', 'mariadb' => 'DATE_ADD(subscriptions.ends_at, INTERVAL COALESCE(p.grace_period_days, 0) DAY)',
-            'sqlite' => "datetime(subscriptions.ends_at, '+' || COALESCE(p.grace_period_days, 0) || ' days')",
-            'pgsql' => "subscriptions.ends_at + (COALESCE(p.grace_period_days, 0) || ' days')::interval",
+            'mysql', 'mariadb' => 'DATE_ADD(subscriptions.ends_at, INTERVAL COALESCE(subscriptions.grace_period_days, 0) DAY)',
+            'sqlite' => "datetime(subscriptions.ends_at, '+' || COALESCE(subscriptions.grace_period_days, 0) || ' days')",
+            'pgsql' => "subscriptions.ends_at + (COALESCE(subscriptions.grace_period_days, 0) || ' days')::interval",
             default => 'subscriptions.ends_at',
         };
 
@@ -91,12 +95,9 @@ class Subscription extends Model
             ->where(function ($q) use ($at, $graceExpr) {
                 $q->whereNull('ends_at')
                     ->orWhere('ends_at', '>', $at)
-                    ->orWhereExists(function ($plan) use ($at, $graceExpr) {
-                        $plan->selectRaw('1')
-                            ->from('plans as p')
-                            ->whereColumn('p.id', 'subscriptions.plan_id')
-                            ->whereNotNull('subscriptions.ends_at')
-                            ->where('subscriptions.ends_at', '<=', $at)
+                    ->orWhere(function ($grace) use ($at, $graceExpr) {
+                        $grace->whereNotNull('ends_at')
+                            ->where('ends_at', '<=', $at)
                             ->whereRaw($graceExpr.' > ?', [$at->toDateTimeString()]);
                     });
             });
@@ -187,8 +188,7 @@ class Subscription extends Model
             return true;
         }
 
-        $this->loadMissing('plan');
-        $grace = PlanSubscriptionTerms::gracePeriodDays($this->plan);
+        $grace = PlanSubscriptionTerms::gracePeriodDaysForSubscription($this);
         if ($grace <= 0) {
             return false;
         }

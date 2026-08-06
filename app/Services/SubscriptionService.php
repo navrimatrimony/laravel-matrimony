@@ -246,7 +246,7 @@ class SubscriptionService
                 $endsAt = $now->copy()->addDays($duration);
             }
 
-            $sub = Subscription::query()->create([
+            $sub = Subscription::query()->create(array_merge([
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
                 'plan_term_id' => $planTerm?->id,
@@ -255,7 +255,7 @@ class SubscriptionService
                 'ends_at' => $endsAt,
                 'status' => Subscription::STATUS_ACTIVE,
                 'meta' => $subscriptionMeta,
-            ]);
+            ], PlanSubscriptionTerms::contractTimingAttributesFromPlan($plan)));
 
             if ($coupon) {
                 $couponSvc->incrementRedemption($coupon);
@@ -415,7 +415,7 @@ class SubscriptionService
                 $endsAt = $now->copy()->addDays($duration);
             }
 
-            $sub = Subscription::query()->create([
+            $sub = Subscription::query()->create(array_merge([
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
                 'plan_term_id' => $term?->id,
@@ -424,7 +424,7 @@ class SubscriptionService
                 'ends_at' => $endsAt,
                 'status' => Subscription::STATUS_ACTIVE,
                 'meta' => $subscriptionMeta,
-            ]);
+            ], PlanSubscriptionTerms::contractTimingAttributesFromPlan($plan)));
 
             if ($coupon) {
                 $couponSvc->incrementRedemption($coupon);
@@ -732,8 +732,7 @@ class SubscriptionService
         $key = app(FeatureUsageService::class)->normalizeFeatureKey($rawKey);
         $grantDays = max(1, (int) ($payload['grant_days'] ?? 30));
         $until = now()->copy()->addDays($grantDays);
-        $sub->loadMissing('plan');
-        $grace = PlanSubscriptionTerms::gracePeriodDays($sub->plan);
+        $grace = PlanSubscriptionTerms::gracePeriodDaysForSubscription($sub);
         if ($sub->ends_at !== null) {
             $cap = $sub->ends_at->copy()->addDays($grace);
             if ($until->gt($cap)) {
@@ -780,20 +779,19 @@ class SubscriptionService
         $now = now();
         $driver = DB::connection()->getDriverName();
         $expiryExpr = match ($driver) {
-            'mysql', 'mariadb' => 'DATE_ADD(subscriptions.ends_at, INTERVAL COALESCE(plans.grace_period_days, 0) DAY)',
-            'sqlite' => "datetime(subscriptions.ends_at, '+' || COALESCE(plans.grace_period_days, 0) || ' days')",
-            'pgsql' => "subscriptions.ends_at + (COALESCE(plans.grace_period_days, 0) || ' days')::interval",
+            'mysql', 'mariadb' => 'DATE_ADD(subscriptions.ends_at, INTERVAL COALESCE(subscriptions.grace_period_days, 0) DAY)',
+            'sqlite' => "datetime(subscriptions.ends_at, '+' || COALESCE(subscriptions.grace_period_days, 0) || ' days')",
+            'pgsql' => "subscriptions.ends_at + (COALESCE(subscriptions.grace_period_days, 0) || ' days')::interval",
             default => 'subscriptions.ends_at',
         };
 
         return Subscription::query()
-            ->join('plans', 'plans.id', '=', 'subscriptions.plan_id')
-            ->where('subscriptions.status', Subscription::STATUS_ACTIVE)
-            ->whereNotNull('subscriptions.ends_at')
+            ->where('status', Subscription::STATUS_ACTIVE)
+            ->whereNotNull('ends_at')
             ->whereRaw($expiryExpr.' <= ?', [$now->toDateTimeString()])
             ->update([
-                'subscriptions.status' => Subscription::STATUS_EXPIRED,
-                'subscriptions.updated_at' => $now,
+                'status' => Subscription::STATUS_EXPIRED,
+                'updated_at' => $now,
             ]);
     }
 
@@ -839,7 +837,7 @@ class SubscriptionService
                 ],
             );
 
-            return Subscription::query()->create([
+            return Subscription::query()->create(array_merge([
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
                 'plan_term_id' => $term->id,
@@ -850,7 +848,7 @@ class SubscriptionService
                 'meta' => [
                     'checkout_snapshot' => $checkoutSnapshot,
                 ],
-            ]);
+            ], PlanSubscriptionTerms::contractTimingAttributesFromPlan($plan)));
         });
     }
 
@@ -902,13 +900,13 @@ class SubscriptionService
                     ],
                 );
 
-                $existing->update([
+                $existing->update(array_merge([
                     'plan_term_id' => $term->id,
                     'starts_at' => $startsAt,
                     'ends_at' => $newEnds,
                     'updated_at' => now(),
                     'meta' => $meta,
-                ]);
+                ], PlanSubscriptionTerms::contractTimingAttributesFromPlan($plan)));
 
                 $fresh = $existing->fresh();
                 app(EntitlementService::class)->assignFromSubscription($fresh);
@@ -1432,17 +1430,17 @@ class SubscriptionService
 
     private function isWithinGraceOrCarryWindow(Subscription $subscription, \Carbon\CarbonInterface $at): bool
     {
-        if ($subscription->ends_at === null || ! $subscription->plan) {
+        if ($subscription->ends_at === null) {
             return false;
         }
 
-        $graceDays = PlanSubscriptionTerms::gracePeriodDays($subscription->plan);
+        $graceDays = PlanSubscriptionTerms::gracePeriodDaysForSubscription($subscription);
         $graceEndsAt = $subscription->ends_at->copy()->addDays($graceDays);
         if ($at->lessThanOrEqualTo($graceEndsAt)) {
             return true;
         }
 
-        $carryWindowDays = PlanSubscriptionTerms::leftoverQuotaCarryWindowDays($subscription->plan);
+        $carryWindowDays = PlanSubscriptionTerms::leftoverQuotaCarryWindowDaysForSubscription($subscription);
         if ($carryWindowDays === null || $carryWindowDays <= 0) {
             return false;
         }

@@ -209,7 +209,7 @@ class QuotaEngineService
 
     /**
      * Subscription access window derived from the same query rules as {@see Subscription::scopeEffectivelyActiveForAccessAt}
-     * and {@see SubscriptionService::getActiveSubscription} (plan grace from {@see PlanSubscriptionTerms::gracePeriodDays}).
+     * and {@see SubscriptionService::getActiveSubscription} (grace from frozen {@see Subscription::$grace_period_days}).
      *
      * @return array{
      *   status: 'active'|'grace'|'expired',
@@ -350,15 +350,14 @@ class QuotaEngineService
 
         $sub->loadMissing('plan');
         $started = $sub->starts_at;
-        $plan = $sub->plan ?? $this->subscriptions->getEffectivePlan($user);
 
         return [
             'plan_name' => (string) ($sub->plan?->name ?? ''),
             'subscription_started_at' => $started?->toIso8601String(),
             'subscription_started_at_display' => $this->formatCarbonForUserDisplay($started),
             'subscription_row_status' => (string) $sub->status,
-            'plan_grace_period_days' => PlanSubscriptionTerms::gracePeriodDays($plan),
-            'plan_carry_window_days' => PlanSubscriptionTerms::leftoverQuotaCarryWindowDays($plan),
+            'plan_grace_period_days' => PlanSubscriptionTerms::gracePeriodDaysForSubscription($sub),
+            'plan_carry_window_days' => PlanSubscriptionTerms::leftoverQuotaCarryWindowDaysForSubscription($sub),
         ];
     }
 
@@ -428,8 +427,7 @@ class QuotaEngineService
         }
 
         $sub->loadMissing('plan');
-        $plan = $sub->plan;
-        $graceDays = $plan !== null ? PlanSubscriptionTerms::gracePeriodDays($plan) : 0;
+        $graceDays = PlanSubscriptionTerms::gracePeriodDaysForSubscription($sub);
         $endsAt = $sub->ends_at;
         $graceEndsAt = null;
         if ($endsAt !== null) {

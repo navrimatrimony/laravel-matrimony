@@ -4,10 +4,11 @@ namespace App\Services;
 
 use App\Models\Plan;
 use App\Models\PlanQuotaPolicy;
+use App\Models\Subscription;
 
 /**
- * Centralized subscription timing for a plan: grace after paid window and leftover-quota carry rules.
- * UI stores days on {@see Plan}; legacy {@see PlanQuotaPolicy::grace_percent_of_plan} is derived for DB compatibility.
+ * Catalog timing on {@see Plan}; contract timing on {@see Subscription} (Phase 2 Checkpoint B readers).
+ * Legacy {@see PlanQuotaPolicy::grace_percent_of_plan} is derived from plan for DB compatibility.
  */
 final class PlanSubscriptionTerms
 {
@@ -27,6 +28,37 @@ final class PlanSubscriptionTerms
         $v = $plan->leftover_quota_carry_window_days;
 
         return $v === null ? null : max(0, (int) $v);
+    }
+
+    /**
+     * Frozen contract grace on the subscription row (runtime access / expiry / entitlements).
+     */
+    public static function gracePeriodDaysForSubscription(Subscription $subscription): int
+    {
+        return max(0, (int) ($subscription->grace_period_days ?? 0));
+    }
+
+    /**
+     * Frozen leftover carry window on the subscription row (null = carry disabled for this contract).
+     */
+    public static function leftoverQuotaCarryWindowDaysForSubscription(Subscription $subscription): ?int
+    {
+        $v = $subscription->leftover_quota_carry_window_days;
+
+        return $v === null ? null : max(0, (int) $v);
+    }
+
+    /**
+     * Catalog → contract copy at purchase/renew (Phase 2 Checkpoint A writers).
+     *
+     * @return array{grace_period_days: int, leftover_quota_carry_window_days: int|null}
+     */
+    public static function contractTimingAttributesFromPlan(Plan $plan): array
+    {
+        return [
+            'grace_period_days' => self::gracePeriodDays($plan),
+            'leftover_quota_carry_window_days' => self::leftoverQuotaCarryWindowDays($plan),
+        ];
     }
 
     /**

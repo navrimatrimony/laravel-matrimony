@@ -34,7 +34,7 @@ class EntitlementService
             return;
         }
 
-        $grace = PlanSubscriptionTerms::gracePeriodDays($plan);
+        $grace = PlanSubscriptionTerms::gracePeriodDaysForSubscription($subscription);
         $validUntil = null;
         if ($subscription->ends_at !== null) {
             $validUntil = $subscription->ends_at->copy()->addDays($grace);
@@ -222,15 +222,14 @@ class EntitlementService
         $now = now();
         $driver = DB::connection()->getDriverName();
         $graceExpr = match ($driver) {
-            'mysql', 'mariadb' => 'DATE_ADD(subscriptions.ends_at, INTERVAL COALESCE(p.grace_period_days, 0) DAY)',
-            'sqlite' => "datetime(subscriptions.ends_at, '+' || COALESCE(p.grace_period_days, 0) || ' days')",
-            'pgsql' => "subscriptions.ends_at + (COALESCE(p.grace_period_days, 0) || ' days')::interval",
+            'mysql', 'mariadb' => 'DATE_ADD(subscriptions.ends_at, INTERVAL COALESCE(subscriptions.grace_period_days, 0) DAY)',
+            'sqlite' => "datetime(subscriptions.ends_at, '+' || COALESCE(subscriptions.grace_period_days, 0) || ' days')",
+            'pgsql' => "subscriptions.ends_at + (COALESCE(subscriptions.grace_period_days, 0) || ' days')::interval",
             default => 'subscriptions.ends_at',
         };
 
         $sub->select(DB::raw(1))
             ->from('subscriptions')
-            ->join('plans as p', 'p.id', '=', 'subscriptions.plan_id')
             ->whereColumn('subscriptions.user_id', 'user_entitlements.user_id')
             ->where('subscriptions.status', Subscription::STATUS_ACTIVE)
             ->whereNotNull('subscriptions.ends_at')
