@@ -22,14 +22,14 @@ class Plan extends Model
     use ResolvesLocalizedText;
 
     /**
-     * Public pricing (/plans): suppress these mirrored or legacy {@see PlanFeature} keys (UI projection only).
+     * Public pricing (/plans): never list these keys (UI projection only).
+     * Admin-offered quota cards come from {@see PlanQuotaPolicyKeys::ordered()} and are listed with
+     * included/excluded styling — only true non-catalog leftovers stay here (e.g. biodata export).
      *
      * @var list<string>
      */
     private const PRICING_CATALOG_UI_HIDDEN_KEYS = [
         PlanFeatureKeys::PHOTO_BLUR_LIMIT,
-        PlanFeatureKeys::PHOTO_FULL_ACCESS,
-        PlanFeatureKeys::PROFILE_WHATSAPP_DIRECT,
         SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES,
         'chat_images',
         'whatsapp_button',
@@ -347,72 +347,43 @@ class Plan extends Model
     }
 
     /**
-     * Public pricing (/plans): quota engine rows are SSOT; {@see features()} fills only keys not emitted by quota mirror
-     * (e.g. legacy chat image flag) so catalog numbers match admin {@see PlanQuotaPolicy}.
+     * Public pricing (/plans): one row per admin {@see PlanQuotaPolicyKeys::ordered()} key.
+     * Each row has {@code included} true when the quota/boolean is meaningfully granted; false rows are still
+     * returned so the web catalog can show them struck/faint. Biodata and other
+     * {@see self::PRICING_CATALOG_UI_HIDDEN_KEYS} stay omitted. DB rows are unchanged.
      *
-     * Final projection: non-user-facing keys ({@see self::PRICING_CATALOG_UI_HIDDEN_KEYS}), disabled quotas, and
-     * zero / empty limits are excluded here only — DB rows are unchanged.
+     * @return \Illuminate\Support\Collection<int, object{key: string, value: string, catalog_quota_payload: array, included: bool}>
      */
     public function catalogFeatureRowsForPricing(): \Illuminate\Support\Collection
     {
-        $this->loadMissing(['quotaPolicies', 'features']);
-        $mirroredKeys = [];
+        $this->loadMissing(['quotaPolicies']);
         $rows = collect();
-
         $payloads = PlanQuotaUiSource::policyPayloadsFromPlan($this);
+
         foreach (PlanQuotaPolicyKeys::ordered() as $fk) {
+            if (in_array($fk, self::PRICING_CATALOG_UI_HIDDEN_KEYS, true)) {
+                continue;
+            }
             if (! isset($payloads[$fk]) || ! is_array($payloads[$fk])) {
                 continue;
             }
             $payload = $payloads[$fk];
-            if (! PlanFeatureLabel::quotaCatalogShouldListRow($fk, $payload)) {
-                continue;
-            }
+            $value = '0';
             foreach (PlanQuotaPolicyMirror::mirroredFeatureRowsFromPolicyPayload($fk, $payload) as $pair) {
-                if (! PlanFeatureLabel::quotaCatalogShouldListMirroredPair($pair['key'], $pair['value'], $fk)) {
-                    continue;
+                if ($pair['key'] === $fk) {
+                    $value = $pair['value'];
+                    break;
                 }
-                if ($pair['key'] === FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS) {
-                    continue;
-                }
-                $mirroredKeys[$pair['key']] = true;
-                $rows->push((object) [
-                    'key' => $pair['key'],
-                    'value' => $pair['value'],
-                    'catalog_quota_payload' => $payload,
-                ]);
             }
+
+            $rows->push((object) [
+                'key' => $fk,
+                'value' => $value,
+                'catalog_quota_payload' => $payload,
+                'included' => PlanFeatureLabel::quotaCatalogShouldListRow($fk, $payload),
+            ]);
         }
 
-        foreach ($this->features as $f) {
-            $k = (string) $f->key;
-            if (PlanQuotaPolicyKeys::isForbiddenPlanFeatureRowKey($k)) {
-                continue;
-            }
-            if ($k === PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD) {
-                continue;
-            }
-            if (isset($mirroredKeys[$k])) {
-                continue;
-            }
-            if (! PlanFeatureLabel::quotaCatalogShouldListMirroredPair($k, (string) $f->value, null)) {
-                continue;
-            }
-            $rows->push($f);
-        }
-
-        return $rows
-            ->filter(function (object $row): bool {
-                $key = (string) $row->key;
-                if (in_array($key, self::PRICING_CATALOG_UI_HIDDEN_KEYS, true)) {
-                    return false;
-                }
-                if (property_exists($row, 'catalog_quota_payload') && is_array($row->catalog_quota_payload)) {
-                    return PlanFeatureLabel::quotaCatalogShouldListRow($key, $row->catalog_quota_payload);
-                }
-
-                return PlanFeatureLabel::quotaCatalogShouldListMirroredPair($key, (string) $row->value, null);
-            })
-            ->values();
+        return $rows->values();
     }
 }

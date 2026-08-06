@@ -74,9 +74,7 @@
         'photo_blur_limit',
         'chat_images',
         'chat_image_messages',
-        'photo_full_access',
         'whatsapp_button',
-        'profile_whatsapp_direct',
         'biodata_export_limit',
         'biodata_premium_templates',
     ];

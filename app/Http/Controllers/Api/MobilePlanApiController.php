@@ -336,6 +336,7 @@ class MobilePlanApiController extends Controller
         $billingDurationType = $defaultTerm instanceof PlanTerm ? (string) $defaultTerm->billing_key : null;
 
         return $plan->catalogFeatureRowsForPricing()
+            ->filter(fn (object $feature): bool => (bool) ($feature->included ?? false))
             ->map(function (object $feature) use ($quotaBonusPercent, $durationMultiplier, $billingDurationType): string {
                 if (property_exists($feature, 'catalog_quota_payload') && is_array($feature->catalog_quota_payload)) {
                     return PlanQuotaCatalogFormatter::catalogLineFromPayload(

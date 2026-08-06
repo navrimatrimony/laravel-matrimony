@@ -3,7 +3,9 @@
     use App\Support\PlanQuotaCatalogFormatter;
     /** @var \Illuminate\Support\Collection $primaryFeatureRows */
     /** @var \Illuminate\Support\Collection $secondaryFeatureRows */
+    /** @var \Illuminate\Support\Collection $excludedFeatureRows */
     $wrapInBillingToggle = $wrapInBillingToggle ?? true;
+    $excludedFeatureRows = $excludedFeatureRows ?? collect();
     $quotaBonusPercent = (int) ($quotaBonusPercent ?? 0);
     $durationMultiplier = (float) ($durationMultiplier ?? 1.0);
     /** One SSOT line (label — value) for pricing; no split value/suffix paths. */
@@ -22,6 +24,8 @@
             .' — '
             .PlanFeatureLabel::catalogFormatValue((string) $feat->key, (string) $feat->value, 1.0, $billingDurationType);
     };
+    $hasIncluded = $primaryFeatureRows->isNotEmpty() || $secondaryFeatureRows->isNotEmpty();
+    $hasExcluded = $excludedFeatureRows->isNotEmpty();
 @endphp
 
 @if ($wrapInBillingToggle)
@@ -29,16 +33,16 @@
 @else
     <div class="pricing-plan-features-static">
 @endif
-    @if ($primaryFeatureRows->isEmpty() && $secondaryFeatureRows->isNotEmpty())
+    @if (! $hasIncluded && $hasExcluded)
         <ul class="mt-6 flex-1 space-y-2 border-t border-slate-100 pt-5 text-sm dark:border-slate-700" role="list">
-            @foreach ($secondaryFeatureRows as $feat)
-                <li class="flex gap-2.5 text-slate-700 dark:text-slate-200" role="listitem">
-                    <span class="mt-0.5 shrink-0 text-emerald-600/80 dark:text-emerald-400/90" aria-hidden="true">✓</span>
+            @foreach ($excludedFeatureRows as $feat)
+                <li class="flex gap-2.5 text-slate-400/90 line-through opacity-50 dark:text-slate-500" role="listitem">
+                    <span class="mt-0.5 shrink-0" aria-hidden="true">–</span>
                     <span class="min-w-0 break-words leading-snug">{{ $catalogLine($feat) }}</span>
                 </li>
             @endforeach
         </ul>
-    @else
+    @elseif ($hasIncluded || $hasExcluded)
         <div
             class="mt-6 flex-1 border-t border-slate-100 pt-5 dark:border-slate-700"
             x-data="{ planFeaturesExpanded: false }"
@@ -93,6 +97,21 @@
                         @endforeach
                     </ul>
                 </div>
+            @endif
+
+            @if ($hasExcluded)
+                <ul
+                    class="{{ $hasIncluded ? 'mt-4 border-t border-slate-100/80 pt-3 dark:border-slate-700/80' : '' }} space-y-1.5 text-sm text-slate-400/90 dark:text-slate-500"
+                    role="list"
+                    aria-label="{{ __('subscriptions.pricing_features_extended_list') }}"
+                >
+                    @foreach ($excludedFeatureRows as $feat)
+                        <li class="flex gap-2.5 line-through opacity-50" role="listitem">
+                            <span class="mt-0.5 shrink-0" aria-hidden="true">–</span>
+                            <span class="min-w-0 break-words leading-snug">{{ $catalogLine($feat) }}</span>
+                        </li>
+                    @endforeach
+                </ul>
             @endif
         </div>
     @endif

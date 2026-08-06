@@ -15,32 +15,30 @@
 
     $isFreeViewer = ! $eff->id || \App\Models\Plan::isFreeCatalogSlug((string) ($eff->slug ?? ''));
 
-    /** Admin plan quota engine owns these; omit from public pricing feature lists. */
-    $pricingCatalogKeysHidden = [
-        PlanFeatureKeys::CHAT_CAN_READ,
-        PlanFeatureKeys::PHOTO_FULL_ACCESS,
-        PlanFeatureKeys::PRIORITY_LISTING,
-    ];
-
     $pricingHighlightFeatureOrder = [
         PlanFeatureKeys::CHAT_SEND_LIMIT,
         PlanFeatureKeys::CONTACT_VIEW_LIMIT,
     ];
 
-    $partitionPricingFeatures = function ($plan) use ($pricingHighlightFeatureOrder, $pricingCatalogKeysHidden) {
-        $rows = $plan->catalogFeatureRowsForPricing()
-            ->filter(fn ($f) => PlanFeatureLabel::shouldListKey((string) $f->key))
-            ->reject(fn ($f) => in_array((string) $f->key, $pricingCatalogKeysHidden, true))
+    /**
+     * @return array{0: \Illuminate\Support\Collection, 1: \Illuminate\Support\Collection, 2: \Illuminate\Support\Collection}
+     *         [primary included, secondary included, excluded]
+     */
+    $partitionPricingFeatures = function ($plan) use ($pricingHighlightFeatureOrder) {
+        $all = $plan->catalogFeatureRowsForPricing()
+            ->filter(fn ($f) => PlanFeatureLabel::shouldListKey((string) $f->key));
+        $excluded = $all->filter(fn ($f) => ! (bool) ($f->included ?? false))->values();
+        $included = $all->filter(fn ($f) => (bool) ($f->included ?? false))
             ->keyBy(fn ($f) => (string) $f->key);
         $primary = collect();
         foreach ($pricingHighlightFeatureOrder as $key) {
-            if ($rows->has($key)) {
-                $primary->push($rows->get($key));
+            if ($included->has($key)) {
+                $primary->push($included->get($key));
             }
-            $rows->forget($key);
+            $included->forget($key);
         }
 
-        return [$primary, $rows->sortKeys()->values()];
+        return [$primary, $included->values(), $excluded];
     };
 
     $discountPercentForTerm = function (\App\Models\PlanTerm $t): int {
@@ -280,7 +278,7 @@
                         $defaultBillingId = $useTerms
                             ? (int) (($defaultTermRow ?? $visibleTerms->first())?->id ?? 0)
                             : 0;
-                        [$primaryFeatureRows, $secondaryFeatureRows] = $partitionPricingFeatures($plan);
+                        [$primaryFeatureRows, $secondaryFeatureRows, $excludedFeatureRows] = $partitionPricingFeatures($plan);
                         $marketingRibbonLabel = $pricingMarketingBadgeLabel($plan);
                         $displayPlanName = preg_replace('/\s*\((male|female)\)\s*$/i', '', (string) $plan->name) ?? (string) $plan->name;
                     @endphp
@@ -400,6 +398,7 @@
                                             'planId' => $plan->id,
                                             'primaryFeatureRows' => $primaryFeatureRows,
                                             'secondaryFeatureRows' => $secondaryFeatureRows,
+                                            'excludedFeatureRows' => $excludedFeatureRows,
                                             'quotaBonusPercent' => (int) ($termCatalog->quota_bonus_percent ?? 0),
                                             'durationMultiplier' => \App\Models\PlanTerm::quotaDurationMultiplierFor(
                                                 (string) $termCatalog->billing_key,
@@ -415,6 +414,7 @@
                                         'planId' => $plan->id,
                                         'primaryFeatureRows' => $primaryFeatureRows,
                                         'secondaryFeatureRows' => $secondaryFeatureRows,
+                                        'excludedFeatureRows' => $excludedFeatureRows,
                                         'quotaBonusPercent' => 0,
                                         'durationMultiplier' => 1.0,
                                         'billingDurationType' => null,
