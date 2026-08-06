@@ -51,10 +51,7 @@ final class PlanQuotaLimitCalculator
     {
         $refresh = PlanQuotaRefreshRuntime::normalizeRefreshTypeString($refreshType);
 
-        return in_array($refresh, [
-            PlanQuotaPolicy::REFRESH_LIFETIME,
-            PlanQuotaPolicy::REFRESH_TOTAL,
-            PlanQuotaPolicy::REFRESH_PLAN_DURATION,
-        ], true);
+        // total / plan_duration collapse to lifetime in normalizeRefreshTypeString.
+        return $refresh === PlanQuotaPolicy::REFRESH_LIFETIME;
     }
 }

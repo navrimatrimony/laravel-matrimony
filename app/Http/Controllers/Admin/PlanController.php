@@ -919,7 +919,7 @@ class PlanController extends Controller
             if (! is_array($request->input($prefix))) {
                 continue;
             }
-            $refresh = (string) $request->input("$prefix.refresh_type");
+            $refresh = PlanQuotaPolicy::normalizeRefreshType((string) $request->input("$prefix.refresh_type"));
             $limitRaw = $request->input("$prefix.limit_value");
             $limitValue = null;
             if ($refresh !== PlanQuotaPolicy::REFRESH_UNLIMITED) {

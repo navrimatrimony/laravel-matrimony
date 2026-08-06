@@ -40,8 +40,7 @@
         PlanQuotaPolicy::REFRESH_WEEKLY => __('subscriptions.chat_quota_phase1_refresh_weekly'),
         PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST => __('subscriptions.chat_quota_phase1_refresh_monthly'),
         PlanQuotaPolicy::REFRESH_LIFETIME => __('subscriptions.chat_quota_phase1_refresh_lifetime'),
-        PlanQuotaPolicy::REFRESH_TOTAL => __('subscriptions.chat_quota_phase1_refresh_total'),
-        PlanQuotaPolicy::REFRESH_PLAN_DURATION => __('subscriptions.chat_quota_phase1_refresh_plan_duration'),
+        // Legacy Total / Plan duration lang keys unused in select; kept in lang files for harmless lookups.
     ];
     $p1Sum = [
         'sep' => __('subscriptions.chat_quota_phase1_sum_sep'),
@@ -133,8 +132,6 @@
                         <option value="{{ PlanQuotaPolicy::REFRESH_DAILY }}">{{ __('subscriptions.chat_quota_phase1_refresh_daily') }}</option>
                         <option value="{{ PlanQuotaPolicy::REFRESH_WEEKLY }}">{{ __('subscriptions.chat_quota_phase1_refresh_weekly') }}</option>
                         <option value="{{ PlanQuotaPolicy::REFRESH_LIFETIME }}">{{ __('subscriptions.chat_quota_phase1_refresh_lifetime') }}</option>
-                        <option value="{{ PlanQuotaPolicy::REFRESH_TOTAL }}">{{ __('subscriptions.chat_quota_phase1_refresh_total') }}</option>
-                        <option value="{{ PlanQuotaPolicy::REFRESH_PLAN_DURATION }}">{{ __('subscriptions.chat_quota_phase1_refresh_plan_duration') }}</option>
                     </select>
                 </div>
                 <div>

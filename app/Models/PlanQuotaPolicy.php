@@ -20,8 +20,10 @@ class PlanQuotaPolicy extends Model
 
     public const REFRESH_LIFETIME = 'lifetime';
 
+    /** @deprecated Alias of {@see REFRESH_LIFETIME}; normalizeRefreshType() collapses on read/save. */
     public const REFRESH_TOTAL = 'total';
 
+    /** @deprecated Alias of {@see REFRESH_LIFETIME}; normalizeRefreshType() collapses on read/save. */
     public const REFRESH_PLAN_DURATION = 'plan_duration';
 
     /** Incoming interest reveal window aligned with calendar quarters. */
@@ -73,6 +75,10 @@ class PlanQuotaPolicy extends Model
     ];
 
     /**
+     * Admin-selectable / validation-allowed refresh types (canonical only).
+     * Legacy aliases {@see REFRESH_TOTAL} / {@see REFRESH_PLAN_DURATION} are NOT listed —
+     * they collapse to {@see REFRESH_LIFETIME} via {@see normalizeRefreshType()}.
+     *
      * @return list<string>
      */
     public static function refreshTypes(): array
@@ -84,19 +90,22 @@ class PlanQuotaPolicy extends Model
             self::REFRESH_MONTHLY_30D_IST,
             self::REFRESH_QUARTERLY,
             self::REFRESH_LIFETIME,
-            self::REFRESH_TOTAL,
-            self::REFRESH_PLAN_DURATION,
         ];
     }
 
     /**
-     * Legacy admin value `monthly` (removed duplicate option) maps to canonical storage.
+     * Canonicalize refresh_type for storage and readers.
+     * Legacy: `monthly` → monthly_30d_ist; `total` / `plan_duration` → lifetime.
      */
     public static function normalizeRefreshType(string $refresh): string
     {
         $refresh = strtolower(trim($refresh));
 
-        return $refresh === 'monthly' ? self::REFRESH_MONTHLY_30D_IST : $refresh;
+        return match ($refresh) {
+            'monthly' => self::REFRESH_MONTHLY_30D_IST,
+            self::REFRESH_TOTAL, self::REFRESH_PLAN_DURATION => self::REFRESH_LIFETIME,
+            default => $refresh,
+        };
     }
 
     /**

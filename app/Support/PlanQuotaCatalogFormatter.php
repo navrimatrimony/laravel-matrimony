@@ -155,9 +155,7 @@ final class PlanQuotaCatalogFormatter
         $refresh = PlanQuotaRefreshRuntime::normalizeRefreshTypeString($refresh);
 
         return match ($refresh) {
-            PlanQuotaPolicy::REFRESH_LIFETIME,
-            PlanQuotaPolicy::REFRESH_TOTAL,
-            PlanQuotaPolicy::REFRESH_PLAN_DURATION => __('subscriptions.quota_line_total', ['count' => $countPart]),
+            PlanQuotaPolicy::REFRESH_LIFETIME => __('subscriptions.quota_line_total', ['count' => $countPart]),
             PlanQuotaPolicy::REFRESH_DAILY, 'daily' => __('subscriptions.quota_line_per_day', ['count' => $countPart]),
             PlanQuotaPolicy::REFRESH_WEEKLY, 'weekly' => __('subscriptions.quota_line_per_week', ['count' => $countPart]),
             PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST => __('subscriptions.quota_line_per_month', ['count' => $countPart]),
