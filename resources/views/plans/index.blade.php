@@ -359,10 +359,10 @@
                                             @endif
                                             <div class="flex flex-wrap items-end gap-x-3 gap-y-1">
                                                 @if ($tDisc > 0 && $tList > $tFinal + 0.004)
-                                                    <span class="text-lg text-slate-400 line-through tabular-nums dark:text-slate-500">{{ number_format($tList) }}</span>
+                                                    <span class="text-lg text-slate-400 line-through tabular-nums dark:text-slate-500">{{ \App\Support\PlanPricing::formatRupees($tList) }}</span>
                                                 @endif
                                                 <span class="text-3xl font-extrabold text-slate-900 tabular-nums dark:text-white">
-                                                    ₹{{ number_format($tFinal) }}
+                                                    ₹{{ \App\Support\PlanPricing::formatRupees($tFinal) }}
                                                 </span>
                                             </div>
                                         </div>
@@ -384,10 +384,10 @@
                                     @endif
                                     <div class="flex flex-wrap items-end gap-x-3 gap-y-1">
                                         @if ($legacyDisc > 0 && $listPrice > $finalPrice + 0.004)
-                                            <span class="text-lg text-slate-400 line-through tabular-nums dark:text-slate-500">₹{{ number_format($listPrice) }}</span>
+                                            <span class="text-lg text-slate-400 line-through tabular-nums dark:text-slate-500">₹{{ \App\Support\PlanPricing::formatRupees($listPrice) }}</span>
                                         @endif
                                         <span class="text-3xl font-extrabold text-slate-900 tabular-nums dark:text-white">
-                                            ₹{{ number_format($finalPrice) }}
+                                            ₹{{ \App\Support\PlanPricing::formatRupees($finalPrice) }}
                                         </span>
                                     </div>
                                 </div>

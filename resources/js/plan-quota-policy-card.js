@@ -21,14 +21,15 @@ export function planQuotaPolicyCard(initial) {
         refreshLabels: initial.refreshLabels && typeof initial.refreshLabels === 'object' ? initial.refreshLabels : {},
         sum: initial.sum && typeof initial.sum === 'object' ? initial.sum : {},
 
-        /** Strip leading zeros / junk; empty if NaN. Preserves 0 as "0". */
+        /** Strip non-digits / leading zeros junk; empty if NaN. Preserves 0 as "0". No spinner scroll risk (text inputs). */
         coerceNonNegIntField(prop) {
             const raw = this[prop];
-            const s = String(raw ?? '').trim();
-            if (s === '') {
+            const digits = String(raw ?? '').replace(/\D+/g, '');
+            if (digits === '') {
+                this[prop] = '';
                 return;
             }
-            const n = parseInt(s, 10);
+            const n = parseInt(digits, 10);
             if (Number.isNaN(n)) {
                 this[prop] = '';
                 return;

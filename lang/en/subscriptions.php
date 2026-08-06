@@ -241,6 +241,7 @@ return [
     'admin_plan_discount_display_label' => 'Discount',
     'admin_selling_must_not_exceed_mrp' => 'Selling Price must not exceed MRP.',
     'admin_plan_quota_bonus_percent_label' => 'Quota bonus %',
+    'admin_plan_bonus_short_label' => 'Bonus %',
     'admin_plan_grace_carry_discount_row_help' => 'Grace and carry-over apply when a subscription ends or renews. Discount here matches the first billing row on save.',
     'admin_plan_catalog_price_label' => 'Catalog price (₹)',
     'admin_plan_active_label' => 'Active (visible for new subscriptions)',

@@ -28,7 +28,7 @@
     $cap = $p['daily_sub_cap'];
     $purchasable = ($p['overuse_mode'] ?? PlanQuotaPolicy::OVERUSE_BLOCK) === PlanQuotaPolicy::OVERUSE_PACK;
     $packRupees = isset($p['pack_price_paise']) && $p['pack_price_paise'] !== null
-        ? number_format((int) $p['pack_price_paise'] / 100, 2, '.', '')
+        ? (string) max(0, (int) round(((int) $p['pack_price_paise']) / 100))
         : '';
     $packCount = $p['pack_message_count'];
     $packDays = $p['pack_validity_days'];
@@ -79,105 +79,126 @@
         'whatsapp_button',
         'profile_whatsapp_direct',
     ];
+    $intFieldClass = 'w-full max-w-[5.5rem] rounded-md border-slate-300 dark:border-slate-600 dark:bg-slate-900 dark:text-white text-sm font-semibold tabular-nums py-2 px-2.5';
 @endphp
-<div class="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/25 p-3 space-y-2"
+<div class="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800/90 shadow-sm overflow-hidden"
     x-data='window.planQuotaPolicyCard(@json($alpineInitial, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE))'>
-    <div>
-        <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <strong class="text-sm text-gray-800 dark:text-gray-100">{{ \App\Support\PlanFeatureLabel::catalogLabelForPricing($featureKey, ['refresh_type' => $refresh, 'is_enabled' => $phaseEnabled]) }}</strong>
-            <span class="text-xs font-mono text-gray-500 dark:text-gray-400">{{ $featureKey }}</span>
-            @if (in_array($featureKey, $pricingCatalogUiHiddenKeys, true))
+    <div class="flex gap-0">
+        <div class="w-1 shrink-0 bg-indigo-500" aria-hidden="true"></div>
+        <div class="min-w-0 flex-1 px-3.5 py-3 space-y-2.5">
+            <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
+                <div class="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <strong class="text-base font-semibold text-slate-900 dark:text-white leading-snug">{{ \App\Support\PlanFeatureLabel::catalogLabelForPricing($featureKey, ['refresh_type' => $refresh, 'is_enabled' => $phaseEnabled]) }}</strong>
+                    <span class="text-xs font-mono text-slate-400 dark:text-slate-500">{{ $featureKey }}</span>
+                    @if (in_array($featureKey, $pricingCatalogUiHiddenKeys, true))
+                        <span
+                            class="inline-flex shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                            title="{{ __('subscriptions.admin_quota_hidden_from_pricing_hint') }}"
+                        >{{ __('subscriptions.admin_quota_hidden_from_pricing_badge') }}</span>
+                    @endif
+                </div>
                 <span
-                    class="inline-flex shrink-0 rounded bg-gray-100 px-2 py-1 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-                    title="{{ __('subscriptions.admin_quota_hidden_from_pricing_hint') }}"
-                >{{ __('subscriptions.admin_quota_hidden_from_pricing_badge') }}</span>
-            @endif
-        </div>
-        <p class="text-[11px] leading-snug text-amber-900/85 dark:text-amber-200/85 mt-1 font-mono tabular-nums" x-text="phase1SummaryLine()"></p>
-    </div>
-    <div class="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm">
-        <input type="hidden" name="quota_policies[{{ $featureKey }}][is_enabled]" :value="phaseEnabled ? 1 : 0" />
-        <label class="inline-flex items-center gap-2 text-gray-800 dark:text-gray-100">
-            <input type="checkbox" class="rounded border-gray-300" x-model="phaseEnabled" />
-            {{ __('subscriptions.chat_quota_phase1_enabled') }}
-        </label>
-        <input type="hidden" name="quota_policies[{{ $featureKey }}][per_day_usage_limit_enabled]" :value="perDayLimit ? 1 : 0" />
-        <label class="inline-flex items-center gap-2 text-gray-800 dark:text-gray-100">
-            <input type="checkbox" class="rounded border-gray-300" x-model="perDayLimit" />
-            {{ __('subscriptions.chat_quota_phase1_per_day_limit') }}
-        </label>
-        <input type="hidden" name="quota_policies[{{ $featureKey }}][purchasable_if_exhausted]" :value="purchasableIfExhausted ? 1 : 0" />
-        <label class="inline-flex items-center gap-2 text-gray-800 dark:text-gray-100">
-            <input type="checkbox" class="rounded border-gray-300" x-model="purchasableIfExhausted" />
-            {{ __('subscriptions.chat_quota_phase1_purchasable_if_exhausted') }}
-        </label>
-    </div>
-    <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-2 gap-y-2 text-sm items-end" :class="perDayLimit ? 'md:grid-cols-3' : 'md:grid-cols-2'">
-        <div class="min-w-0 md:col-span-1 sm:col-span-1 col-span-2">
-            <label class="block text-[10px] font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('subscriptions.chat_quota_phase1_refresh') }}">{{ __('subscriptions.chat_quota_phase1_col_refresh') }}</label>
-            <select name="quota_policies[{{ $featureKey }}][refresh_type]" x-model="refreshType" class="w-full max-w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm py-1.5" title="{{ __('subscriptions.chat_quota_phase1_refresh') }}">
-                <option value="{{ PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST }}">{{ __('subscriptions.chat_quota_phase1_refresh_monthly') }}</option>
-                <option value="{{ PlanQuotaPolicy::REFRESH_UNLIMITED }}">{{ __('subscriptions.chat_quota_phase1_refresh_unlimited') }}</option>
-                <option value="{{ PlanQuotaPolicy::REFRESH_DAILY }}">{{ __('subscriptions.chat_quota_phase1_refresh_daily') }}</option>
-                <option value="{{ PlanQuotaPolicy::REFRESH_WEEKLY }}">{{ __('subscriptions.chat_quota_phase1_refresh_weekly') }}</option>
-                <option value="{{ PlanQuotaPolicy::REFRESH_LIFETIME }}">{{ __('subscriptions.chat_quota_phase1_refresh_lifetime') }}</option>
-                <option value="{{ PlanQuotaPolicy::REFRESH_TOTAL }}">{{ __('subscriptions.chat_quota_phase1_refresh_total') }}</option>
-                <option value="{{ PlanQuotaPolicy::REFRESH_PLAN_DURATION }}">{{ __('subscriptions.chat_quota_phase1_refresh_plan_duration') }}</option>
-            </select>
-        </div>
-        <div class="min-w-0">
-            <label class="block text-[10px] font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('subscriptions.chat_quota_phase1_limit') }}">{{ __('subscriptions.chat_quota_phase1_col_limit') }}</label>
-            <input type="number" name="quota_policies[{{ $featureKey }}][limit_value]" min="0" step="1"
-                x-model="limitVal"
-                @input="coerceNonNegIntField('limitVal')"
-                placeholder="0"
-                title="{{ __('subscriptions.chat_quota_phase1_limit') }}"
-                class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm py-1.5" />
-        </div>
-        <div class="min-w-0" x-show="perDayLimit"
-            x-transition:enter="transition ease-out duration-150"
-            x-transition:enter-start="opacity-0"
-            x-transition:enter-end="opacity-100">
-            <label class="block text-[10px] font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('subscriptions.chat_quota_phase1_daily_sub_cap') }}">{{ __('subscriptions.chat_quota_phase1_col_subcap') }}</label>
-            <input type="number" name="quota_policies[{{ $featureKey }}][daily_sub_cap]" min="0" step="1"
-                x-model="dailyCapVal"
-                @input="coerceNonNegIntField('dailyCapVal')"
-                placeholder="—"
-                title="{{ __('subscriptions.chat_quota_phase1_daily_sub_cap') }}"
-                :disabled="! perDayLimit"
-                class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm py-1.5 disabled:opacity-50" />
-        </div>
-    </div>
-    <div x-show="purchasableIfExhausted" class="border-t border-amber-200/80 dark:border-amber-800/60 pt-2 mt-1">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-amber-900/90 dark:text-amber-200/90 mb-1.5">{{ __('subscriptions.chat_quota_phase1_pack_heading') }}</p>
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
-            <div class="min-w-0">
-                <label class="block text-[10px] font-medium text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('subscriptions.chat_quota_phase1_pack_price') }}">{{ __('subscriptions.chat_quota_phase1_pack_price_short') }}</label>
-                <input type="text" inputmode="decimal" name="quota_policies[{{ $featureKey }}][pack_price_rupees]" placeholder="50"
-                    x-model="packPrice"
-                    title="{{ __('subscriptions.chat_quota_phase1_pack_price') }}"
-                    :disabled="! purchasableIfExhausted"
-                    class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm py-1.5 disabled:opacity-50" />
+                    class="inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold tabular-nums"
+                    :class="phaseEnabled
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
+                        : 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-400'"
+                    x-text="phase1SummaryLine()"
+                ></span>
             </div>
-            <div class="min-w-0">
-                <label class="block text-[10px] font-medium text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('subscriptions.chat_quota_phase1_pack_messages') }}">{{ __('subscriptions.chat_quota_phase1_pack_msgs_short') }}</label>
-                <input type="number" name="quota_policies[{{ $featureKey }}][pack_message_count]" min="1" step="1"
-                    x-model="packMsgs"
-                    @input="coercePackIntField('packMsgs')"
-                    placeholder="30"
-                    title="{{ __('subscriptions.chat_quota_phase1_pack_messages') }}"
-                    :disabled="! purchasableIfExhausted"
-                    class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm py-1.5 disabled:opacity-50" />
+
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-800 dark:text-slate-100">
+                <input type="hidden" name="quota_policies[{{ $featureKey }}][is_enabled]" :value="phaseEnabled ? 1 : 0" />
+                <label class="inline-flex items-center gap-2 cursor-pointer font-medium">
+                    <input type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" x-model="phaseEnabled" />
+                    {{ __('subscriptions.chat_quota_phase1_enabled') }}
+                </label>
+                <input type="hidden" name="quota_policies[{{ $featureKey }}][per_day_usage_limit_enabled]" :value="perDayLimit ? 1 : 0" />
+                <label class="inline-flex items-center gap-2 cursor-pointer font-medium">
+                    <input type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" x-model="perDayLimit" />
+                    {{ __('subscriptions.chat_quota_phase1_per_day_limit') }}
+                </label>
+                <input type="hidden" name="quota_policies[{{ $featureKey }}][purchasable_if_exhausted]" :value="purchasableIfExhausted ? 1 : 0" />
+                <label class="inline-flex items-center gap-2 cursor-pointer font-medium">
+                    <input type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" x-model="purchasableIfExhausted" />
+                    {{ __('subscriptions.chat_quota_phase1_purchasable_if_exhausted') }}
+                </label>
             </div>
-            <div class="min-w-0 col-span-2 sm:col-span-1">
-                <label class="block text-[10px] font-medium text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('subscriptions.chat_quota_phase1_pack_validity') }}">{{ __('subscriptions.chat_quota_phase1_pack_days_short') }}</label>
-                <input type="number" name="quota_policies[{{ $featureKey }}][pack_validity_days]" min="1" step="1"
-                    x-model="packDays"
-                    @input="coercePackIntField('packDays')"
-                    placeholder="7"
-                    title="{{ __('subscriptions.chat_quota_phase1_pack_validity') }}"
-                    :disabled="! purchasableIfExhausted"
-                    class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm py-1.5 disabled:opacity-50" />
+
+            <div class="flex flex-wrap items-end gap-x-3 gap-y-2">
+                <div class="min-w-[11rem] max-w-[16rem] flex-1">
+                    <label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1" title="{{ __('subscriptions.chat_quota_phase1_refresh') }}">{{ __('subscriptions.chat_quota_phase1_col_refresh') }}</label>
+                    <select name="quota_policies[{{ $featureKey }}][refresh_type]" x-model="refreshType" class="w-full rounded-md border-slate-300 dark:border-slate-600 dark:bg-slate-900 dark:text-white text-sm py-2" title="{{ __('subscriptions.chat_quota_phase1_refresh') }}">
+                        <option value="{{ PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST }}">{{ __('subscriptions.chat_quota_phase1_refresh_monthly') }}</option>
+                        <option value="{{ PlanQuotaPolicy::REFRESH_UNLIMITED }}">{{ __('subscriptions.chat_quota_phase1_refresh_unlimited') }}</option>
+                        <option value="{{ PlanQuotaPolicy::REFRESH_DAILY }}">{{ __('subscriptions.chat_quota_phase1_refresh_daily') }}</option>
+                        <option value="{{ PlanQuotaPolicy::REFRESH_WEEKLY }}">{{ __('subscriptions.chat_quota_phase1_refresh_weekly') }}</option>
+                        <option value="{{ PlanQuotaPolicy::REFRESH_LIFETIME }}">{{ __('subscriptions.chat_quota_phase1_refresh_lifetime') }}</option>
+                        <option value="{{ PlanQuotaPolicy::REFRESH_TOTAL }}">{{ __('subscriptions.chat_quota_phase1_refresh_total') }}</option>
+                        <option value="{{ PlanQuotaPolicy::REFRESH_PLAN_DURATION }}">{{ __('subscriptions.chat_quota_phase1_refresh_plan_duration') }}</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1" title="{{ __('subscriptions.chat_quota_phase1_limit') }}">{{ __('subscriptions.chat_quota_phase1_col_limit') }}</label>
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="quota_policies[{{ $featureKey }}][limit_value]"
+                        x-model="limitVal"
+                        @input="coerceNonNegIntField('limitVal')"
+                        placeholder="0"
+                        autocomplete="off"
+                        title="{{ __('subscriptions.chat_quota_phase1_limit') }}"
+                        class="{{ $intFieldClass }}" />
+                </div>
+                <div x-show="perDayLimit"
+                    x-transition:enter="transition ease-out duration-150"
+                    x-transition:enter-start="opacity-0"
+                    x-transition:enter-end="opacity-100">
+                    <label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1" title="{{ __('subscriptions.chat_quota_phase1_daily_sub_cap') }}">{{ __('subscriptions.chat_quota_phase1_col_subcap') }}</label>
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="quota_policies[{{ $featureKey }}][daily_sub_cap]"
+                        x-model="dailyCapVal"
+                        @input="coerceNonNegIntField('dailyCapVal')"
+                        placeholder="—"
+                        autocomplete="off"
+                        title="{{ __('subscriptions.chat_quota_phase1_daily_sub_cap') }}"
+                        :disabled="! perDayLimit"
+                        class="{{ $intFieldClass }} disabled:opacity-50" />
+                </div>
+            </div>
+
+            <div x-show="purchasableIfExhausted" class="border-t border-slate-100 dark:border-slate-700 pt-2.5">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">{{ __('subscriptions.chat_quota_phase1_pack_heading') }}</p>
+                <div class="flex flex-wrap items-end gap-x-3 gap-y-2">
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1 truncate" title="{{ __('subscriptions.chat_quota_phase1_pack_price') }}">{{ __('subscriptions.chat_quota_phase1_pack_price_short') }}</label>
+                        <input type="text" inputmode="numeric" pattern="[0-9]*" name="quota_policies[{{ $featureKey }}][pack_price_rupees]" placeholder="50"
+                            x-model="packPrice"
+                            @input="coerceNonNegIntField('packPrice')"
+                            title="{{ __('subscriptions.chat_quota_phase1_pack_price') }}"
+                            autocomplete="off"
+                            :disabled="! purchasableIfExhausted"
+                            class="{{ $intFieldClass }} disabled:opacity-50" />
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1 truncate" title="{{ __('subscriptions.chat_quota_phase1_pack_messages') }}">{{ __('subscriptions.chat_quota_phase1_pack_msgs_short') }}</label>
+                        <input type="text" inputmode="numeric" pattern="[0-9]*" name="quota_policies[{{ $featureKey }}][pack_message_count]"
+                            x-model="packMsgs"
+                            @input="coercePackIntField('packMsgs')"
+                            placeholder="30"
+                            autocomplete="off"
+                            title="{{ __('subscriptions.chat_quota_phase1_pack_messages') }}"
+                            :disabled="! purchasableIfExhausted"
+                            class="{{ $intFieldClass }} disabled:opacity-50" />
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1 truncate" title="{{ __('subscriptions.chat_quota_phase1_pack_validity') }}">{{ __('subscriptions.chat_quota_phase1_pack_days_short') }}</label>
+                        <input type="text" inputmode="numeric" pattern="[0-9]*" name="quota_policies[{{ $featureKey }}][pack_validity_days]"
+                            x-model="packDays"
+                            @input="coercePackIntField('packDays')"
+                            placeholder="7"
+                            autocomplete="off"
+                            title="{{ __('subscriptions.chat_quota_phase1_pack_validity') }}"
+                            :disabled="! purchasableIfExhausted"
+                            class="{{ $intFieldClass }} disabled:opacity-50" />
+                    </div>
+                </div>
             </div>
         </div>
     </div>

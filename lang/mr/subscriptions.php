@@ -189,6 +189,7 @@ return [
     'admin_plan_discount_display_label' => 'सवलत',
     'admin_selling_must_not_exceed_mrp' => 'विक्री किंमत MRP पेक्षा जास्त असू शकत नाही.',
     'admin_plan_quota_bonus_percent_label' => 'Quota bonus %',
+    'admin_plan_bonus_short_label' => 'Bonus %',
     'admin_plan_grace_carry_discount_row_help' => 'Grace व carry-over सबस्क्रिप्शन संपताना/नूतनीकरणावर लागू. इथली सवलत जतनावर पहिल्या बिलिंग रकानेशी जुळवली जाते.',
     'admin_plan_catalog_price_label' => 'कॅटलॉग किंमत (₹)',
     'admin_plan_active_label' => 'सक्रिय (नवीन सबस्क्रिप्शनसाठी दिसेल)',

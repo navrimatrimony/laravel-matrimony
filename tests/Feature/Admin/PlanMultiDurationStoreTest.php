@@ -168,7 +168,7 @@ class PlanMultiDurationStoreTest extends TestCase
             'quota_policies' => $this->quotaPoliciesPayload(),
             'term_rows' => $this->termRowsList([
                 PlanTerm::BILLING_MONTHLY => ['price' => '100', 'is_visible' => '1'],
-                PlanTerm::BILLING_QUARTERLY => ['price' => '270', 'selling_price' => '256.5', 'quota_bonus_percent' => '5', 'is_visible' => '1'],
+                PlanTerm::BILLING_QUARTERLY => ['price' => '270', 'selling_price' => '256', 'quota_bonus_percent' => '5', 'is_visible' => '1'],
             ]),
         ];
 

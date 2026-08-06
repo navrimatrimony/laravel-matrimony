@@ -56,8 +56,8 @@
                             @endif
                         </td>
                         <td class="py-3 pr-4 text-gray-600 dark:text-gray-300">{{ $plan->slug }}</td>
-                        <td class="py-3 pr-4">₹{{ number_format((float) $plan->price, 2) }}</td>
-                        <td class="py-3 pr-4 font-semibold text-emerald-600 dark:text-emerald-400">₹{{ number_format($plan->final_price, 2) }}</td>
+                        <td class="py-3 pr-4">₹{{ \App\Support\PlanPricing::formatRupees($plan->price) }}</td>
+                        <td class="py-3 pr-4 font-semibold text-emerald-600 dark:text-emerald-400">₹{{ \App\Support\PlanPricing::formatRupees($plan->final_price) }}</td>
                         <td class="py-3 pr-4">{{ $plan->duration_days === 0 ? '∞' : $plan->duration_days }}</td>
                         <td class="py-3 pr-4">
                             <form method="POST" action="{{ route('admin.plans.toggle', $plan) }}" class="inline">
@@ -127,8 +127,8 @@
                             @endif
                         </td>
                         <td class="py-3 pr-4 text-red-700 dark:text-red-200/90">{{ $plan->slug }}</td>
-                        <td class="py-3 pr-4">₹{{ number_format((float) $plan->price, 2) }}</td>
-                        <td class="py-3 pr-4 font-semibold text-red-700 dark:text-red-200">₹{{ number_format($plan->final_price, 2) }}</td>
+                        <td class="py-3 pr-4">₹{{ \App\Support\PlanPricing::formatRupees($plan->price) }}</td>
+                        <td class="py-3 pr-4 font-semibold text-red-700 dark:text-red-200">₹{{ \App\Support\PlanPricing::formatRupees($plan->final_price) }}</td>
                         <td class="py-3 pr-4">{{ $plan->duration_days === 0 ? '∞' : $plan->duration_days }}</td>
                         <td class="py-3 pr-4">
                             <form method="POST" action="{{ route('admin.plans.toggle', $plan) }}" class="inline">

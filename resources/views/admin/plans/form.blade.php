@@ -251,8 +251,8 @@
             </div>
         @endunless
 
-        <div class="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-4 space-y-6">
-            <div>
+        <div class="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-4 space-y-2.5">
+            <div class="mb-1">
                 <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{{ __('subscriptions.plan_quota_policies_title') }}</h2>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {{ __('subscriptions.plan_quota_policies_intro') }}

@@ -13,7 +13,14 @@ final class PlanPricing
 {
     public static function normalizeMoney(float|int|string|null $value): float
     {
-        return round(max(0.0, (float) $value), 2);
+        // Catalog / checkout amounts are whole rupees only (no paise decimals in plan pricing UI).
+        return (float) max(0, (int) round((float) $value));
+    }
+
+    /** Format for member/admin display — Latin digits, no decimal places. */
+    public static function formatRupees(float|int|string|null $value): string
+    {
+        return number_format(self::normalizeMoney($value), 0, '.', ',');
     }
 
     /**

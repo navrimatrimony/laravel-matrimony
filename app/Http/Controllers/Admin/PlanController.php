@@ -306,8 +306,8 @@ class PlanController extends Controller
         $request->validate([
             'term_rows' => ['required', 'array', 'min:1'],
             'term_rows.*.billing_key' => ['required', 'string', Rule::in(PlanTerm::presetBillingKeys())],
-            'term_rows.*.price' => ['required', 'numeric', 'gt:0'],
-            'term_rows.*.selling_price' => ['required', 'numeric', 'min:0'],
+            'term_rows.*.price' => ['required', 'numeric', 'integer', 'gt:0'],
+            'term_rows.*.selling_price' => ['required', 'numeric', 'integer', 'min:0'],
             'term_rows.*.quota_bonus_percent' => ['nullable', 'integer', 'min:0', 'max:100'],
             'term_rows.*.is_visible' => ['nullable'],
             'default_billing_key' => ['required', 'string', Rule::in(PlanTerm::presetBillingKeys())],

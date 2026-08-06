@@ -1,6 +1,5 @@
 /**
- * Paid plan billing rows: clone template + reindex term_rows[n][*]; radio default_billing_key synced with selects.
- * Live discount % preview from MRP + Selling Price (display only).
+ * Paid plan billing rows: clone template + reindex; live discount %; integer-only money fields (no spinners).
  */
 
 function syncDefaultRadioFromSelect(row) {
@@ -10,6 +9,10 @@ function syncDefaultRadioFromSelect(row) {
         return;
     }
     radio.value = sel.value;
+}
+
+function digitsOnly(raw) {
+    return String(raw ?? '').replace(/\D+/g, '');
 }
 
 function displayDiscountPercent(mrp, selling) {
@@ -28,21 +31,25 @@ function refreshDiscountDisplay(row) {
     if (!mrpEl || !sellEl || !out) {
         return;
     }
-    const pct = displayDiscountPercent(mrpEl.value, sellEl.value);
+    const mrp = Number(digitsOnly(mrpEl.value) || '0');
+    const selling = Number(digitsOnly(sellEl.value) || '0');
+    const pct = displayDiscountPercent(mrp, selling);
     const emptyLabel = out.getAttribute('data-empty-label') || '—';
-    if (pct > 0) {
-        out.textContent = `${pct}% OFF`;
-        sellEl.setCustomValidity('');
-        if (Number(sellEl.value) > Number(mrpEl.value)) {
-            sellEl.setCustomValidity('Selling Price must not exceed MRP');
-        }
+    out.textContent = pct > 0 ? `${pct}% OFF` : emptyLabel;
+    if (selling > mrp && mrp > 0) {
+        sellEl.setCustomValidity('Selling Price must not exceed MRP');
     } else {
-        out.textContent = emptyLabel;
-        if (Number.isFinite(Number(sellEl.value)) && Number.isFinite(Number(mrpEl.value)) && Number(sellEl.value) > Number(mrpEl.value)) {
-            sellEl.setCustomValidity('Selling Price must not exceed MRP');
-        } else {
-            sellEl.setCustomValidity('');
-        }
+        sellEl.setCustomValidity('');
+    }
+}
+
+function coerceIntegerField(el) {
+    if (!(el instanceof HTMLInputElement)) {
+        return;
+    }
+    const cleaned = digitsOnly(el.value);
+    if (el.value !== cleaned) {
+        el.value = cleaned;
     }
 }
 
@@ -66,12 +73,21 @@ export function initAdminPlanTermRows() {
     });
 
     body.addEventListener('input', (e) => {
-        if (!e.target.classList.contains('js-plan-mrp') && !e.target.classList.contains('js-plan-selling')) {
+        const t = e.target;
+        if (!(t instanceof HTMLInputElement)) {
             return;
         }
-        const row = e.target.closest('[data-plan-term-row]');
-        if (row) {
-            refreshDiscountDisplay(row);
+        if (t.classList.contains('js-plan-mrp')
+            || t.classList.contains('js-plan-selling')
+            || t.classList.contains('js-plan-int-money')
+            || t.classList.contains('js-plan-int-pct')) {
+            coerceIntegerField(t);
+        }
+        if (t.classList.contains('js-plan-mrp') || t.classList.contains('js-plan-selling')) {
+            const row = t.closest('[data-plan-term-row]');
+            if (row) {
+                refreshDiscountDisplay(row);
+            }
         }
     });
 
