@@ -1,5 +1,7 @@
 # Field & engine ownership map
 
+**See also:** [Architecture Freeze — Plan Catalog vs Subscription Contract Isolation](ARCHITECTURE-FREEZE-PLAN-CONTRACT-ISOLATION.md) (LOCKED architectural reference for paid-member contract vs editable catalog).
+
 **Purpose: stop duplicates before they are written, cheaply.**
 
 The frozen no-duplicate rule (one fact = one input = one destination = one
